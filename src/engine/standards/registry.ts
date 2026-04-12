@@ -29,8 +29,10 @@ export * from './kec';
 export * from './kec/types';
 import { NEC_ARTICLES_FULL, getNECArticleFull } from './nec/nec-articles';
 import { IEC_ARTICLES, getIECArticle } from './iec/iec-articles';
+import { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
 export { NEC_ARTICLES_FULL, getNECArticleFull } from './nec/nec-articles';
 export { IEC_ARTICLES, getIECArticle } from './iec/iec-articles';
+export { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
 
 // ---------------------------------------------------------------------------
 // PART 1 — 지원 국가/기준서 타입
@@ -89,7 +91,12 @@ export function getCodeArticle(
     return getIECArticle(article);
   }
 
-  // JIS — 미구현 (확장 포인트)
+  // JIS 처리
+  if (standard === 'JIS' || standard === 'JIS C 0364' || country === 'JP') {
+    return getJISArticle(article);
+  }
+
+  // 기타
   return null;
 }
 
@@ -143,6 +150,22 @@ export function evaluateStandard(
     }
   }
 
+  // JIS 라우팅
+  if (country === 'JP' || articleId.startsWith('JIS')) {
+    const jisArticle = getJISArticle(articleId.replace('JIS-', ''));
+    if (jisArticle) {
+      const matched = jisArticle.conditions.filter(c => {
+        const val = params[c.param];
+        if (val === undefined) return false;
+        return evaluateCondition(c, val);
+      });
+      const failed = jisArticle.conditions.filter(c => !matched.includes(c) && params[c.param] !== undefined);
+      if (failed.length > 0) return makeFail(jisArticle, matched, failed);
+      if (matched.length === jisArticle.conditions.length) return makePass(jisArticle, matched);
+      return makeHold(jisArticle, jisArticle.conditions.filter(c => params[c.param] === undefined).map(c => c.param));
+    }
+  }
+
   // 미지원 기준서 → HOLD
   const placeholder: CodeArticle = {
     id: articleId,
@@ -169,7 +192,7 @@ export function getSupportedStandards(country: CountryCode): StandardName[] {
  * 현재 레지스트리에 등록된 모든 조항 수를 반환한다.
  */
 export function getRegisteredArticleCount(): number {
-  return KEC_ARTICLES.size + NEC_ARTICLES_FULL.size + IEC_ARTICLES.size;
+  return KEC_ARTICLES.size + NEC_ARTICLES_FULL.size + IEC_ARTICLES.size + JIS_ARTICLES.size;
 }
 
 // NEC 조항은 src/engine/standards/nec/nec-articles.ts에서 통합 관리 (19조)

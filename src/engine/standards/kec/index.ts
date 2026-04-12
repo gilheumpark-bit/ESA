@@ -54,6 +54,14 @@ export const KEC_ARTICLES: Map<string, CodeArticle> = new Map([
 // 55개 확장 조항 등록 (kec-full.ts)
 registerExtendedArticles(KEC_ARTICLES);
 
+// 추가 100+조 (kec-extended.ts) — KEC 전문 커버
+import { KEC_EXTENDED_ARTICLES } from './kec-extended';
+for (const article of KEC_EXTENDED_ARTICLES) {
+  if (!KEC_ARTICLES.has(article.id)) {
+    KEC_ARTICLES.set(article.id, article);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // PART 2 — 평가자 레지스트리 (articleId → evaluator 매핑)
 // ---------------------------------------------------------------------------
