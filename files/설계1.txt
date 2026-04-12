@@ -1,0 +1,371 @@
+ESA AI Architecture — eh-universe-web 인프라 구축 계획
+Context
+ESA (Electronic Search AI) v11.0 설계서 + AI Architecture v1.0의 핵심 인프라를 eh-universe-web 프로젝트에 구축한다.
+기존 프로젝트의 인프라(Firebase Auth, Supabase PostgreSQL, Vercel AI SDK, BYOK, Stripe, i18n, NOA 보안, Panel Registry)를 최대한 재활용하면서,
+결정론적 전기 엔지니어링 계산 엔진의 5개 레이어를 신규 구현한다.
+핵심 원칙: "LLM은 귀(의도 파악), ESA 엔진은 뇌(계산+판정), 리포트는 입(출력)"
+Phase 1: 디렉토리 구조 및 타입 시스템 (Day 1)
+1-1. ESA 모듈 디렉토리 생성
+src/lib/esa/
+├── constants/              ← Layer 0: 물리 상수
+│   └── physical.ts         # π, √3, 저항률, 리액턴스 등
+├── standards/              ← Layer 1: 규격 DSL
+│   ├── types.ts            # CodeArticle, Condition, CountryCode 인터페이스
+│   ├── registry.ts         # 국가별 규격 레지스트리
+│   ├── voltage-db.ts       # 11개국 전압 체계 DB (고정 테이블)
+│   ├── ampacity-tables.ts  # 허용전류 고정 테이블 (KEC/NEC/BS 7671)
+│   ├── breaker-ratings.ts  # 표준 차단기 용량 테이블
+│   ├── transformer-ratings.ts # 표준 변압기 용량 테이블
+│   ├── unit-conversion.ts  # AWG↔mm², ft↔m 등 결정론적 변환
+│   └── kec/                # Phase 1: 한국 KEC 규격 DSL
+│       ├── kec-232.ts      # 전압강하 조건 트리
+│       ├── kec-212.ts      # 차단기 선정 조건 트리
+│       ├── kec-142.ts      # 접지 조건 트리
+│       └── index.ts        # KEC 전체 export
+├── engine/                 ← Layer 2: 계산 그래프 엔진
+│   ├── types.ts            # CalcNode, CalcGraph, Edge, ParamDef
+│   ├── graph.ts            # DAG 실행기 (위상정렬, 자동전파, 캐싱)
+│   ├── validators.ts       # 입력값 범위 검증
+│   └── calculators/        # 개별 계산기 (결정론적 함수)
+│       ├── voltage-drop.ts
+│       ├── cable-sizing.ts
+│       ├── breaker-sizing.ts
+│       ├── short-circuit.ts
+│       ├── transformer-sizing.ts
+│       ├── grounding.ts
+│       ├── power-factor.ts
+│       ├── illumination.ts
+│       ├── load-calculation.ts
+│       └── index.ts
+├── sjc/                    ← Layer 3: SJC 판정 시스템
+│   ├── types.ts            # Judgment, SourceTag, Receipt
+│   ├── judge.ts            # PASS/HOLD/FAIL/BLOCK 판정
+│   ├── source-tracker.ts   # 출처 태그 추적 (USER/CODE/CALC/CONST)
+│   └── receipt.ts          # 영수증(Receipt) 생성기
+├── llm/                    ← Layer 4: LLM 통제 계층
+│   ├── types.ts            # Tool 정의, IntentResult
+│   ├── tools.ts            # ESA Tool 목록 (calculate_*, lookup_*, convert_*)
+│   ├── intent-parser.ts    # 의도 파악 → Tool 매핑
+│   ├── output-filter.ts    # LLM 출력 후처리 (확률적 표현 차단)
+│   └── system-prompt.ts    # ESA 전용 시스템 프롬프트
+├── session/                ← 멀티턴 세션
+│   ├── types.ts            # SessionHistory, ConversationTurn
+│   └── manager.ts          # 세션 관리 (Upstash Redis or in-memory fallback)
+├── report/                 ← 리포트 엔진
+│   ├── types.ts            # ReportTemplate, ReportData
+│   ├── generator.ts        # 리포트 생성 (PDF/Excel용 데이터)
+│   └── templates/
+│       ├── voltage-drop.ts
+│       └── general.ts
+├── sandbox/                ← 샌드박스 격리
+│   ├── types.ts            # SandboxId, SandboxConfig
+│   ├── registry.ts         # SANDBOX_REGISTRY (국가×장르)
+│   └── router.ts           # 라우팅 → 적절한 샌드박스 선택
+└── index.ts                # ESA 메인 진입점
+1-2. 핵심 타입 정의
+파일: src/lib/esa/standards/types.ts
+CountryCode: 'KR' | 'US' | 'CA' | 'JP' | 'DE' | 'GB' | 'IN' | 'AU' | 'SG' | 'SA' | 'CN'
+CodeArticle: { id, country, standard, article, title, conditions[], effective_date, version }
+Condition: { param, operator, value, unit, result: 'PASS'|'FAIL', note }
+VoltageSystem: { single_phase, three_phase, frequency, distribution, unit_system }
+파일: src/lib/esa/engine/types.ts
+CalcNode: { id, calculator, inputs: ParamDef[], outputs: ParamDef[], depends_on, code_ref }
+CalcGraph: { nodes, edges, execution_order }
+CalcResult: { value, unit, source: SourceTag[], judgment, formula }
+파일: src/lib/esa/sjc/types.ts
+Judgment: 'PASS' | 'HOLD' | 'FAIL' | 'BLOCK'
+SourceTag: 'USER' | 'CODE' | 'CALC' | 'CONST'
+Receipt: { session_id, timestamp, inputs, calc_id, result, judgment, sources, formula, disclaimer }
+1-3. 재활용 모듈 매핑
+ESA 필요 기능
+기존 모듈
+재활용 방식
+인증
+src/lib/firebase.ts, firebase-id-token.ts
+그대로 사용
+BYOK
+src/lib/server-ai.ts, multi-key-manager.ts
+그대로 사용
+Rate Limit
+src/lib/rate-limit.ts
+ESA 프로필 추가
+Tier Gate
+src/lib/tier-gate.ts
+ESA 섹션 추가
+i18n
+src/lib/i18n.ts, L4()
+fr-CA 추가 (5개국어)
+보안
+src/lib/noa/index.ts
+runNoa() ESA 도메인 추가
+AI Provider
+src/lib/ai-providers.ts
+Tool-call 모드로 사용
+Supabase
+src/lib/supabase.ts
+규격 DB 테이블 추가
+Stripe
+src/app/api/checkout/route.ts
+ESA 플랜 추가
+Logger
+src/lib/logger.ts
+그대로 사용
+API 패턴
+src/app/api/chat/route.ts
+CSRF/Rate Limit 패턴 복제
+Phase 2: Layer 01 — 상수 + 규격 DSL (Day 12)
+2-1. 물리 상수 (constants/physical.ts)
+SQRT3, PI, 구리 저항률, 알루미늄 저항률, 온도계수 등
+모두 as const 상수 (런타임 불변)
+2-2. 전압 체계 DB (standards/voltage-db.ts)
+11개국 전압/주파수/배전전압/단위계 고정 테이블
+특이 전압 경고 로직 (캐나다 347/600V, 인도 415V, 일본 50/60Hz)
+2-3. 허용전류 테이블 (standards/ampacity-tables.ts)
+KEC 기준 Cu XLPE/PVC 허용전류 (2.5~95mm²)
+Phase 2에서 NEC AWG 추가
+2-4. KEC 조건 트리 (standards/kec/*.ts)
+KEC 232.52 (전압강하): 간선 3%, 분기 3%, 합산 5%
+KEC 212.3 (차단기): 125% 규칙 + 표준 용량 매핑
+KEC 142.5 (접지): 접지 저항 10Ω 이하
+2-5. 단위 변환 (standards/unit-conversion.ts)
+AWG → mm² 고정 매핑 테이블 (AI 추정 금지)
+ft ↔ m, °F ↔ °C, psi ↔ kPa
+Phase 3: Layer 2 — 계산 그래프 엔진 (Day 2~3)
+3-1. DAG 실행기 (engine/graph.ts)
+buildGraph(nodes): CalcNode[] → 위상정렬된 실행 순서
+executeGraph(graph, inputs): 순차 실행 + 자동 입력 전파
+executeNode(node, inputs): 단일 노드 실행
+중간 결과 캐싱 (Map 기반)
+에러 전파: 상위 FAIL → 하위 자동 HOLD
+3-2. 핵심 계산기 10종 (engine/calculators/*.ts)
+#
+계산기
+파일
+규격 근거
+1
+전압강하
+voltage-drop.ts
+KEC 232.52
+2
+케이블 사이징
+cable-sizing.ts
+KEC 232.3~7
+3
+차단기 선정
+breaker-sizing.ts
+KEC 212.3
+4
+단락전류
+short-circuit.ts
+IEC 60909
+5
+변압기 용량
+transformer-sizing.ts
+KEC 311.1
+6
+접지 저항
+grounding.ts
+KEC 142.5
+7
+역률 보상
+power-factor.ts
+KEC 232.8
+8
+조도 계산
+illumination.ts
+KS C 7612
+9
+부하 계산
+load-calculation.ts
+KEC 220.3
+10
+단위 변환
+(unit-conversion 재활용)
+-
+각 계산기 구조:
+function calculate(params: Input): CalcResult {
+  // 1. 입력 검증 (범위)
+  // 2. 결정론적 계산 (공식)
+  // 3. 규격 판정 (조건 트리)
+  // 4. 결과 반환 (출처 태그 포함)
+}
+3-3. 입력 검증 (engine/validators.ts)
+전압: 100600V (저압), 1kV35kV (고압)
+전류: 0.1~10000A
+길이: 0.1~10000m
+범위 밖 → HOLD + 누락 항목 명시
+Phase 4: Layer 3 — SJC 판정 시스템 (Day 3)
+4-1. 판정 엔진 (sjc/judge.ts)
+judge(calcResult, codeArticle) → Judgment
+PASS: 모든 조건 충족
+HOLD: 입력 부족
+FAIL: 규격 위반 (위반 사유 + 근거 조항)
+BLOCK: LLM 금지 구역 침범
+4-2. 출처 추적 (sjc/source-tracker.ts)
+모든 수치에 SourceTag 부착
+출처 없는 수치 → BLOCK
+[USER] 사용자 입력, [CODE] 규격 DB, [CALC] 엔진 산출, [CONST] 물리 상수
+4-3. 영수증 생성 (sjc/receipt.ts)
+모든 계산 → Receipt 자동 생성
+입력 파라미터, 적용 규격, 공식, 결과, 판정, 타임스탬프
+면책 조항 자동 삽입
+Phase 5: Layer 4 — LLM 통제 계층 (Day 3~4)
+5-1. ESA Tool 정의 (llm/tools.ts)
+Vercel AI SDK tool() 형식으로 정의
+calculate_voltage_drop, calculate_cable_sizing, calculate_breaker_sizing 등
+lookup_code_article, convert_unit, compare_scenarios
+각 Tool = 계산 엔진 직접 호출 (LLM 우회)
+5-2. 시스템 프롬프트 (llm/system-prompt.ts)
+"당신은 전기 엔지니어링 인터페이스입니다.
+ 당신은 계산하지 않습니다. Tool을 호출합니다.
+ Tool 없이 수치를 말하면 시스템이 차단합니다."
+5-3. 출력 필터 (llm/output-filter.ts)
+LLM 응답 파싱 → 수치 추출 → 출처 태그 확인
+"약", "대략", "보통", "일반적으로" + 수치 → 삭제
+규격 조항 직접 인용(DB 경유 안 한 것) → 삭제
+5-4. 의도 파서 (llm/intent-parser.ts)
+다국어 의도 파악 → Tool 매핑
+"전선 뭘로 써야 해?" → calculate_cable_sizing
+"전압강하 기준이 뭐야?" → lookup_code_article
+Phase 6: API 라우트 (Day 4)
+6-1. ESA API 구조
+src/app/api/esa/
+├── calculate/route.ts      # POST: 단일 계산 실행
+├── graph/route.ts          # POST: 그래프 전체 실행
+├── lookup/route.ts         # POST: 규격 조항 조회
+├── convert/route.ts        # POST: 단위 변환
+├── chat/route.ts           # POST: ESA AI 채팅 (Tool 강제)
+├── report/route.ts         # POST: 리포트 생성
+└── session/route.ts        # GET/POST: 세션 관리
+6-2. /api/esa/calculate 예시
+POST /api/esa/calculate
+{
+  "type": "voltage_drop",
+  "params": { "voltage": 220, "current": 32, "length": 50, "wire_type": "Cu_XLPE", "phase": "single" },
+  "country": "KR",
+  "code_version": "KEC_2021"
+}
+→ { "result": {...}, "receipt": {...} }
+6-3. 공통 미들웨어 패턴 (기존 chat/route.ts에서 복제)
+CSRF origin check
+Rate limiting (RATE_LIMITS에 esa 프로필 추가)
+Firebase ID token 검증
+Request size guard (1MB)
+Structured error response with requestId
+Phase 7: 세션 관리 (Day 4)
+7-1. 세션 전략
+1차: In-memory Map (기존 rate-limit.ts 패턴과 동일, Vercel 서버리스 호환)
+2차: Upstash Redis (Phase 2에서 추가, 패키지 @upstash/redis)
+TTL 30분, 최대 10턴, LTRIM 자동 컷
+7-2. 세션 스키마
+interface ConversationTurn {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  sandbox?: string;
+  calc_result?: { calc_id: string; inputs: Record<string, unknown>; result: Record<string, unknown> };
+}
+Phase 8: Tier Gate + 샌드박스 (Day 4~5)
+8-1. Tier Gate 확장 (src/lib/tier-gate.ts)
+TierLimits에 esa 섹션 추가:
+esa: {
+  dailyCalculations: number;  // Free: 10, Pro: 0(무제한)
+  excelExport: boolean;       // Free: false, Pro: true
+  graphExecution: boolean;    // Free: false, Pro: true
+  multiCountry: boolean;      // Free: false, Pro: true
+}
+8-2. 샌드박스 레지스트리 (sandbox/registry.ts)
+MVP: 5개 샌드박스 (SB-01~SB-05)
+SANDBOX_REGISTRY Map 구조
+미구현 요청 → SB-03 (범용 Fallback) 자동 라우팅
+Phase 9: UI 패널 등록 (Day 5)
+9-1. Panel Registry 확장 (src/lib/code-studio/core/panel-registry.ts)
+ESA 전용 패널 그룹 추가: esa 카테고리
+패널: ESA Chat, ESA Calculator, ESA Standards, ESA Report
+9-2. 컴포넌트 (기본 골격만)
+src/components/esa/
+├── ESAChat.tsx           # AI 채팅 (Tool 강제)
+├── ESACalculator.tsx     # 계산기 폼 UI
+├── ESAStandards.tsx      # 규격 검색 UI
+├── ESAReport.tsx         # 리포트 뷰어
+└── ESAReceipt.tsx        # 영수증 카드 컴포넌트
+Phase 10: 테스트 (Day 5)
+10-1. 단위 테스트 (Jest)
+src/lib/esa/__tests__/
+├── constants.test.ts       # 물리 상수 불변 확인
+├── voltage-drop.test.ts    # 알려진 케이스 입출력 검증
+├── cable-sizing.test.ts
+├── breaker-sizing.test.ts
+├── graph.test.ts           # DAG 위상정렬 + 전파 검증
+├── judge.test.ts           # SJC 판정 로직
+├── receipt.test.ts         # 영수증 생성 검증
+├── unit-conversion.test.ts # 변환 정확도
+└── output-filter.test.ts   # LLM 필터 검증
+10-2. 핵심 검증 기준
+재현성: 같은 입력 → 항상 같은 출력
+역산 검증: 결과 → 입력 복원 → 일치 확인
+경계값: 규격 한계값 정확히 PASS/FAIL 분기
+BLOCK 검증: 출처 없는 수치 차단 확인
+수정 대상 기존 파일 목록
+파일
+수정 내용
+src/lib/tier-gate.ts
+TierLimits에 esa 섹션 추가
+src/lib/rate-limit.ts
+RATE_LIMITS에 esa 프로필 추가
+src/lib/i18n.ts
+fr-CA 로케일 지원 추가
+vercel.json
+/api/esa/** 60초 maxDuration 유지 (기존 패턴)
+package.json
+@upstash/redis 추가 (Phase 2)
+구현 순서 요약
+순서
+작업
+의존성
+1
+타입 시스템 전체 정의
+없음
+2
+Layer 0: 물리 상수
+없음
+3
+Layer 1: 전압 DB + 허용전류 테이블 + KEC 조건 트리
+타입
+4
+Layer 1: 단위 변환
+상수
+5
+Layer 2: 개별 계산기 10종
+Layer 0, 1
+6
+Layer 2: DAG 그래프 엔진
+계산기
+7
+Layer 3: SJC 판정 + 출처 추적 + 영수증
+Layer 2
+8
+Layer 4: Tool 정의 + 시스템 프롬프트 + 출력 필터
+Layer 3
+9
+API 라우트 6개
+Layer 3, 4
+10
+세션 관리
+API 라우트
+11
+Tier Gate + 샌드박스
+API 라우트
+12
+UI 패널 (골격)
+API 라우트
+13
+테스트
+전체
+Verification (검증 방법)
+단위 테스트: npm test -- --testPathPattern=esa 실행
+API 테스트: /api/esa/calculate POST → 전압강하 계산 → Receipt 포함 응답 확인
+결정론 검증: 동일 입력 10회 반복 → 10회 모두 동일 결과
+BLOCK 검증: Tool 없이 수치 생성 시도 → 필터에서 차단 확인
+경계값: KEC 전압강하 3.0% 경계 → 2.99% PASS, 3.01% FAIL
+빌드: npm run build 성공 확인

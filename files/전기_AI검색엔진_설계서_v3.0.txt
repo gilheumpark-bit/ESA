@@ -1,0 +1,1347 @@
+전기 전문 AI 검색엔진 종합 설계서 v3.0
+작성일: 2026.04.04
+버전 이력: v1.0 기본설계 > v2.0 AI도메인 추가 > v3.0 전체 고도화
+
+==================================================
+목차
+==================================================
+1. 프로젝트 개요
+2. 핵심 철학 및 원칙
+3. 전체 시스템 아키텍처
+4. 기술 스택
+5. 데이터베이스 스키마
+6. 데이터 수집 파이프라인
+7. 날짜 박제 시스템
+8. AI 검색 엔진
+9. 에이전트 워크플로우
+10. 계산기 시스템 (영수증)
+11. 지식 그래프
+12. 해외 기술 뉴스
+13. 자격증 + 학습 시스템
+14. 협업 기능
+15. 모바일 현장 모드
+16. 개인화 알림
+17. 데이터 시각화
+18. OCR 명판 인식
+19. 블록체인 공증
+20. 커뮤니티 / 집단지성
+21. AI 도메인
+22. BYOK 구조
+23. 보안 및 감사 로그
+24. 도메인 확장 전략
+25. 수익 모델
+26. 개발 로드맵
+27. 정확도 목표
+
+==================================================
+1. 프로젝트 개요
+==================================================
+
+한 줄 정의:
+전기 엔지니어링 특화 AI 플랫폼.
+글로벌 논문/규격/뉴스 실시간 수집 + 할루시네이션 없는 출처 기반 답변
++ 영수증 계산기 + 날짜 박제 + 협업 + 현장 모바일까지 원스톱 엔지니어링 플랫폼.
+
+시장 기회:
+- 가트너 예측: 2026년까지 전통 검색엔진 볼륨 25% 감소, AI 버티컬로 이동
+- 버티컬 LLM 시장: 2025년 2.9B달러 -> 2033년 18.7B달러 (CAGR 26%)
+- 전기 특화 버티컬 검색: 전 세계 공백 상태
+
+기존 서비스 대비 비교:
+
+항목              구글/네이버  Perplexity  IEEE Xplore  본 서비스
+전기 특화            X           X           일부           O
+할루 차단            X           일부         X            구조적 차단
+계산기 영수증         X           X           X            독보적
+날짜 박제            X           X           일부           O
+협업 기능            X           X           X             O
+현장 모바일          X           X           X             O
+에이전트 워크플로우   X           X           X             O
+블록체인 공증         X           X           X             O
+한국어 완전 지원      O           일부         X             O
+BYOK               X           X           X             O
+
+목표 사용자:
+1차: 전기 엔지니어(설계/시공/감리), 전기기사/기술사 수험생, 전력 R&D 연구자
+2차: 전기 관련 스타트업, 전력공기업(KEPCO 등), 엔지니어링 컨설팅사
+3차(확장 후): 기계/토목/화학 엔지니어, 해외 엔지니어
+
+==================================================
+2. 핵심 철학 및 원칙
+==================================================
+
+원칙 1: 할루시네이션 제로
+- AI = 수집된 문서 기반 요약만 수행
+- 출처 없는 답변 = 시스템 레벨에서 차단
+- 수치/규격 = 계산 엔진이 직접 연산
+
+원칙 2: 날짜 박제
+모든 데이터에 타임스탬프 필수.
+원문 발행일 / 수집일 / 검증일 / 규격 버전 / 계산 실행 시각 / 엔진 버전.
+"언제 기준인지 모르면 현장에서 못 쓴다."
+
+원칙 3: 영수증 투명성
+계산 과정 전체 공개.
+출처 논문/규격 조항까지 명시.
+AI가 계산했다 X -> 엔진이 직접 돌린 결과.
+
+원칙 4: 도메인 플러그인
+전기 -> 기계 -> 토목 -> 화학 -> 전체 공학.
+코어 건드리지 않고 도메인만 추가.
+
+원칙 5: BYOK
+LLM 비용 = 사용자 부담 (본인 API 키 사용).
+플랫폼 비용 = 크롤링 + DB + 검색만.
+API 키는 서버에 저장하지 않음.
+
+원칙 6: 법적 방패
+엔지니어의 계산서 = 법적 근거 문서.
+날짜 박제 + 블록체인 공증 = 당시 현행 규격 기준으로 작성됨을 타임스탬프로 영구 증명.
+
+==================================================
+3. 전체 시스템 아키텍처
+==================================================
+
+레이어 구조:
+
+[사용자 인터페이스]
+Next.js 14 (Web) + React Native (Mobile)
+검색 / 계산기 / 뉴스 / 자격증 / 협업 / 커뮤니티
+
+[API Gateway - Node.js]
+인증 / 라우팅 / BYOK 키 처리 / Rate Limit
+
+[서비스 레이어 - FastAPI]
+검색 엔진 / 계산기 엔진 / 뉴스 피드 / 에이전트 워크플로우
+
+[Data Layer]
+Weaviate (벡터 검색)
+PostgreSQL (메타/협업/이력)
+Redis (캐시)
+TimescaleDB (뉴스/시계열)
+Neo4j (지식 그래프)
+IPFS (블록체인 공증)
+
+[데이터 수집 파이프라인]
+Scrapy / Playwright / Apache Airflow
+논문 / 뉴스 / 규격 / 법령 / 자격증 크롤러
+
+도메인 플러그인 구조:
+
+도메인 레지스트리 electrical:
+  이름: 전기
+  Tier1 소스: IEEE Xplore, IEC, KEC, KEPCO, 전기사업법
+  Tier2 소스: arXiv, Elsevier, Springer, MDPI
+  Tier3 소스: Power Magazine, IEEE Spectrum, T&D World, EE Times
+  계산기: 전압강하, 단락전류, 변압기용량, 역률보정, 케이블선정,
+          접지저항, 차단기용량, 태양광발전량, 배터리용량, 인버터효율,
+          조도계산, UPS용량
+  자격증: 전기기능사, 전기산업기사, 전기기사, 전기기술사
+
+도메인 레지스트리 ai_ml:
+  이름: AI/ML
+  Tier1 소스: arXiv cs.AI/LG/CV/CL, NeurIPS, ICML, ICLR,
+              Anthropic Research, OpenAI Research, Google DeepMind
+  Tier2 소스: Hugging Face Papers, Papers With Code, Semantic Scholar
+  Tier3 소스: The Batch, Import AI, VentureBeat AI
+  계산기: 토큰비용, GPU메모리, 학습비용, 추론속도, RAG최적화
+  도구 비교 DB: 활성화
+  벤치마크 추적: 활성화
+
+도메인 레지스트리 mechanical: Phase 2 예정
+도메인 레지스트리 civil: Phase 3 예정
+도메인 레지스트리 chemical: Phase 3 예정
+
+==================================================
+4. 기술 스택
+==================================================
+
+Frontend:
+  Next.js 14 (App Router) - 웹 메인 프레임워크
+  React Native - 모바일 앱 (현장 모드)
+  TypeScript - 언어
+  Tailwind CSS - 스타일링
+  shadcn/ui - UI 컴포넌트
+  Zustand - 상태관리
+  React Query - 서버 상태/캐싱
+  D3.js / Recharts - 데이터 시각화
+  Cytoscape.js - 지식 그래프 시각화
+
+Backend:
+  FastAPI (Python) - 검색/계산/AI API
+  Node.js Express - API Gateway
+  WebSocket - 실시간 뉴스/알림
+  Celery - 비동기 태스크
+  Redis - 캐시/세션/큐
+
+AI / ML:
+  LangChain - RAG 오케스트레이션
+  LlamaIndex - 문서 인덱싱/청킹
+  BYOK (OpenAI/Claude/Gemini) - LLM 답변 생성
+  PaddleOCR / Tesseract - 명판/도면 OCR
+  spaCy - NLP 전처리
+
+데이터베이스:
+  Weaviate - 벡터 검색 (하이브리드)
+  PostgreSQL - 메인 RDB
+  TimescaleDB - 뉴스/시계열
+  Redis - 캐시/세션
+  Neo4j - 지식 그래프
+  IPFS - 블록체인 공증 저장
+
+데이터 수집:
+  Scrapy - 대량 크롤링
+  Playwright - JS 렌더링 페이지
+  Apache Airflow - 스케줄러/DAG
+  BeautifulSoup - HTML 파싱
+
+계산 엔진:
+  NumPy / SciPy - 수치 연산
+  SymPy - 기호 수학
+  Pint - 단위 변환
+
+보안:
+  IPFS - 공증 문서 분산 저장
+  SHA-256 - 영수증 해시
+  AES-256 - API 키 암호화
+  JWT - 인증 토큰
+
+배포/인프라:
+  AWS / GCP - 클라우드
+  Docker + Kubernetes - 컨테이너
+  Cloudflare - CDN / DDoS
+  GitHub Actions - CI/CD
+
+==================================================
+5. 데이터베이스 스키마
+==================================================
+
+[문서 테이블 documents]
+id: UUID PK
+domain: VARCHAR(50) - electrical, mechanical, ai_ml
+doc_type: VARCHAR(50) - paper, standard, law, news, datasheet
+title: TEXT
+title_ko: TEXT
+source: VARCHAR(100) - IEEE, IEC, KS, DOE, KEPCO
+tier: SMALLINT - 1, 2, 3
+url: TEXT
+doi: VARCHAR(200)
+published_at: TIMESTAMP (원문 발행일 - 날짜 박제)
+collected_at: TIMESTAMP (수집일 - 날짜 박제)
+verified_at: TIMESTAMP (마지막 검증일 - 날짜 박제)
+standard_version: VARCHAR(100) - KEC 2024년판
+is_latest_version: BOOLEAN
+superseded_by: UUID (개정 시 새 문서 ID)
+next_revision_expected: DATE (차기 개정 예상일)
+revision_notes: TEXT
+language: VARCHAR(10)
+raw_text: TEXT
+summary_ko: TEXT
+quality_score: FLOAT
+created_at: TIMESTAMP
+updated_at: TIMESTAMP
+
+[규격 개정 이력 테이블 standard_revisions]
+id: UUID PK
+standard_name: VARCHAR(200) - IEC 60364
+version: VARCHAR(100) - Ed.5.1
+effective_date: DATE (발효일 - 날짜 박제)
+supersedes_id: UUID (이전 버전 문서 ID)
+changes_summary: TEXT
+affected_calculators: UUID[] (영향받는 계산기 ID)
+detected_at: TIMESTAMP (감지 시각 - 날짜 박제)
+verified_by: VARCHAR(100)
+
+[계산기 테이블 calculators]
+id: UUID PK
+domain: VARCHAR(50)
+category: VARCHAR(100)
+name: VARCHAR(200)
+description: TEXT
+formula_display: TEXT (LaTeX 수식)
+formula_code: TEXT (Python 실제 코드)
+standards: VARCHAR(100)[] - KEC 232.52, IEC 60364-5-52
+standard_version: VARCHAR(100) (날짜 박제)
+standard_verified_at: TIMESTAMP (날짜 박제)
+params_schema: JSONB
+output_schema: JSONB
+engine_version: VARCHAR(20) - CalcEngine v2.3.1
+is_active: BOOLEAN
+last_updated_at: TIMESTAMP
+has_pending_update: BOOLEAN
+pending_update_notes: TEXT
+
+[계산 영수증 테이블 calculation_receipts]
+id: UUID PK
+calc_id: UUID FK calculators
+user_session: VARCHAR(200)
+user_id: UUID FK users
+project_id: UUID FK projects
+inputs: JSONB (사용자 입력값)
+result: JSONB (최종 결과)
+steps: JSONB (단계별 계산 과정)
+formula_used: TEXT
+standards_used: VARCHAR(100)[]
+warnings: TEXT[]
+recommendations: TEXT[]
+calculated_at: TIMESTAMP (계산 실행 시각 - 날짜 박제)
+standard_version: VARCHAR(100) (날짜 박제)
+standard_verified_at: TIMESTAMP (날짜 박제)
+engine_version: VARCHAR(20) (날짜 박제)
+is_standard_current: BOOLEAN
+receipt_hash: VARCHAR(64) (SHA-256 해시)
+ipfs_cid: VARCHAR(100) (IPFS 저장 CID)
+blockchain_tx: VARCHAR(200)
+shared_with: UUID[]
+share_token: VARCHAR(100) UNIQUE
+is_public: BOOLEAN
+
+steps JSONB 구조 예시:
+[
+  {"step": 1, "title": "루트3 계산", "formula": "루트3", "value": 1.7320, "unit": "", "standard_ref": null},
+  {"step": 2, "title": "선간전압 x 루트3", "formula": "22900 x 1.7320", "value": 39662.8, "unit": "V", "standard_ref": "KEC 210.3"},
+  {"step": 3, "title": "x 전류", "formula": "39662.8 x 100", "value": 3966280, "unit": "VA", "standard_ref": null},
+  {"step": 4, "title": "x 역률", "formula": "3966280 x 0.95", "value": 3767966, "unit": "VA", "standard_ref": null},
+  {"step": 5, "title": "kVA 변환", "formula": "3767966 / 1000", "value": 3767.97, "unit": "kVA", "standard_ref": null}
+]
+
+[협업 테이블 projects]
+id: UUID PK
+owner_id: UUID FK users
+name: VARCHAR(200)
+domain: VARCHAR(50)
+description: TEXT
+is_archived: BOOLEAN
+created_at: TIMESTAMP
+
+[프로젝트 멤버 project_members]
+project_id: UUID FK projects
+user_id: UUID FK users
+role: VARCHAR(20) - owner, editor, viewer
+joined_at: TIMESTAMP
+PK: (project_id, user_id)
+
+[계산서 코멘트 receipt_comments]
+id: UUID PK
+receipt_id: UUID FK calculation_receipts
+user_id: UUID FK users
+content: TEXT
+step_ref: INT (몇 번째 step에 대한 코멘트)
+parent_id: UUID (답글)
+created_at: TIMESTAMP
+
+[계산서 버전 이력 receipt_versions]
+id: UUID PK
+original_id: UUID FK calculation_receipts
+version_number: INT
+changed_by: UUID FK users
+change_note: TEXT
+snapshot: JSONB (해당 시점 전체 영수증 스냅샷)
+created_at: TIMESTAMP
+
+[뉴스 테이블 news_articles]
+id: UUID PK
+source: VARCHAR(100)
+tier: SMALLINT
+title: TEXT
+title_ko: TEXT
+url: TEXT UNIQUE
+original_lang: VARCHAR(10)
+content_original: TEXT
+content_ko: TEXT
+summary_ko: TEXT (3줄 요약)
+categories: VARCHAR(100)[]
+keywords: VARCHAR(100)[]
+relevance_score: FLOAT
+published_at: TIMESTAMP (원문 발행일 - 날짜 박제)
+crawled_at: TIMESTAMP (수집일 - 날짜 박제)
+translated_at: TIMESTAMP (번역 시각 - 날짜 박제)
+summary_generated_at: TIMESTAMP (요약 생성 시각 - 날짜 박제)
+
+[자격증 테이블 certifications]
+id: UUID PK
+domain: VARCHAR(50)
+name: VARCHAR(100)
+level: SMALLINT - 1:기능사, 2:산업기사, 3:기사, 4:기술사
+issuer: VARCHAR(100)
+description: TEXT
+requirements: JSONB
+exam_subjects: JSONB
+related_laws: TEXT[]
+is_active: BOOLEAN
+last_updated_at: TIMESTAMP (날짜 박제)
+
+[시험 일정 exam_schedules]
+id: UUID PK
+cert_id: UUID FK certifications
+year: SMALLINT
+round: SMALLINT
+apply_start: DATE
+apply_end: DATE
+written_date: DATE
+written_result: DATE
+practical_apply_start: DATE
+practical_apply_end: DATE
+practical_date: DATE
+final_result: DATE
+is_confirmed: BOOLEAN
+source_url: TEXT
+collected_at: TIMESTAMP (날짜 박제)
+UNIQUE: (cert_id, year, round)
+
+[AI 기출문제 exam_questions]
+id: UUID PK
+cert_id: UUID FK certifications
+year: SMALLINT
+round: SMALLINT
+subject: VARCHAR(100)
+question: TEXT
+options: JSONB (보기 배열)
+answer: INT (정답 번호)
+explanation: TEXT (AI 해설)
+related_standard: VARCHAR(200)
+related_doc_id: UUID FK documents
+difficulty: SMALLINT 1~5
+source_verified_at: TIMESTAMP (날짜 박제)
+
+[사용자 테이블 users]
+id: UUID PK
+email: VARCHAR(255) UNIQUE
+nickname: VARCHAR(100)
+domain_pref: VARCHAR(50)[]
+notification_pref: JSONB
+created_at: TIMESTAMP
+last_login_at: TIMESTAMP
+
+[BYOK API 키 user_api_keys]
+id: UUID PK
+user_id: UUID FK users
+provider: VARCHAR(50) - openai, anthropic, gemini
+key_encrypted: TEXT (AES-256 암호화)
+key_hint: VARCHAR(10) (마지막 4자리)
+is_active: BOOLEAN
+last_used_at: TIMESTAMP
+created_at: TIMESTAMP
+UNIQUE: (user_id, provider)
+
+[알림 구독 user_subscriptions]
+id: UUID PK
+user_id: UUID FK users
+sub_type: VARCHAR(50) - standard_update, cert_schedule, keyword_news
+target: VARCHAR(200) - IEC 61850, 전기기사, 스마트그리드
+channel: VARCHAR(20) - email, push, both
+is_active: BOOLEAN
+created_at: TIMESTAMP
+
+[감사 로그 audit_logs]
+id: UUID PK
+user_id: UUID FK users
+action: VARCHAR(100) - search, calculate, export
+resource_type: VARCHAR(50)
+resource_id: UUID
+metadata: JSONB
+ip_address: INET
+created_at: TIMESTAMP (파티셔닝 기준)
+
+[AI 도구 비교 ai_tools]
+id: UUID PK
+name: VARCHAR(100)
+provider: VARCHAR(100)
+category: VARCHAR(50) - llm, image, code, search
+description_ko: TEXT
+pricing: JSONB
+benchmarks: JSONB
+features: JSONB
+release_date: DATE
+last_updated: DATE (날짜 박제)
+pricing_verified_at: TIMESTAMP (날짜 박제)
+benchmark_verified_at: TIMESTAMP (날짜 박제)
+official_url: TEXT
+is_active: BOOLEAN
+
+[AI 벤치마크 이력 ai_benchmarks]
+id: UUID PK
+tool_id: UUID FK ai_tools
+benchmark_name: VARCHAR(100) - MMLU, HumanEval, MATH
+score: FLOAT
+rank_at_time: INT
+measured_at: DATE (날짜 박제)
+source_url: TEXT
+
+[AI 가격 이력 ai_pricing_history]
+id: UUID PK
+tool_id: UUID FK ai_tools
+pricing: JSONB
+effective_from: DATE (날짜 박제)
+source_url: TEXT
+
+==================================================
+6. 데이터 수집 파이프라인
+==================================================
+
+소스 계층:
+
+Tier 1 (최고 신뢰):
+  IEEE Xplore - 주 1회
+  IEC 공식 문서 - 월 1회
+  KEC/전기사업법 - 월 1회
+  DOE / EPRI - 주 1회
+  arXiv cs.AI/LG - 일 1회
+
+Tier 2 (신뢰):
+  Elsevier / Springer - 주 1회
+  MDPI - 주 1회
+  Hugging Face Papers - 일 1회
+  Papers With Code - 일 1회
+
+Tier 3 (참고):
+  IEEE Spectrum - 6시간
+  Power Magazine - 6시간
+  T&D World - 6시간
+  EE Times - 6시간
+  BloombergNEF - 12시간
+
+Airflow DAG 구성:
+
+DAG 1 논문 크롤링 (주 1회):
+  crawl_ieee -> crawl_arxiv -> crawl_elsevier
+  -> domain_filter -> dedup_by_doi
+  -> quality_score -> embed_and_index
+  -> timestamp_all_fields
+
+DAG 2 뉴스 크롤링 (6시간):
+  crawl_news_sources -> relevance_filter (임계값 0.7)
+  -> translate_ko -> summarize_3lines
+  -> trend_analysis -> store_timescale
+  -> timestamp_all_fields
+
+DAG 3 규격 개정 감시 (월 1회):
+  crawl_iec -> crawl_kec -> crawl_ieee_std
+  -> diff_detection
+  -> mark_affected_calcs
+  -> send_user_alerts
+  -> update_revision_history
+  -> timestamp_revision
+
+DAG 4 자격증 일정 (주 1회):
+  crawl_qnet -> parse_schedules
+  -> update_exam_schedules
+  -> send_dday_alerts
+  -> timestamp_collected_at
+
+전처리 파이프라인:
+  원문 수집
+  -> 언어 감지 (langdetect)
+  -> 전기 도메인 관련성 스코어링 (임계값 0.6 이상만 통과)
+  -> 중복 제거 (DOI 기준/URL 해시 기준)
+  -> 텍스트 청킹 (청크 512토큰, 오버랩 50토큰)
+  -> 임베딩 생성 (text-embedding-3-small 기본)
+  -> Weaviate 저장 + PostgreSQL 메타데이터
+
+==================================================
+7. 날짜 박제 시스템
+==================================================
+
+박제 대상 전체:
+
+문서/논문:
+  published_at - 원문 발행일
+  collected_at - 수집일
+  verified_at - 마지막 검증일
+  standard_version - 규격 버전
+  is_latest_version - 현행 여부
+
+계산 영수증:
+  calculated_at - 계산 실행 시각
+  standard_version - 적용 규격 버전
+  standard_verified_at - 규격 현행 확인 시각
+  engine_version - 엔진 버전
+
+뉴스:
+  published_at - 원문 발행일
+  crawled_at - 수집일
+  translated_at - 번역 시각
+  summary_generated_at - 요약 생성 시각
+
+자격증:
+  collected_at - 일정 수집일
+  last_updated_at - 정보 최종 확인일
+
+AI 도구:
+  release_date - 출시일
+  pricing_verified_at - 가격 검증 시각
+  measured_at - 벤치마크 측정일
+
+영수증 날짜 박제 표시 예시:
+  계산 일시: 2026.04.04 14:32:11
+  적용 규격: KEC 2024년판
+  규격 확인: 2026.04.01 (현행 확인됨)
+  엔진 버전: CalcEngine v2.3.1
+  무결성 해시: a3f2c1...8d4e (SHA-256)
+
+규격 개정 감지 후 처리:
+  월 1회 규격 크롤링
+  -> 개정 감지
+  -> 영향받는 계산기 목록 생성
+  -> 계산기에 경고 배지 부착
+  -> 구독자 알림 발송
+  -> 관리자 검토 후 수식 업데이트
+  -> 기존 영수증에 소급 알림
+     "이 계산서 작성 후 KEC 232.52가 개정됐습니다. 재검토 권장."
+
+==================================================
+8. AI 검색 엔진
+==================================================
+
+검색 파이프라인:
+  자연어 질문 입력
+  -> 1단계: 질문 분석 (BYOK LLM) - 도메인 분류, 검색 의도, 키워드 추출, 한영 쿼리
+  -> 2단계: 하이브리드 검색 (Weaviate) - 벡터 + BM25 + Tier 가중치 + 도메인 필터
+  -> 3단계: 지식 그래프 연계 - 연관 개념 탐색, 학습 경로 제안
+  -> 4단계: 재랭킹 - Cross-encoder + 최신성 + Tier 점수
+  -> 5단계: RAG 답변 (BYOK LLM) - 문서 기반으로만 답변 강제
+  -> 6단계: 할루시네이션 검증 - 원문 일치도, 수치 범위, 출처 없는 주장 감지
+  -> 7단계: 날짜 메타데이터 부착 - 모든 출처에 수집일/발행일/검증일 표시
+  -> 8단계: 최종 출력 - 답변 + 출처(Tier+날짜) + 관련 계산기 + 관련 규격
+
+검색 타입별 처리:
+
+논문 검색: IEEE + arXiv 우선, 2년 이내 가중치 상향, 핵심 수치/결론 추출
+규격 검색: Tier 1 소스 우선, 개정 이력 표시, 국내 대응 규격 연결
+법령 검색: 전기사업법/기술기준 우선, 조항 번호 명시, 최근 개정 여부 표시
+기술 Q&A: 복합 소스 검색, 개념 설명 + 근거 논문, 관련 계산기 추천
+
+검색 결과 출력 구조:
+  answer: 답변 텍스트
+  confidence: 신뢰도 점수 (0~1)
+  sources: [{title, source, tier, url, page, relevance, published_at, collected_at, verified_at}]
+  related_calculators: [계산기명]
+  related_standards: [규격명]
+  search_type: 검색 타입
+  domain: 도메인
+
+==================================================
+9. 에이전트 워크플로우
+==================================================
+
+개념:
+  기존 검색: 질문 -> 답변 (끝)
+  에이전트: 질문 -> 답변 -> 다음 액션 -> 다음 액션 -> 결과물
+  목표: 엔지니어의 업무 흐름을 플랫폼 안에서 완결
+
+워크플로우 예시 (수변전설비 설계):
+
+  입력: "22.9kV 수변전설비 설계해줘 (부하 500kW, 역률 0.9, 케이블 200m)"
+
+  Step 1: 변압기 용량 계산
+    -> 영수증 #001 생성 (날짜 박제 포함)
+    -> 결과: 667kVA -> 표준 750kVA 선정
+
+  Step 2: 관련 KEC 조항 자동 확인
+    -> KEC 210.3, 230조 검색
+    -> 2024년판 현행 확인
+
+  Step 3: 케이블 선정 계산
+    -> 영수증 #002 생성
+    -> 결과: 240mm2 CV 케이블
+
+  Step 4: 전압강하 검증
+    -> 영수증 #003 생성
+    -> 결과: 2.3% (허용 3% 이내 통과)
+
+  Step 5: 차단기 용량 계산
+    -> 영수증 #004 생성
+
+  Step 6: 설계 체크리스트 생성
+    통과: 변압기 용량 (KEC 210.3 적합)
+    통과: 케이블 선정 (KEC 232 적합)
+    통과: 전압강하 (3% 이내)
+    통과: 차단기 협조
+    요주의: 접지 저항 계산 필요
+
+  Step 7: 설계 보고서 초안 생성
+    -> 모든 영수증 통합
+    -> PDF 다운로드
+
+에이전트 클래스 구조:
+  EngineeringAgent (domain, byok_key)
+    - llm: LLMAdapterFactory.create(byok_key)
+    - calculator: CalculatorEngine()
+    - searcher: RAGSearcher()
+    - receipts: []
+
+  run(task) 메서드:
+    1. 태스크 분석 -> 단계 계획
+    2. 단계별 실행 (calculate / search / verify_standard)
+    3. 각 단계 날짜 박제 적용
+    4. 결과 통합 -> 체크리스트 + 보고서 초안
+
+==================================================
+10. 계산기 시스템 (영수증)
+==================================================
+
+전력 계산 계산기:
+  단상/3상 전력 계산기 - KEC 210
+  역률 보정 계산기 - KEC 220
+  전압강하 계산기 - KEC 232.52 / IEC 60364
+  전력손실 계산기 - IEC 60364
+  수용률/부등률 계산기 - KEC 210.3
+
+보호 협조 계산기:
+  차단기 용량 계산기 - IEC 60947
+  단락전류 계산기 - IEC 60909
+  케이블 굵기 선정 - KEC 232
+  접지저항 계산기 - KEC 140
+  보호계전기 정정 - IEEE C37
+
+변압기 계산기:
+  변압기 용량 계산기 - KEC 210.3 / IEC 60076
+  임피던스 전압 계산기 - IEC 60076-1
+  변압기 손실 계산기 - IEC 60076-1
+  병렬운전 조건 계산기 - KEC
+
+신재생/ESS 계산기:
+  태양광 발전량 계산기 - IEC 61724
+  배터리 용량 계산기 - IEC 62619
+  인버터 효율 계산기 - IEC 61683
+  계통연계 계산기 - KEC 500
+
+조명/설비 계산기:
+  조도 계산기 - KS C 3703
+  비상발전기 용량 계산기 - KEC
+  UPS 용량 계산기 - IEC 62040
+
+AI 특화 계산기:
+  토큰 비용 계산기
+  GPU 메모리 계산기
+  학습 비용 계산기
+  추론 속도 계산기
+  RAG 청크 최적화 계산기
+
+영수증 출력 구조:
+
+  [메타 정보 - 날짜 박제]
+  계산 일시: 2026.04.04 14:32:11
+  적용 규격: KEC 2024년판
+  규격 현행: 2026.04.01 확인됨
+  엔진 버전: CalcEngine v2.3.1
+  무결성 해시: a3f2c1...8d4e
+
+  [적용 공식]
+  P = 루트3 x V x I x cosθ
+  근거: KEC 210.3 / IEC 60076-1
+
+  [입력값]
+  결선 방식: 3상
+  선간전압 V: 22,900 V
+  전류 I: 100 A
+  역률 cosθ: 0.95
+
+  [계산 과정]
+  Step 1: 루트3 = 1.7320
+  Step 2: 22,900 x 1.7320 = 39,663 V
+  Step 3: 39,663 x 100 = 3,966,280
+  Step 4: 3,966,280 x 0.95 = 3,767,966
+  Step 5: 3,767,966 / 1,000 = 3,767.97 kVA
+
+  [결과]
+  계산값: 3,767.97 kVA
+  권장 선정: 4,000 kVA (표준 용량)
+  주의: 수용률/부등률 적용 검토 필요
+  주의: 장래 부하 증설 여유분 고려
+
+  [액션]
+  PDF 저장 / 공유 링크 / 재계산 / 블록체인 공증 / 저장 / 코멘트
+
+==================================================
+11. 지식 그래프
+==================================================
+
+개념:
+  키워드 검색 한계: 변압기 검색 -> 변압기 문서만
+  지식 그래프: 변압기 검색 -> 관련 개념 전체 탐색
+  변압기 -> 임피던스, 용량, 병렬운전
+  임피던스 -> 단락전류
+  단락전류 -> 차단기 용량
+  차단기 용량 -> 보호 협조
+
+Neo4j 노드 타입:
+  Concept (name, domain, description_ko)
+  Standard (name, version, issued_at)
+  Calculator (id, name, domain)
+  Document (id, title, published_at)
+
+Neo4j 관계 타입:
+  Concept -> RELATED_TO -> Concept
+  Concept -> GOVERNED_BY -> Standard
+  Concept -> CALCULATED_BY -> Calculator
+  Concept -> REFERENCED_IN -> Document
+  Standard -> SUPERSEDES -> Standard
+
+UI 기능:
+  검색 시 우측에 그래프 패널 표시
+  개념 클릭 -> 해당 개념으로 검색 이동
+  "이 개념들 순서대로 학습하기" 버튼
+  약점 개념 자동 감지 -> 학습 경로 제안
+
+==================================================
+12. 해외 기술 뉴스
+==================================================
+
+전기 분야 뉴스 소스:
+  Tier 1: IEEE Spectrum, Power Magazine, T&D World,
+          EE Times, Renewable Energy World, EPRI
+  Tier 2: BloombergNEF, S&P Global, Electrek, NREL
+
+AI 분야 뉴스 소스:
+  Tier 1: arXiv daily, Anthropic Blog, OpenAI Blog,
+          Google DeepMind, Hugging Face Blog
+  Tier 2: The Batch, Import AI, VentureBeat AI
+
+전기 뉴스 카테고리:
+  스마트그리드 / 디지털 변전소
+  HVDC / FACTS
+  신재생 (태양광/풍력/수소)
+  ESS / 배터리
+  전력 반도체 (SiC/GaN)
+  EV / 충전 인프라
+  전력 정책 / 규제
+
+AI 뉴스 카테고리:
+  모델 출시 / 업데이트
+  벤치마크 기록 갱신
+  전기 x AI 교차 적용
+  AI 인프라 / 전력 이슈
+  가격 변동
+
+AI 일일 브리핑 프로세스:
+  매일 06:00 자동 생성
+  -> 카테고리별 TOP 3 선정
+  -> AI 한국어 3줄 요약
+  -> 원문 발행일 + 번역 시각 표시 (날짜 박제)
+  -> 관련 논문/규격/계산기 자동 연결
+  -> 오늘의 전기+AI 핵심 브리핑 메인 노출
+
+검색과 뉴스 통합 예시:
+  GaN 인버터 최신 동향 검색 시
+  -> 이번 주 뉴스 3건
+  -> 관련 논문 5건
+  -> 관련 IEC 규격
+  -> 관련 계산기 바로가기
+
+==================================================
+13. 자격증 + 학습 시스템
+==================================================
+
+자격증 로드맵:
+  전기기능사 (Level 1)
+  -> 전기산업기사 (Level 2)
+  -> 전기기사 (Level 3) - 실무 필수
+  -> 전기기술사 (Level 4) - 최고 권위
+
+관련 자격증:
+  소방설비기사 (전기분야)
+  에너지관리기사
+  신재생에너지발전설비기사
+  전기안전관리자 선임 자격
+
+자격증별 정보 구조:
+  기본 정보 (개요, 응시자격, 시험 과목)
+  시험 일정 (큐넷 자동 업데이트 + 날짜 박제)
+  합격률 통계 (연도별 차트)
+  수험 가이드 (출제 기준, 핵심 학습 분야)
+  관련 법령 (기술사법, 국가기술자격법, 전기공사업법)
+
+AI 기출문제 시스템:
+  10년치 기출문제 DB
+  -> AI 해설 자동 생성
+  -> 틀린 문제 -> 관련 규격 자동 링크
+  -> 오답 노트 자동화
+  -> 약점 개념 -> 플랫폼 내 논문/규격 연결
+  -> 합격 예측 모델 (현재 패턴 기준 합격 확률 XX%)
+  -> 맞춤 학습 경로 제안
+
+시험 D-DAY 알림:
+  전기기사 필기 접수 D-14 -> 푸시 알림
+  전기기사 필기 접수 D-7 -> 푸시 + 이메일
+  전기기사 필기 시험 D-3 -> 강조 알림
+  합격자 발표일 -> 알림
+
+자격증 x 검색 연동 예시:
+  전기기사 시험에 나오는 변압기 병렬운전 조건 검색
+  -> 자격증 DB: 전기기사 출제기준 확인
+  -> 논문/교재 DB: 관련 기술 자료
+  -> 규격 DB: KEC 관련 조항
+  -> 계산기: 변압기 계산기 추천
+
+==================================================
+14. 협업 기능
+==================================================
+
+프로젝트 단위 관리 예시:
+  프로젝트: OO변전소 설계
+    계산서 묶음:
+      영수증 #001 변압기 용량 v1
+      영수증 #001 변압기 용량 v2 (수정본)
+      영수증 #002 케이블 선정
+    검색 이력
+    참고 규격
+    팀 코멘트
+
+협업 워크플로우:
+  설계자: 계산서 작성 -> 팀장에게 공유
+  팀장: 특정 Step에 코멘트 (역률을 0.9로 변경해봐)
+  설계자: 수치 수정 -> 재계산 -> v2 생성
+          v1과 v2 변경 이력 자동 저장
+  팀장: 최종 승인 -> 감리관에게 제출
+
+공유 링크:
+  계산서 고유 공유 URL 생성
+  접속 시: 계산 과정 전체 열람, 날짜 박제 정보 확인, 블록체인 공증 검증
+  권한 없으면 수정 불가
+
+역할 구분:
+  Owner: 모든 권한
+  Editor: 계산/편집 가능
+  Viewer: 열람만
+
+==================================================
+15. 모바일 현장 모드
+==================================================
+
+오프라인 캐시:
+  자주 쓰는 계산기 10종 로컬 저장
+  KEC 주요 조항 요약 저장
+  최근 검색 이력 저장
+  저장한 영수증 저장
+  지하 현장, 통신 불량 지역 사용 가능
+  온라인 복귀 시 자동 동기화
+
+현장 특화 UX:
+  장갑 끼고도 쓸 수 있는 큰 버튼
+  밝은 햇빛 아래 고대비 모드
+  한 손 조작 최적화
+  음성 입력 지원 (변압기 용량 계산, 전압 22.9kV, 전류 100A)
+  빠른 계산기 즐겨찾기
+
+OCR 명판 인식 연동:
+  현장 변압기 명판 촬영
+  -> OCR 자동 인식
+  -> 관련 계산기 자동 실행
+  -> 영수증 생성
+
+==================================================
+16. 개인화 알림
+==================================================
+
+알림 타입:
+  규격 개정 알림 (구독형): IEC 61850 개정됨 -> 즉시
+  키워드 뉴스 알림: 스마트그리드, SiC 관련 뉴스 -> 일 1회
+  자격증 D-DAY: 전기기사 필기 접수 D-7
+  AI 모델 출시: 새 모델 출시 알림
+  가격 변동: GPT-4o 가격 인하
+  주간 브리핑: 이번 주 내 분야 핵심 5가지
+
+알림 채널:
+  이메일
+  앱 푸시 (모바일)
+  브라우저 알림 (웹)
+  Slack/Teams 연동 (기업용)
+
+==================================================
+17. 데이터 시각화
+==================================================
+
+계산 결과:
+  전압강하 거리별 변화 라인 차트
+  부하 분포 파이 차트
+  케이블 용량 비교 바 차트
+
+논문/뉴스 트렌드:
+  SiC 논문 연도별 증가 추이
+  키워드 버블 차트
+  분야별 논문 수 히트맵
+
+규격 비교:
+  KEC vs IEC vs NEC 비교 테이블
+  규격 개정 타임라인
+
+AI 도구 비교:
+  벤치마크 레이더 차트
+  가격 추이 라인 차트
+  기능 비교 매트릭스
+
+사용 기술:
+  D3.js - 커스텀 차트
+  Recharts - React 기본 차트
+  Cytoscape.js - 지식 그래프
+
+==================================================
+18. OCR 명판 인식
+==================================================
+
+인식 대상:
+  변압기 명판 (용량/전압/전류/임피던스/제조일)
+  차단기 명판 (정격전류/정격전압/차단용량)
+  케이블 레이블 (규격/단면적/제조사)
+  전기 도면 상 수치
+  규격서 페이지 스캔
+
+처리 흐름:
+  카메라 촬영 또는 이미지 업로드
+  -> PaddleOCR 텍스트 추출
+  -> 전기 도메인 파라미터 파싱 (전압, 전류, 용량, 임피던스)
+  -> 파라미터 -> 계산기 자동 매핑
+  -> 이 데이터로 변압기 용량 계산할까요? 제안
+  -> 사용자 확인 -> 계산 실행 -> 영수증 생성
+
+사용 기술:
+  PaddleOCR - 메인 OCR 엔진
+  Tesseract - 보조 OCR
+  커스텀 파서 - 전기 파라미터 추출
+
+==================================================
+19. 블록체인 공증
+==================================================
+
+필요성:
+  전기 설계 계산서 법적 보존 기간: 준공 후 10년 이상
+  문제: 당시 현행 규격 기준이었나? 위변조 됐나?
+  해결: 블록체인 타임스탬프 공증 -> 위변조 불가, 영구 증명
+
+공증 프로세스:
+  계산 영수증 완성
+  -> SHA-256 해시 생성 (영수증 전체 내용 기반)
+  -> IPFS 분산 저장 (CID 생성)
+  -> 블록체인 타임스탬프 트랜잭션 (해시 + 시각 기록)
+  -> 공증 완료 배지 부착
+  -> 누구나 해시로 검증 가능
+
+검증 결과 예시:
+  영수증 ID: receipt_abc123
+  해시값: a3f2c1...8d4e
+  블록: #12345678
+  시각: 2026.04.04 14:32:11 KST
+  규격: KEC 2024년판
+  결과: 검증 완료 - 원본과 일치, 위변조 없음
+
+가치:
+  법적 근거: 당시 현행 규격 기준임을 타임스탬프로 증명
+  감리 제출: 계산 근거 문서화 자동화
+  분쟁 대비: 설계 당시 기준 영구 보존
+
+==================================================
+20. 커뮤니티 / 집단지성
+==================================================
+
+전문가 Q&A:
+  질문 등록
+  -> 검증된 전문가 (기술사 인증) 답변
+  -> 답변에 근거 규격 자동 링크
+  -> 커뮤니티 투표로 베스트 답변 선정
+  -> DB 저장 -> 이후 검색에 활용
+
+계산서 공유 라이브러리:
+  커뮤니티 검증 표준 계산서 템플릿:
+    수변전설비 설계 계산서 (KEC 2024년판)
+    태양광 계통연계 계산서
+    ESS 용량 계산서
+    비상발전기 용량 계산서
+  각 템플릿 정보: 날짜 박제, 커뮤니티 검증 배지, 다운로드 수, 평점
+
+버그 리포트 -> DB 개선:
+  사용자 오류 신고
+  -> 커뮤니티 검증
+  -> 오류 확인 -> 관리자 수정
+  -> 수정 이력 공개 (v2.3.2: 전압강하 공식 오류 수정)
+  -> 기여자 뱃지 부여
+
+규격 해석 토론:
+  같은 조항 다른 해석 공개 토론
+  다수 의견 + 근거 공개
+  전문가 최종 판단 표시
+
+==================================================
+21. AI 도메인
+==================================================
+
+AI 논문 검색 특화 기능:
+
+벤치마크 연동 검색:
+  ImageNet SOTA 최신 모델 검색
+  -> Papers With Code 벤치마크 자동 연결
+  -> 정확도/속도/파라미터 비교 테이블
+
+코드 연동:
+  논문 검색 결과에 GitHub 링크 자동 첨부
+
+인용 네트워크:
+  이 논문 인용한 최신 연구 탐색
+
+날짜 가중치 강화:
+  AI는 6개월만 지나도 구식
+  -> 최신 논문 가중치 대폭 상향
+
+전기 x AI 교차 검색:
+  전력계통 AI 적용 최신 연구
+  -> 전기 DB + AI DB 동시 검색
+
+AI 도구 비교 DB:
+
+비교 항목:
+  가격 (입력/출력 토큰당 USD)
+  컨텍스트 윈도우 크기
+  벤치마크 점수 (MMLU, HumanEval, MATH 등)
+  기능 (비전/함수호출/스트리밍)
+  전기 엔지니어링 특화 평가
+
+날짜 박제:
+  모든 가격 정보에 검증 시각 표시
+  모든 벤치마크에 측정일 표시
+
+전기 x AI 킬러 기능 예시:
+  스마트그리드에 어떤 AI 모델 써?
+  -> 전기 DB: 스마트그리드 논문/규격
+  -> AI DB: 시계열 예측 모델 비교
+  -> 교차: 전력계통 AI 적용 실제 사례
+  -> 비용: GPU/API 비용 계산기
+  -> 통합 답변: 전력 수요 예측은 Transformer 계열 추천,
+                고장 진단은 CNN 계열 추천,
+                관련 논문 5건 + 오픈소스 링크,
+                구현 비용 계산기 바로가기
+
+==================================================
+22. BYOK 구조
+==================================================
+
+키 관리 흐름:
+  사용자 API 키 입력
+  -> 클라이언트에서 AES-256 암호화
+  -> 암호화된 키만 서버 전송
+  -> DB 저장 (복호화 불가 구조)
+  -> API 호출 시: 복호화 -> 헤더 삽입 -> LLM 호출
+  -> 응답 후 메모리 즉시 삭제
+
+지원 LLM 어댑터:
+  openai -> OpenAIAdapter (GPT-4o)
+  anthropic -> AnthropicAdapter (Claude)
+  gemini -> GeminiAdapter
+  ollama -> OllamaAdapter (로컬 LLM)
+  모든 어댑터 공통 인터페이스: query(system, user, context), embed(text)
+
+비용 분담:
+  플랫폼 부담: 크롤링, DB, 검색, OCR, 수치 계산
+  사용자 BYOK: LLM 답변 생성, 뉴스 번역/요약, 파라미터 추출
+
+==================================================
+23. 보안 및 감사 로그
+==================================================
+
+감사 로그 기록 항목:
+  누가 (user_id)
+  언제 (timestamp)
+  무엇을 (action: search/calculate/export)
+  어떤 결과를 (resource_id)
+  어디서 (ip_address)
+  보존 기간: 10년 (전기 설비 설계 법적 보존 기간)
+
+접근 권한 관리:
+  Owner: 모든 권한
+  Editor: 계산/편집 가능
+  Viewer: 열람만
+  팀/프로젝트별 독립 접근 제어
+
+기업 온프레미스 옵션:
+  내부망 설치형
+  외부 인터넷 차단 운영 가능
+  SLA 보장
+  보안 민감한 전력공기업, 대기업 대응
+
+==================================================
+24. 도메인 확장 전략
+==================================================
+
+확장 로드맵:
+  Phase 1 (현재): 전기 + AI
+  Phase 2: 기계 (ASME/ISO)
+  Phase 3: 토목/건축 + 화학
+  Phase 4: 전체 공학 플랫폼 + 글로벌
+
+새 도메인 추가 시 건드리는 것:
+  DOMAIN_REGISTRY 설정 추가
+  해당 도메인 크롤러 추가
+  해당 도메인 계산기 Python 함수 추가
+  해당 도메인 자격증 데이터 추가
+  지식 그래프 노드/엣지 추가
+
+새 도메인 추가 시 건드리지 않는 것:
+  RAG 파이프라인 코어
+  영수증 시스템
+  날짜 박제 시스템
+  BYOK 구조
+  블록체인 공증
+  협업 기능
+  DB 스키마 (domain 컬럼으로 분리됨)
+  Frontend 공통 컴포넌트
+
+==================================================
+25. 수익 모델
+==================================================
+
+Free 티어:
+  계산기 월 20회
+  검색 결과 3개
+  뉴스 1주일 지연
+  블록체인 공증 미지원
+  협업 1인
+
+Pro 티어 (월 정액):
+  계산기 무제한
+  검색 결과 전체
+  실시간 뉴스
+  블록체인 공증 월 10회
+  협업 5인
+  개인화 알림 전체
+
+Team 티어 (월 정액/인):
+  Pro 전체 포함
+  협업 무제한
+  감사 로그
+  블록체인 공증 무제한
+  API 접근
+
+Enterprise 티어 (협의):
+  Team 전체 포함
+  온프레미스 설치
+  커스텀 DB 연동
+  SLA 보장
+  전담 지원
+
+Free 설계 고려사항:
+  계산기 영수증: Free도 생성 가능 (바이럴 효과)
+  블록체인 공증: Pro 이상 (핵심 전환 유인)
+  협업: Free 1인 -> 팀 초대 시 Pro 유도
+  날짜 박제: 전 티어 적용 (신뢰 기반이므로)
+
+==================================================
+26. 개발 로드맵
+==================================================
+
+Phase 1 MVP (3개월):
+
+인프라:
+  DB 스키마 구축
+  Docker 환경
+  CI/CD 파이프라인
+
+데이터:
+  IEEE/arXiv 크롤러
+  KEC/전기사업법 파서
+  날짜 박제 파이프라인 완성
+
+검색:
+  Weaviate 하이브리드 검색
+  RAG 답변 + BYOK 연동
+  날짜 메타데이터 부착
+
+계산기 10종 + 영수증:
+  전압강하 / 변압기 / 단락전류 / 케이블선정 / 역률보정
+  날짜 박제 완전 적용
+
+Frontend MVP:
+  검색 UI + 계산기 UI
+  영수증 뷰 + BYOK 키 입력
+
+Phase 2 기능 확장 (2개월):
+
+  뉴스 파이프라인 + AI 브리핑
+  자격증 + AI 기출문제 해설
+  계산기 전체 확장 (20종)
+  모바일 앱 (현장 모드 + 오프라인)
+  협업 기능 (공유/코멘트/버전)
+  OCR 명판 인식
+  개인화 알림 시스템
+  지식 그래프 (Neo4j)
+  데이터 시각화
+
+Phase 3 고도화 (이후):
+
+  에이전트 워크플로우
+  블록체인 공증 (IPFS)
+  커뮤니티 Q&A + 라이브러리
+  AI 도메인 추가
+  기계 도메인 확장
+  감사 로그 (기업용)
+  온프레미스 옵션
+  수익 모델 적용
+
+==================================================
+27. 정확도 목표
+==================================================
+
+영역별 목표 정확도:
+
+계산기 (영수증): 99.5% 이상
+  근거: Python 엔진 직접 연산, AI 계산 아님
+
+AI 검색 (RAG): 85~92%
+  근거: 도메인 특화 RAG, 일반 Perplexity 대비 5~10%p 높음
+
+뉴스 번역/요약: 88~93%
+  근거: 원문 출처 병기로 검증 가능
+
+자격증/일정: 95% 이상
+  근거: 큐넷 공식 데이터 크롤링
+
+OCR 명판 인식: 90% 이상
+  근거: 정형 데이터 특성
+
+정확도 향상 전략:
+
+단기:
+  청크 크기 A/B 테스트
+  전기 도메인 임베딩 파인튜닝
+  수치 범위 자동 검증 강화
+
+중기:
+  사용자 피드백 루프 (틀린 답변 신고)
+  커뮤니티 버그 리포트 반영
+  전문가 검수 레이어 추가
+
+장기:
+  전기 특화 LLM 파인튜닝
+  지식 그래프 기반 정확도 향상
+
+==================================================
+핵심 차별점 요약
+==================================================
+
+1. 영수증 시스템 (독보적)
+   계산 과정 전체 공개 -> 특허 출원 검토 가능
+
+2. 날짜 박제 (법적 방패)
+   언제, 어떤 규격 기준인지 타임스탬프 영구 증명
+
+3. 에이전트 워크플로우
+   검색 -> 답변 -> 계산 -> 보고서 원스톱 자동화
+
+4. 전기 x AI 교차 도메인
+   두 도메인 동시 검색 -> 전 세계 없는 기능
+
+5. 블록체인 공증
+   계산서 위변조 불가 영구 증명, 감리 제출 가능
+
+6. 현장 모바일 + OCR
+   명판 찍으면 계산기 자동 실행
+
+7. 한국어 + 글로벌 동시
+   KEC 국내 기준과 IEC 국제 기준 대조 한국어 브리핑
+
+8. 규격 개정 추적
+   개정 감지 -> 계산기 자동 경고 -> 구독자 알림
+   전 세계 어느 서비스도 없는 기능
+
+==================================================
+v3.0 최종본 끝
+이후 변경사항은 v4.0으로 관리
+==================================================

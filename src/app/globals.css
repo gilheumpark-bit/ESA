@@ -1,0 +1,284 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  /* ESVA Design Tokens — Professional Vertical AI */
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+  --color-primary-light: #3b82f6;
+  --color-accent: #f59e0b;
+  --color-accent-hover: #d97706;
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+
+  --border-default: #e2e8f0;
+  --border-hover: #cbd5e1;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #1d4ed8, #3b82f6);
+  --gradient-accent: linear-gradient(135deg, #f59e0b, #f97316);
+  --gradient-hero: linear-gradient(135deg, #eff6ff 0%, #fefce8 50%, #fff7ed 100%);
+
+  /* Glass */
+  --bg-glass: rgba(255, 255, 255, 0.7);
+  --bg-glass-border: rgba(255, 255, 255, 0.2);
+
+  /* Shadows — Vercel-style depth */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
+  --shadow-glow-primary: 0 0 20px rgba(29, 78, 216, 0.15);
+  --shadow-glow-accent: 0 0 20px rgba(245, 158, 11, 0.15);
+
+  --z-dropdown: 50;
+  --z-modal: 100;
+  --z-toast: 150;
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #60a5fa;
+  --color-primary-light: #60a5fa;
+
+  --bg-primary: #0a0f1e;
+  --bg-secondary: #111827;
+  --bg-tertiary: #1f2937;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #64748b;
+
+  --border-default: #1f2937;
+  --border-hover: #374151;
+
+  --gradient-hero: linear-gradient(135deg, #0a0f1e 0%, #1a1207 50%, #1a0f07 100%);
+  --bg-glass: rgba(10, 15, 30, 0.7);
+  --bg-glass-border: rgba(255, 255, 255, 0.05);
+
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
+  --shadow-glow-primary: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+/* ═══ Global Animations ═══ */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(29, 78, 216, 0.2); }
+  50% { box-shadow: 0 0 20px 4px rgba(29, 78, 216, 0.15); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out both;
+}
+
+/* Staggered children */
+/* Card system */
+.card-interactive {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-card);
+}
+.card-interactive:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Bento icon gradients — SSR-safe (no inline style hydration mismatch) */
+.bento-icon-blue { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 8px 16px -4px rgba(37,99,235,0.3); }
+.bento-icon-purple { background: linear-gradient(135deg, #7c3aed, #8b5cf6); box-shadow: 0 8px 16px -4px rgba(124,58,237,0.3); }
+.bento-icon-orange { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 8px 16px -4px rgba(249,115,22,0.3); }
+.bento-icon-emerald { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 8px 16px -4px rgba(5,150,105,0.3); }
+
+/* Gradient text */
+.gradient-text-primary {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+ * SSS-Grade Design System
+ * ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── SSS-1: Fluid Typography (유체 타이포그래피) ────────────────────────────── */
+/* clamp(min, preferred, max) — 뷰포트에 따라 유동적 크기 */
+:root {
+  --font-xs:   clamp(0.6875rem, 0.65rem + 0.15vw, 0.75rem);     /* 11~12px */
+  --font-sm:   clamp(0.8125rem, 0.78rem + 0.15vw, 0.875rem);    /* 13~14px */
+  --font-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);          /* 15~16px */
+  --font-lg:   clamp(1.0625rem, 1rem + 0.3vw, 1.125rem);        /* 17~18px */
+  --font-xl:   clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);          /* 20~24px */
+  --font-2xl:  clamp(1.5rem, 1.3rem + 0.8vw, 2rem);             /* 24~32px */
+  --font-3xl:  clamp(1.875rem, 1.5rem + 1.2vw, 2.5rem);         /* 30~40px */
+
+  /* 행간 (line-height) */
+  --leading-tight: 1.35;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* 자간 (letter-spacing) — 한글 최적화 */
+  --tracking-tight: -0.02em;
+  --tracking-normal: -0.01em;
+  --tracking-wide: 0.05em;
+}
+
+/* ── SSS-2: 8pt Vertical Rhythm (수직 리듬) ────────────────────────────────── */
+:root {
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+  --space-16: 4rem;    /* 64px */
+}
+
+/* ── SSS-3: Global Typography Defaults ──────────────────────────────────────── */
+body {
+  font-size: var(--font-base);
+  line-height: var(--leading-normal);
+  letter-spacing: var(--tracking-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 본문 최소 16px 강제 — 11px/13px 방지 */
+p, li, td, th, label, span:not(.badge):not(.chip) {
+  font-size: max(var(--font-base), 0.9375rem);
+}
+
+/* ── SSS-4: Micro Interactions (마이크로 인터랙션) ───────────────────────────── */
+
+/* 버튼 탄성 (젤리 바운스) */
+@keyframes bounce-press {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.95); }
+  60% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.btn-bounce:active {
+  animation: bounce-press 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 카드 호버 — 부드러운 상승 + 그림자 확산 */
+.card-interactive {
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-card);
+  will-change: transform;
+}
+.card-interactive:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
+}
+.card-interactive:active {
+  transform: translateY(-1px);
+  transition-duration: 0.1s;
+}
+
+/* 링크/버튼 호버 — 부드러운 색상 전환 */
+a, button {
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 포커스 링 — 접근성 + 미관 */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── SSS-5: Progressive Disclosure (점진적 공개) ─────────────────────────────── */
+
+/* 호버 시 심화 정보 페이드인 */
+.reveal-on-hover .reveal-target {
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease, max-height 0.4s ease;
+}
+.reveal-on-hover:hover .reveal-target,
+.reveal-on-hover:focus-within .reveal-target {
+  opacity: 1;
+  max-height: 200px;
+}
+
+/* 스크롤 시 등장 (IntersectionObserver 연동) */
+.appear-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.appear-on-scroll.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── SSS-6: Smart Input Styles ──────────────────────────────────────────────── */
+
+/* 입력 필드 포커스 시 확대 + 글로우 */
+input[type="text"], input[type="number"], input[type="search"], textarea, select {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  font-size: max(1rem, 16px); /* iOS zoom 방지 */
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+}
+
+/* ── SSS-7: Optimistic UI Shimmer ────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── SSS-8: Content Width Constraint (한 줄 50~70자) ──────────────────────── */
+.prose {
+  max-width: 65ch;
+  line-height: var(--leading-relaxed);
+  letter-spacing: var(--tracking-normal);
+}
+
+/* Receipt print styles */
+@media print {
+  .no-print { display: none !important; }
+  .receipt-container { break-inside: avoid; }
+}

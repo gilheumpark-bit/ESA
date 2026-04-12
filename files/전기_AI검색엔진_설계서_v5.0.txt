@@ -1,0 +1,1643 @@
+전기 전문 AI 검색엔진 종합 설계서 v5.0
+작성일: 2026.04.04
+버전 이력:
+  v1.0 기본설계 (전기 도메인, 기본 아키텍처)
+  v2.0 AI 도메인 추가, BYOK 구조 확정
+  v3.0 날짜 박제, 협업, 모바일, 에이전트, 지식 그래프, 커뮤니티, 블록체인, 수익 모델
+  v4.0 Hybrid BYOK, 법적 면책 조항, Vision-LLM PDF 파싱, 블록체인 익명화,
+        엑셀 Export, NEC 규격 추가, 단선결선도 AI 인식 예고
+  v5.0 글로벌 규격 완전판 (유럽/일본/중국/미국/북미/호주 전체),
+        국가별 전압 체계, 해외 플랜트 규격 자동 변환, 단위 변환 엔진,
+        글로벌 타겟 확장 (EPC사, 해외 엔지니어)
+
+==================================================
+목차
+==================================================
+1. 프로젝트 개요
+2. 핵심 철학 및 원칙
+3. 전체 시스템 아키텍처
+4. 기술 스택
+5. 데이터베이스 스키마
+6. 데이터 수집 파이프라인
+7. PDF 표/수식 파싱 전략 (Vision-LLM)
+8. 날짜 박제 시스템
+9. 글로벌 규격 DB 완전판 - NEW v5.0
+10. 국가별 전압/전기 체계 DB - NEW v5.0
+11. 해외 플랜트 규격 자동 변환 - NEW v5.0
+12. 단위 변환 엔진 - NEW v5.0
+13. AI 검색 엔진
+14. 에이전트 워크플로우
+15. 계산기 시스템 (영수증)
+16. 산출물 Export 시스템 (PDF/Excel/Word)
+17. 법적 면책 조항 시스템
+18. 지식 그래프
+19. 해외 기술 뉴스
+20. 자격증 + 학습 시스템
+21. 협업 기능
+22. 모바일 현장 모드
+23. 개인화 알림
+24. 데이터 시각화
+25. OCR 명판 인식
+26. 블록체인 공증 (익명화)
+27. 커뮤니티 / 집단지성
+28. AI 도메인
+29. Hybrid BYOK 구조
+30. 보안 및 감사 로그
+31. 도메인 확장 전략
+32. 수익 모델
+33. 개발 로드맵
+34. 정확도 목표
+
+==================================================
+1. 프로젝트 개요
+==================================================
+
+한 줄 정의:
+전기 엔지니어링 특화 글로벌 AI 플랫폼.
+전 세계 전기 규격 (KEC/IEC/NEC/JIS/GB/AS-NZS/EN 등) 완전 지원 +
+글로벌 논문/규격/뉴스 실시간 수집 + 할루시네이션 없는 출처 기반 답변 +
+영수증 계산기 + 날짜 박제 + 협업 + 현장 모바일 + 법적 공증 +
+해외 플랜트 규격 자동 변환까지 원스톱 엔지니어링 플랫폼.
+
+시장 기회:
+  가트너 예측: 2026년까지 전통 검색엔진 볼륨 25% 감소
+  버티컬 LLM 시장: 2025년 2.9B달러 -> 2033년 18.7B달러 (CAGR 26%)
+  전기 특화 버티컬 검색: 전 세계 공백 상태
+  해외 플랜트 EPC 시장: 한국 3대 EPC사 연간 수십조 규모
+  글로벌 전기 엔지니어: 수백만 명 잠재 사용자
+
+목표 사용자:
+
+1차 (국내):
+  전기 엔지니어 (설계/시공/감리)
+  전기기사/기술사 수험생
+  전력 R&D 연구자
+
+2차 (국내 + 글로벌):
+  해외 플랜트 수출 EPC사 (현대엔지니어링, 삼성엔지니어링, GS건설, 대우건설)
+  전력공기업 (KEPCO, 한전KPS 등)
+  엔지니어링 컨설팅사
+
+3차 (글로벌):
+  일본 전기 엔지니어 (JIS 기반 검색)
+  중국 전기 엔지니어 (GB 기반 검색)
+  미국/캐나다 엔지니어 (NEC/CEC 기반)
+  유럽 엔지니어 (EN/DIN VDE/BS 기반)
+  호주/뉴질랜드 엔지니어 (AS/NZS 기반)
+
+기존 서비스 대비 비교:
+
+항목                        구글/네이버  Perplexity  IEEE Xplore  본 서비스
+전기 특화                      X           X           일부          O
+할루 차단                      X           일부         X           구조적 차단
+계산기 영수증                   X           X           X           독보적
+날짜 박제                      X           X           일부          O
+법적 면책 조항 자동화             X           X           X            O
+엑셀/PDF Export                X           X           X            O
+Vision-LLM 수식 파싱            X           X           X            O
+글로벌 규격 완전 커버            X           X           X            O
+국가별 규격 자동 변환            X           X           X            O
+단위 변환 엔진 (mm2/AWG 등)     X           X           X            O
+협업 기능                      X           X           X            O
+현장 모바일                     X           X           X            O
+에이전트 워크플로우               X           X           X            O
+블록체인 공증 (익명화)            X           X           X            O
+한국어 + 다국어 지원             일부         일부         X            O
+Hybrid BYOK                  X           X           X            O
+
+==================================================
+2. 핵심 철학 및 원칙
+==================================================
+
+원칙 1: 할루시네이션 제로
+  AI = 수집된 문서 기반 요약만 수행
+  출처 없는 답변 = 시스템 레벨에서 차단
+  수치/규격 = 계산 엔진이 직접 연산
+
+원칙 2: 날짜 박제
+  모든 데이터에 타임스탬프 필수
+  원문 발행일 / 수집일 / 검증일 / 규격 버전 / 계산 실행 시각 / 엔진 버전
+  언제 기준인지 모르면 현장에서 못 쓴다
+
+원칙 3: 영수증 투명성
+  계산 과정 전체 공개
+  출처 논문/규격 조항까지 명시
+  AI가 계산했다 X -> 엔진이 직접 돌린 결과
+
+원칙 4: 법적 명확성
+  모든 산출물에 면책 조항 자동 삽입
+  공증은 시점 증명이지 결과 보증이 아님을 명시
+
+원칙 5: 글로벌 규격 동등성 (v5.0 추가)
+  어떤 국가 규격으로 질문해도 답변 가능
+  국가 간 규격 자동 변환 및 차이점 명시
+  단위 체계 자동 변환 (mm2 vs AWG, kV vs V 등)
+
+원칙 6: 도메인 플러그인
+  전기 -> 기계 -> 토목 -> 화학 -> 전체 공학
+  코어 건드리지 않고 도메인만 추가
+
+원칙 7: Hybrid BYOK
+  Free: 플랫폼 기본 소형 LLM 제공
+  Pro 이상: 사용자 본인 API 키
+  API 키는 암호화 저장, 로그 기록 안 함
+
+원칙 8: 법적 방패
+  날짜 박제 + 블록체인 공증 (익명화 적용)
+  = 당시 현행 규격 기준으로 작성됨을 타임스탬프로 영구 증명
+
+==================================================
+3. 전체 시스템 아키텍처
+==================================================
+
+레이어 구조:
+
+[사용자 인터페이스]
+Next.js 14 (Web) + React Native (Mobile)
+검색 / 계산기 / 뉴스 / 자격증 / 협업 / 커뮤니티
+국가 규격 선택 UI / 단위 체계 선택 UI (v5.0)
+
+[API Gateway - Node.js]
+인증 / 라우팅 / BYOK 키 처리 / Rate Limit
+국가/언어 감지 (v5.0)
+
+[서비스 레이어 - FastAPI]
+검색 엔진 / 계산기 엔진 / 뉴스 피드 / 에이전트 워크플로우
+Export 엔진 (PDF/Excel/Word)
+면책 조항 엔진
+규격 변환 엔진 (v5.0)
+단위 변환 엔진 (v5.0)
+
+[Data Layer]
+Weaviate (벡터 검색)
+PostgreSQL (메타/협업/이력/글로벌 규격)
+Redis (캐시)
+TimescaleDB (뉴스/시계열)
+Neo4j (지식 그래프 + 글로벌 규격 관계)
+IPFS (블록체인 공증)
+
+[데이터 수집 파이프라인]
+Scrapy / Playwright / Apache Airflow
+논문 / 뉴스 / 규격 / 법령 / 자격증 크롤러
+글로벌 규격 크롤러 (v5.0 대폭 확장)
+Vision-LLM PDF 전처리 파이프라인
+
+==================================================
+4. 기술 스택
+==================================================
+
+Frontend:
+  Next.js 14 (App Router)
+  React Native (모바일)
+  TypeScript
+  Tailwind CSS
+  shadcn/ui
+  Zustand
+  React Query
+  D3.js / Recharts
+  Cytoscape.js (지식 그래프)
+  i18next (다국어 지원 - v5.0)
+
+Backend:
+  FastAPI (Python)
+  Node.js Express (API Gateway)
+  WebSocket
+  Celery
+  Redis
+
+AI / ML:
+  LangChain
+  LlamaIndex
+  Hybrid BYOK (소형 LLM 기본 + 사용자 키 선택)
+    기본 LLM: Llama 3.x 또는 Mistral
+    Pro 이상: OpenAI / Anthropic / Google
+  Vision-LLM (GPT-4o Vision / Claude 3.5 Sonnet) - PDF 파싱
+  PaddleOCR / Tesseract - OCR
+  spaCy (다국어 NLP - v5.0)
+
+데이터베이스:
+  Weaviate (벡터 검색)
+  PostgreSQL (메인 RDB)
+  TimescaleDB (시계열)
+  Redis
+  Neo4j (지식 그래프)
+  IPFS (블록체인 공증)
+
+글로벌 규격 수집 (v5.0):
+  NFPA 70 (NEC) - 미국
+  CSA C22.1 (CEC) - 캐나다
+  IEC 시리즈 - 국제
+  EN 시리즈 - 유럽
+  DIN VDE - 독일
+  BS 7671 - 영국
+  NF C 15-100 - 프랑스
+  JIS C - 일본
+  JEAC 내선규정 - 일본
+  GB 시리즈 - 중국
+  AS/NZS 3000 시리즈 - 호주/뉴질랜드
+  KEC / KS C - 한국
+
+단위 변환 엔진 (v5.0):
+  Pint (단위 변환 라이브러리)
+  커스텀 전기 단위 매핑
+    mm2 <-> AWG <-> kcmil
+    kV <-> V <-> MV
+    kW <-> HP <-> kVA
+    Hz (50Hz <-> 60Hz 영향 계산)
+    섭씨 <-> 화씨 (케이블 허용 전류 온도 보정)
+
+Export 엔진:
+  openpyxl (엑셀)
+  ReportLab / WeasyPrint (PDF)
+  python-docx (Word)
+  Jinja2 (템플릿)
+
+보안:
+  IPFS / SHA-256 / AES-256 / JWT
+  익명화 엔진
+
+배포/인프라:
+  AWS / GCP
+  Docker + Kubernetes
+  Cloudflare
+  GitHub Actions
+
+==================================================
+5. 데이터베이스 스키마
+==================================================
+
+[문서 테이블 documents]
+id: UUID PK
+domain: VARCHAR(50)
+doc_type: VARCHAR(50)
+title: TEXT
+title_ko: TEXT
+title_local: TEXT (원문 언어 제목 - v5.0)
+source: VARCHAR(100)
+tier: SMALLINT
+url: TEXT
+doi: VARCHAR(200)
+country_code: VARCHAR(10) (규격 발행 국가 - v5.0)
+standard_body: VARCHAR(100) (발행 기관 - v5.0)
+published_at: TIMESTAMP
+collected_at: TIMESTAMP
+verified_at: TIMESTAMP
+standard_version: VARCHAR(100)
+is_latest_version: BOOLEAN
+superseded_by: UUID
+next_revision_expected: DATE
+revision_notes: TEXT
+language: VARCHAR(10)
+raw_text: TEXT
+parsed_tables: JSONB
+parsed_formulas: JSONB
+summary_ko: TEXT
+summary_en: TEXT (v5.0)
+quality_score: FLOAT
+created_at: TIMESTAMP
+updated_at: TIMESTAMP
+
+[글로벌 규격 매핑 global_standard_mapping] (v5.0 전면 확장)
+id: UUID PK
+concept: VARCHAR(200) (전압강하, 케이블선정, 접지 등)
+concept_en: VARCHAR(200)
+domain: VARCHAR(50)
+
+kec_ref: VARCHAR(200) (한국 KEC)
+kec_version: VARCHAR(50)
+kec_value: TEXT (기준값/허용값)
+
+iec_ref: VARCHAR(200) (국제 IEC)
+iec_version: VARCHAR(50)
+iec_value: TEXT
+
+nec_ref: VARCHAR(200) (미국 NEC/NFPA 70)
+nec_version: VARCHAR(50)
+nec_value: TEXT
+nec_unit_system: VARCHAR(20) (AWG/Imperial)
+
+cec_ref: VARCHAR(200) (캐나다 CEC)
+cec_version: VARCHAR(50)
+cec_value: TEXT
+
+en_ref: VARCHAR(200) (유럽 EN)
+en_version: VARCHAR(50)
+en_value: TEXT
+
+din_vde_ref: VARCHAR(200) (독일 DIN VDE)
+din_vde_version: VARCHAR(50)
+din_vde_value: TEXT
+
+bs_ref: VARCHAR(200) (영국 BS 7671)
+bs_version: VARCHAR(50)
+bs_value: TEXT
+
+nf_ref: VARCHAR(200) (프랑스 NF C)
+nf_version: VARCHAR(50)
+nf_value: TEXT
+
+jis_ref: VARCHAR(200) (일본 JIS C)
+jis_version: VARCHAR(50)
+jis_value: TEXT
+
+jeac_ref: VARCHAR(200) (일본 내선규정)
+jeac_version: VARCHAR(50)
+jeac_value: TEXT
+
+gb_ref: VARCHAR(200) (중국 GB)
+gb_version: VARCHAR(50)
+gb_value: TEXT
+
+dl_ref: VARCHAR(200) (중국 DL/T 전력업계)
+dl_version: VARCHAR(50)
+dl_value: TEXT
+
+as_nzs_ref: VARCHAR(200) (호주/뉴질랜드 AS/NZS)
+as_nzs_version: VARCHAR(50)
+as_nzs_value: TEXT
+
+comparison_notes: TEXT (국가 간 차이점 설명)
+strictest_standard: VARCHAR(20) (가장 엄격한 기준 국가)
+last_verified_at: TIMESTAMP (날짜 박제)
+
+[국가별 전기 체계 country_electrical_systems] (v5.0 추가)
+id: UUID PK
+country_code: VARCHAR(10)
+country_name_ko: VARCHAR(100)
+country_name_en: VARCHAR(100)
+region: VARCHAR(50) (동아시아, 북미, 유럽, 오세아니아 등)
+
+standard_voltage_single: INTEGER (단상 표준전압 V)
+standard_voltage_three: INTEGER (3상 표준전압 V)
+frequency_hz: INTEGER (50 또는 60)
+frequency_note: TEXT (일본처럼 혼재 시 설명)
+
+distribution_voltage: INTEGER (배전전압 V)
+transmission_voltage: TEXT (송전전압 체계)
+
+primary_standard: VARCHAR(100) (주요 규격명)
+standard_body: VARCHAR(200) (규격 발행 기관)
+plug_type: VARCHAR(50) (콘센트 타입)
+
+unit_system: VARCHAR(20) (metric 또는 imperial)
+cable_sizing_system: VARCHAR(20) (mm2 또는 AWG/kcmil)
+
+wiring_color_live: VARCHAR(20) (활선 색상)
+wiring_color_neutral: VARCHAR(20) (중성선 색상)
+wiring_color_ground: VARCHAR(20) (접지선 색상)
+
+notes: TEXT
+last_updated_at: TIMESTAMP (날짜 박제)
+
+[규격 변환 이력 standard_conversion_history] (v5.0 추가)
+id: UUID PK
+user_id: UUID FK users
+source_standard: VARCHAR(50) (KEC)
+target_standard: VARCHAR(50) (NEC)
+concept: VARCHAR(200)
+input_values: JSONB
+converted_values: JSONB
+conversion_notes: TEXT
+converted_at: TIMESTAMP (날짜 박제)
+
+[계산기 테이블 calculators]
+id: UUID PK
+domain: VARCHAR(50)
+category: VARCHAR(100)
+name: VARCHAR(200)
+name_en: VARCHAR(200)
+description: TEXT
+formula_display: TEXT
+formula_code: TEXT
+excel_formula_template: JSONB
+standards: VARCHAR(100)[]
+supported_countries: VARCHAR(10)[] (v5.0 - 지원 국가 코드)
+standard_version: VARCHAR(100)
+standard_verified_at: TIMESTAMP
+params_schema: JSONB
+output_schema: JSONB
+engine_version: VARCHAR(20)
+is_active: BOOLEAN
+last_updated_at: TIMESTAMP
+has_pending_update: BOOLEAN
+pending_update_notes: TEXT
+
+[계산 영수증 calculation_receipts]
+id: UUID PK
+calc_id: UUID FK calculators
+user_session: VARCHAR(200)
+user_id: UUID FK users
+project_id: UUID FK projects
+country_code: VARCHAR(10) (적용 국가 - v5.0)
+applied_standard: VARCHAR(100) (적용 규격 - v5.0)
+unit_system: VARCHAR(20) (metric/imperial - v5.0)
+inputs: JSONB
+result: JSONB
+steps: JSONB
+formula_used: TEXT
+standards_used: VARCHAR(100)[]
+warnings: TEXT[]
+recommendations: TEXT[]
+disclaimer_text: TEXT
+disclaimer_version: VARCHAR(20)
+calculated_at: TIMESTAMP
+standard_version: VARCHAR(100)
+standard_verified_at: TIMESTAMP
+engine_version: VARCHAR(20)
+is_standard_current: BOOLEAN
+anonymized_hash: VARCHAR(64)
+receipt_hash: VARCHAR(64)
+ipfs_cid: VARCHAR(100)
+blockchain_tx: VARCHAR(200)
+shared_with: UUID[]
+share_token: VARCHAR(100) UNIQUE
+is_public: BOOLEAN
+
+==================================================
+6. 데이터 수집 파이프라인
+==================================================
+
+글로벌 규격 소스 전체 (v5.0):
+
+한국:
+  KEC (한국전기설비규정) - 월 1회
+  전기사업법 / 기술기준 - 월 1회
+  KS C 시리즈 - 월 1회
+
+미국:
+  NFPA 70 (NEC) - 월 1회
+  ANSI/NEMA - 월 1회
+  IEEE Std - 주 1회
+  UL 표준 - 월 1회
+
+캐나다:
+  CSA C22.1 (CEC) - 월 1회
+  CSA 시리즈 - 월 1회
+
+유럽 (공통):
+  EN 시리즈 (IEC 기반) - 월 1회
+  CENELEC 표준 - 월 1회
+
+유럽 (국가별):
+  DIN VDE (독일) - 월 1회
+  BS 7671 (영국) - 월 1회
+  NF C 15-100 (프랑스) - 월 1회
+  CEI 64-8 (이탈리아) - 월 1회
+
+일본:
+  JIS C 시리즈 - 월 1회
+  JEAC 내선규정 - 월 1회
+  電気設備技術基準 - 월 1회
+
+중국:
+  GB/T 시리즈 - 월 1회
+  GB 50054 / 50057 - 월 1회
+  DL/T (전력업계) - 월 1회
+  NB/T (에너지업계) - 월 1회
+
+호주/뉴질랜드:
+  AS/NZS 3000 (Wiring Rules) - 월 1회
+  AS/NZS 3008 - 월 1회
+  AS/NZS 4777 - 월 1회
+
+국제:
+  IEC 60364 시리즈 - 월 1회
+  IEC 60076 / 60909 / 61850 / 62619 - 월 1회
+  IEEE C 시리즈 - 주 1회
+
+논문/뉴스 소스:
+  Tier 1: IEEE Xplore, arXiv, DOE, EPRI (주 1회)
+  Tier 2: Elsevier, Springer, MDPI, Hugging Face Papers (주 1회)
+  Tier 3: IEEE Spectrum, Power Magazine, T&D World, EE Times (6시간)
+
+Airflow DAG:
+
+DAG 1 논문 크롤링 (주 1회):
+  crawl_ieee -> crawl_arxiv -> crawl_elsevier
+  -> domain_filter -> dedup_by_doi
+  -> vision_llm_preprocess
+  -> quality_score -> embed_and_index
+  -> timestamp_all_fields
+
+DAG 2 뉴스 크롤링 (6시간):
+  crawl_all_news -> relevance_filter
+  -> translate_ko -> summarize
+  -> trend_analysis -> store
+  -> timestamp_all_fields
+
+DAG 3 글로벌 규격 감시 (월 1회):
+  crawl_kec -> crawl_iec -> crawl_nec -> crawl_cec
+  -> crawl_en -> crawl_din_vde -> crawl_bs
+  -> crawl_jis -> crawl_jeac -> crawl_gb
+  -> crawl_as_nzs
+  -> diff_detection (개정 감지)
+  -> update_global_mapping (규격 매핑 업데이트)
+  -> mark_affected_calcs
+  -> send_user_alerts
+  -> timestamp_all
+
+DAG 4 자격증 일정 (주 1회):
+  crawl_qnet -> parse -> update -> alert -> timestamp
+
+==================================================
+7. PDF 표/수식 파싱 전략 (Vision-LLM)
+==================================================
+
+문제점:
+  IEC/IEEE/NEC/JIS/GB 규격서의 핵심 정보는
+  복잡한 수식과 다단 표에 존재
+  기본 텍스트 청킹으로는 온전히 담을 수 없음
+
+처리 단계:
+
+1단계: PDF -> 페이지별 이미지 변환 (300 DPI)
+2단계: 텍스트/표수식 페이지 분류
+3단계: Vision-LLM 처리
+  표 -> Markdown 변환
+  수식 -> LaTeX 변환
+  전기공학 전문 용어 정확히 유지
+  다국어 규격서 처리 (영어/독어/일어/중국어 - v5.0)
+4단계: 구조화 저장 (parsed_tables, parsed_formulas)
+5단계: 검색/계산기 연동
+
+비용 최적화:
+  표/수식 포함 페이지만 선별 처리
+  처리 결과 캐싱
+
+==================================================
+8. 날짜 박제 시스템
+==================================================
+
+박제 대상:
+
+문서/논문:
+  published_at / collected_at / verified_at
+  standard_version / is_latest_version
+
+계산 영수증:
+  calculated_at / standard_version
+  standard_verified_at / engine_version
+  disclaimer_version / applied_standard (v5.0)
+  country_code (v5.0)
+
+뉴스:
+  published_at / crawled_at
+  translated_at / summary_generated_at
+
+자격증:
+  collected_at / last_updated_at
+
+AI 도구:
+  release_date / pricing_verified_at / measured_at
+
+글로벌 규격 매핑 (v5.0):
+  last_verified_at (국가별 규격 비교 마지막 검증일)
+
+국가별 전기 체계 (v5.0):
+  last_updated_at
+
+규격 변환 이력 (v5.0):
+  converted_at
+
+==================================================
+9. 글로벌 규격 DB 완전판 - NEW v5.0
+==================================================
+
+지원 규격 전체 목록:
+
+[한국]
+  KEC (한국전기설비규정)
+    개정 주기: 수시
+    핵심 시리즈: KEC 100-800
+    특징: IEC 기반이나 국내 환경 반영
+  전기사업법 / 기술기준 / 판단기준
+  KS C 시리즈 (한국산업표준)
+
+[미국]
+  NEC - NFPA 70 (National Electrical Code)
+    개정 주기: 3년 (2023년판 최신)
+    핵심 조항: Article 200-800
+    단위: AWG, kcmil, Imperial
+    특징: 주(State)별 채택 버전 상이
+  ANSI/NEMA 시리즈
+    MG1 (모터), WC 시리즈 (케이블)
+  IEEE Std 시리즈
+    C2 (NESC), C37 (보호계전), 80 (접지)
+  UL 표준
+    UL 6 (강제 전선관), UL 44 (케이블)
+  ASHRAE (설비 관련)
+
+[캐나다]
+  CEC - CSA C22.1 (Canadian Electrical Code)
+    개정 주기: 3년
+    NEC와 유사하나 독립 규격
+    프랑스어/영어 이중 공식본
+  CSA 시리즈 (Canadian Standards Association)
+
+[유럽 통합]
+  EN 시리즈 (IEC 기반 유럽 채택)
+    EN 60364 시리즈 (저압 설비)
+    EN 60076 (변압기)
+    EN 60909 (단락전류)
+  CENELEC 표준
+
+[독일]
+  DIN VDE 0100 시리즈
+    개정 주기: 수시
+    특징: 유럽 중 가장 엄격
+    0100-410 (감전 보호)
+    0100-520 (배선 방법)
+    0100-710 (의료 시설)
+  DIN EN 시리즈 (EN 독일 채택본)
+
+[영국]
+  BS 7671 (IET Wiring Regulations)
+    개정 주기: 수시 (18th Edition 현재)
+    특징: 브렉시트 후 독자 노선 강화
+    Chapter 1-7 구조
+  BS EN 시리즈
+
+[프랑스]
+  NF C 15-100
+    개정 주기: 수시
+    특징: 주거용 배선에 특히 엄격
+  UTE C 15-900 시리즈
+
+[이탈리아]
+  CEI 64-8 (저압 전기 설비)
+  CEI EN 시리즈
+
+[일본]
+  JIS C 시리즈 (일본공업규격)
+    JIS C 3307 (600V 비닐절연전선)
+    JIS C 3342 (600V 비닐절연케이블)
+    JIS C 4620 (큐비클식 고압수전설비)
+  내선규정 (JESC WE0101)
+    개정 주기: 수시
+    특징: 실무 배선 핵심 규정
+    일본 전기공사의 실질적 기준
+  電気設備技術基準 (전기설비기술기준)
+    법령 기반 최상위 기준
+  電気設備技術基準の解釈 (해석)
+  JEAC (일본전기기술규격위원회)
+    JEAC 8001 (내선규정)
+
+[중국]
+  GB/T 시리즈 (국가표준 - 권장)
+  GB 시리즈 (국가표준 - 강제)
+    GB 50054 (저압배전설계규범)
+    GB 50057 (건축물 피뢰설계규범)
+    GB 50052 (공급전원설계규범)
+    GB 50217 (전력공학 케이블설계표준)
+  DL/T 시리즈 (전력업계 표준)
+    DL/T 620 (과전압보호 및 절연협조)
+  NB/T 시리즈 (에너지업계 표준)
+  CECS 시리즈 (공정건설 표준)
+  특징: IEC 상당부분 채택하나 국내 표준 별도 존재
+
+[호주/뉴질랜드]
+  AS/NZS 3000 (Wiring Rules)
+    개정 주기: 수시 (2018년판 현재)
+    특징: 호주/뉴질랜드 공동 규격
+    IEC 기반이나 독자 요구사항 다수
+  AS/NZS 3008 (케이블 선정)
+  AS/NZS 4777 (태양광 인버터 계통연계)
+  AS/NZS 61439 (배전반)
+  AS 60038 (표준 전압)
+
+[국제]
+  IEC 60364 시리즈 (저압 전기 설비)
+    60364-1: 기본 원칙
+    60364-4-41: 감전 보호
+    60364-5-52: 배선 방법
+    60364-5-53: 개폐 및 제어
+    60364-5-54: 접지
+    60364-7: 특수 장소
+  IEC 60076 (전력 변압기)
+  IEC 60909 (단락전류 계산)
+  IEC 61850 (변전소 통신)
+  IEC 62619 (이차전지)
+  IEC 61724 (태양광 발전 모니터링)
+  IEC 61683 (인버터 효율)
+  IEEE Std 80 (접지망 설계)
+  IEEE Std C37 시리즈 (보호계전)
+
+규격 비교 예시 데이터:
+
+개념: 전압강하 허용 기준 (간선)
+  KEC 232.52: 3% 이하
+  IEC 60364-5-52: 4% 권장
+  NEC: 명시 기준 없음 (5% 권고)
+  CEC C22.1-14: 3% 권고
+  DIN VDE 0100-520: 4% 이하
+  BS 7671: 3% (조명), 5% (기타)
+  JIS 내선규정: 2~3% (용도별 상이)
+  GB 50054: 5% 이하
+  AS/NZS 3000: 5% 이하
+  가장 엄격: KEC/JIS
+  가장 완화: GB/AS-NZS/NEC
+
+개념: 케이블 단면적 표준 계열 (mm2)
+  KEC/IEC/DIN/JIS/GB/AS-NZS: 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300
+  NEC/CEC: AWG 체계 (14, 12, 10, 8, 6, 4, 2, 1, 1/0, 2/0, 3/0, 4/0) + kcmil
+
+개념: 표준 전압 (저압 배전)
+  한국: 220V / 60Hz
+  미국/캐나다: 120/240V / 60Hz (단상), 208V/480V (3상)
+  유럽/호주: 230V / 50Hz
+  일본: 100V / 50Hz(동부) 또는 60Hz(서부)
+  중국: 220V / 50Hz
+
+개념: 전선 색상 (저압)
+  한국 KEC: 적(L1), 흑(L2), 청(L3), 녹황(PE), 청(N)
+  IEC/유럽: 갈(L1), 흑(L2), 회(L3), 녹황(PE), 청(N)
+  미국 NEC: 흑(L1), 적(L2), 청(L3), 녹(PE), 백(N)
+  영국 BS: 갈(L), 청(N), 녹황(PE) - 단상
+  일본: 흑(L), 백(N), 녹(PE)
+  호주: 갈(L1), 흑(L2), 회(L3), 녹황(PE), 청(N) - IEC 채택
+
+==================================================
+10. 국가별 전압/전기 체계 DB - NEW v5.0
+==================================================
+
+국가별 전기 체계 전체:
+
+한국:
+  단상 표준전압: 220V
+  3상 표준전압: 380V
+  주파수: 60Hz
+  배전전압: 22.9kV
+  주요 규격: KEC
+  케이블 단면 단위: mm2
+  단위 체계: 미터법
+
+미국:
+  단상 표준전압: 120V / 240V
+  3상 표준전압: 208V / 277V / 480V
+  주파수: 60Hz
+  배전전압: 4.16kV / 12.47kV / 13.2kV / 13.8kV (지역마다 상이)
+  주요 규격: NEC (주별 채택 버전 상이)
+  케이블 단면 단위: AWG / kcmil
+  단위 체계: Imperial (일부 metric 혼용)
+  특이사항: 주(State)별 NEC 채택 연도 다를 수 있음
+
+캐나다:
+  단상 표준전압: 120V / 240V
+  3상 표준전압: 208V / 480V / 600V
+  주파수: 60Hz
+  주요 규격: CEC (CSA C22.1)
+  케이블 단면 단위: AWG / kcmil
+  단위 체계: Metric (공식) + Imperial (혼용)
+  특이사항: 퀘벡주 NF C 영향 일부 있음
+
+독일:
+  단상 표준전압: 230V
+  3상 표준전압: 400V
+  주파수: 50Hz
+  배전전압: 10kV / 20kV
+  주요 규격: DIN VDE 0100 + EN
+  케이블 단면 단위: mm2
+  단위 체계: 미터법
+  특이사항: 유럽 중 가장 엄격한 기준
+
+영국:
+  단상 표준전압: 230V
+  3상 표준전압: 400V
+  주파수: 50Hz
+  배전전압: 11kV / 33kV
+  주요 규격: BS 7671 (18th Edition)
+  케이블 단면 단위: mm2
+  단위 체계: 미터법 (Imperial 잔재 일부)
+  특이사항: 브렉시트 후 EN과 별도 유지
+
+프랑스:
+  단상 표준전압: 230V
+  3상 표준전압: 400V
+  주파수: 50Hz
+  주요 규격: NF C 15-100
+  케이블 단면 단위: mm2
+  단위 체계: 미터법
+
+일본:
+  단상 표준전압: 100V / 200V
+  3상 표준전압: 200V / 400V
+  주파수: 동일본 50Hz / 서일본 60Hz (혼재!)
+  배전전압: 6.6kV
+  주요 규격: JIS C + 내선규정 + 電技
+  케이블 단면 단위: mm2
+  단위 체계: 미터법
+  특이사항: 동서 주파수 혼재 -> 계산 시 Hz 선택 필수
+
+중국:
+  단상 표준전압: 220V
+  3상 표준전압: 380V
+  주파수: 50Hz
+  배전전압: 10kV / 35kV
+  주요 규격: GB + DL/T
+  케이블 단면 단위: mm2
+  단위 체계: 미터법
+  특이사항: 홍콩은 BS 7671 기반 별도 체계
+
+호주:
+  단상 표준전압: 230V
+  3상 표준전압: 400V
+  주파수: 50Hz
+  배전전압: 11kV / 22kV / 33kV
+  주요 규격: AS/NZS 3000
+  케이블 단면 단위: mm2
+  단위 체계: 미터법
+  특이사항: 뉴질랜드와 공동 규격
+
+뉴질랜드:
+  단상 표준전압: 230V
+  3상 표준전압: 400V
+  주파수: 50Hz
+  주요 규격: AS/NZS 3000 (호주 공동)
+
+계산기 국가 선택 UI:
+  국가 드롭다운 선택
+  -> 자동으로 해당 국가 표준전압/주파수 적용
+  -> 해당 국가 규격 자동 선택
+  -> 단위 체계 자동 전환 (mm2 vs AWG)
+  -> 영수증에 적용 국가/규격 명시
+
+==================================================
+11. 해외 플랜트 규격 자동 변환 - NEW v5.0
+==================================================
+
+배경:
+  한국 EPC사 해외 플랜트 수주 시
+  설계는 KEC 기준 -> 현지 NEC/IEC/AS-NZS 기준으로 변환 필요
+  이 작업이 현재 수작업으로 오류 발생 + 시간 낭비
+
+기능 개요:
+  소스 규격 선택 (KEC)
+  + 타겟 규격 선택 (NEC)
+  + 계산 결과
+  -> 자동 변환 + 차이점 리포트
+
+변환 예시 1: KEC -> NEC 케이블 선정
+
+  입력: KEC 기준 95mm2 케이블
+  변환:
+    95mm2 = 3/0 AWG (약 85mm2 상당)
+    또는 4/0 AWG (107mm2 상당)
+    NEC 허용전류 기준 재계산 필요
+    온도 보정 계수 차이 적용
+  출력:
+    KEC 기준: 95mm2 CV 케이블
+    NEC 기준: 4/0 AWG THWN-2
+    차이점: NEC는 AWG 체계, 온도 기준 40도C vs 60도C 상이
+    영수증 생성 (두 기준 병기)
+
+변환 예시 2: KEC -> NEC 전압강하
+
+  입력: KEC 기준 2.3% 전압강하 (간선 3% 이내 적합)
+  변환:
+    NEC에는 전압강하 의무 기준 없음 (FPN 권고만)
+    NEC FPN: 5% 권고
+    현재 2.3% -> NEC 기준으로도 문제없음
+  출력:
+    KEC 기준: 2.3% (적합, 3% 이내)
+    NEC 기준: 2.3% (적합, 5% 이내 권고)
+    결론: 두 규격 모두 만족
+
+변환 예시 3: KEC -> JIS 변환
+
+  입력: KEC 기준 22.9kV 수변전설비
+  변환:
+    일본 배전전압: 6.6kV (다름!)
+    변압기 2차측 전압: 한국 380V vs 일본 400V
+    계통 구성 재검토 필요
+  출력:
+    규격 충돌 경고!
+    일본 배전전압 체계가 달라 설비 재설계 필요
+    JIS 내선규정 기준 재계산 권장
+
+변환 엔진 구조:
+
+  StandardConversionEngine:
+    source_standard: KEC
+    target_standard: NEC
+    concept: cable_sizing
+    input_value: 95 mm2
+    -> lookup_global_mapping()
+    -> apply_unit_conversion()
+    -> apply_local_corrections()
+    -> generate_conversion_receipt()
+    -> generate_diff_report()
+
+변환 지원 항목:
+  케이블 단면적 (mm2 <-> AWG <-> kcmil)
+  허용전류 (온도 기준 보정)
+  전압강하 허용 기준 비교
+  차단기 정격 (IEC <-> UL/ANSI)
+  접지 저항 기준
+  변압기 임피던스 기준
+  보호 협조 기준
+
+변환 불가 알림:
+  전압 체계 자체가 다른 경우 (22.9kV -> 6.6kV)
+  -> 단순 변환 불가, 재설계 필요 경고
+  규격 간 개념 자체가 없는 경우
+  -> NEC에 해당 조항 없음 명시
+
+EPC 특화 기능:
+  프로젝트 단위 규격 변환 이력 관리
+  발주처 규격 요구사항 등록
+    사우디 아람코 -> NEC + SAES 기준
+    UAE ADNOC -> IEC + ADCO 기준
+  변환 결과 일괄 PDF/Excel Export
+  감리관 제출용 규격 비교 보고서 자동 생성
+
+==================================================
+12. 단위 변환 엔진 - NEW v5.0
+==================================================
+
+전기 분야 핵심 단위 변환:
+
+케이블 단면적:
+  mm2 -> AWG 변환표
+  1.5mm2 = AWG 16
+  2.5mm2 = AWG 14
+  4mm2 = AWG 12
+  6mm2 = AWG 10
+  10mm2 = AWG 8
+  16mm2 = AWG 6
+  25mm2 = AWG 4
+  35mm2 = AWG 2
+  50mm2 = AWG 1/0
+  70mm2 = AWG 2/0
+  95mm2 = AWG 3/0
+  120mm2 = AWG 4/0
+  150mm2 = 300 kcmil
+  185mm2 = 350 kcmil
+  240mm2 = 500 kcmil
+  300mm2 = 600 kcmil
+
+전력 단위:
+  kW <-> HP (1 HP = 0.7457 kW)
+  kVA <-> kW (역률 적용)
+  kVAR (무효전력)
+
+전압 단위:
+  V <-> kV <-> MV
+
+온도 보정 (케이블 허용전류):
+  기준온도: KEC/IEC 40도C, NEC 30도C/40도C
+  온도 보정 계수 자동 적용
+  일본: 동부 50Hz / 서부 60Hz 선택 시 무효전력 계산 차이
+
+임피던스 단위:
+  옴 <-> 퍼유닛 (pu) <-> 퍼센트 (%Z)
+
+계산기 단위 선택 UI:
+  모든 계산기에 입력 단위 선택 가능
+  예: 케이블 단면적 입력 시 mm2 / AWG 선택
+  출력도 선택한 단위로 표시
+  영수증에 사용 단위 명시 (날짜 박제)
+
+==================================================
+13. AI 검색 엔진
+==================================================
+
+검색 파이프라인:
+  자연어 질문 입력 (한국어/영어/일본어/중국어 - v5.0)
+  -> 1단계: 질문 분석 (LLM) + 국가/규격 컨텍스트 파악
+  -> 2단계: 하이브리드 검색 (Weaviate)
+             글로벌 규격 포함 검색
+  -> 3단계: Vision-LLM 파싱 결과 포함
+  -> 4단계: 지식 그래프 연계
+  -> 5단계: 재랭킹
+  -> 6단계: RAG 답변 (Hybrid BYOK LLM)
+  -> 7단계: 할루시네이션 검증
+  -> 8단계: 날짜 메타데이터 부착
+  -> 9단계: 최종 출력 + 글로벌 규격 비교 패널
+
+글로벌 규격 비교 검색 (v5.0):
+
+"전압강하 허용 기준" 검색 시:
+  KEC 232.52: 간선 3%, 분기 2%
+  IEC 60364-5-52: 4% 권장
+  NEC: 5% 권고 (강제 아님)
+  CEC C22.1: 3% 권고
+  DIN VDE: 4% 이하
+  BS 7671: 3%(조명) / 5%(기타)
+  JIS 내선규정: 2~3%
+  GB 50054: 5% 이하
+  AS/NZS 3000: 5% 이하
+  -> 가장 엄격: KEC, JIS
+  -> 가장 완화: GB, AS-NZS, NEC
+
+다국어 검색 지원 (v5.0):
+  한국어 질문 -> 전체 규격 검색
+  영어 질문 -> 전체 규격 검색
+  일본어 질문 -> JIS/내선규정 우선 + 전체
+  중국어 질문 -> GB 우선 + 전체
+
+==================================================
+14. 에이전트 워크플로우
+==================================================
+
+개념:
+  질문 -> 답변 -> 다음 액션 -> 결과물
+  목표: 엔지니어 업무 흐름 플랫폼 안에서 완결
+
+글로벌 워크플로우 예시 (해외 플랜트):
+
+  입력: "사우디 아람코 플랜트 전기 설계
+         KEC 기준 설계본을 NEC + SAES 기준으로 변환해줘"
+
+  Step 1: KEC 기준 원본 계산서 불러오기
+  Step 2: 타겟 규격 확인 (NEC + SAES 사우디 기준)
+  Step 3: 국가 전압 체계 확인
+    한국 22.9kV -> 사우디 34.5kV / 13.8kV
+    전압 체계 차이 경고 발생
+  Step 4: 변환 가능 항목 자동 변환
+    케이블: mm2 -> AWG
+    허용전류: 온도 기준 보정 (40도C -> 30도C 기준)
+    차단기: IEC 정격 -> ANSI/UL 정격
+  Step 5: 변환 불가 항목 목록
+    전압 체계 재설계 필요 항목
+  Step 6: 규격 비교 리포트 생성
+    KEC vs NEC 항목별 비교
+    준수 여부 체크리스트
+  Step 7: Export
+    PDF 비교 보고서 (영문 + 면책 조항)
+    Excel 계산서 (NEC 기준 수식)
+
+국내 워크플로우 예시 (수변전설비):
+
+  입력: "22.9kV 수변전설비 설계
+         (부하 500kW, 역률 0.9, 케이블 200m)"
+
+  Step 1: 변압기 용량 계산 -> 영수증 #001
+  Step 2: KEC 조항 확인 (2024년판)
+  Step 3: 케이블 선정 -> 영수증 #002
+  Step 4: 전압강하 검증 -> 영수증 #003
+  Step 5: 차단기 용량 -> 영수증 #004
+  Step 6: 체크리스트 생성
+  Step 7: Export (PDF + Excel + 블록체인 공증)
+
+==================================================
+15. 계산기 시스템 (영수증)
+==================================================
+
+전력 계산기:
+  단상/3상 전력 계산기 - KEC/IEC/NEC/JIS/GB/AS-NZS
+  역률 보정 계산기
+  전압강하 계산기 - 전 국가 규격 지원
+  전력손실 계산기
+  수용률/부등률 계산기
+
+보호 협조 계산기:
+  차단기 용량 (IEC 정격 / ANSI-UL 정격 선택)
+  단락전류 - IEC 60909
+  케이블 굵기 선정 (mm2 / AWG 선택)
+  접지저항 - 국가별 기준
+  보호계전기 정정
+
+변압기 계산기:
+  변압기 용량 / 임피던스 / 손실 / 병렬운전
+
+신재생/ESS 계산기:
+  태양광 발전량 / 배터리 용량 / 인버터 효율 / 계통연계
+
+조명/설비 계산기:
+  조도 / 비상발전기 / UPS
+
+AI 특화 계산기:
+  토큰 비용 / GPU 메모리 / 학습 비용 / 추론 속도 / RAG 최적화
+
+글로벌 계산기 추가 (v5.0):
+  AWG <-> mm2 변환기 (케이블 단면적)
+  국가별 허용전류 비교기 (동일 케이블 국가별 허용전류 차이)
+  50Hz vs 60Hz 무효전력 비교기
+  국가별 전압강하 허용 기준 비교기
+  NEC 로드 계산기 (미국 방식)
+  일본 내선규정 전력량 계산기
+
+영수증 출력 구조 (v5.0 국가/규격 추가):
+
+  [메타 정보]
+  계산 일시: 2026.04.04 14:32:11
+  적용 국가: 한국
+  적용 규격: KEC 2024년판
+  단위 체계: 미터법 (mm2)
+  규격 현행: 2026.04.01 확인됨
+  엔진 버전: CalcEngine v2.3.1
+  면책 조항: Disclaimer v2.1
+
+  [적용 공식]
+  [입력값]
+  [계산 과정]
+  [결과]
+  [국가별 기준 비교 패널] (v5.0)
+    KEC: 적합 (3% 이내)
+    IEC: 적합 (4% 이내)
+    NEC: 적합 (5% 권고 이내)
+  [면책 조항]
+  [액션] PDF / Excel / 규격변환 / 공증 / 공유
+
+==================================================
+16. 산출물 Export 시스템
+==================================================
+
+Excel Export (수식 살아있는 형태):
+  셀에 수식 그대로 입력
+  담당자가 값 변경 시 자동 재계산
+  메타 시트: 국가/규격/날짜 박제 정보
+  글로벌 버전: AWG 단위 시트 별도 제공
+
+PDF Export:
+  면책 조항 + 워터마크 자동 삽입
+  영문 버전 지원 (해외 제출용 - v5.0)
+  국가별 규격 비교 표 포함
+
+Word Export:
+  보고서 템플릿 선택
+  계산서 통합 보고서 생성
+
+글로벌 규격 비교 보고서 (v5.0 추가):
+  KEC vs NEC 비교 보고서
+  항목별 허용 기준 비교 표
+  준수 여부 체크리스트
+  EPC 제출용 영문 보고서
+
+==================================================
+17. 법적 면책 조항 시스템
+==================================================
+
+자동 삽입 위치:
+  계산 영수증 하단 (필수)
+  PDF 워터마크 + 푸터
+  Excel 별도 시트
+  공유 링크 상단 배너
+  블록체인 공증 전 동의 확인
+
+다국어 면책 조항 (v5.0):
+  한국어: 기본
+  영어: 해외 제출용
+  일본어: 일본 고객용
+  중국어: 중국 고객용
+
+내용:
+  "본 계산서는 참고용이며 최종 설계/시공/감리에 대한
+   책임은 검토자에게 있습니다.
+   본 플랫폼은 계산 결과의 정확성을 보조하나
+   최종 판단은 자격을 갖춘 전문가가 수행해야 합니다."
+
+버전 관리:
+  Disclaimer v1.0 최초
+  Disclaimer v2.0 법률 검토 후 강화
+  Disclaimer v2.1 영문 추가
+  Disclaimer v3.0 다국어 완성 (v5.0)
+  버전별 발효일 날짜 박제
+
+==================================================
+18. 지식 그래프
+==================================================
+
+Neo4j 노드/관계 (v5.0 확장):
+
+노드 타입:
+  Concept (name, domain, description_ko, description_en)
+  Standard (name, version, country_code, issued_at)
+  Calculator (id, name, supported_countries)
+  Document (id, title, country_code, published_at)
+
+관계 타입:
+  Concept -> RELATED_TO -> Concept
+  Concept -> GOVERNED_BY -> Standard
+  Concept -> CALCULATED_BY -> Calculator
+  Standard -> SUPERSEDES -> Standard
+  Standard -> EQUIVALENT_TO -> Standard (국가 간 동등 규격)
+    KEC 232.52 <-> IEC 60364-5-52 <-> NEC Article 210 (유사)
+    KEC 140 <-> IEC 60364-5-54 <-> NEC Article 250
+
+글로벌 규격 동등성 시각화:
+  "전압강하" 개념 클릭 시
+  -> KEC 232.52 / IEC 5-52 / NEC Art.210 / JIS 내선규정 동시 표시
+  -> 국가별 허용 기준 차이 그래프
+
+==================================================
+19. 해외 기술 뉴스
+==================================================
+
+전기 분야 뉴스 소스:
+  Tier 1: IEEE Spectrum, Power Magazine, T&D World,
+          EE Times, Renewable Energy World, EPRI
+  Tier 2: BloombergNEF, S&P Global, Electrek, NREL
+
+글로벌 규격 뉴스 (v5.0 추가):
+  NFPA 저널 (NEC 개정 소식)
+  IEC 공식 뉴스
+  METI (일본 경산성 전기 정책)
+  중국 국가표준화관리위원회 (SAC) 뉴스
+  Standards Australia 뉴스
+  BSI (영국 표준원) 뉴스
+
+AI 분야 뉴스 소스:
+  Tier 1: arXiv daily, Anthropic Blog, OpenAI Blog,
+          Google DeepMind, Hugging Face Blog
+  Tier 2: The Batch, Import AI, VentureBeat AI
+
+카테고리:
+  전기: 스마트그리드 / HVDC / 신재생 / ESS / 전력반도체 / EV / 정책
+  글로벌 규격 개정 (v5.0): KEC/IEC/NEC/JIS/GB/AS-NZS 개정 소식
+  AI: 모델출시 / 벤치마크 / 전기xAI / 가격변동
+
+AI 일일 브리핑:
+  매일 06:00 자동 생성
+  카테고리별 TOP 3
+  AI 한국어 3줄 요약 + 날짜 박제
+
+==================================================
+20. 자격증 + 학습 시스템
+==================================================
+
+국내 자격증 로드맵:
+  전기기능사 -> 전기산업기사 -> 전기기사 -> 전기기술사
+  관련: 소방설비기사 / 에너지관리기사 / 신재생에너지발전설비기사
+
+해외 자격증 정보 (v5.0 추가):
+  미국: PE (Professional Engineer) - 전기 분야
+        NICET (National Institute for Certification in Engineering Technologies)
+  일본: 電気主任技術者 (전기주임기술자) 1~3종
+        電気工事士 (전기공사사) 1~2종
+  호주: CPEng (Chartered Professional Engineer)
+  영국: CEng (Chartered Engineer) - IET
+  국제: IEEE Senior Member / Fellow
+
+AI 기출문제 시스템:
+  10년치 기출문제 DB
+  AI 해설 + 관련 규격 링크
+  합격 예측 모델
+  학습 경로 제안
+
+==================================================
+21. 협업 기능
+==================================================
+
+프로젝트 단위 관리:
+  프로젝트 안에 계산서 / 검색 이력 / 규격 / 코멘트 통합
+  글로벌 프로젝트: 적용 국가/규격 프로젝트 단위 설정 (v5.0)
+
+협업 워크플로우:
+  설계자 -> 계산서 작성 -> 팀 공유
+  코멘트 -> 수정 -> 버전 이력
+  최종 승인 -> Export -> 제출
+
+역할: Owner / Editor / Viewer
+
+==================================================
+22. 모바일 현장 모드
+==================================================
+
+오프라인 캐시:
+  자주 쓰는 계산기 + 해당 국가 규격 요약
+  온라인 복귀 시 동기화
+
+현장 특화 UX:
+  큰 버튼 / 고대비 모드 / 한 손 조작 / 음성 입력
+
+OCR 명판 인식:
+  명판 촬영 -> OCR -> 계산기 자동 실행
+  다국어 명판 지원 (영어/일본어/중국어 - v5.0)
+
+Phase 3 예고 (단선결선도 AI 인식):
+  PDF 도면 업로드 -> 심볼 인식 -> 계산기 연동
+
+==================================================
+23. 개인화 알림
+==================================================
+
+알림 타입:
+  규격 개정: KEC / IEC / NEC / JIS / GB / AS-NZS 개정 시 즉시
+  키워드 뉴스 알림
+  자격증 D-DAY
+  AI 모델 출시
+  주간 브리핑
+
+국가별 규격 구독 (v5.0):
+  관심 국가 규격 선택
+  해당 국가 규격 개정 시 알림
+
+알림 채널:
+  이메일 / 앱 푸시 / 브라우저 / Slack/Teams
+
+==================================================
+24. 데이터 시각화
+==================================================
+
+계산 결과 차트:
+  전압강하 거리별 라인 차트
+  부하 분포 파이 차트
+
+글로벌 규격 비교 (v5.0):
+  국가별 허용 기준 가로 바 차트
+  KEC vs IEC vs NEC vs JIS vs GB vs AS-NZS 비교 테이블
+  규격 개정 타임라인 (전 국가 동시)
+
+AI 도구 비교:
+  벤치마크 레이더 차트
+  가격 추이 라인 차트
+
+==================================================
+25. OCR 명판 인식
+==================================================
+
+인식 대상:
+  변압기 / 차단기 / 케이블 명판
+  다국어 명판 (한국어/영어/일본어/중국어 - v5.0)
+
+처리 흐름:
+  촬영 -> OCR -> 파라미터 파싱 -> 계산기 연동 -> 영수증
+
+==================================================
+26. 블록체인 공증 (익명화)
+==================================================
+
+필요성:
+  전기 설계 계산서 법적 보존 10년 이상
+
+GDPR/개인정보 해결:
+  공증 전 민감 정보 익명화
+    프로젝트명 / 담당자명 / 기업명 / 지역명 -> 해시 대체
+  원본: 플랫폼 DB (삭제 가능)
+  IPFS: 익명화 버전만 (삭제 불가하나 개인정보 없음)
+
+공증 프로세스:
+  영수증 완성
+  -> 면책 조항 동의
+  -> 익명화 처리
+  -> SHA-256 해시
+  -> IPFS 저장
+  -> 블록체인 타임스탬프
+  -> 공증 배지 + 검증 URL
+
+==================================================
+27. 커뮤니티 / 집단지성
+==================================================
+
+전문가 Q&A:
+  검증된 전문가 (기술사 인증) 답변
+  글로벌 전문가 참여 (v5.0): PE, CEng, RPEQ 인증자
+
+계산서 공유 라이브러리:
+  국가별 표준 계산서 템플릿 (v5.0)
+  KEC 기준 / NEC 기준 / IEC 기준 / JIS 기준
+
+버그 리포트:
+  오류 신고 -> 검증 -> 수정 -> 기여자 뱃지
+
+글로벌 규격 해석 포럼 (v5.0):
+  NEC vs IEC 해석 차이 토론
+  해외 플랜트 적용 사례 공유
+
+==================================================
+28. AI 도메인
+==================================================
+
+AI 논문 검색:
+  벤치마크 연동 / 코드 연동 / 인용 네트워크
+  전기 x AI 교차 검색
+
+AI 도구 비교 DB:
+  가격 / 벤치마크 / 기능 비교 (날짜 박제)
+
+전기 x AI 킬러 기능:
+  "스마트그리드에 어떤 AI 모델 써?"
+  -> 전기 DB + AI DB + 비용 계산기 통합 답변
+
+==================================================
+29. Hybrid BYOK 구조
+==================================================
+
+Free: 플랫폼 기본 소형 LLM (Llama/Mistral)
+Pro 기본: 플랫폼 중급 LLM (Claude Haiku / GPT-4o mini)
+Pro + BYOK: 고품질 모델 (GPT-4o / Claude Sonnet)
+Enterprise: 커스텀 LLM 연동
+
+키 관리:
+  AES-256 암호화 저장
+  API 호출 후 메모리 즉시 삭제
+
+지원 어댑터:
+  platform_llm / openai / anthropic / gemini / ollama
+  azure_openai / aws_bedrock (Enterprise)
+
+==================================================
+30. 보안 및 감사 로그
+==================================================
+
+감사 로그:
+  누가 / 언제 / 무엇을 / 결과 / IP
+  국가/규격 선택 이력 (v5.0)
+  Export 포맷 / 면책 조항 동의 여부
+  보존 기간: 10년
+
+접근 권한: Owner / Editor / Viewer
+온프레미스: 내부망 설치형 + SLA
+
+==================================================
+31. 도메인 확장 전략
+==================================================
+
+확장 로드맵:
+  Phase 1 (현재): 전기 + AI + 글로벌 규격 완전판
+  Phase 2: 기계 (ASME/ISO/JIS B 시리즈)
+  Phase 3: 토목/건축 + 화학 + 단선결선도 AI 인식
+  Phase 4: 전체 공학 플랫폼 + 완전 글로벌화
+
+새 도메인 추가 시 건드리는 것:
+  DOMAIN_REGISTRY 설정
+  도메인 크롤러
+  도메인 계산기 함수
+  도메인 자격증 데이터
+  지식 그래프 노드/엣지
+  글로벌 규격 매핑
+
+건드리지 않는 것:
+  RAG 코어 / 영수증 시스템 / 날짜 박제
+  Hybrid BYOK / 블록체인 공증
+  협업 / Export 엔진 / 면책 조항
+  단위 변환 엔진 / 규격 변환 엔진
+  DB 스키마 공통 부분
+
+==================================================
+32. 수익 모델
+==================================================
+
+Free:
+  계산기 월 20회 / 검색 3건 / 뉴스 1주 지연
+  기본 LLM / 협업 1인
+  Excel Export 미지원 / 공증 미지원
+  국가 규격 비교: 2개국
+
+Pro (월 정액):
+  계산기 무제한 / 검색 전체 / 실시간 뉴스
+  중급 LLM + BYOK 선택
+  Excel / PDF Export
+  국가 규격 비교: 전체
+  규격 변환: 월 10회
+  협업 5인 / 공증 월 10회
+
+Team (월 정액/인):
+  Pro 전체
+  협업 무제한 / 공증 무제한
+  규격 변환 무제한
+  감사 로그 / API 접근
+  해외 플랜트 규격 변환 보고서
+
+Enterprise (협의):
+  Team 전체
+  온프레미스 설치
+  커스텀 LLM 연동
+  커스텀 면책 조항
+  SLA 보장 / 전담 지원
+  SAES / ADCO 등 발주처별 규격 커스텀 지원
+
+==================================================
+33. 개발 로드맵
+==================================================
+
+Phase 1 MVP (3개월):
+
+인프라:
+  DB 스키마 (글로벌 규격 테이블 포함)
+  Docker / CI/CD
+
+데이터:
+  IEEE/arXiv 크롤러
+  KEC / IEC / NEC 기본 3개국 규격 파서
+  날짜 박제 파이프라인
+  Vision-LLM PDF 파싱 기본
+
+검색:
+  Weaviate 하이브리드 검색
+  RAG + Hybrid BYOK
+  글로벌 규격 비교 패널 (3개국 기본)
+
+계산기 10종 + 영수증:
+  전압강하 / 변압기 / 단락전류 / 케이블선정 / 역률보정
+  국가 선택 UI + 단위 변환 기본
+  날짜 박제 + 면책 조항
+
+Frontend MVP:
+  검색 UI + 계산기 UI (국가 선택 포함)
+  영수증 뷰 + BYOK 입력
+
+Phase 2 기능 확장 (2개월):
+
+  글로벌 규격 완전판 (전체 국가)
+  뉴스 파이프라인 + 글로벌 규격 뉴스
+  자격증 + AI 기출문제
+  계산기 전체 확장 (20종 + 글로벌 계산기)
+  Excel Export (수식 살아있는 형태)
+  규격 변환 엔진 (KEC <-> NEC <-> IEC)
+  단위 변환 엔진 완성
+  모바일 앱 (현장 모드)
+  협업 기능
+  OCR 명판 인식 (다국어)
+  개인화 알림 (국가별 규격 구독)
+  지식 그래프 (글로벌 규격 동등성)
+
+Phase 3 고도화 (이후):
+
+  에이전트 워크플로우 (글로벌 변환 포함)
+  블록체인 공증 (익명화 완전 적용)
+  커뮤니티 (글로벌 전문가 참여)
+  AI 도메인 완성
+  기계 도메인 확장
+  감사 로그 (기업용)
+  온프레미스
+  단선결선도 AI 인식
+  수익 모델 적용
+
+==================================================
+34. 정확도 목표
+==================================================
+
+계산기 (영수증): 99.5% 이상
+  Python 엔진 직접 연산
+
+AI 검색 (RAG): 85~92%
+  도메인 특화
+
+글로벌 규격 비교 정확도 (v5.0): 90~95%
+  수동 검증된 규격 매핑 DB 기반
+  규격 개정 시 즉시 업데이트
+
+규격 변환 정확도 (v5.0): 88~93%
+  단순 변환 (mm2 <-> AWG): 99%+
+  복합 변환 (허용전류 + 온도보정): 90%
+  규격 체계 자체 다른 경우: 변환 불가 명시
+
+Vision-LLM PDF 파싱: 88~95%
+
+뉴스 번역/요약: 88~93%
+
+자격증/일정: 95% 이상
+
+OCR 명판 인식: 90% 이상 (다국어 포함)
+
+정확도 향상 전략:
+  단기: A/B 테스트, 수치 범위 검증, 규격 매핑 전문가 검수
+  중기: 피드백 루프, 커뮤니티 버그 리포트
+  장기: 전기 특화 LLM 파인튜닝, 지식 그래프 고도화
+
+==================================================
+핵심 차별점 요약 (v5.0 최종)
+==================================================
+
+1. 영수증 시스템 (독보적)
+   계산 과정 전체 공개 -> 특허 출원 검토
+
+2. 날짜 박제 (법적 방패)
+   언제 어떤 규격/국가 기준인지 타임스탬프 영구 증명
+
+3. 글로벌 규격 완전 커버 (v5.0)
+   KEC / IEC / NEC / CEC / EN / DIN VDE / BS 7671
+   NF C / JIS / 내선규정 / GB / DL / AS-NZS
+   전 세계 전기 규격 단일 플랫폼
+
+4. 해외 플랜트 규격 자동 변환 (v5.0)
+   KEC -> NEC / IEC / JIS 원클릭 변환
+   EPC사 해외 프로젝트 수작업 제거
+
+5. 국가별 전압/전기 체계 DB (v5.0)
+   계산기 국가 선택 -> 표준전압/주파수/규격 자동 적용
+
+6. 단위 변환 엔진 (v5.0)
+   mm2 <-> AWG <-> kcmil 자동 변환
+   IEC <-> ANSI 정격 변환
+
+7. 면책 조항 자동화 (다국어)
+   한국어/영어/일본어/중국어 면책 조항 자동 삽입
+
+8. Vision-LLM PDF 파싱
+   IEC/IEEE/NEC/JIS/GB 규격서 표/수식까지 완전 색인
+
+9. Hybrid BYOK
+   기본 소형 LLM 탑재로 진입 장벽 제거
+
+10. 엑셀 수식 Export
+    수식 살아있는 계산서 -> 감리/관공서 제출
+
+11. 블록체인 공증 + 익명화 (GDPR 대응)
+    위변조 불가 공증 + 개인정보 보호 동시
+
+12. 에이전트 워크플로우
+    검색 -> 계산 -> 변환 -> Export -> 공증 원스톱
+
+13. 전기 x AI 교차 도메인
+    전 세계 없는 기능
+
+14. 규격 개정 추적 (전 세계)
+    KEC/IEC/NEC/JIS/GB 등 개정 감지 -> 즉시 알림
+
+==================================================
+v5.0 최종본 끝
+다음 변경사항은 v6.0으로 관리
+==================================================
