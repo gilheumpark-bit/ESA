@@ -18,6 +18,7 @@ import {
   assertRange,
   round,
 } from '../types';
+import { getTransformerSpec, selectTransformerCapacity, STANDARD_CAPACITIES_KVA } from '@/data/transformer/transformer-db';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 

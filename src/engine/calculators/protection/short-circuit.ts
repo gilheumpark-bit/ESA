@@ -13,6 +13,7 @@
  */
 
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
+import { getCableImpedance } from '@/data/transformer/transformer-db';
 import { createSource, createJudgment } from '@engine/sjc/types';
 import {
   DetailedCalcResult,

@@ -32,6 +32,8 @@ import {
 } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import KnowledgePanel from '@/components/KnowledgePanel';
+import { SearchResultSkeleton } from '@/components/SkeletonLoading';
+import { formatApiError } from '@/lib/error-messages';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
 import type {
   SearchResult,

@@ -10,6 +10,10 @@
 import { NextResponse } from 'next/server';
 import { getPublicRuntimeInfo } from '@/lib/esa-config';
 import { esaResponseHeaders } from '@/lib/esa-http';
+import { initWeaviateSchema, getDocumentCount } from '@/lib/weaviate-schema';
+import { getInspectionItemCount } from '@/data/inspection/inspection-checklist';
+import { getTCCDeviceCount } from '@/data/protection/tcc-data';
+import { getCertCount } from '@/data/certifications/certification-db';
 import { getRateLimitStoreSize } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
@@ -68,6 +72,9 @@ export async function GET() {
   const start = Date.now();
   const runtimeInfo = getPublicRuntimeInfo();
 
+  // Weaviate 스키마 초기화 (있으면)
+  await initWeaviateSchema().catch(() => {});
+
   const [supabase, weaviate] = await Promise.all([checkSupabase(), checkWeaviate()]);
   const providers = checkProviderKeys();
   const allDeps = [supabase, weaviate, ...providers];
@@ -88,6 +95,11 @@ export async function GET() {
         totalLatencyMs: Date.now() - start,
         rateLimitStoreSize: getRateLimitStoreSize(),
         dependencies: allDeps,
+        dataAssets: {
+          inspectionItems: getInspectionItemCount(),
+          tccDevices: getTCCDeviceCount(),
+          certifications: getCertCount().total,
+        },
       },
     },
     {

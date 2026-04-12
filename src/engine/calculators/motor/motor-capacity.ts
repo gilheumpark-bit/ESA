@@ -20,6 +20,7 @@ import {
   assertOneOf,
   round,
 } from '../types';
+import { getMotorFLC3PH, getMotorFLC1PH } from '@/data/motor-flc/motor-flc-tables';
 
 // ── Input / Output ──────────────────────────────────────────────────────────
 

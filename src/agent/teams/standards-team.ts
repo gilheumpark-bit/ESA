@@ -9,6 +9,10 @@
  * PART 4: Team result assembly
  */
 
+import { getExamFrequency } from '@/data/exam-frequency/exam-frequency';
+import { getCertsByStandard } from '@/data/certifications/certification-db';
+import { checkSelectivity, MCCB_TCC, ACB_TCC } from '@/data/protection/tcc-data';
+
 import type {
   TeamInput,
   TeamResult,

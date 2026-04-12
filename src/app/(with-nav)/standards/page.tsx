@@ -23,6 +23,9 @@ import { KEC_ARTICLES } from '@/engine/standards/kec';
 import { NEC_ARTICLES_FULL } from '@/engine/standards/nec/nec-articles';
 import { IEC_ARTICLES } from '@/engine/standards/iec/iec-articles';
 import StandardsTree from '@/components/StandardsTree';
+import SplitView from '@/components/SplitView';
+import { getExamFrequency } from '@/data/exam-frequency/exam-frequency';
+import { getCertsByStandard } from '@/data/certifications/certification-db';
 import type { CodeArticle } from '@/engine/standards/kec/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
