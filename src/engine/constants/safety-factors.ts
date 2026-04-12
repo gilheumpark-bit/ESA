@@ -13,7 +13,12 @@
 // PART 1 — 타입 정의
 // ---------------------------------------------------------------------------
 
-export type CountryCode = 'KR' | 'US' | 'JP' | 'INT';
+/**
+ * 지원 국가 코드 (canonical 정의 — 다른 파일에서는 이 타입을 re-export)
+ * Safety Factor Registry에 프로파일이 있는 국가: KR, US, JP, INT
+ * 에이전트 라우팅에서만 사용하는 국가: CN, DE, AU, ME
+ */
+export type CountryCode = 'KR' | 'US' | 'JP' | 'INT' | 'CN' | 'DE' | 'AU' | 'ME';
 
 export interface SafetyFactorProfile {
   /** ISO 3166-1 alpha-2 */
@@ -86,7 +91,7 @@ export interface SafetyFactorProfile {
 // PART 2 — 국가별 프로파일
 // ---------------------------------------------------------------------------
 
-const PROFILES: Record<CountryCode, SafetyFactorProfile> = {
+const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
   // ── 한국 (KEC 2021) ──
   KR: {
     country: 'KR',
@@ -246,8 +251,12 @@ const PROFILES: Record<CountryCode, SafetyFactorProfile> = {
  * 국가 코드로 Safety Factor 프로파일 전체를 반환한다.
  * 국가 선택 한 번으로 모든 에이전트가 해당 프로파일을 참조.
  */
+/** 프로파일이 존재하는 국가 코드 */
+export type ProfiledCountry = 'KR' | 'US' | 'JP' | 'INT';
+
 export function getSafetyProfile(country: CountryCode): SafetyFactorProfile {
-  return PROFILES[country];
+  if (country in PROFILES) return PROFILES[country as ProfiledCountry];
+  return PROFILES.INT; // 프로파일 미등록 국가는 IEC 국제 기준 적용
 }
 
 /** 특정 국가의 전압강하 한도 조회 */
@@ -255,7 +264,7 @@ export function getVoltageDropLimit(
   country: CountryCode,
   type: 'branch' | 'feeder' | 'combined' | 'lighting'
 ): number {
-  const limits = PROFILES[country].voltageDropLimits;
+  const limits = getSafetyProfile(country).voltageDropLimits;
   return limits[type] ?? limits.combined;
 }
 
@@ -264,7 +273,7 @@ export function getBreakerFactor(
   country: CountryCode,
   type: keyof SafetyFactorProfile['breakerFactors']
 ): number {
-  return PROFILES[country].breakerFactors[type];
+  return getSafetyProfile(country).breakerFactors[type];
 }
 
 /** 특정 국가의 전선관 충전율 조회 */
@@ -272,7 +281,7 @@ export function getConduitFillRate(
   country: CountryCode,
   wireCount: number
 ): number {
-  const fill = PROFILES[country].conduitFill;
+  const fill = getSafetyProfile(country).conduitFill;
   if (wireCount === 1) return fill.single;
   if (wireCount === 2) return fill.two;
   return fill.threeOrMore;
@@ -283,7 +292,7 @@ export function getGroundingLimit(
   country: CountryCode,
   type: 'general' | 'special' | 'lightning'
 ): number {
-  const limits = PROFILES[country].groundingResistance;
+  const limits = getSafetyProfile(country).groundingResistance;
   return limits[type] ?? limits.general;
 }
 
@@ -311,7 +320,7 @@ export function compareSafetyFactors(
   for (const key of keys) {
     const row: Record<CountryCode, number | string> = {} as Record<CountryCode, number | string>;
     for (const c of countries) {
-      const profile = PROFILES[c];
+      const profile = getSafetyProfile(c);
       const parts = key.split('.');
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let val: any = profile;

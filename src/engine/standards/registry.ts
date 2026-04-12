@@ -38,14 +38,15 @@ export { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
 // PART 1 — 지원 국가/기준서 타입
 // ---------------------------------------------------------------------------
 
-/** 지원 국가 코드 */
-export type CountryCode = 'KR' | 'US' | 'INT' | 'JP';
+/** 지원 국가 코드 — canonical definition in @/engine/constants/safety-factors */
+import type { CountryCode as _CC } from '@/engine/constants/safety-factors';
+export type CountryCode = _CC;
 
 /** 지원 기준서명 */
 export type StandardName = 'KEC' | 'NEC' | 'IEC' | 'JIS';
 
 /** 국가-기준서 매핑 */
-const COUNTRY_STANDARDS: Record<CountryCode, StandardName[]> = {
+const COUNTRY_STANDARDS: Partial<Record<CountryCode, StandardName[]>> = {
   KR:  ['KEC'],
   US:  ['NEC'],
   INT: ['IEC'],
