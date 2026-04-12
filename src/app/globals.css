@@ -97,29 +97,34 @@ html.dark {
   animation: fadeIn 0.4s ease-out both;
 }
 
-/* Staggered children */
 /* Card system */
-.card-interactive {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-card);
-}
-.card-interactive:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-card-hover);
+@layer components {
+  .card-interactive {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-card);
+  }
+  .card-interactive:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-card-hover);
+  }
 }
 
-/* Bento icon gradients — SSR-safe (no inline style hydration mismatch) */
-.bento-icon-blue { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 8px 16px -4px rgba(37,99,235,0.3); }
-.bento-icon-purple { background: linear-gradient(135deg, #7c3aed, #8b5cf6); box-shadow: 0 8px 16px -4px rgba(124,58,237,0.3); }
-.bento-icon-orange { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 8px 16px -4px rgba(249,115,22,0.3); }
-.bento-icon-emerald { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 8px 16px -4px rgba(5,150,105,0.3); }
+/* Bento icon gradients */
+@layer components {
+  .bento-icon-blue { background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 8px 16px -4px rgba(37,99,235,0.3); }
+  .bento-icon-purple { background: linear-gradient(135deg, #7c3aed, #8b5cf6); box-shadow: 0 8px 16px -4px rgba(124,58,237,0.3); }
+  .bento-icon-orange { background: linear-gradient(135deg, #f97316, #f59e0b); box-shadow: 0 8px 16px -4px rgba(249,115,22,0.3); }
+  .bento-icon-emerald { background: linear-gradient(135deg, #059669, #10b981); box-shadow: 0 8px 16px -4px rgba(5,150,105,0.3); }
+}
 
 /* Gradient text */
-.gradient-text-primary {
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+@layer components {
+  .gradient-text-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════════
