@@ -25,6 +25,8 @@ import {
 import CalculatorForm from '@/components/CalculatorForm';
 import ReceiptCard from '@/components/ReceiptCard';
 import CalcResultGauge from '@/components/CalcResultGauge';
+import CalcProgressDAG from '@/components/CalcProgressDAG';
+import StandardRefPanel from '@/components/StandardRefPanel';
 import { useCalculator } from '@/hooks/useCalculator';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
@@ -802,16 +804,31 @@ export default function CalculatorPage({
           </div>
 
           {/* Right: Result */}
-          <div>
+          <div className="space-y-4">
+            {/* DAG 진행 표시 */}
+            <CalcProgressDAG
+              currentStage={isLoading ? 'calculate' : receipt ? 'done' : 'idle'}
+            />
+
             {receipt ? (
-              <ResultDisplay
-                receipt={receipt}
-                onExportPdf={handleExportPdf}
-                onExportExcel={handleExportExcel}
-                onShare={handleShare}
-                onReset={reset}
-                linkedCalcs={linked}
-              />
+              <>
+                <ResultDisplay
+                  receipt={receipt}
+                  onExportPdf={handleExportPdf}
+                  onExportExcel={handleExportExcel}
+                  onShare={handleShare}
+                  onReset={reset}
+                  linkedCalcs={linked}
+                />
+
+                {/* 참조 기준서 패널 */}
+                {receipt.standardsUsed && receipt.standardsUsed.length > 0 && (
+                  <StandardRefPanel
+                    refs={receipt.standardsUsed.map((s: string) => ({ clause: s }))}
+                    standardName={receipt.appliedStandard}
+                  />
+                )}
+              </>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-primary)] p-12 text-center">
                 <div>
