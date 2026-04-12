@@ -1,0 +1,62 @@
+version: "3.8"
+
+services:
+  # ─── ESA Web Application ────────────────────────────────────────
+  esa-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - WEAVIATE_URL=http://weaviate:8080
+    env_file:
+      - .env
+    depends_on:
+      weaviate:
+        condition: service_started
+      redis:
+        condition: service_started
+    networks:
+      - esa-network
+    restart: unless-stopped
+
+  # ─── Weaviate Vector Database ───────────────────────────────────
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: none
+      CLUSTER_HOSTNAME: node1
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    networks:
+      - esa-network
+    restart: unless-stopped
+
+  # ─── Redis Cache ────────────────────────────────────────────────
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - esa-network
+    restart: unless-stopped
+
+networks:
+  esa-network:
+    driver: bridge
+
+volumes:
+  weaviate-data:
+  redis-data:

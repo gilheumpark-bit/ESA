@@ -1,0 +1,1912 @@
+ESA (Electronic Search AI) 종합 설계서 v6.0
+작성일: 2026.04.04
+버전 이력:
+  v1.0 기본설계
+  v2.0 AI 도메인, BYOK
+  v3.0 날짜 박제, 협업, 모바일, 에이전트, 지식 그래프, 커뮤니티, 블록체인
+  v4.0 Hybrid BYOK, 면책 조항, Vision-LLM, 블록체인 익명화, Excel Export, NEC
+  v5.0 글로벌 규격 완전판, 국가별 전압체계, 규격 변환, 단위 변환 엔진
+  v6.0 인증 시스템, 플랜 가드 로직, 에러 처리/Fallback, 다국어 UX 전략,
+        규격 저작권 처리, 테스트 전략, 성능/SLA 목표, 결제 시스템,
+        개인정보법 다국 대응, 커뮤니티 어뷰징 방지, 오프라인 동기화 충돌 해소,
+        API Rate Limit 세부 정책, ESA 브랜딩 적용
+
+==================================================
+목차
+==================================================
+1. 프로젝트 개요 (ESA 브랜딩)
+2. 핵심 철학 및 원칙
+3. 전체 시스템 아키텍처
+4. 기술 스택
+5. 인증 시스템 - NEW v6.0
+6. 플랜 가드 로직 - NEW v6.0
+7. 결제 시스템 - NEW v6.0
+8. 데이터베이스 스키마
+9. 규격 저작권/라이선스 처리 전략 - NEW v6.0
+10. 데이터 수집 파이프라인
+11. PDF 표/수식 파싱 전략 (Vision-LLM)
+12. 날짜 박제 시스템
+13. 글로벌 규격 DB 완전판
+14. 국가별 전압/전기 체계 DB
+15. 해외 플랜트 규격 자동 변환
+16. 단위 변환 엔진
+17. AI 검색 엔진
+18. 에이전트 워크플로우
+19. 계산기 시스템 (영수증)
+20. 산출물 Export 시스템
+21. 법적 면책 조항 시스템
+22. 지식 그래프
+23. 해외 기술 뉴스
+24. 자격증 + 학습 시스템
+25. 협업 기능
+26. 모바일 현장 모드 + 오프라인 동기화
+27. 개인화 알림
+28. 데이터 시각화
+29. OCR 명판 인식
+30. 블록체인 공증 (익명화)
+31. 커뮤니티 / 집단지성 + 어뷰징 방지
+32. AI 도메인
+33. Hybrid BYOK 구조
+34. 에러 처리 및 Fallback 전략 - NEW v6.0
+35. 테스트 전략 (QA) - NEW v6.0
+36. 성능 및 SLA 목표 - NEW v6.0
+37. 다국어 UX 전략 - NEW v6.0
+38. 개인정보법 다국 대응 - NEW v6.0
+39. API Rate Limit 정책 - NEW v6.0
+40. 보안 및 감사 로그
+41. 도메인 확장 전략
+42. 수익 모델
+43. 개발 로드맵
+44. 정확도 목표
+
+==================================================
+1. 프로젝트 개요 (ESA 브랜딩)
+==================================================
+
+브랜드명: ESA (Electronic Search AI)
+  E - Electronic (전기/전자 엔지니어링)
+  S - Search (검색, 탐색)
+  A - AI (인공지능)
+
+슬로건:
+  "The Engineer's Search Engine"
+  "Know the Standard. Trust the Answer."
+  "전기 엔지니어의 AI 파트너"
+
+도메인 후보: esa.ai / esa-engine.com / esa.io
+
+한 줄 정의:
+ESA는 전기 엔지니어링 특화 글로벌 AI 검색 플랫폼이다.
+전 세계 전기 규격 (KEC/IEC/NEC/JIS/GB/AS-NZS/EN 등) 완전 지원 +
+글로벌 논문/규격/뉴스 실시간 수집 + 할루시네이션 없는 출처 기반 답변 +
+영수증 계산기 + 날짜 박제 + 협업 + 현장 모바일 + 법적 공증 +
+해외 플랜트 규격 자동 변환까지 원스톱 엔지니어링 플랫폼이다.
+
+시장 기회:
+  가트너 예측: 2026년까지 전통 검색엔진 볼륨 25% 감소
+  버티컬 LLM 시장: 2025년 2.9B달러 -> 2033년 18.7B달러 (CAGR 26%)
+  전기 특화 버티컬 검색: 전 세계 공백 상태
+  해외 플랜트 EPC 시장: 한국 3대 EPC사 연간 수십조 규모
+
+목표 사용자:
+  1차 (국내): 전기 엔지니어, 수험생, 전력 R&D 연구자
+  2차 (국내+글로벌): EPC사, 전력공기업, 엔지니어링 컨설팅사
+  3차 (글로벌): 일본/중국/미국/유럽/호주 전기 엔지니어
+
+==================================================
+2. 핵심 철학 및 원칙
+==================================================
+
+원칙 1: 할루시네이션 제로
+  AI = 수집된 문서 기반 요약만
+  출처 없는 답변 = 시스템 레벨 차단
+  수치/규격 = 계산 엔진 직접 연산
+
+원칙 2: 날짜 박제
+  모든 데이터에 타임스탬프 필수
+  언제 기준인지 모르면 현장에서 못 쓴다
+
+원칙 3: 영수증 투명성
+  계산 과정 전체 공개
+  출처 규격 조항까지 명시
+
+원칙 4: 법적 명확성
+  모든 산출물에 면책 조항 자동 삽입
+  공증은 시점 증명이지 결과 보증이 아님
+
+원칙 5: 글로벌 규격 동등성
+  어떤 국가 규격으로 질문해도 답변 가능
+  국가 간 규격 자동 변환 및 차이점 명시
+
+원칙 6: 저작권 준수 (v6.0 추가)
+  규격 원문 무단 크롤링 금지
+  공개 API / 공식 라이선스 / 요약 참조만 허용
+  원문은 출처 링크 제공, ESA DB에는 색인만
+
+원칙 7: 도메인 플러그인
+  전기 -> 기계 -> 토목 -> 화학 순차 확장
+
+원칙 8: Hybrid BYOK
+  Free: 플랫폼 기본 소형 LLM
+  Pro 이상: 사용자 본인 API 키 선택
+
+원칙 9: 법적 방패
+  날짜 박제 + 블록체인 공증 (익명화)
+  = 당시 현행 규격 기준 타임스탬프 증명
+
+==================================================
+3. 전체 시스템 아키텍처
+==================================================
+
+레이어 구조:
+
+[사용자 인터페이스]
+Next.js 14 (Web) + React Native (Mobile)
+검색 / 계산기 / 뉴스 / 자격증 / 협업 / 커뮤니티
+국가 규격 선택 / 단위 체계 선택
+다국어 UI (한국어/영어/일본어/중국어)
+
+[인증 레이어] (v6.0 추가)
+NextAuth.js (소셜 로그인)
+JWT 토큰 발급/갱신
+SSO/SAML (Enterprise)
+
+[API Gateway - Node.js]
+인증 검증 / 라우팅 / BYOK 키 처리
+Rate Limit (티어별 차등 적용)
+플랜 가드 (tier enforcement)
+국가/언어 감지
+
+[서비스 레이어 - FastAPI]
+검색 엔진 / 계산기 엔진 / 뉴스 피드
+에이전트 워크플로우
+Export 엔진 (PDF/Excel/Word)
+면책 조항 엔진
+규격 변환 엔진
+단위 변환 엔진
+에러 처리 / Fallback 엔진 (v6.0)
+
+[Data Layer]
+Weaviate (벡터 검색)
+PostgreSQL (메인 RDB)
+Redis (캐시 + 플랜 카운터)
+TimescaleDB (뉴스/시계열)
+Neo4j (지식 그래프)
+IPFS (블록체인 공증)
+Stripe / 토스페이먼츠 (결제)
+
+[데이터 수집 파이프라인]
+Scrapy / Playwright / Airflow
+저작권 필터 레이어 (v6.0)
+Vision-LLM PDF 전처리
+
+==================================================
+4. 기술 스택
+==================================================
+
+Frontend:
+  Next.js 14 (App Router)
+  React Native (모바일)
+  TypeScript
+  Tailwind CSS / shadcn/ui
+  Zustand / React Query
+  D3.js / Recharts / Cytoscape.js
+  i18next (다국어 - 한국어/영어/일본어/중국어)
+  NextAuth.js (인증 - v6.0)
+
+Backend:
+  FastAPI (Python)
+  Node.js Express (API Gateway)
+  WebSocket / Celery / Redis
+
+AI / ML:
+  LangChain / LlamaIndex
+  Hybrid BYOK (Llama/Mistral 기본 + 사용자 키)
+  Vision-LLM (GPT-4o Vision / Claude 3.5 Sonnet)
+  PaddleOCR / Tesseract / spaCy (다국어)
+
+데이터베이스:
+  Weaviate / PostgreSQL / TimescaleDB
+  Redis / Neo4j / IPFS
+
+결제 (v6.0):
+  Stripe (글로벌)
+  토스페이먼츠 (국내)
+  Paddle (글로벌 세금 처리)
+
+계산/Export:
+  NumPy / SciPy / SymPy / Pint
+  openpyxl / ReportLab / python-docx / Jinja2
+
+보안:
+  IPFS / SHA-256 / AES-256 / JWT
+  익명화 엔진
+  OWASP Top 10 대응
+
+배포/인프라:
+  AWS / GCP / Docker + Kubernetes
+  Cloudflare / GitHub Actions
+
+==================================================
+5. 인증 시스템 - NEW v6.0
+==================================================
+
+인증 방식:
+
+소셜 로그인 (일반 사용자):
+  Google OAuth 2.0
+  GitHub OAuth (개발자/연구자 타겟)
+  Apple Sign In (모바일 iOS)
+  Microsoft OAuth (기업 사용자)
+
+이메일/패스워드 (대안):
+  이메일 인증 필수
+  비밀번호 bcrypt 해싱
+  이메일 인증 링크 24시간 유효
+
+Enterprise SSO (v6.0):
+  SAML 2.0 연동 (대기업/공기업)
+  LDAP / Active Directory 연동
+  온프레미스 인증 서버 지원
+  예: KEPCO, 삼성엔지니어링, 현대엔지니어링
+
+JWT 토큰 전략:
+  Access Token: 만료 15분 (단기)
+  Refresh Token: 만료 30일 (장기, HttpOnly Cookie)
+  토큰 갱신: Refresh Token으로 자동 갱신
+  토큰 블랙리스트: Redis 저장 (로그아웃 처리)
+  토큰 구조: {user_id, tier, domain_pref, country_code, iat, exp}
+
+다국가 가입 정책 (v6.0):
+  한국: 개인정보보호법 준수 (만 14세 이상)
+  EU: GDPR 준수 (명시적 동의, 쿠키 배너)
+  일본: APPI 준수 (개인정보 취급 동의)
+  중국: PIPL 준수 (데이터 현지화 요건 검토)
+  미국: COPPA (13세 미만 불가)
+  호주: Privacy Act 준수
+
+세션 관리:
+  동시 세션 제한:
+    Free: 2개
+    Pro: 5개
+    Team: 10개
+    Enterprise: 무제한
+  의심 세션 감지 (다른 국가 IP 동시 접속 시 알림)
+
+인증 DB 스키마:
+
+테이블 auth_providers:
+  id: UUID PK
+  user_id: UUID FK users
+  provider: VARCHAR(20) - google, github, apple, microsoft, email, saml
+  provider_user_id: VARCHAR(200)
+  created_at: TIMESTAMP
+
+테이블 refresh_tokens:
+  id: UUID PK
+  user_id: UUID FK users
+  token_hash: VARCHAR(64)
+  expires_at: TIMESTAMP
+  is_revoked: BOOLEAN
+  device_info: JSONB
+  created_at: TIMESTAMP
+
+테이블 sessions:
+  id: UUID PK
+  user_id: UUID FK users
+  session_token: VARCHAR(200)
+  ip_address: INET
+  country_code: VARCHAR(10)
+  user_agent: TEXT
+  created_at: TIMESTAMP
+  last_active_at: TIMESTAMP
+  expires_at: TIMESTAMP
+
+==================================================
+6. 플랜 가드 로직 - NEW v6.0
+==================================================
+
+개념:
+  Free/Pro/Team/Enterprise 각 플랜별 제한을
+  API 레벨에서 실시간으로 enforce하는 시스템
+
+카운터 저장소: Redis
+
+Redis 키 구조:
+  usage:calc:{user_id}:{YYYY-MM} -> 계산기 사용 횟수 (월 단위)
+  usage:search:{user_id}:{YYYY-MM} -> 검색 횟수
+  usage:cert:{user_id}:{YYYY-MM} -> 블록체인 공증 횟수
+  usage:convert:{user_id}:{YYYY-MM} -> 규격 변환 횟수
+  usage:export:{user_id}:{YYYY-MM} -> Export 횟수
+  plan:{user_id} -> 현재 플랜 정보 (캐시, 5분 TTL)
+
+플랜별 제한 테이블:
+
+항목                   Free    Pro     Team    Enterprise
+계산기 월 사용 횟수     20회    무제한   무제한   무제한
+검색 결과 개수          3건     전체     전체     전체
+뉴스 지연              1주     실시간   실시간   실시간
+블록체인 공증           불가    10회/월  무제한   무제한
+협업 인원               1인     5인      무제한   무제한
+국가 규격 비교          2개국   전체     전체     전체
+규격 변환               불가    10회/월  무제한   무제한
+Excel Export           불가    가능     가능     가능
+API 접근               불가    불가     가능     가능
+동시 세션               2개     5개      10개     무제한
+
+가드 적용 방식:
+
+1단계: API Gateway에서 JWT 디코딩 -> 플랜 확인
+2단계: Redis에서 현재 사용량 조회
+3단계: 제한 초과 시 429 응답 + 업그레이드 안내
+4단계: 허용 시 사용량 카운터 증가 (INCR)
+5단계: 월 초 자동 리셋 (Celery Beat 스케줄러)
+
+플랜 업그레이드/다운그레이드 처리:
+
+업그레이드 즉시:
+  새 플랜 적용
+  Redis 플랜 캐시 갱신
+  남은 Free 제한 해제
+
+다운그레이드 (결제 주기 만료 후):
+  현재 주기 끝까지 Pro 유지
+  만료 7일 전 알림
+  다운그레이드 시 진행 중인 프로젝트:
+    읽기 전용으로 전환 (삭제 안 함)
+    30일 내 Export 또는 업그레이드 권장
+    30일 후 아카이브 (복구 가능)
+
+테이블 plan_limits:
+  tier: VARCHAR(20) PK
+  calc_monthly: INT (-1 = 무제한)
+  search_count: INT
+  news_delay_days: INT
+  cert_monthly: INT
+  collab_members: INT
+  country_compare_count: INT
+  convert_monthly: INT
+  excel_export: BOOLEAN
+  api_access: BOOLEAN
+  max_sessions: INT
+
+테이블 usage_logs:
+  id: UUID PK
+  user_id: UUID FK users
+  action: VARCHAR(50)
+  year_month: VARCHAR(7) - 2026-04
+  count: INT
+  updated_at: TIMESTAMP
+
+==================================================
+7. 결제 시스템 - NEW v6.0
+==================================================
+
+결제 플랫폼:
+
+국내 사용자:
+  토스페이먼츠 (카드/계좌이체/간편결제)
+  세금계산서 발행 (B2B 기업 고객)
+  VAT 10% 자동 처리
+
+글로벌 사용자:
+  Stripe (신용카드/직불카드)
+  Paddle (글로벌 세금 처리 대행)
+    VAT/GST 자국 세금법 자동 계산
+    EU 디지털서비스세 대응
+    일본 소비세 / 호주 GST 처리
+
+Enterprise:
+  인보이스(후불) 방식 지원
+  연간 계약 선불 할인
+  구매발주서(PO) 기반 결제
+
+구독 관리:
+
+신규 구독:
+  결제 정보 등록 -> 즉시 플랜 활성화
+  첫 결제 실패 시 3일 유예 후 Free 전환
+
+갱신 실패 처리:
+  갱신 실패 D+0: 이메일 알림
+  갱신 실패 D+3: 재시도 + 알림
+  갱신 실패 D+7: 재시도 + 강조 알림
+  갱신 실패 D+14: Free 전환 + 데이터 보존 30일
+
+환불 정책:
+  월 구독: 3일 이내 전액 환불
+  연간 구독: 30일 이내 전액, 이후 일할 계산
+  Enterprise: 계약서 기준
+
+DB 스키마:
+
+테이블 subscriptions:
+  id: UUID PK
+  user_id: UUID FK users
+  tier: VARCHAR(20)
+  billing_cycle: VARCHAR(10) - monthly, yearly
+  status: VARCHAR(20) - active, past_due, cancelled, trialing
+  current_period_start: TIMESTAMP
+  current_period_end: TIMESTAMP
+  stripe_subscription_id: VARCHAR(200)
+  toss_subscription_key: VARCHAR(200)
+  created_at: TIMESTAMP
+
+테이블 invoices:
+  id: UUID PK
+  subscription_id: UUID FK subscriptions
+  user_id: UUID FK users
+  amount: DECIMAL(10,2)
+  currency: VARCHAR(3)
+  tax_amount: DECIMAL(10,2)
+  tax_type: VARCHAR(20) - VAT, GST, consumption_tax
+  status: VARCHAR(20) - paid, pending, failed
+  invoice_pdf_url: TEXT
+  issued_at: TIMESTAMP
+  paid_at: TIMESTAMP
+
+테이블 payment_methods:
+  id: UUID PK
+  user_id: UUID FK users
+  provider: VARCHAR(20) - stripe, toss
+  type: VARCHAR(20) - card, bank_transfer
+  last_four: VARCHAR(4)
+  expires_at: DATE
+  is_default: BOOLEAN
+  created_at: TIMESTAMP
+
+==================================================
+8. 데이터베이스 스키마
+==================================================
+
+[문서 테이블 documents]
+id: UUID PK
+domain: VARCHAR(50)
+doc_type: VARCHAR(50)
+title: TEXT
+title_ko: TEXT
+title_local: TEXT
+source: VARCHAR(100)
+tier: SMALLINT
+url: TEXT
+doi: VARCHAR(200)
+country_code: VARCHAR(10)
+standard_body: VARCHAR(100)
+license_type: VARCHAR(50) - open, licensed, summary_only, link_only (v6.0)
+license_verified_at: TIMESTAMP (v6.0)
+published_at: TIMESTAMP
+collected_at: TIMESTAMP
+verified_at: TIMESTAMP
+standard_version: VARCHAR(100)
+is_latest_version: BOOLEAN
+superseded_by: UUID
+next_revision_expected: DATE
+revision_notes: TEXT
+language: VARCHAR(10)
+raw_text: TEXT
+parsed_tables: JSONB
+parsed_formulas: JSONB
+summary_ko: TEXT
+summary_en: TEXT
+quality_score: FLOAT
+created_at: TIMESTAMP
+updated_at: TIMESTAMP
+
+[규격 저작권 테이블 standard_licenses] (v6.0 추가)
+id: UUID PK
+standard_body: VARCHAR(100) - NFPA, BSI, DIN, JEITA
+standard_name: VARCHAR(200) - NEC, BS 7671, DIN VDE
+license_type: VARCHAR(50)
+  open: 공개 무료 (KEC, 일부 IEC)
+  licensed: 유료 구매 필요 (NEC, BS, DIN VDE)
+  summary_only: 요약/참조만 허용
+  link_only: 링크만 제공 가능
+  api_available: 공식 API 제공
+license_url: TEXT (라이선스 원문 링크)
+commercial_use: BOOLEAN (상업적 이용 가능 여부)
+crawling_allowed: BOOLEAN
+api_endpoint: TEXT
+api_key_required: BOOLEAN
+last_verified_at: TIMESTAMP (날짜 박제)
+notes: TEXT
+
+[글로벌 규격 매핑 global_standard_mapping]
+id: UUID PK
+concept: VARCHAR(200)
+concept_en: VARCHAR(200)
+domain: VARCHAR(50)
+kec_ref: VARCHAR(200)
+kec_version: VARCHAR(50)
+kec_value: TEXT
+iec_ref: VARCHAR(200)
+iec_version: VARCHAR(50)
+iec_value: TEXT
+nec_ref: VARCHAR(200)
+nec_version: VARCHAR(50)
+nec_value: TEXT
+nec_unit_system: VARCHAR(20)
+cec_ref: VARCHAR(200)
+cec_version: VARCHAR(50)
+cec_value: TEXT
+en_ref: VARCHAR(200)
+en_version: VARCHAR(50)
+en_value: TEXT
+din_vde_ref: VARCHAR(200)
+din_vde_version: VARCHAR(50)
+din_vde_value: TEXT
+bs_ref: VARCHAR(200)
+bs_version: VARCHAR(50)
+bs_value: TEXT
+nf_ref: VARCHAR(200)
+nf_version: VARCHAR(50)
+nf_value: TEXT
+jis_ref: VARCHAR(200)
+jis_version: VARCHAR(50)
+jis_value: TEXT
+jeac_ref: VARCHAR(200)
+jeac_version: VARCHAR(50)
+jeac_value: TEXT
+gb_ref: VARCHAR(200)
+gb_version: VARCHAR(50)
+gb_value: TEXT
+dl_ref: VARCHAR(200)
+dl_version: VARCHAR(50)
+dl_value: TEXT
+as_nzs_ref: VARCHAR(200)
+as_nzs_version: VARCHAR(50)
+as_nzs_value: TEXT
+comparison_notes: TEXT
+strictest_standard: VARCHAR(20)
+conversion_confidence: FLOAT (변환 신뢰도 0~1 - v6.0)
+last_verified_at: TIMESTAMP
+
+[국가별 전기 체계 country_electrical_systems]
+id: UUID PK
+country_code: VARCHAR(10)
+country_name_ko: VARCHAR(100)
+country_name_en: VARCHAR(100)
+region: VARCHAR(50)
+standard_voltage_single: INTEGER
+standard_voltage_three: INTEGER
+frequency_hz: INTEGER
+frequency_note: TEXT
+distribution_voltage: INTEGER
+transmission_voltage: TEXT
+primary_standard: VARCHAR(100)
+standard_body: VARCHAR(200)
+plug_type: VARCHAR(50)
+unit_system: VARCHAR(20)
+cable_sizing_system: VARCHAR(20)
+wiring_color_live: VARCHAR(20)
+wiring_color_neutral: VARCHAR(20)
+wiring_color_ground: VARCHAR(20)
+notes: TEXT
+last_updated_at: TIMESTAMP
+
+[계산기 calculators]
+id: UUID PK
+domain: VARCHAR(50)
+category: VARCHAR(100)
+name: VARCHAR(200)
+name_en: VARCHAR(200)
+description: TEXT
+formula_display: TEXT
+formula_code: TEXT
+excel_formula_template: JSONB
+standards: VARCHAR(100)[]
+supported_countries: VARCHAR(10)[]
+standard_version: VARCHAR(100)
+standard_verified_at: TIMESTAMP
+params_schema: JSONB
+output_schema: JSONB
+engine_version: VARCHAR(20)
+is_active: BOOLEAN
+last_updated_at: TIMESTAMP
+has_pending_update: BOOLEAN
+pending_update_notes: TEXT
+
+[계산 영수증 calculation_receipts]
+id: UUID PK
+calc_id: UUID FK calculators
+user_session: VARCHAR(200)
+user_id: UUID FK users
+project_id: UUID FK projects
+country_code: VARCHAR(10)
+applied_standard: VARCHAR(100)
+unit_system: VARCHAR(20)
+inputs: JSONB
+result: JSONB
+steps: JSONB
+formula_used: TEXT
+standards_used: VARCHAR(100)[]
+conversion_confidence: FLOAT (v6.0)
+warnings: TEXT[]
+recommendations: TEXT[]
+disclaimer_text: TEXT
+disclaimer_version: VARCHAR(20)
+calculated_at: TIMESTAMP
+standard_version: VARCHAR(100)
+standard_verified_at: TIMESTAMP
+engine_version: VARCHAR(20)
+is_standard_current: BOOLEAN
+anonymized_hash: VARCHAR(64)
+receipt_hash: VARCHAR(64)
+ipfs_cid: VARCHAR(100)
+blockchain_tx: VARCHAR(200)
+shared_with: UUID[]
+share_token: VARCHAR(100) UNIQUE
+is_public: BOOLEAN
+
+[면책 조항 disclaimer_versions]
+id: UUID PK
+version: VARCHAR(20)
+content_ko: TEXT
+content_en: TEXT
+content_ja: TEXT (v6.0)
+content_zh: TEXT (v6.0)
+effective_from: DATE
+approved_by: VARCHAR(100)
+legal_reviewed_at: TIMESTAMP (v6.0)
+created_at: TIMESTAMP
+
+[사용자 users]
+id: UUID PK
+email: VARCHAR(255) UNIQUE
+nickname: VARCHAR(100)
+domain_pref: VARCHAR(50)[]
+notification_pref: JSONB
+tier: VARCHAR(20)
+country_code: VARCHAR(10)
+language_pref: VARCHAR(10)
+privacy_consented_at: TIMESTAMP (v6.0)
+privacy_consent_version: VARCHAR(20) (v6.0)
+gdpr_region: BOOLEAN (v6.0)
+appi_region: BOOLEAN (v6.0)
+pipl_region: BOOLEAN (v6.0)
+created_at: TIMESTAMP
+last_login_at: TIMESTAMP
+
+[API 사용량 api_usage_logs]
+id: UUID PK
+user_id: UUID FK users
+endpoint: VARCHAR(200)
+method: VARCHAR(10)
+status_code: INT
+response_time_ms: INT
+tier_at_request: VARCHAR(20)
+was_rate_limited: BOOLEAN
+created_at: TIMESTAMP PARTITION BY RANGE
+
+==================================================
+9. 규격 저작권/라이선스 처리 전략 - NEW v6.0
+==================================================
+
+배경:
+  NEC (NFPA 70), BS 7671 (BSI), DIN VDE (VDE Verlag) 등은
+  유료 판매 규격이며 무단 크롤링/복제 시 법적 분쟁 발생 가능
+  규격 원문을 벡터 DB에 색인하는 것과
+  단순 참조 링크 제공의 구분이 필요
+
+규격별 라이선스 분류:
+
+오픈 (Open) - 자유 사용 가능:
+  KEC (한국전기설비규정) - 국가 고시, 공공 도메인
+  전기사업법 / 기술기준 - 법령, 공공 도메인
+  arXiv 논문 - CC 라이선스
+  일부 IEC 미리보기본 - 제한적 공개
+
+요약/참조만 가능 (Summary Only):
+  IEC 60364 시리즈 - 원문 유료, 요약/참조 허용
+  IEEE Std 시리즈 - 원문 유료, 요약 허용
+  JIS C 시리즈 - 원문 유료, 참조 허용
+  GB 시리즈 - 일부 공개, 일부 유료
+
+링크만 제공 (Link Only):
+  NEC (NFPA 70) - NFPA 유료 판매, 원문 색인 불가
+  BS 7671 - BSI 유료 판매, 원문 색인 불가
+  DIN VDE 0100 - VDE Verlag 유료, 원문 색인 불가
+  NF C 15-100 - AFNOR 유료, 원문 색인 불가
+
+공식 API 제공 (API Available):
+  IEEE Xplore API - 기관 구독 또는 개발자 키
+  IEC Webstore API - 유료 API
+  NIST 데이터베이스 - 공개 API
+
+처리 전략:
+
+오픈 규격:
+  전체 텍스트 크롤링 허용
+  벡터 DB 색인 가능
+  RAG 검색에 원문 청크 사용
+
+요약/참조만 가능 규격:
+  규격 번호, 제목, 발행일, 조항 구조만 색인
+  원문 내용 대신 공식 설명 텍스트 색인
+  검색 결과에 공식 구매 링크 제공
+  AI 요약 시 인용 표시 + 원문 구매 안내
+
+링크만 가능 규격:
+  규격 메타데이터만 DB 저장 (번호, 제목, 버전, 발행일)
+  원문 색인 완전 금지
+  검색 결과에 공식 구매 페이지 링크만 제공
+  계산기에 적용 규격 표시 + 구매 링크 (수식 자체는 자체 구현)
+
+공식 API 규격:
+  공식 API를 통한 검색 연동
+  API 키 관리 및 비용 플랫폼 부담
+  결과 캐싱으로 API 비용 절감
+
+사용자 소유 규격 업로드 (v6.0 신기능):
+  사용자가 직접 구매한 규격 PDF 업로드
+  해당 사용자의 개인 공간에만 색인
+  타 사용자와 공유 불가
+  "내 규격 라이브러리" 기능
+
+DB 스키마:
+
+테이블 user_uploaded_standards:
+  id: UUID PK
+  user_id: UUID FK users
+  file_name: VARCHAR(200)
+  standard_name: VARCHAR(200)
+  file_hash: VARCHAR(64)
+  upload_at: TIMESTAMP
+  parsed_at: TIMESTAMP
+  weaviate_collection: VARCHAR(100) (개인 컬렉션 ID)
+  is_processed: BOOLEAN
+  notes: TEXT (사용자 메모)
+
+==================================================
+10. 데이터 수집 파이프라인
+==================================================
+
+저작권 필터 레이어 (v6.0 추가):
+  크롤링 전 standard_licenses 테이블 조회
+  license_type 에 따라 처리 방식 분기:
+    open -> 전체 크롤링
+    summary_only -> 메타데이터 + 요약만
+    link_only -> 메타데이터만 (URL 저장)
+    api_available -> API 호출
+  crawling_allowed = false 인 경우 크롤링 완전 차단
+
+글로벌 규격 소스:
+
+한국 (open):
+  KEC / 전기사업법 / KS C - 월 1회
+
+미국 (link_only):
+  NFPA 70 (NEC) - 메타데이터만 / 공식 링크 제공
+  ANSI/NEMA - 일부 공개본
+  IEEE Xplore - API 연동 (주 1회)
+  UL 표준 - 메타데이터만
+
+캐나다 (link_only):
+  CSA C22.1 (CEC) - 메타데이터만
+
+유럽:
+  EN 시리즈 - summary_only
+  DIN VDE - link_only
+  BS 7671 - link_only
+  NF C 15-100 - link_only
+
+일본 (summary_only):
+  JIS C 시리즈 - summary_only
+  내선규정 - summary_only
+  電技 - open (법령)
+
+중국:
+  GB 강제표준 - summary_only (일부 open)
+  DL/T - summary_only
+
+호주/뉴질랜드 (link_only):
+  AS/NZS 3000 - link_only
+
+국제:
+  IEC 60364 시리즈 - summary_only
+  IEEE Std - API 연동
+
+논문/뉴스:
+  Tier 1: IEEE Xplore API / arXiv / DOE / EPRI (주 1회)
+  Tier 2: Elsevier / Springer / MDPI (주 1회)
+  Tier 3: IEEE Spectrum / Power Magazine (6시간)
+
+Airflow DAG:
+
+DAG 1 논문 크롤링 (주 1회):
+  -> license_filter -> crawl_by_type
+  -> vision_llm_preprocess -> quality_score
+  -> embed_and_index -> timestamp
+
+DAG 2 뉴스 크롤링 (6시간):
+  -> relevance_filter -> translate_ko
+  -> summarize -> trend_analysis -> store -> timestamp
+
+DAG 3 글로벌 규격 감시 (월 1회):
+  -> license_check -> crawl_by_license_type
+  -> diff_detection -> update_mapping
+  -> mark_affected_calcs -> send_alerts -> timestamp
+
+DAG 4 자격증 (주 1회):
+  -> crawl_qnet -> parse -> update -> alert -> timestamp
+
+==================================================
+11. PDF 표/수식 파싱 전략 (Vision-LLM)
+==================================================
+
+적용 대상: 오픈 또는 사용자 업로드 규격만
+  링크전용 / 유료 규격 원문에는 미적용
+
+처리 단계:
+  PDF -> 이미지 변환 (300 DPI)
+  -> 콘텐츠 타입 분류
+  -> Vision-LLM 처리 (표 Markdown / 수식 LaTeX)
+  -> 구조화 저장
+  -> 검색/계산기 연동
+
+에러 처리 (v6.0):
+  Vision-LLM 타임아웃 (30초) -> 재시도 3회
+  재시도 모두 실패 -> 원본 텍스트만 저장 + 이미지 링크 제공
+  품질 검증 실패 -> 수동 검수 큐 이관
+
+==================================================
+12. 날짜 박제 시스템
+==================================================
+
+박제 대상:
+  documents: published_at / collected_at / verified_at /
+             standard_version / license_verified_at (v6.0)
+  calculation_receipts: calculated_at / standard_version /
+                        standard_verified_at / engine_version /
+                        disclaimer_version / country_code
+  news_articles: published_at / crawled_at / translated_at
+  exam_schedules: collected_at
+  ai_tools: release_date / pricing_verified_at / measured_at
+  global_standard_mapping: last_verified_at
+  standard_licenses: last_verified_at (v6.0)
+  disclaimer_versions: legal_reviewed_at (v6.0)
+  subscriptions: current_period_start / current_period_end (v6.0)
+
+==================================================
+13. 글로벌 규격 DB 완전판
+==================================================
+
+지원 규격:
+
+한국: KEC / 전기사업법 / KS C
+미국: NEC(NFPA 70) / ANSI-NEMA / IEEE Std / UL
+캐나다: CEC(CSA C22.1) / CSA 시리즈
+유럽 공통: EN 시리즈 / CENELEC
+독일: DIN VDE 0100
+영국: BS 7671 (18th Edition)
+프랑스: NF C 15-100
+이탈리아: CEI 64-8
+일본: JIS C / 내선규정 / 電技 / JEAC
+중국: GB / DL-T / NB-T
+호주/뉴질랜드: AS/NZS 3000 / 3008 / 4777
+국제: IEC 60364 / 60076 / 60909 / 61850 / 62619 / IEEE C37 / IEEE 80
+
+규격 비교 예시:
+
+개념: 전압강하 허용 기준 (간선)
+  KEC 232.52: 3%
+  IEC 60364-5-52: 4% 권장
+  NEC: 5% 권고 (강제 아님)
+  CEC: 3% 권고
+  DIN VDE: 4%
+  BS 7671: 3%(조명) / 5%(기타)
+  JIS 내선규정: 2~3%
+  GB 50054: 5%
+  AS/NZS 3000: 5%
+  가장 엄격: KEC / JIS
+  가장 완화: GB / AS-NZS / NEC
+  변환 신뢰도: 0.92 (v6.0)
+
+개념: 표준 전선색상
+  KEC: 적(L1) 흑(L2) 청(L3) 녹황(PE) 청(N)
+  IEC/유럽: 갈(L1) 흑(L2) 회(L3) 녹황(PE) 청(N)
+  NEC: 흑(L1) 적(L2) 청(L3) 녹(PE) 백(N)
+  BS 7671: 갈(L) 청(N) 녹황(PE) - 단상
+  JIS: 흑(L) 백(N) 녹(PE)
+  AS/NZS: 갈(L1) 흑(L2) 회(L3) 녹황(PE) 청(N) - IEC 채택
+
+==================================================
+14. 국가별 전압/전기 체계 DB
+==================================================
+
+한국:
+  단상: 220V / 3상: 380V / 60Hz
+  배전: 22.9kV / 규격: KEC / 단위: mm2
+
+미국:
+  단상: 120-240V / 3상: 208-480V / 60Hz
+  배전: 4.16-13.8kV (지역별 상이)
+  규격: NEC (주별 채택 버전 다름) / 단위: AWG-kcmil
+
+캐나다:
+  단상: 120-240V / 3상: 208-600V / 60Hz
+  규격: CEC / 단위: AWG + metric 혼용
+
+독일:
+  단상: 230V / 3상: 400V / 50Hz
+  배전: 10-20kV / 규격: DIN VDE / 단위: mm2
+
+영국:
+  단상: 230V / 3상: 400V / 50Hz
+  배전: 11-33kV / 규격: BS 7671 / 단위: mm2
+
+일본:
+  단상: 100-200V / 3상: 200-400V
+  동일본: 50Hz / 서일본: 60Hz (혼재!)
+  배전: 6.6kV / 규격: JIS + 내선규정
+  특이사항: 동서 주파수 혼재 -> 계산기 Hz 선택 필수
+
+중국:
+  단상: 220V / 3상: 380V / 50Hz
+  배전: 10-35kV / 규격: GB / 단위: mm2
+  특이사항: 홍콩은 BS 7671 기반
+
+호주:
+  단상: 230V / 3상: 400V / 50Hz
+  배전: 11-33kV / 규격: AS/NZS 3000 / 단위: mm2
+
+==================================================
+15. 해외 플랜트 규격 자동 변환
+==================================================
+
+변환 지원 항목:
+  케이블 단면적 (mm2 <-> AWG <-> kcmil)
+  허용전류 (온도 기준 보정)
+  전압강하 기준 비교
+  차단기 정격 (IEC <-> UL-ANSI)
+  접지 저항 기준
+  변압기 임피던스 기준
+
+변환 신뢰도 점수 (v6.0):
+  0.95~1.0: 직접 변환 가능 (단위만 다름)
+  0.80~0.95: 가정/보정 필요 (온도 기준 등)
+  0.60~0.80: 유사 개념 매핑 (주의 필요)
+  0.60 미만: 변환 불가 -> 재설계 권장 표시
+
+변환 불가 알림:
+  전압 체계 자체가 다를 때 (22.9kV -> 6.6kV)
+  규격 간 해당 개념 없을 때
+  -> 변환 불가 이유 + 대안 제시
+
+EPC 특화:
+  발주처별 규격 요구사항 등록
+  사우디 아람코: NEC + SAES 기준
+  UAE ADNOC: IEC + ADCO 기준
+  변환 결과 영문 PDF 보고서 생성
+
+==================================================
+16. 단위 변환 엔진
+==================================================
+
+케이블 단면적:
+  1.5mm2 = AWG 16
+  2.5mm2 = AWG 14
+  4mm2 = AWG 12
+  6mm2 = AWG 10
+  10mm2 = AWG 8
+  16mm2 = AWG 6
+  25mm2 = AWG 4
+  35mm2 = AWG 2
+  50mm2 = AWG 1/0
+  70mm2 = AWG 2/0
+  95mm2 = AWG 3/0
+  120mm2 = AWG 4/0
+  150mm2 = 300 kcmil
+  185mm2 = 350 kcmil
+  240mm2 = 500 kcmil
+  300mm2 = 600 kcmil
+
+전력: kW <-> HP / kVA <-> kW / kVAR
+전압: V <-> kV <-> MV
+온도: 섭씨 <-> 화씨 (허용전류 보정)
+임피던스: 옴 <-> pu <-> %Z
+
+계산기 UI:
+  입력 단위 선택 (mm2 / AWG)
+  출력 단위 선택
+  영수증에 사용 단위 명시
+
+==================================================
+17. AI 검색 엔진
+==================================================
+
+검색 파이프라인:
+  자연어 질문 (다국어 지원)
+  -> 1단계: 질문 분석 + 국가/규격 컨텍스트
+  -> 2단계: 저작권 필터 적용 검색
+             (link_only 규격은 메타만 반환)
+  -> 3단계: 하이브리드 검색 (Weaviate)
+  -> 4단계: Vision-LLM 파싱 결과 포함
+  -> 5단계: 지식 그래프 연계
+  -> 6단계: 재랭킹
+  -> 7단계: RAG 답변 (Hybrid BYOK)
+  -> 8단계: 할루시네이션 검증
+  -> 9단계: 날짜 메타 + 라이선스 표시
+  -> 10단계: 최종 출력 + 글로벌 규격 비교
+
+저작권 표시 (v6.0):
+  오픈 규격: 원문 청크 인용 가능
+  요약만 가능: "IEC 60364-5-52 기준 (원문 구매 필요)"
+  링크만: "NEC Article 210 참조 - NFPA 공식 사이트에서 확인"
+  사용자 업로드: "귀하의 개인 규격 라이브러리 기준"
+
+글로벌 규격 비교 검색:
+  "전압강하 허용 기준" 검색 ->
+  KEC / IEC / NEC / JIS / GB / AS-NZS 동시 비교
+  변환 신뢰도 표시
+
+==================================================
+18. 에이전트 워크플로우
+==================================================
+
+국내 설계 시나리오:
+  입력: "22.9kV 수변전설비 설계 (부하 500kW, 역률 0.9, 케이블 200m)"
+  Step 1: 변압기 용량 계산 -> 영수증 #001 (날짜 박제 + 면책 조항)
+  Step 2: KEC 조항 확인 (저작권 open -> 원문 참조)
+  Step 3: 케이블 선정 -> 영수증 #002
+  Step 4: 전압강하 검증 -> 영수증 #003
+  Step 5: 차단기 용량 -> 영수증 #004
+  Step 6: 체크리스트
+  Step 7: Export (PDF + Excel + 블록체인 공증)
+
+해외 플랜트 시나리오:
+  입력: "KEC 설계본을 NEC + SAES 기준으로 변환해줘"
+  Step 1: 원본 KEC 계산서 로드
+  Step 2: 타겟 규격 확인 (NEC link_only -> 메타 참조)
+  Step 3: 변환 가능 항목 변환 + 신뢰도 점수
+  Step 4: 변환 불가 항목 경고
+  Step 5: 비교 리포트 생성
+  Step 6: 영문 PDF Export + 면책 조항
+
+==================================================
+19. 계산기 시스템 (영수증)
+==================================================
+
+전력 계산기: 단상/3상 전력 / 역률 보정 / 전압강하 /
+             전력손실 / 수용률-부등률
+보호 협조: 차단기 / 단락전류 / 케이블선정 / 접지저항 / 보호계전기
+변압기: 용량 / 임피던스 / 손실 / 병렬운전
+신재생/ESS: 태양광 / 배터리 / 인버터 / 계통연계
+조명/설비: 조도 / 비상발전기 / UPS
+글로벌 전용 (v5.0+): AWG-mm2 변환 / 국가별 허용전류 비교 /
+                      50Hz-60Hz 무효전력 비교 / NEC 로드 계산
+AI 특화: 토큰비용 / GPU메모리 / 학습비용 / 추론속도 / RAG최적화
+
+영수증 구조:
+  [메타]
+  계산 일시 / 적용 국가 / 적용 규격 / 단위 체계
+  규격 현행 확인일 / 엔진 버전 / 면책 조항 버전
+  변환 신뢰도 (규격 변환 시 - v6.0) / 무결성 해시
+
+  [공식] [입력값] [계산 과정] [결과]
+
+  [글로벌 기준 비교 패널]
+  KEC: 적합 / IEC: 적합 / NEC: 적합 (신뢰도: 0.92)
+
+  [저작권 표시] (v6.0)
+  KEC: open 규격 (공공 도메인)
+  NEC: NFPA 유료 규격 (공식 사이트 링크)
+
+  [면책 조항] [액션]
+
+==================================================
+20. 산출물 Export 시스템
+==================================================
+
+Excel Export:
+  셀에 수식 살아있음
+  메타 시트 (국가/규격/날짜 박제)
+  AWG 단위 시트 (글로벌 버전)
+
+PDF Export:
+  면책 조항 + 워터마크
+  영문 버전 지원
+  국가별 규격 비교 표
+
+Word Export:
+  보고서 템플릿
+  통합 보고서
+
+글로벌 규격 비교 보고서 (v5.0+):
+  항목별 비교 + 준수 체크리스트
+  EPC 영문 보고서
+
+==================================================
+21. 법적 면책 조항 시스템
+==================================================
+
+다국어 면책 조항 (v5.0+):
+  한국어 / 영어 / 일본어 / 중국어
+
+내용:
+  "본 계산서는 참고용이며 최종 책임은 검토자에게 있습니다.
+   본 플랫폼은 계산 결과의 정확성을 보조하나
+   최종 판단은 자격을 갖춘 전문가가 수행해야 합니다."
+
+버전 관리:
+  Disclaimer v1.0 최초
+  Disclaimer v2.0 법률 검토 강화
+  Disclaimer v2.1 영문 추가
+  Disclaimer v3.0 다국어 완성
+  Disclaimer v3.1 규격 저작권 면책 추가 (v6.0)
+    "ESA는 링크전용 규격 원문을 보유하지 않습니다.
+     해당 규격은 공식 발행 기관에서 구매하여 확인하시기 바랍니다."
+
+법률 검토:
+  각 언어 버전 현지 법무팀 또는 법률 서비스 검토
+  legal_reviewed_at 날짜 박제
+
+==================================================
+22. 지식 그래프
+==================================================
+
+Neo4j 노드:
+  Concept / Standard (국가 포함) / Calculator / Document
+
+관계:
+  RELATED_TO / GOVERNED_BY / CALCULATED_BY
+  SUPERSEDES / EQUIVALENT_TO (국가 간 동등 규격)
+  LICENSED_AS (v6.0 - 저작권 관계)
+
+초기 데이터 구축 방법 (v6.0):
+  Step 1: 전기공학 교과서 목차 기반 핵심 개념 500개 추출
+  Step 2: 각 개념에 KEC/IEC 조항 수동 매핑 (전문가 검수)
+  Step 3: NEC/JIS/GB/AS-NZS 조항 추가 매핑
+  Step 4: 개념 간 관계 규칙 기반 자동 생성
+  Step 5: 전문가 검수 후 확정
+  Step 6: 사용자 검색 패턴으로 지속 개선
+
+==================================================
+23-31. (해외 기술 뉴스 / 자격증 / 협업 / 모바일 등)
+==================================================
+
+[23. 해외 기술 뉴스]
+전기: IEEE Spectrum / Power Magazine / T&D World / BloombergNEF
+AI: arXiv / Anthropic / OpenAI / Hugging Face
+글로벌 규격 개정 뉴스: NFPA / IEC / METI / SAC / BSI / Standards Australia
+일일 브리핑: 06:00 자동, 카테고리별 TOP 3, 한국어 요약, 날짜 박제
+
+[24. 자격증 + 학습]
+국내: 전기기능사 -> 산업기사 -> 기사 -> 기술사
+해외: 미국 PE / 일본 電気主任技術者 / 영국 CEng / 호주 CPEng
+AI 기출문제: 10년치 DB + AI 해설 + 합격 예측
+
+[25. 협업]
+프로젝트 단위 관리 (국가/규격 설정 포함)
+Owner / Editor / Viewer
+코멘트 / 버전 이력 / 공유 링크
+
+[26. 모바일 현장 모드 + 오프라인 동기화]
+
+오프라인 캐시:
+  계산기 10종 + 해당 국가 규격 요약 로컬 저장
+  온라인 복귀 시 자동 동기화
+
+오프라인 동기화 충돌 해소 전략 (v6.0):
+  충돌 감지 기준: 동일 영수증 ID가 로컬과 서버 양쪽에서 수정된 경우
+  해소 방법:
+    자동 해소 (타임스탬프 기준): 더 최신 버전을 채택
+    수동 해소: 두 버전을 나란히 보여주고 사용자가 선택
+  충돌 발생 시 알림: "오프라인 중 수정된 항목이 충돌합니다. 확인해주세요."
+  충돌 이력 보존: 둘 다 영수증 버전 이력에 저장 후 채택 버전 표시
+
+OCR: 명판 촬영 -> 다국어 인식 -> 계산기 연동
+
+[27. 개인화 알림]
+규격 개정 (전 세계) / 키워드 뉴스 / 자격증 D-DAY
+AI 모델 출시 / 가격 변동 / 주간 브리핑
+채널: 이메일 / 앱 푸시 / 브라우저 / Slack/Teams
+
+[28. 데이터 시각화]
+계산 결과 차트 / 글로벌 규격 비교 / 규격 개정 타임라인
+AI 도구 비교 / 논문 트렌드
+
+[29. OCR 명판 인식]
+변압기 / 차단기 / 케이블 명판
+다국어 명판 (한국어/영어/일본어/중국어)
+Phase 3: 단선결선도 AI 인식
+
+[30. 블록체인 공증]
+익명화 처리 후 IPFS + 타임스탬프
+원본: 플랫폼 DB (삭제 가능) / IPFS: 익명화본만
+
+[31. 커뮤니티 / 집단지성 + 어뷰징 방지]
+
+커뮤니티 기능:
+  전문가 Q&A / 계산서 공유 라이브러리
+  버그 리포트 / 글로벌 규격 해석 포럼
+
+어뷰징 방지 정책 (v6.0):
+
+스팸/허위 답변 방지:
+  신규 가입자: 답변 기능 7일 후 활성화
+  답변 신고 기능: 커뮤니티 신고 3회 -> 임시 숨김 -> 관리자 검토
+  AI 스팸 감지: 반복 패턴, 무의미 텍스트 자동 감지
+
+전문가 인증 시스템:
+  기술사 인증: 자격증 사진 업로드 -> 관리자 수동 검수
+  PE / CEng 등 해외 자격증: 동일 절차
+  인증 전문가 배지 표시
+  인증 오남용 신고 시 재검토
+
+허위 정보 방지:
+  규격 해석 답변 시 반드시 근거 조항 명시 필수
+  근거 없는 답변 = 커뮤니티 투표로 하위 노출
+  잘못된 규격 정보 신고 -> 전문가 검토 -> 수정 알림
+
+계산서 라이브러리 품질 관리:
+  업로드 시 자동 검증: 날짜 박제 있는지, 면책 조항 있는지
+  커뮤니티 평점 3.0 미만 시 경고 배지
+  심각한 오류 신고 시 즉시 비공개 처리
+
+모더레이션 자동화:
+  욕설/혐오 표현: 자동 필터링
+  개인정보 노출 시도: 자동 감지 + 차단
+  광고/홍보성 글: 패턴 감지 + 숨김
+
+==================================================
+32. AI 도메인
+==================================================
+
+AI 논문 검색: 벤치마크 연동 / 코드 연동 / 인용 네트워크
+AI 도구 비교: 가격/벤치마크/기능 (날짜 박제)
+전기 x AI 교차: "스마트그리드에 어떤 AI 모델 써?"
+  -> 전기 DB + AI DB + 비용 계산기 통합 답변
+
+==================================================
+33. Hybrid BYOK 구조
+==================================================
+
+Free: 플랫폼 기본 소형 LLM (Llama/Mistral)
+Pro 기본: 플랫폼 중급 LLM (Claude Haiku / GPT-4o mini)
+Pro + BYOK: 고품질 모델 (GPT-4o / Claude Sonnet)
+Enterprise: 커스텀 LLM (Azure OpenAI / AWS Bedrock)
+
+키 관리: AES-256 암호화 / 메모리 즉시 삭제
+어댑터: platform_llm / openai / anthropic / gemini / ollama / azure / bedrock
+
+==================================================
+34. 에러 처리 및 Fallback 전략 - NEW v6.0
+==================================================
+
+핵심 원칙:
+  어떤 컴포넌트가 실패해도 사용자에게 명확한 안내
+  가능한 경우 자동 Fallback으로 서비스 유지
+  모든 에러는 로그 저장 + 알림
+
+Weaviate 벡터 검색 실패:
+  1차: 자동 재시도 (3회, 지수 백오프)
+  2차: PostgreSQL 키워드 검색으로 Fallback
+  3차: 검색 불가 안내 + 수동 규격 링크 제공
+  알림: 관리자 Slack 알림 즉시
+
+Vision-LLM API 타임아웃 (30초 초과):
+  1차: 자동 재시도 (2회)
+  2차: 원본 텍스트 청킹만으로 저장
+  3차: "표/수식 파싱 지연 중 - 텍스트만 제공" 표시
+  백그라운드 큐에 재처리 작업 등록
+
+BYOK 키 만료/오류:
+  즉시 감지: API 응답 401/429 감지
+  사용자 알림: "API 키가 만료되었거나 잔액이 부족합니다"
+  자동 Fallback: 플랫폼 기본 LLM으로 전환 (Pro는 중급 LLM)
+  키 재입력 안내: 설정 페이지 바로가기 버튼 제공
+  유예 기간: 24시간 기본 LLM 임시 제공
+
+IPFS 공증 저장 실패:
+  1차: 자동 재시도 (3회)
+  2차: 대체 IPFS 노드 시도 (다중 노드 구성)
+  3차: 임시 보류 상태 저장
+       "공증 처리 중입니다. 완료 시 알림 드립니다."
+  복구: 배치 작업으로 24시간 내 재시도
+
+계산 엔진 오류:
+  수식 실행 오류: 즉시 감지 + 구체적 오류 메시지
+  "입력값이 유효 범위를 벗어났습니다 (전압 범위: 100V-765kV)"
+  수치 오버플로우: 안전 처리 후 경고 표시
+  영수증 생성 불가 시: 중간 계산값이라도 표시
+
+PDF/Excel Export 실패:
+  1차: 재시도
+  2차: 단순 포맷으로 Fallback (스타일 없는 기본 포맷)
+  3차: 계산 데이터 JSON 다운로드 제공
+
+규격 변환 엔진:
+  매핑 데이터 없는 경우:
+    "이 개념에 대한 NEC 대응 조항을 찾을 수 없습니다"
+    유사 조항 목록 제시
+  신뢰도 0.6 미만:
+    "변환 신뢰도가 낮습니다. 전문가 확인을 권장합니다" 경고
+
+크롤러 실패:
+  소스별 독립 실행: 하나 실패해도 나머지 계속
+  실패 소스 로그 + 관리자 알림
+  마지막 성공 데이터 유지 (데이터 공백 없음)
+
+에러 코드 체계:
+  ESA-1xxx: 인증/권한 오류
+  ESA-2xxx: 플랜/요금 제한
+  ESA-3xxx: 검색 오류
+  ESA-4xxx: 계산 오류
+  ESA-5xxx: Export 오류
+  ESA-6xxx: 외부 서비스 오류 (LLM, IPFS 등)
+  ESA-7xxx: 규격 변환 오류
+  ESA-9xxx: 시스템 오류
+
+==================================================
+35. 테스트 전략 (QA) - NEW v6.0
+==================================================
+
+테스트 레이어:
+
+단위 테스트 (Unit Test):
+  계산기 수식 정확도 검증
+    각 계산기별 정답 케이스 100개 이상 준비
+    엣지 케이스: 0값, 최소값, 최대값, 음수 입력
+    단위 변환: AWG <-> mm2 전체 표 검증
+    예: 전압강하 계산기
+        입력: V=220, I=100A, L=100m, A=25mm2
+        기대값: 3.2% (KEC 기준)
+        허용 오차: ±0.01%
+  규격 매핑 검증
+    글로벌 규격 매핑 테이블 전수 검증
+    전문가 2인 교차 검토
+  단위 변환 엣지 케이스
+    AWG 0000 (4/0) = 107mm2 검증
+    kcmil 변환 정확도
+
+통합 테스트 (Integration Test):
+  RAG 검색 파이프라인
+    쿼리 -> 임베딩 -> Weaviate 검색 -> 답변 생성 전체 플로우
+    할루시네이션 감지 로직 동작 확인
+  규격 변환 엔진
+    KEC -> NEC 변환 전체 플로우
+    신뢰도 점수 정확성 확인
+  에이전트 워크플로우
+    수변전설비 설계 시나리오 전체 실행
+    중간 단계 실패 시 Fallback 동작 확인
+  결제 시스템
+    Stripe 테스트 카드로 결제 플로우
+    플랜 업그레이드/다운그레이드 처리
+
+규격 개정 감지 테스트:
+  테스트용 더미 규격 변경 -> DAG 실행 -> 감지 확인
+  오탐(없는 개정 감지): 허용치 5% 미만
+  미탐(있는 개정 미감지): 허용치 1% 미만
+
+Vision-LLM 파싱 품질 테스트:
+  표 파싱: 50개 샘플 표 -> Markdown 변환 정확도
+  수식 파싱: 50개 샘플 수식 -> LaTeX 변환 정확도
+  전문가 검수: 전기공학 전문가가 결과물 검토
+
+성능 테스트:
+  부하 테스트: 동시 100/500/1000 사용자 시뮬레이션
+  응답 시간 측정: P50 / P95 / P99
+  병목 구간 식별 및 최적화
+
+보안 테스트:
+  OWASP Top 10 점검
+  BYOK 키 유출 시도 테스트
+  SQL Injection / XSS 테스트
+  JWT 토큰 위조 시도 테스트
+
+글로벌 규격 매핑 검증 프로세스:
+  전기공학 전문가 (기술사) 2명 교차 검토
+  매 규격 개정 시 영향 매핑 재검토
+  커뮤니티 버그 리포트 반영 사이클
+  변환 신뢰도 점수 캘리브레이션 (분기 1회)
+
+==================================================
+36. 성능 및 SLA 목표 - NEW v6.0
+==================================================
+
+응답 시간 목표:
+
+검색 쿼리:
+  P50: 500ms 이내
+  P95: 2,000ms 이내
+  P99: 5,000ms 이내
+
+계산기 영수증 생성:
+  P50: 200ms 이내 (계산 엔진만)
+  P95: 1,000ms 이내
+  P99: 3,000ms 이내
+
+RAG 답변 생성 (LLM 포함):
+  P50: 3,000ms 이내
+  P95: 8,000ms 이내
+  스트리밍 응답으로 체감 속도 개선
+
+Vision-LLM PDF 파싱 (배치):
+  페이지당 5~10초 (실시간 아님, 백그라운드 처리)
+
+글로벌 규격 변환:
+  P50: 300ms 이내 (캐시 히트)
+  P95: 1,500ms 이내
+
+가용성 목표:
+  전체 서비스: 99.9% (월 다운타임 43분 이내)
+  계산기 엔진: 99.95% (핵심 기능)
+  검색 엔진: 99.9%
+  블록체인 공증: 99.5% (비실시간)
+
+트래픽 가정 (초기):
+  DAU: 1,000~5,000명
+  동시 접속: 최대 500명
+  일일 검색 쿼리: 10,000건
+  일일 계산기 실행: 5,000건
+
+DB 성능:
+  global_standard_mapping 테이블 (넓은 구조) 최적화:
+    concept + domain 복합 인덱스
+    자주 조회되는 규격 조합 캐시 (Redis, TTL 1시간)
+    국가별 파티셔닝 검토
+  Weaviate 벡터 인덱스:
+    초기 문서 수: 100만 청크 예상
+    HNSW 인덱스 파라미터 튜닝
+    도메인별 컬렉션 분리
+
+스케일링 전략:
+  수평 스케일링: Kubernetes HPA (CPU/메모리 기준)
+  Weaviate: 샤딩으로 수평 확장
+  PostgreSQL: 읽기 전용 Replica 추가
+  Redis: Cluster 모드
+  LLM 요청: 큐 기반 처리 (Celery)
+
+모니터링:
+  APM: DataDog 또는 New Relic
+  에러 추적: Sentry
+  로그: ELK Stack (Elasticsearch + Logstash + Kibana)
+  알람: PagerDuty (P1 장애 즉시 호출)
+  대시보드: Grafana
+
+SLA Enterprise 보장:
+  99.9% 가용성 보장
+  장애 시 크레딧 보상
+  전담 지원 응답 시간: P1 1시간, P2 4시간, P3 24시간
+
+==================================================
+37. 다국어 UX 전략 - NEW v6.0
+==================================================
+
+지원 언어: 한국어 / 영어 / 일본어 / 중국어 (간체)
+
+UI 번역 전략:
+
+범위: UI 전체 번역 (메뉴, 버튼, 안내 문구, 에러 메시지)
+도구: i18next (프론트엔드) + FastAPI i18n (백엔드)
+번역 파일: JSON 키-값 구조 (/locales/ko/common.json 등)
+품질: 기계 번역 1차 -> 원어민 검토 -> 전문가 교정
+
+UI 번역 예시 (계산기):
+  한국어: "계산 실행"
+  영어: "Run Calculation"
+  일본어: "計算実行"
+  중국어: "运行计算"
+
+RAG 답변 다국어 처리:
+
+방식: 사용자 언어 감지 -> 해당 언어로 답변 생성
+  한국어 질문 -> 한국어 답변 (KEC 우선 검색)
+  영어 질문 -> 영어 답변 (IEC/NEC 우선 검색)
+  일본어 질문 -> 일본어 답변 (JIS/내선규정 우선 검색)
+  중국어 질문 -> 중국어 답변 (GB 우선 검색)
+
+번역 품질 관리:
+  RAG 답변은 원문 기반 생성이므로 품질 비교적 높음
+  기술 용어 번역 사전 구축 (전기 전문 용어)
+    한국: 변압기 / 영어: Transformer / 일본어: 変圧器 / 중국어: 变压器
+  번역 오류 신고 기능 -> 커뮤니티 교정
+
+면책 조항 번역:
+  전문 법률 번역 서비스 이용
+  각국 현지 법무팀 검토 필수
+  번역본 법적 효력: 한국어/영어 원문 우선
+
+영수증 다국어:
+  계산 과정은 해당 사용자 언어로 표시
+  규격 조항명은 원문 유지 (KEC 232.52 등 변경 안 함)
+  면책 조항은 사용자 언어 + 한국어(원문) 병기
+
+언어 감지:
+  브라우저 언어 설정 우선
+  사용자 프로필 언어 설정 적용
+  질문 텍스트 자동 감지 (langdetect)
+
+==================================================
+38. 개인정보법 다국 대응 - NEW v6.0
+==================================================
+
+한국 - 개인정보보호법:
+  적용 대상: 한국 거주자 또는 한국 서버 이용자
+  만 14세 미만: 법정대리인 동의 필수
+  개인정보 처리 동의: 가입 시 명시적 동의
+  보존 기간: 목적 달성 후 즉시 파기 또는 분리 보관
+  국외 이전: 제3국 서버 이용 시 고지 필수
+  개인정보 처리방침: 한국어 공개 의무
+
+EU/영국 - GDPR / UK GDPR:
+  적용 대상: EU/EEA 거주자 + 영국 거주자
+  쿠키 동의: 명시적 옵트인 배너 필수
+  데이터 최소화: 서비스에 필요한 최소 데이터만 수집
+  잊힐 권리: 계정 삭제 시 개인정보 30일 내 완전 삭제
+  블록체인 공증과 잊힐 권리 충돌: 익명화로 해결 (섹션 30 참조)
+  데이터 이식성: 사용자 데이터 JSON 다운로드 기능
+  DPO (Data Protection Officer): EU 사용자 100명 이상 시 지정 검토
+  SCCs (Standard Contractual Clauses): 제3국 데이터 이전 시
+
+일본 - APPI (개인정보보호법):
+  적용 대상: 일본 거주자 개인정보 취급 시
+  제3자 제공: 본인 동의 또는 법적 근거 필요
+  외국 이전: 개인정보보호위원회 고시 국가 기준
+  보안 관리: 안전 관리 조치 의무
+  처리 방침: 일본어 공개
+
+중국 - PIPL (개인정보보호법):
+  적용 대상: 중국 거주자 개인정보 처리 시
+  데이터 현지화 요건:
+    중요 데이터: 중국 내 서버 저장 필요 검토
+    일반 개인정보: 출국 안전 평가 또는 표준 계약 필요
+  대응 전략:
+    중국 사용자 전용 서버 검토 (Alibaba Cloud China Region)
+    또는 중국 서비스 별도 법인으로 운영
+  개인정보 영향 평가: 처리 전 수행
+
+미국 - CCPA (캘리포니아):
+  적용 대상: 캘리포니아 거주자, 연 매출 2,500만 달러 이상 또는 사용자 10만 명 이상
+  개인정보 판매 거부권: "Do Not Sell My Info" 링크 필수
+  데이터 접근/삭제 요청: 45일 내 응답
+
+호주 - Privacy Act:
+  적용 대상: 연 매출 3백만 호주달러 이상 또는 민감 정보 취급
+  APPs (Australian Privacy Principles) 13개 준수
+  데이터 침해 신고: 30일 내 OAIC 신고
+
+공통 대응 구조:
+
+가입 시:
+  국가 감지 -> 해당 국가 개인정보 동의 화면 표시
+  동의 항목: 필수(서비스 이용) / 선택(마케팅) 분리
+  동의 내용 버전 관리 + 날짜 박제
+
+데이터 삭제 요청:
+  계정 삭제 요청 -> 30일 내 개인정보 삭제
+  예외: 법적 보존 의무 데이터 (감사 로그 등)
+  블록체인 공증: 익명화 데이터만이므로 삭제 불필요
+
+데이터 관리 DB:
+
+테이블 privacy_consents:
+  id: UUID PK
+  user_id: UUID FK users
+  consent_type: VARCHAR(50) - essential, marketing, analytics
+  consented: BOOLEAN
+  consent_version: VARCHAR(20)
+  country_code: VARCHAR(10)
+  ip_address: INET
+  created_at: TIMESTAMP (날짜 박제)
+
+테이블 data_deletion_requests:
+  id: UUID PK
+  user_id: UUID FK users
+  requested_at: TIMESTAMP
+  completed_at: TIMESTAMP
+  status: VARCHAR(20) - pending, in_progress, completed
+  requester_country: VARCHAR(10)
+
+==================================================
+39. API Rate Limit 정책 - NEW v6.0
+==================================================
+
+Rate Limit 적용 레이어:
+  Cloudflare: IP 기반 DDoS 방어 (전체)
+  API Gateway: 사용자 티어별 차등 제한
+
+티어별 Rate Limit:
+
+Free:
+  검색: 10 req/분, 100 req/시간
+  계산기: 5 req/분, 20 req/시간
+  뉴스: 20 req/분
+  전체: 200 req/시간
+
+Pro:
+  검색: 30 req/분, 500 req/시간
+  계산기: 20 req/분, 200 req/시간
+  규격 변환: 10 req/분, 100 req/시간
+  전체: 1,000 req/시간
+
+Team:
+  검색: 100 req/분, 2,000 req/시간
+  계산기: 50 req/분, 500 req/시간
+  전체: 5,000 req/시간
+
+Enterprise:
+  협의 (SLA 기반)
+  기본: 무제한 (합리적 사용 정책 적용)
+
+API 키 사용자 (Team/Enterprise):
+  API 키 발급: 사용자당 최대 5개
+  API 키별 개별 Rate Limit 설정 가능
+  API 키 사용량 대시보드 제공
+
+Rate Limit 초과 시:
+  HTTP 429 응답
+  Retry-After 헤더 포함 (재시도 가능 시각)
+  응답 바디:
+    error_code: ESA-2001
+    message: "요청 한도 초과. X초 후 재시도 가능합니다."
+    retry_after: 60
+    current_tier: "free"
+    upgrade_url: "https://esa.ai/pricing"
+
+악성 요청 감지:
+  동일 IP에서 초당 50회 이상 -> 자동 차단 1시간
+  비정상 패턴 감지 -> 관리자 알림
+  계정 공유 감지 (여러 IP 동시 세션 이상) -> 알림 후 조치
+
+==================================================
+40. 보안 및 감사 로그
+==================================================
+
+감사 로그 기록:
+  누가 / 언제 / 무엇을 / 결과 / IP
+  국가/규격 선택 이력
+  Export 포맷 / 면책 조항 동의
+  플랜 변경 이력 (v6.0)
+  API 키 등록/삭제 (v6.0)
+  개인정보 동의 변경 (v6.0)
+  보존 기간: 10년
+
+보안 정책:
+  OWASP Top 10 대응
+  정기 펜 테스트 (분기 1회)
+  취약점 공개 프로그램 (Bug Bounty)
+  의존성 취약점 스캔 (GitHub Dependabot)
+
+접근 권한: Owner / Editor / Viewer
+온프레미스: 내부망 + SSO/SAML + SLA
+
+==================================================
+41. 도메인 확장 전략
+==================================================
+
+확장 로드맵:
+  Phase 1 (현재): 전기 + AI + 글로벌 규격
+  Phase 2: 기계 (ASME/ISO/JIS B)
+  Phase 3: 토목/건축 + 화학 + 단선결선도 AI
+  Phase 4: 전체 공학 플랫폼 + 완전 글로벌화
+
+새 도메인 추가 시 건드리는 것:
+  DOMAIN_REGISTRY / 크롤러 / 계산기 함수
+  자격증 데이터 / 지식 그래프 / 글로벌 규격 매핑
+  저작권 라이선스 분류 추가 (v6.0)
+
+건드리지 않는 것:
+  인증 시스템 / 플랜 가드 / 결제 시스템 (v6.0)
+  RAG 코어 / 영수증 / 날짜 박제
+  Hybrid BYOK / 블록체인 공증
+  협업 / Export / 면책 조항
+  단위 변환 / 규격 변환 엔진
+  에러 처리 / Fallback (v6.0)
+  테스트 프레임워크 (v6.0)
+  Rate Limit 정책 (v6.0)
+
+==================================================
+42. 수익 모델
+==================================================
+
+Free:
+  계산기 월 20회 / 검색 3건 / 뉴스 1주 지연
+  기본 LLM / 협업 1인 / 국가 비교 2개국
+  Excel Export 불가 / 공증 불가 / 변환 불가
+
+Pro (월 정액):
+  계산기 무제한 / 검색 전체 / 실시간 뉴스
+  중급 LLM + BYOK 선택
+  Excel/PDF Export / 국가 비교 전체
+  규격 변환 월 10회 / 공증 월 10회
+  협업 5인 / 사용자 업로드 규격 라이브러리
+
+Team (월 정액/인):
+  Pro 전체
+  협업 무제한 / 공증 무제한 / 변환 무제한
+  감사 로그 / API 접근
+  해외 플랜트 규격 변환 보고서
+  세금계산서 발행
+
+Enterprise (협의):
+  Team 전체
+  온프레미스 설치 / 커스텀 LLM
+  SSO/SAML 연동
+  커스텀 면책 조항 (기업 법무 검토본)
+  SLA 99.9% 보장 / 전담 지원
+  발주처별 규격 커스텀 (SAES/ADCO 등)
+  중국 데이터 현지화 옵션
+
+결제:
+  국내: 토스페이먼츠
+  글로벌: Stripe + Paddle
+
+==================================================
+43. 개발 로드맵
+==================================================
+
+Phase 1 MVP (3개월):
+
+인프라:
+  DB 스키마 전체 (인증/결제/플랜 테이블 포함)
+  Docker / CI/CD
+  Cloudflare + Rate Limit 기본
+
+인증:
+  Google OAuth + 이메일 로그인
+  JWT 발급/갱신
+  플랜 가드 기본 (Redis 카운터)
+
+결제:
+  Stripe 기본 구독 (Pro 플랜만)
+  토스페이먼츠 국내
+
+데이터:
+  IEEE/arXiv 크롤러 (저작권 필터 적용)
+  KEC / IEC (요약) / NEC (메타) 기본 3개국
+  날짜 박제 파이프라인
+
+검색:
+  Weaviate + RAG + Hybrid BYOK
+  저작권 표시 포함
+
+계산기 10종 + 영수증:
+  국가 선택 UI + 단위 변환 기본
+  날짜 박제 + 면책 조항
+
+에러 처리 기본:
+  핵심 Fallback (Weaviate -> 키워드, BYOK 만료 안내)
+
+테스트:
+  계산기 단위 테스트 100% 커버리지
+  통합 테스트 핵심 플로우
+
+Frontend MVP:
+  검색 UI + 계산기 UI
+  인증 UI + BYOK 입력
+  다국어 한국어/영어 우선
+
+Phase 2 기능 확장 (2개월):
+
+  글로벌 규격 완전판 (전체 국가)
+  규격 저작권 완전 분류
+  뉴스 파이프라인 + 글로벌 규격 뉴스
+  자격증 + AI 기출문제
+  계산기 전체 확장 (20종 + 글로벌)
+  Excel Export (수식 살아있는 형태)
+  규격 변환 엔진 (KEC <-> NEC <-> IEC)
+  단위 변환 완성
+  모바일 앱 (오프라인 + 충돌 해소)
+  협업 기능 완성
+  OCR 명판 인식 (다국어)
+  개인화 알림 (국가별 규격 구독)
+  지식 그래프 초기 데이터 구축
+  커뮤니티 + 어뷰징 방지
+  GitHub OAuth + Apple Sign In 추가
+  Stripe 연간 구독 + Paddle 글로벌
+  GDPR 쿠키 배너 + 개인정보 동의
+  일본어/중국어 UI 추가
+  Rate Limit 완성
+  에러 처리 전체 완성
+  성능 테스트 + 모니터링 구축
+
+Phase 3 고도화 (이후):
+
+  에이전트 워크플로우 완성
+  블록체인 공증 완전 적용
+  Enterprise SSO/SAML
+  기계 도메인 확장
+  온프레미스 옵션
+  단선결선도 AI 인식
+  중국 PIPL 대응 (데이터 현지화 검토)
+  Bug Bounty 프로그램
+  수익 모델 전면 적용
+
+==================================================
+44. 정확도 목표
+==================================================
+
+계산기 (영수증): 99.5% 이상
+  Python 엔진 직접 연산
+
+AI 검색 (RAG): 85~92%
+  도메인 특화
+
+글로벌 규격 비교: 90~95%
+  전문가 검수 매핑 DB 기반
+
+규격 변환:
+  단순 변환 (mm2 <-> AWG): 99%+
+  복합 변환 (허용전류 + 온도보정): 90%
+  체계 다른 경우: 변환 불가 명시 (신뢰도 0.6 미만)
+
+Vision-LLM PDF 파싱: 88~95%
+  표 파싱: 88% / 수식 파싱: 90~95%
+
+뉴스 번역/요약: 88~93%
+자격증/일정: 95% 이상
+OCR 명판 인식: 90% 이상 (다국어 포함)
+
+향상 전략:
+  단기: A/B 테스트 / 수치 범위 검증 / 규격 매핑 전문가 검수
+  중기: 피드백 루프 / 커뮤니티 버그 리포트
+  장기: 전기 특화 LLM 파인튜닝 / 지식 그래프 고도화
+
+==================================================
+핵심 차별점 요약 (ESA v6.0 최종)
+==================================================
+
+1. 영수증 시스템 (독보적)
+   계산 과정 전체 공개 -> 특허 출원 검토
+
+2. 날짜 박제 (법적 방패)
+   언제 어떤 규격/국가 기준인지 타임스탬프 영구 증명
+
+3. 글로벌 규격 완전 커버
+   KEC / IEC / NEC / CEC / EN / DIN VDE / BS 7671
+   NF C / JIS / 내선규정 / GB / AS-NZS + 저작권 완전 준수
+
+4. 해외 플랜트 규격 자동 변환
+   KEC -> NEC / IEC / JIS 원클릭 변환 + 신뢰도 점수
+
+5. 국가별 전압/전기 체계 DB
+   계산기 국가 선택 -> 표준전압/주파수/규격 자동 적용
+
+6. 단위 변환 엔진
+   mm2 <-> AWG <-> kcmil 자동 변환
+
+7. 규격 저작권 완전 준수 (v6.0)
+   오픈/요약/링크만 분류 -> 법적 분쟁 없는 운영
+
+8. 인증 + 플랜 가드 완성 (v6.0)
+   SSO/SAML Enterprise / JWT / 티어별 실시간 제한
+
+9. 에러 처리 완전 설계 (v6.0)
+   모든 컴포넌트 Fallback -> 서비스 중단 없음
+
+10. 다국 개인정보법 대응 (v6.0)
+    GDPR / APPI / PIPL / 개인정보보호법 완전 대응
+
+11. 결제 시스템 완성 (v6.0)
+    국내: 토스페이먼츠 / 글로벌: Stripe + Paddle
+
+12. 면책 조항 자동화 (다국어)
+    한국어/영어/일본어/중국어 + 법률 검토본
+
+13. Vision-LLM PDF 파싱
+    규격서 표/수식까지 완전 색인
+
+14. Hybrid BYOK
+    기본 소형 LLM 탑재 -> 진입 장벽 제거
+
+15. 엑셀 수식 Export
+    감리/관공서 제출용 수식 살아있는 계산서
+
+16. 블록체인 공증 + 익명화 (GDPR 대응)
+    위변조 불가 공증 + 개인정보 보호 동시
+
+17. 에이전트 워크플로우
+    검색 -> 계산 -> 변환 -> Export -> 공증 원스톱
+
+18. 전기 x AI 교차 도메인
+    전 세계 없는 기능
+
+19. 규격 개정 추적 (전 세계)
+    KEC/IEC/NEC/JIS/GB 개정 감지 -> 즉시 알림
+
+==================================================
+ESA (Electronic Search AI) v6.0 최종본
+다음 변경사항은 v7.0으로 관리
+브랜드: ESA - The Engineer's Search Engine
+==================================================

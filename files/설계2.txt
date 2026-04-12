@@ -1,0 +1,963 @@
+ESA AI 아키텍처 v1.0 — 전체 설계 (1~100)
+설계 원칙: 확률 AI 위에 결정론 엔진을 얹는다
+구조 기원: φ=0.51 사고 실험 → SJC 판정 시스템 → ESA 전기 엔진
+작성: 2026.04.04
+0. 한 줄 요약
+LLM은 귀(입력 해석)이고, ESA 엔진은 뇌(계산+판정)이고, 리포트는 입(출력)이다.
+LLM이 계산하는 순간 시스템이 죽는다.
+PART 1 — 철학과 구조 원칙 (1~10)
+1. 핵심 명제
+LLM = 확률 기계 (불확실)
+ESA = 결정론 엔진 (확정)
+
+LLM이 하면 안 되는 것: 계산, 규격 해석, 값 결정
+LLM이 해야 하는 것:    의도 파악, 자연어 설명 생성
+2. SJC 판정 구조 (φ=0.51에서 이식)
+NOA-Warp SJC:
+  ALLOW  → 추진 + 위상 고착
+  HOLD   → 추진 정지 + RF 증폭
+  DENY   → 코어 사출
+
+ESA SJC (동일 구조):
+  PASS   → 계산 결과 확정 + 리포트 생성
+  HOLD   → 입력 부족 → 사용자에게 추가 정보 요청
+  FAIL   → 규격 위반 → 위반 사유 + 근거 조항 출력
+  BLOCK  → LLM 금지 구역 침범 → 즉시 차단
+3. 재현 가능성 원칙
+같은 입력 → 항상 같은 출력
+= 엔지니어링의 존재 이유
+= 법적 방패의 전제 조건
+
+모든 계산에 영수증(receipt) 생성:
+  - 입력 파라미터
+  - 적용 규격 조항
+  - 계산 공식
+  - 결과값
+  - 판정 (PASS/FAIL)
+  - 타임스탬프
+4. LLM 금지 구역
+BLOCK 트리거:
+  - LLM이 수치를 생성하려 할 때
+  - LLM이 규격을 "기억"으로 답하려 할 때
+  - LLM이 "보통", "일반적으로" 등 확률적 표현을 쓸 때
+  - LLM이 계산 과정 없이 결과만 말하려 할 때
+5. 결정론 계층 구조
+Layer 0: 규격 DB (불변)
+Layer 1: 계산 엔진 (결정론)
+Layer 2: 판정 시스템 SJC (결정론)
+Layer 3: 리포트 생성 (결정론 기반 템플릿)
+Layer 4: LLM 인터페이스 (확률 — 여기서만 허용)
+6. 안전 우선순위
+NOA-Warp: 우주인 생존 > 임무 완수 > 워프 시도
+ESA:      규격 준수 > 설계 최적화 > 사용자 편의
+
+규격 위반 결과를 "통과"로 바꾸는 것은
+구조적으로 불가능하게 설계
+7. 할루시네이션 차단 구조
+φ=0.51 3차 정리에서 가져옴:
+"할루 = 입력값 출처가 불명확한 계산"
+
+ESA 적용:
+  모든 수치 → 출처 태그 필수
+  출처 없는 수치 → BLOCK
+  계산 과정 없는 결과 → BLOCK
+
+출처 종류:
+  [USER]   사용자 입력
+  [CODE]   규격 DB 조항
+  [CALC]   계산 엔진 산출
+  [CONST]  물리 상수
+8. 교차검증 원칙
+φ=0.51에서 4개 AI 교차검증한 것처럼
+ESA도 계산 결과 이중 검증:
+  1차: 엔진 계산
+  2차: 역산 검증 (결과 → 입력 복원)
+  불일치 시 → HOLD
+9. 폐기 원칙
+15차 중간평가에서 가져옴:
+"계산이 틀리면 바로 폐기"
+
+ESA 적용:
+  - 오차 범위 초과 → FAIL (변명 없음)
+  - 규격 조건 불충족 → FAIL (변명 없음)
+  - "근사적으로 맞다" → 금지 표현
+10. 인풋 설계 원칙
+3차 방법론에서 가져옴:
+"인풋이 엔진이다"
+
+ESA 적용:
+  사용자 입력이 불완전하면 → 계산 안 함 (HOLD)
+  사용자 입력이 완전하면 → 즉시 계산 (자동)
+  AI가 입력을 "추정"하면 → BLOCK
+PART 2 — 규격 DSL 엔진 (11~30)
+11. DSL 정의
+DSL = Domain Specific Language
+= 규격을 "문장"이 아니라 "코드"로 바꾸는 것
+
+예시:
+  문장: "전압강하는 3% 이내여야 한다"
+  DSL:  voltage_drop <= 3.0  → PASS
+        voltage_drop >  3.0  → FAIL
+12. 규격 데이터 구조
+interface CodeArticle {
+  id: string;              // "KEC_232_52"
+  country: string;         // "KR"
+  standard: string;        // "KEC"
+  article: string;         // "232.52"
+  title: string;           // "전압강하"
+  conditions: Condition[]; // 조건 트리
+  effective_date: string;  // "2021-01-01"
+  version: string;         // "2021"
+}
+
+interface Condition {
+  param: string;           // "voltage_drop_percent"
+  operator: "<=" | ">=" | "==" | "<" | ">";
+  value: number;           // 3.0
+  unit: string;            // "%"
+  result: "PASS" | "FAIL";
+  note: string;            // "간선 기준"
+}
+13. 규격 조건 트리
+KEC 232.52 전압강하:
+├─ 회로 유형?
+│  ├─ 간선 → 3% 이내
+│  ├─ 분기 → 3% 이내
+│  └─ 간선+분기 합산 → 5% 이내 (권장)
+├─ 전압?
+│  ├─ 단상 220V
+│  └─ 삼상 380V
+└─ 허용 예외?
+   └─ 모터 기동 시 일시적 초과 허용
+14. 다국가 규격 매핑
+voltage_drop:
+  KR (KEC 232.52):  간선 3%, 분기 3%, 합산 5%
+  US (NEC 210.19):  간선 3%, 분기 3%, 합산 5%
+  UK (BS 7671):     간선 3%, 분기 5% (조명 3%)
+  AU (AS/NZS 3008): 5% (일반), 7% (모터)
+  JP (JIS C 8305):  2% (일반)
+
+같은 질문, 나라만 다르면 → 트리가 바뀜
+15. 규격 버전 관리
+KEC 2021 vs KEC 2024:
+  같은 조항이라도 값이 바뀔 수 있음
+  
+구조:
+  규격 DB는 버전별 독립 저장
+  사용자가 버전 선택
+  기본값 = 최신 버전
+  과거 버전 선택 가능 (리모델링 등)
+16. 규격 파싱 파이프라인
+원문 PDF/텍스트
+  ↓ [수동 1차 코드화]
+조건 트리 JSON
+  ↓ [검증: 원문 대조]
+DSL 규격 DB
+  ↓ [테스트: 알려진 케이스]
+프로덕션 DB
+
+핵심: 이 파이프라인에서 AI 개입 = 0
+전부 사람이 확인하고 사람이 승인
+17. 규격 충돌 처리
+동일 파라미터에 복수 규격 적용 시:
+  1. 더 엄격한 기준 적용 (안전 우선)
+  2. 충돌 사유 리포트에 명시
+  3. 사용자에게 선택권 부여
+
+예:
+  KEC: 전압강하 3%
+  고객 사양: 전압강하 2%
+  → 2% 적용 (더 엄격)
+  → 리포트에 "고객 사양 우선 적용" 명시
+18. 단위 변환 엔진
+결정론적 단위 변환:
+  AWG ↔ mm²
+  ft ↔ m
+  °F ↔ °C
+  psi ↔ kPa
+  kcmil ↔ mm²
+
+변환표: 고정 테이블 (계산 아님)
+  AWG 12 = 3.31 mm²  (상수)
+  AWG 10 = 5.26 mm²  (상수)
+  
+AI가 "약 3.3mm²" 라고 추정 → BLOCK
+테이블에서 정확히 3.31mm² → PASS
+19. 규격 검색 인터페이스
+사용자: "전압강하 기준이 뭐야?"
+  ↓ LLM이 의도 파악: "voltage_drop" + "standard"
+  ↓ 규격 DB 검색: country → article → conditions
+  ↓ 정확한 조항 + 조건 트리 반환
+  ↓ LLM이 자연어로 포장
+
+LLM이 하는 것: 의도 파악 + 포장
+LLM이 안 하는 것: 규격 내용 자체를 답변
+20. 규격 유효성 검사
+매 계산 시:
+  1. 적용 규격 존재 확인
+  2. 버전 유효 확인
+  3. 조건 파라미터 완전성 확인
+  4. 불완전 시 → HOLD + 누락 항목 명시
+21~30. 주요 규격 DSL 예시
+21. 전압강하 계산
+def voltage_drop(voltage, current, length, 
+                 resistance, reactance, power_factor, phase):
+    """
+    결정론적 전압강하 계산
+    출처: KEC 232.52 / NEC 210.19
+    """
+    if phase == "single":
+        vd = 2 * current * length * (resistance * power_factor 
+             + reactance * math.sin(math.acos(power_factor)))
+    elif phase == "three":
+        vd = math.sqrt(3) * current * length * (resistance * power_factor 
+             + reactance * math.sin(math.acos(power_factor)))
+    
+    vd_percent = (vd / voltage) * 100
+    
+    return {
+        "value": round(vd, 2),
+        "percent": round(vd_percent, 2),
+        "source": ["CALC"],
+        "formula": "KEC_232_52",
+        "judgment": "PASS" if vd_percent <= 3.0 else "FAIL"
+    }
+22. 차단기 선정
+def breaker_sizing(load_current, wire_ampacity, 
+                   country, circuit_type):
+    """
+    출처: KEC 212.3 / NEC 240.4
+    """
+    # 표준 차단기 용량 (고정 테이블)
+    STANDARD_RATINGS = [15, 20, 30, 40, 50, 60, 70, 80, 
+                        90, 100, 110, 125, 150, 175, 200,
+                        225, 250, 300, 350, 400]
+    
+    min_rating = load_current * 1.25  # 125% 규칙
+    
+    selected = None
+    for rating in STANDARD_RATINGS:
+        if rating >= min_rating and rating <= wire_ampacity:
+            selected = rating
+            break
+    
+    if selected is None:
+        return {"judgment": "FAIL", 
+                "reason": "적합한 차단기 없음 - 전선 용량 재검토"}
+    
+    return {
+        "rating": selected,
+        "source": ["CODE:KEC_212_3", "CONST:STANDARD_RATINGS"],
+        "judgment": "PASS"
+    }
+23. 전선 허용전류
+# 고정 테이블 — AI 추정 금지
+AMPACITY_TABLE = {
+    "KEC": {
+        "XLPE_Cu": {
+            2.5:  27,
+            4.0:  37,
+            6.0:  47,
+            10.0: 65,
+            16.0: 87,
+            25.0: 117,
+            35.0: 144,
+            50.0: 175,
+            70.0: 222,
+            95.0: 269,
+        }
+    }
+}
+24. 접지 저항 계산
+def grounding_resistance(soil_resistivity, rod_length, rod_diameter):
+    """
+    출처: KEC 142.5 / IEEE 80
+    로드 접지극 기준
+    """
+    R = (soil_resistivity / (2 * math.pi * rod_length)) * \
+        math.log(4 * rod_length / rod_diameter)
+    
+    return {
+        "value": round(R, 2),
+        "unit": "Ω",
+        "source": ["CALC", "CODE:KEC_142_5"],
+        "judgment": "PASS" if R <= 10.0 else "FAIL",
+        "standard_limit": 10.0
+    }
+25. 단락전류 계산
+def short_circuit_current(voltage, impedance, phase):
+    """
+    출처: KEC 232.7 / IEC 60909
+    """
+    if phase == "three":
+        isc = voltage / (math.sqrt(3) * impedance)
+    elif phase == "single":
+        isc = voltage / (2 * impedance)
+    
+    return {
+        "value": round(isc, 0),
+        "unit": "A",
+        "source": ["CALC", "CODE:IEC_60909"]
+    }
+26. 수변전 용량 계산
+def transformer_sizing(total_load_kva, demand_factor, 
+                       growth_factor, redundancy):
+    """
+    출처: KEC 311.1
+    """
+    required = total_load_kva * demand_factor * growth_factor
+    
+    if redundancy:
+        required = required / 0.8  # N-1 여유
+    
+    # 표준 변압기 용량
+    STD_TR = [50, 75, 100, 150, 200, 300, 500, 750, 
+              1000, 1500, 2000, 2500, 3000]
+    
+    selected = None
+    for cap in STD_TR:
+        if cap >= required:
+            selected = cap
+            break
+    
+    return {
+        "required_kva": round(required, 1),
+        "selected_kva": selected,
+        "source": ["CALC", "CONST:STD_TR"],
+        "judgment": "PASS" if selected else "FAIL"
+    }
+27. 역률 보상 계산
+def power_factor_correction(active_power_kw, 
+                            current_pf, target_pf):
+    """
+    출처: KEC 232.8
+    """
+    q_before = active_power_kw * math.tan(math.acos(current_pf))
+    q_after = active_power_kw * math.tan(math.acos(target_pf))
+    q_capacitor = q_before - q_after
+    
+    return {
+        "required_kvar": round(q_capacitor, 1),
+        "source": ["CALC"],
+        "judgment": "PASS"
+    }
+28. 조도 계산
+def illumination_calc(room_area, target_lux, 
+                      luminaire_lumen, utilization, maintenance):
+    """
+    출처: KEC 234.1 / KS C 7612
+    """
+    n_luminaires = math.ceil(
+        (target_lux * room_area) / 
+        (luminaire_lumen * utilization * maintenance)
+    )
+    
+    actual_lux = (n_luminaires * luminaire_lumen * 
+                  utilization * maintenance) / room_area
+    
+    return {
+        "luminaires_required": n_luminaires,
+        "actual_lux": round(actual_lux, 0),
+        "target_lux": target_lux,
+        "source": ["CALC", "CODE:KS_C_7612"],
+        "judgment": "PASS" if actual_lux >= target_lux else "FAIL"
+    }
+29. 부하 계산
+def load_calculation(loads, demand_factors):
+    """
+    출처: KEC 220.3 / NEC 220
+    """
+    total_connected = sum(load["kw"] for load in loads)
+    
+    total_demand = 0
+    for load in loads:
+        df = demand_factors.get(load["type"], 1.0)
+        total_demand += load["kw"] * df
+    
+    return {
+        "connected_load_kw": round(total_connected, 1),
+        "demand_load_kw": round(total_demand, 1),
+        "demand_factor": round(total_demand / total_connected, 3),
+        "source": ["CALC", "CODE:KEC_220_3"]
+    }
+30. 케이블 사이징
+def cable_sizing(load_current, voltage, length, 
+                 installation_method, ambient_temp,
+                 grouping_count, country):
+    """
+    결정론적 케이블 선정
+    출처: KEC 232.3~232.7
+    """
+    # 1. 허용전류 기준 최소 사이즈
+    derating = get_derating_factor(ambient_temp, grouping_count)
+    required_ampacity = load_current / derating
+    size_by_ampacity = lookup_min_size(required_ampacity, 
+                                       installation_method, country)
+    
+    # 2. 전압강하 기준 최소 사이즈
+    size_by_vd = find_min_size_for_vd(voltage, load_current, 
+                                       length, 3.0, country)
+    
+    # 3. 단락전류 기준 (별도)
+    
+    # 4. 최종: 가장 큰 사이즈 선택
+    final_size = max(size_by_ampacity, size_by_vd)
+    
+    return {
+        "size_mm2": final_size,
+        "basis": {
+            "ampacity": size_by_ampacity,
+            "voltage_drop": size_by_vd
+        },
+        "source": ["CALC", "CODE:KEC_232"],
+        "judgment": "PASS"
+    }
+PART 3 — 계산기 그래프 엔진 (31~50)
+31. 계산기 연결 구조
+계산기는 독립 노드
+노드끼리 입출력으로 연결
+= 방향 그래프 (DAG)
+
+예: 부하계산 → 변압기선정 → 차단기선정 → 전선선정
+    각 노드의 출력이 다음 노드의 입력
+32. DAG 정의
+interface CalcNode {
+  id: string;              // "voltage_drop"
+  calculator: Function;     // 실제 계산 함수
+  inputs: ParamDef[];       // 필요한 입력
+  outputs: ParamDef[];      // 생성되는 출력
+  depends_on: string[];     // 선행 노드 ID
+  code_ref: string[];       // 적용 규격
+}
+
+interface CalcGraph {
+  nodes: Map<string, CalcNode>;
+  edges: Edge[];            // 노드 간 연결
+  execution_order: string[]; // 위상정렬 순서
+}
+33. 실행 순서 결정
+위상정렬 (Topological Sort):
+  1. 의존성 없는 노드부터 시작
+  2. 완료된 노드의 출력 → 다음 노드 입력
+  3. 순환 의존 → BLOCK (구조 오류)
+
+예시 실행 순서:
+  [1] load_calculation
+  [2] transformer_sizing (← [1]의 출력)
+  [3] cable_sizing (← [1], [2]의 출력)
+  [4] breaker_sizing (← [3]의 출력)
+  [5] voltage_drop (← [3], [1]의 출력)
+  [6] short_circuit (← [2]의 출력)
+34. 자동 입력 전파
+load_calculation 출력:
+  demand_load_kw = 150
+
+자동으로:
+  transformer_sizing.total_load_kva = 150 / 0.9
+  cable_sizing.load_current = 150000 / (380 * 1.732 * 0.9)
+
+사용자가 일일이 입력 안 해도
+그래프가 자동 전파
+35. 부분 실행
+사용자가 "전압강하만 계산해줘":
+  → 전압강하 노드만 활성화
+  → 필요한 입력만 요청
+  → 불필요한 노드 비활성화
+
+사용자가 "전체 설계해줘":
+  → 전체 그래프 활성화
+  → 위상정렬 순서대로 전부 실행
+36. 중간 결과 캐싱
+[1] load_calculation 완료 → 결과 캐시
+[2] cable_sizing 실패 → 수정 후 재계산
+[3] load_calculation은 재계산 안 함 (캐시 사용)
+
+캐시 무효화 조건:
+  - 입력 파라미터 변경 시
+  - 규격 버전 변경 시
+  - 사용자 명시적 요청 시
+37. 병렬 실행
+독립 노드는 병렬 실행 가능:
+  cable_sizing과 grounding → 독립 → 병렬
+  cable_sizing과 breaker_sizing → 의존 → 직렬
+38. 에러 전파
+상위 노드 FAIL → 하위 노드 자동 HOLD
+이유: 잘못된 입력으로 계산하면 안 됨
+
+load_calculation FAIL
+  → transformer_sizing HOLD
+  → cable_sizing HOLD
+  → 전체 HOLD
+  → 사용자에게 "부하 데이터 수정 필요" 안내
+39. 그래프 시각화
+사용자에게 계산 흐름을 보여줌:
+  [부하] ──→ [변압기] ──→ [차단기]
+    │                        ↑
+    └──→ [케이블] ──────────┘
+           │
+           └──→ [전압강하]
+
+각 노드 상태 표시:
+  ✅ PASS  ⏳ HOLD  ❌ FAIL  ⬜ 미실행
+40. 사용자 오버라이드
+계산 결과: 케이블 25mm²
+사용자: "35mm²로 올려줘"
+  → 오버라이드 태그 부착: [USER_OVERRIDE]
+  → 하위 노드 재계산 (35mm² 기준)
+  → 리포트에 "사용자 오버라이드" 명시
+  → 원래 계산값도 병기
+41~50. 그래프 엔진 세부
+41. 입력 검증
+모든 입력값에 범위 검증:
+  voltage: 100~600V (저압) / 1kV~35kV (고압)
+  current: 0.1~10000A
+  length: 0.1~10000m
+  
+범위 밖 → HOLD + "입력값 확인 필요"
+42. 단위 자동 감지
+사용자: "전선 길이 50m"
+  → length = 50, unit = "m"
+사용자: "전선 길이 150ft"
+  → length = 45.72, unit = "m" (변환 후)
+  → 리포트에 원래 단위 병기
+43. 다중 시나리오
+사용자: "25mm²와 35mm² 비교해줘"
+  → 그래프 2회 실행 (입력만 다름)
+  → 비교 테이블 생성
+  → 추천은 하되 "규격 기준" 명시
+44. 역방향 계산
+사용자: "전압강하 2.5%면 몇mm² 필요해?"
+  → 목표값에서 역산
+  → 결정론적: 허용전류 테이블 순회
+  → 조건 만족하는 최소 사이즈 반환
+45. 감도 분석
+"전선 길이가 10m 늘면 전압강하 어떻게 돼?"
+  → 파라미터 하나씩 변동
+  → 결과 변동 폭 계산
+  → 결정론적 (추정 아님)
+46. 규격 적합성 종합 판정
+모든 노드 PASS → 전체 PASS
+하나라도 FAIL → 전체 FAIL + 실패 항목 명시
+하나라도 HOLD → 전체 HOLD + 누락 항목 명시
+47. 계산 이력
+모든 계산 세션:
+  session_id: UUID
+  timestamp: ISO 8601
+  inputs: {}
+  graph: 실행된 노드 목록
+  results: 각 노드 결과
+  judgment: 최종 판정
+  
+영수증으로 저장 → 재현 가능
+48. 템플릿 시스템
+"아파트 220세대" → 사전 정의 템플릿
+  기본 부하, 수전전압, 배전방식 자동 입력
+  사용자는 특이사항만 수정
+
+템플릿은 규격 DB에 포함 (AI 생성 아님)
+49. 버전 잠금
+계산 시작 시 규격 버전 잠금:
+  "이 계산은 KEC 2021 기준입니다"
+  중간에 버전 변경 → 전체 재계산 필요
+  혼합 버전 → BLOCK
+50. 그래프 확장성
+새 계산기 추가:
+  1. CalcNode 인터페이스 구현
+  2. 입출력 정의
+  3. 의존성 선언
+  4. 그래프에 등록
+  
+기존 노드 수정 없이 확장 가능
+PART 4 — LLM 통제 계층 (51~70)
+51. Tool 호출 강제
+LLM이 전기 관련 질문 감지 시:
+  1. 직접 답변 금지
+  2. 반드시 Tool 호출
+  3. Tool 결과를 자연어로 포장만
+
+System Prompt 핵심 지시:
+  "당신은 계산하지 않습니다.
+   당신은 Tool을 호출합니다.
+   Tool 없이 수치를 말하면 시스템이 차단합니다."
+52. Tool 목록
+calculate_voltage_drop()
+calculate_cable_sizing()
+calculate_breaker_sizing()
+calculate_short_circuit()
+calculate_transformer()
+calculate_grounding()
+calculate_illumination()
+calculate_load()
+calculate_power_factor()
+lookup_code_article()
+convert_unit()
+compare_scenarios()
+generate_report()
+53. Tool 호출 검증
+LLM 응답 파싱:
+  Tool 호출 있음 → 정상 진행
+  Tool 호출 없이 수치 포함 → BLOCK
+  "약", "대략", "정도" + 수치 → BLOCK
+  규격 조항 직접 인용 → BLOCK (DB에서 가져와야 함)
+54. 응답 필터
+LLM 출력 후처리:
+  1. 수치 추출
+  2. 각 수치에 출처 태그 확인
+  3. 태그 없는 수치 → 삭제 + 경고
+  
+"전류는 약 32A입니다" → 차단
+"KEC 232.52 기준, 계산 결과 전류 32.4A입니다" → 통과
+55. 컨텍스트 관리
+대화 중 누적 정보:
+  - 사용자가 입력한 파라미터
+  - 계산 완료된 결과
+  - 적용 중인 규격
+
+LLM은 이 컨텍스트를 "참조"만 가능
+컨텍스트 수정 → Tool 통해서만
+56. 다국어 의도 파악
+"전선 뭘로 써야 해?" → cable_sizing
+"What size wire do I need?" → cable_sizing
+"ケーブルサイズは？" → cable_sizing
+
+의도 파악 = LLM 허용 영역
+파악된 의도 → Tool 매핑 (결정론적)
+57. 모호한 질문 처리
+"전기 설계해줘"
+  → 너무 광범위 → HOLD
+  → "어떤 건물이며, 어떤 전압이며, 
+     어떤 부하인지 알려주세요"
+
+LLM이 "추정"해서 진행 → BLOCK
+사용자에게 질문 → HOLD (정상)
+58. 설명 생성 규칙
+❌ "보통 이렇게 합니다"
+❌ "일반적으로 32A를 씁니다"
+❌ "경험상 이 정도면 됩니다"
+
+✅ "KEC 232.52 기준, 입력 전류 32A, 길이 50m,
+    Cu XLPE 단상 조건에서 전압강하 2.8%로
+    허용 범위(3%) 이내입니다."
+
+설명 = 계산 결과의 자연어 변환
+설명 ≠ LLM의 의견
+59. 면책 문구 자동 삽입
+모든 계산 결과에:
+  "본 결과는 [규격 버전] 기준 참고용 계산이며,
+   최종 설계는 자격을 갖춘 전기기사의 검토가 필요합니다."
+
+이 문구도 결정론적 (고정 템플릿)
+60. 피드백 루프
+사용자: "이 결과 맞아?"
+  → 재계산 (같은 입력)
+  → 결과 동일 → "재현 확인됨"
+  → 결과 다름 → 시스템 오류 → BLOCK + 에러 리포트
+
+확률 시스템에서는 불가능한 검증
+결정론이라서 가능
+61~70. LLM 통제 세부
+61. System Prompt 구조
+[역할 정의]
+당신은 전기 엔지니어링 인터페이스입니다.
+당신은 계산기가 아닙니다.
+당신은 규격 전문가가 아닙니다.
+당신은 사용자의 의도를 파악하고 
+적절한 Tool을 호출하는 것이 역할입니다.
+
+[금지 사항]
+- 수치를 직접 생성하지 마십시오
+- 규격을 기억에서 인용하지 마십시오
+- "보통", "일반적으로" 사용 금지
+- 계산 과정 없이 결과 제시 금지
+
+[허용 사항]
+- 사용자 의도 파악
+- Tool 호출
+- Tool 결과의 자연어 설명
+- 추가 정보 요청
+62. 대화 흐름 제어
+1단계: 의도 파악 (LLM)
+2단계: 파라미터 수집 (LLM ↔ 사용자)
+3단계: Tool 호출 (결정론)
+4단계: 결과 설명 (LLM)
+5단계: 추가 질문 대응 (반복)
+
+각 단계에서 LLM 역할 명확히 분리
+63. 오류 설명
+FAIL 결과 시 LLM의 역할:
+  "KEC 232.52 기준 전압강하 3% 이내여야 하나,
+   현재 조건에서 4.2%로 초과합니다.
+   해결 방안: 전선 사이즈 증가 또는 
+   급전 거리 단축이 필요합니다."
+
+해결 방안도 결정론적 (규격 기반)
+LLM 의견이 아닌 규격 조건의 역산
+64. 멀티턴 파라미터 수집
+턴 1: "전압강하 계산해줘"
+  → "전압, 전류, 전선 길이, 전선 종류를 알려주세요"
+
+턴 2: "220V, 30A, 50m"
+  → "전선 종류는요? (Cu XLPE / Cu PVC / Al XLPE)"
+
+턴 3: "Cu XLPE"
+  → Tool 호출 → 결과 반환
+
+누적된 파라미터 → 컨텍스트에 저장
+빠진 것만 추가 요청
+65. 세이프가드 레이어
+LLM 출력 → 후처리 파이프라인:
+  [1] 수치 검출 → 출처 태그 확인
+  [2] 규격 조항 검출 → DB 대조
+  [3] 확률적 표현 검출 → 삭제
+  [4] 통과한 것만 사용자에게 전달
+66. 로깅
+모든 LLM 호출 로깅:
+  - 입력 (사용자 메시지)
+  - LLM 원본 출력
+  - 필터링 후 출력
+  - Tool 호출 내역
+  - 차단된 내용 (있을 경우)
+
+감사 추적 가능
+67. Rate Limiting
+Tool 호출 제한:
+  - 동일 계산 반복 → 캐시 반환
+  - 비정상 호출 패턴 → 속도 제한
+  - 무한 루프 방지 → 최대 호출 횟수 제한
+68. Fallback
+Tool 실패 시:
+  → LLM이 대신 답하기 ❌ (절대 금지)
+  → "현재 계산 서비스에 문제가 있습니다.
+     잠시 후 다시 시도해주세요." (고정 메시지)
+69. 사용자 교육
+사용자가 "대충 알려줘" 요청 시:
+  "전기 설계에서 '대략적인' 결과는 위험할 수 있습니다.
+   정확한 조건을 입력해주시면 
+   규격 기준의 정확한 결과를 드리겠습니다."
+
+LLM이 "대충" 답하는 것 → BLOCK
+70. A/B 테스트 금지
+결정론 시스템에서 A/B 테스트 = 의미 없음
+같은 입력이면 항상 같은 출력
+
+테스트 대상:
+  LLM의 의도 파악 정확도 (이건 개선 가능)
+  UI/UX (이건 개선 가능)
+  계산 결과 (이건 변하면 안 됨)
+PART 5 — 리포트 엔진 (71~85)
+71. 리포트 = 계산 영수증
+모든 계산 결과는 리포트로 출력 가능
+리포트 = 법적 증빙 수준의 문서
+
+포함 항목:
+  1. 프로젝트 정보
+  2. 적용 규격 + 버전
+  3. 입력 조건 (전부)
+  4. 계산 과정 (공식 포함)
+  5. 결과값
+  6. 판정 (PASS/FAIL)
+  7. 면책 조항
+  8. 타임스탬프
+72. 리포트 템플릿
+결정론적 템플릿:
+  입력값 → 지정된 위치에 삽입
+  판정 → 지정된 형식으로 표시
+  
+LLM 생성 아님
+템플릿 엔진 기반
+73. 다국어 리포트
+같은 계산 결과:
+  KR: KEC 기준 한국어 리포트
+  US: NEC 기준 영어 리포트
+  JP: JIS 기준 일본어 리포트
+
+번역이 아니라 각 국가 규격 기반 독립 생성
+74. PDF 출력
+리포트 → PDF 자동 변환
+  회사 로고 삽입 가능
+  날인란 포함
+  관리번호 자동 부여
+75. 엑셀 출력
+계산서 → Excel 자동 변환
+  셀에 공식 삽입 (수정 추적 가능)
+  입력셀 / 계산셀 / 결과셀 색상 구분
+  보호 잠금 (결과셀 수정 불가)
+76~85. 리포트 세부 (요약)
+76. 차단기 스케줄표 자동 생성
+77. 분전반 결선도 데이터 구조
+78. 부하 집계표 자동 생성
+79. 전압강하 계산서 표준 양식
+80. 접지 계산서 표준 양식
+81. 수변전 용량 계산서
+82. 조도 계산서
+83. 케이블 스케줄표
+84. 규격 적합성 체크리스트
+85. 종합 설계 보고서 (전체 통합)
+PART 6 — 배포 아키텍처 (86~100)
+86. 전체 시스템 구성도
+┌─────────────────────────────────────────────┐
+│  사용자 (자연어)                              │
+└─────────────┬───────────────────────────────┘
+              ↓
+┌─────────────────────────────────────────────┐
+│  Layer 4: LLM 인터페이스                     │
+│  - 의도 파악                                 │
+│  - 파라미터 수집                              │
+│  - 결과 설명                                 │
+│  - 출력 필터 (확률적 표현 차단)               │
+└─────────────┬───────────────────────────────┘
+              ↓ Tool 호출만 허용
+┌─────────────────────────────────────────────┐
+│  Layer 3: SJC 판정 시스템                    │
+│  - PASS / HOLD / FAIL / BLOCK               │
+│  - 입력 검증                                 │
+│  - 출처 태그 확인                             │
+│  - 재현 가능성 보증                           │
+└─────────────┬───────────────────────────────┘
+              ↓
+┌─────────────────────────────────────────────┐
+│  Layer 2: 계산 그래프 엔진                    │
+│  - DAG 기반 실행                             │
+│  - 자동 입력 전파                             │
+│  - 이중 검증 (정방향 + 역산)                  │
+│  - 영수증 생성                               │
+└─────────────┬───────────────────────────────┘
+              ↓
+┌─────────────────────────────────────────────┐
+│  Layer 1: 규격 DSL DB                        │
+│  - 조건 트리                                 │
+│  - 다국가 매핑                               │
+│  - 버전 관리                                 │
+│  - 상수 테이블 (허용전류, 차단기 용량 등)      │
+└─────────────┬───────────────────────────────┘
+              ↓
+┌─────────────────────────────────────────────┐
+│  Layer 0: 물리 상수                          │
+│  - π, √3, 저항률, 리액턴스                   │
+│  - 절대 불변                                 │
+└─────────────────────────────────────────────┘
+87. 기술 스택
+Layer 0-2: Python / TypeScript (계산 로직)
+Layer 3:   Python (판정 로직)
+Layer 4:   OpenAI / Anthropic API (BYOK)
+리포트:    Python (PDF/Excel 생성)
+프론트:    React / Next.js
+DB:        PostgreSQL (규격) + Redis (캐시)
+배포:      Docker → AWS/GCP
+88. BYOK (Bring Your Own Key)
+LLM은 교체 가능:
+  GPT-4o
+  Claude
+  로컬 모델 (Phase 3)
+
+계산 엔진은 LLM과 독립
+어떤 LLM을 써도 계산 결과 동일
+= 결정론의 핵심 가치
+89. API 설계
+POST /api/calculate
+{
+  "type": "voltage_drop",
+  "params": {
+    "voltage": 220,
+    "current": 32,
+    "length": 50,
+    "wire_type": "Cu_XLPE",
+    "phase": "single"
+  },
+  "country": "KR",
+  "code_version": "KEC_2021"
+}
+
+Response:
+{
+  "result": {
+    "voltage_drop_v": 5.28,
+    "voltage_drop_percent": 2.4,
+    "judgment": "PASS",
+    "standard_limit": 3.0
+  },
+  "receipt": {
+    "session_id": "...",
+    "timestamp": "...",
+    "sources": ["CALC", "CODE:KEC_232_52"],
+    "formula": "Vd = 2 × I × L × (R×cosθ + X×sinθ)"
+  }
+}
+90. 온프레미스 배포
+Phase 3 (장기):
+  Docker 이미지 → 고객 서버 설치
+  LLM = 로컬 7B 모델 (Ollama)
+  계산 엔진 = 동일
+  규격 DB = 동일
+  
+인터넷 불필요
+보안 완벽
+계산 속도 더 빠름
+91~95. 보안
+91. 규격 DB 암호화 (무단 복제 방지)
+92. 계산 로그 감사 추적
+93. API 인증 (JWT + API Key)
+94. 사용자 역할 기반 접근 제어
+95. GDPR / 개인정보 보호 (계산 데이터)
+96~100. 로드맵
+96. Phase 1 (현재)
+    - Tool 기반 MVP
+    - KEC + NEC 규격 DB
+    - 핵심 계산기 10종
+    - BYOK LLM
+
+97. Phase 2 (6개월)
+    - 전체 규격 DB 확장 (5개국)
+    - 계산기 30종
+    - 리포트 PDF/Excel 자동화
+    - Fine-tuning 데이터 수집 시작
+
+98. Phase 3 (12개월)
+    - 온프레미스 버전
+    - 7B 특화 모델 (Ollama)
+    - Enterprise 라이선스
+
+99. Phase 4 (18개월)
+    - 설계 자동화 (단선도 → 계산서 일괄)
+    - BIM 연동 (Revit / AutoCAD)
+    - 실시간 협업
+
+100. 최종 비전
+    ESA = 전기 엔지니어의 두뇌 복제 시스템
+    
+    "AI가 똑똑해서가 아니라
+     규격이 정확하고
+     계산이 결정론적이고
+     결과에 영수증이 붙기 때문에
+     신뢰할 수 있다."
+    
+    = φ=0.51 사고 실험의 3차 방법론이
+      산업용으로 구현된 최종 형태
+부록: φ=0.51에서 가져온 설계 원칙 매핑
+φ=0.51 원칙
+ESA 적용
+인풋이 엔진이다 (3차)
+사용자 입력 완전해야 계산 시작
+할루 = 출처 불명 계산 (3차)
+모든 수치에 출처 태그
+같은 입력 → 같은 출력
+결정론적 계산 + 영수증
+틀리면 바로 폐기 (15차)
+FAIL → 변명 없음
+AI는 계산기 (6차)
+LLM은 Tool 호출만
+SJC: ALLOW/HOLD/DENY (NOA)
+PASS/HOLD/FAIL/BLOCK
+스케일 먼저 선언 (15차)
+규격 버전 먼저 잠금
+교차검증 (3차)
+정방향 + 역산 이중 검증
+경계 밖으로 안 나감 (2차)
+규격 범위 밖 → BLOCK
+모르면 멈춘다 (NOA)
+입력 부족 → HOLD
+이 문서는 설계 문서이며, 구현 코드가 아닙니다.
+각 PART는 독립 모듈로 구현 가능하며,
+PART 간 의존성은 위에서 아래로만 흐릅니다.
+Layer 0 (상수) → Layer 1 (규격) → Layer 2 (계산) → Layer 3 (판정) → Layer 4 (LLM)
+역방향 의존 = 구조 위반 = BLOCK
