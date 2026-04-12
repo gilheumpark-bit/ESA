@@ -13,6 +13,7 @@
 
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { SQRT3 } from '@engine/constants/physical';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -68,7 +69,7 @@ export function calculateComplexVoltageDrop(input: ComplexVoltageDropInput): Det
   }
 
   const { voltage: V, current: I, powerFactor: pf, phase } = input;
-  const allowable = input.allowableDropPercent ?? 3.0;
+  const allowable = input.allowableDropPercent ?? activeDefaults().vdBranch;
   const cosPhi = pf;
   const sinPhi = Math.sqrt(1 - pf * pf);
   const phaseFactor = phase === 3 ? SQRT3 : 2;

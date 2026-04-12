@@ -20,6 +20,7 @@ import type {
 } from './types';
 import { EXPANDED_SYMBOL_DB, resolveSymbol } from '../vision/symbol-db';
 import { splitAndAnalyze, type VisionSplitResult } from '../vision/vision-splitter';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Vision Split + Parsing
@@ -194,7 +195,7 @@ async function runCalculations(
   for (const conn of connections) {
     if (conn.length && conn.length > 0) {
       const vd = estimateVoltageDrop(conn);
-      const compliant = vd <= 3.0; // KEC 232.52 분기회로 3%
+      const compliant = vd <= activeDefaults().vdBranch; // 국가별 VD 한도 (KR=3%, IEC=4%)
       calculations.push({
         id: `calc-vd-${conn.from}-${conn.to}`,
         calculatorId: 'voltage-drop',

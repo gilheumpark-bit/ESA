@@ -8,6 +8,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -81,9 +82,9 @@ const AMPACITY_DATA: AmpacityRecord[] = [
   },
 ];
 
-// Correction factors
-const PVC_DERATING = 0.87;  // PVC vs XLPE derating
-const ALUMINUM_DERATING = 0.78;  // Aluminum vs Copper derating
+// Correction factors — 국가별 프로파일에서 가져오되, 비교 계산기이므로 기본값도 유지
+const PVC_DERATING = activeDefaults().pvcDerating;
+const ALUMINUM_DERATING = activeDefaults().aluminumDerating;
 
 function tempCorrectionFactor(refTemp: number, actualTemp: number, maxTemp: number): number {
   if (actualTemp >= maxTemp) return 0;

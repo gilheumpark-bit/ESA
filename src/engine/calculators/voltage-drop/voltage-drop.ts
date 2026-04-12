@@ -16,6 +16,7 @@
 
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -72,7 +73,7 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
     powerFactor: pf,
     phase,
     reactance: X_input,
-    dropLimitPercent = 3,
+    dropLimitPercent = activeDefaults().vdBranch,
   } = input;
 
   const rho = conductor === 'Cu' ? RESISTIVITY_CU : RESISTIVITY_AL;

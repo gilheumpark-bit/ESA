@@ -23,6 +23,10 @@ import { checkCalcAccess, type Tier, type CalcDifficulty } from '@/lib/tier-gate
 import { saveCalculation } from '@/lib/supabase';
 import { sanitizeInput } from '@/lib/security-hardening';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { setActiveCountry } from '@/engine/calculators/country-defaults';
+import { convertInputsToSI, convertResultToImperial, appendAwgEquivalent } from '@/engine/conversion/imperial-adapter';
+import { getSafetyProfile } from '@/engine/constants/safety-factors';
+import type { CountryCode } from '@/engine/constants/safety-factors';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
@@ -140,11 +144,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Execute calculator
-    const calcResult = entry.calculator(body.inputs);
+    // Determine country/standard + set active country for safety factor defaults
+    const countryCode = (body.countryCode ?? 'KR') as CountryCode;
+    const safetyProfile = getSafetyProfile(countryCode in { KR: 1, US: 1, JP: 1, INT: 1 } ? countryCode : 'KR');
+    setActiveCountry(safetyProfile.country);
 
-    // Determine country/standard
-    const countryCode = body.countryCode ?? 'KR';
+    // Imperial → SI 입력 변환 (미국 시장 지원)
+    const unitSystem = safetyProfile.unitSystem;
+    const { converted: siInputs, conversions } = convertInputsToSI(body.inputs, unitSystem);
+
+    // Execute calculator (항상 SI 단위로 실행)
+    let calcResult = entry.calculator(siInputs);
+
+    // SI → Imperial 출력 변환 (필요 시)
+    if (unitSystem === 'Imperial') {
+      calcResult = convertResultToImperial(calcResult);
+    }
+    // mm² 결과에 AWG 등가 표시 추가 (미국 시장)
+    if (countryCode === 'US') {
+      calcResult = appendAwgEquivalent(calcResult);
+    }
+    // 변환 이력을 경고에 추가
+    if (conversions.length > 0) {
+      calcResult = { ...calcResult, warnings: [...(calcResult.warnings || []), `[Unit Conversion] ${conversions.join('; ')}`] };
+    }
     const stdInfo = COUNTRY_STANDARD_MAP[countryCode] ?? COUNTRY_STANDARD_MAP.KR;
 
     // Generate receipt
