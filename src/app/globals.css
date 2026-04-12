@@ -126,26 +126,12 @@ html.dark {
  * SSS-Grade Design System
  * ═══════════════════════════════════════════════════════════════════════════════ */
 
-/* ── SSS-1: Fluid Typography (유체 타이포그래피) ────────────────────────────── */
-/* clamp(min, preferred, max) — 뷰포트에 따라 유동적 크기 */
+/* ── Typography tokens ─────────────────────────────────────────────────────── */
 :root {
-  --font-xs:   clamp(0.6875rem, 0.65rem + 0.15vw, 0.75rem);     /* 11~12px */
-  --font-sm:   clamp(0.8125rem, 0.78rem + 0.15vw, 0.875rem);    /* 13~14px */
-  --font-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);          /* 15~16px */
-  --font-lg:   clamp(1.0625rem, 1rem + 0.3vw, 1.125rem);        /* 17~18px */
-  --font-xl:   clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem);          /* 20~24px */
-  --font-2xl:  clamp(1.5rem, 1.3rem + 0.8vw, 2rem);             /* 24~32px */
-  --font-3xl:  clamp(1.875rem, 1.5rem + 1.2vw, 2.5rem);         /* 30~40px */
-
-  /* 행간 (line-height) */
   --leading-tight: 1.35;
   --leading-normal: 1.6;
   --leading-relaxed: 1.75;
-
-  /* 자간 (letter-spacing) — 한글 최적화 */
-  --tracking-tight: -0.02em;
   --tracking-normal: -0.01em;
-  --tracking-wide: 0.05em;
 }
 
 /* ── SSS-2: 8pt Vertical Rhythm (수직 리듬) ────────────────────────────────── */
@@ -162,9 +148,8 @@ html.dark {
   --space-16: 4rem;    /* 64px */
 }
 
-/* ── SSS-3: Global Typography Defaults ──────────────────────────────────────── */
+/* ── Global Typography ──────────────────────────────────────────────────────── */
 body {
-  font-size: var(--font-base);
   line-height: var(--leading-normal);
   letter-spacing: var(--tracking-normal);
   -webkit-font-smoothing: antialiased;
@@ -172,26 +157,8 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* 본문 최소 16px 강제 — 11px/13px 방지 */
-p, li, td, th, label, span:not(.badge):not(.chip) {
-  font-size: max(var(--font-base), 0.9375rem);
-}
-
-/* ── SSS-4: Micro Interactions (마이크로 인터랙션) ───────────────────────────── */
-
-/* 버튼 탄성 (젤리 바운스) */
-@keyframes bounce-press {
-  0% { transform: scale(1); }
-  40% { transform: scale(0.95); }
-  60% { transform: scale(1.02); }
-  100% { transform: scale(1); }
-}
-
-.btn-bounce:active {
-  animation: bounce-press 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-/* 카드 호버 — 부드러운 상승 + 그림자 확산 */
+/* ── Card & Button Interactions ─────────────────────────────────────────────── */
+/* 카드 호버 */
 .card-interactive {
   transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1),
               box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -219,33 +186,7 @@ a, button {
   border-radius: 4px;
 }
 
-/* ── SSS-5: Progressive Disclosure (점진적 공개) ─────────────────────────────── */
-
-/* 호버 시 심화 정보 페이드인 */
-.reveal-on-hover .reveal-target {
-  opacity: 0;
-  max-height: 0;
-  overflow: hidden;
-  transition: opacity 0.3s ease, max-height 0.4s ease;
-}
-.reveal-on-hover:hover .reveal-target,
-.reveal-on-hover:focus-within .reveal-target {
-  opacity: 1;
-  max-height: 200px;
-}
-
-/* 스크롤 시 등장 (IntersectionObserver 연동) */
-.appear-on-scroll {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-.appear-on-scroll.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* ── SSS-6: Smart Input Styles ──────────────────────────────────────────────── */
+/* ── Input Styles ───────────────────────────────────────────────────────────── */
 
 /* 입력 필드 포커스 시 확대 + 글로우 */
 input[type="text"], input[type="number"], input[type="search"], textarea, select {
@@ -257,7 +198,7 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
 }
 
-/* ── SSS-7: Optimistic UI Shimmer ────────────────────────────────────────────── */
+/* ── Skeleton Shimmer ────────────────────────────────────────────────────────── */
 
 @keyframes shimmer {
   0% { background-position: -200% 0; }
@@ -268,13 +209,6 @@ input:focus, textarea:focus, select:focus {
   background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-}
-
-/* ── SSS-8: Content Width Constraint (한 줄 50~70자) ──────────────────────── */
-.prose {
-  max-width: 65ch;
-  line-height: var(--leading-relaxed);
-  letter-spacing: var(--tracking-normal);
 }
 
 /* Receipt print styles */
