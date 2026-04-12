@@ -121,6 +121,23 @@ const HP_TO_KW = 0.7457;   // 1 mechanical horsepower = 0.7457 kW
 const KV_FACTOR = 1000;     // 1 kV = 1000 V
 
 // =========================================================================
+// PART 4a — Imperial ↔ Metric Length/Area Constants (±0.01% 정밀도)
+// =========================================================================
+
+/** 1 inch = 25.4 mm (정의값 — 오차 0%) */
+const INCH_TO_MM = 25.4;
+/** 1 foot = 0.3048 m (정의값 — 오차 0%) */
+const FOOT_TO_METER = 0.3048;
+/** 1 yard = 0.9144 m */
+const YARD_TO_METER = 0.9144;
+/** 1 mile = 1609.344 m */
+const MILE_TO_METER = 1609.344;
+/** 1 sq inch = 645.16 mm² */
+const SQINCH_TO_SQMM = 645.16;
+/** 1 sq foot = 0.09290304 m² */
+const SQFOOT_TO_SQM = 0.09290304;
+
+// =========================================================================
 // PART 5 — Core Conversion Functions
 // =========================================================================
 
@@ -195,6 +212,21 @@ export function fahrenheitToCelsius(f: number): number {
   return (f - 32) * 5 / 9;
 }
 
+// ── Imperial ↔ Metric 길이/면적 변환 ──
+
+export function inchToMm(inch: number): number { return inch * INCH_TO_MM; }
+export function mmToInch(mm: number): number { return mm / INCH_TO_MM; }
+export function footToMeter(ft: number): number { return ft * FOOT_TO_METER; }
+export function meterToFoot(m: number): number { return m / FOOT_TO_METER; }
+export function yardToMeter(yd: number): number { return yd * YARD_TO_METER; }
+export function meterToYard(m: number): number { return m / YARD_TO_METER; }
+export function mileToMeter(mi: number): number { return mi * MILE_TO_METER; }
+export function meterToMile(m: number): number { return m / MILE_TO_METER; }
+export function sqInchToSqMm(sqin: number): number { return sqin * SQINCH_TO_SQMM; }
+export function sqMmToSqInch(sqmm: number): number { return sqmm / SQINCH_TO_SQMM; }
+export function sqFootToSqM(sqft: number): number { return sqft * SQFOOT_TO_SQM; }
+export function sqMToSqFoot(sqm: number): number { return sqm / SQFOOT_TO_SQM; }
+
 /**
  * Convert impedance between Ohm and per-unit (pu).
  * Base impedance Zbase = Vbase² / Sbase
@@ -226,7 +258,9 @@ export type UnitType =
   | 'kW' | 'HP' | 'kVA'
   | 'V' | 'kV'
   | 'C' | 'F'
-  | 'ohm' | 'pu';
+  | 'ohm' | 'pu'
+  | 'inch' | 'mm' | 'ft' | 'm' | 'yd' | 'mile'
+  | 'sqin' | 'sqmm' | 'sqft' | 'sqm';
 
 export interface ConvertResult {
   result: number;
@@ -343,6 +377,66 @@ export function convert(
       const r = puToOhm(value, vb, sb);
       const zBase = ((vb * 1000) ** 2) / (sb * 1e6);
       return { result: r, formula: `${value} pu × Zbase(${zBase.toFixed(4)} Ω) = ${r.toFixed(4)} Ω` };
+    }
+
+    // inch ↔ mm
+    case 'inch->mm': {
+      const r = inchToMm(value);
+      return { result: r, formula: `${value} in × ${INCH_TO_MM} = ${r} mm` };
+    }
+    case 'mm->inch': {
+      const r = mmToInch(value);
+      return { result: r, formula: `${value} mm / ${INCH_TO_MM} = ${r.toFixed(4)} in` };
+    }
+
+    // ft ↔ m
+    case 'ft->m': {
+      const r = footToMeter(value);
+      return { result: r, formula: `${value} ft × ${FOOT_TO_METER} = ${r.toFixed(4)} m` };
+    }
+    case 'm->ft': {
+      const r = meterToFoot(value);
+      return { result: r, formula: `${value} m / ${FOOT_TO_METER} = ${r.toFixed(4)} ft` };
+    }
+
+    // yd ↔ m
+    case 'yd->m': {
+      const r = yardToMeter(value);
+      return { result: r, formula: `${value} yd × ${YARD_TO_METER} = ${r.toFixed(4)} m` };
+    }
+    case 'm->yd': {
+      const r = meterToYard(value);
+      return { result: r, formula: `${value} m / ${YARD_TO_METER} = ${r.toFixed(4)} yd` };
+    }
+
+    // mile ↔ m
+    case 'mile->m': {
+      const r = mileToMeter(value);
+      return { result: r, formula: `${value} mi × ${MILE_TO_METER} = ${r.toFixed(3)} m` };
+    }
+    case 'm->mile': {
+      const r = meterToMile(value);
+      return { result: r, formula: `${value} m / ${MILE_TO_METER} = ${r.toFixed(6)} mi` };
+    }
+
+    // sqin ↔ sqmm
+    case 'sqin->sqmm': {
+      const r = sqInchToSqMm(value);
+      return { result: r, formula: `${value} in² × ${SQINCH_TO_SQMM} = ${r.toFixed(2)} mm²` };
+    }
+    case 'sqmm->sqin': {
+      const r = sqMmToSqInch(value);
+      return { result: r, formula: `${value} mm² / ${SQINCH_TO_SQMM} = ${r.toFixed(6)} in²` };
+    }
+
+    // sqft ↔ sqm
+    case 'sqft->sqm': {
+      const r = sqFootToSqM(value);
+      return { result: r, formula: `${value} ft² × ${SQFOOT_TO_SQM} = ${r.toFixed(6)} m²` };
+    }
+    case 'sqm->sqft': {
+      const r = sqMToSqFoot(value);
+      return { result: r, formula: `${value} m² / ${SQFOOT_TO_SQM} = ${r.toFixed(4)} ft²` };
     }
 
     default:
