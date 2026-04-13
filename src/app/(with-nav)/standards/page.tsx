@@ -34,10 +34,10 @@ import type { CodeArticle } from '@/engine/standards/kec/types';
 
 const COUNTRY_FILTERS = [
   { value: '', label: '전체' },
-  { value: 'KR', label: '한국 (KR)' },
-  { value: 'US', label: '미국 (US)' },
+  { value: 'KR', label: '한국 (KEC)' },
+  { value: 'US', label: '미국 (NEC)' },
+  { value: 'JP', label: '일본 (JIS)' },
   { value: 'INT', label: '국제 (IEC/IEEE)' },
-  { value: 'CN', label: '중국 (CN)' },
 ];
 
 const LICENSE_FILTERS = [
@@ -49,17 +49,27 @@ const LICENSE_FILTERS = [
 
 // 계산기 관련 맵핑 (standardRef id → calc id)
 const STANDARD_CALC_MAP: Record<string, { calcId: string; category: string; label: string }[]> = {
+  // KEC
   'kec-130': [{ calcId: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
   'kec-212': [{ calcId: 'breaker-sizing', category: 'protection', label: '차단기 선정' }],
-  'kec-232': [{ calcId: 'voltage-drop', category: 'voltage-drop', label: '전압 강하' }],
+  'kec-232': [{ calcId: 'voltage-drop', category: 'voltage-drop', label: '전압 강하' }, { calcId: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
   'kec-241': [{ calcId: 'breaker-sizing', category: 'protection', label: '차단기 선정' }],
-  'kec-140': [{ calcId: 'ground-resistance', category: 'grounding', label: '접지 저항' }],
-  'kec-502': [{ calcId: 'solar-generation', category: 'renewable', label: '태양광 발전량' }],
+  'kec-140': [{ calcId: 'ground-resistance', category: 'grounding', label: '접지 저항' }, { calcId: 'ground-conductor', category: 'grounding', label: '접지 도체' }],
+  'kec-502': [{ calcId: 'solar-generation', category: 'renewable', label: '태양광 발전량' }, { calcId: 'solar-cable', category: 'renewable', label: '태양광 DC 케이블' }],
   'kec-510': [{ calcId: 'battery-capacity', category: 'renewable', label: '배터리 용량' }],
+  // NEC
+  'nec-210': [{ calcId: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
   'nec-240': [{ calcId: 'breaker-sizing', category: 'protection', label: '차단기 선정' }],
-  'nec-310': [{ calcId: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
-  'nec-690': [{ calcId: 'solar-generation', category: 'renewable', label: '태양광 발전량' }],
+  'nec-250': [{ calcId: 'ground-resistance', category: 'grounding', label: '접지 저항' }],
+  'nec-310': [{ calcId: 'ampacity-compare', category: 'cable', label: '허용전류 비교' }, { calcId: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
+  'nec-430': [{ calcId: 'motor-capacity', category: 'motor', label: '전동기 용량' }, { calcId: 'starting-current', category: 'motor', label: '기동전류' }],
+  'nec-690': [{ calcId: 'solar-generation', category: 'renewable', label: '태양광 발전량' }, { calcId: 'solar-cable', category: 'renewable', label: '태양광 DC 케이블' }],
+  // IEC
+  'iec-60364': [{ calcId: 'cable-sizing', category: 'cable', label: '케이블 사이징' }, { calcId: 'voltage-drop', category: 'voltage-drop', label: '전압 강하' }],
   'iec-60909': [{ calcId: 'short-circuit', category: 'protection', label: '단락전류 계산' }],
+  'iec-61936': [{ calcId: 'substation-capacity', category: 'substation', label: '수변전 용량' }],
+  // JIS
+  'jis-c0364': [{ calcId: 'ground-resistance', category: 'grounding', label: '접지 저항' }, { calcId: 'voltage-drop', category: 'voltage-drop', label: '전압 강하' }],
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════

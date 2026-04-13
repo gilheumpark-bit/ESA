@@ -300,7 +300,8 @@ export default function SLDAnalysisPage() {
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('image');
+  // DXF를 기본탭으로 — API 키 없이 즉시 분석 가능 (BYOK 장벽 제거)
+  const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('dxf');
 
   const handleImageSelect = useCallback((file: File) => {
     setImageFile(file);
@@ -328,7 +329,7 @@ export default function SLDAnalysisPage() {
     try {
       const visionKey = await getFirstAvailableVisionKey();
       if (!visionKey) {
-        setError('API 키가 설정되지 않았습니다. 설정 > BYOK에서 OpenAI, Claude, 또는 Gemini API 키를 입력하세요.');
+        setError('API 키가 설정되지 않았습니다. BYOK 설정 페이지에서 Vision API 키를 등록하세요. → /settings/byok');
         setLoading(false);
         return;
       }
@@ -416,6 +417,8 @@ export default function SLDAnalysisPage() {
             { id: 'pdf' as const, label: 'PDF 벡터 파싱' },
           ].map(tab => (
             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setError(null); }}
+              aria-label={`${tab.label} 탭 선택`}
+              aria-pressed={activeTab === tab.id}
               className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-[var(--bg-primary)] text-[var(--color-primary)] shadow-sm'
@@ -438,12 +441,13 @@ export default function SLDAnalysisPage() {
           {preview ? (
             <div className="relative mb-4">
               <img src={preview} alt="단선도" className="w-full rounded-xl border border-[var(--border-default)] object-contain" style={{ maxHeight: 500 }} />
-              <button onClick={handleReset} className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80">
+              <button onClick={handleReset} aria-label="도면 삭제" className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80">
                 <X size={16} />
               </button>
             </div>
           ) : (
             <button onClick={() => fileInputRef.current?.click()}
+              aria-label="단선도 이미지 업로드"
               className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
               <Upload size={28} />
               <div className="text-center">
@@ -512,7 +516,14 @@ export default function SLDAnalysisPage() {
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">{error}</p>
+          <div>
+            <p className="text-sm text-red-700">{error}</p>
+            {error.includes('API 키') && (
+              <a href="/settings/byok" className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline">
+                BYOK 설정 페이지로 이동 →
+              </a>
+            )}
+          </div>
         </div>
       )}
 

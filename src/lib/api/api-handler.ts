@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { log } from '@/lib/logger';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { sanitizeInput } from '@/lib/security-hardening';
+import { getErrorByCode } from '@/data/error-codes';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -156,11 +157,14 @@ export function withApiHandler(
         ip,
       });
 
-      // ESVA-XXXX 코드가 에러 메시지에 있으면 추출
+      // ESVA-XXXX 코드가 에러 메시지에 있으면 추출 + error-codes DB 조회
       const codeMatch = message.match(/ESVA-\d{4}/);
       const code = codeMatch ? codeMatch[0] : 'ESVA-9999';
+      const knownError = getErrorByCode(code);
+      const httpStatus = knownError?.httpStatus ?? 500;
+      const displayMessage = knownError?.message_ko ?? message;
 
-      return buildError(code, message, 500);
+      return buildError(code, displayMessage, httpStatus);
     }
   };
 }

@@ -29,6 +29,7 @@ import type {
   DetailedArgument,
   EscalationInfo,
 } from './types';
+import { SQRT3 } from '@engine/constants/physical';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Debate Engine
@@ -215,21 +216,146 @@ export function validatePhysicsLaw(
       }
       return { valid: true };
     }
+    case 'voltageDropPercent': {
+      // VD% = (√3 × I × L × R) / (V × 1000) × 100
+      const v = relatedParams['voltage_V'];
+      const i = relatedParams['current_A'];
+      const l = relatedParams['length_m'];
+      const r = relatedParams['resistance_ohm_per_km'];
+      if (v && i && l && r && v > 0) {
+        const expected = (SQRT3 * i * l * r) / (v * 1000) * 100;
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'VD% = √3×I×L×R/V (전압강하 공식)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'reactivePower_var': {
+      // Q = P × tan(φ) = P × sin(φ)/cos(φ)
+      const p = relatedParams['power_W'];
+      const pf = relatedParams['powerFactor'];
+      if (p && pf && pf > 0 && pf < 1) {
+        const phi = Math.acos(pf);
+        const expected = p * Math.tan(phi);
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'Q = P×tan(φ) (무효전력 공식)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'apparentPower_VA': {
+      // S = √(P² + Q²) = P / cos(φ)
+      const p = relatedParams['power_W'];
+      const pf = relatedParams['powerFactor'];
+      if (p && pf && pf > 0) {
+        const expected = p / pf;
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'S = P/cos(φ) (피상전력 공식)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'heatLoss_W': {
+      // P_loss = I² × R (줄 발열 법칙)
+      const i = relatedParams['current_A'];
+      const r = relatedParams['resistance_ohm'];
+      if (i && r) {
+        const expected = i * i * r;
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'P=I²R (줄 발열 법칙)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'impedance_ohm': {
+      // Z = √(R² + X²) (임피던스 합성)
+      const r = relatedParams['resistance_ohm'];
+      const x = relatedParams['reactance_ohm'];
+      if (r !== undefined && x !== undefined) {
+        const expected = Math.sqrt(r * r + x * x);
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'Z=√(R²+X²) (임피던스 합성)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'energy_kWh': {
+      // E = P × t (에너지 보존)
+      const p = relatedParams['power_W'];
+      const t = relatedParams['time_h'];
+      if (p && t) {
+        const expected = (p * t) / 1000;
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'E=P×t (에너지 보존법칙)', expected };
+        }
+      }
+      return { valid: true };
+    }
     default:
       return { valid: true };
   }
 }
 
+/** 검증 가능한 물리법칙 목록 (8개) */
+export const PHYSICS_LAWS = [
+  'V=IR (옴의 법칙)',
+  'P=VI (전력 공식)',
+  'VD%=√3×I×L×R/V (전압강하)',
+  'Q=P×tan(φ) (무효전력)',
+  'S=P/cos(φ) (피상전력)',
+  'P=I²R (줄 발열)',
+  'Z=√(R²+X²) (임피던스)',
+  'E=P×t (에너지 보존)',
+] as const;
+
+/**
+ * calculatorId → 물리 파라미터 매핑 테이블.
+ * 문자열 includes 대신 명시적 키워드 매핑으로 오판 방지.
+ */
+const CALC_TO_PARAM: Record<string, string> = {
+  'voltage-drop': 'voltageDropPercent',
+  'three-phase-vd': 'voltageDropPercent',
+  'busbar-vd': 'voltageDropPercent',
+  'complex-voltage-drop': 'voltageDropPercent',
+  'cable-sizing': 'current_A',
+  'ampacity': 'current_A',
+  'short-circuit': 'current_A',
+  'three-phase-power': 'power_W',
+  'single-phase-power': 'power_W',
+  'power-loss': 'heatLoss_W',
+  'reactive-power': 'reactivePower_var',
+  'power-factor': 'powerFactor',
+  'ground-resistance': 'resistance_ohm',
+  'cable-impedance': 'impedance_ohm',
+  'transformer-capacity': 'apparentPower_VA',
+  'solar-generation': 'energy_kWh',
+  'battery-capacity': 'energy_kWh',
+};
+
 /** 팀 결과에서 관련 파라미터 추출 (물리법칙 검증용) */
 function extractRelatedParams(teamResult: TeamResult): Record<string, number> {
   const params: Record<string, number> = {};
   if (!teamResult.calculations) return params;
+
   for (const calc of teamResult.calculations) {
-    // calculatorId → 파라미터명 매핑
-    if (calc.calculatorId.includes('voltage')) params['voltage_V'] = calc.value;
-    if (calc.calculatorId.includes('current') || calc.calculatorId.includes('ampacity')) params['current_A'] = calc.value;
-    if (calc.calculatorId.includes('power')) params['power_W'] = calc.value;
-    if (calc.calculatorId.includes('resistance')) params['resistance_ohm'] = calc.value;
+    // 1) 명시적 매핑 테이블 우선
+    const paramName = CALC_TO_PARAM[calc.calculatorId];
+    if (paramName) {
+      params[paramName] = calc.value;
+    }
+    // 2) 폴백: 키워드 기반 (하위 호환)
+    if (!paramName) {
+      if (calc.calculatorId.includes('voltage')) params['voltage_V'] = calc.value;
+      if (calc.calculatorId.includes('current')) params['current_A'] = calc.value;
+      if (calc.calculatorId.includes('power')) params['power_W'] = calc.value;
+      if (calc.calculatorId.includes('resistance')) params['resistance_ohm'] = calc.value;
+    }
   }
   return params;
 }

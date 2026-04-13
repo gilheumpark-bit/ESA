@@ -20,6 +20,8 @@ import {
   KEC_CABLE_SIZES,
   getAmpacity,
 } from '@/data/ampacity-tables/kec-ampacity';
+import { getNecAmpacity, type NecAmpacityOptions } from '@/data/ampacity-tables/nec-ampacity';
+import { getIecAmpacity, type IecAmpacityOptions } from '@/data/ampacity-tables/iec-ampacity';
 
 import { STANDARD_BREAKER_RATINGS } from './kec-212';
 import { getKECArticle, evaluateKEC } from './index';
@@ -232,7 +234,7 @@ export function queryWithRelated(articleId: string): {
 // PART 5 — 통합 쿼리 디스패처 (AI Function Calling 연동)
 // =========================================================================
 
-export type QueryType = 'ampacity' | 'min_cable_size' | 'breaker' | 'voltage_drop';
+export type QueryType = 'ampacity' | 'min_cable_size' | 'breaker' | 'voltage_drop' | 'nec_ampacity' | 'iec_ampacity';
 
 export interface StructuredQuery {
   type: QueryType;
@@ -289,6 +291,20 @@ export function executeQuery(query: StructuredQuery): QueryResult {
         const result = queryVoltageDrop(p.voltageDropPercent, p.circuitType);
         if (!result) return failResult('voltage_drop', '전압강하 판정 조항을 찾을 수 없습니다.');
         return { type: 'voltage_drop', success: true, data: result, source: { standard: 'KEC', clause: '232.52', edition: '2021' } };
+      }
+
+      case 'nec_ampacity': {
+        const p = query.params as unknown as NecAmpacityOptions;
+        const result = getNecAmpacity(p);
+        if (!result) return failResult('nec_ampacity', 'NEC Table 310.16 해당 조건의 데이터를 찾을 수 없습니다.');
+        return { type: 'nec_ampacity', success: true, data: result, source: { standard: 'NEC', clause: '310.16', edition: '2023' } as SourceTag };
+      }
+
+      case 'iec_ampacity': {
+        const p = query.params as unknown as IecAmpacityOptions;
+        const result = getIecAmpacity(p);
+        if (!result) return failResult('iec_ampacity', 'IEC 60364-5-52 해당 조건의 허용전류 데이터를 찾을 수 없습니다.');
+        return { type: 'iec_ampacity', success: true, data: result, source: { standard: 'IEC', clause: '60364-5-52', edition: '2009+A1:2023' } as SourceTag };
       }
 
       default:

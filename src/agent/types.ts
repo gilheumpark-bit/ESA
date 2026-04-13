@@ -22,8 +22,9 @@ export type { SourceTag } from '@engine/sjc/types';
 /** The three tiers of the agent hierarchy */
 export type AgentTier = 'main' | 'bridge' | 'sandbox';
 
-/** Supported country codes for electrical standards */
-export type CountryCode = 'KR' | 'US' | 'JP' | 'CN' | 'DE' | 'AU' | 'ME';
+/** Supported country codes — canonical definition in @/engine/constants/safety-factors */
+import type { CountryCode as _CountryCode } from '@/engine/constants/safety-factors';
+export type CountryCode = _CountryCode;
 
 /** Domain genres handled by sandboxes */
 export type Genre = 'electrical' | 'ai' | 'standard' | 'certification';

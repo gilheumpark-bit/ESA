@@ -65,6 +65,22 @@ const MATERIAL_PRICES: UnitPriceEntry[] = [
   { id: 'MAT-TR-001', category: 'transformer', name: 'Dry TR 300kVA', nameKo: '건식변압기 300kVA', spec: '22.9kV/380V 300kVA', unit: '대', priceKRW: 15000000, lastUpdated: '2024-06' },
   { id: 'MAT-TR-002', category: 'transformer', name: 'Dry TR 500kVA', nameKo: '건식변압기 500kVA', spec: '22.9kV/380V 500kVA', unit: '대', priceKRW: 22000000, lastUpdated: '2024-06' },
   { id: 'MAT-TR-003', category: 'transformer', name: 'Dry TR 1000kVA', nameKo: '건식변압기 1000kVA', spec: '22.9kV/380V 1000kVA', unit: '대', priceKRW: 38000000, lastUpdated: '2024-06' },
+  { id: 'MAT-TR-004', category: 'transformer', name: 'Oil TR 500kVA', nameKo: '유입변압기 500kVA', spec: '22.9kV/380V 500kVA ONAN', unit: '대', priceKRW: 16000000, lastUpdated: '2025-01' },
+  { id: 'MAT-TR-005', category: 'transformer', name: 'Oil TR 1000kVA', nameKo: '유입변압기 1000kVA', spec: '22.9kV/380V 1000kVA ONAN', unit: '대', priceKRW: 28000000, lastUpdated: '2025-01' },
+  { id: 'MAT-TR-006', category: 'transformer', name: 'Oil TR 2000kVA', nameKo: '유입변압기 2000kVA', spec: '22.9kV/380V 2000kVA ONAN', unit: '대', priceKRW: 48000000, lastUpdated: '2025-01' },
+  { id: 'MAT-TR-007', category: 'transformer', name: 'Dry TR 2000kVA', nameKo: '건식변압기 2000kVA', spec: '22.9kV/380V 2000kVA', unit: '대', priceKRW: 65000000, lastUpdated: '2025-01' },
+
+  // === EV 충전기 ===
+  { id: 'MAT-EV-001', category: 'ev_charger', name: 'EV Charger 7kW', nameKo: 'EV 완속충전기 7kW', spec: 'AC 7kW 1구 Type2', unit: '대', priceKRW: 2500000, lastUpdated: '2025-01' },
+  { id: 'MAT-EV-002', category: 'ev_charger', name: 'EV Fast Charger 50kW', nameKo: 'EV 급속충전기 50kW', spec: 'DC 50kW CCS2+CHAdeMO', unit: '대', priceKRW: 35000000, lastUpdated: '2025-01' },
+
+  // === 태양광 ===
+  { id: 'MAT-PV-001', category: 'renewable', name: 'PV Module 550W', nameKo: '태양광 모듈 550W', spec: 'Mono PERC 550Wp', unit: '장', priceKRW: 180000, lastUpdated: '2025-01' },
+  { id: 'MAT-PV-002', category: 'renewable', name: 'PV Inverter 50kW', nameKo: '태양광 인버터 50kW', spec: '3상 50kW 계통연계', unit: '대', priceKRW: 8500000, lastUpdated: '2025-01' },
+
+  // === UPS / ESS ===
+  { id: 'MAT-UPS-001', category: 'ups', name: 'UPS 10kVA', nameKo: 'UPS 10kVA', spec: 'Online 10kVA 3상', unit: '대', priceKRW: 6500000, lastUpdated: '2025-01' },
+  { id: 'MAT-ESS-001', category: 'ess', name: 'ESS Battery 100kWh', nameKo: 'ESS 배터리 100kWh', spec: 'LiFePO4 100kWh', unit: '세트', priceKRW: 85000000, lastUpdated: '2025-01' },
 
   // === 분전반 / 수배전반 (per unit) ===
   { id: 'MAT-PN-001', category: 'panel', name: 'Distribution Panel 12회로', nameKo: '분전반 12회로', spec: '12회로 3P', unit: '면', priceKRW: 250000, lastUpdated: '2024-06' },

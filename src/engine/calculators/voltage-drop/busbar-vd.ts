@@ -15,6 +15,7 @@
 
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { SQRT3 } from '@engine/constants/physical';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -66,7 +67,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
   }
 
   const { voltage: V, powerFactor: pf } = input;
-  const allowable = input.allowableTotalPercent ?? 5.0;
+  const allowable = input.allowableTotalPercent ?? activeDefaults().vdCombined;
   const cosPhi = pf;
   const sinPhi = Math.sqrt(1 - pf * pf);
   const steps: CalcStep[] = [];

@@ -49,6 +49,18 @@ export interface VerifyFixResult {
   stopReason: StopReason;
   /** 총 라운드 */
   totalRounds: number;
+  /** 수렴 사유 설명 (사용자 표시용) */
+  convergenceReason: string;
+}
+
+/** StopReason → 사용자 설명 */
+function describeStopReason(reason: StopReason, spec: Record<string, unknown>): string {
+  switch (reason) {
+    case 'compliant': return `규격 ${spec.size ?? spec.rating ?? '—'} 적합 확인됨`;
+    case 'max-rounds': return `최대 라운드 도달 — 수동 검토 필요`;
+    case 'no-candidate': return `최대 규격(${spec.size ?? '630mm²'})으로도 부적합 — 회로 분할 검토`;
+    case 'no-improvement': return `추가 상향해도 개선 없음 — 다른 파라미터(길이/전압) 변경 필요`;
+  }
 }
 
 // =========================================================================
@@ -159,23 +171,27 @@ export async function runVerifyFixLoop(
     });
 
     if (result.compliant) {
+      const reason: StopReason = 'compliant';
       return {
         finalCompliant: true,
         recommendedSpec: currentSpec,
         iterations,
-        stopReason: 'compliant',
+        stopReason: reason,
         totalRounds: round,
+        convergenceReason: describeStopReason(reason, currentSpec),
       };
     }
 
     // 수렴 감지: 이전과 개선 없음
     if (Math.abs(result.calculatedValue - prevValue) < 0.001) {
+      const reason: StopReason = 'no-improvement';
       return {
         finalCompliant: false,
         recommendedSpec: currentSpec,
         iterations,
-        stopReason: 'no-improvement',
+        stopReason: reason,
         totalRounds: round,
+        convergenceReason: describeStopReason(reason, currentSpec),
       };
     }
     prevValue = result.calculatedValue;
@@ -183,12 +199,14 @@ export async function runVerifyFixLoop(
     // 자동 수정
     const nextSpec = await config.fix(currentSpec);
     if (!nextSpec) {
+      const reason: StopReason = 'no-candidate';
       return {
         finalCompliant: false,
         recommendedSpec: currentSpec,
         iterations,
-        stopReason: 'no-candidate',
+        stopReason: reason,
         totalRounds: round,
+        convergenceReason: describeStopReason(reason, currentSpec),
       };
     }
 
@@ -199,12 +217,14 @@ export async function runVerifyFixLoop(
     currentSpec = nextSpec;
   }
 
+  const reason: StopReason = 'max-rounds';
   return {
     finalCompliant: false,
     recommendedSpec: currentSpec,
     iterations,
-    stopReason: 'max-rounds',
+    stopReason: reason,
     totalRounds: config.maxRounds,
+    convergenceReason: describeStopReason(reason, currentSpec),
   };
 }
 

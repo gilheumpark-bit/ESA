@@ -78,6 +78,7 @@ const COUNTRY_PATTERNS: Record<CountryCode, RegExp[]> = {
   KR: [/한국/i, /korea/i, /\bKR\b/, /KEC/i, /KEPIC/i, /전기설비규정/],
   US: [/미국/i, /america/i, /\bUS\b/, /\bUSA\b/, /NEC/i, /NFPA/i],
   JP: [/일본/i, /japan/i, /\bJP\b/, /JEAC/i, /JIS/i, /電気設備/],
+  INT: [/국제/i, /international/i, /\bIEC\b/i, /\bINT\b/, /글로벌|global/i],
   CN: [/중국/i, /china/i, /\bCN\b/, /\bGB\b/i, /DL\/T/i],
   DE: [/독일/i, /german/i, /\bDE\b/, /VDE/i, /DIN/i, /유럽|europe/i],
   AU: [/호주/i, /australia/i, /\bAU\b/, /AS\/NZS/i, /뉴질랜드|new zealand/i],

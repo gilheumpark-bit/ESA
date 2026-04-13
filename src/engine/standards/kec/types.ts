@@ -96,6 +96,66 @@ export interface JudgmentResult {
 }
 
 // ---------------------------------------------------------------------------
+// CompositeCondition — AND/OR 복합 조건 (조항 내 다중 조건 결합)
+// ---------------------------------------------------------------------------
+
+export type LogicOperator = 'AND' | 'OR';
+
+/**
+ * 복합 조건: 다수의 Condition을 AND/OR로 결합.
+ * 예: (전압강하 ≤ 3%) AND (허용전류 ≥ 부하전류)
+ */
+export interface CompositeCondition {
+  operator: LogicOperator;
+  conditions: Condition[];
+  /** 중첩 가능: ((A AND B) OR C) */
+  nested?: CompositeCondition;
+}
+
+/**
+ * CompositeCondition을 평가한다.
+ * AND: 모든 조건 충족 시 true
+ * OR: 하나 이상 충족 시 true
+ */
+export function evaluateComposite(
+  composite: CompositeCondition,
+  params: Record<string, number>,
+): { result: boolean; matched: Condition[]; failed: Condition[] } {
+  const matched: Condition[] = [];
+  const failed: Condition[] = [];
+
+  for (const cond of composite.conditions) {
+    const actual = params[cond.param];
+    if (actual === undefined) {
+      failed.push(cond);
+      continue;
+    }
+    if (evaluateCondition(cond, actual)) {
+      matched.push(cond);
+    } else {
+      failed.push(cond);
+    }
+  }
+
+  // 중첩 조건 평가
+  if (composite.nested) {
+    const nestedResult = evaluateComposite(composite.nested, params);
+    matched.push(...nestedResult.matched);
+    failed.push(...nestedResult.failed);
+
+    if (composite.operator === 'AND') {
+      return { result: failed.length === 0 && nestedResult.result, matched, failed };
+    }
+    return { result: matched.length > 0 || nestedResult.result, matched, failed };
+  }
+
+  if (composite.operator === 'AND') {
+    return { result: failed.length === 0, matched, failed };
+  }
+  return { result: matched.length > 0, matched, failed };
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

@@ -43,6 +43,23 @@ export interface DetailedCalcResult extends BaseCalcResult {
   confidence?: Confidence;
   /** Additional named outputs (e.g. reactivePower, selectedRating) */
   additionalOutputs?: Record<string, { value: number; unit: string; formula?: string }>;
+  /**
+   * 계산 불확실성 범위 — PE 검토 시 오차 인식용.
+   * 예: arc-flash ±25%, grounding ±30%, voltage-drop ±5%
+   * Reference: IEEE 1584 Annex D, KEC 해설서
+   */
+  uncertaintyRange?: {
+    /** 최소값 (value - uncertainty) */
+    min: number;
+    /** 최대값 (value + uncertainty) */
+    max: number;
+    /** 불확실성 비율 (%) */
+    tolerancePercent: number;
+    /** 불확실성 근거 */
+    basis?: string;
+  };
+  /** 경고 메시지 (PE 검토 필요 등) */
+  warnings?: string[];
 }
 
 // ---------------------------------------------------------------------------

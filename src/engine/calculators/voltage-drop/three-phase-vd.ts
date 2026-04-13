@@ -17,6 +17,8 @@
 
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { SQRT3 } from '@engine/constants/physical';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
+import { DEFAULT_MOTOR_STARTING_VD_LIMIT } from '@engine/constants/calc-thresholds';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -64,7 +66,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
   assertRange(input.powerFactor, 0.01, 1.0, 'powerFactor');
 
   const { voltage: V, current: I, length, resistance: R, reactance: X, powerFactor: pf } = input;
-  const allowable = input.allowableDropPercent ?? 3.0;
+  const allowable = input.allowableDropPercent ?? activeDefaults().vdBranch;
   const L_km = length / 1000;
   const cosPhi = pf;
   const sinPhi = Math.sqrt(1 - pf * pf);
@@ -117,7 +119,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
   // PART 3 — Motor starting voltage drop (if applicable)
   let vdStartPercent = 0;
   let startingPass = true;
-  const allowableStart = input.motorStarting?.allowableStartingDropPercent ?? 15.0;
+  const allowableStart = input.motorStarting?.allowableStartingDropPercent ?? DEFAULT_MOTOR_STARTING_VD_LIMIT;
 
   if (input.motorStarting) {
     const ms = input.motorStarting;

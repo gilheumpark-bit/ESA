@@ -196,6 +196,36 @@ const RULES: GuardrailRule[] = [
       return null;
     },
   },
+  // ── 필수 파라미터 누락 (계산 불가) ──
+  {
+    id: 'GR-010',
+    severity: 'BLOCK',
+    check: (p) => {
+      // 모든 값이 null/undefined/빈문자열인 경우 → 입력 자체가 없음
+      const values = Object.values(p).filter(v => v !== null && v !== undefined && v !== '');
+      if (values.length === 0) return {
+        rule: 'GR-010', severity: 'BLOCK' as GuardrailSeverity, param: '*', detected: 0,
+        limit: '≥ 1 required param',
+        message: '필수 파라미터 누락. 계산 불가. 최소 1개 이상의 입력값이 필요합니다.',
+      };
+      return null;
+    },
+  },
+
+  // ── 확신도 부족 (데이터 부족) ──
+  {
+    id: 'GR-011',
+    severity: 'BLOCK',
+    check: (p) => {
+      const conf = num(p['confidence'] ?? p['_confidence']);
+      if (conf !== null && conf < 0.7) return {
+        rule: 'GR-011', severity: 'BLOCK' as GuardrailSeverity, param: 'confidence', detected: conf,
+        limit: '≥ 0.7',
+        message: `확신도 ${(conf * 100).toFixed(0)}% — 데이터 부족으로 정확한 계산 불가. PE 검토 필요. 추가 파라미터를 입력하거나 전문가에게 문의하세요.`,
+      };
+      return null;
+    },
+  },
 ];
 
 // =========================================================================

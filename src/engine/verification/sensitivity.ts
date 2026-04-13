@@ -219,3 +219,76 @@ export function analyzeMultiSensitivity(
     mostSensitiveCoeff: analyses[0]?.sensitivityCoeff ?? 0,
   };
 }
+
+// ---------------------------------------------------------------------------
+// PART 4 — 2-Variable Interaction Analysis (다변수 상호작용)
+// ---------------------------------------------------------------------------
+
+export interface InteractionResult {
+  paramA: string;
+  paramB: string;
+  /** 2D grid of output values [rowA][colB] */
+  grid: number[][];
+  /** 2D grid of pass/fail judgments */
+  judgmentGrid: boolean[][];
+  /** Values swept for param A */
+  valuesA: number[];
+  /** Values swept for param B */
+  valuesB: number[];
+  /** Interaction coefficient: how much paramB changes the sensitivity of paramA */
+  interactionCoeff: number;
+  calcId: string;
+}
+
+/**
+ * 2-Variable Interaction: paramA와 paramB를 동시에 변화시켜
+ * 상호작용 효과를 측정한다.
+ *
+ * interactionCoeff > 0.1이면 두 변수가 유의미하게 상호작용.
+ */
+export function analyzeInteraction(
+  calcId: string,
+  calculator: CalcFn,
+  inputs: Record<string, unknown>,
+  paramA: { param: string; range: [number, number] },
+  paramB: { param: string; range: [number, number] },
+  stepsPerParam: number = 10,
+): InteractionResult {
+  const valuesA: number[] = [];
+  const valuesB: number[] = [];
+  const stepA = (paramA.range[1] - paramA.range[0]) / (stepsPerParam - 1);
+  const stepB = (paramB.range[1] - paramB.range[0]) / (stepsPerParam - 1);
+
+  for (let i = 0; i < stepsPerParam; i++) valuesA.push(paramA.range[0] + i * stepA);
+  for (let j = 0; j < stepsPerParam; j++) valuesB.push(paramB.range[0] + j * stepB);
+
+  const grid: number[][] = [];
+  const judgmentGrid: boolean[][] = [];
+
+  for (let i = 0; i < stepsPerParam; i++) {
+    const row: number[] = [];
+    const jRow: boolean[] = [];
+    for (let j = 0; j < stepsPerParam; j++) {
+      try {
+        const varied = { ...inputs, [paramA.param]: valuesA[i], [paramB.param]: valuesB[j] };
+        const r = calculator(varied);
+        row.push(typeof r.value === 'number' ? r.value : 0);
+        jRow.push(r.judgment?.pass ?? true);
+      } catch {
+        row.push(NaN);
+        jRow.push(false);
+      }
+    }
+    grid.push(row);
+    judgmentGrid.push(jRow);
+  }
+
+  // 상호작용 계수: paramB의 값에 따라 paramA의 기울기가 얼마나 변하는지
+  const slopeAtLowB = grid.length >= 2 && Number.isFinite(grid[1][0]) && Number.isFinite(grid[0][0])
+    ? (grid[1][0] - grid[0][0]) / (stepA || 1) : 0;
+  const slopeAtHighB = grid.length >= 2 && Number.isFinite(grid[1][stepsPerParam - 1]) && Number.isFinite(grid[0][stepsPerParam - 1])
+    ? (grid[1][stepsPerParam - 1] - grid[0][stepsPerParam - 1]) / (stepA || 1) : 0;
+  const interactionCoeff = slopeAtHighB !== 0 ? Math.abs((slopeAtHighB - slopeAtLowB) / slopeAtHighB) : 0;
+
+  return { paramA: paramA.param, paramB: paramB.param, grid, judgmentGrid, valuesA, valuesB, interactionCoeff, calcId };
+}

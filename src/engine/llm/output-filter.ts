@@ -273,6 +273,39 @@ export function filterLLMOutput(
 // ---------------------------------------------------------------------------
 
 /**
+ * INSUFFICIENT_DATA 마커 삽입 — confidence 부족 시 즉시 차단.
+ *
+ * 계산기 결과에서 confidence < 0.7이면 결과를 차단하고
+ * 명시적 "데이터 부족" 메시지로 대체한다.
+ * "추정 금지 규칙"의 최종 방어선.
+ */
+export function applyConfidenceGate(
+  output: string,
+  confidence?: number,
+): FilterResult {
+  if (confidence !== undefined && confidence < 0.7) {
+    const marker = `[INSUFFICIENT DATA: 확신도 ${(confidence * 100).toFixed(0)}% — 데이터 부족으로 정확한 계산 불가. 추가 파라미터 입력 또는 PE 검토 필요.]`;
+    return {
+      original: output,
+      filtered: marker,
+      blocked: [{
+        text: output.slice(0, 100),
+        position: 0,
+        reason: 'insufficient_data',
+      }],
+      passed: false,
+    };
+  }
+
+  return {
+    original: output,
+    filtered: output,
+    blocked: [],
+    passed: true,
+  };
+}
+
+/**
  * Quick check whether an LLM output would pass the filter.
  * Cheaper than full filterLLMOutput() — no replacement step.
  */

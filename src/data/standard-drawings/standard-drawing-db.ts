@@ -157,6 +157,126 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
     ],
     standards: ['소방시설법', '화재예방법 시행령'],
   },
+
+  // === EV 충전 설비 (EV Charging) ===
+  {
+    id: 'STD-EV-001',
+    name: 'Typical EV Charging Station',
+    nameKo: '표준 전기차 충전 설비',
+    category: 'ev_charging',
+    voltageClass: 'LV',
+    description: '수전반 → 전용 차단기 → EV 충전기 (7kW~50kW), 전용 접지',
+    typicalComponents: [
+      { type: 'panel_distribution', minCount: 1, maxCount: 1, mandatory: true },
+      { type: 'breaker_mccb', minCount: 1, maxCount: 20, mandatory: true },
+      { type: 'rcd', minCount: 1, maxCount: 20, mandatory: true, requiredRating: '30mA Type A/B' },
+      { type: 'ev_charger', minCount: 1, maxCount: 20, mandatory: true },
+      { type: 'energy_meter', minCount: 1, maxCount: 20, mandatory: false },
+    ],
+    typicalConnections: [
+      { from: 'panel_distribution', to: 'breaker_mccb', mandatory: true },
+      { from: 'breaker_mccb', to: 'rcd', mandatory: true },
+      { from: 'rcd', to: 'ev_charger', mandatory: true, typicalCable: 'XLPE 3C+E' },
+    ],
+    standards: ['KEC 722', 'IEC 61851', 'KEC 142.5'],
+  },
+
+  // === 태양광 발전 (Solar PV) ===
+  {
+    id: 'STD-PV-001',
+    name: 'Typical Rooftop PV System',
+    nameKo: '표준 옥상 태양광 발전 설비',
+    category: 'renewable',
+    voltageClass: 'LV',
+    description: 'PV 모듈 → 접속함 → 인버터(PCS) → 분전반 → 계통 연계',
+    typicalComponents: [
+      { type: 'pv_module', minCount: 10, maxCount: 500, mandatory: true },
+      { type: 'pv_combiner', minCount: 1, maxCount: 10, mandatory: true },
+      { type: 'pv_inverter', minCount: 1, maxCount: 10, mandatory: true },
+      { type: 'breaker_mccb', minCount: 2, maxCount: 5, mandatory: true },
+      { type: 'energy_meter', minCount: 1, maxCount: 2, mandatory: true },
+      { type: 'surge_arrester', minCount: 1, maxCount: 4, mandatory: true },
+    ],
+    typicalConnections: [
+      { from: 'pv_module', to: 'pv_combiner', mandatory: true, typicalCable: 'PV Wire 4sq' },
+      { from: 'pv_combiner', to: 'pv_inverter', mandatory: true, typicalCable: 'XLPE 2C DC' },
+      { from: 'pv_inverter', to: 'breaker_mccb', mandatory: true, typicalCable: 'XLPE 3C AC' },
+    ],
+    standards: ['KEC 501', 'KEC 690', 'IEC 62548'],
+  },
+
+  // === UPS/비상전원 (Emergency Power) ===
+  {
+    id: 'STD-UPS-001',
+    name: 'Typical UPS + Emergency Generator',
+    nameKo: '표준 UPS 및 비상발전기 설비',
+    category: 'emergency',
+    voltageClass: 'LV',
+    description: '비상발전기 → ATS → 비상반 → UPS → 전산실 부하',
+    typicalComponents: [
+      { type: 'generator', minCount: 1, maxCount: 2, mandatory: true },
+      { type: 'ats', minCount: 1, maxCount: 2, mandatory: true, requiredRating: '자동 전환 10초 이내' },
+      { type: 'panel_emergency', minCount: 1, maxCount: 1, mandatory: true },
+      { type: 'ups', minCount: 1, maxCount: 4, mandatory: true },
+      { type: 'battery_bank', minCount: 1, maxCount: 4, mandatory: true },
+    ],
+    typicalConnections: [
+      { from: 'generator', to: 'ats', mandatory: true },
+      { from: 'ats', to: 'panel_emergency', mandatory: true },
+      { from: 'panel_emergency', to: 'ups', mandatory: true },
+      { from: 'ups', to: 'battery_bank', mandatory: true },
+    ],
+    standards: ['KEC 700', 'KEC 701', 'NFPA 110'],
+  },
+
+  // === 고압 배전반 (MV Switchgear) ===
+  {
+    id: 'STD-MV-001',
+    name: 'Typical 3.3-6.6kV MV Switchgear',
+    nameKo: '표준 특고압(3.3~6.6kV) 배전반',
+    category: 'distribution',
+    voltageClass: 'MV',
+    description: '인입 VCB → 버스바 → 피더 VCB → 변압기 (2~3뱅크)',
+    typicalComponents: [
+      { type: 'vcb', minCount: 3, maxCount: 12, mandatory: true, requiredRating: '25kA 3s' },
+      { type: 'ct', minCount: 6, maxCount: 36, mandatory: true },
+      { type: 'vt', minCount: 3, maxCount: 6, mandatory: true },
+      { type: 'protection_relay', minCount: 3, maxCount: 12, mandatory: true },
+      { type: 'busbar', minCount: 1, maxCount: 2, mandatory: true },
+      { type: 'surge_arrester', minCount: 3, maxCount: 6, mandatory: true },
+    ],
+    typicalConnections: [
+      { from: 'vcb', to: 'busbar', mandatory: true },
+      { from: 'busbar', to: 'vcb', mandatory: true },
+      { from: 'vcb', to: 'ct', mandatory: true },
+      { from: 'ct', to: 'protection_relay', mandatory: true },
+    ],
+    standards: ['KEC 311', 'IEC 62271', 'KEC 131'],
+  },
+
+  // === 데이터센터 (Data Center) ===
+  {
+    id: 'STD-DC-001',
+    name: 'Typical Data Center Power Distribution',
+    nameKo: '표준 데이터센터 전력 배분',
+    category: 'data_center',
+    voltageClass: 'LV',
+    description: 'A/B 이중화: 수전 → UPS A/B → PDU → 서버랙 → 원격 감시',
+    typicalComponents: [
+      { type: 'panel_distribution', minCount: 2, maxCount: 4, mandatory: true, requiredRating: 'A/B 이중화' },
+      { type: 'ups', minCount: 2, maxCount: 8, mandatory: true, requiredRating: '2N 이중화' },
+      { type: 'pdu', minCount: 4, maxCount: 100, mandatory: true },
+      { type: 'ats', minCount: 1, maxCount: 4, mandatory: true },
+      { type: 'energy_meter', minCount: 2, maxCount: 10, mandatory: true },
+      { type: 'breaker_mccb', minCount: 10, maxCount: 200, mandatory: true },
+    ],
+    typicalConnections: [
+      { from: 'panel_distribution', to: 'ups', mandatory: true },
+      { from: 'ups', to: 'pdu', mandatory: true },
+      { from: 'pdu', to: 'breaker_mccb', mandatory: true },
+    ],
+    standards: ['KEC 232', 'TIA-942', 'EN 50600'],
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -264,7 +384,10 @@ export function detectDeviations(
   for (const conn of template.typicalConnections) {
     if (conn.mandatory) {
       const found = extractedConnections.some(
-        c => extractedTypes[0] // simplified check
+        c => c.from === conn.from && c.to === conn.to
+      ) || extractedConnections.some(
+        // 역방향도 허용 (from↔to 순서 무관)
+        c => c.from === conn.to && c.to === conn.from
       );
       if (!found) {
         deviations.push({

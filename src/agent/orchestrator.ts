@@ -63,6 +63,30 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
   };
 }
 
+/**
+ * 팀 디스패치 + 지수 백오프 재시도.
+ * 일시적 오류(네트워크, 타임아웃) 시 자동 복구.
+ */
+async function dispatchWithRetry(
+  teamId: string,
+  input: TeamInput,
+  maxRetries: number = 2,
+): Promise<TeamResult> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await dispatchToTeam(teamId, input);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries) {
+        // 지수 백오프: 500ms, 1000ms
+        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw lastError ?? new Error(`[Orchestrator] ${teamId} dispatch failed after ${maxRetries} retries`);
+}
+
 async function dispatchToTeam(teamId: string, input: TeamInput): Promise<TeamResult> {
   switch (teamId) {
     case 'TEAM-SLD':
@@ -118,7 +142,7 @@ export async function runOrchestrator(
       .filter(t => t !== 'TEAM-CONSENSUS');
 
     const teamPromises = allTeamIds.map(teamId =>
-      dispatchToTeam(teamId, teamInput).catch(err => ({
+      dispatchWithRetry(teamId, teamInput, 2).catch(err => ({
         teamId: teamId as TeamResult['teamId'],
         success: false,
         confidence: 0,

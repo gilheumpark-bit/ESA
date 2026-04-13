@@ -24,12 +24,22 @@ interface RecentCalc {
   keyResult: string;
 }
 
+/** 최근 계산 기록 로드 — 최대 200건으로 제한 (localStorage 오버플로 방지) */
+const MAX_RECENT_CALCS = 200;
+
 function loadRecentCalcs(): RecentCalc[] {
   try {
     const raw = localStorage.getItem('esa-recent-calcs');
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // 초과분 정리 (오래된 항목 제거)
+    if (parsed.length > MAX_RECENT_CALCS) {
+      const trimmed = parsed.slice(0, MAX_RECENT_CALCS);
+      localStorage.setItem('esa-recent-calcs', JSON.stringify(trimmed));
+      return trimmed;
+    }
+    return parsed;
   } catch {
     return [];
   }

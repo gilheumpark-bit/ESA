@@ -5,7 +5,7 @@
  * 새 조항 추가 시 이 파일에 등록만 하면 전체 시스템에서 사용 가능.
  */
 
-import { CodeArticle, JudgmentResult, makeHold } from './types';
+import { CodeArticle, Condition, JudgmentResult, makeHold } from './types';
 import {
   KEC_232_52_MAIN,
   KEC_232_52_BRANCH,
@@ -113,12 +113,81 @@ export function evaluateKEC(
   }
 
   const evaluator = KEC_EVALUATORS.get(articleId);
-  if (!evaluator) {
-    // 조항은 등록되어 있으나 평가 함수가 아직 구현되지 않은 경우
-    return makeHold(article, ['(평가 함수 미구현)']);
+  if (evaluator) {
+    return evaluator(params);
   }
 
-  return evaluator(params);
+  // 범용 조건 트리 평가기 — evaluator 없는 75+ 조항을 자동 평가
+  return evaluateConditionTree(article, params);
+}
+
+/**
+ * 범용 조건 트리 평가기 — evaluator가 없는 조항도 conditions 배열로 자동 평가.
+ * 모든 조건이 PASS → PASS, 하나라도 FAIL → FAIL, 파라미터 누락 → HOLD.
+ */
+function evaluateConditionTree(
+  article: CodeArticle,
+  params: Record<string, number>,
+): JudgmentResult {
+  const missingParams: string[] = [];
+  let hasFail = false;
+  const details: string[] = [];
+
+  for (const cond of article.conditions) {
+    const value = params[cond.param];
+    if (value === undefined || value === null) {
+      missingParams.push(cond.param);
+      continue;
+    }
+
+    let passed = false;
+    switch (cond.operator) {
+      case '<=': passed = value <= cond.value; break;
+      case '>=': passed = value >= cond.value; break;
+      case '==': passed = value === cond.value; break;
+      case '<':  passed = value < cond.value; break;
+      case '>':  passed = value > cond.value; break;
+    }
+
+    if (passed) {
+      details.push(`✓ ${cond.param} = ${value}${cond.unit} ${cond.operator} ${cond.value}${cond.unit} → ${cond.result}`);
+    } else {
+      hasFail = true;
+      const expected = cond.result === 'PASS' ? 'FAIL' : 'PASS';
+      details.push(`✗ ${cond.param} = ${value}${cond.unit} — 기준 ${cond.operator} ${cond.value}${cond.unit} 미충족 → ${expected}`);
+    }
+  }
+
+  // 파라미터 누락 시 HOLD
+  if (missingParams.length > 0) {
+    return makeHold(article, [`누락 파라미터: ${missingParams.join(', ')}`, ...details]);
+  }
+
+  // 각 조건을 통과/실패로 분류
+  const matched: Condition[] = [];
+  const failed: Condition[] = [];
+  for (const cond of article.conditions) {
+    const value = params[cond.param];
+    if (value === undefined) continue;
+    let passed = false;
+    switch (cond.operator) {
+      case '<=': passed = value <= cond.value; break;
+      case '>=': passed = value >= cond.value; break;
+      case '==': passed = value === cond.value; break;
+      case '<':  passed = value < cond.value; break;
+      case '>':  passed = value > cond.value; break;
+    }
+    if (passed) matched.push(cond);
+    else failed.push(cond);
+  }
+
+  return {
+    judgment: hasFail ? 'FAIL' : 'PASS',
+    article,
+    matchedConditions: matched,
+    failedConditions: failed,
+    notes: details,
+  };
 }
 
 /**

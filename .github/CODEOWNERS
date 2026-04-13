@@ -1,0 +1,19 @@
+# ESVA Code Owners
+# These owners are automatically requested for review on PRs.
+
+# Default owner for everything
+* @gilheumpark-bit
+
+# Engine layer — core engineering logic
+/src/engine/ @gilheumpark-bit
+
+# Agent system
+/src/agent/ @gilheumpark-bit
+
+# API routes
+/src/app/api/ @gilheumpark-bit
+
+# Security-sensitive files
+/src/lib/security-hardening.ts @gilheumpark-bit
+/src/lib/rate-limit.ts @gilheumpark-bit
+/src/agent/guardrails.ts @gilheumpark-bit

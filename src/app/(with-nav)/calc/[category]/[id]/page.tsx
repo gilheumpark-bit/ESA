@@ -25,6 +25,9 @@ import {
 import CalculatorForm from '@/components/CalculatorForm';
 import ReceiptCard from '@/components/ReceiptCard';
 import CalcResultGauge from '@/components/CalcResultGauge';
+import CalcProgressDAG from '@/components/CalcProgressDAG';
+import StandardRefPanel from '@/components/StandardRefPanel';
+import Breadcrumb from '@/components/Breadcrumb';
 import { useCalculator } from '@/hooks/useCalculator';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
@@ -423,11 +426,11 @@ const LINKED_CALCS: Record<string, { id: string; category: string; label: string
   'single-phase-power': [{ id: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
   'three-phase-power': [{ id: 'transformer-capacity', category: 'transformer', label: '변압기 용량' }, { id: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
   'voltage-drop': [{ id: 'cable-sizing', category: 'cable', label: '케이블 사이징' }],
-  'transformer-capacity': [{ id: 'short-circuit', category: 'protection', label: '단락전류 계산' }, { id: 'breaker-sizing', category: 'protection', label: '차단기 선정' }],
+  'transformer-capacity': [{ id: 'ct-sizing', category: 'substation', label: 'CT 선정' }, { id: 'short-circuit', category: 'protection', label: '단락전류 계산' }, { id: 'breaker-sizing', category: 'protection', label: '차단기 선정' }],
   'cable-sizing': [{ id: 'voltage-drop', category: 'voltage-drop', label: '전압강하 확인' }],
   'short-circuit': [{ id: 'breaker-sizing', category: 'protection', label: '차단기 선정' }],
-  'breaker-sizing': [],
-  'ground-resistance': [],
+  'breaker-sizing': [{ id: 'short-circuit', category: 'protection', label: '단락전류 계산' }],
+  'ground-resistance': [{ id: 'ground-conductor', category: 'grounding', label: '접지 도체' }, { id: 'earth-fault', category: 'protection', label: '지락 전류' }],
   'solar-generation': [{ id: 'battery-capacity', category: 'renewable', label: '배터리 용량' }],
   'battery-capacity': [{ id: 'solar-generation', category: 'renewable', label: '태양광 발전량' }],
   'power-factor': [{ id: 'reactive-power', category: 'power', label: '무효전력 보상' }],
@@ -459,11 +462,11 @@ const LINKED_CALCS: Record<string, { id: string; category: string; label: string
   'inverter-capacity': [{ id: 'motor-capacity', category: 'motor', label: '전동기 용량' }],
   'motor-pf-correction': [{ id: 'reactive-power', category: 'power', label: '무효전력 보상' }],
   'braking-resistor': [],
-  'solar-cable': [{ id: 'solar-generation', category: 'renewable', label: '태양광 발전량' }],
-  'pcs-capacity': [{ id: 'battery-capacity', category: 'renewable', label: '배터리 용량' }],
+  'solar-cable': [{ id: 'pcs-capacity', category: 'renewable', label: 'PCS 용량' }, { id: 'solar-generation', category: 'renewable', label: '태양광 발전량' }],
+  'pcs-capacity': [{ id: 'grid-connect', category: 'renewable', label: '계통연계' }, { id: 'battery-capacity', category: 'renewable', label: '배터리 용량' }],
   'grid-connect': [{ id: 'solar-generation', category: 'renewable', label: '태양광 발전량' }],
   'substation-capacity': [{ id: 'transformer-capacity', category: 'transformer', label: '변압기 용량' }, { id: 'max-demand', category: 'power', label: '최대수요전력' }],
-  'ct-sizing': [{ id: 'vt-sizing', category: 'equipment', label: 'VT 선정' }],
+  'ct-sizing': [{ id: 'breaker-sizing', category: 'protection', label: '차단기 선정' }, { id: 'vt-sizing', category: 'substation', label: 'VT 선정' }],
   'vt-sizing': [{ id: 'ct-sizing', category: 'equipment', label: 'CT 선정' }],
   'surge-arrester': [],
   'illuminance': [],
@@ -746,15 +749,12 @@ export default function CalculatorPage({
       {/* Header */}
       <header className="border-b border-[var(--border-default)] bg-[var(--bg-primary)]">
         <div className="mx-auto max-w-4xl px-4 py-4">
-          <div className="mb-2 flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
-            <Link href="/" className="hover:text-[var(--color-primary)]">ESVA</Link>
-            <span>/</span>
-            <Link href="/calc" className="hover:text-[var(--color-primary)]">계산기</Link>
-            <span>/</span>
-            <span>{category}</span>
-            <span>/</span>
-            <span className="text-[var(--text-primary)]">{calcMeta.name}</span>
-          </div>
+          <Breadcrumb items={[
+            { label: 'ESVA', href: '/' },
+            { label: '계산기', href: '/calc' },
+            { label: category },
+            { label: calcMeta.name },
+          ]} />
           <h1 className="flex items-center gap-3 text-2xl font-bold text-[var(--text-primary)]">
             <Calculator size={28} className="text-[var(--color-primary)]" />
             {calcMeta.name}
@@ -802,16 +802,31 @@ export default function CalculatorPage({
           </div>
 
           {/* Right: Result */}
-          <div>
+          <div className="space-y-4">
+            {/* DAG 진행 표시 */}
+            <CalcProgressDAG
+              currentStage={isLoading ? 'calculate' : receipt ? 'done' : 'idle'}
+            />
+
             {receipt ? (
-              <ResultDisplay
-                receipt={receipt}
-                onExportPdf={handleExportPdf}
-                onExportExcel={handleExportExcel}
-                onShare={handleShare}
-                onReset={reset}
-                linkedCalcs={linked}
-              />
+              <>
+                <ResultDisplay
+                  receipt={receipt}
+                  onExportPdf={handleExportPdf}
+                  onExportExcel={handleExportExcel}
+                  onShare={handleShare}
+                  onReset={reset}
+                  linkedCalcs={linked}
+                />
+
+                {/* 참조 기준서 패널 */}
+                {receipt.standardsUsed && receipt.standardsUsed.length > 0 && (
+                  <StandardRefPanel
+                    refs={receipt.standardsUsed.map((s: string) => ({ clause: s }))}
+                    standardName={receipt.appliedStandard}
+                  />
+                )}
+              </>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-primary)] p-12 text-center">
                 <div>

@@ -20,6 +20,8 @@ import type {
 } from './types';
 import { EXPANDED_SYMBOL_DB, resolveSymbol } from '../vision/symbol-db';
 import { splitAndAnalyze, type VisionSplitResult } from '../vision/vision-splitter';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
+import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Vision Split + Parsing
@@ -194,7 +196,7 @@ async function runCalculations(
   for (const conn of connections) {
     if (conn.length && conn.length > 0) {
       const vd = estimateVoltageDrop(conn);
-      const compliant = vd <= 3.0; // KEC 232.52 분기회로 3%
+      const compliant = vd <= activeDefaults().vdBranch; // 국가별 VD 한도 (KR=3%, IEC=4%)
       calculations.push({
         id: `calc-vd-${conn.from}-${conn.to}`,
         calculatorId: 'voltage-drop',
@@ -250,8 +252,7 @@ async function runCalculations(
 
 /** 간이 전압강하 추정 (정밀 계산은 calc engine 사용) */
 function estimateVoltageDrop(conn: ExtractedConnection): number {
-  // 상수는 engine/constants/electrical.ts에서 중앙 관리
-  const { RESISTIVITY, PHYSICS } = require('@/engine/constants/electrical');
+  // 상수는 top-level import로 가져옴 (ELECTRICAL_CONSTANTS)
   const length = conn.length ?? 10;
   const cableSpec = conn.cableType ?? '35sq';
   const sizeMatch = cableSpec.match(/(\d+)sq/);

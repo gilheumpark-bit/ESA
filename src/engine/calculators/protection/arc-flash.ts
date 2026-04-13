@@ -297,5 +297,10 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     ppeCategory: ppe.category,
     ppeDescription: ppe.description,
     hazardLabel: ppe.hazardLabel,
+    warnings: [
+      'IEEE 1584-2018은 경험식(empirical model)으로 정확도 ±25% 범위입니다.',
+      '안전 관련 최종 판단에는 ETAP/SKM 등 전문 소프트웨어 검증이 필요합니다.',
+      '아크 지속시간 > 2초인 경우 반드시 에너지 저감 조치를 검토하세요.',
+    ],
   };
 }

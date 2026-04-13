@@ -26,8 +26,13 @@ import {
   TrendingUp,
   ExternalLink,
 } from 'lucide-react';
-import CalcUsageChart, { type CalcUsageData } from '@/components/charts/CalcUsageChart';
-import GlobalCompareChart, { PRESET_COMPARISONS, type CountryConfig } from '@/components/charts/GlobalCompareChart';
+import dynamic from 'next/dynamic';
+import type { CalcUsageData } from '@/components/charts/CalcUsageChart';
+import { PRESET_COMPARISONS, type CountryConfig } from '@/components/charts/GlobalCompareChart';
+
+// 차트 라이브러리(recharts) 번들 분리 — 대시보드 진입 시에만 로드
+const CalcUsageChart = dynamic(() => import('@/components/charts/CalcUsageChart'), { ssr: false });
+const GlobalCompareChart = dynamic(() => import('@/components/charts/GlobalCompareChart'), { ssr: false });
 import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════

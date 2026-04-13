@@ -16,6 +16,7 @@ import { runQualityChecklist, type QualityReport } from '@/engine/verification/q
 import { runAudit, type AuditReport, type Grade } from '@/engine/verification/audit-engine';
 import { runMultiTeamReview, type MultiTeamReport } from '@/engine/verification/multi-team-review';
 import type { CalcParams } from '@/engine/topology';
+import { getSafetyProfile, type SafetyFactorProfile, type CountryCode } from '@/engine/constants/safety-factors';
 
 // =========================================================================
 // PART 1 — Types & Context
@@ -26,6 +27,10 @@ export type PipelineStage = 'EXTRACT' | 'LOOKUP' | 'CALCULATE' | 'VERIFY' | 'REP
 export interface PipelineContext {
   /** 현재 단계 */
   stage: PipelineStage;
+  /** 국가 코드 (Safety Factor 프로파일 결정) */
+  countryCode: CountryCode;
+  /** 국가별 안전율/여유치 프로파일 (자동 주입) */
+  safetyProfile: SafetyFactorProfile;
   /** 추출된 계산 파라미터 */
   params: CalcParams | null;
   /** KEC 법규 조회 결과 */
@@ -305,6 +310,8 @@ const reportStep: PipelineStep = {
 // =========================================================================
 
 export interface PipelineConfig {
+  /** 국가 코드 — Safety Factor 프로파일 자동 결정 (기본: 'KR') */
+  countryCode?: CountryCode;
   /** 파라미터 추출 함수 */
   extractor: (ctx: PipelineContext) => Promise<CalcParams>;
   /** KEC 법규 조회 함수 */
@@ -329,8 +336,11 @@ export async function runCalcPipeline(config: PipelineConfig): Promise<PipelineC
     reportStep,
   ];
 
+  const country = config.countryCode ?? 'KR';
   let ctx: PipelineContext = {
     stage: 'EXTRACT',
+    countryCode: country,
+    safetyProfile: getSafetyProfile(country),
     params: null,
     standards: null,
     calculation: null,
@@ -379,9 +389,11 @@ export async function runCalcPipeline(config: PipelineConfig): Promise<PipelineC
 }
 
 /** 빈 PipelineContext 생성 */
-export function createEmptyContext(): PipelineContext {
+export function createEmptyContext(countryCode: CountryCode = 'KR'): PipelineContext {
   return {
     stage: 'EXTRACT',
+    countryCode,
+    safetyProfile: getSafetyProfile(countryCode),
     params: null,
     standards: null,
     calculation: null,

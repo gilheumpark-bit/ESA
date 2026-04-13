@@ -153,6 +153,30 @@ export const ELECTRICAL_SYNONYMS: Map<string, string[]> = new Map([
   ['EPC', ['설계조달시공', 'Engineering Procurement Construction']],
   ['FAT', ['공장인수시험', 'Factory Acceptance Test']],
   ['SAT', ['현장인수시험', 'Site Acceptance Test']],
+
+  // =========================================================================
+  // PART 9: 일본어 동의어 (Japanese Synonyms)
+  // =========================================================================
+  ['アース', ['접지', 'Grounding', 'Earthing', '接地']],
+  ['接地抵抗', ['접지저항', 'Ground Resistance', 'アース抵抗']],
+  ['電圧降下', ['전압강하', 'Voltage Drop']],
+  ['過電流', ['과전류', 'Overcurrent']],
+  ['短絡', ['단락', 'Short Circuit', '短絡電流']],
+  ['遮断器', ['차단기', 'Circuit Breaker', 'ブレーカー']],
+  ['変圧器', ['변압기', 'Transformer', 'トランス']],
+  ['配電盤', ['배전반', 'Switchboard', 'Distribution Board']],
+  ['電線管', ['전선관', 'Conduit', 'コンジット']],
+  ['許容電流', ['허용전류', 'Ampacity', 'Allowable Current']],
+  ['力率', ['역률', 'Power Factor']],
+  ['漏電', ['누전', 'Earth Leakage', 'Ground Fault']],
+  ['太陽光発電', ['태양광발전', 'Solar PV', 'Photovoltaic']],
+  ['蓄電池', ['축전지', 'Battery', 'Storage Battery']],
+  ['電動機', ['전동기', 'Motor', 'モーター']],
+  ['受変電設備', ['수변전설비', 'Substation', 'Receiving/Transforming Equipment']],
+  ['絶縁抵抗', ['절연저항', 'Insulation Resistance']],
+  ['耐圧試験', ['내전압시험', 'Withstand Voltage Test', 'Hi-Pot Test']],
+  ['電気設備技術基準', ['전기설비기술기준', 'Technical Standard for Electrical Facilities']],
+  ['内線規程', ['내선규정', 'Internal Wiring Regulations']],
 ]);
 
 // =============================================================================

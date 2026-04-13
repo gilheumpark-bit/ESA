@@ -9,7 +9,9 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { HelpCircle, Send, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { HelpCircle, Send, Loader2, LogIn } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Constants & Types
@@ -34,11 +36,33 @@ type SubmitStatus = 'idle' | 'submitting' | 'error';
 
 export default function CommunityAskPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // 비로그인 사용자에게 사전 안내
+  if (!authLoading && !user) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4 text-center">
+        <LogIn size={48} className="mb-4 text-[var(--color-primary)]" />
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">로그인이 필요합니다</h1>
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+          질문을 작성하려면 먼저 로그인해주세요.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Link href="/login" className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white transition-colors hover:opacity-90">
+            로그인
+          </Link>
+          <Link href="/community" className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-5 py-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-tertiary)]">
+            목록으로
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

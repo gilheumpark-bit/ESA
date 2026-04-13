@@ -91,7 +91,8 @@ export type BlockReason =
   | 'no_source'
   | 'probabilistic'
   | 'direct_citation'
-  | 'no_tool_call';
+  | 'no_tool_call'
+  | 'insufficient_data';
 
 /** A single blocked item found in LLM output */
 export interface BlockedItem {

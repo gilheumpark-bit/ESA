@@ -179,8 +179,15 @@ export const PHYSICS = {
   TOUCH_VOLTAGE_LIMIT_DC: 120,
   /** 표준 주파수 (Hz) */
   STANDARD_FREQUENCIES: [50, 60] as readonly number[],
-  /** 표준 전압 (V, 3상 선간) */
+  /** 표준 전압 (V, 3상 선간, LV ≤1kV) */
   STANDARD_VOLTAGES_3PH: [208, 220, 380, 400, 440, 460, 480, 690] as readonly number[],
+  /** 표준 전압 (V, MV/HV >1kV) — KEC 131-22 중압·고압 표준전압 */
+  STANDARD_VOLTAGES_MV_HV: [
+    3_300, 6_600, 11_000, 22_000, 22_900, 33_000,
+    66_000, 100_000, 154_000, 345_000, 765_000,
+  ] as readonly number[],
+  /** 단상 표준 전압 (V) — KEC/NEC/IEC */
+  STANDARD_VOLTAGES_1PH: [100, 110, 120, 200, 220, 230, 240] as readonly number[],
 } as const;
 
 /** KEC 표준 전선 규격 (mm²) */
