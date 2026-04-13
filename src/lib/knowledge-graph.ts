@@ -52,6 +52,10 @@ export class KnowledgeGraph {
   private edges: KGEdge[] = [];
   /** Adjacency list: nodeId -> [{ to, type, weight }] */
   private adjacency = new Map<string, Array<{ to: string; type: EdgeType; weight: number }>>();
+  /** BFS 결과 캐시 (5분 TTL) — 동일 질의 반복 시 재탐색 방지 */
+  private pathCache = new Map<string, { result: PathResult | null; ts: number }>();
+  private relatedCache = new Map<string, { result: KGNode[]; ts: number }>();
+  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 
   // --- Mutation ---
 
@@ -89,6 +93,11 @@ export class KnowledgeGraph {
    * Find nodes related to the given node within a certain depth (BFS).
    */
   findRelated(nodeId: string, depth: number = 2): KGNode[] {
+    // 캐시 확인
+    const cacheKey = `${nodeId}:${depth}`;
+    const cached = this.relatedCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < this.CACHE_TTL_MS) return cached.result;
+
     const visited = new Set<string>();
     const queue: Array<{ id: string; d: number }> = [{ id: nodeId, d: 0 }];
     visited.add(nodeId);
@@ -107,9 +116,18 @@ export class KnowledgeGraph {
     }
 
     visited.delete(nodeId); // 자기 자신 제외
-    return Array.from(visited)
+    const result = Array.from(visited)
       .map((id) => this.nodes.get(id))
       .filter((n): n is KGNode => n !== undefined);
+
+    // 캐시 저장
+    this.relatedCache.set(cacheKey, { result, ts: Date.now() });
+    // 캐시 크기 제한 (최대 200 엔트리)
+    if (this.relatedCache.size > 200) {
+      const oldest = [...this.relatedCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+      if (oldest) this.relatedCache.delete(oldest[0]);
+    }
+    return result;
   }
 
   /**

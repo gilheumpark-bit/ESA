@@ -53,6 +53,12 @@ export interface MultiTeamReport {
   compositeScore: number;
   /** 총 소요시간 (ms) */
   totalDurationMs: number;
+  /** 개별 팀 점수 요약 (UI 표시용) */
+  teamScoreBreakdown: Array<{ teamId: string; teamName: string; score: number; domain: string }>;
+  /** 핵심 발견사항 요약 (상위 5건) */
+  topFindings: string[];
+  /** 우수 사례 요약 (상위 3건) */
+  topCommendations: string[];
 }
 
 // =========================================================================
@@ -144,12 +150,33 @@ export async function runMultiTeamReview(
   const cappedBonus = Math.min(totalBonus, 20);
   const compositeScore = Math.min(100, Math.round(baseScore + cappedBonus));
 
+  // 개별 팀 점수 분해 (UI 표시용)
+  const teamScoreBreakdown = teamResults.map(t => ({
+    teamId: t.team.id,
+    teamName: t.team.name,
+    score: t.score,
+    domain: t.team.domain,
+  }));
+
+  // 핵심 발견사항 상위 5건
+  const topFindings = teamResults
+    .flatMap(t => t.findings)
+    .slice(0, 5);
+
+  // 우수 사례 상위 3건
+  const topCommendations = teamResults
+    .flatMap(t => t.commendations)
+    .slice(0, 3);
+
   return {
     teams: teamResults,
     overallPassRate,
     totalBonus,
     compositeScore,
     totalDurationMs: Date.now() - totalStart,
+    teamScoreBreakdown,
+    topFindings,
+    topCommendations,
   };
 }
 

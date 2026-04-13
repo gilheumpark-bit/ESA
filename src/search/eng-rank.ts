@@ -224,6 +224,7 @@ export function rankResults(
       document: doc,
       score,
       breakdown,
+      reasoning: buildReasoning(breakdown),
     };
   });
 
@@ -237,4 +238,32 @@ export function rankResults(
   });
 
   return results;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 5 — Ranking Reasoning (사용자 설명용)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 랭킹 점수 분해 → 사용자가 이해 가능한 설명 문자열.
+ * "왜 이 결과가 1위인지" 투명하게 설명.
+ */
+function buildReasoning(bd: EngRankBreakdown): string {
+  const factors: string[] = [];
+
+  if (bd.standardScore >= 0.7) factors.push('표준 조항 정확 일치');
+  else if (bd.standardScore >= 0.4) factors.push('관련 표준 참조');
+
+  if (bd.freshnessScore >= 0.8) factors.push('최신 문서 (1년 이내)');
+  else if (bd.freshnessScore < 0.3) factors.push('오래된 문서 (감점)');
+
+  if (bd.verificationScore >= 0.8) factors.push('전문가 검증됨');
+  else if (bd.verificationScore < 0.3) factors.push('미검증 (감점)');
+
+  if (bd.calculatorRelevance >= 0.8) factors.push('관련 계산기 직결');
+  else if (bd.calculatorRelevance >= 0.3) factors.push('동일 카테고리');
+
+  if (bd.userBehaviorScore >= 0.7) factors.push('높은 조회수');
+
+  return factors.length > 0 ? factors.join(' · ') : '기본 점수';
 }

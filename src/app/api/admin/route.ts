@@ -21,6 +21,13 @@ import { verifyIdToken } from '@/lib/firebase-id-token';
 // PART 1 — Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
+export interface AdminDashboardResponse {
+  success: boolean;
+  data: AdminDashboardData;
+  /** true면 Supabase 미연결 → 데모 데이터 표시 중 */
+  isDemo: boolean;
+}
+
 export interface AdminDashboardData {
   tenant: {
     id: string;
