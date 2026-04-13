@@ -241,11 +241,17 @@ export class SandboxAgent {
    * Find related standards based on the query keywords.
    */
   private findRelatedStandards(query: ParsedQuery) {
-    // Placeholder: will hook into standards search index
     if (query.keywords.length === 0) return undefined;
 
+    // dataScope 안전 파싱 (쉼표 구분, 공백 제거)
+    const scopes = this.config.dataScope
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const primaryScope = scopes[0] ?? this.config.dataScope;
+
     return [{
-      standard: this.config.dataScope.split(',')[0]?.trim() ?? this.config.dataScope,
+      standard: primaryScope,
       description: `Primary standard for ${this.config.displayName}`,
       country: this.config.country,
     }];
@@ -281,10 +287,13 @@ async function executeTool(toolId: string, query: ParsedQuery): Promise<ToolResu
   switch (toolId) {
     // ── SEARCH: RAG pipeline over Weaviate ──
     case 'SEARCH': {
+      // 안전한 배열 접근 — 빈 배열 시 기본값
+      const country = query.countries?.[0] ?? 'KR';
+      const genre = query.genres?.[0] ?? 'general';
       const ragResults = await searchRAG({
         query: query.raw,
-        country: query.countries[0],
-        genre: query.genres[0],
+        country,
+        genre,
         limit: 10,
       });
       if (ragResults.length === 0) {

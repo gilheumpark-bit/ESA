@@ -269,15 +269,16 @@ function computeWiringRoutes(
     const manhattanDist =
       Math.abs(nearestPanel.position.x - load.position.x) +
       Math.abs(nearestPanel.position.y - load.position.y);
-    const routeLength = manhattanDist * 0.001 * 1.15; // mm→m, 1.15배 여유
+    const routeLength = manhattanDist * LAYOUT_CONFIG.mmToM * LAYOUT_CONFIG.routeMarginFactor;
+    const cableInfo = CABLE_BY_LOAD_TYPE[load.type] ?? CABLE_BY_LOAD_TYPE.default;
 
     routes.push({
       from: nearestPanel.id,
       to: load.id,
       method: 'conduit',
       length: Math.round(routeLength * 100) / 100,
-      cableCount: load.type === 'motor' ? 4 : 3, // 동력: 4C, 전등: 3C
-      cableSpec: load.type === 'motor' ? 'HIV 6sq × 4C' : 'HIV 2.5sq × 3C',
+      cableCount: cableInfo.conductorCount,
+      cableSpec: cableInfo.spec,
     });
   }
 
@@ -288,26 +289,54 @@ function computeWiringRoutes(
 // PART 3 — Conduit & Distance Calculation
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** KEC 기준 전선관 충전율 (KEC 232.31) — 전선 3본 이상: 40% */
-const CONDUIT_FILL_RATE = 0.40; // 전선 단면적 합 / 전선관 단면적 ≤ 40%
+/**
+ * 배선 설계 설정 — 하드코딩 대신 중앙 관리.
+ * 국가/표준별 변경 시 이 블록만 수정.
+ */
+const LAYOUT_CONFIG = {
+  /** KEC 기준 전선관 충전율 (KEC 232.31) — 3본 이상: 40% */
+  conduitFillRate: 0.40,
+  /** 배선 경로 여유 배수 (직선 대비 실 배선 경로 증가분) */
+  routeMarginFactor: 1.15,
+  /** mm → m 변환 계수 */
+  mmToM: 0.001,
+  /** 전압강하 경고 거리 (m) */
+  vdWarningDistance: 50,
+  /** 케이블트레이 권장 거리 (m) */
+  trayRecommendDistance: 30,
+} as const;
 
-/** 케이블 외경 테이블 (mm) — KEC 표준 */
+/** 컴포넌트 타입별 기본 케이블 사양 — 하드코딩 제거 */
+const CABLE_BY_LOAD_TYPE: Record<string, { spec: string; conductorCount: number }> = {
+  motor: { spec: 'HIV 6sq × 4C', conductorCount: 4 },
+  light: { spec: 'HIV 2.5sq × 3C', conductorCount: 3 },
+  outlet: { spec: 'HIV 2.5sq × 3C', conductorCount: 3 },
+  panel: { spec: 'XLPE 25sq × 3C', conductorCount: 3 },
+  contactor: { spec: 'HIV 4sq × 4C', conductorCount: 4 },
+  ev_charger: { spec: 'XLPE 10sq × 4C', conductorCount: 4 },
+  default: { spec: 'HIV 2.5sq × 3C', conductorCount: 3 },
+};
+
+/** 케이블 외경 테이블 (mm) — KEC/IEC 60228 */
 const CABLE_OD: Record<string, number> = {
   'HIV 1.5sq': 3.8, 'HIV 2.5sq': 4.5, 'HIV 4sq': 5.3,
   'HIV 6sq': 6.2, 'HIV 10sq': 7.8, 'HIV 16sq': 9.2,
   'HIV 25sq': 11.0, 'HIV 35sq': 12.6, 'HIV 50sq': 14.6,
+  'HIV 70sq': 17.0, 'HIV 95sq': 19.5, 'HIV 120sq': 21.6,
   'XLPE 6sq': 10.2, 'XLPE 10sq': 11.5, 'XLPE 16sq': 12.8,
   'XLPE 25sq': 14.5, 'XLPE 35sq': 16.2, 'XLPE 50sq': 18.0,
+  'XLPE 70sq': 20.5, 'XLPE 95sq': 23.0, 'XLPE 120sq': 25.5,
+  'XLPE 150sq': 28.2, 'XLPE 185sq': 31.0, 'XLPE 240sq': 35.0,
 };
 
-/** 표준 전선관 규격 (mm 내경) */
-const STANDARD_CONDUIT_SIZES = [16, 22, 28, 36, 42, 54, 70, 82, 92, 104];
+/** 표준 전선관 규격 (mm 내경) — KEC/IEC 61386 */
+const STANDARD_CONDUIT_SIZES = [16, 22, 28, 36, 42, 54, 70, 82, 92, 104, 130, 156];
 
 function calculateConduitSize(cableSpec: string, cableCount: number): number {
   const baseName = cableSpec.replace(/\s*×\s*\d+C/, '').trim();
   const od = CABLE_OD[baseName] ?? 5.0;
   const totalArea = cableCount * Math.PI * (od / 2) ** 2;
-  const requiredArea = totalArea / CONDUIT_FILL_RATE;
+  const requiredArea = totalArea / LAYOUT_CONFIG.conduitFillRate;
   const requiredDiameter = Math.sqrt(requiredArea * 4 / Math.PI);
 
   // 표준 규격 중 최소 만족 크기

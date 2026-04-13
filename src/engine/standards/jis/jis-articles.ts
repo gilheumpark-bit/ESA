@@ -39,9 +39,10 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
     { param: 'voltageDropPercent', operator: '<=', value: 3, unit: '%', result: 'PASS', note: '간선 ≤3%, 분기 ≤3%, 합산 ≤5% (전기설비기술기준 해석 제57조)' },
   ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 전압강하' }, { articleId: 'NEC-VD-BRANCH', relation: 'equivalent', note: 'NEC 전압강하' }])],
 
-  // 허용전류
-  ['JIS-523.1', jis('523.1', '523.1', '허용전류 — 설치방법별', [
-    { param: 'loadCurrent', operator: '<=', value: 0, unit: 'A', result: 'PASS', note: '전선 허용전류 ≤ JIS C 3005 기준 (30°C 기준)' },
+  // 허용전류 — JIS C 3005 기반 (30°C 기준, 설치방법별)
+  ['JIS-523.1', jis('523.1', '523.1', '허용전류 — JIS C 3005 설치방법별', [
+    { param: 'loadCurrent', operator: '<=', value: 9999, unit: 'A', result: 'PASS', note: '부하전류가 JIS C 3005 허용전류 이내 (테이블 참조 필수). 기본 30°C, 설치방법 A1/B1/C/D 구분.' },
+    { param: 'ambientTemp', operator: '<=', value: 40, unit: '°C', result: 'PASS', note: '주위온도 40°C 초과 시 보정계수 적용 (JIS C 3005 Table 3)' },
   ], [{ articleId: 'KEC-232.1', relation: 'equivalent', note: 'KEC 허용전류' }])],
 
   // 과전류 보호
@@ -59,8 +60,8 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
     { param: 'wiringMethod', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속관/합성수지관/금속가요관/케이블 배선' },
   ])],
   ['JIS-521.2', jis('521.2', '521.2', '전선관 충전율 — ≤32%', [
-    { param: 'conduitFillPercent', operator: '<=', value: 32, unit: '%', result: 'PASS', note: '일본 기준 충전율 ≤32% (3선 이상)' },
-  ], [{ articleId: 'KEC-232.31', relation: 'reference', note: 'KEC 충전율 40%와 차이' }])],
+    { param: 'conduitFillPercent', operator: '<=', value: 32, unit: '%', result: 'PASS', note: '일본 기준 충전율 ≤32% (3선 이상). 참고: KEC 40%, NEC 40%, IEC 40% — 일본이 가장 엄격' },
+  ], [{ articleId: 'KEC-232.31', relation: 'reference', note: 'KEC 충전율 40%와 차이 (일본 32% vs 한국 40%)' }])],
 
   // 특수 장소
   ['JIS-701.1', jis('701.1', '701.1', '욕실 — 구역 구분', [
@@ -81,6 +82,28 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   ['JIS-VOLTAGE', jis('VOLTAGE', '100/200V', '일본 표준 전압 — 100V/200V, 50/60Hz', [
     { param: 'voltage_V', operator: '<=', value: 200, unit: 'V', result: 'PASS', note: '단상 100V/200V, 3상 200V. 동일본 50Hz, 서일본 60Hz' },
   ])],
+
+  // ── 추가 조항 ──
+
+  // 단락전류 보호
+  ['JIS-434.1', jis('434.1', '434.1', '단락전류 보호 — 차단용량', [
+    { param: 'breakingCapacity_kA', operator: '>=', value: 0, unit: 'kA', result: 'PASS', note: '차단기 차단용량 ≥ 예상 단락전류. JIS C 8201-2-1 참조' },
+  ], [{ articleId: 'IEC-434.1', relation: 'equivalent', note: 'IEC 60364-4-43 단락보호' }])],
+
+  // 절연저항
+  ['JIS-612.1', jis('612.1', '612.1', '절연저항 — 최소 기준', [
+    { param: 'insulationResistance_MOhm', operator: '>=', value: 0.5, unit: 'MΩ', result: 'PASS', note: '300V 이하: 0.3MΩ, 300V 초과: 0.4MΩ (대지전압), 사용전압 600V 이하: 0.5MΩ (JIS C 1302)' },
+  ], [{ articleId: 'KEC-612.1', relation: 'equivalent', note: 'KEC 절연저항 기준' }])],
+
+  // 내진 설계
+  ['JIS-SEISMIC', jis('SEISMIC', 'C 0920', '내진 설계 — 전기설비 내진', [
+    { param: 'seismicDesign', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '수배전반/변압기/케이블랙 내진앵커 설치 (JIS C 0920, 일본 건축기준법 시행령)' },
+  ])],
+
+  // 의료 시설
+  ['JIS-710.1', jis('710.1', '710.1', '의료 시설 — 절연변압기 IT 계통', [
+    { param: 'medicalITSystem', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '수술실/ICU: IT 계통 + 절연감시장치. JIS T 1022 (의용전기기기 안전)' },
+  ], [{ articleId: 'IEC-710.1', relation: 'equivalent', note: 'IEC 60364-7-710 의료시설' }])],
 ]);
 
 export function getJISArticleCount(): number {

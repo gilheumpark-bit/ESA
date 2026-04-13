@@ -101,12 +101,22 @@ async function queryKECArticle(clause: string, params?: Record<string, unknown>)
   }
 }
 
-/** 허용전류 테이블 조회 */
+/** 허용전류 테이블 조회 — 타입 안전 변환 */
 async function queryAmpacity(params: Record<string, unknown>) {
   try {
     const { queryAmpacity: qa } = await import('@/engine/standards/kec/kec-table-query');
-    return qa(params as unknown as Parameters<typeof qa>[0]);
-  } catch {
+    // Record<string, unknown> → AmpacityOptions 안전 변환
+    const safeParams = {
+      size: Number(params.size ?? 0),
+      conductor: String(params.conductor ?? 'Cu') as 'Cu' | 'Al',
+      insulation: String(params.insulation ?? 'XLPE') as 'PVC' | 'XLPE' | 'MI',
+      installation: String(params.installation ?? 'conduit') as 'conduit' | 'tray' | 'directBuried' | 'freeAir',
+      ambientTemp: params.ambientTemp ? Number(params.ambientTemp) : undefined,
+      groupCount: params.groupCount ? Number(params.groupCount) : undefined,
+    };
+    return qa(safeParams);
+  } catch (err) {
+    console.warn('[TEAM-STD] ampacity query failed:', err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -118,12 +128,16 @@ async function queryAmpacity(params: Record<string, unknown>) {
 async function lookupUnitPrices(components: string[]) {
   try {
     const { getUnitPrice, estimateProjectCost } = await import('@/data/unit-prices/unit-price-db');
-    const prices = components.map(c => ({
-      item: c,
-      price: getUnitPrice(c),
-    }));
+    const prices = components
+      .map(c => {
+        const priceEntry = getUnitPrice(c);
+        return priceEntry ? { item: c, price: priceEntry } : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+    if (prices.length === 0) return null;
     return { prices, totalEstimate: estimateProjectCost(prices) };
-  } catch {
+  } catch (err) {
+    console.warn('[TEAM-STD] unit price lookup failed:', err instanceof Error ? err.message : err);
     return null;
   }
 }
