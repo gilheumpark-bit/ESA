@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" stroke="url(#g1)" stroke-width="4" fill="none"/>
+  <path d="M68 22L42 62h20L52 98l26-42H58L68 22z" fill="url(#g1)"/>
+  <text x="60" y="115" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="700" fill="#64748B">ESVA</text>
+</svg>
