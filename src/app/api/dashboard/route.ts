@@ -58,36 +58,32 @@ export async function GET(request: NextRequest) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
 
-    // Query 1: Recent 10 calculations
-    const { data: recentRows, error: recentErr } = await supabase
-      .from('calculation_receipts')
-      .select('id, calculator_id, calculator_name, created_at, inputs, outputs')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(10);
+    // 4개 쿼리 병렬 실행 (순차→병렬: ~4x 속도 향상)
+    const [recentResult, monthResult, countResult, notifResult] = await Promise.all([
+      supabase.from('calculation_receipts')
+        .select('id, calculator_id, calculator_name, created_at, inputs, outputs')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabase.from('calculation_receipts')
+        .select('calculator_id, calculator_name')
+        .eq('user_id', userId)
+        .gte('created_at', thirtyDaysAgoISO),
+      supabase.from('calculation_receipts')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId),
+      supabase.from('notifications')
+        .select('id, title, body, created_at, metadata')
+        .eq('type', 'standard_update')
+        .order('created_at', { ascending: false })
+        .limit(10),
+    ]);
 
-    // Query 2: All calcs in last 30 days for aggregation
-    const { data: monthRows, error: monthErr } = await supabase
-      .from('calculation_receipts')
-      .select('calculator_id, calculator_name')
-      .eq('user_id', userId)
-      .gte('created_at', thirtyDaysAgoISO);
+    const { data: recentRows, error: recentErr } = recentResult;
+    const { data: monthRows, error: monthErr } = monthResult;
+    const { count: totalCount, error: countErr } = countResult;
+    const { data: notifRows, error: _notifErr } = notifResult;
 
-    // Query 3: Total count
-    const { count: totalCount, error: countErr } = await supabase
-      .from('calculation_receipts')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
-
-    // Query 4: Standard update notifications
-    const { data: notifRows, error: _notifErr } = await supabase
-      .from('notifications')
-      .select('id, title, body, created_at, metadata')
-      .eq('type', 'standard_update')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    // Handle errors gracefully — return empty data on Supabase failures
     if (recentErr || monthErr || countErr) {
       console.warn('[ESVA Dashboard] Supabase query error:', recentErr ?? monthErr ?? countErr);
     }

@@ -27,6 +27,7 @@ import ReceiptCard from '@/components/ReceiptCard';
 import CalcResultGauge from '@/components/CalcResultGauge';
 import CalcProgressDAG from '@/components/CalcProgressDAG';
 import StandardRefPanel from '@/components/StandardRefPanel';
+import Breadcrumb from '@/components/Breadcrumb';
 import { useCalculator } from '@/hooks/useCalculator';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
@@ -748,15 +749,12 @@ export default function CalculatorPage({
       {/* Header */}
       <header className="border-b border-[var(--border-default)] bg-[var(--bg-primary)]">
         <div className="mx-auto max-w-4xl px-4 py-4">
-          <div className="mb-2 flex items-center gap-2 text-sm text-[var(--text-tertiary)]">
-            <Link href="/" className="hover:text-[var(--color-primary)]">ESVA</Link>
-            <span>/</span>
-            <Link href="/calc" className="hover:text-[var(--color-primary)]">계산기</Link>
-            <span>/</span>
-            <span>{category}</span>
-            <span>/</span>
-            <span className="text-[var(--text-primary)]">{calcMeta.name}</span>
-          </div>
+          <Breadcrumb items={[
+            { label: 'ESVA', href: '/' },
+            { label: '계산기', href: '/calc' },
+            { label: category },
+            { label: calcMeta.name },
+          ]} />
           <h1 className="flex items-center gap-3 text-2xl font-bold text-[var(--text-primary)]">
             <Calculator size={28} className="text-[var(--color-primary)]" />
             {calcMeta.name}

@@ -84,13 +84,21 @@ export default function ContactPage() {
           <p className="mt-2 text-sm text-[var(--text-secondary)]">
             빠른 시일 내에 답변드리겠습니다.
           </p>
-          <button
-            type="button"
-            onClick={() => setStatus('idle')}
-            className="mt-6 rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
-          >
-            추가 문의하기
-          </button>
+          <div className="mt-6 flex gap-3">
+            <a
+              href="/"
+              className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-5 py-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-tertiary)]"
+            >
+              홈으로
+            </a>
+            <button
+              type="button"
+              onClick={() => setStatus('idle')}
+              className="rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-medium text-white transition-colors hover:opacity-90"
+            >
+              추가 문의하기
+            </button>
+          </div>
         </div>
       </div>
     );
