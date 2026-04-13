@@ -11,6 +11,52 @@
 
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
 
+// ── Image dimension parsing from raw bytes ──
+
+/** PNG 헤더에서 너비 추출 (IHDR chunk, offset 16-19) */
+function parseImageWidth(buf: ArrayBuffer): number | null {
+  const view = new DataView(buf);
+  if (buf.byteLength < 24) return null;
+  // PNG magic: 0x89 0x50 0x4E 0x47
+  if (view.getUint8(0) === 0x89 && view.getUint8(1) === 0x50) {
+    return view.getUint32(16, false); // big-endian
+  }
+  // JPEG: parse SOF0 marker for dimensions
+  if (view.getUint8(0) === 0xFF && view.getUint8(1) === 0xD8) {
+    return parseJpegDimension(buf, 'width');
+  }
+  return null;
+}
+
+function parseImageHeight(buf: ArrayBuffer): number | null {
+  const view = new DataView(buf);
+  if (buf.byteLength < 24) return null;
+  if (view.getUint8(0) === 0x89 && view.getUint8(1) === 0x50) {
+    return view.getUint32(20, false);
+  }
+  if (view.getUint8(0) === 0xFF && view.getUint8(1) === 0xD8) {
+    return parseJpegDimension(buf, 'height');
+  }
+  return null;
+}
+
+/** JPEG SOF0 marker 파싱 (0xFFC0) */
+function parseJpegDimension(buf: ArrayBuffer, dim: 'width' | 'height'): number | null {
+  const view = new DataView(buf);
+  let offset = 2;
+  while (offset < buf.byteLength - 8) {
+    if (view.getUint8(offset) !== 0xFF) { offset++; continue; }
+    const marker = view.getUint8(offset + 1);
+    if (marker === 0xC0 || marker === 0xC2) {
+      // SOF0/SOF2: height at +5, width at +7
+      return dim === 'height' ? view.getUint16(offset + 5, false) : view.getUint16(offset + 7, false);
+    }
+    const len = view.getUint16(offset + 2, false);
+    offset += 2 + len;
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Image Grid Splitter
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -19,6 +65,12 @@ export interface SplitOptions {
   gridSize: number;     // 4 = 2×2, 8 = 2×4, 16 = 4×4
   overlap: number;      // 오버랩 비율 (0.1 = 10%)
   model: 'gemini' | 'openai' | 'local';
+  /** 이미지 너비 (px) — 미지정 시 MIME 헤더에서 추출 시도 */
+  imageWidth?: number;
+  /** 이미지 높이 (px) */
+  imageHeight?: number;
+  /** 중복제거 위치 허용오차 (px, 기본 10) */
+  deduplicateTolerance?: number;
 }
 
 export interface VisionSplitResult {
@@ -46,13 +98,13 @@ export async function splitAndAnalyze(
 ): Promise<VisionSplitResult[]> {
   const { gridSize, overlap } = options;
 
-  // 그리드 계산 (정사각형이면 √gridSize × √gridSize)
-  const cols = gridSize <= 4 ? 2 : gridSize <= 8 ? 4 : 4;
+  // 그리드 계산
+  const cols = gridSize <= 4 ? 2 : Math.min(4, Math.ceil(Math.sqrt(gridSize)));
   const rows = Math.ceil(gridSize / cols);
 
-  // 이미지 크기 추정 (실제 구현에서는 이미지 헤더 파싱)
-  const imgWidth = 4000;  // 가정: A1 도면 스캔 4000px
-  const imgHeight = 3000;
+  // 이미지 크기: 옵션 → PNG/JPEG 헤더 파싱 → 폴백
+  const imgWidth = options.imageWidth ?? parseImageWidth(imageBuffer) ?? 4000;
+  const imgHeight = options.imageHeight ?? parseImageHeight(imageBuffer) ?? 3000;
 
   const regionWidth = Math.ceil(imgWidth / cols);
   const regionHeight = Math.ceil(imgHeight / rows);

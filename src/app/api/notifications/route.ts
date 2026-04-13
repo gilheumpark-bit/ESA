@@ -47,6 +47,10 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    // Rate limiting on PATCH as well
+    const blocked = applyRateLimit(req, 'default');
+    if (blocked) return blocked;
+
     const body = await req.json();
     const { notificationId, userId, markAll } = body as {
       notificationId?: string;
@@ -54,12 +58,20 @@ export async function PATCH(req: NextRequest) {
       markAll?: boolean;
     };
 
-    if (markAll && userId) {
+    // userId 필수 검증 (인증 대리)
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'userId is required and must be a non-empty string' },
+        { status: 400 },
+      );
+    }
+
+    if (markAll) {
       await markAllRead(userId);
       return NextResponse.json({ success: true, message: 'All notifications marked as read' });
     }
 
-    if (notificationId) {
+    if (notificationId && typeof notificationId === 'string') {
       await markRead(notificationId);
       return NextResponse.json({ success: true, message: 'Notification marked as read' });
     }
