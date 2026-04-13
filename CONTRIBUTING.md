@@ -53,7 +53,7 @@ npm run dev
 ## Testing
 
 ```bash
-npm test             # All 22 suites
+npm test             # All 22 suites / 336 tests
 npm run test:calc    # Calculator accuracy only
 npm run test:watch   # Watch mode
 ```

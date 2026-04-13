@@ -26,8 +26,8 @@ ESVA is a professional electrical engineering platform that combines multi-model
 
 ### Key Value Propositions
 
-- **Multi-Standard Search** — KEC (61), NEC (41), IEC (25), JIS (15) = 142+ articles with condition-tree DSL
-- **52+ Validated Calculators** — Voltage drop, cable sizing, arc flash, short-circuit, grounding, solar PV, and more (±0.01% accuracy)
+- **Multi-Standard Search** — KEC (160+), NEC (42), IEC (25), JIS (18) = 245+ articles with condition-tree DSL
+- **56+ Validated Calculators** — Voltage drop, cable sizing, arc flash, short-circuit, grounding, solar PV, and more (±0.01% accuracy)
 - **4-Team Agent System** — SLD/Layout/Standards/Consensus with debate protocol and physics-law validation
 - **Receipt Transparency** — Every AI response comes with a verifiable receipt (SHA-256 hash, date-stamped, model-tracked)
 - **BYOK (Bring Your Own Key)** — Users supply their own LLM API keys; ESVA never stores keys server-side
@@ -55,11 +55,11 @@ ESVA is a professional electrical engineering platform that combines multi-model
 | Motor | Full-load current (NEC 430), starting current, protection |
 
 ### Standards Compliance
-- **KEC 2021** — 61 articles (전기설비기술기준) + 75 extended articles
-- **NEC 2023** — 41 articles (National Electrical Code)
+- **KEC 2021** — 160+ articles (전기설비기술기준, 55 core + 100+ extended)
+- **NEC 2023** — 42 articles (National Electrical Code) with full cross-references
 - **IEC 60364** — 25 articles (Low-voltage electrical installations)
-- **JIS C 0364** — 15 articles (Japanese Industrial Standard)
-- Condition-tree DSL for programmatic code evaluation
+- **JIS C 0364** — 18 articles (Japanese Industrial Standard)
+- Condition-tree DSL with AND/OR composite conditions for programmatic evaluation
 
 ### 4-Team Agent Architecture
 ```
@@ -68,7 +68,7 @@ Input → Orchestrator → ┬─ TEAM-SLD (계통도 분석)
                         ├─ TEAM-STD (규정 질의)
                         └─ TEAM-CONSENSUS (합의 + 보고서)
 ```
-- Physics-law validation (V=IR, P=VI) — 0.1% deviation triggers rejection
+- Physics-law validation (8 laws: V=IR, P=VI, I²R, Z=√R²+X², etc.) — 0.1% deviation triggers rejection
 - Max 3-round debate → 2/3 consensus or conservative adoption
 - HITL escalation on consensus failure
 
@@ -103,7 +103,7 @@ Input → Orchestrator → ┬─ TEAM-SLD (계통도 분석)
 ├─────────────────────────────────────────────────┤
 │  Engine Layer                                   │
 │  ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐│
-│  │Calc(52)│ │Std(142)│ │Topology│ │Receipt   ││
+│  │Calc(56)│ │Std(245)│ │Topology│ │Receipt   ││
 │  │±0.01%  │ │KEC/NEC/│ │BFS     │ │SHA-256   ││
 │  │        │ │IEC/JIS │ │Graph   │ │IPFS      ││
 │  └────────┘ └────────┘ └────────┘ └──────────┘│
@@ -165,7 +165,7 @@ WEAVIATE_API_KEY=
 npm run dev          # Start dev server (Turbopack)
 npm run build        # Production build
 npm run lint         # ESLint
-npm test             # All tests (22 suites, 323 tests)
+npm test             # All tests (22 suites, 336 tests)
 npm run test:calc    # Calculator accuracy tests only
 npm run test:watch   # Watch mode
 ```
