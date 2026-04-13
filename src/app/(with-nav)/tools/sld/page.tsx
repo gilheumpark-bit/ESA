@@ -300,7 +300,8 @@ export default function SLDAnalysisPage() {
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('image');
+  // DXF를 기본탭으로 — API 키 없이 즉시 분석 가능 (BYOK 장벽 제거)
+  const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('dxf');
 
   const handleImageSelect = useCallback((file: File) => {
     setImageFile(file);

@@ -463,6 +463,20 @@ export default function BYOKPage() {
         })}
       </div>
 
+      {/* Team Sharing Guide */}
+      <div className="mb-8 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
+        <h3 className="mb-3 text-base font-semibold text-[var(--text-primary)]">팀 공유 방법</h3>
+        <div className="space-y-2 text-sm text-[var(--text-secondary)]">
+          <p><strong>1. 공용 API 키 발급:</strong> OpenAI/Claude 대시보드에서 팀 전용 키를 생성합니다.</p>
+          <p><strong>2. 안전한 전달:</strong> 사내 메신저(Slack, Teams)로 키를 팀원에게 전달합니다.</p>
+          <p><strong>3. 각 브라우저에서 등록:</strong> 팀원 각자 이 페이지에서 키를 등록합니다.</p>
+          <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+            키는 각 브라우저에 AES-256 암호화 저장되며, 서버에 전송되지 않습니다.
+            팀 전체가 동일한 키를 사용하면 비용을 중앙 관리할 수 있습니다.
+          </p>
+        </div>
+      </div>
+
       {/* Guide & FAQ */}
       <div className="flex flex-col gap-6">
         <QuickStartGuide />
