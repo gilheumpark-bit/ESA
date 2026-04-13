@@ -245,15 +245,35 @@ export function runQualityChecklist(params: Record<string, unknown>): QualityRep
   const domains: QualityDomain[] = ['electrical-safety', 'thermal', 'protection', 'reliability', 'code-compliance'];
   const scores = {} as Record<QualityDomain, number>;
 
+  // 심각도 가중치 (부분점수: critical 실패 = -3, major = -2, minor = -1, info = 0)
+  const SEVERITY_WEIGHT: Record<string, number> = { critical: 3, major: 2, minor: 1, info: 0 };
+
   for (const domain of domains) {
     const domainResults = results.filter(r => r.domain === domain);
     if (domainResults.length === 0) { scores[domain] = 100; continue; }
-    const passed = domainResults.filter(r => r.passed).length;
-    scores[domain] = Math.round((passed / domainResults.length) * 100);
+
+    const maxPenalty = domainResults.reduce((sum, r) => sum + SEVERITY_WEIGHT[r.severity ?? 'info'], 0);
+    const actualPenalty = domainResults
+      .filter(r => !r.passed)
+      .reduce((sum, r) => sum + SEVERITY_WEIGHT[r.severity ?? 'info'], 0);
+
+    // 가중치 기반 점수 (100 - penalty ratio)
+    scores[domain] = maxPenalty > 0
+      ? Math.round((1 - actualPenalty / maxPenalty) * 100)
+      : 100;
   }
 
+  // 도메인 가중치: 전기안전 > 보호 > 열적 > 코드준수 > 신뢰성
+  const DOMAIN_WEIGHT: Record<QualityDomain, number> = {
+    'electrical-safety': 0.30,
+    'protection': 0.25,
+    'thermal': 0.20,
+    'code-compliance': 0.15,
+    'reliability': 0.10,
+  };
+
   const overallScore = Math.round(
-    domains.reduce((sum, d) => sum + scores[d], 0) / domains.length,
+    domains.reduce((sum, d) => sum + scores[d] * (DOMAIN_WEIGHT[d] ?? 0.2), 0),
   );
 
   const criticalCount = results.filter(r => !r.passed && r.severity === 'critical').length;

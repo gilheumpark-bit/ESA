@@ -215,6 +215,48 @@ export function validatePhysicsLaw(
       }
       return { valid: true };
     }
+    case 'voltageDropPercent': {
+      // VD% = (√3 × I × L × R) / (V × 1000) × 100
+      const v = relatedParams['voltage_V'];
+      const i = relatedParams['current_A'];
+      const l = relatedParams['length_m'];
+      const r = relatedParams['resistance_ohm_per_km'];
+      if (v && i && l && r && v > 0) {
+        const expected = (1.732 * i * l * r) / (v * 1000) * 100;
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'VD% = √3×I×L×R/V (전압강하 공식)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'reactivePower_var': {
+      // Q = P × tan(φ) = P × sin(φ)/cos(φ)
+      const p = relatedParams['power_W'];
+      const pf = relatedParams['powerFactor'];
+      if (p && pf && pf > 0 && pf < 1) {
+        const phi = Math.acos(pf);
+        const expected = p * Math.tan(phi);
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'Q = P×tan(φ) (무효전력 공식)', expected };
+        }
+      }
+      return { valid: true };
+    }
+    case 'apparentPower_VA': {
+      // S = √(P² + Q²) = P / cos(φ)
+      const p = relatedParams['power_W'];
+      const pf = relatedParams['powerFactor'];
+      if (p && pf && pf > 0) {
+        const expected = p / pf;
+        const deviation = Math.abs((value - expected) / (expected || 1)) * 100;
+        if (deviation > 0.1) {
+          return { valid: false, law: 'S = P/cos(φ) (피상전력 공식)', expected };
+        }
+      }
+      return { valid: true };
+    }
     default:
       return { valid: true };
   }

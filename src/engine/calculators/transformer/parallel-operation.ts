@@ -102,10 +102,10 @@ export function calculateParallelOperation(input: ParallelOperationInput): Detai
     warnings.push(`Impedance voltage deviation ${round(maxZDeviation, 2)}% exceeds 10% limit`);
   }
 
-  // Step 4: 부하 분담 계산
-  const ratios = transformers.map(t => t.capacity / t.impedancePercent);
+  // Step 4: 부하 분담 계산 (÷0 방어)
+  const ratios = transformers.map(t => t.impedancePercent > 0 ? t.capacity / t.impedancePercent : 0);
   const sumRatios = ratios.reduce((a, b) => a + b, 0);
-  const loadSharing = ratios.map(r => round((r / sumRatios) * 100, 2));
+  const loadSharing = sumRatios > 0 ? ratios.map(r => round((r / sumRatios) * 100, 2)) : ratios.map(() => 0);
   const totalCapacity = transformers.reduce((a, t) => a + t.capacity, 0);
 
   steps.push({
