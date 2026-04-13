@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, MessageSquare, ChevronUp, Award, Tag, Plus } from 'lucide-react';
 import Link from 'next/link';
 
@@ -112,9 +112,13 @@ function FilterBar({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <input
           type="text"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
+          defaultValue={search}
+          onChange={(e) => {
+            const val = e.target.value;
+            onSearchChange(val);
+          }}
           placeholder="질문 검색..."
+          aria-label="커뮤니티 질문 검색"
           className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-4 text-sm
                      focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500
                      dark:border-gray-700 dark:bg-gray-800"
@@ -127,6 +131,8 @@ function FilterBar({
           <button
             key={btn.key}
             onClick={() => onSortChange(btn.key)}
+            aria-label={`${btn.label} 정렬`}
+            aria-pressed={sort === btn.key}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors
               ${sort === btn.key
                 ? 'bg-blue-600 text-white'
@@ -254,9 +260,14 @@ export default function CommunityPage() {
     setPage(1);
   }, []);
 
+  // 300ms 디바운스 — 타이핑 중 불필요한 리렌더 방지
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearchChange = useCallback((value: string) => {
-    setSearch(value);
-    setPage(1);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setSearch(value);
+      setPage(1);
+    }, 300);
   }, []);
 
   return (

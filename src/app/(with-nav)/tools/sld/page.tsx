@@ -417,6 +417,8 @@ export default function SLDAnalysisPage() {
             { id: 'pdf' as const, label: 'PDF 벡터 파싱' },
           ].map(tab => (
             <button key={tab.id} onClick={() => { setActiveTab(tab.id); setError(null); }}
+              aria-label={`${tab.label} 탭 선택`}
+              aria-pressed={activeTab === tab.id}
               className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'bg-[var(--bg-primary)] text-[var(--color-primary)] shadow-sm'
@@ -439,12 +441,13 @@ export default function SLDAnalysisPage() {
           {preview ? (
             <div className="relative mb-4">
               <img src={preview} alt="단선도" className="w-full rounded-xl border border-[var(--border-default)] object-contain" style={{ maxHeight: 500 }} />
-              <button onClick={handleReset} className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80">
+              <button onClick={handleReset} aria-label="도면 삭제" className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80">
                 <X size={16} />
               </button>
             </div>
           ) : (
             <button onClick={() => fileInputRef.current?.click()}
+              aria-label="단선도 이미지 업로드"
               className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
               <Upload size={28} />
               <div className="text-center">
