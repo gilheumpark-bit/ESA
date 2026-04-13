@@ -396,6 +396,8 @@ export default function BYOKPage() {
 
   const handleDelete = useCallback(
     (id: string) => {
+      const ok = window.confirm('이 API 키를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.');
+      if (!ok) return;
       deleteStoredKey(id);
       updateState(id, { maskedKey: '', status: 'empty', rawInput: '' });
     },

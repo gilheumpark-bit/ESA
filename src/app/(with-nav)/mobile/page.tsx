@@ -31,6 +31,7 @@ import {
   History,
   AlertCircle,
   Shield,
+  Share2,
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -231,6 +232,22 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
               <span className="text-lg font-bold text-blue-700">
                 {result.value} <span className="text-sm font-normal text-gray-500">{result.unit}</span>
               </span>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const text = `${result.calculatorName}: ${result.value} ${result.unit}`;
+                  if (navigator.share) {
+                    navigator.share({ title: 'ESVA 계산 결과', text }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(text).then(() => alert('복사됨'));
+                  }
+                }}
+                className="p-1.5 rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                aria-label="결과 공유"
+              >
+                <Share2 className="h-4 w-4 text-gray-400" />
+              </button>
               <ChevronRight className="h-4 w-4 text-gray-300" />
             </div>
           </Link>

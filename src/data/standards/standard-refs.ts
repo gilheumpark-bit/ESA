@@ -609,6 +609,90 @@ const KS_AND_OTHER_REFS: StandardRef[] = [
 ];
 
 // =============================================================================
+// PART 5b: JIS (日本産業規格 — 전기설비기술기준)
+// =============================================================================
+
+const JIS_REFS: StandardRef[] = [
+  {
+    id: 'jis-c0364-1', standard: 'JIS', clause: 'C 0364-1', title_ko: '저압 전기설비 — 총칙',
+    title_en: 'Low-voltage electrical installations — General', edition: '2010',
+    licenseType: 'link_only', country: 'JP', body: 'JSA',
+    url: 'https://www.jisc.go.jp/',
+  },
+  {
+    id: 'jis-c0364-4-41', standard: 'JIS', clause: 'C 0364-4-41', title_ko: '감전 보호',
+    title_en: 'Protection against electric shock', edition: '2010',
+    licenseType: 'summary_only', country: 'JP', body: 'JSA',
+  },
+  {
+    id: 'jis-c0364-4-43', standard: 'JIS', clause: 'C 0364-4-43', title_ko: '과전류 보호',
+    title_en: 'Protection against overcurrent', edition: '2010',
+    licenseType: 'summary_only', country: 'JP', body: 'JSA',
+  },
+  {
+    id: 'jis-c0364-5-52', standard: 'JIS', clause: 'C 0364-5-52', title_ko: '배선 설비 — 전선 및 케이블',
+    title_en: 'Wiring systems — Selection and erection of cables', edition: '2010',
+    licenseType: 'summary_only', country: 'JP', body: 'JSA',
+  },
+  {
+    id: 'jis-c0364-5-54', standard: 'JIS', clause: 'C 0364-5-54', title_ko: '접지 및 보호도체',
+    title_en: 'Earthing arrangements and protective conductors', edition: '2010',
+    licenseType: 'summary_only', country: 'JP', body: 'JSA',
+  },
+  {
+    id: 'jis-c0364-6', standard: 'JIS', clause: 'C 0364-6', title_ko: '검증 및 시험',
+    title_en: 'Verification and testing', edition: '2010',
+    licenseType: 'summary_only', country: 'JP', body: 'JSA',
+  },
+  {
+    id: 'jis-c0364-7-701', standard: 'JIS', clause: 'C 0364-7-701', title_ko: '욕실 및 샤워실',
+    title_en: 'Locations containing a bath or shower', edition: '2010',
+    licenseType: 'summary_only', country: 'JP', body: 'JSA',
+  },
+  {
+    id: 'jis-c60364-grounding-a', standard: 'JIS', clause: 'A종 접지', title_ko: 'A종 접지 (고압 기기 외함)',
+    title_en: 'Class A Grounding — HV equipment enclosure (≤10Ω)', edition: '전기설비기술기준',
+    licenseType: 'open', country: 'JP', body: '経済産業省',
+  },
+  {
+    id: 'jis-c60364-grounding-b', standard: 'JIS', clause: 'B종 접지', title_ko: 'B종 접지 (변압기 혼촉 방지)',
+    title_en: 'Class B Grounding — Transformer neutral (150/Ig Ω)', edition: '전기설비기술기준',
+    licenseType: 'open', country: 'JP', body: '経済産業省',
+  },
+  {
+    id: 'jis-c60364-grounding-c', standard: 'JIS', clause: 'C종 접지', title_ko: 'C종 접지 (300V 초과 저압 기기)',
+    title_en: 'Class C Grounding — LV equipment >300V (≤10Ω)', edition: '전기설비기술기준',
+    licenseType: 'open', country: 'JP', body: '経済産業省',
+  },
+  {
+    id: 'jis-c60364-grounding-d', standard: 'JIS', clause: 'D종 접지', title_ko: 'D종 접지 (300V 이하 저압 기기)',
+    title_en: 'Class D Grounding — LV equipment ≤300V (≤100Ω)', edition: '전기설비기술기준',
+    licenseType: 'open', country: 'JP', body: '経済産業省',
+  },
+  {
+    id: 'jis-c0364-vd', standard: 'JIS', clause: '전압강하', title_ko: '전압강하 기준 (내선규정 3202-1)',
+    title_en: 'Voltage drop limits per Naisen Kitei 3202-1', edition: '내선규정',
+    licenseType: 'open', country: 'JP', body: '日本電気協会',
+  },
+  {
+    id: 'jis-c0364-conduit', standard: 'JIS', clause: '전선관', title_ko: '전선관 충전율 32%',
+    title_en: 'Conduit fill rate 32% for 3+ wires', edition: '내선규정',
+    licenseType: 'open', country: 'JP', body: '日本電気協会',
+  },
+  {
+    id: 'jis-ev-chademo', standard: 'JIS', clause: 'CHAdeMO', title_ko: 'EV 급속충전 CHAdeMO 규격',
+    title_en: 'CHAdeMO DC fast charging standard', edition: '2.0',
+    licenseType: 'link_only', country: 'JP', body: 'CHAdeMO Association',
+    url: 'https://www.chademo.com/',
+  },
+  {
+    id: 'jis-c8105', standard: 'JIS', clause: 'C 8105', title_ko: '조명기구 — 안전 요구사항',
+    title_en: 'Luminaires — Safety requirements', edition: '2017',
+    licenseType: 'link_only', country: 'JP', body: 'JSA',
+  },
+];
+
+// =============================================================================
 // PART 6: Export
 // =============================================================================
 
@@ -618,6 +702,7 @@ export const STANDARD_REFS: StandardRef[] = [
   ...IEC_REFS,
   ...IEEE_REFS,
   ...KS_AND_OTHER_REFS,
+  ...JIS_REFS,
 ];
 
 /** 표준별 조항 검색 */
