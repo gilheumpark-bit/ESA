@@ -252,3 +252,55 @@ export function validateKeyFormat(providerId: string, key: string): boolean {
       return key.length > 0;
   }
 }
+
+// ─── PART 7: Timeout-Wrapped Resolution ─────────────────────
+
+/**
+ * resolveProviderKey with timeout guard.
+ * 환경변수 조회가 지연되거나 BYOK 복호화가 느릴 때 타임아웃.
+ *
+ * @param providerId - 프로바이더 ID
+ * @param userKey - BYOK 키 (선택)
+ * @param timeoutMs - 최대 대기 시간 (기본 5000ms)
+ */
+export async function resolveProviderKeyWithTimeout(
+  providerId: string,
+  userKey?: string | null,
+  timeoutMs: number = 5000,
+): Promise<ResolvedKey> {
+  return Promise.race([
+    Promise.resolve(resolveProviderKey(providerId, userKey)),
+    new Promise<ResolvedKey>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`[ESVA] Provider key resolution timeout after ${timeoutMs}ms for ${PROVIDER_NAMES[providerId] ?? providerId}`)),
+        timeoutMs,
+      ),
+    ),
+  ]);
+}
+
+/**
+ * 여러 프로바이더 중 가장 먼저 사용 가능한 키를 반환.
+ * ARI Circuit Breaker 패턴의 경량 버전.
+ *
+ * @param providerIds - 우선순위 순서의 프로바이더 ID 목록
+ * @param userKeys - 프로바이더별 BYOK 키 (선택)
+ */
+export function resolveFirstAvailable(
+  providerIds: string[],
+  userKeys?: Record<string, string>,
+): ResolvedKey & { providerId: string } {
+  for (const id of providerIds) {
+    try {
+      const key = resolveProviderKey(id, userKeys?.[id]);
+      return { ...key, providerId: id };
+    } catch {
+      // 다음 프로바이더 시도
+      continue;
+    }
+  }
+  throw new Error(
+    `[ESVA] No available provider found. Tried: ${providerIds.join(', ')}. ` +
+    'BYOK 키를 등록하거나 환경변수를 설정하세요.',
+  );
+}
