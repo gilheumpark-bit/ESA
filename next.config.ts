@@ -6,8 +6,19 @@ const nextConfig: NextConfig = {
   output: 'standalone',
 
   experimental: {
-    optimizePackageImports: ['lucide-react', 'recharts', 'katex'],
+    optimizePackageImports: [
+      'lucide-react',
+      'recharts',
+      'katex',
+      '@supabase/supabase-js',
+      'exceljs',
+    ],
+    // View Transitions API — 지원 브라우저에서 페이지 전환 애니메이션
+    viewTransition: true,
   },
+
+  // 정적 자산 압축
+  compress: true,
 
   async headers() {
     return [

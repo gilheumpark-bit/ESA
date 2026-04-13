@@ -216,6 +216,56 @@ input:focus, textarea:focus, select:focus {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* ── Page Transition — 모든 페이지 진입 시 부드러운 등장 ─────────────────── */
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loading-slide {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(300%); }
+}
+
+/* Next.js 라우트 전환 시 메인 컨텐츠에 자동 적용 */
+main {
+  animation: page-enter 0.25s ease-out both;
+}
+
+/* 스크롤 복원 시 부드러운 동작 */
+html {
+  scroll-behavior: smooth;
+}
+
+/* 페이지 전환 중 레이아웃 시프트 방지 */
+.page-stable {
+  contain: layout style;
+}
+
+/* ── View Transition API (지원 브라우저에서 자동 적용) ─────────────────── */
+
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root) {
+  animation: 0.2s ease-out both fade-out;
+}
+
+::view-transition-new(root) {
+  animation: 0.25s ease-out both fade-in;
+}
+
+@keyframes fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
 /* Receipt print styles */
 @media print {
   .no-print { display: none !important; }
