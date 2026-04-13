@@ -328,7 +328,7 @@ export default function SLDAnalysisPage() {
     try {
       const visionKey = await getFirstAvailableVisionKey();
       if (!visionKey) {
-        setError('API 키가 설정되지 않았습니다. 설정 > BYOK에서 OpenAI, Claude, 또는 Gemini API 키를 입력하세요.');
+        setError('API 키가 설정되지 않았습니다. BYOK 설정 페이지에서 Vision API 키를 등록하세요. → /settings/byok');
         setLoading(false);
         return;
       }
@@ -512,7 +512,14 @@ export default function SLDAnalysisPage() {
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">{error}</p>
+          <div>
+            <p className="text-sm text-red-700">{error}</p>
+            {error.includes('API 키') && (
+              <a href="/settings/byok" className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline">
+                BYOK 설정 페이지로 이동 →
+              </a>
+            )}
+          </div>
         </div>
       )}
 

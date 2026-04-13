@@ -320,7 +320,7 @@ function CameraButton() {
       // Get user's BYOK API key from localStorage
       const apiKey = localStorage.getItem('esa-byok-openai-key') ?? '';
       if (!apiKey) {
-        setError('OpenAI API 키가 필요합니다. 설정에서 BYOK 키를 등록하세요.');
+        setError('OpenAI API 키가 필요합니다. BYOK 설정에서 등록하세요. → /settings/byok');
         setStatus('error');
         return;
       }

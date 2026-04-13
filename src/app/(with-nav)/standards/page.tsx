@@ -34,10 +34,10 @@ import type { CodeArticle } from '@/engine/standards/kec/types';
 
 const COUNTRY_FILTERS = [
   { value: '', label: '전체' },
-  { value: 'KR', label: '한국 (KR)' },
-  { value: 'US', label: '미국 (US)' },
+  { value: 'KR', label: '한국 (KEC)' },
+  { value: 'US', label: '미국 (NEC)' },
+  { value: 'JP', label: '일본 (JIS)' },
   { value: 'INT', label: '국제 (IEC/IEEE)' },
-  { value: 'CN', label: '중국 (CN)' },
 ];
 
 const LICENSE_FILTERS = [
