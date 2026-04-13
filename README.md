@@ -9,12 +9,24 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/gilheumpark-bit/ESA/actions"><img alt="CI" src="https://github.com/gilheumpark-bit/ESA/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/gilheumpark-bit/ESA/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
+  <img alt="Node" src="https://img.shields.io/badge/Node-20+-green.svg" />
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-blue.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-22_suites_/_336_pass-brightgreen.svg" />
+  <img alt="Calculators" src="https://img.shields.io/badge/Calculators-56+-orange.svg" />
+  <img alt="Standards" src="https://img.shields.io/badge/Standards-245+_articles-blueviolet.svg" />
+</p>
+
+<p align="center">
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#getting-started">Getting Started</a> •
   <a href="#tech-stack">Tech Stack</a> •
   <a href="#testing">Testing</a> •
   <a href="#api">API</a> •
+  <a href="#roadmap">Roadmap</a> •
+  <a href="#contributing">Contributing</a> •
   <a href="#license">License</a>
 </p>
 
@@ -24,11 +36,13 @@
 
 ESVA is a professional electrical engineering platform that combines multi-model LLM search with deterministic engineering calculators, 4-team agent verification, and transparent receipt system. Built for licensed electrical engineers, designers, and students.
 
+> **Status:** Open Beta (v0.2.0) — Free to use with BYOK (Bring Your Own Key)
+
 ### Key Value Propositions
 
 - **Multi-Standard Search** — KEC (160+), NEC (42), IEC (25), JIS (18) = 245+ articles with condition-tree DSL
 - **56+ Validated Calculators** — Voltage drop, cable sizing, arc flash, short-circuit, grounding, solar PV, and more (±0.01% accuracy)
-- **4-Team Agent System** — SLD/Layout/Standards/Consensus with debate protocol and physics-law validation
+- **4-Team Agent System** — SLD/Layout/Standards/Consensus with debate protocol and 8 physics-law validations
 - **Receipt Transparency** — Every AI response comes with a verifiable receipt (SHA-256 hash, date-stamped, model-tracked)
 - **BYOK (Bring Your Own Key)** — Users supply their own LLM API keys; ESVA never stores keys server-side
 
@@ -39,80 +53,106 @@ ESVA is a professional electrical engineering platform that combines multi-model
 ### AI-Powered Search
 - Multi-model LLM support: Google Gemini 2.5, OpenAI GPT-4.1, Anthropic Claude 4, Groq Llama 4, Mistral, Ollama
 - 7-language keyword extraction (KR/EN/JP/ZH/DE/FR/ES)
-- EngRank scoring algorithm optimized for electrical engineering context
+- EngRank scoring algorithm with transparent ranking reasoning
 - Vector search via Weaviate with local fallback
 
-### Engineering Calculators
+### Engineering Calculators (56+)
+
 | Category | Examples |
 |----------|---------|
-| Power | Voltage drop, power factor correction, demand factor |
-| Protection | Short-circuit current, arc flash (IEEE 1584), breaker coordination |
-| Wiring | Cable sizing, conduit fill, ampacity derating |
-| Grounding | Ground resistance, mesh voltage, touch/step voltage |
-| Solar PV | Array sizing, irradiance lookup, inverter matching |
-| Transformer | Impedance, tap selection, inrush current |
-| Lighting | Lux calculation, zonal cavity, emergency lighting |
-| Motor | Full-load current (NEC 430), starting current, protection |
+| Power | Voltage drop (1ph/3ph), power factor correction, demand/diversity factor, power loss |
+| Protection | Short-circuit (IEC 60909), arc flash (IEEE 1584), breaker sizing, RCD, relay |
+| Wiring | Cable sizing (KEC/NEC/IEC), conduit fill, ampacity derating, AWG converter |
+| Grounding | Ground resistance (Dwight), equipotential bonding, lightning protection |
+| Solar/ESS | PV generation, battery capacity, grid connect, PCS sizing, solar cable |
+| Transformer | Capacity, loss, efficiency, impedance, inrush, parallel operation |
+| Lighting | Illuminance (KS C 7612), energy saving, emergency generator, UPS |
+| Motor | Capacity, starting current, efficiency (IE1-4), braking resistor, VFD |
+| Substation | CT/VT sizing, surge arrester, MV switchgear |
 
-### Standards Compliance
-- **KEC 2021** — 160+ articles (전기설비기술기준, 55 core + 100+ extended)
-- **NEC 2023** — 42 articles (National Electrical Code) with full cross-references
-- **IEC 60364** — 25 articles (Low-voltage electrical installations)
-- **JIS C 0364** — 18 articles (Japanese Industrial Standard)
-- Condition-tree DSL with AND/OR composite conditions for programmatic evaluation
+All calculators: pure functions, sandboxed, no side effects, uncertainty range tracking.
+
+### Standards Compliance (245+ articles)
+
+| Standard | Articles | Coverage |
+|----------|----------|----------|
+| **KEC 2021** | 160+ | 55 core + 100+ extended, 8 individual evaluators |
+| **NEC 2023** | 42 | Full cross-references to KEC/IEC/JIS equivalents |
+| **IEC 60364** | 25 | 6th edition + Amendment, 20 cross-references |
+| **JIS C 0364** | 18 | A/B/C/D grounding, seismic, medical, EV |
+
+- Condition-tree DSL with AND/OR composite conditions
+- Generic evaluator for 97% of articles + 8 specialized evaluators
+- Ampacity tables: KEC (456 values), NEC (162 values), IEC (200+ values)
 
 ### 4-Team Agent Architecture
+
 ```
 Input → Orchestrator → ┬─ TEAM-SLD (계통도 분석)
-                        ├─ TEAM-LAYOUT (평면도 분석)
+         (retry 2x)    ├─ TEAM-LAYOUT (평면도 분석)
                         ├─ TEAM-STD (규정 질의)
                         └─ TEAM-CONSENSUS (합의 + 보고서)
 ```
-- Physics-law validation (8 laws: V=IR, P=VI, I²R, Z=√R²+X², etc.) — 0.1% deviation triggers rejection
-- Max 3-round debate → 2/3 consensus or conservative adoption
+
+- 8 physics-law validations (V=IR, P=VI, I²R, Z=√R²+X², VD%, Q=Ptanφ, S=P/cosφ, E=Pt)
+- Max 3-round debate with 2/3 consensus or conservative adoption
 - HITL escalation on consensus failure
+- Exponential backoff retry on team dispatch failure
 
 ### Vision Pipeline
 - DXF/PDF vector parsing for electrical drawings
-- VRAM-split parallel vision (N×N grid → deduplication)
+- VRAM-split parallel vision (N×N grid with PNG/JPEG header parsing)
 - 150+ electrical symbol database (CAD block name → standard type)
+- VLM integration: Gemini 2.5 Flash / GPT-4.1 Vision with retry + key validation
+
+### Safety & Verification
+- 9 guardrail blocking rules + 11 system prompt rules
+- 17 prompt injection detection patterns (EN + KO)
+- `sanitizeInput()` on all user-facing API inputs
+- AES-GCM encryption for BYOK keys (session-scoped)
+- Rate limiting with 9 profiles (sliding window)
+- PE-grade disclaimers on all safety-critical calculations
 
 ### Professional Output
 - ESVA Verified badge with IDE-style red/yellow/green markings
-- Engineering Review Report format (Issue Analysis → Applicable Codes → Technical Verification → Conclusion → Pending RFI)
-- PE-grade disclaimers on all safety-critical calculations
+- Engineering Review Report (Issue Analysis → Applicable Codes → Technical Verification → Conclusion → Pending RFI)
 - Receipt with SHA-256 hash and optional IPFS pinning
+- Excel export (ExcelJS, 2-sheet with formatting + formulas)
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                   Next.js 16 App                │
-│              (19 pages, 31 API routes)          │
-├─────────────────────────────────────────────────┤
-│  Agent Layer                                    │
-│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐│
-│  │Orchestr. │ │ Legacy   │ │ Vision Pipeline  ││
-│  │(4-Team)  │ │(Main/    │ │ (DXF/PDF/VLM)    ││
-│  │          │ │Bridge/   │ │                  ││
-│  │SLD/LAY/  │ │Sandbox)  │ │ 150+ symbols     ││
-│  │STD/CON   │ │17 sbox   │ │                  ││
-│  └──────────┘ └──────────┘ └──────────────────┘│
-├─────────────────────────────────────────────────┤
-│  Engine Layer                                   │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐│
-│  │Calc(56)│ │Std(245)│ │Topology│ │Receipt   ││
-│  │±0.01%  │ │KEC/NEC/│ │BFS     │ │SHA-256   ││
-│  │        │ │IEC/JIS │ │Graph   │ │IPFS      ││
-│  └────────┘ └────────┘ └────────┘ └──────────┘│
-├─────────────────────────────────────────────────┤
-│  Data Layer                                     │
-│  250+ IEC terms │ 200+ synonyms │ 170+ consts  │
-│  Ampacity tables│ Unit prices   │ TCC curves    │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│                    Next.js 16 App                    │
+│               (19 pages, 31 API routes)              │
+├──────────────────────────────────────────────────────┤
+│  Agent Layer                                         │
+│  ┌───────────┐  ┌───────────┐  ┌──────────────────┐ │
+│  │Orchestr.  │  │ Legacy    │  │ Vision Pipeline  │ │
+│  │(4-Team)   │  │(Main/     │  │ (DXF/PDF/VLM)    │ │
+│  │+ Retry    │  │Bridge/    │  │ + PNG/JPEG parse  │ │
+│  │SLD/LAY/   │  │Sandbox)   │  │ 150+ symbols     │ │
+│  │STD/CON    │  │17 sbox    │  │ Gemini/GPT-4V    │ │
+│  └───────────┘  └───────────┘  └──────────────────┘ │
+├──────────────────────────────────────────────────────┤
+│  Engine Layer                                        │
+│  ┌────────┐ ┌──────────┐ ┌────────┐ ┌────────────┐ │
+│  │Calc(56)│ │Std(245)  │ │Topology│ │Receipt     │ │
+│  │±0.01%  │ │KEC/NEC/  │ │BFS     │ │SHA-256     │ │
+│  │uncert. │ │IEC/JIS   │ │Graph   │ │IPFS        │ │
+│  │range   │ │AND/OR DSL│ │Cache   │ │            │ │
+│  └────────┘ └──────────┘ └────────┘ └────────────┘ │
+├──────────────────────────────────────────────────────┤
+│  Data Layer                                          │
+│  250+ IEC terms │ 200+ synonyms │ 170+ constants    │
+│  KEC/NEC/IEC    │ 56 material   │ 11 drawing        │
+│  ampacity tables│ prices        │ templates          │
+└──────────────────────────────────────────────────────┘
 ```
+
+> See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed system design.
 
 ---
 
@@ -120,7 +160,7 @@ Input → Orchestrator → ┬─ TEAM-SLD (계통도 분석)
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 20+ (see `.nvmrc`)
 - npm 10+
 
 ### Installation
@@ -145,19 +185,21 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
-# Stripe
+# Stripe (optional)
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 
-# AI Providers (BYOK — users can also supply their own)
+# AI Providers (optional — users can supply their own via BYOK)
 GOOGLE_AI_API_KEY=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 
-# Weaviate Vector DB
+# Weaviate Vector DB (optional — local fallback available)
 WEAVIATE_URL=
 WEAVIATE_API_KEY=
 ```
+
+> All AI provider keys are optional. ESVA works with BYOK — users can register their own keys in Settings.
 
 ### Development
 
@@ -185,6 +227,7 @@ npm run test:watch   # Watch mode
 | AI SDK | Vercel AI SDK (multi-provider) |
 | State | Zustand + React Query |
 | Vector DB | Weaviate (+ local fallback) |
+| Testing | Jest 30 + Playwright |
 | Deploy | Vercel |
 
 ### AI Models Supported (2026-Q2)
@@ -200,75 +243,18 @@ npm run test:watch   # Watch mode
 
 ---
 
-## Project Structure
-
-```
-src/
-├── app/                    # Next.js App Router (19 pages, 31 API routes)
-│   ├── (with-nav)/         # Pages with navigation layout
-│   │   ├── calc/           # Engineering calculators
-│   │   ├── search/         # AI-powered search
-│   │   ├── standards/      # Standards browser (KEC/NEC/IEC/JIS)
-│   │   ├── glossary/       # IEC 60050 electrical terms
-│   │   ├── compare/        # Multi-model comparison
-│   │   ├── dashboard/      # User dashboard
-│   │   └── ...             # 12 more pages
-│   └── api/                # API routes
-│       ├── search/         # Search endpoints
-│       ├── calculate/      # Calculator endpoints
-│       ├── team-review/    # 4-team agent review
-│       ├── health/         # Dependency health check
-│       ├── openapi/        # Self-documenting OpenAPI 3.1
-│       └── ...             # 26 more endpoints
-├── agent/                  # AI Agent system
-│   ├── orchestrator.ts     # 4-Team enhanced orchestrator
-│   ├── teams/              # SLD, Layout, Standards, Consensus
-│   ├── debate/             # Debate protocol + physics validation
-│   ├── vision/             # VRAM splitter + VLM + symbol DB
-│   ├── main.ts             # Legacy text query orchestrator
-│   ├── bridge.ts           # Parallel sandbox coordinator
-│   ├── sandbox/            # 17 isolated sandboxes
-│   ├── pipeline.ts         # 5-stage DAG pipeline
-│   └── guardrails.ts       # 9 blocking rules
-├── engine/                 # Core engineering engine
-│   ├── calculators/        # 52+ pure-function calculators
-│   ├── standards/          # KEC/NEC/IEC/JIS condition-tree DSL
-│   ├── constants/          # 170+ electrical constants
-│   ├── topology/           # BFS graph + DXF/PDF parsers
-│   ├── verification/       # Audit engine + quality checklist
-│   ├── receipt/            # Receipt generator + SHA-256
-│   └── llm/                # 22 LLM tools + system prompts
-├── data/                   # Static data
-│   ├── iec-60050/          # 250+ electrical terms (4 languages)
-│   ├── synonyms/           # 200+ abbreviation mappings
-│   ├── ampacity-tables/    # KEC/NEC ampacity lookup tables
-│   └── ...                 # Unit prices, TCC, certifications
-├── components/             # React components (26+)
-├── lib/                    # Shared utilities
-│   ├── security/           # Input sanitization, rate limiting
-│   ├── api/                # withApiHandler, performance middleware
-│   └── ai/                 # AI provider re-exports
-└── services/               # Server-side AI providers
-```
-
----
-
 ## Testing
 
-22 test suites with 323 tests. Calculator tests enforce **±0.01% accuracy** against reference values.
+22 test suites / 336 tests. Calculator tests enforce **±0.01% accuracy** against reference values.
 
-```bash
-npm test                # Run all tests
-npm run test:calc       # Calculator accuracy tests only
-npm run test:watch      # Watch mode
-```
-
-| Category | Suites | Coverage |
-|----------|--------|----------|
-| Calculators | 8 | Voltage drop, cable sizing, short-circuit, transformer, grounding, solar, power, arc flash |
-| Standards | 4 | KEC DSL, NEC articles, IEC articles, debate protocol |
-| LLM | 4 | Intent parser, output filter, judge, source tracker |
-| Lib/Search | 6 | Rate limit, safety policies, API helpers, query parser |
+| Category | Suites | Tests | Coverage |
+|----------|--------|-------|----------|
+| Calculators | 9 | ~120 | VD, cable, short-circuit, transformer, grounding, solar, power, arc flash, unit conversion |
+| Standards | 4 | ~40 | KEC DSL boundary, NEC articles, IEC articles, debate protocol |
+| LLM | 4 | ~50 | Intent parser, output filter, judge, source tracker |
+| Lib/Search | 4 | ~60 | Rate limit, safety policies (16 injection tests), API helpers, query parser |
+| Agent | 1 | ~10 | Orchestrator, classification, routing |
+| E2E | 1 | 28 | Pages, API, responsive, accessibility (Playwright) |
 
 ---
 
@@ -277,32 +263,18 @@ npm run test:watch      # Watch mode
 ### Self-Documenting
 
 ```
-GET /api/openapi     # OpenAPI 3.1 schema
+GET /api/openapi     # OpenAPI 3.1 schema (auto-generated)
 GET /api/health      # Dependency health dashboard
 ```
 
-### All routes use `withApiHandler()` for consistent response shape:
+### Response Shape (all routes)
 
 ```json
-{
-  "success": true,
-  "data": { ... }
-}
+{ "success": true, "data": { ... } }
 ```
-
 ```json
-{
-  "success": false,
-  "error": {
-    "code": "ESA-3001",
-    "message": "Search query too short"
-  }
-}
+{ "success": false, "error": { "code": "ESA-3001", "message": "..." } }
 ```
-
-### Performance headers on all responses:
-- `X-Response-Time`
-- `Server-Timing`
 
 ### Error Code Ranges
 
@@ -317,23 +289,65 @@ GET /api/health      # Dependency health dashboard
 | ESA-7xxx | Standard Conversion |
 | ESA-9xxx | System |
 
+### Performance Headers
+- `X-Response-Time`, `Server-Timing` on all responses
+
 ---
 
-## Security
+## Roadmap
 
-- `sanitizeInput()` on all user-facing API inputs
-- `assertUrlAllowedForFetch()` on external URLs
-- AES-GCM encryption for BYOK API keys (session-scoped)
-- Rate limiting with sliding window
-- 9 guardrail blocking rules + 11 system prompt rules
-- In-memory Maps with `MAX_ENTRIES` and periodic cleanup
-- No API keys stored server-side
+| Phase | Target | Status |
+|-------|--------|--------|
+| v0.1.0 | Core platform (56 calc, 211 articles, 4-team agent) | ✅ Complete |
+| v0.2.0 | Quality upgrade (IEC tables, DSL AND/OR, retry, accessibility) | ✅ Complete |
+| v0.3.0 | Fine-tuned model (Qwen 3 32B + KEC LoRA) | Planned |
+| v0.4.0 | Dynamic simulation (transient, harmonics) | Planned |
+| v0.5.0 | Protection coordination TCC overlay | Planned |
+| v1.0.0 | Production release + SaaS billing | Planned |
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/                    # Next.js App Router (19 pages, 31 API routes)
+├── agent/                  # 4-Team agent + debate + vision + 17 sandboxes
+├── engine/
+│   ├── calculators/        # 56+ pure-function calculators
+│   ├── standards/          # KEC/NEC/IEC/JIS condition-tree DSL (245+ articles)
+│   ├── constants/          # 170+ electrical constants + calc thresholds
+│   ├── conversion/         # Metric↔Imperial adapter + unit conversion
+│   ├── verification/       # Audit engine + quality checklist + sensitivity
+│   ├── topology/           # BFS graph + DXF/PDF parsers
+│   ├── receipt/            # Receipt generator + SHA-256
+│   └── llm/                # 22 LLM tools + system prompts
+├── data/                   # 250+ IEC terms, 200+ synonyms, ampacity tables, prices
+├── components/             # React components (30+)
+├── lib/                    # Security, rate limit, cache, embedding, AI providers
+└── services/               # Server-side AI streaming providers
+```
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README.md](README.md) | This file — overview and setup |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Detailed system architecture |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development guidelines and conventions |
+| [CHANGELOG.md](CHANGELOG.md) | Version history (v0.1.0, v0.2.0) |
+| [EVALUATION_GUIDE.md](EVALUATION_GUIDE.md) | 10-category evaluation rubric for external review |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
+| [SECURITY.md](.github/SECURITY.md) | Vulnerability reporting + security measures |
+| [LICENSE](LICENSE) | MIT License |
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch strategy, code conventions, and PR process.
 
 ---
 
