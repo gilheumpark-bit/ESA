@@ -17,6 +17,7 @@
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
+import { DEFAULT_REACTANCE_OHM_PER_KM } from '@engine/constants/calc-thresholds';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -77,7 +78,7 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
   } = input;
 
   const rho = conductor === 'Cu' ? RESISTIVITY_CU : RESISTIVITY_AL;
-  const X = X_input ?? 0.08; // Ohm/km default
+  const X = X_input ?? DEFAULT_REACTANCE_OHM_PER_KM;
 
   const steps: CalcStep[] = [];
 

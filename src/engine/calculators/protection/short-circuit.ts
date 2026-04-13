@@ -15,6 +15,7 @@
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { getCableImpedance } from '@/data/transformer/transformer-db';
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { DEFAULT_REACTANCE_OHM_PER_KM, getKappaFactor } from '@engine/constants/calc-thresholds';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -65,7 +66,7 @@ export function calculateShortCircuit(input: ShortCircuitInput): DetailedCalcRes
   } = input;
 
   const rho = conductor === 'Cu' ? RESISTIVITY_CU : RESISTIVITY_AL;
-  const X_per_km = X_input ?? 0.08;
+  const X_per_km = X_input ?? DEFAULT_REACTANCE_OHM_PER_KM;
   const S_VA = S_kVA * 1000;
 
   const steps: CalcStep[] = [];
@@ -126,8 +127,8 @@ export function calculateShortCircuit(input: ShortCircuitInput): DetailedCalcRes
     unit: 'kA',
   });
 
-  // Step 6: Peak short-circuit current (IEC 60909 factor 1.8 for LV)
-  const kPeak = 1.8;
+  // Step 6: Peak short-circuit current (IEC 60909 κ factor)
+  const kPeak = getKappaFactor(V);
   const _Ipeak_kA = kPeak * SQRT3 / 2 * Isc_kA; // simplified: ip = kappa * sqrt(2) * Ik
   // More accurate: ip = kappa * sqrt(2) * Ik"
   const Ipeak_accurate = kPeak * Math.SQRT2 * Isc_kA;

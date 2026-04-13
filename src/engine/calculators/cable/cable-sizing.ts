@@ -16,6 +16,8 @@
 
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { DEFAULT_REACTANCE_OHM_PER_KM, getInsulationTempLimit } from '@engine/constants/calc-thresholds';
+import { activeDefaults } from '@/engine/calculators/country-defaults';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -76,7 +78,7 @@ function getAmpacityTable(conductor: ConductorMaterial, insulation: InsulationTy
  * Base: 30 deg C for XLPE (90 deg C rated), 30 deg C for PVC (70 deg C rated)
  */
 function tempCorrectionFactor(ambientTemp: number, insulation: InsulationType): number {
-  const maxTemp = insulation === 'XLPE' ? 90 : 70;
+  const maxTemp = getInsulationTempLimit(insulation);
   const baseAmbient = 30;
   if (ambientTemp >= maxTemp) {
     throw new Error(
@@ -148,7 +150,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     groupCount = 1,
     powerFactor: pf = 0.85,
     phase = 3,
-    dropLimitPercent = 3,
+    dropLimitPercent = activeDefaults().vdBranch,
   } = input;
 
   const steps: CalcStep[] = [];
@@ -191,7 +193,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
 
   // PART 3 — Size selection (ampacity + voltage drop)
   const rho = conductor === 'Cu' ? RESISTIVITY_CU : RESISTIVITY_AL;
-  const X = 0.08; // Ohm/km default reactance
+  const X = DEFAULT_REACTANCE_OHM_PER_KM;
 
   let selectedSize: number | null = null;
   let selectedAmpacity = 0;

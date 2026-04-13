@@ -18,6 +18,7 @@
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { SQRT3 } from '@engine/constants/physical';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
+import { DEFAULT_MOTOR_STARTING_VD_LIMIT } from '@engine/constants/calc-thresholds';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -118,7 +119,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
   // PART 3 — Motor starting voltage drop (if applicable)
   let vdStartPercent = 0;
   let startingPass = true;
-  const allowableStart = input.motorStarting?.allowableStartingDropPercent ?? 15.0;
+  const allowableStart = input.motorStarting?.allowableStartingDropPercent ?? DEFAULT_MOTOR_STARTING_VD_LIMIT;
 
   if (input.motorStarting) {
     const ms = input.motorStarting;
