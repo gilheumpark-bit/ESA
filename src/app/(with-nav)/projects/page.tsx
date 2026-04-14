@@ -43,15 +43,15 @@ type FilterMode = 'all' | 'owned' | 'shared';
 const ROLE_BADGES: Record<string, { label: string; color: string; icon: typeof Crown }> = {
   owner: { label: 'Owner', color: 'bg-amber-100 text-amber-800', icon: Crown },
   editor: { label: 'Editor', color: 'bg-blue-100 text-blue-800', icon: Pencil },
-  viewer: { label: 'Viewer', color: 'bg-gray-100 text-gray-600', icon: Eye },
+  viewer: { label: 'Viewer', color: 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]', icon: Eye },
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-200 text-gray-700',
+  draft: 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]',
   active: 'bg-green-100 text-green-800',
   review: 'bg-yellow-100 text-yellow-800',
   approved: 'bg-blue-100 text-blue-800',
-  archived: 'bg-gray-100 text-gray-500',
+  archived: 'bg-[var(--bg-secondary)] text-[var(--text-tertiary)]',
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -68,15 +68,15 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="block rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md hover:border-blue-300"
+      className="block rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 shadow-sm transition-all hover:shadow-md hover:border-[var(--color-primary)]"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 truncate">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] truncate">
             {project.name}
           </h3>
           {project.description && (
-            <p className="mt-1 text-sm text-gray-500 line-clamp-2">
+            <p className="mt-1 text-sm text-[var(--text-tertiary)] line-clamp-2">
               {project.description}
             </p>
           )}
@@ -93,7 +93,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
+      <div className="mt-4 flex items-center gap-4 text-sm text-[var(--text-tertiary)]">
         <span className="inline-flex items-center gap-1">
           <Users className="h-4 w-4" />
           {project.memberCount}
@@ -130,15 +130,15 @@ function FilterBar({
 
   return (
     <div className="flex items-center gap-2">
-      <Filter className="h-4 w-4 text-gray-400" />
+      <Filter className="h-4 w-4 text-[var(--text-tertiary)]" />
       {filters.map(({ mode, label }) => (
         <button
           key={mode}
           onClick={() => onFilterChange(mode)}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             filter === mode
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              ? 'bg-[var(--color-primary)] text-white'
+              : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
           }`}
         >
           {label}
@@ -183,18 +183,18 @@ export default function ProjectsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FolderOpen className="h-7 w-7 text-blue-600" />
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <FolderOpen className="h-7 w-7 text-[var(--color-primary)]" />
             프로젝트
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-[var(--text-tertiary)]">
             계산 결과를 프로젝트로 묶어 팀과 공유하세요
           </p>
         </div>
 
         <Link
           href="/projects/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-[var(--color-primary-hover)] transition-colors"
         >
           <Plus className="h-4 w-4" />
           새 프로젝트
@@ -210,7 +210,7 @@ export default function ProjectsPage() {
       {loading ? (
         <div className="grid gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse rounded-xl border border-gray-200 bg-white p-5 h-28" />
+            <div key={i} className="animate-pulse rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 h-28" />
           ))}
         </div>
       ) : error ? (
@@ -218,15 +218,15 @@ export default function ProjectsPage() {
           {error}
         </div>
       ) : projects.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-          <FolderOpen className="mx-auto h-12 w-12 text-gray-300" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">프로젝트가 없습니다</h3>
-          <p className="mt-2 text-sm text-gray-500">
+        <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] p-12 text-center">
+          <FolderOpen className="mx-auto h-12 w-12 text-[var(--text-tertiary)]" />
+          <h3 className="mt-4 text-lg font-medium text-[var(--text-primary)]">프로젝트가 없습니다</h3>
+          <p className="mt-2 text-sm text-[var(--text-tertiary)]">
             새 프로젝트를 만들어 계산 결과를 정리하세요.
           </p>
           <Link
             href="/projects/new"
-            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
           >
             <Plus className="h-4 w-4" />
             첫 프로젝트 만들기

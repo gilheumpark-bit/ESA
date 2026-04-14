@@ -14,6 +14,7 @@
  */
 
 import type { DetailedCalcResult, CalcStep } from '../types';
+import { assertRange } from '../types';
 import {
   IEEE_1584_ARC_CURRENT,
   IEEE_1584_DISTANCE_EXPONENT,
@@ -195,16 +196,10 @@ function determinePPE(incidentEnergy: number): PPEInfo {
 export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   const steps: CalcStep[] = [];
 
-  // 입력 검증
-  if (input.voltage_V < 208 || input.voltage_V > 15000) {
-    throw new Error('ESVA-4401: 전압 범위 초과 (208V~15,000V)');
-  }
-  if (input.boltedFaultCurrent_kA < 0.2 || input.boltedFaultCurrent_kA > 106) {
-    throw new Error('ESVA-4402: 단락전류 범위 초과 (0.2~106kA)');
-  }
-  if (input.arcDuration_s <= 0 || input.arcDuration_s > 10) {
-    throw new Error('ESVA-4403: 아크 지속시간 범위 초과 (0~10s)');
-  }
+  // 입력 검증 — IEEE 1584-2018 적용 범위
+  assertRange(input.voltage_V, 208, 15000, 'voltage_V');
+  assertRange(input.boltedFaultCurrent_kA, 0.2, 106, 'boltedFaultCurrent_kA');
+  assertRange(input.arcDuration_s, 0.001, 10, 'arcDuration_s');
 
   // Step 1: 아크 전류 계산
   const { arcCurrent_kA, variationFactor } = calculateArcingCurrent(

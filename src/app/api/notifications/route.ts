@@ -13,17 +13,57 @@ import {
   markAllRead,
   type NotificationType,
 } from '@/lib/notifications';
+import { verifyIdToken } from '@/lib/firebase-id-token';
+
+/** Authorization 헤더에서 Firebase JWT를 검증하고 uid를 반환 */
+async function authenticateRequest(
+  req: NextRequest,
+): Promise<{ uid: string } | NextResponse> {
+  const authHeader =
+    req.headers.get('Authorization') ?? req.headers.get('authorization');
+  const token = authHeader?.replace('Bearer ', '');
+  if (!token) {
+    return NextResponse.json(
+      { error: 'Authentication required' },
+      { status: 401 },
+    );
+  }
+  try {
+    const decoded = await verifyIdToken(token);
+    if (!decoded?.uid) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+    return { uid: decoded.uid };
+  } catch {
+    return NextResponse.json(
+      { error: 'Authentication failed' },
+      { status: 401 },
+    );
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
 
+    // ── Auth: require valid Firebase JWT ──
+    const auth = await authenticateRequest(req);
+    if (auth instanceof NextResponse) return auth;
+
     const { searchParams } = req.nextUrl;
     const userId = searchParams.get('userId');
 
     if (!userId) {
       return NextResponse.json({ error: 'userId required' }, { status: 400 });
+    }
+
+    // ── 요청자가 본인의 알림만 조회 가능 ──
+    if (userId !== auth.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden: cannot access another user\'s notifications' },
+        { status: 403 },
+      );
     }
 
     const page = parseInt(searchParams.get('page') ?? '1', 10);
@@ -51,6 +91,10 @@ export async function PATCH(req: NextRequest) {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
 
+    // ── Auth: require valid Firebase JWT ──
+    const auth = await authenticateRequest(req);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await req.json();
     const { notificationId, userId, markAll } = body as {
       notificationId?: string;
@@ -58,11 +102,19 @@ export async function PATCH(req: NextRequest) {
       markAll?: boolean;
     };
 
-    // userId 필수 검증 (인증 대리)
+    // userId 필수 검증
     if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
       return NextResponse.json(
         { error: 'userId is required and must be a non-empty string' },
         { status: 400 },
+      );
+    }
+
+    // ── 요청자가 본인의 알림만 수정 가능 ──
+    if (userId !== auth.uid) {
+      return NextResponse.json(
+        { error: 'Forbidden: cannot modify another user\'s notifications' },
+        { status: 403 },
       );
     }
 

@@ -192,6 +192,41 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
 // PART 4 — GET handler
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Supabase profiles 테이블에서 사용자 role을 조회하여 admin 여부 확인.
+ * Supabase 미연결 시 ADMIN_API_TOKEN 환경변수로 폴백.
+ */
+async function checkAdminRole(uid: string, rawToken: string): Promise<boolean> {
+  // 1차: Supabase profiles 테이블에서 role 확인
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (url && serviceKey) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(url, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', uid)
+        .single();
+
+      if (data?.role === 'admin') return true;
+    }
+  } catch {
+    // Supabase 조회 실패 → 폴백으로 진행
+  }
+
+  // 2차 폴백: ADMIN_API_TOKEN 환경변수 대조
+  const adminToken = process.env.ADMIN_API_TOKEN;
+  if (adminToken && rawToken === adminToken) return true;
+
+  return false;
+}
+
 export async function GET(request: NextRequest) {
   // ── Auth: require valid Firebase JWT ──
   const authHeader = request.headers.get('Authorization') ?? request.headers.get('authorization');
@@ -200,13 +235,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
+  let uid: string;
   try {
     const decoded = await verifyIdToken(token);
     if (!decoded?.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
+    uid = decoded.uid;
   } catch {
     return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
+  }
+
+  // ── Admin role 검증 ──
+  const isAdmin = await checkAdminRole(uid, token);
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'Forbidden: admin access required' }, { status: 403 });
   }
 
   const liveData = await fetchLiveData();

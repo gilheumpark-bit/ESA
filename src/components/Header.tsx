@@ -100,7 +100,7 @@ function LangSelect({ className }: { className: string }) {
       value={language}
       onChange={handleChange}
       className={className}
-      aria-label="Language"
+      aria-label="언어 선택"
     >
       {SUPPORTED_LANGS.map((lang) => (
         <option key={lang} value={lang}>
