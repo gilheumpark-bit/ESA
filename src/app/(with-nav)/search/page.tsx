@@ -32,8 +32,10 @@ import {
 } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import KnowledgePanel from '@/components/KnowledgePanel';
+import InlineCalcResult from '@/components/InlineCalcResult';
 import { SearchResultSkeleton } from '@/components/SkeletonLoading';
 import { formatApiError } from '@/lib/error-messages';
+import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
 import type {
   SearchResult,
@@ -588,6 +590,8 @@ function SearchPageInner() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') ?? '';
 
+  const calcIntent = query ? analyzeCalcIntent(query) : null;
+
   const [result, setResult] = useState<SearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -698,10 +702,20 @@ function SearchPageInner() {
               {/* Unit conversion card (if query matches pattern) */}
               <UnitConversionCard query={query} />
 
-              {/* Featured calculator */}
-              {result.featuredCalculator && (
+              {/* Featured calculator — inline result if calc intent detected, otherwise link panel */}
+              {calcIntent?.hasCalcIntent && calcIntent.calculatorId ? (
+                <InlineCalcResult
+                  calculatorId={calcIntent.calculatorId}
+                  calculatorName={calcIntent.calculatorName || '계산기'}
+                  extractedParams={calcIntent.extractedParams}
+                  missingRequired={calcIntent.missingRequired}
+                  missingOptional={calcIntent.missingOptional}
+                  allParams={calcIntent.allParams}
+                  canAutoExecute={calcIntent.canAutoExecute}
+                />
+              ) : result.featuredCalculator ? (
                 <FeaturedCalculatorPanel calc={result.featuredCalculator} />
-              )}
+              ) : null}
 
               {/* Document results */}
               <div className="space-y-3">

@@ -5,9 +5,14 @@ import Link from 'next/link';
 import {
   Search, Calculator, FileText, Camera, BarChart3,
   Users, FolderOpen, Shield, Globe, Cpu,
-  BookOpen, ArrowUpRight, Zap, Activity,
+  BookOpen, ArrowUpRight, Zap, Activity, LogIn, LogOut, User,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import ESVALogo from '@/components/ESVALogo';
+import { analyzeCalcIntent, type CalcIntentResult } from '@/lib/calc-intent-bridge';
+import InlineCalcResult from '@/components/InlineCalcResult';
+import QuickCalcButtons from '@/components/QuickCalcButtons';
+import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 
 // ── 실시간 카운터 훅 ──
 function useCountUp(target: number, duration = 1200) {
@@ -34,14 +39,47 @@ function useCountUp(target: number, duration = 1200) {
 }
 
 export default function HomePage() {
+  const { user, signOut } = useAuth();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [calcIntent, setCalcIntent] = useState<CalcIntentResult | null>(null);
 
-  const handleSearch = useCallback(async () => {
-    if (!query.trim()) return;
+  const handleSearch = useCallback(() => {
+    const q = query.trim();
+    if (!q) return;
+
+    // Try to detect calc intent first
+    const intent = analyzeCalcIntent(q);
+    if (intent.hasCalcIntent) {
+      setCalcIntent(intent);
+      return;
+    }
+
+    // Fall through to search page for non-calc queries
     setIsLoading(true);
-    window.location.href = `/search?q=${encodeURIComponent(query.trim())}`;
+    window.location.href = `/search?q=${encodeURIComponent(q)}`;
   }, [query]);
+
+  const handleQuickCalc = useCallback((calculatorId: string) => {
+    const params = CALCULATOR_PARAMS[calculatorId];
+    const names = CALCULATOR_NAMES[calculatorId];
+    if (!params || !names) return;
+
+    const missingRequired = params.filter(p => p.defaultValue === undefined);
+    const missingOptional = params.filter(p => p.defaultValue !== undefined);
+
+    setCalcIntent({
+      hasCalcIntent: true,
+      calculatorId,
+      calculatorName: names.name,
+      extractedParams: {},
+      missingRequired,
+      missingOptional,
+      allParams: params,
+      canAutoExecute: false,
+      confidence: 1,
+    });
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); },
@@ -54,6 +92,32 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg-primary)]" suppressHydrationWarning>
+
+      {/* ═══ 오른쪽 상단 로그인/사용자 ═══ */}
+      <div className="absolute right-4 top-4 z-50 sm:right-6 sm:top-6">
+        {user ? (
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-[var(--text-secondary)] sm:inline">
+              {user.displayName || user.email?.split('@')[0]}
+            </span>
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-secondary)]"
+            >
+              <LogOut size={16} />
+              <span className="hidden sm:inline">로그아웃</span>
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--color-primary-hover)]"
+          >
+            <LogIn size={16} />
+            로그인
+          </Link>
+        )}
+      </div>
 
       {/* ═══ Hero — 전기 엔지니어 전용 느낌 ═══ */}
       <section className="relative overflow-hidden border-b border-[var(--border-default)]">
@@ -107,15 +171,27 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
-              {QUICK_TAGS.map(tag => (
-                <button key={tag} onClick={() => setQuery(tag)}
-                  className="rounded-md border border-[var(--border-default)] px-2 py-0.5 text-[10px] text-[var(--text-tertiary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
-                  {tag}
-                </button>
-              ))}
-            </div>
+            {!calcIntent && (
+              <div className="mt-2.5">
+                <QuickCalcButtons onSelect={handleQuickCalc} />
+              </div>
+            )}
           </div>
+
+          {calcIntent?.hasCalcIntent && calcIntent.calculatorId && (
+            <div className="mt-6 w-full max-w-lg mx-auto">
+              <InlineCalcResult
+                calculatorId={calcIntent.calculatorId}
+                calculatorName={calcIntent.calculatorName || '계산기'}
+                extractedParams={calcIntent.extractedParams}
+                missingRequired={calcIntent.missingRequired}
+                missingOptional={calcIntent.missingOptional}
+                allParams={calcIntent.allParams}
+                canAutoExecute={calcIntent.canAutoExecute}
+                onClose={() => setCalcIntent(null)}
+              />
+            </div>
+          )}
         </div>
       </section>
 
