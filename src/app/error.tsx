@@ -59,11 +59,11 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
           <h2 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">
             Error Details (dev only)
           </h2>
-          <p className="mb-1 text-sm text-red-600 dark:text-red-300">
+          <p className="mb-1 text-sm text-[var(--color-error)]">
             {error.message}
           </p>
           {error.digest && (
-            <p className="text-xs text-red-500 dark:text-red-400">
+            <p className="text-xs text-[var(--color-error)]">
               Digest: {error.digest}
             </p>
           )}

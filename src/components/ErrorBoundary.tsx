@@ -77,7 +77,7 @@ function DefaultFallback({
       role="alert"
       className="flex flex-col items-center justify-center gap-4 p-8 text-center"
     >
-      <p className="text-lg font-semibold text-red-600">
+      <p className="text-lg font-semibold text-[var(--color-error)]">
         문제가 발생했습니다
       </p>
       {error && (
@@ -190,7 +190,7 @@ function SectionFallback({
         이 섹션을 불러올 수 없습니다
       </p>
       {error && process.env.NODE_ENV === 'development' && (
-        <p className="text-xs text-red-600">{error.message}</p>
+        <p className="text-xs text-[var(--color-error)]">{error.message}</p>
       )}
       <button
         type="button"

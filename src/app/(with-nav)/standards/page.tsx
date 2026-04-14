@@ -390,7 +390,7 @@ function StandardConvertWidget() {
 
         {/* Result */}
         {error && (
-          <p className="text-xs text-red-500">{error}</p>
+          <p className="text-xs text-[var(--color-error)]">{error}</p>
         )}
         {result && (
           <div className="rounded-lg bg-[var(--bg-secondary)] p-3">

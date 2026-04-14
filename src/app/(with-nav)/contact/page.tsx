@@ -190,7 +190,7 @@ export default function ContactPage() {
 
           {/* Error */}
           {status === 'error' && (
-            <p className="text-sm text-red-500">{errorMsg}</p>
+            <p className="text-sm text-[var(--color-error)]">{errorMsg}</p>
           )}
 
           {/* Submit */}

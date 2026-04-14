@@ -151,7 +151,7 @@ function ScenarioForm({
       </button>
 
       {scenario.error && (
-        <p className="mt-2 text-xs text-red-500">{scenario.error}</p>
+        <p className="mt-2 text-xs text-[var(--color-error)]">{scenario.error}</p>
       )}
     </div>
   );
@@ -405,10 +405,10 @@ export default function ComparePage() {
         </div>
 
         {/* Side-by-side forms */}
-        <div className={`mb-6 grid gap-4 ${
-          scenarios.length === 2 ? 'grid-cols-2' :
-          scenarios.length === 3 ? 'grid-cols-3' :
-          'grid-cols-4'
+        <div className={`mb-6 grid gap-4 grid-cols-1 ${
+          scenarios.length === 2 ? 'sm:grid-cols-2' :
+          scenarios.length === 3 ? 'sm:grid-cols-2 lg:grid-cols-3' :
+          'sm:grid-cols-2 lg:grid-cols-4'
         }`}>
           {scenarios.map((s, i) => (
             <ScenarioForm

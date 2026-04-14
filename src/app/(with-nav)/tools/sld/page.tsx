@@ -515,9 +515,9 @@ export default function SLDAnalysisPage() {
       {/* Error */}
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
           <div>
-            <p className="text-sm text-red-700">{error}</p>
+            <p className="text-sm text-[var(--color-error)]">{error}</p>
             {error.includes('API 키') && (
               <a href="/settings/byok" className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline">
                 BYOK 설정 페이지로 이동 →

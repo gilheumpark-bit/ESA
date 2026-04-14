@@ -488,8 +488,8 @@ export default function OCRNameplatePage() {
       {/* Error */}
       {error && (
         <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
-          <p className="text-sm text-red-700">{error}</p>
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
+          <p className="text-sm text-[var(--color-error)]">{error}</p>
         </div>
       )}
 

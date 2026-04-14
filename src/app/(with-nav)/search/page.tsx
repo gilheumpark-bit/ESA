@@ -312,7 +312,7 @@ function UnitConversionCard({ query }: { query: string }) {
           <Loader2 size={14} className="animate-spin" /> 변환 중...
         </div>
       ) : error ? (
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-sm text-[var(--color-error)]">{error}</p>
       ) : result ? (
         <div>
           <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
@@ -353,7 +353,7 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
         body: JSON.stringify({
           messages: allMessages,
           provider: 'openai',
-          model: 'gpt-4.1-mini',
+          model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-4.1-mini',
           systemPrompt: `You are an electrical engineering assistant for ESVA (전기 검색 AI). Answer in Korean. Be concise. Reference KEC/NEC/IEC standards when relevant. Current query context: "${query}"`,
           temperature: 0.7,
           maxTokens: 1024,
@@ -526,7 +526,7 @@ function YouTubeSummaryCard({ url }: { url: string }) {
         <span className="font-semibold text-red-800 dark:text-red-300">YouTube 요약</span>
       </div>
       {error ? (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-[var(--color-error)]">{error}</p>
       ) : summary ? (
         <div className="space-y-2">
           {summary.title && <p className="font-medium text-red-900 dark:text-red-200">{summary.title}</p>}
