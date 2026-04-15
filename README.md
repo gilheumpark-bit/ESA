@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/gilheumpark-bit/ESA/actions"><img alt="CI" src="https://github.com/gilheumpark-bit/ESA/actions/workflows/ci.yml/badge.svg" /></a>
-  <a href="https://github.com/gilheumpark-bit/ESA/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-blue.svg" /></a>
+  <a href="https://github.com/gilheumpark-bit/ESA/blob/main/LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg" /></a>
   <img alt="Node" src="https://img.shields.io/badge/Node-20+-green.svg" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-blue.svg" />
   <img alt="Tests" src="https://img.shields.io/badge/Tests-22_suites_/_336_pass-brightgreen.svg" />
@@ -341,7 +341,7 @@ src/
 | [EVALUATION_GUIDE.md](EVALUATION_GUIDE.md) | 10-category evaluation rubric for external review |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
 | [SECURITY.md](.github/SECURITY.md) | Vulnerability reporting + security measures |
-| [LICENSE](LICENSE) | MIT License |
+| [LICENSE](LICENSE) | CC BY-NC 4.0 |
 
 ---
 
@@ -353,7 +353,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines, branch strate
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+This project is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) — 비상업적 사용만 허용됩니다. 상업적 이용은 별도 문의 바랍니다.
 
 ---
 
