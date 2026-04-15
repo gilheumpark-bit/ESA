@@ -241,10 +241,14 @@ function ChatPanel({ file }: ChatPanelProps) {
         }),
       });
       const data = await res.json();
-      const answer =
-        data.data?.answer ??
+      // search API: studio mode → data.answer (요약) 또는 data.data.documents 상위 항목 사용
+      const docs: Array<{ title: string; excerpt: string }> = data.data?.documents ?? [];
+      const answer: string =
         data.answer ??
-        '검색 결과를 불러오지 못했습니다. API 키(BYOK)를 확인해 주세요.';
+        data.data?.answer ??
+        (docs.length > 0
+          ? docs.slice(0, 3).map(d => `**${d.title}**\n${d.excerpt}`).join('\n\n')
+          : '검색 결과를 불러오지 못했습니다. API 키(BYOK)를 확인하거나 잠시 후 다시 시도해 주세요.');
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: answer, timestamp: new Date().toLocaleTimeString('ko-KR') },

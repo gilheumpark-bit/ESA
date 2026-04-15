@@ -62,6 +62,12 @@ interface SearchRequestBody {
   countryCode?: CountryCode;
   page?: number;
   pageSize?: number;
+  /**
+   * 'studio': Split-view Studio 모드
+   * — 계산기 즉시 리다이렉트 없이 문서 중심 결과 반환
+   * — 응답에 `answer` 필드 포함 (상위 문서 요약)
+   */
+  mode?: 'studio';
 }
 
 // ─── PART 3: Agent Singleton ────────────────────────────────────
@@ -135,12 +141,14 @@ export async function POST(request: NextRequest) {
     const countryCode = body.countryCode ?? 'KR';
     const page = Math.max(1, body.page ?? 1);
     const pageSize = Math.min(50, Math.max(1, body.pageSize ?? 10));
+    const isStudioMode = body.mode === 'studio';
 
     // Step 1: Parse the query with electrical NER
     const parsed = parseQuery(body.query);
 
     // Step 2: If intent is 'calculate', redirect to calculator suggestion
-    if (parsed.intent === 'calculate' && parsed.suggestedCalculator) {
+    // Studio 모드에서는 계산기 리다이렉트 없이 문서 결과를 반환 (뷰어 컨텍스트에서 전문 문서가 유용)
+    if (!isStudioMode && parsed.intent === 'calculate' && parsed.suggestedCalculator) {
       const entry = CALCULATOR_REGISTRY.get(parsed.suggestedCalculator);
       const featured: FeaturedCalculator | undefined = entry
         ? {
@@ -424,6 +432,17 @@ export async function POST(request: NextRequest) {
       latencyMs: Math.round(performance.now() - start),
     };
 
+    // Studio 모드: 상위 문서를 요약한 `answer` 필드 추가 (ChatPanel에서 직접 표시)
+    const studioAnswer = isStudioMode
+      ? (agentResponse?.answer) ??
+        (paginated.length > 0
+          ? paginated
+              .slice(0, 3)
+              .map(r => `**${r.document.title}**\n${r.document.excerpt}`)
+              .join('\n\n')
+          : null)
+      : undefined;
+
     void logAudit({
       tenantId: getDefaultTenantId(),
       userId: 'anonymous',
@@ -439,7 +458,7 @@ export async function POST(request: NextRequest) {
     }).catch(() => undefined);
 
     return jsonWithEsa(
-      { success: true, data: result },
+      { success: true, data: result, ...(studioAnswer !== undefined && { answer: studioAnswer }) },
       {
         status: 200,
         headers: {

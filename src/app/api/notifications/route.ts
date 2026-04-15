@@ -8,12 +8,18 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  createNotification,
   getUserNotifications,
   markRead,
   markAllRead,
   type NotificationType,
 } from '@/lib/notifications';
 import { verifyIdToken } from '@/lib/firebase-id-token';
+
+const VALID_TYPES: NotificationType[] = [
+  'standard_update', 'keyword_news', 'cert_dday', 'calc_complete',
+  'project_invite', 'community_answer', 'system',
+];
 
 /** Authorization 헤더에서 Firebase JWT를 검증하고 uid를 반환 */
 async function authenticateRequest(
@@ -84,6 +90,63 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+// ─── POST: 알림 생성 (내부 서버 → 서버 또는 인증된 클라이언트) ─────────────
+
+export async function POST(req: NextRequest) {
+  try {
+    const blocked = applyRateLimit(req, 'default');
+    if (blocked) return blocked;
+
+    // 내부 서버 간 호출 (field-complete → notifications)은 x-internal 헤더로 인증
+    // 외부 클라이언트 호출은 Firebase JWT 필요
+    const isInternal = req.headers.get('x-internal') === 'field-complete';
+
+    if (!isInternal) {
+      const auth = await authenticateRequest(req);
+      if (auth instanceof NextResponse) return auth;
+    }
+
+    const body = await req.json() as {
+      userId: string;
+      type: NotificationType;
+      title: string;
+      message?: string;
+      link?: string;
+      metadata?: Record<string, unknown>;
+    };
+
+    const { userId, type, title, message, link } = body;
+
+    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+      return NextResponse.json({ error: 'userId 필수' }, { status: 400 });
+    }
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return NextResponse.json({ error: 'title 필수' }, { status: 400 });
+    }
+    if (!type || !VALID_TYPES.includes(type)) {
+      return NextResponse.json(
+        { error: `유효하지 않은 type. 가능: ${VALID_TYPES.join(', ')}` },
+        { status: 400 },
+      );
+    }
+
+    const notification = await createNotification({
+      userId,
+      type,
+      title,
+      body: message ?? '',
+      link: link ?? undefined,
+    });
+
+    return NextResponse.json({ success: true, notification });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '알림 생성 실패';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+// ─── PATCH: 읽음 처리 ────────────────────────────────────────────────────────
 
 export async function PATCH(req: NextRequest) {
   try {

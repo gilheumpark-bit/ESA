@@ -74,27 +74,34 @@ export const POST = withApiHandler(
       disclaimer: '본 영수증은 데이터 무결성을 증명하며, 법적 책임의 대체 수단이 아닙니다.',
     };
 
-    // ── 관리자 알림 발송 (in-app 알림 시스템 활용)
+    // ── 관리자 알림 발송 (in-app 알림 시스템 활용) — Promise.allSettled로 실패 추적
     const notifResult: { sent: number; failed: number } = { sent: 0, failed: 0 };
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
-    for (const supervisorId of supervisorIds ?? []) {
-      try {
-        // 내부 notifications 시스템 호출 (fire-and-forget)
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-        void fetch(`${baseUrl}/api/notifications`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-internal': 'field-complete' },
-          body: JSON.stringify({
-            userId: supervisorId,
-            type: 'system',
-            title: `[현장 완료] ${ctx.sanitize(workSite)}`,
-            message: `작업자 ${workerCount}명 전원 이상 없음, 작업 종료. 영수증 SHA-256: ${hash.slice(0, 12)}…${note ? ` / ${ctx.sanitize(note)}` : ''}`,
-            metadata: { hash, sessionId },
-          }),
-        }).catch(() => null);
+    const notifPromises = (supervisorIds ?? []).map(async (supervisorId) => {
+      const res = await fetch(`${baseUrl}/api/notifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal': 'field-complete' },
+        body: JSON.stringify({
+          userId: supervisorId,
+          type: 'system',
+          title: `[현장 완료] ${ctx.sanitize(workSite)}`,
+          message: `작업자 ${workerCount}명 전원 이상 없음, 작업 종료. 영수증 SHA-256: ${hash.slice(0, 12)}…${note ? ` / ${ctx.sanitize(note)}` : ''}`,
+          metadata: { hash, sessionId },
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} — supervisorId=${supervisorId}`);
+      }
+    });
+
+    const results = await Promise.allSettled(notifPromises);
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
         notifResult.sent++;
-      } catch {
+      } else {
         notifResult.failed++;
+        console.error('[field/complete] 알림 발송 실패:', r.reason instanceof Error ? r.reason.message : r.reason);
       }
     }
 

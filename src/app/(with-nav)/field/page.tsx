@@ -106,9 +106,18 @@ export default function FieldSafetyPage() {
 
   const handleSos = useCallback((ts: number) => {
     setSosLog(prev => [...prev, ts]);
-    // 실제 SOS: /api/field/complete API 또는 알림 시스템 호출
-    console.warn('[ESVA 데드맨] SOS 발동:', new Date(ts).toISOString());
-  }, []);
+    // SOS 신호 → /api/field/sos 전송 (best-effort: 클라이언트 이벤트 특성상 fire-and-forget 허용)
+    void fetch('/api/field/sos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        workSite: analysis?.intent.location?.ko ?? '현장',
+        sosTimestamp: ts,
+        workers: analysis?.intent.workers ?? 0,
+      }),
+    }).catch(err => console.error('[ESVA SOS] 전송 실패:', err));
+  }, [sessionId, analysis]);
 
   const handleWorkComplete = async () => {
     if (!analysis) return;

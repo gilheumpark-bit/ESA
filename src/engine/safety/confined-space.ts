@@ -189,13 +189,45 @@ const HEAT_CHECK_ITEMS: Omit<SafetyCheckItem, 'isMissing'>[] = [
 // PART 2 — 조건부 항목 생성 함수
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** 입력 기반 누락 항목 판정 (현재 버전: 모두 '입력 없음 = 미확인 = isMissing') */
+/**
+ * 입력 기반 누락 항목 판정
+ *
+ * 기본: 모든 체크 항목 = isMissing: true (작업 전 물리적 확인 필요)
+ * 인텐트 추론 가능 항목:
+ *   cs-04 (감시인): 관리자 1명 이상 명시 → isMissing: false (배치 가능 상태)
+ *   cs-04 (감시인): 관리자 0명 → 설명에 경고 문구 추가
+ *
+ * 주의: isMissing: false = "배치 가능" ≠ "물리적으로 완료됨"
+ *       체크리스트에서 최종 확인은 작업자가 직접 수행해야 함.
+ */
 function markMissing(
   items: Omit<SafetyCheckItem, 'isMissing'>[],
+  intent?: SafetyIntentResult,
 ): SafetyCheckItem[] {
-  // v0 전략: 체크 항목 전부 "확인 필요"로 표시
-  // v1에서는 체크박스 상태 저장 후 실제 isMissing 분기
-  return items.map(item => ({ ...item, isMissing: true }));
+  return items.map(item => {
+    // cs-04: 외부 감시인 — 관리자 인원으로 가용성 추론
+    if (item.id === 'cs-04' && intent !== undefined) {
+      const supervisorCount = intent.supervisors ?? 0;
+      if (supervisorCount >= 1) {
+        return {
+          ...item,
+          isMissing: false,
+          description:
+            `${item.description} ` +
+            `[관리자 ${supervisorCount}명 명시됨 — 외부 배치 여부 현장 확인 필수]`,
+        };
+      }
+      // 관리자 0명: 더 강한 경고 문구
+      return {
+        ...item,
+        isMissing: true,
+        alternative:
+          `⚠️ 관리자/감시인 미명시. ${item.alternative}`,
+      };
+    }
+    // 그 외: 작업 전 미확인 상태로 초기화
+    return { ...item, isMissing: true };
+  });
 }
 
 /** 전체 위험도 계산 */
@@ -230,25 +262,25 @@ export function analyzeSafety(intent: SafetyIntentResult): SafetyAnalysisResult 
 
   // 밀폐공간 기본 항목
   if (intent.isConfinedSpace) {
-    allItems.push(...markMissing(CONFINED_SPACE_MANDATORY));
+    allItems.push(...markMissing(CONFINED_SPACE_MANDATORY, intent));
   }
 
   // 우천 추가 항목
   const hasRain = intent.weather.some(w => w.condition === 'rain');
   if (hasRain) {
-    allItems.push(...markMissing(RAIN_CHECK_ITEMS));
+    allItems.push(...markMissing(RAIN_CHECK_ITEMS, intent));
   }
 
   // 활선 작업 추가 항목
   const hasLiveWork = intent.workTypes.some(w => w.isLiveWork);
   if (hasLiveWork) {
-    allItems.push(...markMissing(LIVE_WORK_CHECK_ITEMS));
+    allItems.push(...markMissing(LIVE_WORK_CHECK_ITEMS, intent));
   }
 
   // 폭염 추가 항목
   const hasHeat = intent.weather.some(w => w.condition === 'extreme_heat');
   if (hasHeat) {
-    allItems.push(...markMissing(HEAT_CHECK_ITEMS));
+    allItems.push(...markMissing(HEAT_CHECK_ITEMS, intent));
   }
 
   // 위치가 없거나 일반 실내/옥외인 경우 기본 전기 안전 항목 추가
@@ -273,7 +305,7 @@ export function analyzeSafety(intent: SafetyIntentResult): SafetyAnalysisResult 
           riskLevel: 'high',
           alternative: '절연화 없으면 고무창 신발. 슬리퍼, 샌들 금지.',
         },
-      ]),
+      ], intent),
     );
   }
 
