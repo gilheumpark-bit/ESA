@@ -23,6 +23,8 @@ import {
   BookOpen,
   FileText,
   ClipboardCheck,
+  HardHat,
+  Columns2,
 } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import ESVALogo from '@/components/ESVALogo';
@@ -42,13 +44,15 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/search', label: '검색', icon: Search },
-  { href: '/calc', label: '계산기', icon: Calculator },
-  { href: '/tools/sld', label: 'SLD 분석', icon: Zap },
-  { href: '/standards', label: '기준서', icon: FileText },
-  { href: '/glossary', label: '용어사전', icon: BookOpen },
-  { href: '/report/demo', label: '검증보고서', icon: ClipboardCheck },
-  { href: '/settings', label: '설정', icon: Settings },
+  { href: '/search',       label: '검색',    icon: Search },
+  { href: '/calc',         label: '계산기',   icon: Calculator },
+  { href: '/field',        label: '현장안전', icon: HardHat },
+  { href: '/tools/studio', label: 'Studio',  icon: Columns2 },
+  { href: '/tools/sld',    label: 'SLD',     icon: Zap },
+  { href: '/standards',    label: '기준서',   icon: FileText },
+  { href: '/glossary',     label: '용어사전', icon: BookOpen },
+  { href: '/report/demo',  label: '검증보고서', icon: ClipboardCheck },
+  { href: '/settings',     label: '설정',    icon: Settings },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
