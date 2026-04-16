@@ -22,6 +22,8 @@ import { STANDARD_REFS, type StandardRef } from '@/data/standards/standard-refs'
 import { KEC_ARTICLES } from '@/engine/standards/kec';
 import { NEC_ARTICLES_FULL } from '@/engine/standards/nec/nec-articles';
 import { IEC_ARTICLES } from '@/engine/standards/iec/iec-articles';
+import { NER_ARTICLES, type NerArticle } from '@/engine/standards/ner/ner-articles';
+import { ESA_ARTICLES, type EsaArticle } from '@/engine/standards/esa/esa-articles';
 import StandardsTree from '@/components/StandardsTree';
 import SplitView from '@/components/SplitView';
 import { getExamFrequency } from '@/data/exam-frequency/exam-frequency';
@@ -34,7 +36,7 @@ import type { CodeArticle } from '@/engine/standards/kec/types';
 
 const COUNTRY_FILTERS = [
   { value: '', label: '전체' },
-  { value: 'KR', label: '한국 (KEC)' },
+  { value: 'KR', label: '한국 (KEC·NER·ESA)' },
   { value: 'US', label: '미국 (NEC)' },
   { value: 'JP', label: '일본 (JIS)' },
   { value: 'INT', label: '국제 (IEC/IEEE)' },
@@ -89,25 +91,44 @@ function DetailPanel({
     const clause = ref_.clause;
     if (!clause) return articles;
 
-    // KEC
     if (ref_.standard.startsWith('KEC')) {
       KEC_ARTICLES.forEach((article) => {
         if (article.article.startsWith(clause)) articles.push(article);
       });
     }
-    // NEC
     if (ref_.standard.startsWith('NEC')) {
       NEC_ARTICLES_FULL.forEach((article) => {
         if (article.article.startsWith(clause)) articles.push(article);
       });
     }
-    // IEC
     if (ref_.standard.startsWith('IEC')) {
       IEC_ARTICLES.forEach((article) => {
         if (article.article.startsWith(clause)) articles.push(article);
       });
     }
     return articles;
+  }, [ref_]);
+
+  // NER 조문 조회 (한국전기내선규정)
+  const nerArticles: NerArticle[] = useMemo(() => {
+    if (ref_.standard !== 'NER' || !ref_.clause) return [];
+    const prefix = `NER-${ref_.clause}`;
+    const result: NerArticle[] = [];
+    NER_ARTICLES.forEach((art) => {
+      if (art.id.startsWith(prefix)) result.push(art);
+    });
+    return result;
+  }, [ref_]);
+
+  // ESA 조문 조회 (전기사업법)
+  const esaArticles: EsaArticle[] = useMemo(() => {
+    if (ref_.standard !== 'ESA' || !ref_.clause) return [];
+    const prefix = `ESA-${ref_.clause}`;
+    const result: EsaArticle[] = [];
+    ESA_ARTICLES.forEach((art) => {
+      if (art.id.startsWith(prefix)) result.push(art);
+    });
+    return result;
   }, [ref_]);
 
   const relatedCalcs = STANDARD_CALC_MAP[ref_.id] ?? [];
@@ -196,6 +217,103 @@ function DetailPanel({
                       </li>
                     ))}
                   </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* NER 조문 내용 (한국전기내선규정) */}
+      {nerArticles.length > 0 && (
+        <div className="mb-4">
+          <h3 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">
+            조문 내용 ({nerArticles.length}개)
+          </h3>
+          <div className="space-y-3">
+            {nerArticles.map((art) => (
+              <div
+                key={art.id}
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-tertiary)] p-3"
+              >
+                {/* 조문 번호 + 제목 */}
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  {art.article} — {art.title}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                  내선규정 {art.edition}
+                </p>
+                {/* 핵심 요약 */}
+                <p className="mt-2 rounded bg-[var(--color-primary)]/8 px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)]">
+                  💡 {art.summary}
+                </p>
+                {/* 조문 본문 */}
+                <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--text-secondary)] font-sans">
+                  {art.content}
+                </pre>
+                {/* 규정 표 */}
+                {art.table && art.table.length > 0 && (
+                  <table className="mt-2 w-full text-xs border-collapse">
+                    <tbody>
+                      {art.table.map((row, i) => (
+                        <tr key={i} className={i % 2 === 0 ? 'bg-[var(--bg-secondary)]' : ''}>
+                          <td className="border border-[var(--border-default)] px-2 py-1 font-medium text-[var(--text-secondary)]">{row.label}</td>
+                          <td className="border border-[var(--border-default)] px-2 py-1 text-[var(--text-primary)]">{row.value}</td>
+                          {row.note && <td className="border border-[var(--border-default)] px-2 py-1 text-[var(--text-tertiary)]">{row.note}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {/* 교차 참조 */}
+                {art.crossRef && art.crossRef.length > 0 && (
+                  <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">
+                    참조: {art.crossRef.join(' · ')}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ESA 조문 내용 (전기사업법) */}
+      {esaArticles.length > 0 && (
+        <div className="mb-4">
+          <h3 className="mb-2 text-sm font-semibold text-[var(--text-primary)]">
+            조문 내용 ({esaArticles.length}개)
+          </h3>
+          <div className="space-y-3">
+            {esaArticles.map((art) => (
+              <div
+                key={art.id}
+                className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-tertiary)] p-3"
+              >
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  {art.article} — {art.title}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">
+                  전기사업법 {art.edition}
+                </p>
+                {/* 핵심 요약 */}
+                <p className="mt-2 rounded bg-[var(--color-primary)]/8 px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)]">
+                  💡 {art.summary}
+                </p>
+                {/* 조문 본문 */}
+                <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--text-secondary)] font-sans">
+                  {art.content}
+                </pre>
+                {/* 위반 제재 */}
+                {art.penalty && (
+                  <div className="mt-2 rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+                    ⚠️ {art.penalty}
+                  </div>
+                )}
+                {/* 교차 참조 */}
+                {art.crossRef && art.crossRef.length > 0 && (
+                  <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">
+                    참조: {art.crossRef.join(' · ')}
+                  </p>
                 )}
               </div>
             ))}
