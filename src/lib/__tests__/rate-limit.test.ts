@@ -125,10 +125,12 @@ describe('Rate Limiter - Store', () => {
 // -- IP Extraction Tests -----------------------------------------------------
 
 describe('getClientIp', () => {
-  test('Extracts from x-forwarded-for header', () => {
+  test('Uses the rightmost (trusted-proxy) x-forwarded-for entry, not the spoofable leftmost', () => {
     const headers = new Headers();
+    // The leftmost value (203.0.113.50) is client-suppliable; the rightmost entry
+    // is the one appended by the closest trusted proxy, so it is used for identity.
     headers.set('x-forwarded-for', '203.0.113.50, 70.41.3.18');
-    expect(getClientIp(headers)).toBe('203.0.113.50');
+    expect(getClientIp(headers)).toBe('70.41.3.18');
   });
 
   test('Extracts from x-real-ip header', () => {
@@ -148,10 +150,10 @@ describe('getClientIp', () => {
     expect(getClientIp(headers)).toBe('127.0.0.1');
   });
 
-  test('Prefers x-forwarded-for over other headers', () => {
+  test('Prefers the trusted x-real-ip edge header over client-suppliable x-forwarded-for', () => {
     const headers = new Headers();
     headers.set('x-forwarded-for', '10.0.0.1');
     headers.set('x-real-ip', '10.0.0.2');
-    expect(getClientIp(headers)).toBe('10.0.0.1');
+    expect(getClientIp(headers)).toBe('10.0.0.2');
   });
 });
