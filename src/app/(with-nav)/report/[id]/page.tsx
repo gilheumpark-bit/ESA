@@ -22,6 +22,7 @@ export default function ReportPage() {
   const [report, setReport] = useState<ESVAVerifiedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
     loadReport();
@@ -36,6 +37,7 @@ export default function ReportPage() {
       const cached = sessionStorage.getItem(`esva-report-${reportId}`);
       if (cached) {
         setReport(JSON.parse(cached));
+        setIsDemo(false);
         setLoading(false);
         return;
       }
@@ -44,8 +46,10 @@ export default function ReportPage() {
       // const res = await fetch(`/api/report/${reportId}`);
       // if (res.ok) { const data = await res.json(); setReport(data); }
 
-      // 현재: 데모 보고서 생성
+      // 실제 보고서가 없으면 데모 데이터를 보여주되, 반드시 데모임을 표시한다.
+      // (이전에는 배지 없이 82점·B+ 등급을 실제 결과처럼 노출했다.)
       setReport(generateDemoReport(reportId));
+      setIsDemo(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : '보고서를 불러올 수 없습니다.');
     } finally {
@@ -108,6 +112,20 @@ export default function ReportPage() {
 
   return (
     <div className="px-4 py-8">
+      {/* 데모 데이터 경고 — 실제 검증 결과로 오인 방지 */}
+      {isDemo && (
+        <div
+          role="status"
+          className="mx-auto mb-6 flex max-w-4xl items-start gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <strong>데모 보고서입니다.</strong> 아래 점수·등급·판정은 예시 데이터이며 실제 검증 결과가 아닙니다.
+            실제 보고서는 SLD 분석 등에서 검증을 실행하면 생성됩니다.
+          </div>
+        </div>
+      )}
+
       {/* 게이지 대시보드 */}
       {gaugeResults.length > 0 && (
         <div className="mx-auto mb-6 max-w-4xl">

@@ -93,6 +93,20 @@ export default function VerificationReport({ report, onExport }: Props) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      {/* 사람 검토 필요 — 팀 간 합의 실패 등. 사일런트로 넘어가지 않도록 상단 노출. */}
+      {report.requiresHumanReview && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-2xl border border-[var(--color-error)] bg-red-50 px-5 py-4 text-sm text-[var(--color-error)] dark:bg-red-900/20"
+        >
+          <AlertTriangle size={20} className="mt-0.5 shrink-0" />
+          <div>
+            <strong>사람(PE) 검토가 필요합니다.</strong> 팀 간 검증 합의에 도달하지 못했습니다.
+            아래 판정을 확정 근거로 사용하기 전에 전문 엔지니어의 검토를 받으세요.
+          </div>
+        </div>
+      )}
+
       {/* ═══ PART 1: Header ═══ */}
       <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-6">
         <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">

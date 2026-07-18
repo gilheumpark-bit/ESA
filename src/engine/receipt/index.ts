@@ -16,7 +16,8 @@ export { generateReceipt, ENGINE_VERSION } from './receipt-generator';
 export type { GenerateReceiptOpts } from './receipt-generator';
 
 // Hash / integrity
-export { hashReceipt, verifyReceipt, canonicalize } from './receipt-hash';
+export { hashReceipt, verifyReceipt, canonicalize, claimFromReceipt } from './receipt-hash';
+export type { ReceiptClaim } from './receipt-hash';
 
 // Disclaimer system
 export {

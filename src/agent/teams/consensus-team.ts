@@ -314,6 +314,19 @@ export async function executeConsensusTeam(
     }
   } catch { /* 패턴 매칭/견적 실패해도 보고서 생성은 계속 */ }
 
+  // 에스컬레이션(팀 간 합의 실패) 위반은 반드시 점수·판정·마킹·요약 계산 "전에"
+  // 반영해야 한다. 이전에는 report 조립 이후에 push되어, 합의 실패가 verdict/score/
+  // summary/markings 어디에도 안 잡히고 PASS로 표시되는 버그가 있었다.
+  if (escalation) {
+    merged.allViolations.push({
+      id: 'vio-escalation',
+      severity: 'critical',
+      title: '팀 간 합의 실패',
+      description: escalation.reason,
+      suggestedFix: escalation.suggestedAction,
+    });
+  }
+
   // Step 3: 검증 마킹
   const markings = generateMarkings(merged, input.teamResults);
 
@@ -338,20 +351,12 @@ export async function executeConsensusTeam(
     debateResults,
     markings,
     summary,
+    // 합의 실패 시 사람 검토 필요 신호를 리포트에 노출 (이전엔 debate 결과의
+    // requiresHumanReview를 읽는 production 코드가 0이라 아무 데도 전달 안 됐음).
+    requiresHumanReview: !!escalation,
     receiptIds: [], // 영수증 ID는 export 시 생성
     hash: '', // SHA-256은 최종 확정 시 계산
   };
-
-  // 에스컬레이션 경고
-  if (escalation) {
-    merged.allViolations.push({
-      id: 'vio-escalation',
-      severity: 'critical',
-      title: '팀 간 합의 실패',
-      description: escalation.reason,
-      suggestedFix: escalation.suggestedAction,
-    });
-  }
 
   const teamResult: TeamResult = {
     teamId: 'TEAM-CONSENSUS',
