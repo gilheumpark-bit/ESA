@@ -1,6 +1,9 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/**
+ * Jest config in CommonJS (.js) so Jest can parse it without `ts-node`.
+ * `ts-jest` still transforms the `.test.ts(x)` sources via the `transform` map.
+ * @type {import('jest').Config}
+ */
+const config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
@@ -16,4 +19,4 @@ const config: Config = {
   },
 };
 
-export default config;
+module.exports = config;
