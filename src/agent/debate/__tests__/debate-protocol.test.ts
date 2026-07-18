@@ -1,3 +1,4 @@
+import { describe, test, expect } from '@jest/globals';
 import { detectDisagreements, executeDebateRound, runDebate, validatePhysicsLaw, buildEscalation } from '../debate-protocol';
 import type { TeamResult } from '../../teams/types';
 

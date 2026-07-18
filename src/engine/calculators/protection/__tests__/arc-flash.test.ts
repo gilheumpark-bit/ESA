@@ -1,3 +1,4 @@
+import { describe, test, expect } from '@jest/globals';
 import { calculateArcFlash, type ArcFlashInput } from '../arc-flash';
 
 describe('Arc Flash Calculator (IEEE 1584-2018)', () => {

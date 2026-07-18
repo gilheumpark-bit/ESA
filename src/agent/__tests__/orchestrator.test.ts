@@ -4,6 +4,7 @@
  * 4-Team 오케스트레이터 전체 플로우 검증.
  */
 
+import { describe, test, expect } from '@jest/globals';
 import { classifyInput, routeToTeams } from '../teams/team-registry';
 
 describe('Input Classification', () => {

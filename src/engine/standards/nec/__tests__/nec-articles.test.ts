@@ -1,3 +1,4 @@
+import { describe, test, expect } from '@jest/globals';
 import { NEC_ARTICLES_FULL, getNECArticleCount, getNECArticleFull } from '../nec-articles';
 
 describe('NEC 2023 Articles', () => {

@@ -1,3 +1,4 @@
+import { describe, test, expect } from '@jest/globals';
 import { IEC_ARTICLES, getIECArticleCount, getIECArticle } from '../iec-articles';
 
 describe('IEC 60364 Articles', () => {
