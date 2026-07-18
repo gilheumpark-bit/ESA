@@ -43,14 +43,14 @@
   --ax-radius-card: 12px;
   --ax-radius-icon: 10px;
 
-  font-family: var(--ax-font-sans), 'Apple SD Gothic Neo', system-ui, sans-serif;
+  font-family: var(--font-sans), 'Apple SD Gothic Neo', system-ui, sans-serif;
   color: var(--ax-ink);
   background: var(--ax-paper);
   -webkit-font-smoothing: antialiased;
 }
 
-.ax-serif { font-family: var(--ax-font-serif), 'Noto Serif KR', serif; }
-.ax-mono  { font-family: var(--ax-font-mono), ui-monospace, 'IBM Plex Mono', monospace; }
+.ax-serif { font-family: var(--font-serif), 'Noto Serif KR', serif; }
+.ax-mono  { font-family: var(--font-mono), ui-monospace, 'IBM Plex Mono', monospace; }
 .ax-tnum  { font-variant-numeric: tabular-nums; }
 
 /* 링크 */
