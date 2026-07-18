@@ -51,7 +51,7 @@ const SEVERITY_CONFIG: Record<MarkingSeverity, {
 }> = {
   error:   { icon: XCircle,       color: '#ef4444', bg: '#fef2f2', border: '#fecaca', label: '오류' },
   warning: { icon: AlertTriangle, color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', label: '경고' },
-  info:    { icon: Info,          color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe', label: '정보' },
+  info:    { icon: Info,          color: '#1e3a5f', bg: '#eef2f7', border: '#cdd9e6', label: '정보' },
   success: { icon: CheckCircle2,  color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0', label: '적합' },
 };
 

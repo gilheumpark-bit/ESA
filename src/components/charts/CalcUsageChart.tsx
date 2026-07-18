@@ -29,7 +29,7 @@ interface CalcUsageChartProps {
 }
 
 const COLORS = [
-  '#3b82f6', // blue-500
+  '#1e3a5f', // AX navy (primary)
   '#8b5cf6', // violet-500
   '#06b6d4', // cyan-500
   '#10b981', // emerald-500

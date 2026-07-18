@@ -18,8 +18,8 @@ interface Props {
 const GRADE_COLORS: Record<VerifiedGrade, { bg: string; border: string; text: string }> = {
   'A+': { bg: '#059669', border: '#047857', text: '#ffffff' },
   'A':  { bg: '#10b981', border: '#059669', text: '#ffffff' },
-  'B+': { bg: '#3b82f6', border: '#2563eb', text: '#ffffff' },
-  'B':  { bg: '#60a5fa', border: '#3b82f6', text: '#ffffff' },
+  'B+': { bg: '#1e3a5f', border: '#16304f', text: '#ffffff' },
+  'B':  { bg: '#2d5280', border: '#1e3a5f', text: '#ffffff' },
   'C':  { bg: '#f59e0b', border: '#d97706', text: '#ffffff' },
   'D':  { bg: '#ef4444', border: '#dc2626', text: '#ffffff' },
   'F':  { bg: '#991b1b', border: '#7f1d1d', text: '#ffffff' },
