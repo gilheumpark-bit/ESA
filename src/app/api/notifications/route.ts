@@ -98,9 +98,12 @@ export async function POST(req: NextRequest) {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
 
-    // 내부 서버 간 호출 (field-complete → notifications)은 x-internal 헤더로 인증
-    // 외부 클라이언트 호출은 Firebase JWT 필요
-    const isInternal = req.headers.get('x-internal') === 'field-complete';
+    // 내부 서버 간 호출은 공유 시크릿으로 인증. 이전의 고정 문자열('field-complete')은
+    // 누구나 헤더에 넣을 수 있어 JWT를 우회하고 임의 userId 앞 알림을 주입할 수 있었다.
+    // 시크릿 미설정 시 내부 우회를 비활성화하고 항상 JWT를 요구한다(fail-closed).
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+    const isInternal = !!internalSecret &&
+      req.headers.get('x-internal-secret') === internalSecret;
 
     if (!isInternal) {
       const auth = await authenticateRequest(req);

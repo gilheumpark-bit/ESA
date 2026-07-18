@@ -12,6 +12,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 
 // ---------------------------------------------------------------------------
@@ -106,11 +107,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let receipt: import('@/engine/receipt/types').Receipt;
 
     if (body.receipt) {
+      // 클라이언트가 영수증 객체를 직접 제공 (익명·자기 소유) — 그대로 사용.
       receipt = body.receipt;
     } else {
+      // receiptId로 DB 조회 시에는 소유권 검증 필수 — 미검증이면 SERVICE_ROLE_KEY로
+      // 타인 영수증을 임의 조회하는 IDOR이 된다. 서명 검증된 요청자와 소유자 대조.
+      const requesterId = await extractVerifiedUserId(req);
+      if (!requesterId) {
+        return NextResponse.json(
+          { error: 'ESVA-4010: Authentication required to export a stored receipt' },
+          { status: 401 },
+        );
+      }
       try {
-        const receiptData = await loadReceipt(body.receiptId!);
-        receipt = receiptData as import('@/engine/receipt/types').Receipt;
+        const receiptData = await loadReceipt(body.receiptId!) as
+          import('@/engine/receipt/types').Receipt & { user_id?: string };
+        if (receiptData.user_id && receiptData.user_id !== requesterId) {
+          return NextResponse.json(
+            { error: 'ESVA-4030: You do not have access to this receipt' },
+            { status: 403 },
+          );
+        }
+        receipt = receiptData;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return NextResponse.json(

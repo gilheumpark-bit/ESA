@@ -81,7 +81,13 @@ export const POST = withApiHandler(
     const notifPromises = (supervisorIds ?? []).map(async (supervisorId) => {
       const res = await fetch(`${baseUrl}/api/notifications`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal': 'field-complete' },
+        headers: {
+          'Content-Type': 'application/json',
+          // 공유 시크릿으로 내부 인증 (미설정 시 헤더 생략 → notifications가 JWT 요구).
+          ...(process.env.INTERNAL_API_SECRET
+            ? { 'x-internal-secret': process.env.INTERNAL_API_SECRET }
+            : {}),
+        },
         body: JSON.stringify({
           userId: supervisorId,
           type: 'system',

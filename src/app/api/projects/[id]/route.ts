@@ -13,6 +13,7 @@
 
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import {
   getProject,
   updateProject,
@@ -28,23 +29,9 @@ import { loadCalculation } from '@/lib/supabase';
 // PART 1 — Auth Helper
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    return payload.user_id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
-}
+// 서명 검증 헬퍼로 위임 — 기존 atob-only 디코드는 서명 미검증이라 위조 토큰을 허용했음.
+const extractUserId = (request: NextRequest): Promise<string | null> =>
+  extractVerifiedUserId(request);
 
 function getProjectId(request: NextRequest): string {
   const url = new URL(request.url);
