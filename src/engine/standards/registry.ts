@@ -33,6 +33,7 @@ import { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
 import { NER_ARTICLES, getNERArticle, searchNER, NER_META } from './ner/ner-articles';
 import { ESA_ARTICLES, getESAArticle, searchESA, ESA_META } from './esa/esa-articles';
 import { isPlaceholderThreshold } from './evaluator-guard';
+import { DEDICATED_EVALUATORS } from './dedicated-evaluators';
 export { NEC_ARTICLES_FULL, getNECArticleFull } from './nec/nec-articles';
 export { IEC_ARTICLES, getIECArticle } from './iec/iec-articles';
 export { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
@@ -141,6 +142,14 @@ export function evaluateStandard(
   articleId: string,
   params: Record<string, number>,
 ): JudgmentResult {
+  // 전용 평가기 우선 — 자리표시자 조항 중 실판정으로 승격된 것.
+  // 범용 경로(자리표시자 가드 포함)보다 먼저 조회한다. null이면 폴백.
+  const dedicated = DEDICATED_EVALUATORS.get(articleId);
+  if (dedicated) {
+    const result = dedicated(params);
+    if (result) return result;
+  }
+
   // KEC 라우팅
   if (country === 'KR' || articleId.startsWith('KEC')) {
     return evaluateKEC(articleId, params);
