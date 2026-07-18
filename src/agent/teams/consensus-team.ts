@@ -187,8 +187,9 @@ function computeScore(merged: MergedResults): number {
   if (totalChecks === 0) return 50;
 
   const passedCalcs = (merged.allCalculations ?? []).filter(c => c.compliant).length;
+  // HOLD(RFI 대기)는 검증 미완료 — 분모(totalChecks)에는 남지만 통과로 세지 않는다
   const passedStds = (merged.allStandards ?? []).filter(s =>
-    s.judgment === 'PASS' || s.judgment === 'HOLD'
+    s.judgment === 'PASS'
   ).length;
 
   const passRate = (passedCalcs + passedStds) / totalChecks;
@@ -270,6 +271,18 @@ export async function executeConsensusTeam(
   const debateResults = runDebate(input.teamResults, input.consensusConfig);
   const escalation = buildEscalation(debateResults);
 
+  // 에스컬레이션 경고 — 마킹/점수/판정/등급/요약이 소비하기 전에 위반으로 반영해야
+  // 합의 실패가 verdict(FAIL)·score(-15)·markings·summary에 정상 전파된다.
+  if (escalation) {
+    merged.allViolations.push({
+      id: 'vio-escalation',
+      severity: 'critical',
+      title: '팀 간 합의 실패',
+      description: escalation.reason,
+      suggestedFix: escalation.suggestedAction,
+    });
+  }
+
   // Step 2.5: 표준 도면 패턴 매칭 + 비용 산출
   try {
     const allComponentTypes = input.teamResults
@@ -341,17 +354,6 @@ export async function executeConsensusTeam(
     receiptIds: [], // 영수증 ID는 export 시 생성
     hash: '', // SHA-256은 최종 확정 시 계산
   };
-
-  // 에스컬레이션 경고
-  if (escalation) {
-    merged.allViolations.push({
-      id: 'vio-escalation',
-      severity: 'critical',
-      title: '팀 간 합의 실패',
-      description: escalation.reason,
-      suggestedFix: escalation.suggestedAction,
-    });
-  }
 
   const teamResult: TeamResult = {
     teamId: 'TEAM-CONSENSUS',

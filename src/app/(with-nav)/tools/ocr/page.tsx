@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { decryptKey } from '@/lib/ai-providers';
+import { getCurrentUser } from '@/lib/firebase';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & State
@@ -37,11 +38,14 @@ const DEFAULT_VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;
 /** Read first available vision API key from BYOK localStorage */
 async function getFirstAvailableVisionKey(): Promise<{ provider: string; key: string } | null> {
   if (typeof window === 'undefined') return null;
+  // 복호화 secret으로 로그인 사용자 uid 사용 (BYOK 저장 시와 동일 secret) — 미로그인 시 키 부재 처리
+  const uid = (await getCurrentUser())?.uid;
+  if (!uid) return null;
   for (const provider of DEFAULT_VISION_PROVIDERS) {
     const stored = localStorage.getItem(BYOK_PREFIX + provider);
     if (stored) {
       try {
-        const key = await decryptKey(stored);
+        const key = await decryptKey(stored, uid);
         if (key) return { provider, key };
       } catch { /* skip */ }
     }
@@ -76,6 +80,18 @@ interface OCRResponse {
   error?: string;
 }
 
+// suggestCalculators() (src/lib/ocr-nameplate.ts)가 방출하는 레거시 id를
+// 실제 /calc/[category]/[id] 라우트 id로 정규화 (없으면 그대로 사용).
+// 레거시 id를 그대로 쓰면 calc 라우트의 'calculator not found' 분기로 빠짐.
+const CALC_ID_ALIAS: Record<string, string> = {
+  'motor-starting': 'starting-current',
+  'motor-load': 'motor-capacity',
+  'demand-factor': 'demand-diversity',
+  'load-calculation': 'max-demand',
+  'transformer-sizing': 'transformer-capacity',
+  'power-factor-correction': 'reactive-power',
+};
+
 const CALC_CATEGORY_MAP: Record<string, string> = {
   'voltage-drop': 'voltage-drop',
   'cable-sizing': 'cable',
@@ -88,20 +104,24 @@ const CALC_CATEGORY_MAP: Record<string, string> = {
   'solar-generation': 'renewable',
   'battery-capacity': 'renewable',
   'motor-capacity': 'motor',
+  'starting-current': 'motor',
+  'demand-diversity': 'power',
+  'max-demand': 'power',
+  'reactive-power': 'power',
 };
 
 const CALC_LABELS: Record<string, string> = {
   'voltage-drop': '전압강하 계산',
   'cable-sizing': '케이블 사이즈 선정',
   'breaker-sizing': '차단기 선정',
-  'motor-starting': '모터 기동전류',
-  'motor-load': '모터 부하 계산',
-  'demand-factor': '수용률 계산',
-  'load-calculation': '부하 계산',
-  'transformer-sizing': '변압기 용량',
+  'starting-current': '모터 기동전류',
+  'motor-capacity': '모터 부하 계산',
+  'demand-diversity': '수용률 계산',
+  'max-demand': '부하 계산',
+  'transformer-capacity': '변압기 용량',
   'short-circuit': '단락전류 계산',
   'three-phase-power': '3상 전력 계산',
-  'power-factor-correction': '역률 보상',
+  'reactive-power': '역률 보상',
 };
 
 const PARAM_LABELS: Record<string, string> = {
@@ -343,17 +363,20 @@ function OCRResults({
             이 데이터로 계산하기
           </h3>
           <div className="flex flex-wrap gap-2">
-            {suggestedCalcs.map(calcId => (
-              <Link
-                key={calcId}
-                href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}?${buildCalcParams(result, calcId)}`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)]/5 px-3 py-2 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)] hover:text-white"
-              >
-                <Zap size={12} />
-                {CALC_LABELS[calcId] ?? calcId}
-                <ArrowRight size={12} />
-              </Link>
-            ))}
+            {suggestedCalcs.map(rawId => {
+              const calcId = CALC_ID_ALIAS[rawId] ?? rawId;
+              return (
+                <Link
+                  key={rawId}
+                  href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}?${buildCalcParams(result, calcId)}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)]/5 px-3 py-2 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)] hover:text-white"
+                >
+                  <Zap size={12} />
+                  {CALC_LABELS[calcId] ?? calcId}
+                  <ArrowRight size={12} />
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

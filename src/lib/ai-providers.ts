@@ -138,17 +138,23 @@ export const PROVIDERS: Record<string, AIProvider> = {
 // ─── PART 3: Key Encryption (4-Layer) ─────────────────────────
 
 const ENCRYPTION_VERSION = 4;
+// PBKDF2 salt (버전 고정). 키 재료(keyMaterial)는 상수가 아닌 사용자 고유 secret에서만 파생한다.
 const ESVA_SALT = 'esa-key-v4-2025';
 
-/** Derive an AES-GCM key from the salt (browser-only). */
-async function deriveAesKey(): Promise<CryptoKey | null> {
+/**
+ * Derive an AES-GCM key from a per-user secret (browser-only).
+ * 하드코딩 상수만으로 파생하면 결정론적 난독화에 불과하므로,
+ * 반드시 호출자가 사용자 고유 secret(예: 인증 사용자 uid + 세션 값 조합)을 제공해야 한다.
+ */
+async function deriveAesKey(secret: string): Promise<CryptoKey | null> {
   if (typeof globalThis.crypto?.subtle === 'undefined') return null;
+  if (!secret) throw new Error('encryptKey/decryptKey requires a non-empty user secret');
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(ESVA_SALT), 'PBKDF2', false, ['deriveKey'],
+    'raw', enc.encode(secret), 'PBKDF2', false, ['deriveKey'],
   );
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('esa-static-salt'), iterations: 100_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: enc.encode(ESVA_SALT), iterations: 100_000, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -180,10 +186,10 @@ function xorDecipher(encoded: string, key: string): string {
  * Layer 2: XOR with salt (fallback)
  * Layer 3: Base64 (legacy compat)
  */
-export async function encryptKey(raw: string): Promise<string> {
+export async function encryptKey(raw: string, secret: string): Promise<string> {
   // Try AES-GCM first
   try {
-    const aesKey = await deriveAesKey();
+    const aesKey = await deriveAesKey(secret);
     if (aesKey) {
       const iv = crypto.getRandomValues(new Uint8Array(12));
       const enc = new TextEncoder();
@@ -201,9 +207,9 @@ export async function encryptKey(raw: string): Promise<string> {
     // Fall through to XOR
   }
 
-  // XOR fallback
+  // XOR fallback — 사용자 secret을 키로 사용 (하드코딩 상수 금지)
   try {
-    const xored = xorCipher(raw, ESVA_SALT);
+    const xored = xorCipher(raw, secret);
     return `v3:${xored}`;
   } catch {
     // Base64 legacy
@@ -215,10 +221,10 @@ export async function encryptKey(raw: string): Promise<string> {
  * Decrypt a stored API key.
  * Detects version prefix and uses appropriate layer.
  */
-export async function decryptKey(stored: string): Promise<string> {
+export async function decryptKey(stored: string, secret: string): Promise<string> {
   // v4: AES-GCM
   if (stored.startsWith('v4:')) {
-    const aesKey = await deriveAesKey();
+    const aesKey = await deriveAesKey(secret);
     if (!aesKey) throw new Error('AES-GCM not available for decryption');
     const raw = atob(stored.slice(3));
     const bytes = Uint8Array.from(raw, c => c.charCodeAt(0));
@@ -228,9 +234,9 @@ export async function decryptKey(stored: string): Promise<string> {
     return new TextDecoder().decode(decrypted);
   }
 
-  // v3: XOR
+  // v3: XOR — 사용자 secret을 키로 사용
   if (stored.startsWith('v3:')) {
-    return xorDecipher(stored.slice(3), ESVA_SALT);
+    return xorDecipher(stored.slice(3), secret);
   }
 
   // v2 / v1: Base64
@@ -250,6 +256,9 @@ export async function decryptKey(stored: string): Promise<string> {
 
 const TRANSIENT_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const MAX_RETRIES = 2;
+
+/** 재시도 불가 HTTP 에러 (400/401/403 등 영구 실패 — 즉시 반려) */
+class NonRetryableHttpError extends Error {}
 
 function getBackoffMs(attempt: number): number {
   return Math.min(1000 * 2 ** attempt + Math.random() * 500, 10_000);
@@ -413,7 +422,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
           continue;
         }
         const errBody = await res.text().catch(() => '');
-        throw new Error(`${provider.name} API error ${res.status}: ${errBody.slice(0, 200)}`);
+        throw new NonRetryableHttpError(`${provider.name} API error ${res.status}: ${errBody.slice(0, 200)}`);
       }
 
       // Handle Ollama NDJSON streaming
@@ -427,6 +436,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<string> {
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
       if (opts.signal?.aborted) throw lastError;
+      if (lastError instanceof NonRetryableHttpError) throw lastError;
       if (attempt < MAX_RETRIES) {
         await sleep(getBackoffMs(attempt));
         continue;

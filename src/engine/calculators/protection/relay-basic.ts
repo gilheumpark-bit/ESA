@@ -86,6 +86,10 @@ export function calculateRelayBasic(input: RelayBasicInput): DetailedCalcResult 
 
   // Step 3: 고장 전류 배수 계산
   const faultMultiple = Ifault / Ip;
+  // 반한시 동작을 위해서는 고장전류가 픽업전류(1.3×부하전류)를 초과해야 함 (M > 1)
+  if (faultMultiple <= 1) {
+    throw new Error('faultCurrent must exceed relay pickup current (1.3× loadCurrent) for inverse-time operation');
+  }
   steps.push({
     step: 3,
     title: 'Calculate fault current multiple',

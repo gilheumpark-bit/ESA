@@ -71,11 +71,27 @@ export async function executeCalcChain(steps: ChainStep[]): Promise<ChainResult>
 
       if (step.dependsOn) {
         for (const [inputKey, ref] of Object.entries(step.dependsOn)) {
-          const [prevStepId, outputField] = ref.split('.');
+          // ref 형식: "stepId.field" 또는 "stepId.additionalOutputs.key.value" 등 점(.) 경로 지원
+          const segments = ref.split('.');
+          const prevStepId = segments[0];
+          const path = segments.slice(1);
           const prevOutputs = outputMap.get(prevStepId);
-          if (prevOutputs && outputField in prevOutputs) {
-            resolvedInputs[inputKey] = prevOutputs[outputField];
+
+          // 실패 경로 명시화: 조용히 누락시키지 않고 오류를 던져 잘못된 배선을 즉시 노출한다.
+          if (!prevOutputs) {
+            throw new Error(`dependsOn "${inputKey}" references unknown step "${prevStepId}"`);
           }
+
+          // 점 경로를 따라 중첩 출력(additionalOutputs.key.value 등)까지 탐색
+          let cursor: unknown = prevOutputs;
+          for (const seg of path) {
+            if (cursor !== null && typeof cursor === 'object' && seg in (cursor as Record<string, unknown>)) {
+              cursor = (cursor as Record<string, unknown>)[seg];
+            } else {
+              throw new Error(`step "${prevStepId}" has no output field "${path.join('.')}"`);
+            }
+          }
+          resolvedInputs[inputKey] = cursor;
         }
       }
 
@@ -136,7 +152,14 @@ export async function executeCalcChain(steps: ChainStep[]): Promise<ChainResult>
 // PART 3 — 프리셋 체인 빌더
 // =========================================================================
 
-/** 수배전반 검토 체인: 부하합계 → 변압기 → 단락전류 → 차단기 → 케이블 → 전압강하 */
+/**
+ * 수배전반 검토 체인: 부하합계 → 변압기 → 케이블 → 단락전류 → 차단기 → 전압강하
+ *
+ * 각 스텝은 실제 계산기 계약(입력/출력 필드명)에 정확히 맞춘다.
+ * 어떤 계산기도 전력→전류(kW→A)를 유도하지 않으므로, 설계전류는 빌드 시점에
+ * 3상/단상 전력식으로 산출하여 전류가 필요한 스텝에 리터럴로 주입한다.
+ *   3상: I = P×1000 / (√3 × V × pf),  단상: I = P×1000 / (V × pf)
+ */
 export function buildSubstationReviewChain(
   inputs: {
     totalLoad_kW: number;
@@ -145,77 +168,103 @@ export function buildSubstationReviewChain(
     voltage_V: number;
     cableLength_m: number;
     phase: '1' | '3';
+    /** 변압기 임피던스(%) — 변압기 계산기는 %Z를 산출하지 않으므로 설계값을 지정. 기본 5% */
+    impedancePercent?: number;
+    /** 변압기 효율 — 필수 입력. 기본 0.98 */
+    efficiency?: number;
   },
 ): ChainStep[] {
+  const isThreePhase = inputs.phase === '3';
+  const phaseNum: 1 | 3 = isThreePhase ? 3 : 1;
+  const impedancePercent = inputs.impedancePercent ?? 5;
+  const efficiency = inputs.efficiency ?? 0.98;
+
+  // 빌드 시점 설계전류 산출 (kW→A 유도 계산기가 없으므로 리터럴로 주입)
+  const demandLoad_kW = inputs.totalLoad_kW * inputs.demandFactor;
+  const current_A = isThreePhase
+    ? (demandLoad_kW * 1000) / (Math.sqrt(3) * inputs.voltage_V * inputs.powerFactor)
+    : (demandLoad_kW * 1000) / (inputs.voltage_V * inputs.powerFactor);
+
   return [
     {
+      // 부하합계: value = 수요부하(kW, 수용률 반영)
       id: 'step-1-demand',
       calculatorId: 'max-demand',
       inputs: {
-        loads: JSON.stringify([{ name: 'total', kW: inputs.totalLoad_kW, qty: 1, demandFactor: inputs.demandFactor }]),
+        loads: [
+          { name: 'total', ratedPower: inputs.totalLoad_kW, demandFactor: inputs.demandFactor },
+        ],
         diversityFactor: 1.0,
-        powerFactor: inputs.powerFactor,
       },
     },
     {
+      // 변압기 용량: step-1 value는 이미 수요부하이므로 demandFactor=1.0로 이중 감쇠 방지
       id: 'step-2-transformer',
       calculatorId: 'transformer-capacity',
       inputs: {
-        demandFactor: inputs.demandFactor,
         powerFactor: inputs.powerFactor,
-        growthPercent: 20,
+        efficiency,
+        demandFactor: 1.0,
+        growthMargin: 0.2,
       },
-      dependsOn: { totalLoad: 'step-1-demand.maxDemand_kW' },
+      dependsOn: { totalLoad: 'step-1-demand.value' },
     },
     {
-      id: 'step-3-short-circuit',
-      calculatorId: 'short-circuit',
-      inputs: {
-        secondaryVoltage: inputs.voltage_V,
-        phase: inputs.phase,
-      },
-      dependsOn: {
-        transformerKVA: 'step-2-transformer.selectedCapacity_kVA',
-        impedancePercent: 'step-2-transformer.impedancePercent',
-      },
-    },
-    {
-      id: 'step-4-breaker',
-      calculatorId: 'breaker-sizing',
-      inputs: {
-        voltage: inputs.voltage_V,
-      },
-      dependsOn: {
-        loadCurrent: 'step-1-demand.maxDemand_A',
-        shortCircuitCurrent: 'step-3-short-circuit.shortCircuitCurrent_kA',
-      },
-    },
-    {
-      id: 'step-5-cable',
+      // 케이블 선정: value = 선정 굵기(mm²). 설계전류는 리터럴 주입
+      id: 'step-3-cable',
       calculatorId: 'cable-sizing',
       inputs: {
+        current: current_A,
         voltage: inputs.voltage_V,
         length: inputs.cableLength_m,
         conductor: 'Cu',
         insulation: 'XLPE',
         powerFactor: inputs.powerFactor,
-        phase: inputs.phase,
+        phase: phaseNum,
       },
-      dependsOn: { current: 'step-1-demand.maxDemand_A' },
     },
     {
-      id: 'step-6-voltage-drop',
-      calculatorId: 'voltage-drop',
+      // 단락전류: 변압기 표준용량(additionalOutputs.selectedStandard.value) + 선정 케이블 굵기 참조
+      id: 'step-4-short-circuit',
+      calculatorId: 'short-circuit',
       inputs: {
-        voltage: inputs.voltage_V,
-        length: inputs.cableLength_m,
-        powerFactor: inputs.powerFactor,
-        phase: inputs.phase,
+        systemVoltage: inputs.voltage_V,
+        impedancePercent,
+        cableLength: inputs.cableLength_m,
         conductor: 'Cu',
       },
       dependsOn: {
-        current: 'step-1-demand.maxDemand_A',
-        cableSize: 'step-5-cable.selectedSize_mm2',
+        transformerCapacity: 'step-2-transformer.additionalOutputs.selectedStandard.value',
+        cableSize: 'step-3-cable.value',
+      },
+    },
+    {
+      // 차단기: 설계전류 리터럴 + 단락전류(kA) + 케이블 보정 허용전류로 협조 검토
+      id: 'step-5-breaker',
+      calculatorId: 'breaker-sizing',
+      inputs: {
+        loadCurrent: current_A,
+        voltage: inputs.voltage_V,
+      },
+      dependsOn: {
+        shortCircuitCurrent: 'step-4-short-circuit.value',
+        cableAmpacity: 'step-3-cable.additionalOutputs.correctedAmpacity.value',
+      },
+    },
+    {
+      // 전압강하: 선정 케이블 굵기 참조 + 설계전류 리터럴
+      id: 'step-6-voltage-drop',
+      calculatorId: 'voltage-drop',
+      inputs: {
+        current: current_A,
+        voltage: inputs.voltage_V,
+        length: inputs.cableLength_m,
+        powerFactor: inputs.powerFactor,
+        phase: phaseNum,
+        conductor: 'Cu',
+      },
+      dependsOn: {
+        cableSize: 'step-3-cable.value',
       },
     },
   ];

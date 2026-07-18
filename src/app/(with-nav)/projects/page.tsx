@@ -163,7 +163,11 @@ export default function ProjectsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/projects?filter=${filter}`);
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/projects?filter=${filter}`, { headers });
       if (!res.ok) throw new Error('프로젝트 목록을 불러올 수 없습니다.');
       const data = await res.json();
       setProjects(data.projects ?? []);

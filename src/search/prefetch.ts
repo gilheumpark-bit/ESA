@@ -92,6 +92,13 @@ class LRUCache<V> {
 export type SearchFn = (query: string) => Promise<SearchResult>;
 
 /**
+ * Upper bound on distinct queries holding pending onReady listeners.
+ * Prevents unbounded growth of the listeners Map (project rule: every
+ * in-memory Map must have a MAX_ENTRIES cap + cleanup).
+ */
+const MAX_LISTENER_QUERIES = 100;
+
+/**
  * PrefetchManager: triggers background search after a debounce delay,
  * caches results in an LRU cache, and aborts in-flight requests
  * when the query changes.
@@ -198,10 +205,21 @@ export class PrefetchManager {
       return;
     }
 
-    // Register listener
-    const existing = this.listeners.get(normalized) ?? [];
-    existing.push(callback);
-    this.listeners.set(normalized, existing);
+    // Register listener. Bound the Map: if at capacity for a *new* query,
+    // evict the oldest listener entry (insertion-ordered) so aborted/never-
+    // revisited queries cannot grow the Map without limit.
+    const existing = this.listeners.get(normalized);
+    if (existing) {
+      existing.push(callback);
+      return;
+    }
+    if (this.listeners.size >= MAX_LISTENER_QUERIES) {
+      const oldest = this.listeners.keys().next().value;
+      if (oldest !== undefined) {
+        this.listeners.delete(oldest);
+      }
+    }
+    this.listeners.set(normalized, [callback]);
   }
 
   /**
@@ -285,6 +303,11 @@ export class PrefetchManager {
       }
     } finally {
       this.inFlight.delete(normalizedQuery);
+      // Cleanup: on the abort/error paths the success block above never ran,
+      // so any pending listeners for this query would leak forever (the query
+      // has been abandoned). Drop them here. On the success path this entry
+      // was already deleted, so this is a harmless no-op.
+      this.listeners.delete(normalizedQuery);
       if (this.currentQuery === normalizedQuery) {
         this.currentQuery = null;
         this.currentAbort = null;

@@ -12,6 +12,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getProject,
@@ -28,22 +29,10 @@ import { loadCalculation } from '@/lib/supabase';
 // PART 1 — Auth Helper
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// 서명 검증된 Firebase ID 토큰에서만 userId 추출 (JWT 서명 미검증 spoofing 방지).
+// atob 디코딩은 서명을 검증하지 않아 alg=none / 위조 sub 로 타인 계정 사칭이 가능하므로 사용 금지.
 async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    return payload.user_id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
+  return extractVerifiedUserId(request);
 }
 
 function getProjectId(request: NextRequest): string {

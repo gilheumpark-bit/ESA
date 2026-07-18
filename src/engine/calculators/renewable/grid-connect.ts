@@ -119,7 +119,8 @@ export function calculateGridConnect(input: GridConnectInput): DetailedCalcResul
   });
 
   // PART 3 -- Result assembly
-  const pass = maxExport <= contractDemand;
+  // 클램핑 이전 총 발전량 기준으로 계약전력 초과(역송 제한) 여부 판정
+  const pass = totalGeneration <= contractDemand;
   return {
     value: round(maxExport, 2),
     unit: 'kW',
@@ -131,8 +132,9 @@ export function calculateGridConnect(input: GridConnectInput): DetailedCalcResul
     ],
     judgment: createJudgment(
       pass,
-      `${connectionType === 'low' ? '저압' : '고압'} 연계, 최대 역송 ${round(maxExport, 2)} kW, CT ${ctRatio}`,
-      'info',
+      `${connectionType === 'low' ? '저압' : '고압'} 연계, 최대 역송 ${round(maxExport, 2)} kW, CT ${ctRatio}`
+        + (pass ? '' : ` — 총 발전 ${round(totalGeneration, 2)}kW > 계약전력 ${contractDemand}kW: 역송 제한(curtailment) 발생`),
+      pass ? 'info' : 'warning',
     ),
     additionalOutputs: {
       maxExportPower:  { value: round(maxExport, 2),   unit: 'kW' },

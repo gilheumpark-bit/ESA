@@ -83,7 +83,7 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
   }
 
   const { loads, futureGrowth, redundancy } = input;
-  const _V = input.systemVoltage ?? 22900;
+  const V = input.systemVoltage ?? 22900;
   const sqrt3 = Math.sqrt(3);
 
   // PART 2 -- Derivation
@@ -114,9 +114,9 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
   });
 
   // Step 3: Transformer selection
-  const trRequired = redundancy === 'N+1'
-    ? totalWithGrowth / 2  // Each transformer handles 50% in N+1
-    : totalWithGrowth;
+  // N+1 진성 예비: 각 변압기가 설계부하 전량을 단독 부담해야 하므로 100% 용량 선정
+  // (N+1 = 필요 1대 + 예비 1대, 총 2대. 1대 고장 시 잔여 1대가 전 부하 감당)
+  const trRequired = totalWithGrowth;
   const trSize = selectTransformer(trRequired);
   const trCount = redundancy === 'N+1' ? 2 : 1;
   steps.push({
@@ -148,6 +148,16 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
     unit: 'A',
   });
 
+  // Step 6: 수전 전압측(HV) 수전 전류 — systemVoltage(수전전압) 기준
+  const IhvIncoming = (totalWithGrowth * 1000) / (sqrt3 * V);
+  steps.push({
+    step: 6,
+    title: '수전전압측 수전전류 (HV-side incoming current)',
+    formula: 'I_{HV} = \\frac{S_{design} \\times 1000}{\\sqrt{3} \\times V_{sys}}',
+    value: round(IhvIncoming, 2),
+    unit: 'A',
+  });
+
   // PART 3 -- Result assembly
   return {
     value: round(totalWithGrowth, 2),
@@ -164,10 +174,11 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
       'info',
     ),
     additionalOutputs: {
-      totalDemand:      { value: round(totalWithGrowth, 2), unit: 'kVA' },
-      transformerSize:  { value: trSize,                    unit: 'kVA' },
-      busRating:        { value: round(Ibus, 1),            unit: 'A' },
-      switchgearRating: { value: switchgearRating,          unit: 'A' },
+      totalDemand:       { value: round(totalWithGrowth, 2), unit: 'kVA' },
+      transformerSize:   { value: trSize,                    unit: 'kVA' },
+      busRating:         { value: round(Ibus, 1),            unit: 'A' },
+      switchgearRating:  { value: switchgearRating,          unit: 'A' },
+      hvIncomingCurrent: { value: round(IhvIncoming, 2),     unit: 'A' },
     },
   };
 }

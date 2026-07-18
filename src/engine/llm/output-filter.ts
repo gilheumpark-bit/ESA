@@ -243,10 +243,17 @@ export function filterLLMOutput(
   // Sort blocked items by position (descending) for safe removal
   const sortedBlocked = [...blocked].sort((a, b) => b.position - a.position);
 
+  // blocked 범위는 서로 겹칠 수 있다 (예: 확률적 '약 5' 와 수치 '5A').
+  // descending 순서로 적용하되, 직전 적용 범위의 좌측 경계를 넘는(겹치는) 범위는 건너뛴다.
+  // 이렇게 하면 모든 치환 범위가 non-overlapping 이고 좌측 slice 는 항상 미변형 텍스트를 참조한다.
   let filtered = output;
+  let appliedStart = output.length + 1;
   for (const item of sortedBlocked) {
+    const end = item.position + item.text.length;
+    if (end > appliedStart) continue;
+
     const before = filtered.slice(0, item.position);
-    const after = filtered.slice(item.position + item.text.length);
+    const after = filtered.slice(end);
 
     // Replace with a warning marker
     const marker = item.reason === 'probabilistic'
@@ -258,6 +265,7 @@ export function filterLLMOutput(
           : '[BLOCKED: Tool 호출 필요 / Tool call required]';
 
     filtered = before + marker + after;
+    appliedStart = item.position;
   }
 
   return {
@@ -323,15 +331,13 @@ export function isClean(
     }
   }
 
-  // Quick unsourced number check
-  if (toolCalls.length === 0) {
-    NUMBER_PATTERN.lastIndex = 0;
-    const numbers = extractNumbers(output, new Set());
-    // Filter out small ordinal integers
-    const suspiciousNumbers = numbers.filter(n => !n.isAllowed);
-    if (suspiciousNumbers.length > 0) {
-      return false;
-    }
+  // Quick unsourced number check — filterLLMOutput() 과 동일하게 tool 실행 여부와 무관하게
+  // 출처 없는 수치(!hasSource)를 차단한다. 실제 source 위치를 계산해 정당하게 출처가 있는 수치는 통과시킨다.
+  const sourcePositions = findSourcePositions(output);
+  const numbers = extractNumbers(output, sourcePositions);
+  const suspicious = numbers.filter(n => !n.isAllowed && !n.hasSource);
+  if (suspicious.length > 0) {
+    return false;
   }
 
   return true;

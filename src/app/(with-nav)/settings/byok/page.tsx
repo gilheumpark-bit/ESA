@@ -68,22 +68,26 @@ function maskKey(key: string): string {
   return '****' + key.slice(-4);
 }
 
-/** localStorage에서 암호화된 키 로드 */
-async function loadStoredKey(providerId: string): Promise<string | null> {
+/** localStorage에서 암호화된 키 로드 (uid를 복호화 secret으로 사용 — BYOK는 로그인 필수) */
+async function loadStoredKey(providerId: string, uid: string | undefined): Promise<string | null> {
   if (typeof window === 'undefined') return null;
+  // uid 없으면 복호화 불가 — 키 부재로 처리
+  if (!uid) return null;
   try {
     const stored = localStorage.getItem(STORAGE_PREFIX + providerId);
     if (!stored) return null;
-    return await decryptKey(stored);
+    return await decryptKey(stored, uid);
   } catch {
     return null;
   }
 }
 
-/** localStorage에 암호화하여 저장 */
-async function saveStoredKey(providerId: string, raw: string): Promise<void> {
+/** localStorage에 암호화하여 저장 (uid를 암호화 secret으로 사용 — 저장·복호화 secret 동일 보장) */
+async function saveStoredKey(providerId: string, raw: string, uid: string | undefined): Promise<void> {
   if (typeof window === 'undefined') return;
-  const encrypted = await encryptKey(raw);
+  // uid 없으면 암호화 불가 — 저장 생략
+  if (!uid) return;
+  const encrypted = await encryptKey(raw, uid);
   localStorage.setItem(STORAGE_PREFIX + providerId, encrypted);
 }
 
@@ -283,12 +287,13 @@ export default function BYOKPage() {
   // BYOK keys are client-side localStorage only — auth is NOT required.
   // If logged in, cloud sync is available; otherwise local-only is fine.
 
-  // localStorage에서 저장된 키 로드
+  // localStorage에서 저장된 키 로드 — uid를 복호화 secret으로 사용하므로 uid 확정 후 로드
   useEffect(() => {
+    const uid = user?.uid;
     async function loadAll() {
       const initial: Record<string, ProviderKeyState> = {};
       for (const id of PROVIDER_ORDER) {
-        const raw = await loadStoredKey(id);
+        const raw = await loadStoredKey(id, uid);
         initial[id] = {
           maskedKey: raw ? maskKey(raw) : '',
           status: raw ? 'saved' : 'empty',
@@ -299,7 +304,7 @@ export default function BYOKPage() {
       setLoaded(true);
     }
     loadAll();
-  }, []);
+  }, [user?.uid]);
 
   const updateState = useCallback(
     (id: string, patch: Partial<ProviderKeyState>) => {
@@ -313,16 +318,18 @@ export default function BYOKPage() {
 
   const handleSave = useCallback(
     async (id: string) => {
+      const uid = user?.uid;
       const raw = states[id]?.rawInput?.trim();
-      if (!raw) return;
-      await saveStoredKey(id, raw);
+      // uid 없으면 암호화 저장 불가 (BYOK는 로그인 필수)
+      if (!raw || !uid) return;
+      await saveStoredKey(id, raw, uid);
       updateState(id, {
         maskedKey: maskKey(raw),
         status: 'saved',
         rawInput: '',
       });
     },
-    [states, updateState],
+    [states, updateState, user?.uid],
   );
 
   const handleTest = useCallback(
@@ -343,7 +350,7 @@ export default function BYOKPage() {
       }
 
       // 클라우드 프로바이더: 저장된 키로 간단한 요청 테스트
-      const raw = await loadStoredKey(id);
+      const raw = await loadStoredKey(id, user?.uid);
       if (!raw) {
         updateState(id, { status: 'invalid' });
         return;
@@ -386,12 +393,16 @@ export default function BYOKPage() {
         const res = await fetch(testUrl, { method: 'GET', headers });
         // Claude /messages returns 405 on GET but 401 on bad key
         const ok = res.ok || (id === 'claude' && res.status === 405);
-        updateState(id, { status: ok ? 'valid' : 'invalid' });
+        // 401/403만 실제 키 무효 근거 — 그 외 상태는 브라우저에서 검증 불가하므로 'saved'(미검증) 유지
+        updateState(id, {
+          status: ok ? 'valid' : res.status === 401 || res.status === 403 ? 'invalid' : 'saved',
+        });
       } catch {
-        updateState(id, { status: 'invalid' });
+        // CORS/네트워크 거부는 키가 잘못됐다는 근거가 아님 (BYOK 정책상 서버 프록시 금지) → 'saved'(미검증) 유지
+        updateState(id, { status: 'saved' });
       }
     },
-    [updateState],
+    [updateState, user?.uid],
   );
 
   const handleDelete = useCallback(

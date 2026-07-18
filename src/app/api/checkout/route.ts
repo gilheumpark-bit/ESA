@@ -28,10 +28,15 @@ interface CheckoutRequestBody {
 
 function isValidPriceId(priceId: string): boolean {
   const validIds = Object.values(ESVA_PRICE_IDS).filter((id) => id.length > 0);
-  // Accept any Stripe price ID format (price_xxxxx or prod-env IDs)
-  if (validIds.length > 0 && validIds.includes(priceId)) return true;
-  // Fallback: accept standard Stripe price ID format during dev
-  return /^price_[a-zA-Z0-9]{10,}$/.test(priceId);
+  // Allowlist is authoritative: only configured ESVA price IDs are accepted.
+  if (validIds.includes(priceId)) return true;
+  // Dev-only fallback: accept well-formed Stripe price IDs ONLY when the
+  // allowlist is unconfigured and we are not in production. Never in prod —
+  // otherwise any existing price in the Stripe account could be checked out.
+  if (validIds.length === 0 && process.env.NODE_ENV !== 'production') {
+    return /^price_[a-zA-Z0-9]{10,}$/.test(priceId);
+  }
+  return false;
 }
 
 // ─── PART 4: POST Handler ───────────────────────────────────────

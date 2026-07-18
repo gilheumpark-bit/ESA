@@ -108,7 +108,12 @@ export function calculateReactivePower(input: ReactivePowerInput): DetailedCalcR
   });
 
   // Step 6: Select nearest standard capacitor size
-  const selectedSize = STANDARD_CAPACITOR_SIZES.find((s) => s >= Qc) ?? STANDARD_CAPACITOR_SIZES[STANDARD_CAPACITOR_SIZES.length - 1];
+  // 표준 단일 뱅크로 커버 가능한 경우 해당 정격을, 초과 시 다중 뱅크로 산정
+  const exactSize = STANDARD_CAPACITOR_SIZES.find((s) => s >= Qc);
+  const maxSize = STANDARD_CAPACITOR_SIZES[STANDARD_CAPACITOR_SIZES.length - 1];
+  const overRange = exactSize === undefined;
+  const bankCount = overRange ? Math.ceil(Qc / maxSize) : 1;
+  const selectedSize = overRange ? bankCount * maxSize : exactSize;
   steps.push({
     step: 6,
     title: 'Select nearest standard capacitor bank',
@@ -129,9 +134,11 @@ export function calculateReactivePower(input: ReactivePowerInput): DetailedCalcR
       createSource('IEC', '60831', { edition: '2014' }),
     ],
     judgment: createJudgment(
-      true,
-      `Required ${round(Qc, 2)} kvar — select ${selectedSize} kvar standard capacitor bank`,
-      'info',
+      !overRange,
+      overRange
+        ? `Required ${round(Qc, 2)} kvar exceeds the largest ${maxSize} kvar standard bank — use ${bankCount} x ${maxSize} kvar banks`
+        : `Required ${round(Qc, 2)} kvar — select ${selectedSize} kvar standard capacitor bank`,
+      overRange ? 'warning' : 'info',
     ),
     additionalOutputs: {
       requiredCapacitorBank: { value: round(Qc, 2), unit: 'kvar' },

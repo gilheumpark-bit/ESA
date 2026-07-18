@@ -85,6 +85,10 @@ function TreeGroupNode({
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
+  // 검색 중에는 필터된 매치가 보이도록 강제 펼침 (defaultOpen prop이 useState 초기값이라
+  // searchQuery 변경 시 반영되지 않는 stale 상태 방지). 검색이 없으면 수동 토글 상태 사용.
+  const expanded = searchQuery.trim().length > 0 ? true : open;
+
   const filteredItems = useMemo(() => {
     if (!searchQuery) return group.items;
     return group.items.filter((r) => matchesSearch(r, searchQuery));
@@ -100,7 +104,7 @@ function TreeGroupNode({
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
       >
-        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <span className="font-semibold text-[var(--text-primary)]">{group.standard}</span>
         <span className="text-xs text-[var(--text-tertiary)]">({group.body})</span>
         <span className="ml-auto rounded-full bg-[var(--bg-tertiary)] px-2 py-0.5 text-xs text-[var(--text-tertiary)]">
@@ -109,7 +113,7 @@ function TreeGroupNode({
       </button>
 
       {/* Children */}
-      {open && (
+      {expanded && (
         <div className="pb-2 pl-8 pr-4">
           {filteredItems.map((ref) => (
             <TreeItemNode key={ref.id} ref_={ref} searchQuery={searchQuery} onSelect={onSelectRef} />

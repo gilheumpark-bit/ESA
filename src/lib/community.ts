@@ -12,6 +12,7 @@
  */
 
 import { getSupabaseClient, getSupabaseAdmin, type PaginationOptions, type PaginatedResult } from '@/lib/supabase';
+import { sanitizeInput } from '@/lib/security-hardening';
 
 // ─── PART 1: Types ────────────────────────────────────────────
 
@@ -146,7 +147,12 @@ export async function getQuestions(
   }
 
   if (search) {
-    query = query.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+    // PostgREST .or() 필터 DSL 인젝션 방지: 제어문자 제거 후 DSL 메타문자(,()* 및
+    // LIKE 와일드카드 %_ , 백슬래시)를 공백으로 치환하여 필터 구조 탈출을 차단한다.
+    const safeSearch = sanitizeInput(search).replace(/[\\%_,()*]/g, ' ').trim();
+    if (safeSearch) {
+      query = query.or(`title.ilike.%${safeSearch}%,body.ilike.%${safeSearch}%`);
+    }
   }
 
   // Sort
@@ -331,6 +337,11 @@ async function vote(
     });
 
   if (error) {
+    // 동시성: unique(user_id,target_type,target_id) 위반(23505)은 동시 요청이 이미
+    // 투표를 삽입했음을 의미 — 중복 집계 없이 현재 카운트만 반환한다.
+    if ((error as { code?: string }).code === '23505') {
+      return updateVoteCount(targetTable, targetId, 0);
+    }
     throw new Error(`[ESA-7006] Failed to vote: ${error.message}`);
   }
 
@@ -344,21 +355,57 @@ async function updateVoteCount(
 ): Promise<{ votes: number }> {
   const admin = getSupabaseAdmin();
 
-  // Read current votes, apply delta, write back
-  const { data: current } = await admin
-    .from(table)
-    .select('votes')
-    .eq('id', id)
-    .single();
+  // 원자적 증감 RPC로 read-modify-write 경쟁 제거 (increment_answer_count와 동일 패턴).
+  // delta=0이면 값 변경 없이 현재 votes를 조회하는 용도로 재사용된다.
+  try {
+    const { data, error } = await admin.rpc('increment_vote_count', {
+      target_table: table,
+      target_id: id,
+      delta,
+    });
 
-  const newVotes = ((current?.votes as number) ?? 0) + delta;
+    if (error) throw error;
 
-  await admin
-    .from(table)
-    .update({ votes: newVotes })
-    .eq('id', id);
+    return { votes: (data as number) ?? 0 };
+  } catch (rpcError) {
+    // Fallback: increment_vote_count RPC 미배포(마이그레이션 미적용) 시에도 투표가
+    // 동작하도록 read-modify-write로 대체한다. 원자적이지 않아 동시성 경쟁이 있으나,
+    // RPC 배포 전까지의 기능 유지가 우선. RPC는 여전히 기본 경로로 유지된다.
+    console.warn(
+      `[ESA-7006] increment_vote_count RPC unavailable, falling back to read-modify-write:`,
+      rpcError,
+    );
 
-  return { votes: newVotes };
+    const { data: current, error: readError } = await admin
+      .from(table)
+      .select('votes')
+      .eq('id', id)
+      .single();
+
+    if (readError) {
+      throw new Error(`[ESA-7006] Failed to update vote count: ${readError.message}`);
+    }
+
+    const nextVotes = ((current?.votes as number) ?? 0) + delta;
+
+    // delta=0이면 쓰기 없이 현재 값만 반환 (조회 전용 재사용 경로).
+    if (delta === 0) {
+      return { votes: nextVotes };
+    }
+
+    const { data: updated, error: writeError } = await admin
+      .from(table)
+      .update({ votes: nextVotes })
+      .eq('id', id)
+      .select('votes')
+      .single();
+
+    if (writeError) {
+      throw new Error(`[ESA-7006] Failed to update vote count: ${writeError.message}`);
+    }
+
+    return { votes: (updated?.votes as number) ?? nextVotes };
+  }
 }
 
 // ─── PART 5: Expert Profile Helpers ──────────────────────────

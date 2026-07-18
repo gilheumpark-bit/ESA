@@ -68,7 +68,8 @@ function useDashboardData() {
   const [totalCalcs, setTotalCalcs] = useState(0);
   const [recentCalcs, setRecentCalcs] = useState<RecentCalc[]>([]);
   const [standardUpdates, setStandardUpdates] = useState<StandardUpdate[]>([]);
-  const [news, _setNews] = useState<NewsItem[]>([]);
+  // 뉴스 브리핑: 현재 백엔드 미제공 — 빈 상태로 유지하고 UI에서 empty-state 노출
+  const [news] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -255,6 +256,14 @@ function NewsBriefingSection({ news }: { news: NewsItem[] }) {
         <Newspaper size={18} className="text-[var(--color-primary)]" />
         <h2 className="text-base font-semibold text-[var(--text-primary)]">뉴스 브리핑</h2>
       </div>
+      {news.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-[var(--border-default)] px-4 py-8 text-center">
+          <p className="text-sm text-[var(--text-tertiary)]">뉴스 준비 중</p>
+          <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+            규격 개정 및 업계 뉴스 브리핑이 곧 제공될 예정입니다.
+          </p>
+        </div>
+      ) : (
       <div className="space-y-4">
         {categories.slice(0, 3).map(category => {
           const items = news.filter(n => n.category === category).slice(0, 3);
@@ -281,6 +290,7 @@ function NewsBriefingSection({ news }: { news: NewsItem[] }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

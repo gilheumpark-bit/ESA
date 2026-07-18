@@ -25,6 +25,8 @@ export interface ReviewTeam {
   goodPatternCategory: GoodPatternCategory;
   /** 이 팀의 검토가 필수인지 (false면 해당 파라미터 없을 때 스킵) */
   required: boolean;
+  /** 이 팀의 검사/우수패턴이 참조하는 입력 파라미터 키 (스코프 판정용) */
+  triggerParams: string[];
 }
 
 export interface TeamResult {
@@ -69,22 +71,46 @@ const TEAMS: ReviewTeam[] = [
   {
     id: 'TEAM-AMP', name: '허용전류 검토팀',
     domain: 'thermal', goodPatternCategory: 'efficiency', required: true,
+    triggerParams: [
+      'ambientTemp', 'tempCorrectionApplied', 'groupCount', 'groupCorrectionApplied',
+      'powerFactor', 'highEfficiencyTransformer', 'allLED', 'ampacityMargin',
+    ],
   },
   {
     id: 'TEAM-VD', name: '전압강하 검토팀',
     domain: 'code-compliance', goodPatternCategory: 'standards', required: true,
+    triggerParams: [
+      'voltageDropPercent', 'vdLimit', 'cableSize', 'standardVersion', 'crossCountryVerified',
+    ],
   },
   {
     id: 'TEAM-PROT', name: '보호계전 검토팀',
     domain: 'protection', goodPatternCategory: 'safety', required: true,
+    triggerParams: [
+      'loadCurrent', 'breakerRating', 'wireAmpacity',
+      'separateGroundConductor', 'dualGrounding', 'hasSPD', 'hasAFCI',
+      'equipotentialBonding', 'vfdPower_kW', 'harmonicFilterInstalled',
+    ],
   },
   {
     id: 'TEAM-GND', name: '접지 검토팀',
     domain: 'electrical-safety', goodPatternCategory: 'safety', required: false,
+    triggerParams: [
+      'hasGrounding', 'groundResistance', 'hasRCD', 'loadCurrent', 'wireAmpacity',
+      'shortCircuitCurrent', 'breakerCapacity', 'hasEmergencyCircuit',
+      'emergencyCircuitSeparateProtection', 'thdPercent', 'shortCircuitCurrent_kA',
+      'arcFlashLabelApplied', 'separateGroundConductor', 'dualGrounding', 'hasSPD',
+      'hasAFCI', 'equipotentialBonding', 'vfdPower_kW', 'harmonicFilterInstalled',
+    ],
   },
   {
     id: 'TEAM-REL', name: '신뢰성 검토팀',
     domain: 'reliability', goodPatternCategory: 'reliability', required: false,
+    triggerParams: [
+      'loadCurrent', 'wireAmpacity', 'voltageDropPercent', 'vdLimit',
+      'dualFeeder', 'emergencyGenerator', 'hasUPS', 'hasSPD',
+      'groundResistance', 'equipotentialBonding',
+    ],
   },
 ];
 
@@ -101,9 +127,15 @@ export async function runMultiTeamReview(
 ): Promise<MultiTeamReport> {
   const totalStart = Date.now();
 
+  // 선택 팀 스코프 판정: 필수 팀은 항상, 선택 팀은 관련 입력 파라미터가 있을 때만 실행.
+  // (선택 팀의 도메인 검사는 파라미터 부재 시 fail-closed로 낮은 점수를 내 baseScore를 왜곡함)
+  const activeTeams = TEAMS.filter(
+    t => t.required || t.triggerParams.some(k => params[k] !== undefined),
+  );
+
   // 병렬 실행
   const teamResults = await Promise.all(
-    TEAMS.map(async (team) => {
+    activeTeams.map(async (team) => {
       const start = Date.now();
 
       const checks = runDomainCheck(team.domain, params);
@@ -141,9 +173,15 @@ export async function runMultiTeamReview(
   const passedChecks = allChecks.filter(c => c.passed).length;
   const overallPassRate = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 100;
 
-  const totalBonus = teamResults.reduce(
-    (sum, t) => sum + t.goodPatterns.filter(gp => gp.detected).reduce((s, gp) => s + gp.bonus, 0), 0,
-  );
+  // 팀 간 우수패턴 중복 제거: TEAM-PROT/TEAM-GND가 같은 'safety' 카테고리를 공유하므로
+  // patternId 기준으로 dedup하지 않으면 동일 패턴 가점이 팀마다 이중 계산됨.
+  const detectedPatterns = new Map<string, GoodPatternResult>();
+  for (const t of teamResults) {
+    for (const gp of t.goodPatterns) {
+      if (gp.detected) detectedPatterns.set(gp.patternId, gp);
+    }
+  }
+  const totalBonus = [...detectedPatterns.values()].reduce((s, gp) => s + gp.bonus, 0);
 
   // 합산 점수: 기본 점수(0~100) + 가점(최대 20점 cap)
   const baseScore = teamResults.reduce((sum, t) => sum + t.score, 0) / teamResults.length;

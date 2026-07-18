@@ -137,16 +137,21 @@ export function evaluateComposite(
     }
   }
 
+  // 부모 자신의 판정을 중첩 병합 이전에 확정 (중첩 결과 이중 계산 방지)
+  const selfAllPassed = failed.length === 0;
+  const selfAnyMatched = matched.length > 0;
+
   // 중첩 조건 평가
   if (composite.nested) {
     const nestedResult = evaluateComposite(composite.nested, params);
+    // 아래 병합은 리포팅(matched/failed 집계)용일 뿐, 판정에는 부모 자신의 결과만 사용
     matched.push(...nestedResult.matched);
     failed.push(...nestedResult.failed);
 
     if (composite.operator === 'AND') {
-      return { result: failed.length === 0 && nestedResult.result, matched, failed };
+      return { result: selfAllPassed && nestedResult.result, matched, failed };
     }
-    return { result: matched.length > 0 || nestedResult.result, matched, failed };
+    return { result: selfAnyMatched || nestedResult.result, matched, failed };
   }
 
   if (composite.operator === 'AND') {

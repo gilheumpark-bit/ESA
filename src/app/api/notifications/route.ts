@@ -6,6 +6,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getUserNotifications,
@@ -19,13 +20,13 @@ export async function GET(req: NextRequest) {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
 
-    const { searchParams } = req.nextUrl;
-    const userId = searchParams.get('userId');
-
+    // 인증된 사용자 본인의 알림만 조회 (IDOR 방지) — client의 userId 파라미터는 신뢰하지 않음
+    const userId = await extractVerifiedUserId(req);
     if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = req.nextUrl;
     const page = parseInt(searchParams.get('page') ?? '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') ?? '20', 10);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
@@ -51,20 +52,17 @@ export async function PATCH(req: NextRequest) {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
 
+    // 인증된 사용자 본인만 알림 상태 변경 (IDOR 방지) — client가 보낸 userId는 신뢰하지 않음
+    const userId = await extractVerifiedUserId(req);
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
-    const { notificationId, userId, markAll } = body as {
+    const { notificationId, markAll } = body as {
       notificationId?: string;
-      userId?: string;
       markAll?: boolean;
     };
-
-    // userId 필수 검증 (인증 대리)
-    if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-      return NextResponse.json(
-        { error: 'userId is required and must be a non-empty string' },
-        { status: 400 },
-      );
-    }
 
     if (markAll) {
       await markAllRead(userId);
@@ -72,7 +70,8 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (notificationId && typeof notificationId === 'string') {
-      await markRead(notificationId);
+      // 소유권 스코프: 검증된 userId 전달로 타인 알림 read 처리(IDOR) 차단
+      await markRead(notificationId, userId);
       return NextResponse.json({ success: true, message: 'Notification marked as read' });
     }
 

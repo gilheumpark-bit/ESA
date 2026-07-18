@@ -9,8 +9,8 @@
  * PART 4: Report assembly
  */
 
-import type { TeamInput, TeamResult, ESVAVerifiedReport } from './teams/types';
-import { classifyInput, routeToTeams, type TeamRouting } from './teams/team-registry';
+import type { TeamInput, TeamResult, ESVAVerifiedReport, TeamId } from './teams/types';
+import { classifyInput, routeToTeams, getTeamConfig, type TeamRouting } from './teams/team-registry';
 import { executeSLDTeam } from './teams/sld-team';
 import { executeLayoutTeam } from './teams/layout-team';
 import { executeStandardsTeam } from './teams/standards-team';
@@ -87,6 +87,44 @@ async function dispatchWithRetry(
   throw lastError ?? new Error(`[Orchestrator] ${teamId} dispatch failed after ${maxRetries} retries`);
 }
 
+/**
+ * 팀 실행에 상한 시간(레지스트리 timeoutMs)을 강제.
+ * 재시도 윈도우 전체를 감싸므로, 무한 대기 팀이 요청을 블로킹하지 못한다.
+ */
+function withTimeout(
+  p: Promise<TeamResult>,
+  ms: number,
+  teamId: string,
+): Promise<TeamResult> {
+  return new Promise<TeamResult>(resolve => {
+    const t = setTimeout(() => {
+      resolve({
+        teamId: teamId as TeamResult['teamId'],
+        success: false,
+        confidence: 0,
+        durationMs: ms,
+        error: `Team ${teamId} timed out after ${ms}ms`,
+      });
+    }, ms);
+    p.then(
+      r => {
+        clearTimeout(t);
+        resolve(r);
+      },
+      e => {
+        clearTimeout(t);
+        resolve({
+          teamId: teamId as TeamResult['teamId'],
+          success: false,
+          confidence: 0,
+          durationMs: 0,
+          error: String(e),
+        });
+      },
+    );
+  });
+}
+
 async function dispatchToTeam(teamId: string, input: TeamInput): Promise<TeamResult> {
   switch (teamId) {
     case 'TEAM-SLD':
@@ -142,13 +180,11 @@ export async function runOrchestrator(
       .filter(t => t !== 'TEAM-CONSENSUS');
 
     const teamPromises = allTeamIds.map(teamId =>
-      dispatchWithRetry(teamId, teamInput, 2).catch(err => ({
-        teamId: teamId as TeamResult['teamId'],
-        success: false,
-        confidence: 0,
-        durationMs: 0,
-        error: err instanceof Error ? err.message : String(err),
-      } as TeamResult))
+      withTimeout(
+        dispatchWithRetry(teamId, teamInput, 2),
+        getTeamConfig(teamId as TeamId).timeoutMs,
+        teamId,
+      ),
     );
 
     // 텍스트 쿼리 시 레거시 MainAgent도 병렬 호출 (검색 보강)

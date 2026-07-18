@@ -491,12 +491,20 @@ const MAPPINGS: MappingEntry[] = [
 function findMapping(standard: StandardCode, clause: string): MappingEntry | undefined {
   const stdKey = standard.toLowerCase() as 'kec' | 'nec' | 'iec' | 'jis';
 
-  return MAPPINGS.find((m) => {
-    const mappedClause = m[stdKey];
-    if (!mappedClause) return false;
-    // 정확 일치 또는 접두사 일치
-    return mappedClause === clause || clause.startsWith(mappedClause);
-  });
+  // 정확 일치 우선, 없으면 경계 인식 최장 접두사 매칭 (parent/child 중 가장 구체적인 항목 선택)
+  let best: MappingEntry | undefined;
+  let bestLen = -1;
+  for (const m of MAPPINGS) {
+    const mapped = m[stdKey];
+    if (!mapped) continue;
+    if (clause === mapped) return m;
+    // '.' 경계로 자식 조문만 매칭 ('232.51'이 '232.5'에 오매칭되는 것 방지)
+    if (clause.startsWith(mapped + '.') && mapped.length > bestLen) {
+      best = m;
+      bestLen = mapped.length;
+    }
+  }
+  return best;
 }
 
 function getClauseFromMapping(mapping: MappingEntry, standard: StandardCode): string | undefined {

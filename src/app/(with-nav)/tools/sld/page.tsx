@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { decryptKey } from '@/lib/ai-providers';
+import { getCurrentUser } from '@/lib/firebase';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 
 const BYOK_PREFIX = 'esa-byok-';
@@ -35,11 +36,14 @@ const VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;
 
 async function getFirstAvailableVisionKey(): Promise<{ provider: string; key: string } | null> {
   if (typeof window === 'undefined') return null;
+  // 복호화 secret으로 로그인 사용자 uid 사용 (BYOK 저장 시와 동일 secret) — 미로그인 시 키 부재 처리
+  const uid = (await getCurrentUser())?.uid;
+  if (!uid) return null;
   for (const provider of VISION_PROVIDERS) {
     const stored = localStorage.getItem(BYOK_PREFIX + provider);
     if (stored) {
       try {
-        const key = await decryptKey(stored);
+        const key = await decryptKey(stored, uid);
         if (key) return { provider, key };
       } catch { /* skip */ }
     }
@@ -93,6 +97,15 @@ interface SLDAnalysisResult {
   rawDescription: string;
 }
 
+// generateCalcChainFromSLD() (src/lib/sld-recognition.ts)가 방출하는 레거시 id를
+// 실제 /calc/[category]/[id] 라우트 id로 정규화 (없으면 그대로 사용).
+// 레거시 id를 그대로 쓰면 calc 라우트의 'calculator not found' 분기로 빠짐.
+const CALC_ID_ALIAS: Record<string, string> = {
+  'load-calculation': 'max-demand',
+  'transformer-sizing': 'transformer-capacity',
+  'motor-starting': 'starting-current',
+};
+
 const CALC_CATEGORY_MAP: Record<string, string> = {
   'voltage-drop': 'voltage-drop',
   'cable-sizing': 'cable',
@@ -105,6 +118,8 @@ const CALC_CATEGORY_MAP: Record<string, string> = {
   'solar-generation': 'renewable',
   'battery-capacity': 'renewable',
   'motor-capacity': 'motor',
+  'max-demand': 'power',
+  'starting-current': 'motor',
 };
 
 const COMPONENT_ICONS: Record<string, string> = {
@@ -247,7 +262,9 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
         </h3>
       </div>
       <div className="space-y-3">
-        {steps.map((step, idx) => (
+        {steps.map((step, idx) => {
+          const calcId = CALC_ID_ALIAS[step.calculatorId] ?? step.calculatorId;
+          return (
           <div key={step.step} className="flex items-start gap-3">
             {/* Step number */}
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-xs font-bold text-white">
@@ -268,7 +285,7 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
 
             {/* Run button */}
             <Link
-              href={`/calc/${CALC_CATEGORY_MAP[step.calculatorId] ?? 'power'}/${step.calculatorId}?source=sld`}
+              href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}?source=sld`}
               className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)] hover:text-white"
             >
               <PlayCircle size={12} />
@@ -280,7 +297,8 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
               <div className="absolute left-[13px] top-7 h-6 w-0.5 bg-[var(--border-default)]" />
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -491,8 +509,8 @@ export default function SLDAnalysisPage() {
         </>
       )}
 
-      {/* Analyze button */}
-      {imageFile && !analysis && (
+      {/* Analyze button — 이미지 탭에서만 노출 (다른 탭 전환 시 stale imageFile로 실행 방지) */}
+      {activeTab === 'image' && imageFile && !analysis && (
         <button
           onClick={handleAnalyze}
           disabled={loading}

@@ -290,10 +290,13 @@ export function chunkText(text: string, opts?: ChunkOptions): Chunk[] {
     }
   } else {
     // Simple sliding window
+    // 실제 텍스트에서 문자당 토큰 비율을 도출 (CJK는 ~0.67, Latin은 ~4)
+    const charsPerToken = text.length / Math.max(1, totalTokens);
     let position = 0;
     while (position < text.length) {
+      const startPos = position;
       // Estimate where maxTokens would end
-      const approxChars = maxTokens * 4; // rough chars-per-token
+      const approxChars = Math.ceil(maxTokens * charsPerToken);
       let endPos = Math.min(position + approxChars, text.length);
 
       if (endPos < text.length) {
@@ -306,9 +309,9 @@ export function chunkText(text: string, opts?: ChunkOptions): Chunk[] {
       }
 
       // Move forward, subtracting overlap
-      const overlapChars = overlap * 4;
+      const overlapChars = Math.ceil(overlap * charsPerToken);
       position = endPos - overlapChars;
-      if (position <= (chunks.length > 0 ? endPos - approxChars : 0)) {
+      if (position <= startPos) {
         position = endPos; // Prevent infinite loop
       }
     }
@@ -342,7 +345,9 @@ function createChunk(
  */
 function getOverlapText(text: string, overlapTokens: number): string {
   if (overlapTokens <= 0) return '';
-  const approxChars = overlapTokens * 4;
+  // 실제 텍스트 기준 문자당 토큰 비율로 overlap 문자 수 산출 (CJK 6x 초과 방지)
+  const charsPerToken = text.length / Math.max(1, estimateTokens(text));
+  const approxChars = Math.ceil(overlapTokens * charsPerToken);
   if (text.length <= approxChars) return text;
 
   const tail = text.slice(-approxChars);

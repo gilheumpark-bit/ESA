@@ -14,7 +14,6 @@ import {
   footToMeter,
   meterToFoot,
   hpToKw,
-  kwToHp,
   fahrenheitToCelsius,
   celsiusToFahrenheit,
   mm2ToAwg,
@@ -114,7 +113,8 @@ function convertValueUnit(value: number, unit: string): number {
   switch (unit) {
     case 'm': return meterToFoot(value);
     case 'mm²': return value; // mm² → AWG는 별도 표시
-    case 'kW': return kwToHp(value);
+    // kW: 전력 실효치(전기)는 미국 관행에서도 kW/MW로 표기(NEC/IEEE).
+    // HP는 회전기 축출력에만 해당하므로 단위 문자열만으로 kW→HP 변환 금지 → 그대로 통과.
     case '°C': return celsiusToFahrenheit(value);
     default: return value;
   }
@@ -123,7 +123,7 @@ function convertValueUnit(value: number, unit: string): number {
 function convertUnitLabel(unit: string): string {
   switch (unit) {
     case 'm': return 'ft';
-    case 'kW': return 'HP';
+    // kW는 Imperial 요청에서도 유효한 전기 단위 → 라벨 유지
     case '°C': return '°F';
     default: return unit;
   }

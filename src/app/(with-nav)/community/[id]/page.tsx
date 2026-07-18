@@ -414,7 +414,7 @@ export default function QuestionDetailPage() {
                 {question.calcRefs.map((calcId) => (
                   <Link
                     key={calcId}
-                    href={`/calc/${calcId}`}
+                    href={`/calc/general/${calcId}`}
                     className="flex items-center gap-1 rounded bg-white px-2.5 py-1 text-xs text-blue-600
                                border border-gray-200 hover:bg-blue-50
                                dark:bg-gray-700 dark:border-gray-600 dark:text-blue-400"

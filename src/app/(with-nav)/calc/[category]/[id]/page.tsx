@@ -506,8 +506,7 @@ function ResultDisplay({
     if (!r || r.value == null || typeof r.value !== 'number') return null;
     const unit = r.unit ?? '';
     // 전압강하 → 기준 3%
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (unit === '%' && (receipt as any).calculatorId?.includes('voltage')) {
+    if (unit === '%' && receipt.calcId?.includes('voltage')) {
       return { value: r.value, unit: '%', limit: 3, label: '전압강하', standardRef: 'KEC 232.52', direction: 'below' as const };
     }
     return null;

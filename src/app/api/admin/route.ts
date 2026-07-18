@@ -189,7 +189,55 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 4 — GET handler
+// PART 4 — 관리자 권한 검증 (RBAC)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 요청자가 관리자인지 검증한다.
+ * 1) 환경변수 허용 목록(ADMIN_UIDS / ADMIN_EMAILS) 우선
+ * 2) Supabase profiles.role === 'admin' 조회 (fallback)
+ * 어느 조건도 만족하지 못하면 false (기본 거부).
+ */
+async function isAdminUser(uid: string, email?: string): Promise<boolean> {
+  // 1) 배포 시 지정된 관리자 허용 목록
+  const adminUids = (process.env.ADMIN_UIDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (adminUids.includes(uid)) return true;
+  if (email && adminEmails.includes(email.toLowerCase())) return true;
+
+  // 2) Supabase profiles 테이블의 role 컬럼 조회
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !serviceKey) return false;
+
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(url, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', uid)
+      .maybeSingle();
+
+    return data?.role === 'admin';
+  } catch {
+    // 조회 실패 시 안전하게 거부
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 5 — GET handler
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export async function GET(request: NextRequest) {
@@ -200,13 +248,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
+  let decoded;
   try {
-    const decoded = await verifyIdToken(token);
+    decoded = await verifyIdToken(token);
     if (!decoded?.uid) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
   } catch {
     return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
+  }
+
+  // ── RBAC: 관리자 권한 필수 (일반 인증만으로는 접근 불가) ──
+  const authorized = await isAdminUser(decoded.uid, decoded.email);
+  if (!authorized) {
+    return NextResponse.json({ error: 'Admin privileges required' }, { status: 403 });
   }
 
   const liveData = await fetchLiveData();

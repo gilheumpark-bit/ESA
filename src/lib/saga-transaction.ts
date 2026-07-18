@@ -152,6 +152,7 @@ export function createCalcVerifySaga(config: {
 
   let params: Record<string, number> = {};
   let standards: Record<string, number> = {};
+  let calcOutput: { result: number; unit: string } | null = null;
 
   saga.addStep({
     name: 'extract-params',
@@ -174,7 +175,8 @@ export function createCalcVerifySaga(config: {
   saga.addStep({
     name: 'calculate',
     execute: async () => {
-      return await config.calculate(params, standards);
+      calcOutput = await config.calculate(params, standards);
+      return calcOutput;
     },
     compensate: async () => { /* 순수함수 — 롤백 불필요 */ },
   });
@@ -182,8 +184,8 @@ export function createCalcVerifySaga(config: {
   saga.addStep({
     name: 'verify',
     execute: async () => {
-      const calcResult = saga['steps'][2] as unknown;
-      const valid = await config.verify(calcResult as { result: number; unit: string });
+      if (!calcOutput) throw new Error('ESVA-4099: calculate step produced no result before verify');
+      const valid = await config.verify(calcOutput);
       if (!valid) throw new Error('ESVA-4099: 계산 결과가 물리적 허용 범위를 초과하여 검증 실패');
       return valid;
     },

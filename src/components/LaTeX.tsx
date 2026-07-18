@@ -102,7 +102,14 @@ export default function LaTeX({ formula, display, className = '' }: LaTeXProps) 
     } catch {
       setFallback(true);
     }
-  }, [ready, cleanFormula, resolvedDisplay]);
+  }, [ready, cleanFormula, resolvedDisplay, fallback]);
+
+  // Un-latch fallback when the formula changes so the ref'd container remounts
+  // and the render effect can re-attempt KaTeX rendering for a new valid formula.
+  useEffect(() => {
+    if (fallback) setFallback(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanFormula, resolvedDisplay]);
 
   // Fallback: show raw formula in code block
   if (fallback || !formula) {

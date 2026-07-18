@@ -34,9 +34,14 @@ export default function NewProjectPage() {
     setErrorMsg('');
 
     try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
       const res = await fetch('/api/projects', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ name, description }),
       });
 

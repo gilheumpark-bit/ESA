@@ -205,6 +205,9 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   if (input.arcDuration_s <= 0 || input.arcDuration_s > 10) {
     throw new Error('ESVA-4403: 아크 지속시간 범위 초과 (0~10s)');
   }
+  if (!Number.isFinite(input.workingDistance_mm) || input.workingDistance_mm <= 0) {
+    throw new Error('ESVA-4404: 작업 거리 범위 초과 (workingDistance_mm > 0)');
+  }
 
   // Step 1: 아크 전류 계산
   const { arcCurrent_kA, variationFactor } = calculateArcingCurrent(

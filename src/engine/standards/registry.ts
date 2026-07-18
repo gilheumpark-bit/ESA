@@ -11,12 +11,23 @@
 
 import {
   CodeArticle,
+  Condition,
   JudgmentResult,
   makeHold,
   makePass,
   makeFail,
   evaluateCondition,
 } from './kec/types';
+
+/**
+ * 조건 준수 여부 판정.
+ * evaluateCondition()의 수치적 참/거짓을 Condition.result와 대조하여 실제 적합 여부를 반환한다.
+ * - result:'PASS' 조건: 수치 참 → 적합 (기존 동작과 동일)
+ * - result:'FAIL' 조건: 수치 참 → 위반(부적합). 반전 방지.
+ */
+function isCompliant(c: Condition, val: number): boolean {
+  return evaluateCondition(c, val) === (c.result === 'PASS');
+}
 
 import {
   KEC_ARTICLES,
@@ -126,7 +137,7 @@ export function evaluateStandard(
       const matched = iecArticle.conditions.filter(c => {
         const val = params[c.param];
         if (val === undefined) return false;
-        return evaluateCondition(c, val);
+        return isCompliant(c, val);
       });
       const failed = iecArticle.conditions.filter(c => !matched.includes(c) && params[c.param] !== undefined);
       if (failed.length > 0) return makeFail(iecArticle, matched, failed);
@@ -142,7 +153,7 @@ export function evaluateStandard(
       const matched = necArticle.conditions.filter(c => {
         const val = params[c.param];
         if (val === undefined) return false;
-        return evaluateCondition(c, val);
+        return isCompliant(c, val);
       });
       const failed = necArticle.conditions.filter(c => !matched.includes(c) && params[c.param] !== undefined);
       if (failed.length > 0) return makeFail(necArticle, matched, failed);
@@ -158,7 +169,7 @@ export function evaluateStandard(
       const matched = jisArticle.conditions.filter(c => {
         const val = params[c.param];
         if (val === undefined) return false;
-        return evaluateCondition(c, val);
+        return isCompliant(c, val);
       });
       const failed = jisArticle.conditions.filter(c => !matched.includes(c) && params[c.param] !== undefined);
       if (failed.length > 0) return makeFail(jisArticle, matched, failed);

@@ -119,8 +119,9 @@ function ReceiptHeader({
           <Printer size={14} />
           인쇄
         </button>
+        {/* 계산기 라우트는 2-세그먼트(/calc/[category]/[id]) — id로만 계산기를 해석하므로 category는 placeholder */}
         <Link
-          href={`/calc/${receipt.calcId}`}
+          href={`/calc/general/${receipt.calcId}`}
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]"
         >
           <ExternalLink size={14} />

@@ -69,8 +69,14 @@ const BLOCK_SYMBOL_MAP: Record<string, SLDComponentType> = {
 
 function resolveBlockType(blockName: string): SLDComponentType {
   const lower = blockName.toLowerCase().replace(/[^a-z]/g, '');
-  for (const [key, type] of Object.entries(BLOCK_SYMBOL_MAP)) {
-    if (lower.includes(key)) return type;
+  // 정확 일치 우선 (예: 'mcc'→panel, 'meter'→meter, 'swgr'→panel)
+  if (BLOCK_SYMBOL_MAP[lower]) return BLOCK_SYMBOL_MAP[lower];
+  // 부분 일치는 긴 키 우선 — 단일 문자 'm'/'g'가 긴 키를 substring 오매칭하는 것 방지
+  const keys = Object.keys(BLOCK_SYMBOL_MAP)
+    .filter(k => k.length > 1)
+    .sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (lower.includes(key)) return BLOCK_SYMBOL_MAP[key];
   }
   return 'load'; // 미식별 블록은 부하로 기본 분류
 }
@@ -100,8 +106,8 @@ function parseSpecText(text: string): ParsedSpec {
   const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:sq|mm2|㎟)/i);
   if (sizeMatch) spec.conductorSize = parseFloat(sizeMatch[1]);
 
-  // 전압: 22.9kV, 380V, 220V 등
-  const voltMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kV|V)/i);
+  // 전압: 22.9kV, 380V, 220V 등 — 후행 경계로 kVA/MVA(피상전력)의 kV/V 오매칭 차단
+  const voltMatch = text.match(/(\d+(?:\.\d+)?)\s*(kV|V)(?![A-Za-z])/i);
   if (voltMatch) {
     const v = parseFloat(voltMatch[1]);
     const unit = voltMatch[0].toLowerCase();
@@ -152,6 +158,8 @@ export interface DxfParseOptions {
   unitScale?: number;
   /** 텍스트-심볼 매핑 최대 거리 (DXF 단위, 기본: 50) */
   textProximityThreshold?: number;
+  /** 연결 끝점을 실제 컴포넌트에 스냅하는 최대 거리 (DXF 원단위, 기본: 50) */
+  endpointSnapThreshold?: number;
 }
 
 /**
@@ -162,7 +170,7 @@ export function parseDxfToSLD(
   dxfContent: string,
   options: DxfParseOptions = {},
 ): SLDAnalysis {
-  const { unitScale = 0.001, textProximityThreshold = 50 } = options; // mm → m
+  const { unitScale = 0.001, textProximityThreshold = 50, endpointSnapThreshold = 50 } = options; // mm → m
 
   const parser = new DxfParser();
   const dxf = parser.parseSync(dxfContent) as DxfParseResult | null;
@@ -295,6 +303,24 @@ export function parseDxfToSLD(
         }
       }
     }
+  }
+
+  // Pass 3: 연결 끝점(node_at_X_Y)을 실제 컴포넌트 id(comp_N)로 재조정.
+  // Pass 2의 케이블 중점 계산이 node_at_ 좌표에 의존하므로 반드시 그 이후에 실행.
+  const snap = (nodeId: string): string => {
+    const c = parseNodeCoords(nodeId);
+    if (!c) return nodeId;
+    let best: SLDComponent | null = null;
+    let bestD = endpointSnapThreshold;
+    for (const comp of components) {
+      const d = euclideanDist(c, comp.position);
+      if (d < bestD) { bestD = d; best = comp; }
+    }
+    return best ? best.id : nodeId;
+  };
+  for (const conn of connections) {
+    conn.from = snap(conn.from);
+    conn.to = snap(conn.to);
   }
 
   return {

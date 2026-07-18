@@ -41,6 +41,8 @@ export interface PdfParseOptions {
   textProximityThreshold?: number;
   /** 최소 선 길이 (포인트, 기본: 10) — 짧은 장식선 무시 */
   minLineLength?: number;
+  /** 연결 끝점을 실제 컴포넌트에 스냅하는 최대 거리 (포인트, 기본: 50) */
+  endpointSnapThreshold?: number;
 }
 
 // =========================================================================
@@ -87,7 +89,8 @@ function parseSpecText(text: string): ParsedSpec {
   if (cableMatch) spec.cableType = cableMatch[1].toUpperCase();
   const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:sq|mm2|㎟)/i);
   if (sizeMatch) spec.conductorSize = parseFloat(sizeMatch[1]);
-  const voltMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kV|V)/i);
+  // 후행 경계로 kVA/MVA(피상전력)의 kV/V 오매칭 차단
+  const voltMatch = text.match(/(\d+(?:\.\d+)?)\s*(kV|V)(?![A-Za-z])/i);
   if (voltMatch) {
     const v = parseFloat(voltMatch[1]);
     spec.voltage = voltMatch[0].toLowerCase().includes('kv') ? v * 1000 : v;
@@ -123,7 +126,7 @@ export async function parsePdfToSLD(
   pdfBytes: ArrayBuffer,
   options: PdfParseOptions = {},
 ): Promise<SLDAnalysis> {
-  const { pageNumber = 1, textProximityThreshold = 30, minLineLength = 10 } = options;
+  const { pageNumber = 1, textProximityThreshold = 30, minLineLength = 10, endpointSnapThreshold = 50 } = options;
 
   // pdfjs-dist 동적 임포트 (서버 번들 최소화)
   const pdfjsLib = await import('pdfjs-dist');
@@ -188,14 +191,17 @@ export async function parsePdfToSLD(
   let connIdx = 0;
 
   // 텍스트 중 심볼 키워드를 포함한 것 → 컴포넌트
+  // 컴포넌트 position은 퍼센트로 스케일되므로, 끝점 스냅용 원좌표(pt)는 별도 보관
   const usedTexts = new Set<number>();
+  const componentAnchors: Array<{ id: string; x: number; y: number }> = [];
   for (let i = 0; i < texts.length; i++) {
     const t = texts[i];
     const type = detectComponentType(t.text);
     if (type !== 'load' || t.fontHeight > 8) { // 큰 텍스트 or 심볼 키워드
       const spec = parseSpecText(t.text);
+      const id = `comp_${++compIdx}`;
       components.push({
-        id: `comp_${++compIdx}`,
+        id,
         type,
         label: t.text.slice(0, 50),
         position: { x: Math.round(t.x / viewport.width * 100), y: Math.round(t.y / viewport.height * 100) },
@@ -203,6 +209,7 @@ export async function parsePdfToSLD(
         current: spec.current ? `${spec.current}A` : undefined,
         rating: spec.power ? `${spec.power}${spec.powerUnit}` : undefined,
       });
+      componentAnchors.push({ id, x: t.x, y: t.y });
       usedTexts.add(i);
     }
   }
@@ -246,6 +253,24 @@ export async function parsePdfToSLD(
       if (spec.conductorSize) closestConn.conductorSize = `${spec.conductorSize}sq`;
       if (spec.cableType) closestConn.cableType = spec.cableType;
     }
+  }
+
+  // 연결 끝점(node_at_X_Y, pt 원좌표)을 실제 컴포넌트 id(comp_N)로 재조정.
+  // 케이블 중점 매핑이 node_at_ 좌표에 의존하므로 반드시 그 이후에 실행.
+  const snap = (nodeId: string): string => {
+    const c = parseNodeCoords(nodeId);
+    if (!c) return nodeId;
+    let bestId: string | null = null;
+    let bestD = endpointSnapThreshold;
+    for (const anchor of componentAnchors) {
+      const d = dist(c, anchor);
+      if (d < bestD) { bestD = d; bestId = anchor.id; }
+    }
+    return bestId ?? nodeId;
+  };
+  for (const conn of connections) {
+    conn.from = snap(conn.from);
+    conn.to = snap(conn.to);
   }
 
   return {

@@ -12,26 +12,10 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { loadCalculation } from '@/lib/supabase';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 
-// ─── PART 1: Token Extraction ───────────────────────────────────
-
-async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    return payload.user_id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
-}
+// ─── PART 1: Verified Token Extraction ──────────────────────────
+// 서명 검증된 Firebase ID 토큰에서만 uid를 추출한다 (atob 위조 불가).
 
 // ─── PART 2: GET Handler ────────────────────────────────────────
 
@@ -60,7 +44,7 @@ export async function GET(
 
     // If the receipt has a user_id, verify the requester owns it
     if (receipt.user_id) {
-      const requesterId = await extractUserId(request);
+      const requesterId = await extractVerifiedUserId(request);
 
       if (!requesterId) {
         return NextResponse.json(

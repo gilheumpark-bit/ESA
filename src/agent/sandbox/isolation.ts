@@ -14,8 +14,23 @@ import { SANDBOX_REGISTRY } from './sandbox-registry';
 
 // ─── PART 1: IsolationMatrix ────────────────────────────────────
 
+// 감사 로그 최대 보관 엔트리 수 — 프로세스 수명 동안 무한 증가 방지 (CLAUDE.md In-memory Maps 규칙)
+const MAX_AUDIT_ENTRIES = 5000;
+
 export class IsolationMatrix {
   private readonly auditLog: CrossAccessLog[] = [];
+
+  /**
+   * 감사 로그에 엔트리를 추가하되, MAX_AUDIT_ENTRIES 상한을 넘으면
+   * 가장 오래된 엔트리부터 제거(FIFO)하여 heap 무한 증가를 방지한다.
+   */
+  private appendLog(entry: CrossAccessLog): void {
+    this.auditLog.push(entry);
+    if (this.auditLog.length > MAX_AUDIT_ENTRIES) {
+      // 초과분만큼 앞에서 잘라냄 (오래된 것 우선 폐기)
+      this.auditLog.splice(0, this.auditLog.length - MAX_AUDIT_ENTRIES);
+    }
+  }
 
   /**
    * Assert that direct communication between two sandboxes is forbidden.
@@ -32,7 +47,7 @@ export class IsolationMatrix {
       reason: `BLOCKED: Direct access attempted from ${from} to ${to}`,
       bridgeMediated: false,
     };
-    this.auditLog.push(entry);
+    this.appendLog(entry);
 
     throw new IsolationViolationError(
       `Direct sandbox communication forbidden: ${from} → ${to}. ` +
@@ -82,7 +97,7 @@ export class IsolationMatrix {
       reason,
       bridgeMediated: true,
     };
-    this.auditLog.push(entry);
+    this.appendLog(entry);
   }
 
   /**

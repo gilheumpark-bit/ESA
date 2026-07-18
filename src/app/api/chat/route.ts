@@ -141,9 +141,19 @@ async function buildStreamingResponse(
       sdkProvider = createMistral({ apiKey });
       break;
     }
-    case 'deepseek': {
-      const { createDeepSeek } = await import('@ai-sdk/deepseek');
-      sdkProvider = createDeepSeek({ apiKey });
+    case 'groq': {
+      // Groq는 OpenAI 호환 엔드포인트 — @ai-sdk/openai에 baseURL 지정
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      sdkProvider = createOpenAI({ apiKey, baseURL: 'https://api.groq.com/openai/v1' });
+      break;
+    }
+    case 'ollama':
+    case 'lmstudio': {
+      // 로컬 프로바이더도 OpenAI 호환 — SSRF 검증된 baseURL 사용 (핸들러 298-307)
+      // Ollama/LM Studio는 OpenAI 호환 엔드포인트를 /v1 하위에 노출하므로 /v1 접미사 필요
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const localBase = getLocalProviderUrl(provider).replace(/\/+$/, '');
+      sdkProvider = createOpenAI({ apiKey: apiKey || 'local', baseURL: `${localBase}/v1` });
       break;
     }
     default: {

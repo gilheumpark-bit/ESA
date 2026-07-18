@@ -266,17 +266,13 @@ export function validateKeyFormat(providerId: string, key: string): boolean {
 export async function resolveProviderKeyWithTimeout(
   providerId: string,
   userKey?: string | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   timeoutMs: number = 5000,
 ): Promise<ResolvedKey> {
-  return Promise.race([
-    Promise.resolve(resolveProviderKey(providerId, userKey)),
-    new Promise<ResolvedKey>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`[ESVA] Provider key resolution timeout after ${timeoutMs}ms for ${PROVIDER_NAMES[providerId] ?? providerId}`)),
-        timeoutMs,
-      ),
-    ),
-  ]);
+  // resolveProviderKey는 동기(환경변수 조회)이므로 타임아웃이 보호할 비동기 작업이 없다.
+  // 기존 Promise.race + setTimeout은 절대 발동하지 않으면서 타이머만 누수시켰다.
+  // 시그니처(async, timeoutMs)는 호출부 호환을 위해 유지한다.
+  return resolveProviderKey(providerId, userKey);
 }
 
 /**

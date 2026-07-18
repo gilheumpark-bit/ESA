@@ -156,8 +156,12 @@ export const BREAKER_RATINGS = {
   VCB: [200, 400, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150] as const,
 } as const;
 
-/** 부하전류 기반 차단기 종류 + 정격 추천 */
-export function recommendBreaker(loadCurrent: number): { type: 'MCCB' | 'ACB' | 'VCB'; rating: number } {
+/**
+ * 부하전류 기반 차단기 종류 + 정격 추천.
+ * @returns 표준 정격을 만족하는 차단기, 또는 최대 표준 정격(6300A)으로도 부족하면 null.
+ *          null 반환 시 호출부는 커스텀/병렬/고압 설계로 에스컬레이션해야 함.
+ */
+export function recommendBreaker(loadCurrent: number): { type: 'MCCB' | 'ACB' | 'VCB'; rating: number } | null {
   const minRating = Math.ceil(loadCurrent * 1.25);
   // MCCB (≤800A)
   const mccb = BREAKER_RATINGS.MCCB.find(r => r >= minRating);
@@ -165,7 +169,8 @@ export function recommendBreaker(loadCurrent: number): { type: 'MCCB' | 'ACB' | 
   // ACB (>800A)
   const acb = BREAKER_RATINGS.ACB.find(r => r >= minRating);
   if (acb) return { type: 'ACB', rating: acb };
-  return { type: 'ACB', rating: BREAKER_RATINGS.ACB[BREAKER_RATINGS.ACB.length - 1] };
+  // 최대 표준 정격(6300A)으로도 부족 → 표준 차단기 없음
+  return null;
 }
 
 /** 데이터 수 */

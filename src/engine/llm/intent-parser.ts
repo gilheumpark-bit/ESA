@@ -183,7 +183,11 @@ function extractNumericParams(query: string): Record<string, unknown> {
 
   // Current: "100A", "50 A"
   const currentMatch = query.match(/(\d+(?:\.\d+)?)\s*[Aa](?:mp)?(?:\s|$|,|,)/);
-  if (currentMatch) params.current = parseFloat(currentMatch[1]);
+  if (currentMatch) {
+    // voltage_drop/cable_sizing 은 'current', breaker/query_breaker_rating 은 'loadCurrent' 로 선언되어 있어 양쪽 모두 채운다
+    params.current = parseFloat(currentMatch[1]);
+    params.loadCurrent = parseFloat(currentMatch[1]);
+  }
 
   // Length: "50m", "100 m", "50미터"
   const lengthMatch = query.match(/(\d+(?:\.\d+)?)\s*(?:m(?:eter)?|미터)(?:\s|$|,|,)/i);

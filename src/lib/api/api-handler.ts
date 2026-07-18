@@ -124,6 +124,14 @@ export function withApiHandler(
       }
     }
 
+    // Body size limit (best-effort via Content-Length header — 스트리밍 바디에서는 부재/위조 가능)
+    const maxBodySize = options.maxBodySize ?? 10 * 1024 * 1024;
+    const contentLength = Number(req.headers.get('content-length') ?? '0');
+    if (Number.isFinite(contentLength) && contentLength > maxBodySize) {
+      log.warn('api', 'Body too large', { ip, route, contentLength, maxBodySize });
+      return buildError('ESVA-9009', 'Request body too large', 413);
+    }
+
     // Context
     const ctx: ApiContext = {
       ip,
@@ -162,7 +170,9 @@ export function withApiHandler(
       const code = codeMatch ? codeMatch[0] : 'ESVA-9999';
       const knownError = getErrorByCode(code);
       const httpStatus = knownError?.httpStatus ?? 500;
-      const displayMessage = knownError?.message_ko ?? message;
+      // 미등록 코드(예: ESVA-9999)의 raw Error.message는 내부 정보(DB 호스트/자격증명 실패 등)를
+      // 노출할 수 있으므로 클라이언트에는 일반 메시지만 반환한다. 원본은 위 log.error에만 기록됨.
+      const displayMessage = knownError?.message_ko ?? '내부 서버 오류가 발생했습니다';
 
       return buildError(code, displayMessage, httpStatus);
     }

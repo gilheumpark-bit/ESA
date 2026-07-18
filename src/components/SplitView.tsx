@@ -49,6 +49,22 @@ export default function SplitView({
   const [mobileTab, setMobileTab] = useState<'left' | 'right'>('left');
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // 반응형 레이아웃을 JS 미디어쿼리로 결정 — 좌/우 패널을 CSS로 이중 마운트하지 않도록
+  // 정확히 하나의 레이아웃(모바일 탭 또는 데스크톱 분할)만 렌더한다.
+  // SSR/hydration 불일치 방지: mounted 전에는 안정적 기본값(데스크톱 분할)을 렌더한다.
+  const [mounted, setMounted] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    setMounted(true);
+    const mql = window.matchMedia('(min-width: 768px)'); // Tailwind md
+    const update = () => setIsDesktop(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+
+  const showMobile = mounted && !isDesktop && mobileTabMode;
+
   // 드래그 핸들러
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -129,8 +145,8 @@ export default function SplitView({
   return (
     <div className={`flex flex-col ${className}`}>
       {/* 모바일: 탭 전환 모드 */}
-      {mobileTabMode && (
-        <div className="flex border-b border-[var(--border-default)] md:hidden">
+      {showMobile && (
+        <div className="flex border-b border-[var(--border-default)]">
           <button
             onClick={() => setMobileTab('left')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
@@ -155,17 +171,18 @@ export default function SplitView({
       )}
 
       {/* 모바일: 탭 콘텐츠 */}
-      {mobileTabMode && (
-        <div className="md:hidden">
+      {showMobile && (
+        <div>
           <div className={mobileTab === 'left' ? '' : 'hidden'}>{left}</div>
           <div className={mobileTab === 'right' ? '' : 'hidden'}>{right}</div>
         </div>
       )}
 
       {/* 데스크톱: 분할 뷰 */}
+      {!showMobile && (
       <div
         ref={containerRef}
-        className={`hidden md:flex ${isHorizontal ? 'flex-row' : 'flex-col'} h-full min-h-0 overflow-hidden rounded-xl border border-[var(--border-default)]`}
+        className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} h-full min-h-0 overflow-hidden rounded-xl border border-[var(--border-default)]`}
         style={{ cursor: isDragging ? (isHorizontal ? 'col-resize' : 'row-resize') : undefined }}
       >
         {/* 좌측 패널 */}
@@ -215,6 +232,7 @@ export default function SplitView({
           {right}
         </div>
       </div>
+      )}
     </div>
   );
 }

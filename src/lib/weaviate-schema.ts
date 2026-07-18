@@ -71,6 +71,7 @@ export async function initWeaviateSchema(): Promise<boolean> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(ESVA_SCHEMA),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (createRes.ok) {

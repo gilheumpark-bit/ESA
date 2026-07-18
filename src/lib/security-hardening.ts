@@ -69,7 +69,8 @@ export function safeJsonParse<T>(json: string): T | null {
   try {
     const parsed = JSON.parse(json);
     const str = JSON.stringify(parsed);
-    if (/__proto__|constructor\s*:|prototype\s*:/i.test(str)) return null;
+    // JSON.stringify는 키를 항상 따옴표로 감싸므로("constructor":) 직렬화된 형태를 검사한다.
+    if (/"(?:__proto__|constructor|prototype)"\s*:/i.test(str)) return null;
     return parsed;
   } catch {
     return null;

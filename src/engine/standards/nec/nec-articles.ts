@@ -31,7 +31,7 @@ const WIRING: CodeArticle[] = [
   ], [{ articleId: 'KEC-212.3', relation: 'equivalent', note: 'KEC 과전류보호 선정' }]),
 
   nec('210.19', '210.19', '분기회로 전선 크기 — 허용전류 ≥ 부하', [
-    { param: 'conductorAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '전선 허용전류 ≥ 비연속부하 + 연속부하×1.25' },
+    { param: 'conductorAmpacityMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '허용전류 여유 = 전선 허용전류 − (비연속부하 + 연속부하×1.25) ≥ 0 (여유값은 체인에서 산출·전달)' },
   ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 분기회로 전선' }]),
 
   nec('210.52', '210.52', '주거 콘센트 배치 기준', [
@@ -48,7 +48,7 @@ const WIRING: CodeArticle[] = [
   ], [{ articleId: 'NEC-210.8', relation: 'reference', note: 'GFCI/AFCI 병행 보호' }]),
 
   nec('215.2', '215.2', '간선 전선 크기 — 허용전류 기준', [
-    { param: 'feederAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '간선 허용전류 ≥ 비연속부하 + 연속부하×1.25' },
+    { param: 'feederAmpacityMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '간선 허용전류 여유 = 간선 허용전류 − (비연속부하 + 연속부하×1.25) ≥ 0 (여유값은 체인에서 산출·전달)' },
   ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 간선 전압강하' }]),
 
   nec('220.12', '220.12', '용도별 조명 부하 단위', [
@@ -56,11 +56,11 @@ const WIRING: CodeArticle[] = [
   ]),
 
   nec('220.40', '220.40', '일반 부하 계산 — 수용률 적용', [
-    { param: 'demandFactor', operator: '>=', value: 0, unit: '%', result: 'PASS', note: '첫 10kVA 100%, 초과분 40% (일반 조명)' },
+    { param: 'demandFactor', operator: '<=', value: 100, unit: '%', result: 'PASS', note: '수용률 ≤100% (첫 10kVA 100%, 초과분 40% — 일반 조명). 100% 초과는 유효하지 않은 입력' },
   ]),
 
   nec('240.4', '240.4', '전선 보호 — OCPD ≤ 전선 허용전류', [
-    { param: 'ocpdRating', operator: '<=', value: 0, unit: 'A', result: 'PASS', note: '과전류보호장치 정격 ≤ 전선 허용전류 (예외: 240.4(B))' },
+    { param: 'ocpdAmpacityMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: 'OCPD 여유 = 전선 허용전류 − OCPD 정격 ≥ 0 (예외: 240.4(B)/(D)). 여유값은 체인에서 산출·전달' },
   ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16' }, { articleId: 'KEC-212.3', relation: 'equivalent', note: 'KEC 과전류차단기' }]),
 
   nec('240.6', '240.6', '표준 과전류보호장치 정격 (A)', [
@@ -82,7 +82,7 @@ const WIRING: CodeArticle[] = [
 
 const CONDUCTORS: CodeArticle[] = [
   nec('310.16', '310.16', '절연전선 허용전류 (도관 내 3선 이하, 30°C)', [
-    { param: 'loadCurrent', operator: '<=', value: 0, unit: 'A', result: 'PASS', note: '부하전류 ≤ Table 310.16 허용전류' },
+    { param: 'ampacityMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '허용전류 여유 = Table 310.16 허용전류 − 부하전류 ≥ 0 (여유값은 체인에서 산출·전달)' },
   ], [{ articleId: 'NEC-240.4', relation: 'reference', note: '과전류보호 협조' }, { articleId: 'NEC-310.15(B)(3)', relation: 'reference', note: '묶음 보정' }, { articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 허용전류' }]),
 
   nec('310.15(B)(2)', '310.15(B)(2)', '주위 온도 보정 계수', [
@@ -98,7 +98,7 @@ const CONDUCTORS: CodeArticle[] = [
   ], [{ articleId: 'NEC-310.16', relation: 'reference', note: '허용전류 온도 등급' }]),
 
   nec('310.106', '310.106', '도체 최소 규격', [
-    { param: 'conductorSizeAWG', operator: '>=', value: 14, unit: 'AWG', result: 'PASS', note: '일반 분기회로 최소 14AWG (15A), 12AWG (20A), 10AWG (30A)' },
+    { param: 'conductorSizeAWG', operator: '<=', value: 14, unit: 'AWG', result: 'PASS', note: '일반 분기회로 최소 14AWG (15A), 12AWG (20A), 10AWG (30A) — AWG 역척도: 게이지 번호 ≤14 이면 14AWG 이상 굵기' },
   ], [{ articleId: 'NEC-210.3', relation: 'reference', note: '분기회로 정격 연동' }]),
 ];
 
@@ -146,15 +146,15 @@ const MOTORS: CodeArticle[] = [
   ]),
 
   nec('430.22', '430.22', '전동기 분기회로 전선 — ≥125% FLC', [
-    { param: 'branchConductorAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '분기 전선 허용전류 ≥ FLC × 1.25' },
+    { param: 'branchConductorMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '분기 전선 여유 = 허용전류 − (FLC × 1.25) ≥ 0 (여유값은 체인에서 산출·전달)' },
   ], [{ articleId: 'KEC-341.1', relation: 'equivalent', note: 'KEC 전동기 분기회로' }]),
 
   nec('430.24', '430.24', '다중 전동기 회로 전선 크기', [
-    { param: 'multiMotorConductor', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '최대 FLC×1.25 + 나머지 FLC 합' },
+    { param: 'multiMotorConductorMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '다중 전동기 전선 여유 = 허용전류 − (최대 FLC×1.25 + 나머지 FLC 합) ≥ 0 (여유값은 체인에서 산출·전달)' },
   ]),
 
   nec('430.32', '430.32', '과부하 계전기 정격', [
-    { param: 'overloadRelayRating', operator: '<=', value: 0, unit: 'A', result: 'PASS', note: 'SF≥1.15: ≤115% FLA, SF<1.15: ≤125% FLA' },
+    { param: 'overloadRelayMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '과부하 계전기 여유 = 허용 상한(SF≥1.15: 125% FLA, SF<1.15: 115% FLA) − 정격 ≥ 0 (여유값은 체인에서 산출·전달)' },
   ]),
 
   nec('430.52', '430.52', '전동기 분기 과전류보호장치 최대 정격', [
@@ -162,11 +162,11 @@ const MOTORS: CodeArticle[] = [
   ]),
 
   nec('430.62', '430.62', '전동기 간선 과전류보호장치', [
-    { param: 'motorFeederOCPD', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '최대 전동기 OCPD + 나머지 FLC 합' },
+    { param: 'motorFeederOCPDMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '간선 OCPD 여유 = 허용 상한(최대 전동기 OCPD + 나머지 FLC 합) − 정격 ≥ 0 (여유값은 체인에서 산출·전달)' },
   ]),
 
   nec('430.109', '430.109', '전동기 개폐기 정격', [
-    { param: 'motorDisconnectRating', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '개폐기 ≥ 115% FLC (HP 정격 또는 전류 정격)' },
+    { param: 'motorDisconnectMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '개폐기 여유 = 개폐기 정격 − 115% FLC ≥ 0 (HP 정격 또는 전류 정격, 여유값은 체인에서 산출·전달)' },
   ]),
 ];
 
@@ -211,7 +211,7 @@ const WIRING_METHODS: CodeArticle[] = [
   ], [{ articleId: 'KEC-501.1', relation: 'equivalent', note: 'KEC 태양광 안전' }, { articleId: 'IEC-712.1', relation: 'equivalent', note: 'IEC PV 안전' }]),
 
   nec('625.40', '625.40', '전기차 충전기 분기회로', [
-    { param: 'evBranchCircuit', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: 'Level 2: 전용 분기회로 40A, 전선 ≥ 50A 허용전류' },
+    { param: 'evBranchCircuitMargin', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: 'EV 분기회로 여유 = 전선 허용전류 − 필요 허용전류(Level 2: 40A 회로당 ≥50A) ≥ 0 (여유값은 체인에서 산출·전달)' },
   ], [{ articleId: 'KEC-260.1', relation: 'equivalent', note: 'KEC EV 충전' }, { articleId: 'JIS-722.1', relation: 'equivalent', note: 'JIS EV 충전' }]),
 
   nec('700.12', '700.12', '비상 전원 — 자동 전환', [

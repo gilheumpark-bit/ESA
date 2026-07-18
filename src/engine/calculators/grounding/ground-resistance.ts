@@ -89,8 +89,8 @@ export function calculateGroundResistance(input: GroundResistanceInput): Detaile
     targetResistance = 10,
   } = input;
 
-  if (n < 1 || !Number.isInteger(n)) {
-    assertPositive(n, 'rodCount');
+  if (!Number.isInteger(n) || n < 1) {
+    throw new Error('rodCount must be a positive integer (>= 1)');
   }
 
   const d = d_mm / 1000; // convert mm to m

@@ -14,17 +14,51 @@ const BLOCKED_HOSTNAMES = new Set([
   'metadata',
 ]);
 
-function ipv4ToInt(ip: string): number | null {
-  const parts = ip.split('.');
-  if (parts.length !== 4) return null;
-  const nums = parts.map((p) => parseInt(p, 10));
-  if (nums.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
-  return ((nums[0] << 24) | (nums[1] << 16) | (nums[2] << 8) | nums[3]) >>> 0;
+/**
+ * Parse an IPv4 host in ANY WHATWG-permitted form to a 32-bit integer:
+ * dotted-decimal (127.0.0.1), integer (2130706433), hex (0x7f.0.0.1),
+ * octal (0177.0.0.1), and shortened forms (127.1). Returns null for
+ * anything that is not a valid IPv4 literal (e.g. real domain names).
+ */
+function flexibleIpv4ToInt(host: string): number | null {
+  const parts = host.split('.');
+  if (parts.length === 0 || parts.length > 4) return null;
+
+  const numbers: number[] = [];
+  for (const part of parts) {
+    if (part.length === 0) return null;
+    let n: number;
+    if (/^0x[0-9a-f]+$/i.test(part)) {
+      n = parseInt(part.slice(2), 16);
+    } else if (/^0[0-7]+$/.test(part)) {
+      n = parseInt(part, 8);
+    } else if (/^[0-9]+$/.test(part)) {
+      n = parseInt(part, 10);
+    } else {
+      return null; // 문자가 섞이면 IPv4가 아님 (도메인)
+    }
+    if (!Number.isFinite(n) || n < 0) return null;
+    numbers.push(n);
+  }
+
+  // 마지막을 제외한 모든 옥텟은 0~255 범위여야 함
+  for (let i = 0; i < numbers.length - 1; i++) {
+    if (numbers[i] > 255) return null;
+  }
+  // 마지막 옥텟은 남은 바이트 수만큼의 범위를 차지할 수 있음
+  const remainingBytes = 4 - (numbers.length - 1);
+  const maxLast = Math.pow(256, remainingBytes) - 1;
+  const last = numbers[numbers.length - 1];
+  if (last > maxLast) return null;
+
+  let ipInt = last;
+  for (let i = 0; i < numbers.length - 1; i++) {
+    ipInt += numbers[i] * Math.pow(256, 3 - i);
+  }
+  return ipInt >>> 0;
 }
 
-function isPrivateOrReservedIPv4(ip: string): boolean {
-  const n = ipv4ToInt(ip);
-  if (n === null) return true;
+function isPrivateOrReservedIPv4Int(n: number): boolean {
   // 10.0.0.0/8
   if ((n >>> 24) === 10) return true;
   // 172.16.0.0/12
@@ -45,6 +79,36 @@ function isPrivateOrReservedIPv4(ip: string): boolean {
   return false;
 }
 
+function isPrivateOrReservedIPv4(ip: string): boolean {
+  const n = flexibleIpv4ToInt(ip);
+  if (n === null) return true;
+  return isPrivateOrReservedIPv4Int(n);
+}
+
+/**
+ * IPv6 리터럴(대괄호 제거된 형태)이 사설/예약 대역인지 판정.
+ * loopback(::1), unspecified(::), ULA(fc00::/7), link-local(fe80::/10),
+ * IPv4-mapped/embedded(::ffff:*) 를 모두 차단한다.
+ */
+function isBlockedIpv6(rawInner: string): boolean {
+  const addr = rawInner.toLowerCase();
+
+  if (addr === '::1' || addr === '::') return true;
+
+  // IPv4-mapped/embedded (::ffff:169.254.169.254, ::ffff:a9fe:a9fe 등)은
+  // IPv4 공간을 IPv6로 우회하는 형태이므로 일괄 차단
+  if (addr.includes('::ffff:') || addr.startsWith('::ffff:')) return true;
+  const v4Embedded = addr.match(/((?:\d{1,3}\.){3}\d{1,3})$/);
+  if (v4Embedded && isPrivateOrReservedIPv4(v4Embedded[1])) return true;
+
+  // 첫 hextet 접두사로 ULA / link-local 판정
+  const firstHextet = addr.startsWith('::') ? '0' : (addr.split(':')[0] || '');
+  if (/^f[cd]/.test(firstHextet)) return true;      // ULA fc00::/7
+  if (/^fe[89ab]/.test(firstHextet)) return true;   // link-local fe80::/10
+
+  return false;
+}
+
 export function assertUrlAllowedForFetch(rawUrl: string): { ok: true; href: string } | { ok: false; reason: string } {
   let parsed: URL;
   try {
@@ -62,14 +126,20 @@ export function assertUrlAllowedForFetch(rawUrl: string): { ok: true; href: stri
     return { ok: false, reason: '허용되지 않는 호스트입니다.' };
   }
 
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-    if (isPrivateOrReservedIPv4(host)) {
+  // IPv6 리터럴 ([...]): loopback/ULA/link-local/IPv4-mapped 차단
+  if (host.startsWith('[') && host.endsWith(']')) {
+    if (isBlockedIpv6(host.slice(1, -1))) {
       return { ok: false, reason: '사설/로컬 주소로의 요청은 허용되지 않습니다.' };
     }
+    return { ok: true, href: parsed.href };
   }
 
-  if (host === '[::1]' || (host.startsWith('[') && host.includes('::1'))) {
-    return { ok: false, reason: '사설/로컬 주소로의 요청은 허용되지 않습니다.' };
+  // IPv4 (dotted-decimal / integer / hex / octal 모든 형식 정규화 후 판정)
+  const ipv4Int = flexibleIpv4ToInt(host);
+  if (ipv4Int !== null) {
+    if (isPrivateOrReservedIPv4Int(ipv4Int)) {
+      return { ok: false, reason: '사설/로컬 주소로의 요청은 허용되지 않습니다.' };
+    }
   }
 
   return { ok: true, href: parsed.href };

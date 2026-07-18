@@ -155,16 +155,16 @@ interface IecTempCorrRow {
 }
 
 const IEC_TEMP_CORRECTION: IecTempCorrRow[] = [
-  { ambientMin: 10, ambientMax: 15, pvc70: 1.22, xlpe90: 1.15 },
-  { ambientMin: 16, ambientMax: 20, pvc70: 1.17, xlpe90: 1.12 },
-  { ambientMin: 21, ambientMax: 25, pvc70: 1.12, xlpe90: 1.08 },
+  { ambientMin: 10, ambientMax: 15, pvc70: 1.17, xlpe90: 1.12 },
+  { ambientMin: 16, ambientMax: 20, pvc70: 1.12, xlpe90: 1.08 },
+  { ambientMin: 21, ambientMax: 25, pvc70: 1.06, xlpe90: 1.04 },
   { ambientMin: 26, ambientMax: 30, pvc70: 1.00, xlpe90: 1.00 },
-  { ambientMin: 31, ambientMax: 35, pvc70: 0.87, xlpe90: 0.94 },
-  { ambientMin: 36, ambientMax: 40, pvc70: 0.71, xlpe90: 0.87 },
-  { ambientMin: 41, ambientMax: 45, pvc70: 0.50, xlpe90: 0.79 },
-  { ambientMin: 46, ambientMax: 50, pvc70: 0.00, xlpe90: 0.71 },
-  { ambientMin: 51, ambientMax: 55, pvc70: 0.00, xlpe90: 0.61 },
-  { ambientMin: 56, ambientMax: 60, pvc70: 0.00, xlpe90: 0.50 },
+  { ambientMin: 31, ambientMax: 35, pvc70: 0.94, xlpe90: 0.96 },
+  { ambientMin: 36, ambientMax: 40, pvc70: 0.87, xlpe90: 0.91 },
+  { ambientMin: 41, ambientMax: 45, pvc70: 0.79, xlpe90: 0.87 },
+  { ambientMin: 46, ambientMax: 50, pvc70: 0.71, xlpe90: 0.82 },
+  { ambientMin: 51, ambientMax: 55, pvc70: 0.61, xlpe90: 0.76 },
+  { ambientMin: 56, ambientMax: 60, pvc70: 0.50, xlpe90: 0.71 },
 ];
 
 function getIecTempFactor(ambientTemp: number, insulation: IecInsulationType): number {
@@ -235,13 +235,21 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
     );
   }
 
-  // Try exact key first, then fallback to method C
+  // 요청된 설치방법 키로만 조회한다. IEC 60364-5-52의 방법별 컬럼은
+  // 상호 치환 불가 — 폐쇄형(A2/B2)·다심(F)은 Method C(클립 직결)보다
+  // 엄격히 낮은 허용전류를 가지므로, 데이터가 없다고 Method C로
+  // 대체하면 비보수적(과대) 값이 된다. 미지원 조합은 조회를 거부한다.
   const primaryKey = `${conductor}_${insulation}_${method}` as IecAmpacityKey;
-  const fallbackKey = `${conductor}_${insulation}_C` as IecAmpacityKey;
-  const row = IEC_BASE_AMPACITY[primaryKey] ?? IEC_BASE_AMPACITY[fallbackKey];
+  const row = IEC_BASE_AMPACITY[primaryKey];
 
   if (!row) {
-    throw new Error(`No IEC ampacity data for: ${conductor}/${insulation}/${method}`);
+    throw new Error(
+      `Unsupported IEC ampacity method/combination: ${conductor}/${insulation}/${method}. ` +
+      `IEC 60364-5-52 columns are not interchangeable — no fallback is applied. ` +
+      `Populated methods: C, A1, B1, D, E (Cu/PVC, Cu/XLPE, Cu/EPR, Al/PVC, Al/XLPE, Al/EPR for C; ` +
+      `Cu/PVC, Cu/XLPE, Al/PVC, Al/XLPE for A1; Cu/PVC, Cu/XLPE for B1; ` +
+      `Cu/PVC, Cu/XLPE, Al/PVC, Al/XLPE for D; Cu/PVC, Cu/XLPE for E).`,
+    );
   }
 
   const baseAmpacity = row[sizeIdx];

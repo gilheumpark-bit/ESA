@@ -126,8 +126,10 @@ export function convertAwgMm2(input: AwgConverterInput): DetailedCalcResult {
     const awgNum = input.awg;
 
     // Step 1: Diameter from AWG formula
-    // For AWG 0000(-3) through 36
-    const effectiveAwg = awgNum; // -1=1/0, -2=2/0, -3=3/0, -4=4/0 convention not used; lookup instead
+    // 입력 규약(-1=1/0, -2=2/0, -3=3/0, -4=4/0)을 ASTM B258 실제 게이지 번호로 변환.
+    // 실제 게이지: 1/0=0, 2/0=-1, 3/0=-2, 4/0=-3 → 음수 입력에 +1 적용.
+    // (0 입력은 AWG 0 = 1/0 = 실게이지 0이므로 그대로 유지; `< 0`만 보정)
+    const effectiveAwg = awgNum < 0 ? awgNum + 1 : awgNum;
     const dMm = 0.127 * Math.pow(92, (36 - effectiveAwg) / 39);
     steps.push({
       step: 1,

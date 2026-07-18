@@ -102,7 +102,7 @@ function computeStandardScore(doc: SearchDocument, query: ParsedQuery): number {
 
   // Weighted combination: overlap is primary, then citations + tier, with clause bonus on top
   const base = citationScore * 0.2 + tierScore * 0.2 + overlapScore * 0.4;
-  return Math.min(1.0, base + clauseBonus * 0.2);
+  return Math.min(1.0, base + clauseBonus);
 }
 
 /**

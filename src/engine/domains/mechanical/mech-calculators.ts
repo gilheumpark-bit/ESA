@@ -89,6 +89,12 @@ export interface HVACLoadInput {
   occupants?: number;
   /** Lighting power density in W/m² (optional) */
   lightingDensity?: number;
+  /**
+   * 난방 부하에서 내부 발열을 공제할지 여부 (기본 false).
+   * 난방 설계조건 = 최한시·재실 없음·조명 소등 → 기본은 내부발열 미공제(보수적).
+   * 명시적 opt-in 시에만 내부발열을 차감한다.
+   */
+  creditInternalGains?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -539,19 +545,23 @@ export function calculateHVACLoad(input: HVACLoadInput): DetailedCalcResult {
   });
 
   // Step 3: Total load
+  // 난방 설계부하는 내부·일사 취득을 공제하지 않는다(설계조건 = 최한시·재실 없음·조명 소등).
+  // 명시적 opt-in(creditInternalGains)일 때만 내부발열을 차감한다.
+  const creditGains = input.creditInternalGains === true;
   let totalLoad: number;
   if (loadType === 'cooling') {
     totalLoad = envelopeLoad + internalGain;
   } else {
-    // Heating: envelope load minus internal gains (internal gains help)
-    totalLoad = Math.max(envelopeLoad - internalGain, 0);
+    totalLoad = creditGains ? Math.max(envelopeLoad - internalGain, 0) : envelopeLoad;
   }
   steps.push({
     step: 3,
     title: `총 ${loadType === 'cooling' ? '냉방' : '난방'} 부하 (Total load)`,
     formula: loadType === 'cooling'
       ? 'Q_{total} = Q_{env} + Q_{int}'
-      : 'Q_{total} = \\max(Q_{env} - Q_{int}, 0)',
+      : creditGains
+        ? 'Q_{total} = \\max(Q_{env} - Q_{int}, 0)'
+        : 'Q_{total} = Q_{env}',
     value: round(totalLoad, 0),
     unit: 'W',
   });
@@ -572,7 +582,9 @@ export function calculateHVACLoad(input: HVACLoadInput): DetailedCalcResult {
     unit: 'W',
     formula: loadType === 'cooling'
       ? 'Q = A \\times f + Q_{int}'
-      : 'Q = A \\times f - Q_{int}',
+      : creditGains
+        ? 'Q = A \\times f - Q_{int}'
+        : 'Q = A \\times f',
     steps,
     source: [createSource('ASHRAE', 'Fundamentals Ch.18', { edition: '2021' })],
     judgment: createJudgment(

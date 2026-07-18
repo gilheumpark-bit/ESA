@@ -4,7 +4,7 @@
  * Formulae:
  *   Impedance:          Zt = Vn / (√3 × In)  (for 3-phase)        [Ω]
  *   Rated current:      In = S / (√3 × Vn)                        [A]
- *   Impedance voltage:  Vz% = (Iz × Zt / Vn) × 100               [%]
+ *   Impedance voltage:  Vz% = (In / Iz) × 100                     [%]
  *
  * Standards: IEC 60076-1 (Power Transformers)
  */
@@ -61,12 +61,12 @@ export function calculateImpedanceVoltage(input: ImpedanceVoltageInput): Detaile
     unit: 'Ω',
   });
 
-  // Step 3: 임피던스 전압 (%) 계산
-  const VzPercent = (Iz * Zt / Vn) * 100;
+  // Step 3: 임피던스 전압 (%) 계산 — %Z = (정격전류/단락전류) × 100 (IEC 60076-1)
+  const VzPercent = (In / Iz) * 100;
   steps.push({
     step: 3,
     title: 'Calculate impedance voltage percentage',
-    formula: 'V_z\\% = \\frac{I_z \\times Z_t}{V_n} \\times 100',
+    formula: 'V_z\\% = \\frac{I_n}{I_z} \\times 100',
     value: round(VzPercent, 2),
     unit: '%',
   });
@@ -81,7 +81,7 @@ export function calculateImpedanceVoltage(input: ImpedanceVoltageInput): Detaile
   return {
     value: round(VzPercent, 2),
     unit: '%',
-    formula: 'V_z\\% = \\frac{I_z \\times Z_t}{V_n} \\times 100',
+    formula: 'V_z\\% = \\frac{I_n}{I_z} \\times 100',
     steps,
     source: [createSource('IEC', '60076-1', { edition: '2011' })],
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'warning'),

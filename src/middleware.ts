@@ -15,6 +15,33 @@ const DEFAULT_LOCALE: SupportedLocale = 'ko';
 /** Rate limit 추적 (Edge Runtime 메모리 — 인스턴스별) */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
+/** rateLimitMap 최대 엔트리 수 (메모리 무한 증가 방지 — DoS 완화) */
+const RATE_LIMIT_MAX_ENTRIES = 10_000;
+
+/**
+ * 만료된 엔트리 제거 + 상한 초과 시 강제 축출.
+ * X-Forwarded-For 회전으로 고유 IP를 무한 삽입하는 공격에도
+ * 맵 크기가 RATE_LIMIT_MAX_ENTRIES를 넘지 않도록 보장한다.
+ */
+function pruneRateLimitMap(now: number): void {
+  // 1) 만료된 엔트리 정리
+  for (const [key, entry] of rateLimitMap) {
+    if (now > entry.resetAt) {
+      rateLimitMap.delete(key);
+    }
+  }
+
+  // 2) 여전히 상한 초과면 가장 오래된 삽입 순서대로 축출 (Map은 삽입 순서 보존)
+  if (rateLimitMap.size >= RATE_LIMIT_MAX_ENTRIES) {
+    const evictCount = rateLimitMap.size - RATE_LIMIT_MAX_ENTRIES + 1;
+    let removed = 0;
+    for (const key of rateLimitMap.keys()) {
+      rateLimitMap.delete(key);
+      if (++removed >= evictCount) break;
+    }
+  }
+}
+
 // =============================================================================
 // PART 2: Helpers
 // =============================================================================
@@ -58,6 +85,8 @@ function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   const entry = rateLimitMap.get(ip);
 
   if (!entry || now > entry.resetAt) {
+    // 새 엔트리 삽입 전 만료분 정리 + 상한 강제 (무한 증가 방지)
+    pruneRateLimitMap(now);
     rateLimitMap.set(ip, { count: 1, resetAt: now + 60_000 });
     return { allowed: true, remaining: RATE_LIMIT_PER_MINUTE - 1 };
   }

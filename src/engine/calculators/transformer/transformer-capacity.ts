@@ -118,15 +118,17 @@ export function calculateTransformerCapacity(input: TransformerCapacityInput): D
 
   // PART 3 — Judgment
   const overSized = utilizationPct < 40;
-  const pass = !overSized && selectedSize <= STANDARD_TRANSFORMER_SIZES_KVA[STANDARD_TRANSFORMER_SIZES_KVA.length - 1];
+  // 최대 표준용량(3000kVA)으로도 설계부하를 못 담는 경우: 미달(fail)
+  const undersized = selectedSize < S_with_margin;
+  const pass = !overSized && !undersized;
   const judgment = createJudgment(
     pass,
     overSized
       ? `Selected ${selectedSize} kVA (${utilizationPct}% utilization) - may be oversized, review demand assumptions`
-      : selectedSize < S_with_margin
+      : undersized
         ? `Required capacity ${round(S_with_margin, 2)} kVA exceeds maximum standard size ${STANDARD_TRANSFORMER_SIZES_KVA[STANDARD_TRANSFORMER_SIZES_KVA.length - 1]} kVA`
         : `Selected ${selectedSize} kVA (${utilizationPct}% utilization)`,
-    overSized ? 'warning' : 'info',
+    overSized ? 'warning' : undersized ? 'error' : 'info',
     'KEC 341',
   );
 

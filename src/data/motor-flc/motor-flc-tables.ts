@@ -52,12 +52,13 @@ export const MOTOR_FLC_3PH: MotorFLCEntry[] = [
   { hp: 125,  kw: 90,    flc_200v: 359.0, flc_208v: 343.0, flc_230v: 312.0, flc_460v: 156.0, flc_575v: 125.0 },
   { hp: 150,  kw: 110,   flc_200v: 414.0, flc_208v: 396.0, flc_230v: 360.0, flc_460v: 180.0, flc_575v: 144.0 },
   { hp: 200,  kw: 150,   flc_200v: 552.0, flc_208v: 528.0, flc_230v: 480.0, flc_460v: 240.0, flc_575v: 192.0 },
-  { hp: 250,  kw: 185,   flc_200v: 604.0, flc_208v: 578.0, flc_230v: 525.0, flc_460v: 263.0, flc_575v: 210.0 },
-  { hp: 300,  kw: 220,   flc_200v: 715.0, flc_208v: 684.0, flc_230v: 622.0, flc_460v: 311.0, flc_575v: 249.0 },
-  { hp: 350,  kw: 260,   flc_200v: 847.0, flc_208v: 810.0, flc_230v: 737.0, flc_460v: 368.0, flc_575v: 295.0 },
-  { hp: 400,  kw: 300,   flc_200v: 968.0, flc_208v: 926.0, flc_230v: 841.0, flc_460v: 421.0, flc_575v: 336.0 },
-  { hp: 450,  kw: 335,   flc_200v: 1085.0,flc_208v: 1038.0,flc_230v: 943.0, flc_460v: 472.0, flc_575v: 377.0 },
-  { hp: 500,  kw: 375,   flc_200v: 1200.0,flc_208v: 1150.0,flc_230v: 1045.0,flc_460v: 523.0, flc_575v: 418.0 },
+  // NEC Table 430.250 (NFPA 70-2023): 460V·575V 열은 공표 정수, 200/208/230V 열은 460V 기준 비율 정합(2.3/2.2/2.0)
+  { hp: 250,  kw: 185,   flc_200v: 695.0, flc_208v: 664.0, flc_230v: 604.0, flc_460v: 302.0, flc_575v: 242.0 },
+  { hp: 300,  kw: 220,   flc_200v: 830.0, flc_208v: 794.0, flc_230v: 722.0, flc_460v: 361.0, flc_575v: 289.0 },
+  { hp: 350,  kw: 260,   flc_200v: 952.0, flc_208v: 911.0, flc_230v: 828.0, flc_460v: 414.0, flc_575v: 336.0 },
+  { hp: 400,  kw: 300,   flc_200v: 1097.0, flc_208v: 1049.0, flc_230v: 954.0, flc_460v: 477.0, flc_575v: 382.0 },
+  { hp: 450,  kw: 335,   flc_200v: 1185.0, flc_208v: 1133.0, flc_230v: 1030.0, flc_460v: 515.0, flc_575v: 412.0 },
+  { hp: 500,  kw: 375,   flc_200v: 1357.0, flc_208v: 1298.0, flc_230v: 1180.0, flc_460v: 590.0, flc_575v: 472.0 },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -117,10 +118,8 @@ function voltageKey1PH(v: number): VoltageKey1PH {
  * @returns FLC (A) or null
  */
 export function getMotorFLC3PH(hp: number, voltage: number): number | null {
-  const entry = MOTOR_FLC_3PH.find(e => e.hp === hp)
-    ?? MOTOR_FLC_3PH.reduce((prev, curr) =>
-      Math.abs(curr.hp - hp) < Math.abs(prev.hp - hp) ? curr : prev
-    );
+  // NEC 430.6(A)(1): 중간 HP는 다음 상위 정격행으로 올림(보수적 선정). 500HP 초과 시 undefined → null (범위 밖)
+  const entry = MOTOR_FLC_3PH.find(e => e.hp >= hp) ?? null;
   if (!entry) return null;
   return entry[voltageKey3PH(voltage)];
 }
@@ -129,10 +128,8 @@ export function getMotorFLC3PH(hp: number, voltage: number): number | null {
  * 단상 전동기 전부하전류 조회.
  */
 export function getMotorFLC1PH(hp: number, voltage: number): number | null {
-  const entry = MOTOR_FLC_1PH.find(e => e.hp === hp)
-    ?? MOTOR_FLC_1PH.reduce((prev, curr) =>
-      Math.abs(curr.hp - hp) < Math.abs(prev.hp - hp) ? curr : prev
-    );
+  // NEC 430.6(A)(1): 중간 HP는 다음 상위 정격행으로 올림(보수적 선정). 범위 밖은 undefined → null
+  const entry = MOTOR_FLC_1PH.find(e => e.hp >= hp) ?? null;
   if (!entry) return null;
   return entry[voltageKey1PH(voltage)];
 }

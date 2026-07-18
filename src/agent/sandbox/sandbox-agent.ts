@@ -170,7 +170,7 @@ export class SandboxAgent {
       const data = String(result.data);
       if (!data) continue;
 
-      switch (result.toolId) {
+      switch (resolveToolCategory(result.toolId)) {
         case 'SEARCH':
           sections.push(`### 검색 결과\n${data}`);
           break;
@@ -280,11 +280,27 @@ interface ToolResult {
 }
 
 /**
+ * 하이픈 도메인 툴 ID(예: 'search-kec', 'calc-voltage-drop')를
+ * 실행 카테고리(SEARCH/CALCULATE/...)로 정규화한다.
+ * 레거시 대문자 ID('SEARCH' 등)는 어떤 prefix에도 매칭되지 않아 자기 자신으로 유지된다(하위 호환).
+ */
+function resolveToolCategory(toolId: string): string {
+  if (toolId.startsWith('search-')) return 'SEARCH';
+  if (toolId.startsWith('calc-')) return 'CALCULATE';
+  if (toolId.startsWith('convert')) return 'CONVERT';
+  if (toolId.startsWith('term')) return 'TERM_LOOKUP';
+  if (toolId.startsWith('std-') || toolId.startsWith('standard')) return 'STANDARD_LOOKUP';
+  if (toolId.startsWith('kg-') || toolId.startsWith('graph')) return 'KNOWLEDGE_GRAPH';
+  return toolId;
+}
+
+/**
  * Execute a single tool by ID.
  * Routes to the real tool implementation based on the tool identifier.
  */
 async function executeTool(toolId: string, query: ParsedQuery): Promise<ToolResult> {
-  switch (toolId) {
+  const category = resolveToolCategory(toolId);
+  switch (category) {
     // ── SEARCH: RAG pipeline over Weaviate ──
     case 'SEARCH': {
       // 안전한 배열 접근 — 빈 배열 시 기본값
@@ -315,10 +331,12 @@ async function executeTool(toolId: string, query: ParsedQuery): Promise<ToolResu
 
     // ── CALCULATE: lookup and describe a calculator from registry ──
     case 'CALCULATE': {
-      if (!query.calculatorId) {
+      // 툴 ID가 'calc-voltage-drop' 형태면 접두사를 벗겨 계산기 ID로 사용
+      const calcId = query.calculatorId ?? (toolId.startsWith('calc-') ? toolId.slice(5) : undefined);
+      if (!calcId) {
         return { toolId, success: true, data: null, sources: [] };
       }
-      const entry = CALCULATOR_REGISTRY.get(query.calculatorId);
+      const entry = CALCULATOR_REGISTRY.get(calcId);
       if (!entry) {
         return { toolId, success: false, data: null, sources: [] };
       }

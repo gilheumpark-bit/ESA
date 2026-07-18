@@ -474,6 +474,12 @@ const SYSTEM_ERRORS: ESAError[] = [
     message_en: 'Content Security Policy violation',
     httpStatus: 403,
   },
+  {
+    code: 'ESVA-9009',
+    message_ko: '요청 본문이 너무 큽니다',
+    message_en: 'Request body too large',
+    httpStatus: 413,
+  },
 ];
 
 // =============================================================================

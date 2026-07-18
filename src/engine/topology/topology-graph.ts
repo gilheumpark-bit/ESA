@@ -295,7 +295,11 @@ export class TopologyGraph {
       }
     }
 
-    const isolatedCount = this.nodes.size - connectedNodes.size;
+    // 실제 노드 집합 기준으로 고립 노드를 계산 (ISOLATED_NODE 이슈와 일치)
+    // connectedNodes는 존재하지 않는 간선 대상 id도 포함할 수 있어 단순 차집합은 과소보고됨
+    const isolatedCount = this.nodes.size > 1
+      ? Array.from(this.nodes.keys()).filter(id => !connectedNodes.has(id)).length
+      : 0;
 
     return {
       valid: issues.length === 0,
@@ -303,7 +307,7 @@ export class TopologyGraph {
       stats: {
         nodeCount: this.nodes.size,
         edgeCount: this.edges.size,
-        isolatedNodes: isolatedCount > 0 ? isolatedCount : 0,
+        isolatedNodes: isolatedCount,
         connectedComponents: componentCount,
       },
     };

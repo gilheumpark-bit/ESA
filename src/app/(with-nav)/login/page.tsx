@@ -42,12 +42,26 @@ const BENEFITS = [
 // PART 2 — Login Page
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Open redirect 방어: `from` 파라미터는 반드시 동일 출처의 내부 경로여야 한다.
+ * '//evil.example', 'https://evil.example', '\\evil' 같은 외부/프로토콜 상대 URL은
+ * 무시하고 안전한 기본 경로('/')로 폴백한다.
+ */
+function sanitizeReturnTo(raw: string | null): string {
+  if (!raw) return '/';
+  // 단일 '/'로 시작하는 상대 경로만 허용 ('//' 및 '/\' 프로토콜 상대 형태는 거부)
+  if (raw[0] !== '/' || raw[1] === '/' || raw[1] === '\\') return '/';
+  // 백슬래시/제어문자 또는 스킴 구분자가 섞인 경우 거부
+  if (raw.includes('\\') || raw.includes('://')) return '/';
+  return raw;
+}
+
 function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, error, signIn } = useAuth();
 
-  const returnTo = searchParams.get('from') ?? '/';
+  const returnTo = sanitizeReturnTo(searchParams.get('from'));
 
   // Redirect if already logged in
   useEffect(() => {

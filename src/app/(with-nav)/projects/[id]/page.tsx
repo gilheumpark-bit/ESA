@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft,
   Users,
@@ -240,9 +241,14 @@ function ShareDialog({
   const handleGenerate = async () => {
     setLoading(true);
     try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
       const res = await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'generateShareLink',
           expireHours,
@@ -354,6 +360,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { user } = useAuth();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -366,7 +373,11 @@ export default function ProjectDetailPage() {
   const fetchProject = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}`);
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/projects/${projectId}`, { headers });
       if (!res.ok) throw new Error('프로젝트를 불러올 수 없습니다.');
       const data = await res.json();
       setProject(data);
@@ -384,9 +395,14 @@ export default function ProjectDetailPage() {
   const handleInvite = async () => {
     if (!inviteEmail) return;
     try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
       await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'inviteMember',
           email: inviteEmail,
@@ -404,9 +420,14 @@ export default function ProjectDetailPage() {
   const handleRemoveMember = async (userId: string) => {
     if (!confirm('이 멤버를 제거하시겠습니까?')) return;
     try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
       await fetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           action: 'removeMember',
           userId,
@@ -421,15 +442,20 @@ export default function ProjectDetailPage() {
   const handleDelete = async () => {
     if (!confirm('프로젝트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
     try {
-      await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      await fetch(`/api/projects/${projectId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       router.push('/projects');
     } catch {
       // Error handling
     }
   };
 
-  // Determine user role (simplified — in production, derive from auth context)
-  const userRole = project?.members?.[0]?.role ?? 'viewer';
+  // 현재 로그인한 사용자(uid)에 해당하는 멤버의 역할을 도출
+  const userRole = project?.members?.find((m) => m.userId === user?.uid)?.role ?? 'viewer';
   const isOwner = userRole === 'owner';
   const canEdit = userRole === 'owner' || userRole === 'editor';
 

@@ -14,6 +14,10 @@ import { CALCULATOR_REGISTRY } from '@engine/calculators';
 import { CalcValidationError } from '@engine/calculators/types';
 import { generateReceipt } from '@engine/receipt';
 import type { GenerateReceiptOpts } from '@engine/receipt';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { runWithCountry } from '@/engine/calculators/country-defaults';
+import { convertInputsToSI, convertResultToImperial, appendAwgEquivalent } from '@/engine/conversion/imperial-adapter';
+import { getSafetyProfile, type CountryCode } from '@/engine/constants/safety-factors';
 
 // ─── PART 1: Request/Response Types ────────────────────────────
 
@@ -55,23 +59,8 @@ const COUNTRY_STANDARD_MAP: Record<string, { standard: string; version: string }
 };
 
 // ─── PART 3: Auth Token Extraction ─────────────────────────────
-
-async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    return payload.user_id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
-}
+// 서명 검증된 Firebase ID 토큰에서만 uid를 추출 (extractVerifiedUserId).
+// atob 기반 위조 토큰은 통과하지 못한다.
 
 // ─── PART 4: Single Calculation Executor ───────────────────────
 
@@ -97,9 +86,40 @@ async function executeSingle(
       };
     }
 
-    const calcResult = entry.calculator(calc.inputs);
+    // 국가 코드 → 안전율 프로파일 (단위계 결정)
+    const countryCode = (calc.countryCode ?? 'KR') as CountryCode;
+    const safetyProfile = getSafetyProfile(countryCode);
+    const unitSystem = safetyProfile.unitSystem;
 
-    const countryCode = calc.countryCode ?? 'KR';
+    // 요청/항목 범위로 국가 컨텍스트를 격리 — 병렬 실행 간 전역 누수 방지
+    const calcResult = runWithCountry(safetyProfile.country, () => {
+      // Imperial → SI 입력 변환 (미국 시장: AWG/kcmil/ft/°F → mm²/m/°C)
+      const { converted: siInputs, conversions } = convertInputsToSI(
+        calc.inputs,
+        unitSystem,
+      );
+
+      // 계산기는 항상 SI 단위로 실행
+      let result = entry.calculator(siInputs);
+
+      // SI → Imperial 출력 변환 (필요 시)
+      if (unitSystem === 'Imperial') {
+        result = convertResultToImperial(result);
+      }
+      // mm² 결과에 AWG 등가 표시 추가 (미국 시장)
+      if (countryCode === 'US') {
+        result = appendAwgEquivalent(result);
+      }
+      // 변환 이력을 경고에 추가
+      if (conversions.length > 0) {
+        result = {
+          ...result,
+          warnings: [...(result.warnings || []), `[Unit Conversion] ${conversions.join('; ')}`],
+        };
+      }
+      return result;
+    });
+
     const stdInfo = COUNTRY_STANDARD_MAP[countryCode] ?? COUNTRY_STANDARD_MAP.KR;
 
     const receiptOpts: GenerateReceiptOpts = {
@@ -144,8 +164,8 @@ const MAX_BATCH_SIZE = 100;
 
 export async function POST(request: NextRequest) {
   try {
-    // Auth required for batch
-    const userId = await extractUserId(request);
+    // Auth required for batch (서명 검증된 토큰만 허용)
+    const userId = await extractVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { success: false, error: { code: 'ESVA-1001', message: 'Authentication required for batch calculations' } },

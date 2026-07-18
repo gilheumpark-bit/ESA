@@ -33,6 +33,8 @@ import {
   Shield,
   Share2,
 } from 'lucide-react';
+import { decryptKey } from '@/lib/ai-providers';
+import { getCurrentUser } from '@/lib/firebase';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types and Constants
@@ -334,8 +336,19 @@ function CameraButton() {
       const imageBlob = await captureFrame();
       stopCamera();
 
-      // Get user's BYOK API key from localStorage
-      const apiKey = localStorage.getItem('esa-byok-openai-key') ?? '';
+      // BYOK 키는 'esa-byok-<provider>' 키에 암호화되어 저장됨 — 복호화 후 사용
+      // 복호화 secret으로 로그인 사용자 uid 사용 (BYOK 저장 시와 동일 secret)
+      const stored = localStorage.getItem('esa-byok-openai');
+      const uid = (await getCurrentUser())?.uid;
+      let apiKey = '';
+      if (stored && uid) {
+        try {
+          apiKey = await decryptKey(stored, uid);
+        } catch {
+          // 복호화 실패 시 빈 키로 처리하여 아래 안내 메시지 노출
+          apiKey = '';
+        }
+      }
       if (!apiKey) {
         setError('OpenAI API 키가 필요합니다. BYOK 설정에서 등록하세요. → /settings/byok');
         setStatus('error');

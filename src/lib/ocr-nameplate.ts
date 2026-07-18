@@ -109,9 +109,13 @@ export function parseElectricalParams(text: string): Partial<NameplateData> {
     if (m) {
       const val = m[2] ?? m[1];
       if (val) {
-        if (pattern.source.includes('MVA')) result.power = `${val}MVA`;
-        else if (pattern.source.includes('kVA')) result.power = `${val}kVA`;
-        else if (pattern.source.includes('kW|KW')) result.power = `${val}kW`;
+        // 단위는 정규식 소스가 아니라 실제 매칭된 텍스트(m[0])에서 판정.
+        // powerPatterns[3]의 소스는 kW|W|kVA|MVA 를 모두 포함하므로
+        // 소스 기반 판정 시 모든 값이 MVA로 잘못 라벨링됨.
+        const unit = m[0];
+        if (/MVA/i.test(unit)) result.power = `${val}MVA`;
+        else if (/kVA/i.test(unit)) result.power = `${val}kVA`;
+        else if (/kW/i.test(unit)) result.power = `${val}kW`;
         else result.power = `${val}W`;
       }
       break;
@@ -238,6 +242,9 @@ Return a JSON object with these fields (omit if not visible):
 }
 Return ONLY valid JSON. No markdown, no explanation.`;
 
+/** Vision 공급자 응답 대기 상한 (hung connection 방지) */
+const VISION_TIMEOUT_MS = 30_000;
+
 /**
  * Vision LLM을 사용한 명판 OCR
  * Supports: OpenAI (GPT-4V), Anthropic (Claude Vision), Google (Gemini Vision)
@@ -297,39 +304,51 @@ async function callOpenAIVision(
   mimeType: string,
   options: NameplateOCROptions,
 ): Promise<string> {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${options.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: options.model || 'gpt-4.1',
-      messages: [
-        { role: 'system', content: NAMEPLATE_SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Analyze this equipment nameplate and extract all electrical parameters.' },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' },
-            },
-          ],
-        },
-      ],
-      max_tokens: 2000,
-      temperature: 0.1,
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), VISION_TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: options.model || 'gpt-4.1',
+        messages: [
+          { role: 'system', content: NAMEPLATE_SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Analyze this equipment nameplate and extract all electrical parameters.' },
+              {
+                type: 'image_url',
+                image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' },
+              },
+            ],
+          },
+        ],
+        max_tokens: 2000,
+        temperature: 0.1,
+      }),
+      signal: ctrl.signal,
+    });
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`[ESA-OCR] OpenAI Vision error ${res.status}: ${err.slice(0, 200)}`);
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`[ESA-OCR] OpenAI Vision error ${res.status}: ${err.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? '';
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`[ESA-OCR] Vision request timed out after ${VISION_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? '';
 }
 
 async function callClaudeVision(
@@ -337,42 +356,54 @@ async function callClaudeVision(
   mimeType: string,
   options: NameplateOCROptions,
 ): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': options.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: options.model || 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
-      system: NAMEPLATE_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mimeType, data: base64 },
-            },
-            {
-              type: 'text',
-              text: 'Analyze this equipment nameplate and extract all electrical parameters.',
-            },
-          ],
-        },
-      ],
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), VISION_TIMEOUT_MS);
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': options.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: options.model || 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        system: NAMEPLATE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mimeType, data: base64 },
+              },
+              {
+                type: 'text',
+                text: 'Analyze this equipment nameplate and extract all electrical parameters.',
+              },
+            ],
+          },
+        ],
+      }),
+      signal: ctrl.signal,
+    });
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`[ESA-OCR] Claude Vision error ${res.status}: ${err.slice(0, 200)}`);
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`[ESA-OCR] Claude Vision error ${res.status}: ${err.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    return data.content?.[0]?.text ?? '';
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`[ESA-OCR] Vision request timed out after ${VISION_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await res.json();
-  return data.content?.[0]?.text ?? '';
 }
 
 async function callGeminiVision(
@@ -383,31 +414,43 @@ async function callGeminiVision(
   const model = options.model || 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${options.apiKey}`;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: `${NAMEPLATE_SYSTEM_PROMPT}\n\nAnalyze this equipment nameplate and extract all electrical parameters.` },
-            {
-              inline_data: { mime_type: mimeType, data: base64 },
-            },
-          ],
-        },
-      ],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 2000 },
-    }),
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), VISION_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: `${NAMEPLATE_SYSTEM_PROMPT}\n\nAnalyze this equipment nameplate and extract all electrical parameters.` },
+              {
+                inline_data: { mime_type: mimeType, data: base64 },
+              },
+            ],
+          },
+        ],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 2000 },
+      }),
+      signal: ctrl.signal,
+    });
 
-  if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`[ESA-OCR] Gemini Vision error ${res.status}: ${err.slice(0, 200)}`);
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      throw new Error(`[ESA-OCR] Gemini Vision error ${res.status}: ${err.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`[ESA-OCR] Vision request timed out after ${VISION_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

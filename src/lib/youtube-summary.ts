@@ -12,7 +12,9 @@ export function extractVideoId(url: string): string | null {
 }
 
 export async function fetchVideoMeta(videoId: string): Promise<{ title: string; duration: string }> {
-  const res = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`);
+  const res = await fetch(`https://www.youtube.com/oembed?url=https://youtube.com/watch?v=${videoId}&format=json`, {
+    signal: AbortSignal.timeout(5000),
+  });
   if (!res.ok) throw new Error(`Video meta fetch failed: ${res.status}`);
   const data = await res.json();
   return { title: data.title || 'Unknown', duration: 'N/A' };
@@ -43,9 +45,7 @@ export async function summarizeYouTube(
     };
   }
 
-  return {
-    summary: `[${options.provider || 'AI'}] API 연동 요약 — 추후 구현 예정`,
-    keywords: [],
-    keyPoints: [],
-  };
+  // BYOK LLM 요약은 미구현 — placeholder 성공 응답 대신 명시적 실패로 fail-fast
+  // (route.ts BYOK catch가 ESA-6099/500으로 매핑)
+  throw new Error('YouTube LLM summarization not yet implemented');
 }

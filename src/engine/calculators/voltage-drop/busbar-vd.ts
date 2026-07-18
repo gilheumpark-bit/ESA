@@ -20,6 +20,7 @@ import {
   DetailedCalcResult,
   CalcStep,
   assertPositive,
+  assertNonNegative,
   assertRange,
   round,
 } from '../types';
@@ -64,6 +65,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
     assertPositive(input.sections[i].current, `sections[${i}].current`);
     assertPositive(input.sections[i].length, `sections[${i}].length`);
     assertPositive(input.sections[i].resistance, `sections[${i}].resistance`);
+    assertNonNegative(input.sections[i].reactance, `sections[${i}].reactance`);
   }
 
   const { voltage: V, powerFactor: pf } = input;
@@ -78,7 +80,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
 
   input.sections.forEach((sec, idx) => {
     const L_km = sec.length / 1000;
-    const X = sec.reactance ?? 0;
+    const X = sec.reactance;
     const dropV = SQRT3 * sec.current * L_km * (sec.resistance * cosPhi + X * sinPhi);
     cumulativeDropV += dropV;
     const cumPercent = (cumulativeDropV / V) * 100;

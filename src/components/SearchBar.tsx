@@ -125,16 +125,21 @@ export default function SearchBar({
   const [isOpen, setIsOpen] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // Fetch suggestions with debounce — calls /api/autocomplete
   const fetchSuggestions = useCallback((partial: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(async () => {
+      // 이전 요청 취소 — 응답 순서 역전으로 인한 stale suggestion 방지
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
         const limit = partial.trim().length === 0 ? 8 : 10;
         const params = new URLSearchParams({ q: partial, lang: 'ko', limit: String(limit) });
-        const res = await fetch(`/api/autocomplete?${params.toString()}`);
+        const res = await fetch(`/api/autocomplete?${params.toString()}`, { signal: controller.signal });
         if (!res.ok) throw new Error(`Autocomplete failed (${res.status})`);
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
@@ -142,8 +147,8 @@ export default function SearchBar({
         } else {
           setSuggestions([]);
         }
-      } catch {
-        setSuggestions([]);
+      } catch (err) {
+        if ((err as Error)?.name !== 'AbortError') setSuggestions([]);
       }
     }, DEBOUNCE_MS);
   }, []);

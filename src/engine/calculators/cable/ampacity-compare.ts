@@ -1,15 +1,14 @@
 /**
- * Ampacity Country-Comparison Calculator
+ * Ampacity Calculator (KEC)
  *
- * Compares allowable current-carrying capacity for the same cable across:
- *   - KEC (한국전기설비기준 Table 232-1)
- *   - NEC (Table 310.16)
- *   - IEC 60364-5-52 (Table B.52.2 ~ B.52.4)
+ * KEC(한국전기설비기준 Table 232-1) 허용전류를 조회하고 주위온도 보정을 적용한다.
+ * NEC/IEC 값은 KEC 표에 상수를 곱하는 방식으로는 정확히 유도할 수 없어 제거했다
+ * (실 표 기반 국가 비교는 global/ampacity-global-compare.ts 사용).
  *
  * Applies temperature derating: I_derated = I_base × Kt
  *   Kt = sqrt((T_insulation - T_ambient) / (T_insulation - T_reference))
  *
- * Standards: KEC 232.3, NEC 310.16, IEC 60364-5-52
+ * Standards: KEC 232.3
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -56,9 +55,10 @@ const KEC_TABLE: AmpacityEntry[] = [
   { size: 300,  pvcCu: 530, xlpeCu: 693, pvcAl: 411, xlpeAl: 538 },
 ];
 
-// NEC and IEC have slightly different values — using representative offsets
-const NEC_FACTOR = 0.98;   // NEC values typically ~2% lower for same conditions
-const IEC_FACTOR = 1.02;   // IEC values slightly higher in some cable arrangements
+// NOTE: 이 계산기는 KEC 표 값만 신뢰 가능한 출처로 제공한다.
+// NEC/IEC 값은 별도 표 조회 없이 KEC 값에 임의 상수를 곱해 조작할 수 없으므로
+// (실제 NEC/IEC 허용전류는 KEC와 상수비로 추종하지 않음) 비교 출력을 제거했다.
+// 실 표 기반 국가 비교가 필요하면 global/ampacity-global-compare.ts를 사용할 것.
 
 // ── Input / Output ──────────────────────────────────────────────────────────
 
@@ -94,11 +94,9 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
 
   const steps: CalcStep[] = [];
 
-  // PART 2 — Base ampacity lookup
+  // PART 2 — Base ampacity lookup (KEC only — 신뢰 가능한 단일 출처)
   const key = `${input.insulation.toLowerCase()}${input.conductor}` as keyof AmpacityEntry;
   const kecBase = entry[key] as number;
-  const necBase = round(kecBase * NEC_FACTOR, 0);
-  const iecBase = round(kecBase * IEC_FACTOR, 0);
 
   steps.push({
     step: 1,
@@ -107,24 +105,6 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     value: kecBase,
     unit: 'A',
     standardRef: 'KEC 232.3 Table 232-1',
-  });
-
-  steps.push({
-    step: 2,
-    title: 'NEC base ampacity',
-    formula: 'I_{base,NEC}',
-    value: necBase,
-    unit: 'A',
-    standardRef: 'NEC Table 310.16',
-  });
-
-  steps.push({
-    step: 3,
-    title: 'IEC base ampacity',
-    formula: 'I_{base,IEC}',
-    value: iecBase,
-    unit: 'A',
-    standardRef: 'IEC 60364-5-52 Table B.52.4',
   });
 
   // PART 3 — Temperature derating (if ambient != reference)
@@ -138,7 +118,7 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     Kt = Math.sqrt(numerator / denominator);
 
     steps.push({
-      step: 4,
+      step: 2,
       title: `Temperature derating factor (${ambientTemp}°C ambient)`,
       formula: 'K_t = \\sqrt{\\frac{T_{ins} - T_{amb}}{T_{ins} - T_{ref}}}',
       value: round(Kt, 4),
@@ -147,13 +127,11 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
   }
 
   const kecDerated = round(kecBase * Kt, 0);
-  const necDerated = round(necBase * Kt, 0);
-  const iecDerated = round(iecBase * Kt, 0);
 
   if (ambientTemp !== refTemp) {
     steps.push({
-      step: 5,
-      title: 'Derated ampacities',
+      step: 3,
+      title: 'Derated ampacity (KEC)',
       formula: 'I_{derated} = I_{base} \\times K_t',
       value: kecDerated,
       unit: 'A (KEC)',
@@ -168,18 +146,14 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     steps,
     source: [
       createSource('KEC', '232.3', { edition: '2021' }),
-      createSource('NEC', '310.16', { edition: '2023' }),
-      createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],
     judgment: createJudgment(
       true,
-      `${input.cableSize} mm² ${input.conductor}/${input.insulation} at ${ambientTemp}°C — KEC: ${kecDerated}A, NEC: ${necDerated}A, IEC: ${iecDerated}A`,
+      `${input.cableSize} mm² ${input.conductor}/${input.insulation} at ${ambientTemp}°C — KEC: ${kecDerated}A`,
       'info',
     ),
     additionalOutputs: {
       kecAmpacity: { value: kecDerated, unit: 'A' },
-      necAmpacity: { value: necDerated, unit: 'A' },
-      iecAmpacity: { value: iecDerated, unit: 'A' },
       deratingFactor: { value: round(Kt, 4), unit: '' },
     },
   };

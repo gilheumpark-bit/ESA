@@ -268,12 +268,18 @@ const reportStep: PipelineStep = {
           { cableSize: ctx.params!.minCableSize_sq ?? 0 },
           {
             maxRounds: 5,
-            verify: async (spec) => ({
-              compliant: (spec['cableSize'] as number) > (ctx.params!.minCableSize_sq ?? 0),
-              calculatedValue: calc.value,
-              limitValue: ctx.standards?.vdLimit ?? 5,
-              unit: calc.unit,
-            }),
+            verify: async (spec) => {
+              // 후보 단면적으로 전압강하를 재계산 (R = ρ·L/A → VD% ∝ 1/A)
+              const candidate = spec['cableSize'] as number;
+              const orig = ctx.params!.minCableSize_sq ?? candidate;
+              const limit = ctx.standards?.vdLimit ?? 5;
+              // 전압강하(%) 이외 지표(전류/암페어시티)는 이 스케일링 법칙이 성립하지 않으므로 보류
+              if (calc.unit !== '%') {
+                return { compliant: false, calculatedValue: calc.value, limitValue: limit, unit: calc.unit };
+              }
+              const scaledVD = orig > 0 ? calc.value * (orig / candidate) : calc.value;
+              return { compliant: scaledVD <= limit, calculatedValue: scaledVD, limitValue: limit, unit: calc.unit };
+            },
             fix: async (spec) => {
               const sizes = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300, 400, 500, 630];
               const curr = spec['cableSize'] as number;

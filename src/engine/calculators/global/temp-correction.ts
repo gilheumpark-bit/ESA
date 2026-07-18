@@ -48,6 +48,10 @@ export function calculateTempCorrection(input: TempCorrectionInput): DetailedCal
     throw new Error('actualTemp must be a finite number');
   }
   assertPositive(input.maxConductorTemp, 'maxConductorTemp');
+  // 분모(Tmax - Tref) > 0 보장: IEC 60364-5-52 CF 공식은 Tref < Tmax에서만 정의됨
+  if (input.referenceTemp >= input.maxConductorTemp) {
+    throw new Error('referenceTemp must be less than maxConductorTemp (Tmax - Tref must be > 0)');
+  }
 
   const { baseAmpacity: Ibase, referenceTemp: Tref, actualTemp: Tactual, maxConductorTemp: Tmax } = input;
 

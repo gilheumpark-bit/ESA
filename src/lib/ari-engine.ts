@@ -45,6 +45,9 @@ const EMA_HISTORY_SIZE = 10;
 const EMA_ALPHA = 0.3;
 const LATENCY_GOOD_MS = 2_000;
 const LATENCY_BAD_MS = 15_000;
+// states Map 무한 증가 방지 (CLAUDE.md: 모든 in-memory Map은 MAX_ENTRIES + cleanup 필수).
+// 알려진 프로바이더는 소수(7개)이므로 넉넉한 상한. 초과 시 가장 오래된 항목부터 제거(FIFO).
+const MAX_PROVIDER_STATES = 256;
 
 // ============================================================
 // PART 3 — ARI Manager
@@ -75,9 +78,19 @@ export class ARIManager {
     let s = this.states.get(provider);
     if (!s) {
       s = createDefaultState(provider);
+      this.evictIfNeeded();
       this.states.set(provider, s);
     }
     return s;
+  }
+
+  /** 상한 초과 시 가장 오래 삽입된 항목부터 제거 (Map은 삽입 순서 보존 → FIFO 축출) */
+  private evictIfNeeded(): void {
+    while (this.states.size >= MAX_PROVIDER_STATES) {
+      const oldest = this.states.keys().next().value;
+      if (oldest === undefined) break;
+      this.states.delete(oldest);
+    }
   }
 
   /** AI 호출 결과 반영 (성공/실패 + 지연시간) */

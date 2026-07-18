@@ -140,14 +140,24 @@ async function pinJsonToPinata(
     },
   };
 
-  const response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify(body),
-  });
+  let response: Response;
+  try {
+    response = await fetch('https://api.pinata.cloud/pinning/pinJSONToIPFS', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${jwt}`,
+      },
+      body: JSON.stringify(body),
+      // 쓰기 작업이므로 게이트웨이 읽기(15s)보다 여유 있는 30s 타임아웃
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new Error('[ESA-6002] Pinata pinning timed out after 30s');
+    }
+    throw err;
+  }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');

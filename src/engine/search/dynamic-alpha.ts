@@ -183,9 +183,11 @@ export function adjustAlphaFromFeedback(
   // (keyword 쪽이었으면 semantic 쪽으로, 반대도 동일)
   let adjusted: number;
   if (fb < 0) {
-    // 나쁜 결과: alpha를 0.5 방향으로 이동 후 반대로 약간
+    // 나쁜 결과: alpha를 0.5 방향으로 이동 후 현재 모드의 반대 방향으로 약간 더 밀어낸다
+    // (keyword 쪽 baseAlpha>0.5 이면 semantic 쪽으로, semantic 쪽이면 keyword 쪽으로)
     const towardCenter = (0.5 - baseAlpha) * 0.3;
-    adjusted = baseAlpha + towardCenter - adjustment;
+    const awaySign = baseAlpha > 0.5 ? -1 : 1;
+    adjusted = baseAlpha + towardCenter + awaySign * Math.abs(adjustment);
   } else {
     // 좋은 결과: 현재 방향 약간 강화
     adjusted = baseAlpha + adjustment * (baseAlpha > 0.5 ? 1 : -1);

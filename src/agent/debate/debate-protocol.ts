@@ -128,7 +128,7 @@ export function executeDebateRound(
 
     // 물리법칙 대조 — V=IR, P=VI 등 위반 시 즉시 반려
     const physicsCheck = validatePhysicsLaw(
-      disagreement.calcId,
+      CALC_TO_PARAM[disagreement.calcId] ?? disagreement.calcId,
       entry.value,
       extractRelatedParams(teamResult),
     );
@@ -391,8 +391,9 @@ export function runDebate(
     if (!finalConsensus) {
       const conservativeEntry = dis.entries
         .sort((a, b) => {
-          // 전압강하는 높은 값이 보수적, 허용전류는 낮은 값이 보수적
-          if (dis.calcId.includes('voltage_drop')) return b.value - a.value;
+          // 전압강하는 높은 값이 보수적(최악 조건), 허용전류는 낮은 값이 보수적
+          const param = CALC_TO_PARAM[dis.calcId];
+          if (param === 'voltageDropPercent') return b.value - a.value;
           return a.value - b.value;
         })[0];
       finalPosition = `${conservativeEntry.value} ${conservativeEntry.unit} (보수적 채택)`;

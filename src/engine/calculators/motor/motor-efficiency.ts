@@ -58,6 +58,15 @@ function lookupEfficiency(ieClass: IEClass, ratedPower: number): number {
   return table[String(closest)];
 }
 
+// 부분부하 효율 모델 (load-squared loss).
+// eta(load) = loadRatio / (loadRatio + k*loadRatio^2), k = (1-etaRated)/etaRated
+// -> loadRatio=1 에서 정확히 etaRated 로 수렴 (etaRated 를 제곱하지 않음).
+// Math.min(p, etaRated) 로 정격 초과 부하(loadRatio>1) 이외 구간은 정격효율로 클램프.
+function partialLoadEfficiency(etaRated: number, loadRatio: number): number {
+  const p = loadRatio / (loadRatio + ((1 - etaRated) / etaRated) * loadRatio * loadRatio);
+  return Math.min(p, etaRated);
+}
+
 // ── Calculator ──────────────────────────────────────────────────────────────
 
 export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedCalcResult {
@@ -84,11 +93,9 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
     standardRef: 'IEC 60034-30-1',
   });
 
-  // Step 2: Adjust for partial load (simplified parabolic model)
-  // eta(load) = eta_rated * loadRatio / (loadRatio + (1-eta_rated)/eta_rated * loadRatio^2 + constant losses)
-  // Simplified: at partial load, efficiency dips slightly
-  const etaPartial = etaRated * loadRatio / (loadRatio + ((1 - etaRated) / etaRated) * loadRatio * loadRatio);
-  const etaActual = Math.min(etaPartial, etaRated);
+  // Step 2: Adjust for partial load (load-squared loss model)
+  // etaRated 로 정확히 수렴하는 모델. loadRatio<=1 구간은 정격효율로 클램프됨.
+  const etaActual = partialLoadEfficiency(etaRated, loadRatio);
   steps.push({
     step: 2,
     title: '부분부하 효율 보정 (Partial load efficiency)',
@@ -121,7 +128,8 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
 
   // Step 5: Savings vs IE1
   const etaIE1 = lookupEfficiency('IE1', ratedPower);
-  const PinIE1 = Pout / etaIE1;
+  const etaIE1Actual = partialLoadEfficiency(etaIE1, loadRatio);
+  const PinIE1 = Pout / etaIE1Actual;
   const costIE1 = PinIE1 * annualHours * rate;
   const savings = costIE1 - annualCost;
   steps.push({

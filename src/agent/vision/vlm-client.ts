@@ -27,6 +27,8 @@ export interface VLMOptions {
   temperature?: number;
   /** 최대 재시도 횟수 (기본 2) */
   maxRetries?: number;
+  /** fetch 타임아웃 (ms) — 미지정 시 provider 기본값 */
+  timeoutMs?: number;
 }
 
 export interface VLMAnalysisResult {
@@ -46,12 +48,14 @@ const VLM_CONFIG = {
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
+    defaultTimeoutMs: 30000,
   },
   openai: {
     defaultModel: 'gpt-4.1',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
+    defaultTimeoutMs: 30000,
   },
 } as const;
 
@@ -142,39 +146,48 @@ async function analyzeWithGemini(
   model?: string,
   temperature?: number,
   maxTokens?: number,
+  timeoutMs?: number,
 ): Promise<VLMAnalysisResult> {
   const start = Date.now();
   const cfg = VLM_CONFIG.gemini;
   const finalModel = model ?? cfg.defaultModel;
   const url = `${cfg.endpoint}/${finalModel}:generateContent?key=${apiKey}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: SLD_VISION_PROMPT },
-          { inline_data: { mime_type: mimeType, data: imageBase64 } },
-        ],
-      }],
-      generationConfig: {
-        temperature: temperature ?? cfg.defaultTemp,
-        maxOutputTokens: maxTokens ?? cfg.defaultMaxTokens,
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
+  // 타임아웃: 정지된 연결이 Promise.all region fan-out을 무한 블로킹하지 않도록 abort
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs ?? cfg.defaultTimeoutMs);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: SLD_VISION_PROMPT },
+            { inline_data: { mime_type: mimeType, data: imageBase64 } },
+          ],
+        }],
+        generationConfig: {
+          temperature: temperature ?? cfg.defaultTemp,
+          maxOutputTokens: maxTokens ?? cfg.defaultMaxTokens,
+          responseMimeType: 'application/json',
+        },
+      }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+
+    return parseVLMResponse(text, finalModel, Date.now() - start);
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
-
-  return parseVLMResponse(text, finalModel, Date.now() - start);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -188,44 +201,53 @@ async function analyzeWithOpenAI(
   model?: string,
   temperature?: number,
   maxTokens?: number,
+  timeoutMs?: number,
 ): Promise<VLMAnalysisResult> {
   const start = Date.now();
   const cfg = VLM_CONFIG.openai;
   const finalModel = model ?? cfg.defaultModel;
 
-  const response = await fetch(cfg.endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: finalModel,
-      messages: [
-        { role: 'system', content: SLD_VISION_PROMPT },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' } },
-            { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
-          ],
-        },
-      ],
-      temperature: temperature ?? cfg.defaultTemp,
-      max_tokens: maxTokens ?? cfg.defaultMaxTokens,
-      response_format: { type: 'json_object' },
-    }),
-  });
+  // 타임아웃: 정지된 연결이 Promise.all region fan-out을 무한 블로킹하지 않도록 abort
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs ?? cfg.defaultTimeoutMs);
+  try {
+    const response = await fetch(cfg.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: finalModel,
+        messages: [
+          { role: 'system', content: SLD_VISION_PROMPT },
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' } },
+              { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
+            ],
+          },
+        ],
+        temperature: temperature ?? cfg.defaultTemp,
+        max_tokens: maxTokens ?? cfg.defaultMaxTokens,
+        response_format: { type: 'json_object' },
+      }),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenAI Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`OpenAI Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content ?? '{}';
+
+    return parseVLMResponse(text, finalModel, Date.now() - start);
+  } finally {
+    clearTimeout(timer);
   }
-
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content ?? '{}';
-
-  return parseVLMResponse(text, finalModel, Date.now() - start);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -249,7 +271,8 @@ function parseVLMResponse(
       label: (c.label as string) ?? '',
       rating: c.rating as string | undefined,
       position: (c.x != null && c.y != null) ? { x: Number(c.x), y: Number(c.y) } : undefined,
-      confidence: Number(c.confidence ?? 0.7),
+      // 비수치 문자열("high" 등)은 NaN → avgConf 오염 방지. NaN/±Infinity 시 0.7 폴백 후 [0,1] 클램프
+      confidence: (() => { const n = Number(c.confidence); return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.7; })(),
     }));
 
     const connections: ExtractedConnection[] = (parsed.connections ?? []).map((conn: Record<string, unknown>) => ({
@@ -309,9 +332,9 @@ export async function analyzeDrawingWithVLM(
   const { result, retryCount } = await withRetry(async () => {
     switch (options.provider) {
       case 'gemini':
-        return analyzeWithGemini(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
+        return analyzeWithGemini(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens, options.timeoutMs);
       case 'openai':
-        return analyzeWithOpenAI(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
+        return analyzeWithOpenAI(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens, options.timeoutMs);
       default:
         throw new Error(`Unsupported VLM provider: ${options.provider}`);
     }

@@ -82,10 +82,6 @@ const AMPACITY_DATA: AmpacityRecord[] = [
   },
 ];
 
-// Correction factors — 국가별 프로파일에서 가져오되, 비교 계산기이므로 기본값도 유지
-const PVC_DERATING = activeDefaults().pvcDerating;
-const ALUMINUM_DERATING = activeDefaults().aluminumDerating;
-
 function tempCorrectionFactor(refTemp: number, actualTemp: number, maxTemp: number): number {
   if (actualTemp >= maxTemp) return 0;
   return Math.sqrt((maxTemp - actualTemp) / (maxTemp - refTemp));
@@ -101,6 +97,11 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
 
   const { cableSize, conductor, insulation, ambientTemp } = input;
   const steps: CalcStep[] = [];
+
+  // 보정 계수 — 요청 스코프 국가 프로파일에서 매 호출 시 조회 (모듈 로드 시점 고정 방지)
+  const defaults = activeDefaults();
+  const PVC_DERATING = defaults.pvcDerating;
+  const ALUMINUM_DERATING = defaults.aluminumDerating;
 
   // PART 2 -- Derivation
   // Step 1: Identify material/insulation derating
@@ -119,6 +120,7 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
   const perCountry: { country: string; standard: string; baseAmpacity: number; correctionFactor: number; correctedAmpacity: number }[] = [];
 
   let stepNum = 2;
+  let approximated = false;   // 표 값 근사 사용 여부 (중간 사이즈)
   for (const record of AMPACITY_DATA) {
     // Find nearest cable size in table
     const sizes = Object.keys(record.table).map(Number).sort((a, b) => a - b);
@@ -128,6 +130,17 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
       const diff = Math.abs(cableSize - s);
       if (diff < bestDiff) { nearestSize = s; bestDiff = diff; }
     }
+
+    // 표 범위 밖 입력은 조용히 스냅하지 않고 즉시 검증 오류 (fail-fast)
+    const minSize = sizes[0];
+    const maxSize = sizes[sizes.length - 1];
+    if (cableSize < minSize || cableSize > maxSize) {
+      throw new Error(`Cable size ${cableSize} mm2 outside tabulated range ${minSize}-${maxSize} mm2 for ${record.standard}`);
+    }
+
+    // 범위 내 중간 사이즈는 근사 표 값 사용 — 사용자에게 명시
+    const isApprox = bestDiff > 0;
+    if (isApprox) approximated = true;
 
     const baseXLPECopper = record.table[nearestSize] ?? 0;
     const baseAmpacity = baseXLPECopper * materialFactor * insulationFactor;
@@ -144,7 +157,7 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
 
     steps.push({
       step: stepNum++,
-      title: `${record.country} 허용전류 (${record.standard})`,
+      title: `${record.country} 허용전류 (${record.standard})${isApprox ? ` (근사: ${nearestSize} mm2 표 값 사용)` : ''}`,
       formula: `I = I_{base} \\times k_{mat} \\times k_{ins} \\times k_{temp}`,
       value: round(corrected, 1),
       unit: 'A',
@@ -156,9 +169,24 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
   const ampValues = perCountry.map(c => c.correctedAmpacity);
   const minAmp = Math.min(...ampValues);
   const maxAmp = Math.max(...ampValues);
-  const spread = round(((maxAmp - minAmp) / minAmp) * 100, 1);
+  // minAmp가 0이면 0/0 = NaN 방지. 모든 record가 maxConductorTemp=90 공유 → minAmp=0 ⇔ maxAmp=0
+  const spread = minAmp > 0 ? round(((maxAmp - minAmp) / minAmp) * 100, 1) : 0;
 
   // PART 3 -- Result assembly
+  // 판정: 모든 표준이 최대 도체온도 초과로 0으로 감소하면 사용 불가(error).
+  // 그 외에는 근사 표 값 사용 시 warning, 정상 시 info.
+  const judgment = maxAmp === 0
+    ? createJudgment(
+        false,
+        `${cableSize} mm2 @ ${ambientTemp}C: 모든 표준에서 최대 도체온도 초과, 사용 불가`,
+        'error',
+      )
+    : createJudgment(
+        true,
+        `${cableSize} mm2 ${conductor} ${insulation} @ ${ambientTemp}C: ${minAmp}~${maxAmp} A (편차 ${spread}%)${approximated ? ' — 근사 표 값 포함' : ''}`,
+        approximated ? 'warning' : 'info',
+      );
+
   return {
     value: round(minAmp, 1),
     unit: 'A',
@@ -169,11 +197,7 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
       createSource('NEC', '310.16', { edition: '2023' }),
       createSource('KEC', '232', { edition: '2021' }),
     ],
-    judgment: createJudgment(
-      true,
-      `${cableSize} mm2 ${conductor} ${insulation} @ ${ambientTemp}C: ${minAmp}~${maxAmp} A (편차 ${spread}%)`,
-      'info',
-    ),
+    judgment,
     additionalOutputs: {
       minAmpacity: { value: minAmp, unit: 'A' },
       maxAmpacity: { value: maxAmp, unit: 'A' },

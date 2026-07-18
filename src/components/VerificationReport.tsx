@@ -149,7 +149,7 @@ export default function VerificationReport({ report, onExport }: Props) {
         onToggle={() => toggle('markings')}
       >
         <div className="space-y-2">
-          {markings
+          {[...markings]
             .sort((a, b) => {
               const order: MarkingSeverity[] = ['error', 'warning', 'info', 'success'];
               return order.indexOf(a.severity) - order.indexOf(b.severity);

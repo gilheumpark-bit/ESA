@@ -23,6 +23,7 @@ interface Props {
   label: string;
   standardRef?: string;
   direction?: 'below' | 'above';
+  compliant?: boolean;
   className?: string;
 }
 
@@ -33,9 +34,11 @@ export default function CalcResultGauge({
   label,
   standardRef,
   direction = 'below',
+  compliant,
   className = '',
 }: Props) {
-  const isCompliant = direction === 'below' ? value <= limit : value >= limit;
+  // compliant flag가 명시되면 그것을 신뢰, 없으면 값-기준 비교로 유도 (비-퍼센트 결과 false PASS 방지)
+  const isCompliant = compliant ?? (direction === 'below' ? value <= limit : value >= limit);
   const ratio = direction === 'below'
     ? Math.min(value / limit, 1.5)
     : Math.min(limit / value, 1.5);
@@ -52,7 +55,7 @@ export default function CalcResultGauge({
   };
 
   const color = getColor();
-  const displayPercent = Math.min(percentage / 1.5 * 100, 100);
+  const displayPercent = Math.min(percentage / 1.5, 100);
 
   return (
     <div className={`rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4 ${className}`}>
@@ -139,10 +142,11 @@ export function CalcResultDashboard({
     label: string;
     standardRef?: string;
     direction?: 'below' | 'above';
+    compliant?: boolean;
   }[];
 }) {
   const passCount = results.filter(r =>
-    (r.direction ?? 'below') === 'below' ? r.value <= r.limit : r.value >= r.limit
+    r.compliant ?? ((r.direction ?? 'below') === 'below' ? r.value <= r.limit : r.value >= r.limit)
   ).length;
   const totalCount = results.length;
 

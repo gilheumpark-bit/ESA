@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q') ?? '';
     const lang = (searchParams.get('lang') ?? 'ko') as SupportedLanguage;
     const limitParam = searchParams.get('limit');
-    const limit = Math.min(20, Math.max(1, parseInt(limitParam ?? '8', 10)));
+    const parsed = parseInt(limitParam ?? '8', 10);
+    const limit = Math.min(20, Math.max(1, Number.isNaN(parsed) ? 8 : parsed));
 
     // Validate language
     if (lang !== 'ko' && lang !== 'en') {

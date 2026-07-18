@@ -79,6 +79,10 @@ async function resolveUserTier(userId: string, request: NextRequest): Promise<Ti
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limiting — notarize profile (5 req/min)
+    const blocked = applyRateLimit(request, 'notarize');
+    if (blocked) return blocked;
+
     // Auth check
     const userId = await extractVerifiedUserId(request);
     if (!userId) {

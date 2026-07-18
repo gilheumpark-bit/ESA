@@ -3,8 +3,8 @@
  *
  * Formulae:
  *   Efficiency:         η = (S × cosφ × k) / (S × cosφ × k + Pfe + Pcu × k²) × 100  [%]
- *   Optimal load ratio: k_opt = √(Pfe / Pcu)
- *   Annual energy saving vs full-load operation
+ *   Optimal load ratio: k_opt = √(Pfe / Pcu)  (max-efficiency load point)
+ *   Annual energy loss:  E = P_loss × 8760 / 1000  [kWh]
  *
  * Standards: IEC 60076-1 (Power Transformers), IEC 60076-20 (Energy Efficiency)
  */
@@ -88,15 +88,14 @@ export function calculateTransformerEfficiency(input: TransformerEfficiencyInput
     unit: '',
   });
 
-  // Step 5: 최적 부하율 대비 연간 에너지 절감 추정
-  // 현재 부하율 vs 최적 부하율의 손실 차이 × 8760h
-  const lossAtOptimal = Pfe + Pcu * optimalLoadRatio * optimalLoadRatio;
-  const annualSaving = (totalLoss - lossAtOptimal) * 8760 / 1000;
+  // Step 5: 현재 부하율에서의 연간 에너지 손실 (8760h/year)
+  // k_opt는 최대효율 부하점(Pcu·k²=Pfe)이며 손실 최소화 목표가 아니므로 '절감'을 도출하지 않는다.
+  const annualLoss = totalLoss * 8760 / 1000;
   steps.push({
     step: 5,
-    title: 'Estimate annual energy saving vs optimal loading',
-    formula: 'E_{saving} = (P_{loss,current} - P_{loss,optimal}) \\times 8760 / 1000',
-    value: round(annualSaving, 2),
+    title: 'Annual energy loss at current load',
+    formula: 'E_{annual} = P_{loss} \\times 8760 / 1000',
+    value: round(annualLoss, 2),
     unit: 'kWh',
   });
 
@@ -119,7 +118,7 @@ export function calculateTransformerEfficiency(input: TransformerEfficiencyInput
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'warning'),
     additionalOutputs: {
       optimalLoadRatio: { value: round(optimalLoadRatio, 4), unit: '', formula: 'k_{opt} = \\sqrt{P_{fe}/P_{cu}}' },
-      annualEnergySaving: { value: round(annualSaving, 2), unit: 'kWh' },
+      annualEnergyLoss: { value: round(annualLoss, 2), unit: 'kWh', formula: 'E = P_{loss} \\times 8760 / 1000' },
     },
   };
 }

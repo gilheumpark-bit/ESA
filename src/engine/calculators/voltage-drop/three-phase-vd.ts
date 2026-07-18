@@ -23,6 +23,7 @@ import {
   DetailedCalcResult,
   CalcStep,
   assertPositive,
+  assertNonNegative,
   assertRange,
   round,
 } from '../types';
@@ -63,6 +64,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
   assertPositive(input.current, 'current');
   assertPositive(input.length, 'length');
   assertPositive(input.resistance, 'resistance');
+  assertNonNegative(input.reactance, 'reactance');
   assertRange(input.powerFactor, 0.01, 1.0, 'powerFactor');
 
   const { voltage: V, current: I, length, resistance: R, reactance: X, powerFactor: pf } = input;

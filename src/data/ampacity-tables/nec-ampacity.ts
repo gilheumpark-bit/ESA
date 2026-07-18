@@ -158,15 +158,15 @@ interface NecTempCorrRow {
  * Ambient Temperature Correction Factors Based on 30°C
  */
 const NEC_TEMP_CORRECTION: NecTempCorrRow[] = [
-  { ambientMin: 10, ambientMax: 15, f60: 1.29, f75: 1.20, f90: 1.15 },
-  { ambientMin: 16, ambientMax: 20, f60: 1.22, f75: 1.15, f90: 1.12 },
-  { ambientMin: 21, ambientMax: 25, f60: 1.15, f75: 1.11, f90: 1.08 },
+  { ambientMin: 10, ambientMax: 15, f60: 1.22, f75: 1.15, f90: 1.12 },
+  { ambientMin: 16, ambientMax: 20, f60: 1.15, f75: 1.11, f90: 1.08 },
+  { ambientMin: 21, ambientMax: 25, f60: 1.08, f75: 1.05, f90: 1.04 },
   { ambientMin: 26, ambientMax: 30, f60: 1.00, f75: 1.00, f90: 1.00 },
-  { ambientMin: 31, ambientMax: 35, f60: 0.87, f75: 0.94, f90: 0.96 },
-  { ambientMin: 36, ambientMax: 40, f60: 0.71, f75: 0.88, f90: 0.91 },
-  { ambientMin: 41, ambientMax: 45, f60: 0.50, f75: 0.82, f90: 0.87 },
-  { ambientMin: 46, ambientMax: 50, f60: 0.00, f75: 0.75, f90: 0.82 },
-  { ambientMin: 51, ambientMax: 55, f60: 0.00, f75: 0.67, f90: 0.76 },
+  { ambientMin: 31, ambientMax: 35, f60: 0.91, f75: 0.94, f90: 0.96 },
+  { ambientMin: 36, ambientMax: 40, f60: 0.82, f75: 0.88, f90: 0.91 },
+  { ambientMin: 41, ambientMax: 45, f60: 0.71, f75: 0.82, f90: 0.87 },
+  { ambientMin: 46, ambientMax: 50, f60: 0.58, f75: 0.75, f90: 0.82 },
+  { ambientMin: 51, ambientMax: 55, f60: 0.41, f75: 0.67, f90: 0.76 },
   { ambientMin: 56, ambientMax: 60, f60: 0.00, f75: 0.58, f90: 0.71 },
   { ambientMin: 61, ambientMax: 65, f60: 0.00, f75: 0.47, f90: 0.65 },
   { ambientMin: 66, ambientMax: 70, f60: 0.00, f75: 0.33, f90: 0.58 },

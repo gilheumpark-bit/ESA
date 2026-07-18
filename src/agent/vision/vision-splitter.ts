@@ -57,6 +57,35 @@ function parseJpegDimension(buf: ArrayBuffer, dim: 'width' | 'height'): number |
   return null;
 }
 
+/** 매직바이트로 실제 MIME 판별 (PNG 0x89 0x50 / JPEG 0xFF 0xD8) */
+function detectMimeType(buf: ArrayBuffer): string {
+  const v = new DataView(buf);
+  if (buf.byteLength >= 2 && v.getUint8(0) === 0x89 && v.getUint8(1) === 0x50) return 'image/png';
+  if (buf.byteLength >= 2 && v.getUint8(0) === 0xFF && v.getUint8(1) === 0xD8) return 'image/jpeg';
+  return 'image/png';
+}
+
+// ── sharp 래스터 크롭 라이브러리 동적 로드 (미설치 시 단일 영역 degrade) ──
+
+interface SharpInstance {
+  extract(region: { left: number; top: number; width: number; height: number }): SharpInstance;
+  png(): SharpInstance;
+  toBuffer(): Promise<Buffer>;
+}
+type SharpFactory = (input: Buffer) => SharpInstance;
+
+/** sharp 동적 로드 — 미설치/로드 실패 시 null. (간접 specifier로 모듈 미해결 회피) */
+async function loadSharp(): Promise<SharpFactory | null> {
+  try {
+    const spec = 'sharp';
+    const mod: unknown = await import(spec);
+    const fn = (mod as { default?: SharpFactory }).default;
+    return typeof fn === 'function' ? fn : null;
+  } catch {
+    return null;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Image Grid Splitter
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -86,6 +115,8 @@ interface ImageRegion {
   index: number;
   buffer: ArrayBuffer;
   bounds: { x: number; y: number; w: number; h: number };
+  /** buffer의 실제 MIME — crop 후 재인코딩 포맷과 일치 */
+  mimeType: string;
 }
 
 /**
@@ -98,20 +129,37 @@ export async function splitAndAnalyze(
 ): Promise<VisionSplitResult[]> {
   const { gridSize, overlap } = options;
 
-  // 그리드 계산
-  const cols = gridSize <= 4 ? 2 : Math.min(4, Math.ceil(Math.sqrt(gridSize)));
-  const rows = Math.ceil(gridSize / cols);
+  // 그리드 계산 — SplitOptions.gridSize 문서값(4=2×2, 8=2×4, 16=4×4)에 맞춘 명시적 레이아웃.
+  // sqrt 폐형식은 gridSize=8에서 3×3=9로 어긋나므로 lookup 사용.
+  const { cols, rows } = gridSize <= 4
+    ? { cols: 2, rows: 2 }
+    : gridSize <= 8
+      ? { cols: 2, rows: 4 }
+      : { cols: 4, rows: 4 };
 
   // 이미지 크기: 옵션 → PNG/JPEG 헤더 파싱 → 폴백
   const imgWidth = options.imageWidth ?? parseImageWidth(imageBuffer) ?? 4000;
   const imgHeight = options.imageHeight ?? parseImageHeight(imageBuffer) ?? 3000;
 
+  // 크롭 라이브러리 로드 — 실패 시 단일 전체 이미지 영역으로 정직하게 degrade.
+  // (N개 동일 전체 이미지 중복 호출 대신 1회 정확한 호출)
+  const sharpFn = await loadSharp();
+  if (!sharpFn) {
+    const region: ImageRegion = {
+      index: 0,
+      buffer: imageBuffer,
+      bounds: { x: 0, y: 0, w: imgWidth, h: imgHeight },
+      mimeType: detectMimeType(imageBuffer),
+    };
+    return [await analyzeRegion(region, options)];
+  }
+
   const regionWidth = Math.ceil(imgWidth / cols);
   const regionHeight = Math.ceil(imgHeight / rows);
   const overlapPx = Math.ceil(Math.max(regionWidth, regionHeight) * overlap);
 
-  // 영역 생성
-  const regions: ImageRegion[] = [];
+  // 영역 생성 + 실제 crop (bounds 픽셀 추출, 병렬)
+  const regionPromises: Promise<ImageRegion>[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const x = Math.max(0, c * regionWidth - overlapPx);
@@ -119,13 +167,12 @@ export async function splitAndAnalyze(
       const w = Math.min(regionWidth + 2 * overlapPx, imgWidth - x);
       const h = Math.min(regionHeight + 2 * overlapPx, imgHeight - y);
 
-      regions.push({
-        index: r * cols + c,
-        buffer: imageBuffer, // 실제: crop된 버퍼
-        bounds: { x, y, w, h },
-      });
+      regionPromises.push(
+        cropRegion(sharpFn, imageBuffer, r * cols + c, { x, y, w, h }),
+      );
     }
   }
+  const regions = await Promise.all(regionPromises);
 
   // 병렬 분석 (Promise.all)
   const results = await Promise.all(
@@ -133,6 +180,33 @@ export async function splitAndAnalyze(
   );
 
   return results;
+}
+
+/**
+ * region.bounds 영역을 imageBuffer에서 실제로 crop → PNG로 재인코딩.
+ * crop 실패 시 전체 이미지로 폴백(해당 영역만 degrade).
+ */
+async function cropRegion(
+  sharpFn: SharpFactory,
+  imageBuffer: ArrayBuffer,
+  index: number,
+  bounds: { x: number; y: number; w: number; h: number },
+): Promise<ImageRegion> {
+  try {
+    const cropped = await sharpFn(Buffer.from(imageBuffer))
+      .extract({ left: bounds.x, top: bounds.y, width: bounds.w, height: bounds.h })
+      .png()
+      .toBuffer();
+    // sharp는 Node Buffer 반환 → ArrayBuffer로 변환 (arrayBufferToBase64의 double-wrap 방지)
+    const ab = cropped.buffer.slice(
+      cropped.byteOffset,
+      cropped.byteOffset + cropped.byteLength,
+    ) as ArrayBuffer;
+    return { index, buffer: ab, bounds, mimeType: 'image/png' };
+  } catch (err) {
+    console.warn(`[ESVA] region ${index} crop failed, using full image:`, err);
+    return { index, buffer: imageBuffer, bounds, mimeType: detectMimeType(imageBuffer) };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -155,7 +229,7 @@ async function analyzeRegion(
     try {
       const { analyzeDrawingWithVLM } = await import('./vlm-client');
       const provider = options.model === 'openai' ? 'openai' : 'gemini';
-      const result = await analyzeDrawingWithVLM(region.buffer, 'image/png', {
+      const result = await analyzeDrawingWithVLM(region.buffer, region.mimeType, {
         provider,
         apiKey,
       });

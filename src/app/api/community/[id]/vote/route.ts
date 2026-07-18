@@ -10,26 +10,13 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { voteQuestion, voteAnswer, type VoteDirection } from '@/lib/community';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
-
-async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    return payload.user_id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
-}
+// Uses shared extractVerifiedUserId (Firebase ID token verification) from
+// @/lib/auth-helpers. Votes are deduped by userId, so an unverified
+// base64-decoded JWT payload would enable unlimited ballot stuffing —
+// only cryptographically verified uids are accepted.
 
 // ─── PART 2: POST — Vote ──────────────────────────────────────
 
@@ -44,10 +31,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Per-IP rate limit — 무제한 투표(ballot stuffing) 방어의 1차 방어선
+    const blocked = applyRateLimit(request, 'default');
+    if (blocked) return blocked;
+
     const { id: questionId } = await params;
 
     // Auth required
-    const userId = await extractUserId(request);
+    const userId = await extractVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { success: false, error: { code: 'ESVA-1001', message: 'Authentication required' } },

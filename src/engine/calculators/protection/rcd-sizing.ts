@@ -77,7 +77,9 @@ export function calculateRCDSizing(input: RCDSizingInput): DetailedCalcResult {
   });
 
   // Step 2: RCD 정격 전류 선정 (부하 전류 이상의 표준 정격)
-  const selectedRating = STANDARD_RATINGS.find(r => r >= loadCurrent) ?? STANDARD_RATINGS[STANDARD_RATINGS.length - 1];
+  const foundRating = STANDARD_RATINGS.find(r => r >= loadCurrent);
+  const ratingAdequate = foundRating !== undefined;
+  const selectedRating = foundRating ?? STANDARD_RATINGS[STANDARD_RATINGS.length - 1];
   steps.push({
     step: 2,
     title: 'Select RCD current rating (≥ load current)',
@@ -107,10 +109,12 @@ export function calculateRCDSizing(input: RCDSizingInput): DetailedCalcResult {
   });
 
   // PART 3 — Judgment
-  const pass = touchVoltage <= spec.touchLimit;
-  const judgmentMsg = pass
-    ? `RCD ${selectedRating}A / ${spec.sensitivity}mA suitable. Touch voltage ${round(touchVoltage, 2)}V ≤ ${spec.touchLimit}V.`
-    : `Touch voltage ${round(touchVoltage, 2)}V exceeds ${spec.touchLimit}V limit. Reduce earth resistance below ${round(maxEarthResistance, 2)}Ω.`;
+  const pass = ratingAdequate && touchVoltage <= spec.touchLimit;
+  const judgmentMsg = !ratingAdequate
+    ? `Load current ${loadCurrent}A exceeds max standard RCD rating ${STANDARD_RATINGS[STANDARD_RATINGS.length - 1]}A — not covered by IEC 61008 standard ratings; use a dedicated/parallel device.`
+    : (touchVoltage <= spec.touchLimit
+      ? `RCD ${selectedRating}A / ${spec.sensitivity}mA suitable. Touch voltage ${round(touchVoltage, 2)}V ≤ ${spec.touchLimit}V.`
+      : `Touch voltage ${round(touchVoltage, 2)}V exceeds ${spec.touchLimit}V limit. Reduce earth resistance below ${round(maxEarthResistance, 2)}Ω.`);
 
   // PART 4 — Result assembly
   return {

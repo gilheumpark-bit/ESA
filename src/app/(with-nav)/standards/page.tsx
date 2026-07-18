@@ -310,6 +310,7 @@ function StandardConvertWidget() {
 
   const handleConvert = useCallback(async () => {
     if (!fromClause.trim()) return;
+    if (fromStandard === toStandard) return; // 자가변환 방지 (belt-and-suspenders)
     setLoading(true);
     setError(null);
     setResult(null);
@@ -352,7 +353,12 @@ function StandardConvertWidget() {
         <div className="flex gap-2">
           <select
             value={fromStandard}
-            onChange={(e) => setFromStandard(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setFromStandard(next);
+              // From을 현재 To와 같게 선택하면 To를 다른 기준으로 재조정 (자가변환 방지)
+              if (next === toStandard) setToStandard(CONVERT_STANDARDS.find((s) => s !== next)!);
+            }}
             className="h-9 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
           >
             {CONVERT_STANDARDS.map((s) => <option key={s} value={s}>{s}</option>)}

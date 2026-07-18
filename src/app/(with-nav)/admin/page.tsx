@@ -279,9 +279,22 @@ function UsageSection({ stats }: { stats: UsageStat[] }) {
 // PART 4 — Audit Log Table
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// CSV 필드 이스케이프 — 수식 인젝션 방지 + RFC 4180 따옴표 이스케이프
+function escapeCsvField(value: string): string {
+  let v = value ?? '';
+  // 수식 인젝션 방지: =, +, -, @, 탭, CR로 시작하면 작은따옴표 prefix
+  if (/^[=+\-@\t\r]/.test(v)) {
+    v = `'${v}`;
+  }
+  // 임베디드 따옴표 이스케이프
+  return v.replace(/"/g, '""');
+}
+
+// 클라이언트 페이지네이션 크기 (서버 audit_log limit과 정합)
+const AUDIT_PAGE_SIZE = 20;
+
 function AuditLogSection({
   entries: initialEntries,
-  totalPages: initialTotalPages,
 }: {
   entries: AuditRow[];
   totalPages: number;
@@ -290,14 +303,18 @@ function AuditLogSection({
   const [actionFilter, setActionFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages] = useState(initialTotalPages);
   const [exporting, setExporting] = useState(false);
+
+  // 필터/검색 변경 시 첫 페이지로 리셋 — 빈 페이지에 갇히는 것 방지
+  useEffect(() => {
+    setPage(1);
+  }, [actionFilter, searchQuery]);
 
   const handleExportCSV = useCallback(async () => {
     setExporting(true);
     try {
       const csv = entries.map(e =>
-        `"${e.createdAt}","${e.userId}","${e.action}","${e.resource}","${e.ip ?? ''}"`,
+        `"${escapeCsvField(e.createdAt)}","${escapeCsvField(e.userId)}","${escapeCsvField(e.action)}","${escapeCsvField(e.resource)}","${escapeCsvField(e.ip ?? '')}"`,
       ).join('\n');
       const header = '"Timestamp","User","Action","Resource","IP"\n';
       const blob = new Blob(['\uFEFF' + header + csv], { type: 'text/csv;charset=utf-8' });
@@ -317,6 +334,10 @@ function AuditLogSection({
     if (searchQuery && !e.resource.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     return true;
   });
+
+  // 로드된 행 수 기준으로 페이지 수를 정직하게 산출 (5행에 3페이지라 주장하지 않음)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE);
 
   return (
     <div className="space-y-4">
@@ -368,7 +389,7 @@ function AuditLogSection({
             </tr>
           </thead>
           <tbody>
-            {filtered.map(entry => (
+            {paged.map(entry => (
               <tr key={entry.id} className="border-b border-[var(--border-default)] last:border-b-0">
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-tertiary)]">
                   {new Date(entry.createdAt).toLocaleString('ko-KR')}
@@ -487,8 +508,8 @@ export default function AdminDashboard() {
     return () => { cancelled = true; };
   }, [user]);
 
-  // Gate: enterprise only
-  if (tier !== 'enterprise' && tier !== 'pro') {
+  // Gate: enterprise only — 정책과 일치 (pro 티어는 접근 불가)
+  if (tier !== 'enterprise') {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <AlertCircle size={48} className="mx-auto text-[var(--text-tertiary)]" />

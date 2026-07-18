@@ -12,6 +12,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { NextRequest, NextResponse } from 'next/server';
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,9 @@ async function loadReceipt(receiptId: string) {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    // Rate limiting — export profile (10 req/min)
+    const blocked = applyRateLimit(req, 'export');
+    if (blocked) return blocked as NextResponse;
 
     const body = (await req.json()) as Partial<ExportRequestBody>;
 
@@ -100,9 +104,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (body.receipt) {
       receipt = body.receipt;
     } else {
+      let receiptData: Awaited<ReturnType<typeof loadReceipt>>;
       try {
-        const receiptData = await loadReceipt(body.receiptId!);
-        receipt = receiptData as import('@/engine/receipt/types').Receipt;
+        receiptData = await loadReceipt(body.receiptId!);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         return NextResponse.json(
@@ -110,6 +114,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 404 },
         );
       }
+
+      // 소유권 검증(IDOR 방지): user_id가 있는 영수증은 본인만 export 가능.
+      // /api/calculate/[id] 와 동일한 정책 — 인증 없이 타인 영수증 다운로드 차단.
+      const ownerId = (receiptData as { user_id?: string | null }).user_id;
+      if (ownerId) {
+        const userId = await extractVerifiedUserId(req);
+        if (!userId) {
+          return NextResponse.json(
+            { error: 'ESA-1001: Authentication required' },
+            { status: 401 },
+          );
+        }
+        if (userId !== ownerId) {
+          return NextResponse.json(
+            { error: 'ESA-1002: Not authorized to export this receipt' },
+            { status: 403 },
+          );
+        }
+      }
+
+      receipt = receiptData as import('@/engine/receipt/types').Receipt;
     }
 
     // --- Generate export ---

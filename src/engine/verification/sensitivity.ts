@@ -108,7 +108,7 @@ export function analyzeSensitivity(
   }
 
   // Detect critical point
-  const { criticalPoint, criticalDirection } = findCriticalPoint(values, judgments);
+  const { criticalPoint, criticalDirection } = findCriticalPoint(values, results, judgments);
 
   // Calculate sensitivity coefficient at midpoint
   const sensitivityCoeff = calculateSensitivityCoeff(values, results);
@@ -138,9 +138,12 @@ export function analyzeSensitivity(
  */
 function findCriticalPoint(
   values: number[],
+  results: number[],
   judgments: boolean[],
 ): { criticalPoint?: number; criticalDirection?: 'pass_to_fail' | 'fail_to_pass' } {
   for (let i = 1; i < judgments.length; i++) {
+    // NaN 센티넬(계산 실패) 구간은 실제 판정 전환이 아니므로 건너뛴다
+    if (!Number.isFinite(results[i]) || !Number.isFinite(results[i - 1])) continue;
     if (judgments[i] !== judgments[i - 1]) {
       // Judgment flipped between index i-1 and i
       // Linear interpolation: the critical point is approximately at the midpoint
@@ -163,13 +166,15 @@ function calculateSensitivityCoeff(values: number[], results: number[]): number 
   // Find two valid points near the midpoint
   const mid = Math.floor(values.length / 2);
 
-  // Search outward from midpoint for two valid adjacent points
-  for (let offset = 0; offset < values.length - 1; offset++) {
-    const i = Math.min(mid + offset, values.length - 2);
-    if (Number.isFinite(results[i]) && Number.isFinite(results[i + 1])) {
-      const dInput = values[i + 1] - values[i];
-      if (dInput === 0) continue;
-      return (results[i + 1] - results[i]) / dInput;
+  // 중점에서 양방향(위/아래)으로 확장하며 유효한 인접 쌍을 탐색
+  for (let offset = 0; offset < values.length; offset++) {
+    for (const i of [mid + offset, mid - offset]) {
+      if (i < 0 || i > values.length - 2) continue;
+      if (Number.isFinite(results[i]) && Number.isFinite(results[i + 1])) {
+        const dInput = values[i + 1] - values[i];
+        if (dInput === 0) continue;
+        return (results[i + 1] - results[i]) / dInput;
+      }
     }
   }
 

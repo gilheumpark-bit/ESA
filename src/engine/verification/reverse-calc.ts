@@ -102,15 +102,11 @@ const reverseFormulas: Record<string, ReverseFormula> = {
     const current = Number(inputs.current);
     if (!current) return null;
 
-    // The selected cable's ampacity must be >= current.
-    // We return the current as the "reverse" check — if selectedSize ampacity < current, fail.
-    // Since we don't have the ampacity table here, we verify the selection is >= input current.
-    // The "reverseValue" represents that the cable was selected for this current.
-    return {
-      reverseValue: current,
-      inputKey: 'current',
-      description: `Verify cable ${selectedSize}mm2 ampacity covers ${current}A load`,
-    };
+    // 이 모듈에는 규격→허용전류(Iz) 룩업 테이블이 없어 Iz >= Ib 부등식을 검증할 수 없다.
+    // current를 자기 자신과 비교하면 항상 discrepancy=0 (거짓 PASS)이 되므로, 검증 불가로 처리한다.
+    // spec=null → dispatcher가 status='HOLD'로 안전하게 처리 (거짓 PASS 방지).
+    // (IEC 60364-4-43:2017 §433.1 / KEC 212.4: Iz >= Ib — ampacity 테이블 필요)
+    return null;
   },
 
   // ── Breaker Sizing ────────────────────────────────────────────────────
@@ -122,10 +118,20 @@ const reverseFormulas: Record<string, ReverseFormula> = {
     const loadCurrent = Number(inputs.loadCurrent);
     if (!loadCurrent) return null;
 
+    // In >= Ib 부등식을 등가-불일치 프레임워크로 인코딩:
+    // 미달 시 reverseValue=0 → discrepancy=1 → FAIL, 충족 시 loadCurrent → discrepancy=0 → PASS.
+    // (IEC 60364-4-43:2017 §433.1: Ib <= In)
+    if (breakerRating < loadCurrent) {
+      return {
+        reverseValue: 0,
+        inputKey: 'loadCurrent',
+        description: `REJECT: breaker ${breakerRating}A < load ${loadCurrent}A`,
+      };
+    }
     return {
       reverseValue: loadCurrent,
       inputKey: 'loadCurrent',
-      description: `Verify breaker ${breakerRating}A >= load ${loadCurrent}A`,
+      description: `Verify breaker ${breakerRating}A >= load ${loadCurrent}A (satisfied)`,
     };
   },
 

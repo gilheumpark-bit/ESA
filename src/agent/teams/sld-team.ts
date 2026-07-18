@@ -192,18 +192,39 @@ async function runCalculations(
     }
   }
 
+  // 계통전압(V)은 변압기 2차측 등 컴포넌트 정격에서 1회 산출 (없으면 null)
+  const systemVoltage = resolveSystemVoltage(components);
+
   // 케이블 구간 → 전압강하 계산
   for (const conn of connections) {
     if (conn.length && conn.length > 0) {
-      const vd = estimateVoltageDrop(conn);
-      const compliant = vd <= activeDefaults().vdBranch; // 국가별 VD 한도 (KR=3%, IEC=4%)
+      // 부하전류는 하류 노드(부하/전동기)의 정격에서 추출 (임의 가정 금지)
+      const loadCurrent = resolveLoadCurrent(conn, components);
+      const vd = loadCurrent != null && systemVoltage != null
+        ? estimateVoltageDrop(conn, loadCurrent, systemVoltage)
+        : null;
+
+      // 부하전류/계통전압 미상 → PASS/FAIL 판정 불가, Hold + RFI (임의 100A/380V 가정 금지)
+      if (vd == null) {
+        standards.push({
+          standard: 'KEC',
+          clause: '232.52',
+          title: '전압강하',
+          judgment: 'HOLD',
+          note: '부하전류/계통전압 미상 — RFI 필요',
+        });
+        continue;
+      }
+
+      const vdLimit = activeDefaults().vdBranch; // 국가별 VD 한도 (KR=3%, IEC=4%)
+      const compliant = vd <= vdLimit;
       calculations.push({
         id: `calc-vd-${conn.from}-${conn.to}`,
         calculatorId: 'voltage-drop',
         label: `${conn.from} → ${conn.to} 전압강하`,
         value: Math.round(vd * 100) / 100,
         unit: '%',
-        formula: 'VD = (2 × L × I × R) / (1000 × V) × 100',
+        formula: 'VD% = (√3 × I × L × R) / V × 100',
         compliant,
         standardRef: 'KEC 232.52',
       });
@@ -213,7 +234,7 @@ async function runCalculations(
         clause: '232.52',
         title: '전압강하',
         judgment: compliant ? 'PASS' : 'FAIL',
-        note: `${vd.toFixed(2)}% (허용: 3%)`,
+        note: `${vd.toFixed(2)}% (허용: ${vdLimit}%)`,
       });
 
       if (!compliant) {
@@ -221,7 +242,7 @@ async function runCalculations(
           id: `vio-vd-${conn.from}-${conn.to}`,
           severity: 'critical',
           title: '전압강하 기준 초과',
-          description: `${conn.from} → ${conn.to} 구간 전압강하 ${vd.toFixed(2)}% > 허용 3%`,
+          description: `${conn.from} → ${conn.to} 구간 전압강하 ${vd.toFixed(2)}% > 허용 ${vdLimit}%`,
           location: `${conn.from} → ${conn.to}`,
           standardRef: 'KEC 232.52',
           suggestedFix: '케이블 굵기 증가 또는 배전반 위치 변경 검토',
@@ -250,17 +271,60 @@ async function runCalculations(
   return { calculations, standards, violations };
 }
 
-/** 간이 전압강하 추정 (정밀 계산은 calc engine 사용) */
-function estimateVoltageDrop(conn: ExtractedConnection): number {
+/**
+ * 하류 노드(부하/전동기)의 정격에서 연속 부하전류(A)를 추출한다.
+ * 정격이 없거나 "…A" 형식이 아니면 null (임의 100A 가정 금지).
+ */
+function resolveLoadCurrent(
+  conn: ExtractedConnection,
+  components: ExtractedComponent[],
+): number | null {
+  const downstream = components.find(c => c.id === conn.to);
+  if (!downstream?.rating) return null;
+  const m = downstream.rating.match(/(\d+(?:\.\d+)?)\s*a\b/i);
+  return m ? parseFloat(m[1]) : null;
+}
+
+/**
+ * 계통 선간전압(V)을 컴포넌트 정격에서 추출한다.
+ * 변압기 2차측 등에서 파싱된 전압 중 최소값(이용전압)을 보수적으로 채택.
+ * 전압 정보가 없으면 null → 호출부에서 Hold+RFI (임의 380V 가정 금지).
+ * NOTE: 국가별 공칭전압은 CalcDefaults에 nominalVoltage 필드 추가 후 우선 사용 예정.
+ */
+function resolveSystemVoltage(components: ExtractedComponent[]): number | null {
+  let minVoltage: number | null = null;
+  for (const c of components) {
+    if (!c.rating) continue;
+    const kv = c.rating.match(/(\d+(?:\.\d+)?)\s*kv\b/i);
+    const v = c.rating.match(/(\d+(?:\.\d+)?)\s*v\b/i);
+    const parsed = kv ? parseFloat(kv[1]) * 1000 : v ? parseFloat(v[1]) : null;
+    if (parsed != null && parsed > 0 && (minVoltage == null || parsed < minVoltage)) {
+      minVoltage = parsed;
+    }
+  }
+  return minVoltage;
+}
+
+/**
+ * 간이 전압강하 추정 (정밀 계산은 calc engine 사용).
+ * 부하전류(current)와 계통전압(voltage)은 호출부에서 실제값을 주입한다.
+ * 둘 중 하나라도 미상(≤0)이면 null 반환 → 호출부에서 Hold+RFI 처리.
+ */
+function estimateVoltageDrop(
+  conn: ExtractedConnection,
+  current: number,
+  voltage: number,
+): number | null {
+  if (!(current > 0) || !(voltage > 0)) return null;
   // 상수는 top-level import로 가져옴 (ELECTRICAL_CONSTANTS)
   const length = conn.length ?? 10;
   const cableSpec = conn.cableType ?? '35sq';
-  const sizeMatch = cableSpec.match(/(\d+)sq/);
-  const size = sizeMatch ? parseInt(sizeMatch[1]) : 35;
+  // 소수 단면적(2.5sq, 1.5sq, 0.75sq 등, KS C IEC 60228) 파싱 지원
+  const sizeMatch = cableSpec.match(/(\d+(?:\.\d+)?)\s*sq/i);
+  const size = sizeMatch ? parseFloat(sizeMatch[1]) : 35;
   const resistance = RESISTIVITY.CU_20C / size; // Ω/m per conductor
-  const current = 100; // 가정 부하전류 (실제값은 토폴로지에서 추출)
-  // VD% = (√3 × I × L × R) / V × 100
-  const vd = (PHYSICS.SQRT3 * current * length * resistance) / 380 * 100;
+  // VD% = (√3 × I × L × R) / V × 100 — 부하전류·계통전압은 인자로 주입 (임의 가정 금지)
+  const vd = (PHYSICS.SQRT3 * current * length * resistance) / voltage * 100;
   return Math.round(vd * 100) / 100;
 }
 

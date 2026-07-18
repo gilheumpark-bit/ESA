@@ -192,9 +192,9 @@ export interface OCRSetting {
 
 /** IEC 60255 표준 역한시 곡선 공식 계수 */
 export const OCR_CURVE_CONSTANTS: Record<OCRCurveType, { a: number; b: number; p: number }> = {
-  NI:  { a: 0.14,  b: 0.02, p: 1 },     // Normal Inverse
+  NI:  { a: 0.14,  b: 1.0,  p: 0.02 },  // Normal Inverse: t = TDS × 0.14/(M^0.02 - 1)
   VI:  { a: 13.5,  b: 1.0,  p: 1 },     // Very Inverse
-  EI:  { a: 80.0,  b: 2.0,  p: 2 },     // Extremely Inverse
+  EI:  { a: 80.0,  b: 1.0,  p: 2 },     // Extremely Inverse: t = TDS × 80/(M^2 - 1)
   LTI: { a: 120.0, b: 1.0,  p: 1 },     // Long Time Inverse
 };
 

@@ -26,8 +26,12 @@ export interface UseCalculatorReturn {
 }
 
 interface CalculateApiResponse {
-  result: DetailedCalcResult;
-  receipt: Receipt;
+  success: boolean;
+  data: {
+    result: DetailedCalcResult;
+    receipt: Receipt;
+    relatedCalculators?: unknown[];
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -53,19 +57,23 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         });
 
         if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
+          const body: { error?: { code?: string; message?: string } } =
+            await res.json().catch(() => ({}));
           throw new Error(
-            body.error ?? `Calculation failed (${res.status})`,
+            body.error?.message ?? `Calculation failed (${res.status})`,
           );
         }
 
         const data: CalculateApiResponse = await res.json();
-        setResult(data.result);
-        setReceipt(data.receipt);
-
-        // Cache receipt client-side for offline export support
-        if (data.receipt) {
-          cacheReceipt(data.receipt);
+        // route는 성공 payload를 { success, data: { result, receipt } } 로 중첩 반환
+        const payload = data?.data;
+        if (payload?.result) {
+          setResult(payload.result);
+        }
+        if (payload?.receipt) {
+          setReceipt(payload.receipt);
+          // Cache receipt client-side for offline export support
+          cacheReceipt(payload.receipt);
         }
       } catch (err) {
         const message =

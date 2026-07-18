@@ -44,6 +44,7 @@ export function calculatePCSCapacity(input: PCSCapacityInput): DetailedCalcResul
 
   const { batteryCapacity, maxChargeRate, maxDischargeRate, efficiency: eta } = input;
   const gridVoltage = input.gridVoltage ?? 380;
+  assertPositive(gridVoltage, 'gridVoltage');
 
   // PART 2 -- Derivation
   const steps: CalcStep[] = [];

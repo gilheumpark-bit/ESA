@@ -274,7 +274,7 @@ export default function ComparePage() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `Calculation failed (${res.status})`);
+          throw new Error(body.error?.message ?? `Calculation failed (${res.status})`);
         }
 
         const data = await res.json();
@@ -282,7 +282,7 @@ export default function ComparePage() {
         setScenarios((prev) =>
           prev.map((s, i) =>
             i === idx
-              ? { ...s, result: data.result, receipt: data.receipt, isLoading: false }
+              ? { ...s, result: data.data?.result ?? null, receipt: data.data?.receipt ?? null, isLoading: false }
               : s,
           ),
         );

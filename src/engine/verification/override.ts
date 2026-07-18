@@ -36,6 +36,8 @@ export interface OverrideRecord {
   recalcTriggered: boolean;
   /** New receipt ID if recalculation produced a new receipt */
   newReceiptId?: string;
+  /** Whether this override's recalculation changed the engineering judgment */
+  judgmentChanged?: boolean;
 }
 
 /** Summary of all overrides in a session or receipt */
@@ -134,7 +136,7 @@ export function getOverrideSummary(receiptId: string): OverrideSummary {
     count: records.length,
     params: [...new Set(records.map(r => r.param))],
     records,
-    judgmentChanged: records.some(r => r.newReceiptId !== undefined),
+    judgmentChanged: records.some(r => r.judgmentChanged === true),
   };
 }
 
@@ -195,6 +197,7 @@ export async function applyOverrideWithRecalc(
     const result = await recalcFn(receiptId, updatedInputs);
     record.recalcTriggered = true;
     record.newReceiptId = result.newReceiptId;
+    record.judgmentChanged = result.judgmentChanged;
 
     // Update the stored record
     const idx = _overrideStore.findIndex(r => r.id === record.id);

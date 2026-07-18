@@ -139,16 +139,16 @@ interface TempCorrectionRow {
  * Base ambient temperature: 30°C for KEC.
  */
 const TEMP_CORRECTION: TempCorrectionRow[] = [
-  { ambientMin: 10, ambientMax: 15, pvc60: 1.22, mi70: 1.18, xlpe90: 1.15 },
-  { ambientMin: 16, ambientMax: 20, pvc60: 1.17, mi70: 1.14, xlpe90: 1.12 },
-  { ambientMin: 21, ambientMax: 25, pvc60: 1.12, mi70: 1.10, xlpe90: 1.08 },
+  { ambientMin: 10, ambientMax: 15, pvc60: 1.22, mi70: 1.17, xlpe90: 1.12 },
+  { ambientMin: 16, ambientMax: 20, pvc60: 1.15, mi70: 1.12, xlpe90: 1.08 },
+  { ambientMin: 21, ambientMax: 25, pvc60: 1.08, mi70: 1.06, xlpe90: 1.04 },
   { ambientMin: 26, ambientMax: 30, pvc60: 1.00, mi70: 1.00, xlpe90: 1.00 },
-  { ambientMin: 31, ambientMax: 35, pvc60: 0.91, mi70: 0.93, xlpe90: 0.94 },
-  { ambientMin: 36, ambientMax: 40, pvc60: 0.82, mi70: 0.87, xlpe90: 0.87 },
-  { ambientMin: 41, ambientMax: 45, pvc60: 0.71, mi70: 0.79, xlpe90: 0.79 },
-  { ambientMin: 46, ambientMax: 50, pvc60: 0.58, mi70: 0.71, xlpe90: 0.71 },
-  { ambientMin: 51, ambientMax: 55, pvc60: 0.41, mi70: 0.61, xlpe90: 0.61 },
-  { ambientMin: 56, ambientMax: 60, pvc60: 0.00, mi70: 0.50, xlpe90: 0.50 },
+  { ambientMin: 31, ambientMax: 35, pvc60: 0.91, mi70: 0.94, xlpe90: 0.96 },
+  { ambientMin: 36, ambientMax: 40, pvc60: 0.82, mi70: 0.87, xlpe90: 0.91 },
+  { ambientMin: 41, ambientMax: 45, pvc60: 0.71, mi70: 0.79, xlpe90: 0.87 },
+  { ambientMin: 46, ambientMax: 50, pvc60: 0.58, mi70: 0.71, xlpe90: 0.82 },
+  { ambientMin: 51, ambientMax: 55, pvc60: 0.41, mi70: 0.61, xlpe90: 0.76 },
+  { ambientMin: 56, ambientMax: 60, pvc60: 0.00, mi70: 0.50, xlpe90: 0.71 },
 ];
 
 function getTemperatureFactor(ambientTemp: number, insulation: InsulationType): number {

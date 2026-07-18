@@ -74,10 +74,13 @@ export default function ReportPage() {
     .map(c => ({
       value: c.value,
       unit: c.unit,
-      limit: c.unit === '%' ? 3.0 : c.unit === 'A' ? c.value * 1.25 : c.value,
+      // limit/direction은 게이지 바의 표시 스케일 전용 — PASS/FAIL 판정은 authoritative한 compliant가 결정.
+      // (value*1.25 같은 값 유도 임계값은 KEC 실제 기준이 아니므로 사용 금지)
+      limit: c.unit === '%' ? 3.0 : c.value,
       label: c.label,
       standardRef: c.standardRef,
       direction: (c.unit === '%' ? 'below' : 'above') as 'below' | 'above',
+      compliant: c.compliant,
     })) ?? [];
 
   if (loading) {

@@ -13,7 +13,36 @@
  */
 
 import { getSupabaseClient } from '@/lib/supabase';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Share-link password hashing (scrypt + per-row salt)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// 단일 unsalted SHA-256는 rainbow table / GPU brute force에 취약하고 동일 비밀번호가
+// 동일 해시를 만들어 재사용을 노출한다. scrypt(KDF) + 행별 랜덤 salt로 대체한다.
+// 저장 포맷: "scrypt$<saltHex>$<hashHex>" — 단일 text 컬럼(password_hash)에 그대로 저장.
+
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_SALT_BYTES = 16;
+
+/** 비밀번호를 scrypt + 랜덤 salt로 해싱하여 저장용 문자열을 만든다. */
+function hashSharePassword(password: string): string {
+  const salt = randomBytes(SCRYPT_SALT_BYTES);
+  const derived = scryptSync(password, salt, SCRYPT_KEYLEN);
+  return `scrypt$${salt.toString('hex')}$${derived.toString('hex')}`;
+}
+
+/** 저장된 해시 문자열과 입력 비밀번호를 상수시간으로 비교한다. */
+function verifySharePassword(password: string, stored: string): boolean {
+  const parts = stored.split('$');
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
+  const salt = Buffer.from(parts[1], 'hex');
+  const expected = Buffer.from(parts[2], 'hex');
+  if (salt.length === 0 || expected.length === 0) return false;
+  const derived = scryptSync(password, salt, expected.length);
+  return derived.length === expected.length && timingSafeEqual(derived, expected);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -381,7 +410,7 @@ export async function generateShareLink(
     : null;
 
   const passwordHash = password
-    ? createHash('sha256').update(password).digest('hex')
+    ? hashSharePassword(password)
     : null;
 
   const linkData = {
@@ -434,8 +463,9 @@ export async function validateShareLink(
   // Check password
   if (data.password_hash) {
     if (!password) return { valid: false, error: 'Password required' };
-    const hash = createHash('sha256').update(password).digest('hex');
-    if (hash !== data.password_hash) return { valid: false, error: 'Invalid password' };
+    if (!verifySharePassword(password, data.password_hash as string)) {
+      return { valid: false, error: 'Invalid password' };
+    }
   }
 
   return { valid: true, projectId: data.project_id as string };

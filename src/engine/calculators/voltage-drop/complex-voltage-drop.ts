@@ -18,6 +18,7 @@ import {
   DetailedCalcResult,
   CalcStep,
   assertPositive,
+  assertNonNegative,
   assertRange,
   assertOneOf,
   round,
@@ -66,6 +67,7 @@ export function calculateComplexVoltageDrop(input: ComplexVoltageDropInput): Det
   for (let i = 0; i < input.sections.length; i++) {
     assertPositive(input.sections[i].length, `sections[${i}].length`);
     assertPositive(input.sections[i].resistance, `sections[${i}].resistance`);
+    assertNonNegative(input.sections[i].reactance, `sections[${i}].reactance`);
   }
 
   const { voltage: V, current: I, powerFactor: pf, phase } = input;
@@ -92,7 +94,7 @@ export function calculateComplexVoltageDrop(input: ComplexVoltageDropInput): Det
   input.sections.forEach((sec, idx) => {
     const L_km = sec.length / 1000;
     const R = sec.resistance;
-    const X = sec.reactance ?? 0;
+    const X = sec.reactance;
     const dropV = phaseFactor * I * L_km * (R * cosPhi + X * sinPhi);
     totalDropV += dropV;
 

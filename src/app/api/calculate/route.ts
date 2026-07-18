@@ -23,7 +23,7 @@ import { checkCalcAccess, type Tier, type CalcDifficulty } from '@/lib/tier-gate
 import { saveCalculation } from '@/lib/supabase';
 import { sanitizeInput } from '@/lib/security-hardening';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
-import { setActiveCountry } from '@/engine/calculators/country-defaults';
+import { runWithCountry } from '@/engine/calculators/country-defaults';
 import { convertInputsToSI, convertResultToImperial, appendAwgEquivalent } from '@/engine/conversion/imperial-adapter';
 import { getSafetyProfile } from '@/engine/constants/safety-factors';
 import type { CountryCode } from '@/engine/constants/safety-factors';
@@ -146,28 +146,32 @@ export async function POST(request: NextRequest) {
 
     // Determine country/standard + set active country for safety factor defaults
     const countryCode = (body.countryCode ?? 'KR') as CountryCode;
-    const safetyProfile = getSafetyProfile(countryCode in { KR: 1, US: 1, JP: 1, INT: 1 } ? countryCode : 'KR');
-    setActiveCountry(safetyProfile.country);
-
-    // Imperial → SI 입력 변환 (미국 시장 지원)
+    const safetyProfile = getSafetyProfile(countryCode);
     const unitSystem = safetyProfile.unitSystem;
-    const { converted: siInputs, conversions } = convertInputsToSI(body.inputs, unitSystem);
 
-    // Execute calculator (항상 SI 단위로 실행)
-    let calcResult = entry.calculator(siInputs);
+    // 요청 범위(request-scope)로 국가 컨텍스트를 격리 — 동시 요청 간 전역 누수 방지
+    const calcResult = runWithCountry(safetyProfile.country, () => {
+      // Imperial → SI 입력 변환 (미국 시장 지원)
+      const { converted: siInputs, conversions } = convertInputsToSI(body.inputs, unitSystem);
 
-    // SI → Imperial 출력 변환 (필요 시)
-    if (unitSystem === 'Imperial') {
-      calcResult = convertResultToImperial(calcResult);
-    }
-    // mm² 결과에 AWG 등가 표시 추가 (미국 시장)
-    if (countryCode === 'US') {
-      calcResult = appendAwgEquivalent(calcResult);
-    }
-    // 변환 이력을 경고에 추가
-    if (conversions.length > 0) {
-      calcResult = { ...calcResult, warnings: [...(calcResult.warnings || []), `[Unit Conversion] ${conversions.join('; ')}`] };
-    }
+      // Execute calculator (항상 SI 단위로 실행)
+      let result = entry.calculator(siInputs);
+
+      // SI → Imperial 출력 변환 (필요 시)
+      if (unitSystem === 'Imperial') {
+        result = convertResultToImperial(result);
+      }
+      // mm² 결과에 AWG 등가 표시 추가 (미국 시장)
+      if (countryCode === 'US') {
+        result = appendAwgEquivalent(result);
+      }
+      // 변환 이력을 경고에 추가
+      if (conversions.length > 0) {
+        result = { ...result, warnings: [...(result.warnings || []), `[Unit Conversion] ${conversions.join('; ')}`] };
+      }
+      return result;
+    });
+
     const stdInfo = COUNTRY_STANDARD_MAP[countryCode] ?? COUNTRY_STANDARD_MAP.KR;
 
     // Generate receipt

@@ -139,8 +139,9 @@ export class BridgeAgent {
     const config = getSandbox(sandboxId);
     const agent = createSandboxAgent(config);
 
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<SandboxResult>(resolve => {
-      setTimeout(() => {
+      timeoutHandle = setTimeout(() => {
         resolve({
           sandboxId,
           data: { answer: '', sources: [] },
@@ -152,8 +153,10 @@ export class BridgeAgent {
 
     const executionPromise = agent.execute(query, context);
 
-    // Race: first to resolve wins
-    return Promise.race([executionPromise, timeoutPromise]);
+    // Race: first to resolve wins. 승패 결정 후 타이머 핸들 정리 (누수 방지)
+    return Promise.race([executionPromise, timeoutPromise]).finally(() =>
+      clearTimeout(timeoutHandle),
+    );
   }
 
   // ─── PART 2: Result Merging ─────────────────────────────────

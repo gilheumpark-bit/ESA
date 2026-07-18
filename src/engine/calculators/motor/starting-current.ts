@@ -91,19 +91,9 @@ export function calculateStartingCurrent(input: StartingCurrentInput): DetailedC
     unit: 'A',
   });
 
-  // Step 4: Voltage drop estimate (simple %Z approximation)
-  // 전압강하(%) ~= (Ist / Irated) x (motor kVA / system kVA) -- simplified to Ist/Irated * 2%
-  const voltageDrop = round((Ist / Irated) * 2, 2);
-  steps.push({
-    step: 4,
-    title: '기동시 전압강하 추정 (Voltage drop during starting)',
-    formula: '\\Delta V \\approx k_{start} \\times 2\\%',
-    value: voltageDrop,
-    unit: '%',
-  });
-
   // PART 3 -- Result assembly
-  const pass = voltageDrop <= 15;
+  // 기동 전압강하 판정은 계통 단락용량 + 급전 임피던스가 필요 -> 본 계산기 범위 밖 (Hold/RFI).
+  // 고정 배율 x 2% 방식의 임의 추정은 CLAUDE.md 시스템 프롬프트 규칙 11 위반이므로 제거.
   return {
     value: round(Ist, 2),
     unit: 'A',
@@ -114,17 +104,14 @@ export function calculateStartingCurrent(input: StartingCurrentInput): DetailedC
       createSource('IEC', '60034-12', { edition: '2012' }),
     ],
     judgment: createJudgment(
-      pass,
-      pass
-        ? `기동전류 ${round(Ist, 2)} A (${startingMethod}), 전압강하 ${voltageDrop}% -- 허용 범위 이내`
-        : `기동전류 ${round(Ist, 2)} A, 전압강하 ${voltageDrop}% -- 15% 초과, 기동방식 변경 검토`,
-      pass ? 'info' : 'warning',
+      true,
+      `기동전류 ${round(Ist, 2)} A (${startingMethod}, k=${mult.typical}). 기동시 전압강하 평가는 계통 단락용량(S_sc)과 급전/케이블 임피던스가 필요하여 본 계산 범위 밖 -- Hold/RFI: 변압기 kVA·%Z 및 케이블 임피던스 제공 요망.`,
+      'info',
     ),
     additionalOutputs: {
       ratedCurrent:       { value: round(Irated, 2),      unit: 'A', formula: 'I_{rated}' },
       startingCurrent:    { value: round(Ist, 2),          unit: 'A', formula: 'I_{st}' },
       startingMultiple:   { value: mult.typical,           unit: 'x' },
-      voltageDropDuring:  { value: voltageDrop,            unit: '%' },
     },
   };
 }

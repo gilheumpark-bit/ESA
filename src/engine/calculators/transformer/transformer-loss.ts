@@ -3,9 +3,10 @@
  *
  * Formulae:
  *   Total loss:    P_total = P_fe + P_cu × (loadRatio)²          [W]
- *   Efficiency:    η = (S × pf × loadRatio) /
- *                      (S × pf × loadRatio + P_total) × 100      [%]
  *   Annual loss:   E = P_total × 8760 / 1000                     [kWh]
+ *
+ * Efficiency requires the rated capacity S (kVA) and power factor, which this
+ * loss-only calculator does not take — use transformer-efficiency.ts instead.
  *
  * Standards: IEC 60076-1 (Power Transformers)
  */
@@ -64,25 +65,11 @@ export function calculateTransformerLoss(input: TransformerLossInput): DetailedC
     unit: 'W',
   });
 
-  // Step 3: 효율 계산 (assumes pf=1 for loss-only calculation)
-  // η = output / (output + losses); output approximated as proportional to load
-  const Sref = 1000; // 1 kVA reference for percentage calculation
-  const outputPower = Sref * k * 1000; // W (assuming pf=1)
-  const efficiency = outputPower > 0
-    ? (outputPower / (outputPower + totalLoss)) * 100
-    : 0;
-  steps.push({
-    step: 3,
-    title: 'Calculate efficiency (reference, pf=1)',
-    formula: '\\eta = \\frac{P_{out}}{P_{out} + P_{total}} \\times 100',
-    value: round(efficiency, 2),
-    unit: '%',
-  });
-
-  // Step 4: 연간 에너지 손실 (8760h/year)
+  // Step 3: 연간 에너지 손실 (8760h/year)
+  // 효율은 정격용량 S(kVA)와 역률이 있어야 산출 가능하므로 손실 전용 계산기에서는 제외한다.
   const annualLoss = totalLoss * 8760 / 1000;
   steps.push({
-    step: 4,
+    step: 3,
     title: 'Calculate annual energy loss',
     formula: 'E_{annual} = P_{total} \\times 8760 / 1000',
     value: round(annualLoss, 2),
@@ -102,7 +89,6 @@ export function calculateTransformerLoss(input: TransformerLossInput): DetailedC
       'info',
     ),
     additionalOutputs: {
-      efficiency: { value: round(efficiency, 2), unit: '%', formula: '\\eta = P_{out} / (P_{out} + P_{total})' },
       annualLoss: { value: round(annualLoss, 2), unit: 'kWh', formula: 'E = P_{total} \\times 8760 / 1000' },
     },
   };

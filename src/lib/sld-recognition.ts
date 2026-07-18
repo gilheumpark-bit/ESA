@@ -317,6 +317,9 @@ function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
 export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[] {
   const steps: CalcChainStep[] = [];
   let stepNum = 1;
+  // 부하 계산 단계가 생략되면 이후 step 번호가 밀리므로 실제 step 번호를 캡처한다.
+  let txSizingStep: number | undefined;
+  let scStep: number | undefined;
 
   const { components, connections } = analysis;
   const hasTransformers = components.some(c => c.type === 'transformer');
@@ -344,8 +347,9 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
   // Step 2: 변압기 용량 검증
   if (hasTransformers) {
     const tx = components.find(c => c.type === 'transformer')!;
+    txSizingStep = stepNum++;
     steps.push({
-      step: stepNum++,
+      step: txSizingStep,
       calculatorId: 'transformer-sizing',
       inputs: {
         rating: tx.rating,
@@ -360,7 +364,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
   // Step 3: 단락전류 계산
   if (hasTransformers) {
     const tx = components.find(c => c.type === 'transformer')!;
-    const scStep = stepNum++;
+    scStep = stepNum++;
     steps.push({
       step: scStep,
       calculatorId: 'short-circuit',
@@ -368,7 +372,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
         transformerRating: tx.rating,
         voltage: analysis.systemVoltage,
       },
-      dependsOn: hasTransformers ? [2] : undefined,
+      dependsOn: txSizingStep !== undefined ? [txSizingStep] : undefined,
       description: '단락전류 계산 - 차단기 선정 근거',
     });
   }
@@ -385,7 +389,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
         length: cable.length,
         voltage: analysis.systemVoltage,
       },
-      dependsOn: hasTransformers ? [3] : undefined,
+      dependsOn: scStep !== undefined ? [scStep] : undefined,
       description: '케이블 사이즈 선정',
     });
   }

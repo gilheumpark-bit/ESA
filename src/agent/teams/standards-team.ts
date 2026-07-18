@@ -70,37 +70,6 @@ function parseStandardQuery(query: string): StandardQueryIntent {
   return { type: 'general' };
 }
 
-/** KEC 조문 검색 + 판정 */
-async function queryKECArticle(clause: string, params?: Record<string, unknown>) {
-  try {
-    const { getKECArticle, evaluateKEC } = await import('@/engine/standards/kec');
-    const article = getKECArticle(`KEC-${clause}`);
-    if (!article) return null;
-
-    let judgment: StandardEntry['judgment'] = 'HOLD';
-    if (params) {
-      // Record<string, unknown> → Record<string, number> 안전 변환
-      const numParams: Record<string, number> = {};
-      for (const [k, v] of Object.entries(params)) {
-        if (typeof v === 'number') numParams[k] = v;
-      }
-      const result = evaluateKEC(`KEC-${clause}`, numParams);
-      judgment = result?.judgment ?? 'HOLD';
-    }
-
-    return {
-      standard: 'KEC',
-      clause,
-      title: article.title,
-      judgment,
-      conditions: article.conditions,
-      relatedClauses: article.relatedClauses,
-    };
-  } catch {
-    return null;
-  }
-}
-
 /** 허용전류 테이블 조회 — 타입 안전 변환 */
 async function queryAmpacity(params: Record<string, unknown>) {
   try {
@@ -175,24 +144,46 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
   try {
     switch (intent.type) {
       case 'article_lookup': {
-        if (intent.standard === 'KEC' && intent.clause) {
-          const result = await queryKECArticle(intent.clause, input.params as Record<string, unknown>);
-          if (result) {
+        // KEC/NEC/IEC 모두 통합 레지스트리로 조회 (KEC 전용 분기 → 다국가 일반화)
+        if (intent.standard && intent.clause) {
+          const { getCodeArticle, evaluateStandard } = await import('@/engine/standards/registry');
+          const countryMap: Record<string, string> = { KEC: 'KR', NEC: 'US', IEC: 'INT' };
+          const country = countryMap[intent.standard] ?? 'KR';
+
+          const article = getCodeArticle(country, intent.standard, intent.clause);
+          if (article) {
+            // 수치 파라미터가 있으면 평가, 없으면 HOLD (임의 판정 금지)
+            let judgment: StandardEntry['judgment'] = 'HOLD';
+            const rawParams = input.params as Record<string, unknown> | undefined;
+            if (rawParams) {
+              const numParams: Record<string, number> = {};
+              for (const [k, v] of Object.entries(rawParams)) {
+                if (typeof v === 'number') numParams[k] = v;
+              }
+              if (Object.keys(numParams).length > 0) {
+                const evalResult = evaluateStandard(country, `${intent.standard}-${intent.clause}`, numParams);
+                judgment = evalResult?.judgment ?? 'HOLD';
+              }
+            }
+
             standards.push({
-              standard: result.standard,
-              clause: result.clause,
-              title: result.title,
-              judgment: result.judgment,
+              standard: intent.standard,
+              clause: intent.clause,
+              title: article.title,
+              judgment,
             });
 
-            // 관련 조항도 함께 조회
-            if (result.relatedClauses) {
-              for (const rel of result.relatedClauses) {
-                const related = await queryKECArticle(rel.articleId.replace('KEC-', ''));
+            // 관련 조항도 함께 조회 (NEC/IEC 항목은 relatedClauses가 없을 수 있음)
+            if (article.relatedClauses) {
+              for (const rel of article.relatedClauses) {
+                const relClause = rel.articleId
+                  .replace(`${intent.standard}-`, '')
+                  .replace('KEC-', '');
+                const related = getCodeArticle(country, intent.standard, relClause);
                 if (related) {
                   standards.push({
-                    standard: related.standard,
-                    clause: related.clause,
+                    standard: intent.standard,
+                    clause: relClause,
                     title: related.title,
                     judgment: 'HOLD',
                     note: `관련: ${rel.relation}`,
@@ -200,6 +191,15 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
                 }
               }
             }
+          } else {
+            // 조문 미수록 → 침묵 성공(빈 배열) 대신 명시적 HOLD
+            standards.push({
+              standard: intent.standard,
+              clause: intent.clause,
+              title: `${intent.standard} ${intent.clause}`,
+              judgment: 'HOLD',
+              note: '조문 미수록',
+            });
           }
         }
         break;

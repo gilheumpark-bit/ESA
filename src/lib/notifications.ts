@@ -191,15 +191,22 @@ export async function getUserNotifications(
 
 /**
  * Mark a notification as read.
+ *
+ * @param id       알림 ID
+ * @param ownerId  소유자 userId. 전달 시 소유권 스코프로 IDOR 차단 (타인 알림 read 방지).
+ *                 미전달 시 기존 동작 유지 (id만으로 처리).
  */
-export async function markRead(id: string): Promise<void> {
+export async function markRead(id: string, ownerId?: string): Promise<void> {
   const client = getSupabaseClientSafe();
   if (client) {
     try {
-      const { error } = await client
+      let query = client
         .from(NOTIF_TABLE)
         .update({ read: true })
         .eq('id', id);
+      // 소유권 스코프: ownerId 제공 시 user_id 일치 조건 추가
+      if (ownerId) query = query.eq('user_id', ownerId);
+      const { error } = await query;
       if (!error) return;
     } catch { /* fall through */ }
   }
@@ -207,7 +214,8 @@ export async function markRead(id: string): Promise<void> {
   // In-memory fallback
   for (const [, notifs] of memoryNotifications) {
     const notif = notifs.find(n => n.id === id);
-    if (notif) {
+    // ownerId 제공 시 소유자 일치하는 알림만 처리
+    if (notif && (!ownerId || notif.userId === ownerId)) {
       notif.read = true;
       return;
     }

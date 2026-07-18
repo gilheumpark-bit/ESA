@@ -48,6 +48,12 @@ const store = new Map<string, BucketEntry>();
 
 let lastCleanup = Date.now();
 const CLEANUP_INTERVAL_MS = 5 * 60_000; // 5 minutes
+/**
+ * Hard cap on distinct buckets. Prevents unbounded memory growth from forged
+ * x-forwarded-for headers spraying new keys within a single window (project
+ * rule: all in-memory Maps must have MAX_ENTRIES + cleanup).
+ */
+const MAX_ENTRIES = 50_000;
 
 // ─── PART 3: Core Logic ──────────────────────────────────────
 
@@ -67,9 +73,9 @@ function pruneExpired(entry: BucketEntry, windowMs: number, now: number): void {
   }
 }
 
-function lazyCleanup(): void {
+function lazyCleanup(force = false): void {
   const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL_MS) return;
+  if (!force && now - lastCleanup < CLEANUP_INTERVAL_MS) return;
   lastCleanup = now;
 
   const maxWindow = Math.max(...Object.values(RATE_LIMIT_PROFILES).map(p => p.windowMs));
@@ -102,6 +108,16 @@ export function checkRateLimit(
 
   let entry = store.get(key);
   if (!entry) {
+    // 하드 캡 도달 시: 강제 정리 후에도 초과하면 가장 오래된 항목 축출
+    // (Map은 삽입 순서를 보존하므로 keys().next()가 가장 오래된 키)
+    if (store.size >= MAX_ENTRIES) {
+      lazyCleanup(true);
+      while (store.size >= MAX_ENTRIES) {
+        const oldestKey = store.keys().next().value;
+        if (oldestKey === undefined) break;
+        store.delete(oldestKey);
+      }
+    }
     entry = { timestamps: [] };
     store.set(key, entry);
   }
@@ -136,22 +152,29 @@ export function checkRateLimit(
 
 /**
  * Extract client IP from request headers.
- * Checks standard proxy headers, falls back to '127.0.0.1'.
+ *
+ * SECURITY: The leftmost x-forwarded-for entry is client-suppliable and can be
+ * forged to mint a fresh rate-limit bucket per request. We therefore prefer
+ * headers set by the trusted edge (x-real-ip / cf-connecting-ip) and, when only
+ * x-forwarded-for is present, use the RIGHTMOST entry (appended by the closest
+ * trusted proxy) rather than the leftmost. Falls back to '127.0.0.1'.
  */
 export function getClientIp(headers: Headers): string {
-  // Vercel / Cloudflare / standard proxies
-  const forwarded = headers.get('x-forwarded-for');
-  if (forwarded) {
-    // x-forwarded-for can be comma-separated; take the first (client IP)
-    const first = forwarded.split(',')[0].trim();
-    if (first && isValidIp(first)) return first;
-  }
-
+  // 신뢰 가능한 엣지(Vercel/Cloudflare)가 설정하는 헤더 우선 — 클라이언트 위조 불가
   const realIp = headers.get('x-real-ip');
-  if (realIp && isValidIp(realIp)) return realIp;
+  if (realIp && isValidIp(realIp.trim())) return realIp.trim();
 
   const cfIp = headers.get('cf-connecting-ip');
-  if (cfIp && isValidIp(cfIp)) return cfIp;
+  if (cfIp && isValidIp(cfIp.trim())) return cfIp.trim();
+
+  // x-forwarded-for는 클라이언트가 앞쪽 값을 위조할 수 있으므로
+  // 가장 오른쪽(신뢰 프록시가 추가한 값)을 사용
+  const forwarded = headers.get('x-forwarded-for');
+  if (forwarded) {
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean);
+    const candidate = parts[parts.length - 1];
+    if (candidate && isValidIp(candidate)) return candidate;
+  }
 
   return '127.0.0.1';
 }

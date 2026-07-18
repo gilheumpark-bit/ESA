@@ -83,6 +83,7 @@ function useNotifications() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notificationId: id }),
+        keepalive: true,
       });
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, read: true } : n)),

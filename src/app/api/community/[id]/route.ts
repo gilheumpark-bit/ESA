@@ -14,26 +14,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getQuestion, getAnswersForQuestion, createAnswer } from '@/lib/community';
 import { getExpertBadge } from '@/lib/expert-verification';
 import { checkContent, checkAnswerQuality } from '@/lib/abuse-prevention';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
-
-async function extractUserId(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    const payload = JSON.parse(atob(payloadB64));
-    return payload.user_id ?? payload.sub ?? null;
-  } catch {
-    return null;
-  }
-}
+// Uses shared extractVerifiedUserId (Firebase ID token verification) from
+// @/lib/auth-helpers. Never trust an unverified base64-decoded JWT payload —
+// doing so would let a caller impersonate any user (incl. verified experts).
 
 // ─── PART 2: GET — Question + Answers ──────────────────────────
 
@@ -83,7 +69,7 @@ export async function POST(
     const { id: questionId } = await params;
 
     // Auth required
-    const userId = await extractUserId(request);
+    const userId = await extractVerifiedUserId(request);
     if (!userId) {
       return NextResponse.json(
         { success: false, error: { code: 'ESVA-1001', message: 'Authentication required' } },

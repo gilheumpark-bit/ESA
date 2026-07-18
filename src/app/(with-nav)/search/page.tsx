@@ -374,18 +374,22 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
 
       const decoder = new TextDecoder();
       let assistantText = '';
+      let buffer = '';
+      let streamDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        // 청크 경계를 가로지르는 부분 라인을 buffer에 보존 (마지막 미완성 라인은 다음 read로 이월)
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
-          if (payload === '[DONE]') break;
+          if (payload === '[DONE]') { streamDone = true; break; }
           try {
             const parsed = JSON.parse(payload);
             if (parsed.text) {
@@ -398,6 +402,8 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
             }
           } catch { /* skip malformed */ }
         }
+
+        if (streamDone) break;
       }
     } catch {
       setMessages((prev) => {

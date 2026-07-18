@@ -5,7 +5,7 @@
  * 새 조항 추가 시 이 파일에 등록만 하면 전체 시스템에서 사용 가능.
  */
 
-import { CodeArticle, Condition, JudgmentResult, makeHold } from './types';
+import { CodeArticle, Condition, JudgmentResult, makeHold, makePass, makeFail } from './types';
 import {
   KEC_232_52_MAIN,
   KEC_232_52_BRANCH,
@@ -23,7 +23,12 @@ import {
   KEC_142_5_D,
   evaluateGroundingKEC,
 } from './kec-142';
-import { registerExtendedArticles } from './kec-full';
+import {
+  registerExtendedArticles,
+  KEC_240_1,
+  KEC_232_1,
+  KEC_240_5,
+} from './kec-full';
 
 // Re-export
 export * from './types';
@@ -56,10 +61,23 @@ registerExtendedArticles(KEC_ARTICLES);
 
 // 추가 100+조 (kec-extended.ts) — KEC 전문 커버
 import { KEC_EXTENDED_ARTICLES } from './kec-extended';
+// ID 충돌 감지: kec-full과 kec-extended가 같은 id를 서로 다른 조항에 부여하면
+// kec-full 정의가 우선 등록되어 kec-extended 정의가 조용히 사라진다.
+// 모듈 로드 시 throw하면 전체 임포터가 크래시하므로, 충돌을 수집해 console.warn으로만 표면화한다.
+const kecIdCollisions: string[] = [];
 for (const article of KEC_EXTENDED_ARTICLES) {
-  if (!KEC_ARTICLES.has(article.id)) {
-    KEC_ARTICLES.set(article.id, article);
+  if (KEC_ARTICLES.has(article.id)) {
+    kecIdCollisions.push(article.id);
+    continue;
   }
+  KEC_ARTICLES.set(article.id, article);
+}
+if (kecIdCollisions.length > 0) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[KEC Registry] KEC ID 충돌 ${kecIdCollisions.length}건 — kec-extended 정의가 무시됨(kec-full 우선). ` +
+      `충돌 id에 고유 하위번호를 부여해야 함: ${kecIdCollisions.join(', ')}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +107,39 @@ const KEC_EVALUATORS: Map<string, KecEvaluator> = new Map([
   ['KEC-142.5-B', (p) => evaluateGroundingKEC(p.resistance, 'B')],
   ['KEC-142.5-C', (p) => evaluateGroundingKEC(p.resistance, 'C')],
   ['KEC-142.5-D', (p) => evaluateGroundingKEC(p.resistance, 'D')],
+  // 과전류 보호 협조 — I_B ≤ I_n ≤ I_z (evaluateBreakerKEC 재사용, article만 KEC-240.1로 재스탬프)
+  ['KEC-240.1', (p) => {
+    const r = evaluateBreakerKEC(p.breakerRating, p.loadCurrent, p.wireAmpacity);
+    return { ...r, article: KEC_240_1 };
+  }],
+  // 허용전류 ≥ 설계전류 (I_z ≥ I_B) — param-vs-param 부등식
+  ['KEC-232.1', (p) => {
+    const missing = ['ampacity', 'designCurrent'].filter(
+      (k) => p[k] == null || !Number.isFinite(p[k]),
+    );
+    if (missing.length > 0) return makeHold(KEC_232_1, missing);
+    const c: Condition = {
+      param: 'ampacity', operator: '>=', value: p.designCurrent,
+      unit: 'A', result: 'PASS', note: '허용전류 ≥ 설계전류',
+    };
+    return p.ampacity >= p.designCurrent
+      ? makePass(KEC_232_1, [c])
+      : makeFail(KEC_232_1, [], [c]);
+  }],
+  // 차단용량 ≥ 예상 단락전류 (I_cu ≥ I_k) — param-vs-param 부등식
+  ['KEC-240.5', (p) => {
+    const missing = ['breakingCapacity', 'prospectiveShortCircuit'].filter(
+      (k) => p[k] == null || !Number.isFinite(p[k]),
+    );
+    if (missing.length > 0) return makeHold(KEC_240_5, missing);
+    const c: Condition = {
+      param: 'breakingCapacity', operator: '>=', value: p.prospectiveShortCircuit,
+      unit: 'kA', result: 'PASS', note: '차단용량 ≥ 예상 단락전류',
+    };
+    return p.breakingCapacity >= p.prospectiveShortCircuit
+      ? makePass(KEC_240_5, [c])
+      : makeFail(KEC_240_5, [], [c]);
+  }],
 ]);
 
 // ---------------------------------------------------------------------------
