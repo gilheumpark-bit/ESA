@@ -89,6 +89,8 @@ export default function FieldSafetyPage() {
   const [sosLog, setSosLog] = useState<number[]>([]);
   const [, setIsDone] = useState(false);
   const [doneMsg, setDoneMsg] = useState('');
+  // 체크리스트에서 실제로 이행한 항목 id. 완료 영수증의 이행률 근거가 된다.
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
 
   const handleAnalyze = useCallback(() => {
     if (!query.trim()) return;
@@ -130,7 +132,7 @@ export default function FieldSafetyPage() {
           workSite: analysis.intent.location?.ko ?? '현장',
           workerCount: analysis.intent.workers ?? 0,
           supervisorIds: [],
-          checklistDone: [],
+          checklistDone: checkedIds,
           checklistTotal: analysis.checkItems.length,
           completedAt: new Date().toISOString(),
         }),
@@ -252,7 +254,7 @@ export default function FieldSafetyPage() {
           </div>
 
           {/* 체크리스트 */}
-          <SafetyCheckList analysis={analysis} />
+          <SafetyCheckList analysis={analysis} onCheckedChange={setCheckedIds} />
 
           {/* 스케줄 */}
           {schedule && <SchedulePanel schedule={schedule} />}

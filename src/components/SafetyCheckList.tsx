@@ -10,7 +10,7 @@
  * PART 2: 메인 컴포넌트
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { SafetyCheckItem, SafetyAnalysisResult, RiskLevel } from '@/engine/safety/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -107,10 +107,22 @@ function CheckItemRow({ item, checked, onToggle }: CheckItemRowProps) {
 interface SafetyCheckListProps {
   analysis: SafetyAnalysisResult;
   className?: string;
+  /**
+   * 체크된 항목 id 목록이 바뀔 때 부모에 알린다.
+   * 작업 완료 영수증의 이행률 산출에 쓰인다 — 전달하지 않으면
+   * 완료 기록에 이행 항목이 빈 채로 남는다.
+   */
+  onCheckedChange?: (checkedIds: string[]) => void;
 }
 
-export function SafetyCheckList({ analysis, className = '' }: SafetyCheckListProps) {
+export function SafetyCheckList({ analysis, className = '', onCheckedChange }: SafetyCheckListProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
+
+  // 체크 상태를 부모에 올려보낸다. setState 업데이터 안에서 부르면 렌더 중에
+  // 부모 상태를 바꾸게 되므로 effect로 분리한다.
+  useEffect(() => {
+    onCheckedChange?.([...checked]);
+  }, [checked, onCheckedChange]);
 
   const toggleItem = (id: string) => {
     setChecked(prev => {
