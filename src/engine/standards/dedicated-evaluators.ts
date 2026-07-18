@@ -19,6 +19,7 @@ import { makePass, makeFail, makeHold } from './kec/types';
 import { getIECArticle } from './iec/iec-articles';
 import { getJISArticle } from './jis/jis-articles';
 import { getNECArticleFull } from './nec/nec-articles';
+import { getKECArticle } from './kec';
 
 /**
  * 차단용량 판정: 차단기/개폐기의 정격 차단용량이 설치점 예상 단락전류
@@ -118,6 +119,18 @@ function evaluateAmpacity(
   ]);
 }
 
+/**
+ * 분류·적용범위 조항: 임계값 비교가 아니라 "이 조항이 적용되는 범위" 또는
+ * "구역/등급 분류"를 안내하는 조항(KEC-111.1 적용범위, 욕실 Zone 구분 등).
+ * pass/fail 대상이 아니므로 어떤 입력에도 판정하지 않고, 정확한 사유의 HOLD를
+ * 반환한다. (자리표시자 가드의 "임계값 누락" 사유가 오해를 부르는 것을 교정)
+ */
+function evaluateInformational(article: CodeArticle): JudgmentResult {
+  return makeHold(article, [
+    '이 조항은 적용범위/구역 분류 안내이며 자동 pass/fail 판정 대상이 아님',
+  ]);
+}
+
 /** 조항 조회 + 평가를 묶는다. 조항이 없으면 null (디스패처가 폴백). */
 function withArticle(
   article: CodeArticle | null,
@@ -139,6 +152,10 @@ export const DEDICATED_EVALUATORS: Map<
   ['JIS-434.1', (p) => withArticle(getJISArticle('JIS-434.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['NEC-310.16', (p) => withArticle(getNECArticleFull('NEC-310.16'), (a) => evaluateAmpacity(a, p))],
   ['IEC-523.1', (p) => withArticle(getIECArticle('IEC-523.1'), (a) => evaluateAmpacity(a, p))],
+  // 분류·적용범위 조항 — pass/fail 대상 아님, 정확한 사유로 HOLD
+  ['KEC-111.1', () => withArticle(getKECArticle('KEC-111.1'), evaluateInformational)],
+  ['KEC-250.1', () => withArticle(getKECArticle('KEC-250.1'), evaluateInformational)],
+  ['JIS-701.1', () => withArticle(getJISArticle('JIS-701.1'), evaluateInformational)],
 ]);
 
 // IDENTITY_SEAL: standards/dedicated-evaluators | role=자리표시자 조항 실판정 승격 | inputs=params | outputs=JudgmentResult
