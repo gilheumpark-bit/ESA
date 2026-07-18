@@ -138,3 +138,42 @@ describe('분류·적용범위 조항 (KEC-111.1 / KEC-250.1 / JIS-701.1)', () =
     expect(r.notes.some(n => n.includes('분류') || n.includes('적용범위') || n.includes('안내'))).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 공식형 조항 — 안전 HOLD 잠금 (3단계)
+//
+// 아래 조항들은 note에 공식이 산문으로 적혀 있으나(예: "FLC × 1.25",
+// "비연속부하 + 연속부하×1.25", "SF≥1.15면 115% else 125%"), 그 공식을
+// 기준서 원문과 대조하기 전까지는 인코딩하지 않는다. note는 기준서가 아니라
+// 누군가의 요약이며, 요약 작성자도 틀릴 수 있다(사용자 지침).
+//
+// 따라서 이들은 자리표시자 가드가 HOLD로 유지하는 것이 올바른 상태다.
+// 이 테스트는 그 안전 상태를 잠근다 — 향후 누군가 이 조항들을 임의 임계값으로
+// 채워 PASS/FAIL을 만들면 즉시 실패한다. 승격은 반드시 (i) 기준서 원문 대조 후
+// 전용 평가기(dedicated-evaluators.ts)로만, 또는 (ii) 공인표/측정입력 비교로만.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('공식형 조항 안전 HOLD 잠금 (검증 전까지 PASS/FAIL 금지)', () => {
+  const FORMULA_ARTICLES: Array<[string, string]> = [
+    ['US', 'NEC-210.19'],  // conductorAmpacity ≥ 비연속 + 연속×1.25
+    ['US', 'NEC-215.2'],   // feederAmpacity ≥ 비연속 + 연속×1.25
+    ['US', 'NEC-430.22'],  // motorBranchConductor ≥ FLC×1.25
+    ['US', 'NEC-430.24'],  // multiMotorConductor ≥ 최대FLC×1.25 + 나머지 합
+    ['US', 'NEC-430.32'],  // overloadRelayRating ≤ SF별 %FLA
+    ['US', 'NEC-240.4'],   // ocpdRating ≤ 전선 허용전류
+    ['US', 'NEC-430.6'],   // motorFLC = NEC 표 값
+    ['INT', 'IEC-543.1'],  // protectiveConductorSize 공식
+    ['KR', 'KEC-340.1'],
+  ];
+
+  test.each(FORMULA_ARTICLES)('%s %s 는 임의 입력에도 PASS/FAIL 하지 않는다 (HOLD)', (country, id) => {
+    const params = {
+      conductorAmpacity: 100, feederAmpacity: 100, motorBranchConductor: 100,
+      multiMotorConductor: 100, overloadRelayRating: 100, ocpdRating: 100,
+      motorFLC: 100, protectiveConductorSize: 100,
+    };
+    const r = evaluateStandard(country, id, params);
+    expect(r.judgment).toBe('HOLD');
+    expect(['PASS', 'FAIL']).not.toContain(r.judgment);
+  });
+});
