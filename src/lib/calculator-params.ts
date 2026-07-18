@@ -141,17 +141,20 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     { name: 'currentPF', type: 'number', unit: '', description: '현재 역률', min: 0.01, max: 0.99, defaultValue: 0.75, step: 0.01 },
     { name: 'targetPF', type: 'number', unit: '', description: '목표 역률', min: 0.01, max: 1, defaultValue: 0.95, step: 0.01 },
   ],
-  // TODO(Phase2 array-form): needs individualMaxDemands: number[] — flat form cannot express
   'demand-diversity': [
-    { name: 'totalConnectedLoad', type: 'number', unit: 'kW', description: '총 설비용량', min: 0.1 },
-    { name: 'demandFactor', type: 'number', unit: '', description: '수용률 (0~1)', min: 0.01, max: 1, defaultValue: 0.7, step: 0.01 },
-    { name: 'diversityFactor', type: 'number', unit: '', description: '부등률', min: 1, defaultValue: 1.2, step: 0.1 },
+    { name: 'individualMaxDemands', type: 'array', unit: '', description: '개별 부하 최대수요 목록', minItems: 1, flatten: true, itemSchema: [
+      { name: 'value', type: 'number', unit: 'kW', description: '최대수요', min: 0.01, defaultValue: 50 },
+    ] },
+    { name: 'combinedMaxDemand', type: 'number', unit: 'kW', description: '합성 최대수요', min: 0.01, defaultValue: 120 },
+    { name: 'totalInstalled', type: 'number', unit: 'kW', description: '총 설비용량', min: 0.01, defaultValue: 200 },
   ],
-  // TODO(Phase2 array-form): needs loads: {name,ratedPower,demandFactor}[] — flat form cannot express
   'max-demand': [
-    { name: 'totalLoad', type: 'number', unit: 'kW', description: '총 부하', min: 0.1 },
-    { name: 'demandFactor', type: 'number', unit: '', description: '수용률', min: 0.01, max: 1, defaultValue: 0.7, step: 0.01 },
-    { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0.1, max: 1, defaultValue: 0.85, step: 0.01 },
+    { name: 'loads', type: 'array', unit: '', description: '부하 목록', minItems: 1, itemSchema: [
+      { name: 'name', type: 'string', unit: '', description: '명칭', defaultValue: '부하' },
+      { name: 'ratedPower', type: 'number', unit: 'kW', description: '정격전력', min: 0.01, defaultValue: 10 },
+      { name: 'demandFactor', type: 'number', unit: '', description: '수용률', min: 0.01, max: 1, defaultValue: 0.7, step: 0.01 },
+    ] },
+    { name: 'diversityFactor', type: 'number', unit: '', description: '부등률 (≥1)', min: 1, defaultValue: 1.2, step: 0.1 },
   ],
   'power-loss': [
     { name: 'current', type: 'number', unit: 'A', description: '전류', min: 0.01 },
@@ -167,22 +170,27 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     { name: 'reactance', type: 'number', unit: 'Ω/km', description: '전선 리액턴스 (km당)', min: 0, defaultValue: 0.08 },
     { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0, max: 1, defaultValue: 0.85, step: 0.01 },
   ],
-  // TODO(Phase2 array-form): needs sections: {length,resistance,reactance}[] — flat form cannot express
   'complex-voltage-drop': [
     { name: 'voltage', type: 'number', unit: 'V', description: '전압', min: 0.1, defaultValue: 380 },
     { name: 'current', type: 'number', unit: 'A', description: '전류', min: 0.01 },
-    { name: 'resistance', type: 'number', unit: 'Ω/km', description: '저항', min: 0.001 },
-    { name: 'reactance', type: 'number', unit: 'Ω/km', description: '리액턴스', min: 0.001 },
-    { name: 'length', type: 'number', unit: 'km', description: '길이', min: 0.001 },
-    { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0, max: 1, defaultValue: 0.85, step: 0.01 },
+    { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0.01, max: 1, defaultValue: 0.85, step: 0.01 },
+    { name: 'phase', type: 'number', unit: '', description: '상수 (1 또는 3)', min: 1, max: 3, defaultValue: 3 },
+    { name: 'sections', type: 'array', unit: '', description: '케이블 구간 목록', minItems: 1, itemSchema: [
+      { name: 'length', type: 'number', unit: 'm', description: '길이', min: 0.1, defaultValue: 50 },
+      { name: 'resistance', type: 'number', unit: 'Ω/km', description: '저항', min: 0.001, defaultValue: 0.5 },
+      { name: 'reactance', type: 'number', unit: 'Ω/km', description: '리액턴스', min: 0, defaultValue: 0.08 },
+    ] },
   ],
-  // TODO(Phase2 array-form): needs sections: {current,length,resistance,reactance}[] — flat form cannot express
   'busbar-vd': [
     { name: 'voltage', type: 'number', unit: 'V', description: '전압', min: 0.1, defaultValue: 380 },
-    { name: 'totalCurrent', type: 'number', unit: 'A', description: '총 전류', min: 0.01 },
-    { name: 'busbarLength', type: 'number', unit: 'm', description: '부스바 길이', min: 0.1 },
-    { name: 'crossSection', type: 'number', unit: 'mm²', description: '단면적', min: 1 },
-    { name: 'tapCount', type: 'number', unit: '', description: '분기 수', min: 1, defaultValue: 5 },
+    { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0.01, max: 1, defaultValue: 0.85, step: 0.01 },
+    { name: 'sections', type: 'array', unit: '', description: '부스바 구간 목록', minItems: 1, itemSchema: [
+      { name: 'name', type: 'string', unit: '', description: '구간명', defaultValue: '구간' },
+      { name: 'current', type: 'number', unit: 'A', description: '전류', min: 0.01, defaultValue: 100 },
+      { name: 'length', type: 'number', unit: 'm', description: '길이', min: 0.1, defaultValue: 10 },
+      { name: 'resistance', type: 'number', unit: 'Ω/km', description: '저항', min: 0.001, defaultValue: 0.1 },
+      { name: 'reactance', type: 'number', unit: 'Ω/km', description: '리액턴스', min: 0, defaultValue: 0.05 },
+    ] },
   ],
   'country-compare-vd': [
     { name: 'voltage', type: 'number', unit: 'V', description: '전압', min: 0.1, defaultValue: 380 },
@@ -249,12 +257,13 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
       { value: 'dry-type', label: '건식 (10~15배)' },
     ], defaultValue: 'distribution' },
   ],
-  // TODO(Phase2 array-form): needs transformers: {capacity,impedancePercent,voltageRatio,vectorGroup}[] ≥2 — flat form cannot express
   'parallel-operation': [
-    { name: 'capacity1', type: 'number', unit: 'kVA', description: '변압기1 용량', min: 1 },
-    { name: 'capacity2', type: 'number', unit: 'kVA', description: '변압기2 용량', min: 1 },
-    { name: 'impedance1', type: 'number', unit: '%', description: '변압기1 %Z', min: 0.1, defaultValue: 5, step: 0.1 },
-    { name: 'impedance2', type: 'number', unit: '%', description: '변압기2 %Z', min: 0.1, defaultValue: 5, step: 0.1 },
+    { name: 'transformers', type: 'array', unit: '', description: '병렬 변압기 목록 (2대 이상)', minItems: 2, defaultItems: 2, itemSchema: [
+      { name: 'capacity', type: 'number', unit: 'kVA', description: '용량', min: 1, defaultValue: 500 },
+      { name: 'impedancePercent', type: 'number', unit: '%', description: '%임피던스', min: 0.1, max: 30, defaultValue: 5, step: 0.1 },
+      { name: 'voltageRatio', type: 'string', unit: '', description: '전압비 (예 22900/380)', defaultValue: '22900/380' },
+      { name: 'vectorGroup', type: 'string', unit: '', description: '결선군 (예 Dyn11)', defaultValue: 'Dyn11' },
+    ] },
   ],
   'earth-fault': [
     { name: 'systemVoltage', type: 'number', unit: 'V', description: '계통 전압 (선간)', min: 0.1, defaultValue: 380 },
@@ -386,12 +395,19 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     { name: 'gridVoltage', type: 'number', unit: 'V', description: '계통 전압', min: 1, defaultValue: 380 },
     { name: 'contractDemand', type: 'number', unit: 'kW', description: '계약 전력', min: 0.1 },
   ],
-  // TODO(Phase2 array-form): needs loads: {name,kW,pf,demandFactor}[] — flat form cannot express
   'substation-capacity': [
-    { name: 'totalLoad', type: 'number', unit: 'kW', description: '총 부하', min: 0.1 },
-    { name: 'demandFactor', type: 'number', unit: '', description: '수용률', min: 0.01, max: 1, defaultValue: 0.7, step: 0.01 },
-    { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0.1, max: 1, defaultValue: 0.85, step: 0.01 },
-    { name: 'growthFactor', type: 'number', unit: '', description: '증설 계수', min: 1, defaultValue: 1.25, step: 0.05 },
+    { name: 'loads', type: 'array', unit: '', description: '부하 목록', minItems: 1, itemSchema: [
+      { name: 'name', type: 'string', unit: '', description: '명칭', defaultValue: '부하' },
+      { name: 'kW', type: 'number', unit: 'kW', description: '용량', min: 0.01, defaultValue: 50 },
+      { name: 'pf', type: 'number', unit: '', description: '역률', min: 0.01, max: 1, defaultValue: 0.85, step: 0.01 },
+      { name: 'demandFactor', type: 'number', unit: '', description: '수용률', min: 0.01, max: 1, defaultValue: 0.7, step: 0.01 },
+    ] },
+    { name: 'futureGrowth', type: 'number', unit: '%', description: '장래 증설률 (0~100)', min: 0, max: 100, defaultValue: 25, step: 1 },
+    { name: 'redundancy', type: 'string', unit: '', description: '이중화', options: [
+      { value: 'N', label: 'N (단일)' },
+      { value: 'N+1', label: 'N+1 (예비 1)' },
+    ], defaultValue: 'N' },
+    { name: 'systemVoltage', type: 'number', unit: 'V', description: '계통 전압 (선택)', min: 1, defaultValue: 22900 },
   ],
   'ct-sizing': [
     { name: 'maxLoadCurrent', type: 'number', unit: 'A', description: '최대 부하 전류', min: 0.1, defaultValue: 200 },
@@ -465,12 +481,15 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     { name: 'depthOfDischarge', type: 'number', unit: '', description: '방전심도 DoD (0~1)', min: 0.01, max: 1, defaultValue: 0.8, step: 0.05 },
     { name: 'cellVoltage', type: 'number', unit: 'V', description: '셀 전압', min: 0.1, defaultValue: 12 },
   ],
-  // TODO(Phase2 array-form): needs emergencyLoads: {name,kW,pf,isMotor}[] — flat form cannot express
   'emergency-generator': [
-    { name: 'totalLoad', type: 'number', unit: 'kW', description: '총 부하', min: 0.1 },
-    { name: 'motorStartingLoad', type: 'number', unit: 'kW', description: '전동기 기동 부하', min: 0, defaultValue: 0 },
-    { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0.1, max: 1, defaultValue: 0.8, step: 0.01 },
-    { name: 'safetyFactor', type: 'number', unit: '', description: '여유율', min: 1, defaultValue: 1.25, step: 0.05 },
+    { name: 'emergencyLoads', type: 'array', unit: '', description: '비상 부하 목록', minItems: 1, itemSchema: [
+      { name: 'name', type: 'string', unit: '', description: '명칭', defaultValue: '비상부하' },
+      { name: 'kW', type: 'number', unit: 'kW', description: '용량', min: 0.01, defaultValue: 20 },
+      { name: 'pf', type: 'number', unit: '', description: '역률', min: 0.01, max: 1, defaultValue: 0.8, step: 0.01 },
+      { name: 'isMotor', type: 'boolean', unit: '', description: '전동기 부하', defaultValue: false },
+    ] },
+    { name: 'safetyFactor', type: 'number', unit: '', description: '여유율 (1.0~2.0)', min: 1, max: 2, defaultValue: 1.25, step: 0.05 },
+    { name: 'requiredRuntime', type: 'number', unit: 'h', description: '요구 가동시간 (선택)', min: 0.1, defaultValue: 8 },
   ],
   'temp-correction': [
     { name: 'baseAmpacity', type: 'number', unit: 'A', description: '기준 허용전류 (기준 온도에서)', min: 0.01, defaultValue: 100 },
