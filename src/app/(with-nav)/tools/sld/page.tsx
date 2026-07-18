@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { decryptKey } from '@/lib/ai-providers';
-import { isFeatureEnabled } from '@/lib/feature-flags';
 
 const BYOK_PREFIX = 'esa-byok-';
 const VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;

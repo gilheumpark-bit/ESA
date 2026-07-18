@@ -59,6 +59,10 @@ function getProjectId(request: NextRequest): string {
 
 export async function GET(request: NextRequest) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'default');
+    if (blocked) return blocked;
+
     const userId = await extractUserId(request);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -113,6 +117,10 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'default');
+    if (blocked) return blocked;
+
     const userId = await extractUserId(request);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -185,6 +193,10 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'default');
+    if (blocked) return blocked;
+
     const userId = await extractUserId(request);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

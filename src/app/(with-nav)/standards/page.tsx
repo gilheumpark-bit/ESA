@@ -25,9 +25,6 @@ import { IEC_ARTICLES } from '@/engine/standards/iec/iec-articles';
 import { NER_ARTICLES, type NerArticle } from '@/engine/standards/ner/ner-articles';
 import { ESA_ARTICLES, type EsaArticle } from '@/engine/standards/esa/esa-articles';
 import StandardsTree from '@/components/StandardsTree';
-import SplitView from '@/components/SplitView';
-import { getExamFrequency } from '@/data/exam-frequency/exam-frequency';
-import { getCertsByStandard } from '@/data/certifications/certification-db';
 import type { CodeArticle } from '@/engine/standards/kec/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -72,6 +72,14 @@ async function loadReceipt(receiptId: string) {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    // Rate limit (R4 stub repair: applyRateLimit was imported but never invoked).
+    const blocked = applyRateLimit(req, 'default');
+    if (blocked) {
+      return NextResponse.json(
+        { error: 'ESA-2001: Rate limit exceeded' },
+        { status: 429, headers: blocked.headers },
+      );
+    }
 
     const body = (await req.json()) as Partial<ExportRequestBody>;
 

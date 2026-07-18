@@ -40,14 +40,17 @@ const tokenUsage = new Map<string, { tokens: number; resetAt: number }>();
 const ALLOWED_ORIGINS = new Set([
   'https://esva.engineer',
   'https://www.esva.engineer',
-  'http://localhost:3000',
-  'http://localhost:3001',
 ]);
+
+// Permissive in dev (any localhost port), strict in prod — BUG-016.
+const LOCALHOST_RE = /^http:\/\/localhost:\d+$/;
+const VERCEL_PREVIEW_RE = /^https:\/\/.*\.vercel\.app$/;
 
 function isOriginAllowed(origin: string | null): boolean {
   if (!origin) return false;
   if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  if (VERCEL_PREVIEW_RE.test(origin)) return true;
+  if (process.env.NODE_ENV !== 'production' && LOCALHOST_RE.test(origin)) return true;
   return false;
 }
 

@@ -33,7 +33,12 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              // Dev mode needs unsafe-eval for React's callstack reconstruction
+              // (HMR + Fast Refresh). Production never uses eval. Without this,
+              // dev console shows: "eval() is not supported in this environment".
+              process.env.NODE_ENV === 'production'
+                ? "script-src 'self' 'unsafe-inline'"
+                : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
               "img-src 'self' data: https:",
               "font-src 'self' https://cdn.jsdelivr.net",

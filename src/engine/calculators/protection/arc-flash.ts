@@ -14,10 +14,9 @@
  */
 
 import type { DetailedCalcResult, CalcStep } from '../types';
-import { assertRange } from '../types';
+import { CalcValidationError } from '../types';
 import {
   IEEE_1584_ARC_CURRENT,
-  IEEE_1584_DISTANCE_EXPONENT,
   PPE_THRESHOLDS,
 } from '@/engine/constants/electrical';
 
@@ -196,10 +195,26 @@ function determinePPE(incidentEnergy: number): PPEInfo {
 export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   const steps: CalcStep[] = [];
 
-  // 입력 검증 — IEEE 1584-2018 적용 범위
-  assertRange(input.voltage_V, 208, 15000, 'voltage_V');
-  assertRange(input.boltedFaultCurrent_kA, 0.2, 106, 'boltedFaultCurrent_kA');
-  assertRange(input.arcDuration_s, 0.001, 10, 'arcDuration_s');
+  // 입력 검증 — IEEE 1584-2018 적용 범위.
+  // ESVA-440x 코드를 throw 메시지에 포함해 API 응답에서 표준 에러 코드를 노출한다.
+  if (!Number.isFinite(input.voltage_V) || input.voltage_V < 208 || input.voltage_V > 15000) {
+    throw new CalcValidationError(
+      'voltage_V',
+      `ESVA-4401: voltage_V must be between 208 and 15000 (IEEE 1584-2018 range), got ${input.voltage_V}`,
+    );
+  }
+  if (!Number.isFinite(input.boltedFaultCurrent_kA) || input.boltedFaultCurrent_kA < 0.2 || input.boltedFaultCurrent_kA > 106) {
+    throw new CalcValidationError(
+      'boltedFaultCurrent_kA',
+      `ESVA-4402: boltedFaultCurrent_kA must be between 0.2 and 106 kA (IEEE 1584-2018 range), got ${input.boltedFaultCurrent_kA}`,
+    );
+  }
+  if (!Number.isFinite(input.arcDuration_s) || input.arcDuration_s < 0.001 || input.arcDuration_s > 10) {
+    throw new CalcValidationError(
+      'arcDuration_s',
+      `ESVA-4403: arcDuration_s must be between 0.001 and 10 seconds, got ${input.arcDuration_s}`,
+    );
+  }
 
   // Step 1: 아크 전류 계산
   const { arcCurrent_kA, variationFactor } = calculateArcingCurrent(

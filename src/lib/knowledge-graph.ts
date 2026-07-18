@@ -52,8 +52,12 @@ export class KnowledgeGraph {
   private edges: KGEdge[] = [];
   /** Adjacency list: nodeId -> [{ to, type, weight }] */
   private adjacency = new Map<string, Array<{ to: string; type: EdgeType; weight: number }>>();
-  /** BFS 결과 캐시 (5분 TTL) — 동일 질의 반복 시 재탐색 방지 */
-  private pathCache = new Map<string, { result: PathResult | null; ts: number }>();
+  /**
+   * BFS 결과 캐시 (5분 TTL) — 동일 질의 반복 시 재탐색 방지.
+   * NOTE (R-cleanup): 필드는 선언됐으나 BFS 메서드에서 아직 wiring되지 않음.
+   * 50%-stub 상태로 마킹: underscore prefix로 외부 reader 차단.
+   */
+  private _pathCache = new Map<string, { result: PathResult | null; ts: number }>();
   private relatedCache = new Map<string, { result: KGNode[]; ts: number }>();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 

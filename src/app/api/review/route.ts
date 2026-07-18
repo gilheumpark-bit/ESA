@@ -8,7 +8,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { runCalcPipeline, type PipelineConfig } from '@/agent/pipeline';
-import { queryAmpacity, findMinCableSize, queryBreakerRating } from '@/engine/standards/kec/kec-table-query';
+import { queryAmpacity, queryBreakerRating } from '@/engine/standards/kec/kec-table-query';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import type { CalcParams } from '@/engine/topology';
 

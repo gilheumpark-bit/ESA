@@ -87,7 +87,7 @@ export default function FieldSafetyPage() {
   const [schedule, setSchedule] = useState<SafetySchedule | null>(null);
   const [sessionId] = useState(() => `field-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const [sosLog, setSosLog] = useState<number[]>([]);
-  const [isDone, setIsDone] = useState(false);
+  const [, setIsDone] = useState(false);
   const [doneMsg, setDoneMsg] = useState('');
 
   const handleAnalyze = useCallback(() => {

@@ -18,7 +18,7 @@ import type {
   StandardEntry,
   ViolationEntry,
 } from './types';
-import { EXPANDED_SYMBOL_DB, resolveSymbol } from '../vision/symbol-db';
+import { resolveSymbol } from '../vision/symbol-db';
 import { splitAndAnalyze, type VisionSplitResult } from '../vision/vision-splitter';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';

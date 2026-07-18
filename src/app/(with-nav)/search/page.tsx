@@ -33,8 +33,6 @@ import {
 import SearchBar from '@/components/SearchBar';
 import KnowledgePanel from '@/components/KnowledgePanel';
 import InlineCalcResult from '@/components/InlineCalcResult';
-import { SearchResultSkeleton } from '@/components/SkeletonLoading';
-import { formatApiError } from '@/lib/error-messages';
 import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
 import type {

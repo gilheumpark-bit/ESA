@@ -18,7 +18,6 @@ import {
   Download,
   CheckCircle2,
   XCircle,
-  FileText,
 } from 'lucide-react';
 import type { Receipt } from '@/engine/receipt/types';
 import { EmptyHistory } from '@/components/EmptyState';
@@ -176,8 +175,7 @@ export default function HistoryPage() {
 
       // 2) Supabase 영구 이력 (로그인 유저)
       try {
-        const { useAuth } = await import('@/contexts/AuthContext');
-        // AuthContext는 hook이라 여기서 직접 사용 불가 — userId를 다른 방법으로 가져옴
+        // AuthContext는 hook이라 여기서 직접 사용 불가 — Firebase getCurrentUser 경유.
         const { getCurrentUser } = await import('@/lib/firebase');
         const user = await getCurrentUser();
         if (user) {

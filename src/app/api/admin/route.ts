@@ -228,6 +228,10 @@ async function checkAdminRole(uid: string, rawToken: string): Promise<boolean> {
 }
 
 export async function GET(request: NextRequest) {
+  // Rate limit (R4 stub repair: applyRateLimit was imported but never invoked).
+  const blocked = applyRateLimit(request, 'default');
+  if (blocked) return blocked;
+
   // ── Auth: require valid Firebase JWT ──
   const authHeader = request.headers.get('Authorization') ?? request.headers.get('authorization');
   const token = authHeader?.replace('Bearer ', '');

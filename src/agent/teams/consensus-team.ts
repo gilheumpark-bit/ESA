@@ -93,7 +93,7 @@ function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
 
 function generateMarkings(
   merged: MergedResults,
-  teamResults: TeamResult[],
+  _teamResults: TeamResult[],
 ): VerificationMarking[] {
   const markings: VerificationMarking[] = [];
   let markIdx = 0;

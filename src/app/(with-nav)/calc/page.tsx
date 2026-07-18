@@ -59,7 +59,11 @@ const DIFFICULTY_CONFIG: Record<DifficultyLevel, { label: string; color: string 
 
 /** Map engine categories to display categories */
 function buildCategories(): CategoryMeta[] {
-  // Static category definitions with mapped calculators — 56 total across 12 categories
+  // Static category definitions with mapped calculators.
+  // Total here drifts from CALCULATOR_REGISTRY size (engine/calculators/count.ts);
+  // tracked in BUG-008 — at least 1 registry calculator is not surfaced on this page.
+  // The runtime `totalCalcs` reduces from `categories[].calculators.length` so the
+  // displayed number always matches what this static map contains.
   const categories: CategoryMeta[] = [
     {
       id: 'power',
@@ -136,6 +140,7 @@ function buildCategories(): CategoryMeta[] {
         { id: 'earth-fault', name: '지락 전류', nameEn: 'Earth Fault', difficulty: 'advanced', category: 'protection' },
         { id: 'rcd-sizing', name: '누전차단기 선정', nameEn: 'RCD Sizing', difficulty: 'intermediate', category: 'protection' },
         { id: 'relay-basic', name: '과전류 계전기', nameEn: 'Overcurrent Relay', difficulty: 'advanced', category: 'protection' },
+        { id: 'arc-flash', name: '아크 플래시 (IEEE 1584)', nameEn: 'Arc Flash', difficulty: 'advanced', category: 'protection' },
       ],
     },
     {

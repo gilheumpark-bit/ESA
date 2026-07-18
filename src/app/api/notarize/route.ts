@@ -79,6 +79,10 @@ async function resolveUserTier(userId: string, request: NextRequest): Promise<Ti
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'default');
+    if (blocked) return blocked;
+
     // Auth check
     const userId = await extractVerifiedUserId(request);
     if (!userId) {

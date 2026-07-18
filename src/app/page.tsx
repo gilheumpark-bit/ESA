@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Search, Calculator, FileText, Camera, BarChart3,
   Users, FolderOpen, Shield, Globe, Cpu,
-  BookOpen, ArrowUpRight, Zap, Activity, LogIn, LogOut, User,
+  BookOpen, ArrowUpRight, Zap, Activity, LogIn, LogOut,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import ESVALogo from '@/components/ESVALogo';
@@ -13,6 +13,7 @@ import { analyzeCalcIntent, type CalcIntentResult } from '@/lib/calc-intent-brid
 import InlineCalcResult from '@/components/InlineCalcResult';
 import QuickCalcButtons from '@/components/QuickCalcButtons';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
+import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 
 // ── 실시간 카운터 훅 ──
 function useCountUp(target: number, duration = 1200) {
@@ -86,7 +87,10 @@ export default function HomePage() {
     [handleSearch],
   );
 
-  const calcCounter = useCountUp(56);
+  // SoT: CALCULATOR_COUNT comes from engine/calculators/count.ts (57 as of 2026-05-12).
+  // articleCount/termCount are still local constants until CLAUDE.md's "90 articles total" /
+  // "250+ terms" claims have matching SoT modules (tracked as BUG-005 doc drift).
+  const calcCounter = useCountUp(CALCULATOR_COUNT);
   const articleCounter = useCountUp(62);
   const termCounter = useCountUp(151);
 
@@ -164,6 +168,10 @@ export default function HomePage() {
                 autoFocus
                 enterKeyHint="search"
                 aria-label="검색어"
+                /* maxLength 500: keeps URL < 4KB even after URI encoding (BUG-012).
+                   Real engineering queries fit well under this; the cap blocks
+                   accidental paste of multi-page text. */
+                maxLength={500}
               />
               <button onClick={handleSearch} disabled={isLoading}
                 className="ml-2 shrink-0 rounded-lg bg-[var(--color-primary)] px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50">
@@ -232,7 +240,7 @@ export default function HomePage() {
                 <Calculator size={22} className="text-white" />
               </div>
               <h3 className="text-base font-bold text-[var(--text-primary)]">전기 계산기</h3>
-              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">KEC/NEC/IEC 기준 56개 검증 계산기</p>
+              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">KEC/NEC/IEC 기준 {CALCULATOR_COUNT}개 검증 계산기</p>
               <div className="mt-4 grid grid-cols-2 gap-1.5">
                 {['전압강하', '케이블 선정', '차단기 선정', '단락전류', '변압기 용량', '접지저항', '역률 보정', '조도 계산'].map(c => (
                   <span key={c} className="rounded-lg bg-[var(--bg-secondary)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] transition-colors group-hover:bg-blue-50 group-hover:text-blue-700 dark:group-hover:bg-blue-900/20 dark:group-hover:text-blue-300">
@@ -241,7 +249,7 @@ export default function HomePage() {
                 ))}
               </div>
               <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)]">
-                전체 56개 <ArrowUpRight size={12} />
+                전체 {CALCULATOR_COUNT}개 <ArrowUpRight size={12} />
               </div>
             </div>
           </Link>
@@ -321,8 +329,6 @@ export default function HomePage() {
     </main>
   );
 }
-
-const QUICK_TAGS = ['전압강하 계산', '케이블 선정', 'KEC 232조', '단락전류', 'AWG→mm²'];
 
 const PRO_TOOLS = [
   { icon: BarChart3, title: '대시보드', href: '/dashboard', badge: undefined },

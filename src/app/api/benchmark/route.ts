@@ -32,6 +32,15 @@ function isAdminAuth(request: Request): boolean {
 // ---------------------------------------------------------------------------
 
 export async function GET(request: Request): Promise<NextResponse> {
+  // Rate limit (R4 stub repair: applyRateLimit was imported but never invoked).
+  const blocked = applyRateLimit(request, 'default');
+  if (blocked) {
+    return NextResponse.json(
+      { error: 'ESA-2001: Rate limit exceeded' },
+      { status: 429, headers: blocked.headers },
+    );
+  }
+
   // 접근 제어: 개발 모드 또는 관리자 인증
   if (!isDevelopment() && !isAdminAuth(request)) {
     return NextResponse.json(

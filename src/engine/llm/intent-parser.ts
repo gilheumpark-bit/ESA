@@ -323,7 +323,7 @@ export function parseIntent(query: string, lang: string = 'en'): IntentResult {
 // Helper — Clarifying Questions
 // ---------------------------------------------------------------------------
 
-function generateClarifyingQuestions(query: string, lang: string): string[] {
+function generateClarifyingQuestions(_query: string, lang: string): string[] {
   if (lang === 'ko') {
     return [
       '어떤 종류의 계산이 필요하신가요? (전압강하, 케이블 선정, 차단기 선정 등)',

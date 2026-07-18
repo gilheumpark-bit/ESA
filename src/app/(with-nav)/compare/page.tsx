@@ -22,7 +22,7 @@ import ComparisonTable, { type Scenario } from '@/components/ComparisonTable';
 import type { CalcResult } from '@/engine/standards/types';
 import type { Receipt } from '@/engine/receipt/types';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
-import { compareVoltageDropLimits, type ComparisonReport } from '@/engine/chain/standard-comparator';
+import { compareVoltageDropLimits } from '@/engine/chain/standard-comparator';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Constants

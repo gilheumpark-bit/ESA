@@ -39,9 +39,9 @@ export default function DrawingOverlay({
   const [selectedMarking, setSelectedMarking] = useState<VerificationMarking | null>(null);
 
   // 마킹 위치 시뮬레이션 (실제 도면에서는 componentId 기반 좌표 매핑)
-  const getMarkingPosition = (marking: VerificationMarking, index: number) => {
-    // 실제 구현 시: marking.componentId → topology graph → 좌표
-    // 현재: 균등 분배
+  const getMarkingPosition = (_marking: VerificationMarking, index: number) => {
+    // 실제 구현 시: _marking.componentId → topology graph → 좌표
+    // 현재: 균등 분배 (marking 미사용 — underscore prefix로 미연결 명시)
     const cols = 4;
     const row = Math.floor(index / cols);
     const col = index % cols;

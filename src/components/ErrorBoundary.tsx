@@ -11,7 +11,7 @@
  * PART 4: withErrorBoundary HOC
  */
 
-import React, { Component, type ReactNode, type ErrorInfo, type ComponentType } from 'react';
+import { Component, type ReactNode, type ErrorInfo, type ComponentType } from 'react';
 import { reportError } from '@/lib/logger';
 
 // ─── PART 1: Base ErrorBoundary ─────────────────────────────────

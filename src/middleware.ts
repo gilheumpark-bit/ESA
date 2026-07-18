@@ -93,6 +93,11 @@ function applySecurityHeaders(response: NextResponse): void {
 
 // =============================================================================
 // PART 4: Middleware Entry Point
+// (Next.js 16 deprecates `middleware` in favor of `proxy`. Rename was attempted
+//  but blocked by dev-server HMR not reloading routing config across the rename
+//  — needs a full `next dev` restart. Tracked as BUG-001 action item.
+//  Production build supports both names; we stay on `middleware` to keep
+//  dev workflow stable.)
 // =============================================================================
 
 export function middleware(request: NextRequest) {

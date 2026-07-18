@@ -12,8 +12,8 @@ import { log } from '@/lib/logger';
 /** Electropedia base URL */
 const ELECTROPEDIA_BASE = 'https://www.electropedia.org';
 
-/** 전기공학 관련 IEC 60050 섹션 목록 */
-const DEFAULT_SECTIONS = [826, 195, 441, 442, 461, 466, 601, 602, 604, 614];
+// (legacy `DEFAULT_SECTIONS` constant removed — crawler now uses link-only mode
+//  per PART 1; the section enumeration moved to data/electrical-terms.)
 
 // =============================================================================
 // PART 1: 링크 전용 — 콘텐츠 크롤링 없음

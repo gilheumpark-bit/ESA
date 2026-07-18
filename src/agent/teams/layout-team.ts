@@ -20,7 +20,6 @@ import type {
   RecommendationEntry,
 } from './types';
 import { splitAndAnalyze } from '../vision/vision-splitter';
-import { resolveSymbol } from '../vision/symbol-db';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Floor Plan Parsing
