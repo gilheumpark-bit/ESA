@@ -38,10 +38,14 @@ async function extractUserId(request: NextRequest): Promise<string | null> {
 // ─── PART 2: GET — Question + Answers ──────────────────────────
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'community');
+    if (blocked) return blocked;
+
     const { id } = await params;
 
     const question = await getQuestion(id);
@@ -80,6 +84,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'community');
+    if (blocked) return blocked;
+
     const { id: questionId } = await params;
 
     // Auth required

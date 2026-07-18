@@ -152,7 +152,7 @@ function ProviderKeyCard({
             type="password"
             value={state.rawInput}
             onChange={(e) => onInputChange(e.target.value)}
-            placeholder={`Enter ${provider.name} API key`}
+            placeholder={`${provider.name} API 키를 입력하세요`}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:placeholder-zinc-500"
           />
         </div>

@@ -9,8 +9,8 @@
  * PART 3: 프리셋 비교
  */
 
-import { queryAmpacity, type AmpacityQueryResult } from '@/engine/standards/kec/kec-table-query';
-import { getCodeArticle, evaluateStandard } from '@/engine/standards/registry';
+import { queryAmpacity } from '@/engine/standards/kec/kec-table-query';
+import { evaluateStandard } from '@/engine/standards/registry';
 import type { JudgmentResult } from '@/engine/standards/kec/types';
 import type { AmpacityOptions } from '@/data/ampacity-tables/kec-ampacity';
 

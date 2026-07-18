@@ -21,6 +21,7 @@ import {
   round,
 } from '../types';
 import { getMotorFLC3PH, getMotorFLC1PH } from '@/data/motor-flc/motor-flc-tables';
+import { MOTOR_STARTING } from '@/engine/constants/electrical';
 
 // ── Input / Output ──────────────────────────────────────────────────────────
 
@@ -129,8 +130,8 @@ export function calculateMotorCapacity(input: MotorCapacityInput): DetailedCalcR
     unit: 'A',
   });
 
-  // Step 5: 기동 전류 (DOL 기준 7배)
-  const startMultiple = 7;
+  // Step 5: 기동 전류 (DOL 기준)
+  const startMultiple = MOTOR_STARTING.DOL_START_MULTIPLE;
   const Istart = startMultiple * Irated;
   steps.push({
     step: 5,

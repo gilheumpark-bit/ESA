@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { getPublicRuntimeInfo } from '@/lib/esa-config';
 import { esaResponseHeaders } from '@/lib/esa-http';
-import { initWeaviateSchema, getDocumentCount } from '@/lib/weaviate-schema';
+import { initWeaviateSchema } from '@/lib/weaviate-schema';
 import { getInspectionItemCount } from '@/data/inspection/inspection-checklist';
 import { getTCCDeviceCount } from '@/data/protection/tcc-data';
 import { getCertCount } from '@/data/certifications/certification-db';

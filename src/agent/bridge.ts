@@ -38,16 +38,15 @@ const PARTIAL_RESULTS_WARNING_EN = 'Some results excluded (timeout)';
 // ─── PART 1: BridgeAgent Class ──────────────────────────────────
 
 export class BridgeAgent {
-  private readonly sandboxIds: SandboxId[];
-  private readonly createdAt: number;
-
   /**
-   * Bridge is ephemeral: constructed with the set of sandboxes to coordinate,
-   * used once, then discarded.
+   * Bridge is ephemeral: constructed once per coordination, used once, then discarded.
+   * Sandbox IDs are passed per-call via `execute()` / `executeParallel()`; the constructor
+   * historically stored them on the instance but the fields were never read — removed in
+   * R-cleanup sweep (kept the constructor for backward compat with `createBridgeAgent`).
    */
-  constructor(sandboxIds: SandboxId[]) {
-    this.sandboxIds = sandboxIds;
-    this.createdAt = performance.now();
+  constructor(_sandboxIds: SandboxId[]) {
+    // No instance state: the constructor signature is preserved for compatibility
+    // with `createBridgeAgent(sandboxIds)`, but the bridge is stateless beyond per-call args.
   }
 
   /**

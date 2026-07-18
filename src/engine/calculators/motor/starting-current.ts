@@ -18,6 +18,7 @@ import {
   assertOneOf,
   round,
 } from '../types';
+import { MOTOR_STARTING } from '@/engine/constants/electrical';
 
 // ── Input / Output ──────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export function calculateStartingCurrent(input: StartingCurrentInput): DetailedC
   });
 
   // PART 3 -- Result assembly
-  const pass = voltageDrop <= 15;
+  const pass = voltageDrop <= MOTOR_STARTING.STARTING_VOLTAGE_DROP_LIMIT;
   return {
     value: round(Ist, 2),
     unit: 'A',

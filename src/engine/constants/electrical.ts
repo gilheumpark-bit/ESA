@@ -201,6 +201,18 @@ export const NEC_STANDARD_SIZES_AWG = [
   250, 300, 350, 400, 500, 600, 700, 750, 800, 900, 1000,
 ] as const;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 5 — Motor Constants (IEC 60034)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 전동기 기동 배율 (IEC 60034-12) */
+export const MOTOR_STARTING = {
+  /** DOL 직입 기동 전류 배율 (전부하 전류의 n배) — IEC 60034-12 typical */
+  DOL_START_MULTIPLE: 7,
+  /** 기동시 전압강하 허용 한계 (%) */
+  STARTING_VOLTAGE_DROP_LIMIT: 15,
+} as const;
+
 /** 표준 차단기 정격 (A) — NEC 240.6 */
 export const STANDARD_BREAKER_RATINGS = [
   15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100,

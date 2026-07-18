@@ -428,7 +428,7 @@ function CameraButton() {
         <span className="text-[10px] text-gray-400">OCR Nameplate</span>
       </button>
       {error && (
-        <p className="mt-2 flex items-center gap-1 text-xs text-red-600">
+        <p className="mt-2 flex items-center gap-1 text-xs text-[var(--color-error)]">
           <AlertCircle className="h-3 w-3" /> {error}
         </p>
       )}
@@ -507,7 +507,7 @@ function VoiceButton() {
         <span className="text-[10px] text-gray-400">Voice Input</span>
       </button>
       {error && (
-        <p className="mt-2 flex items-center gap-1 text-xs text-red-600">
+        <p className="mt-2 flex items-center gap-1 text-xs text-[var(--color-error)]">
           <AlertCircle className="h-3 w-3" /> {error}
         </p>
       )}

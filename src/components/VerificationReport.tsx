@@ -364,7 +364,7 @@ function TeamResultCard({ result }: { result: TeamResult }) {
       )}
 
       {result.error && (
-        <p className="mt-2 text-xs text-red-500">{result.error}</p>
+        <p className="mt-2 text-xs text-[var(--color-error)]">{result.error}</p>
       )}
     </div>
   );

@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, type FormEvent } from 'react';
-import { Calculator, Loader2, AlertCircle } from 'lucide-react';
+import { Calculator, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 import type { ParamDef } from '@/engine/standards/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -24,6 +24,8 @@ interface CalculatorFormProps {
   className?: string;
   /** Initial values to pre-fill (e.g. from URL params) */
   initialValues?: Record<string, unknown>;
+  /** compact: defaultValue 있는 필드를 '고급 옵션'으로 접음. full: 전체 표시(기본) */
+  mode?: 'full' | 'compact';
 }
 
 /** Extended ParamDef with enum options for select fields */
@@ -60,18 +62,13 @@ function NumberField({
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-        {param.name}
+        {param.description || param.name}
         {param.unit && (
           <span className="ml-1 font-normal text-[var(--text-tertiary)]">
             ({param.unit})
           </span>
         )}
       </label>
-      {param.description && (
-        <p className="mb-1.5 text-xs text-[var(--text-tertiary)]">
-          {param.description}
-        </p>
-      )}
       <div className="relative">
         <input
           type="number"
@@ -80,7 +77,7 @@ function NumberField({
           min={param.min}
           max={param.max}
           step={param.step ?? 'any'}
-          placeholder={param.placeholder ?? `${param.name} 입력`}
+          placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
           className={`
             h-10 w-full rounded-lg border bg-[var(--bg-primary)] px-3 pr-12
             text-sm text-[var(--text-primary)] outline-none transition-colors
@@ -119,18 +116,13 @@ function SelectField({
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-        {param.name}
+        {param.description || param.name}
         {param.unit && (
           <span className="ml-1 font-normal text-[var(--text-tertiary)]">
             ({param.unit})
           </span>
         )}
       </label>
-      {param.description && (
-        <p className="mb-1.5 text-xs text-[var(--text-tertiary)]">
-          {param.description}
-        </p>
-      )}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -209,8 +201,18 @@ export default function CalculatorForm({
   error,
   className = '',
   initialValues,
+  mode = 'full',
 }: CalculatorFormProps) {
   const extParams = params as ExtendedParamDef[];
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // compact 모드: defaultValue 있는 필드 = 고급, 없는 필드 = 필수
+  const requiredParams = mode === 'compact'
+    ? extParams.filter(p => p.defaultValue === undefined)
+    : extParams;
+  const advancedParams = mode === 'compact'
+    ? extParams.filter(p => p.defaultValue !== undefined)
+    : [];
 
   // Initialize form state from defaults, then overlay initialValues (e.g. from URL)
   const [values, setValues] = useState<Record<string, string | boolean>>(() => {
@@ -294,44 +296,66 @@ export default function CalculatorForm({
     [validate, extParams, values, onSubmit],
   );
 
+  const renderField = (param: ExtendedParamDef) => {
+    const fieldError = fieldErrors.find((e) => e.field === param.name)?.message;
+
+    if (param.type === 'boolean') {
+      return (
+        <BooleanField
+          key={param.name}
+          param={param}
+          value={values[param.name] as boolean}
+          onChange={(v) => updateValue(param.name, v)}
+        />
+      );
+    }
+
+    if (param.type === 'string' && param.options) {
+      return (
+        <SelectField
+          key={param.name}
+          param={param}
+          value={values[param.name] as string}
+          onChange={(v) => updateValue(param.name, v)}
+          error={fieldError}
+        />
+      );
+    }
+
+    return (
+      <NumberField
+        key={param.name}
+        param={param}
+        value={values[param.name] as string}
+        onChange={(v) => updateValue(param.name, v)}
+        error={fieldError}
+      />
+    );
+  };
+
   return (
     <form onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
-      {extParams.map((param) => {
-        const fieldError = fieldErrors.find((e) => e.field === param.name)?.message;
+      {/* 필수 필드 */}
+      {requiredParams.map(renderField)}
 
-        if (param.type === 'boolean') {
-          return (
-            <BooleanField
-              key={param.name}
-              param={param}
-              value={values[param.name] as boolean}
-              onChange={(v) => updateValue(param.name, v)}
-            />
-          );
-        }
-
-        if (param.type === 'string' && param.options) {
-          return (
-            <SelectField
-              key={param.name}
-              param={param}
-              value={values[param.name] as string}
-              onChange={(v) => updateValue(param.name, v)}
-              error={fieldError}
-            />
-          );
-        }
-
-        return (
-          <NumberField
-            key={param.name}
-            param={param}
-            value={values[param.name] as string}
-            onChange={(v) => updateValue(param.name, v)}
-            error={fieldError}
-          />
-        );
-      })}
+      {/* 고급 옵션 (compact 모드에서 defaultValue 있는 필드) */}
+      {advancedParams.length > 0 && (
+        <div className="border-t border-[var(--border-default)] pt-3">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex w-full items-center gap-2 text-sm text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            <ChevronDown size={16} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+            고급 옵션 ({advancedParams.length}개)
+          </button>
+          {showAdvanced && (
+            <div className="mt-3 space-y-4">
+              {advancedParams.map(renderField)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* API error */}
       {error && (

@@ -1,7 +1,7 @@
 /**
  * ESVA Calculator Registry
  *
- * Central registry of all 56 calculator modules.
+ * Central registry of all 57 calculator modules.
  * Each entry maps to a pure function: input -> CalcResult.
  */
 

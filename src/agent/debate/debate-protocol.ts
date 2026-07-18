@@ -22,13 +22,7 @@ import type {
   ConsensusConfig,
   CalculationEntry,
 } from '../teams/types';
-import type {
-  DebateTopic,
-  NumericalEvidence,
-  RegulatoryEvidence,
-  DetailedArgument,
-  EscalationInfo,
-} from './types';
+import type { EscalationInfo } from './types';
 import { SQRT3 } from '@engine/constants/physical';
 
 // ═══════════════════════════════════════════════════════════════════════════════

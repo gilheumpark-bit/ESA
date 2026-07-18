@@ -693,7 +693,89 @@ const JIS_REFS: StandardRef[] = [
 ];
 
 // =============================================================================
-// PART 6: Export
+// PART 6: NER (한국전기내선규정 2022 — 대한전기협회)
+// =============================================================================
+
+const NER_REFS: StandardRef[] = [
+  {
+    id: 'ner-2', standard: 'NER', clause: '2',
+    title_ko: '분기회로', title_en: 'Branch Circuits',
+    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    url: 'https://www.kea.kr',
+  },
+  {
+    id: 'ner-5', standard: 'NER', clause: '5',
+    title_ko: '누전차단기 설치의무', title_en: 'ELCB/GFCI Mandatory Installation',
+    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    url: 'https://www.kea.kr',
+  },
+  {
+    id: 'ner-6', standard: 'NER', clause: '6',
+    title_ko: '과전류 차단기 선정', title_en: 'Overcurrent Breaker Selection (MCCB)',
+    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+  },
+  {
+    id: 'ner-8', standard: 'NER', clause: '8',
+    title_ko: '전선관 충전율', title_en: 'Conduit Fill Rate (40% Rule)',
+    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+  },
+  {
+    id: 'ner-9', standard: 'NER', clause: '9',
+    title_ko: '콘센트 설치 기준', title_en: 'Outlet Installation Requirements',
+    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+  },
+  {
+    id: 'ner-12', standard: 'NER', clause: '12',
+    title_ko: '분전반 설치', title_en: 'Distribution Panel Installation',
+    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+  },
+];
+
+// =============================================================================
+// PART 7: ESA (전기사업법 2023 — 산업통상자원부)
+// =============================================================================
+
+const ESA_REFS: StandardRef[] = [
+  {
+    id: 'esa-61', standard: 'ESA', clause: '61',
+    title_ko: '전기설비 유지 의무', title_en: 'Obligation to Maintain Electrical Facilities',
+    edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
+    url: 'https://www.law.go.kr',
+  },
+  {
+    id: 'esa-62', standard: 'ESA', clause: '62',
+    title_ko: '정기검사', title_en: 'Periodic Inspection',
+    edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
+    url: 'https://www.law.go.kr',
+  },
+  {
+    id: 'esa-63', standard: 'ESA', clause: '63',
+    title_ko: '사용 전 검사', title_en: 'Pre-use Inspection',
+    edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
+    url: 'https://www.law.go.kr',
+  },
+  {
+    id: 'esa-64', standard: 'ESA', clause: '64',
+    title_ko: '임시 검사', title_en: 'Temporary/Spot Inspection',
+    edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
+    url: 'https://www.law.go.kr',
+  },
+  {
+    id: 'esa-73', standard: 'ESA', clause: '73',
+    title_ko: '안전관리자 선임', title_en: 'Safety Manager Appointment',
+    edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
+    url: 'https://www.law.go.kr',
+  },
+  {
+    id: 'esa-99', standard: 'ESA', clause: '99',
+    title_ko: '전기공사업 등록', title_en: 'Electrical Contractor Registration',
+    edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
+    url: 'https://www.law.go.kr',
+  },
+];
+
+// =============================================================================
+// PART 8: Export
 // =============================================================================
 
 export const STANDARD_REFS: StandardRef[] = [
@@ -703,6 +785,8 @@ export const STANDARD_REFS: StandardRef[] = [
   ...IEEE_REFS,
   ...KS_AND_OTHER_REFS,
   ...JIS_REFS,
+  ...NER_REFS,
+  ...ESA_REFS,
 ];
 
 /** 표준별 조항 검색 */

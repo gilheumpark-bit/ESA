@@ -5,9 +5,15 @@ import Link from 'next/link';
 import {
   Search, Calculator, FileText, Camera, BarChart3,
   Users, FolderOpen, Shield, Globe, Cpu,
-  BookOpen, ArrowUpRight, Zap, Activity,
+  BookOpen, ArrowUpRight, Zap, Activity, LogIn, LogOut,
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import ESVALogo from '@/components/ESVALogo';
+import { analyzeCalcIntent, type CalcIntentResult } from '@/lib/calc-intent-bridge';
+import InlineCalcResult from '@/components/InlineCalcResult';
+import QuickCalcButtons from '@/components/QuickCalcButtons';
+import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
+import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 
 // ── 실시간 카운터 훅 ──
 function useCountUp(target: number, duration = 1200) {
@@ -34,26 +40,88 @@ function useCountUp(target: number, duration = 1200) {
 }
 
 export default function HomePage() {
+  const { user, signOut } = useAuth();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [calcIntent, setCalcIntent] = useState<CalcIntentResult | null>(null);
 
-  const handleSearch = useCallback(async () => {
-    if (!query.trim()) return;
+  const handleSearch = useCallback(() => {
+    const q = query.trim();
+    if (!q) return;
+
+    // Try to detect calc intent first
+    const intent = analyzeCalcIntent(q);
+    if (intent.hasCalcIntent) {
+      setCalcIntent(intent);
+      return;
+    }
+
+    // Fall through to search page for non-calc queries
     setIsLoading(true);
-    window.location.href = `/search?q=${encodeURIComponent(query.trim())}`;
+    window.location.href = `/search?q=${encodeURIComponent(q)}`;
   }, [query]);
+
+  const handleQuickCalc = useCallback((calculatorId: string) => {
+    const params = CALCULATOR_PARAMS[calculatorId];
+    const names = CALCULATOR_NAMES[calculatorId];
+    if (!params || !names) return;
+
+    const missingRequired = params.filter(p => p.defaultValue === undefined);
+    const missingOptional = params.filter(p => p.defaultValue !== undefined);
+
+    setCalcIntent({
+      hasCalcIntent: true,
+      calculatorId,
+      calculatorName: names.name,
+      extractedParams: {},
+      missingRequired,
+      missingOptional,
+      allParams: params,
+      canAutoExecute: false,
+      confidence: 1,
+    });
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); },
     [handleSearch],
   );
 
-  const calcCounter = useCountUp(56);
+  // SoT: CALCULATOR_COUNT comes from engine/calculators/count.ts (57 as of 2026-05-12).
+  // articleCount/termCount are still local constants until CLAUDE.md's "90 articles total" /
+  // "250+ terms" claims have matching SoT modules (tracked as BUG-005 doc drift).
+  const calcCounter = useCountUp(CALCULATOR_COUNT);
   const articleCounter = useCountUp(62);
   const termCounter = useCountUp(151);
 
   return (
     <main className="min-h-screen bg-[var(--bg-primary)]" suppressHydrationWarning>
+
+      {/* ═══ 오른쪽 상단 로그인/사용자 ═══ */}
+      <div className="absolute right-4 top-4 z-50 sm:right-6 sm:top-6">
+        {user ? (
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-[var(--text-secondary)] sm:inline">
+              {user.displayName || user.email?.split('@')[0]}
+            </span>
+            <button
+              onClick={() => signOut()}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-secondary)]"
+            >
+              <LogOut size={16} />
+              <span className="hidden sm:inline">로그아웃</span>
+            </button>
+          </div>
+        ) : (
+          <Link
+            href="/login"
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--color-primary-hover)]"
+          >
+            <LogIn size={16} />
+            로그인
+          </Link>
+        )}
+      </div>
 
       {/* ═══ Hero — 전기 엔지니어 전용 느낌 ═══ */}
       <section className="relative overflow-hidden border-b border-[var(--border-default)]">
@@ -100,6 +168,10 @@ export default function HomePage() {
                 autoFocus
                 enterKeyHint="search"
                 aria-label="검색어"
+                /* maxLength 500: keeps URL < 4KB even after URI encoding (BUG-012).
+                   Real engineering queries fit well under this; the cap blocks
+                   accidental paste of multi-page text. */
+                maxLength={500}
               />
               <button onClick={handleSearch} disabled={isLoading}
                 className="ml-2 shrink-0 rounded-lg bg-[var(--color-primary)] px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50">
@@ -107,15 +179,27 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
-              {QUICK_TAGS.map(tag => (
-                <button key={tag} onClick={() => setQuery(tag)}
-                  className="rounded-md border border-[var(--border-default)] px-2 py-0.5 text-[10px] text-[var(--text-tertiary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
-                  {tag}
-                </button>
-              ))}
-            </div>
+            {!calcIntent && (
+              <div className="mt-2.5">
+                <QuickCalcButtons onSelect={handleQuickCalc} />
+              </div>
+            )}
           </div>
+
+          {calcIntent?.hasCalcIntent && calcIntent.calculatorId && (
+            <div className="mt-6 w-full max-w-lg mx-auto">
+              <InlineCalcResult
+                calculatorId={calcIntent.calculatorId}
+                calculatorName={calcIntent.calculatorName || '계산기'}
+                extractedParams={calcIntent.extractedParams}
+                missingRequired={calcIntent.missingRequired}
+                missingOptional={calcIntent.missingOptional}
+                allParams={calcIntent.allParams}
+                canAutoExecute={calcIntent.canAutoExecute}
+                onClose={() => setCalcIntent(null)}
+              />
+            </div>
+          )}
         </div>
       </section>
 
@@ -156,7 +240,7 @@ export default function HomePage() {
                 <Calculator size={22} className="text-white" />
               </div>
               <h3 className="text-base font-bold text-[var(--text-primary)]">전기 계산기</h3>
-              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">KEC/NEC/IEC 기준 56개 검증 계산기</p>
+              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">KEC/NEC/IEC 기준 {CALCULATOR_COUNT}개 검증 계산기</p>
               <div className="mt-4 grid grid-cols-2 gap-1.5">
                 {['전압강하', '케이블 선정', '차단기 선정', '단락전류', '변압기 용량', '접지저항', '역률 보정', '조도 계산'].map(c => (
                   <span key={c} className="rounded-lg bg-[var(--bg-secondary)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] transition-colors group-hover:bg-blue-50 group-hover:text-blue-700 dark:group-hover:bg-blue-900/20 dark:group-hover:text-blue-300">
@@ -165,7 +249,7 @@ export default function HomePage() {
                 ))}
               </div>
               <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)]">
-                전체 56개 <ArrowUpRight size={12} />
+                전체 {CALCULATOR_COUNT}개 <ArrowUpRight size={12} />
               </div>
             </div>
           </Link>
@@ -245,8 +329,6 @@ export default function HomePage() {
     </main>
   );
 }
-
-const QUICK_TAGS = ['전압강하 계산', '케이블 선정', 'KEC 232조', '단락전류', 'AWG→mm²'];
 
 const PRO_TOOLS = [
   { icon: BarChart3, title: '대시보드', href: '/dashboard', badge: undefined },

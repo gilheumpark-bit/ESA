@@ -44,6 +44,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'community');
+    if (blocked) return blocked;
+
     const { id: questionId } = await params;
 
     // Auth required

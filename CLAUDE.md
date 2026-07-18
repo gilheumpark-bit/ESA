@@ -35,7 +35,7 @@ ESVA is an AI-powered electrical engineering vertical search and verification pl
 
 **Core value proposition:**
 - Search electrical standards (KEC 61조, NEC 19조, IEC 10조) with AI-powered context
-- 52+ validated engineering calculators (voltage drop, cable sizing, arc flash, etc.)
+- 57 validated engineering calculators (voltage drop, cable sizing, arc flash, etc.) — see `engine/calculators/count.ts`
 - 4-Team agent system (계통도/평면도/규정/합의) with debate/consensus protocol
 - Every AI answer comes with a verifiable receipt (date-stamped, model-tracked, IPFS-pinned)
 - BYOK (Bring Your Own Key) first — users supply their own LLM API keys
@@ -69,7 +69,20 @@ ESVA is an AI-powered electrical engineering vertical search and verification pl
 - **BYOK-first**: Users provide their own API keys. ESVA never stores keys server-side beyond the session.
 - **Receipt transparency**: Every AI response generates a receipt with: timestamp, model, token count, confidence, sources. Optionally IPFS-pinned.
 - **Sandbox isolation**: All calculator logic runs in sandboxed pure functions. No network access.
-- **Guardrails**: 9 blocking rules + 11 system prompt rules + arc flash/motor starting estimation ban
+- **Guardrails**: 11 rules total (8 BLOCK + 3 WARN, in `agent/guardrails.ts:RULES`) + 11 system prompt rules + arc flash/motor starting estimation ban
+
+## Design Anti-patterns (from BareWrite v2 audit, 2026-05-12)
+
+The design system intentionally bans the following to stay distinct from generic-SaaS aesthetics:
+
+- ❌ **Emoji / unicode glyph icons** — OS-rendered, inconsistent across platforms. Use inline SVG (16×16 viewBox, stroke `currentColor`, 1.5 width).
+- ❌ **Gradient washes (purple/pink/teal)** — typical "AI slop" signal. Single-color brand accents only.
+- ❌ **Inter / Roboto / Space Grotesk** — overused by AI design tools. Pretendard / Noto Serif KR / JetBrains Mono is the canonical stack.
+- ❌ **Friendly-AI copy** — "확인하겠습니다 / 다음 단계 진입 가능합니다 / 좋은 질문입니다". Cold-pro PE voice only. Quantified language preferred ("KEC 232.3 한도 3.0% 초과 — Reject").
+- ❌ **Uniform shadows on every card** — no visual hierarchy. Default = 1px border; hover = `border-strong`; modal = pop-shadow.
+- ❌ **Cross-chroma accent mixing** — all signal colors must share a chroma family (≈0.085–0.13 in OKLCH) so the UI reads as one system, not a sticker collection.
+
+The `.esa-v2` design system in `globals.css` enforces these via tokens (4 accents · 3 signal colors · semantic chip variants).
 
 ## Tech Stack
 
@@ -106,7 +119,7 @@ src/
     main.ts          — Legacy text query orchestrator
     bridge.ts        — Parallel sandbox coordinator
     pipeline.ts      — 5-stage DAG (EXTRACT→LOOKUP→CALCULATE→VERIFY→REPORT)
-    guardrails.ts    — 9 blocking rules
+    guardrails.ts    — 11 physics-law rules (8 BLOCK + 3 WARN)
     orchestrator.ts  — 4-Team enhanced orchestrator
     teams/           — 4 team agents (SLD, Layout, Standards, Consensus)
     debate/          — Debate protocol + physics law validation
@@ -114,7 +127,7 @@ src/
     sandbox/         — 17 isolated sandboxes
   engine/
     constants/       — 170+ electrical constants (resistivity, IEEE 1584, PPE, KEC/NEC/IEC thresholds)
-    calculators/     — 52 pure-function calculators (±0.01% accuracy) + plugin-registry.ts
+    calculators/     — 57 pure-function calculators (±0.01% accuracy) registered in `CALCULATOR_REGISTRY` + plugin-registry.ts (`count.ts` for SoT)
     standards/
       kec/           — 61 KEC articles + condition tree DSL
       nec/           — 19 NEC 2023 articles
@@ -124,7 +137,7 @@ src/
     verification/    — Audit engine + quality checklist + gen-verify-fix + multi-team review
     chain/           — Calc chain executor + standard comparator + design review
     receipt/         — Receipt generator + SHA-256 hash + disclaimer
-    llm/             — 22 LLM tools + system prompt (3 languages) + output filter
+    llm/             — 17 LLM tools (`ESVA_TOOLS`) + system prompt (3 languages) + output filter
   search/            — Search logic, embedding, ranking (EngRank)
   components/        — React components (ESVALogo, ESVAVerifiedBadge, VerificationReport, Header, etc.)
   contexts/          — React context providers (Auth, Settings)

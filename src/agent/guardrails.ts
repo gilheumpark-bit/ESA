@@ -9,7 +9,10 @@
  */
 
 import { KEC_CABLE_SIZES } from '@/data/ampacity-tables/kec-ampacity';
-import { applyScopePolicy, PolicyManager } from '@/lib/scope-policy';
+// applyScopePolicy was previously imported but never invoked here — runGuardrails
+// inlines its equivalent via PolicyManager.getInstance().resolve(...). Removed
+// to satisfy noUnusedLocals (R5 dead-import sweep).
+import { PolicyManager } from '@/lib/scope-policy';
 
 // =========================================================================
 // PART 1 — 규칙 정의

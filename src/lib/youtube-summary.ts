@@ -1,4 +1,16 @@
-/** YouTube 영상 요약 유틸리티 — 전기공학 교육 영상 분석 */
+/**
+ * YouTube 영상 요약 유틸리티 — 전기공학 교육 영상 분석
+ *
+ * 구현 상태 (2026-05-12):
+ *   ✓ extractVideoId   — URL 파싱 (구현 완료)
+ *   ✓ fetchVideoMeta   — YouTube oembed 메타 (구현 완료)
+ *   ✗ fetchTranscript  — YouTube Data API + 캡션 권한 필요 (미구현)
+ *   ✗ summarizeYouTube — LLM 통합 필요 (미구현)
+ *
+ * 미구현 함수는 `Error('ESA-6021' | 'ESA-6031')`을 throw하여 호출자가
+ * 503/502 응답으로 사용자에게 정확히 전달하도록 한다.
+ * (placeholder 문자열을 성공 응답으로 반환하지 않는다.)
+ */
 
 export function extractVideoId(url: string): string | null {
   const patterns = [
@@ -18,12 +30,21 @@ export async function fetchVideoMeta(videoId: string): Promise<{ title: string; 
   return { title: data.title || 'Unknown', duration: 'N/A' };
 }
 
+/**
+ * YouTube 자막 추출 — 미구현.
+ *
+ * 정직 정책: 가짜 placeholder 문자열을 성공 응답으로 반환하지 않는다.
+ * 호출자가 503/502로 사용자에게 정확히 전달하도록 throw한다.
+ *
+ * 구현 시 필요:
+ *   - YouTube Data API v3 captions.list + captions.download (OAuth scope)
+ *   - 또는 youtube-transcript npm 패키지 (비공식, 안정성 낮음)
+ */
 export async function fetchTranscript(
   _videoId: string,
   _language?: string
 ): Promise<{ text: string; start: number; duration: number }[]> {
-  // YouTube transcript API는 별도 인증 필요 — placeholder
-  return [{ text: '[Transcript not available — YouTube Data API key required]', start: 0, duration: 0 }];
+  throw new Error('ESA-6021: YouTube transcript fetch not implemented (requires YouTube Data API captions scope)');
 }
 
 interface SummarizeOptions {
@@ -33,19 +54,20 @@ interface SummarizeOptions {
   provider?: string;
 }
 
+/**
+ * YouTube 영상 LLM 요약 — 미구현.
+ *
+ * 정직 정책: 가짜 "추후 구현 예정" 문자열을 성공 응답으로 반환하지 않는다.
+ * 호출자가 503/502로 사용자에게 정확히 전달하도록 throw한다.
+ *
+ * 구현 시 필요:
+ *   - fetchTranscript 선행 구현
+ *   - BYOK LLM 호출 (services/server-ai 경유)
+ *   - KEC/NEC/IEC 조항 감지 (engine/standards/registry)
+ *   - keywords/keyPoints 추출 프롬프트
+ */
 export async function summarizeYouTube(
-  options: SummarizeOptions
+  _options: SummarizeOptions
 ): Promise<{ summary: string; keywords: string[]; keyPoints?: string[] }> {
-  if (!options.apiKey) {
-    return {
-      summary: 'YouTube 요약 기능은 AI API 키가 필요합니다. 설정에서 API 키를 등록해주세요.',
-      keywords: [],
-    };
-  }
-
-  return {
-    summary: `[${options.provider || 'AI'}] API 연동 요약 — 추후 구현 예정`,
-    keywords: [],
-    keyPoints: [],
-  };
+  throw new Error('ESA-6031: YouTube LLM summarization not implemented (requires transcript pipeline + BYOK LLM integration)');
 }

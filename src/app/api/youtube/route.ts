@@ -35,6 +35,15 @@ function isValidProvider(p: unknown): p is 'openai' | 'anthropic' | 'google' {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    // Rate limit — applyRateLimit was imported but never invoked (R2 stub repair).
+    // applyRateLimit returns globalThis.Response; wrap to satisfy NextResponse return type.
+    const blocked = applyRateLimit(req, 'default');
+    if (blocked) {
+      return NextResponse.json(
+        { error: 'ESA-2001: Rate limit exceeded' },
+        { status: 429, headers: blocked.headers },
+      );
+    }
 
     const body = (await req.json()) as Partial<YouTubeRequestBody>;
 

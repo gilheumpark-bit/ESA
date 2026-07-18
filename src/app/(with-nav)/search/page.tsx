@@ -32,8 +32,8 @@ import {
 } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import KnowledgePanel from '@/components/KnowledgePanel';
-import { SearchResultSkeleton } from '@/components/SkeletonLoading';
-import { formatApiError } from '@/lib/error-messages';
+import InlineCalcResult from '@/components/InlineCalcResult';
+import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
 import type {
   SearchResult,
@@ -310,7 +310,7 @@ function UnitConversionCard({ query }: { query: string }) {
           <Loader2 size={14} className="animate-spin" /> 변환 중...
         </div>
       ) : error ? (
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-sm text-[var(--color-error)]">{error}</p>
       ) : result ? (
         <div>
           <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
@@ -351,7 +351,7 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
         body: JSON.stringify({
           messages: allMessages,
           provider: 'openai',
-          model: 'gpt-4.1-mini',
+          model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-4.1-mini',
           systemPrompt: `You are an electrical engineering assistant for ESVA (전기 검색 AI). Answer in Korean. Be concise. Reference KEC/NEC/IEC standards when relevant. Current query context: "${query}"`,
           temperature: 0.7,
           maxTokens: 1024,
@@ -524,7 +524,7 @@ function YouTubeSummaryCard({ url }: { url: string }) {
         <span className="font-semibold text-red-800 dark:text-red-300">YouTube 요약</span>
       </div>
       {error ? (
-        <p className="text-xs text-red-600">{error}</p>
+        <p className="text-xs text-[var(--color-error)]">{error}</p>
       ) : summary ? (
         <div className="space-y-2">
           {summary.title && <p className="font-medium text-red-900 dark:text-red-200">{summary.title}</p>}
@@ -587,6 +587,8 @@ function EmptyState({ query }: { query: string }) {
 function SearchPageInner() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') ?? '';
+
+  const calcIntent = query ? analyzeCalcIntent(query) : null;
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -698,10 +700,20 @@ function SearchPageInner() {
               {/* Unit conversion card (if query matches pattern) */}
               <UnitConversionCard query={query} />
 
-              {/* Featured calculator */}
-              {result.featuredCalculator && (
+              {/* Featured calculator — inline result if calc intent detected, otherwise link panel */}
+              {calcIntent?.hasCalcIntent && calcIntent.calculatorId ? (
+                <InlineCalcResult
+                  calculatorId={calcIntent.calculatorId}
+                  calculatorName={calcIntent.calculatorName || '계산기'}
+                  extractedParams={calcIntent.extractedParams}
+                  missingRequired={calcIntent.missingRequired}
+                  missingOptional={calcIntent.missingOptional}
+                  allParams={calcIntent.allParams}
+                  canAutoExecute={calcIntent.canAutoExecute}
+                />
+              ) : result.featuredCalculator ? (
                 <FeaturedCalculatorPanel calc={result.featuredCalculator} />
-              )}
+              ) : null}
 
               {/* Document results */}
               <div className="space-y-3">

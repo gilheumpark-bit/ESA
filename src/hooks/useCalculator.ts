@@ -54,12 +54,15 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(
-            body.error ?? `Calculation failed (${res.status})`,
-          );
+          const errMsg = typeof body.error === 'string'
+            ? body.error
+            : body.error?.message ?? `Calculation failed (${res.status})`;
+          throw new Error(errMsg);
         }
 
-        const data: CalculateApiResponse = await res.json();
+        const body = await res.json();
+        // API returns { success, data: { result, receipt } }
+        const data: CalculateApiResponse = body.data ?? body;
         setResult(data.result);
         setReceipt(data.receipt);
 

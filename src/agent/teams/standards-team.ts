@@ -9,8 +9,6 @@
  * PART 4: Team result assembly
  */
 
-import { getExamFrequency } from '@/data/exam-frequency/exam-frequency';
-import { getCertsByStandard } from '@/data/certifications/certification-db';
 import { checkSelectivity, MCCB_TCC, ACB_TCC } from '@/data/protection/tcc-data';
 
 import type {
@@ -121,33 +119,15 @@ async function queryAmpacity(params: Record<string, unknown>) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 2 — Unit Price Lookup
-// ═══════════════════════════════════════════════════════════════════════════════
-
-async function lookupUnitPrices(components: string[]) {
-  try {
-    const { getUnitPrice, estimateProjectCost } = await import('@/data/unit-prices/unit-price-db');
-    const prices = components
-      .map(c => {
-        const priceEntry = getUnitPrice(c);
-        return priceEntry ? { item: c, price: priceEntry } : null;
-      })
-      .filter((p): p is NonNullable<typeof p> => p !== null);
-    if (prices.length === 0) return null;
-    return { prices, totalEstimate: estimateProjectCost(prices) };
-  } catch (err) {
-    console.warn('[TEAM-STD] unit price lookup failed:', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
+// PART 2 (legacy `lookupUnitPrices`) was removed in R-cleanup — never invoked.
+//   Re-add via dynamic import + call from PART 4 if cost estimation is needed.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 3 — Cross-Standard Comparison
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function compareStandards(
-  topic: string,
+  _topic: string,
   params: Record<string, unknown>,
 ) {
   try {

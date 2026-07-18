@@ -40,6 +40,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    // Rate limit (R4 stub repair).
+    const blocked = applyRateLimit(request, 'default');
+    if (blocked) return blocked;
+
     const { id } = await params;
 
     if (!id || typeof id !== 'string' || id.length < 10) {

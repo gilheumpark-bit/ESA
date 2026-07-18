@@ -287,7 +287,7 @@ function AnswerForm({
       />
 
       {error && (
-        <p className="mt-2 text-sm text-red-500">{error}</p>
+        <p className="mt-2 text-sm text-[var(--color-error)]">{error}</p>
       )}
 
       <div className="mt-3 flex items-center justify-between">
@@ -331,7 +331,7 @@ export default function QuestionDetailPage() {
     return (
       <main className="mx-auto max-w-4xl px-4 py-8">
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950">
-          <p className="text-red-600">{error ?? 'Question not found'}</p>
+          <p className="text-[var(--color-error)]">{error ?? 'Question not found'}</p>
           <Link href="/community" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
             커뮤니티로 돌아가기
           </Link>

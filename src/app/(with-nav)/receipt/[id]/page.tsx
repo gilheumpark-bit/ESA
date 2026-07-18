@@ -287,7 +287,7 @@ function NotarizeButton({ receiptId }: { receiptId: string }) {
         공증 (IPFS + 타임스탬프)
       </button>
       {error && (
-        <p className="mt-2 text-xs text-red-500">{error}</p>
+        <p className="mt-2 text-xs text-[var(--color-error)]">{error}</p>
       )}
       <p className="mt-2 text-[10px] text-[var(--text-tertiary)]">
         계산 결과를 익명화하여 IPFS에 고정하고 타임스탬프 증명을 생성합니다. Pro 플랜 이상 필요.

@@ -2,7 +2,7 @@
   "name": "esva",
   "version": "0.2.0",
   "private": true,
-  "license": "MIT",
+  "license": "CC-BY-NC-4.0",
   "description": "ESVA - Electrical Search Vertical AI: The Engineer's Search Engine",
   "scripts": {
     "dev": "next dev --turbopack",

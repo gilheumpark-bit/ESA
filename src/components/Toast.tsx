@@ -82,7 +82,7 @@ const ICON_MAP: Record<ToastType, typeof CheckCircle> = {
 
 const COLOR_MAP: Record<ToastType, string> = {
   success: 'text-emerald-500',
-  error: 'text-red-500',
+  error: 'text-[var(--color-error)]',
   info: 'text-blue-500',
 };
 
