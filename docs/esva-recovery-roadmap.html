@@ -1,0 +1,373 @@
+<!-- ESVA Recovery & Modernization Roadmap -->
+<title>ESVA 복구·현대화 로드맵 — 대·중·소</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --panel2:#f9fafb; --border:#e3e7ec; --border2:#eef1f4;
+  --ink:#12171d; --muted:#586372; --faint:#8b97a5;
+  --accent:#a9662b; --accent-soft:#f0e2d3; --accent-ink:#8a531f;
+  --p0:#d83a3f; --p1:#e07724; --p2:#3d7ea6;
+  --p0-bg:#fbe9e9; --p1-bg:#fbeee0; --p2-bg:#e6f0f5;
+  --good:#2f9e66;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0b0e12; --panel:#141920; --panel2:#0f141a; --border:#252d37; --border2:#1b222b;
+  --ink:#e7ebf0; --muted:#98a3b2; --faint:#65707e;
+  --accent:#cf8b47; --accent-soft:#2a2016; --accent-ink:#e0a463;
+  --p0:#ec5a5f; --p1:#f0913f; --p2:#5aa6cf;
+  --p0-bg:#2a1517; --p1-bg:#2a1d10; --p2-bg:#12222b;
+}}
+:root[data-theme="light"]{
+  --bg:#f4f5f7; --panel:#ffffff; --panel2:#f9fafb; --border:#e3e7ec; --border2:#eef1f4;
+  --ink:#12171d; --muted:#586372; --faint:#8b97a5; --accent:#a9662b; --accent-soft:#f0e2d3; --accent-ink:#8a531f;
+  --p0:#d83a3f; --p1:#e07724; --p2:#3d7ea6; --p0-bg:#fbe9e9; --p1-bg:#fbeee0; --p2-bg:#e6f0f5;
+}
+:root[data-theme="dark"]{
+  --bg:#0b0e12; --panel:#141920; --panel2:#0f141a; --border:#252d37; --border2:#1b222b;
+  --ink:#e7ebf0; --muted:#98a3b2; --faint:#65707e; --accent:#cf8b47; --accent-soft:#2a2016; --accent-ink:#e0a463;
+  --p0:#ec5a5f; --p1:#f0913f; --p2:#5aa6cf; --p0-bg:#2a1517; --p1-bg:#2a1d10; --p2-bg:#12222b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.58;
+  -webkit-font-smoothing:antialiased;font-size:15px}
+.wrap{max-width:1080px;margin:0 auto;padding:34px 22px 100px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);font-weight:650}
+a{color:var(--accent);text-underline-offset:2px}
+
+/* header */
+.masthead{border-bottom:1px solid var(--border);padding-bottom:24px;margin-bottom:12px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.brand b{font-weight:700;letter-spacing:.02em}
+h1{font-size:clamp(27px,4.6vw,42px);line-height:1.07;margin:6px 0 12px;font-weight:760;letter-spacing:-.022em;text-wrap:balance}
+.sub{color:var(--muted);max-width:66ch;font-size:15.5px}
+.arrowline{display:inline-flex;flex-wrap:wrap;align-items:center;gap:9px;margin-top:18px;font-weight:650;font-size:14px}
+.state{padding:5px 11px;border-radius:8px;border:1px solid var(--border);background:var(--panel)}
+.state.bad{color:var(--p0);border-color:color-mix(in srgb,var(--p0) 30%,transparent);background:var(--p0-bg)}
+.state.good{color:var(--good);border-color:color-mix(in srgb,var(--good) 35%,transparent);background:color-mix(in srgb,var(--good) 12%,transparent)}
+.arrow{color:var(--faint)}
+.nowchips{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}
+.nowchip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px;background:var(--panel2);border:1px solid var(--border);color:var(--muted)}
+.nowchip b{color:var(--ink)}
+
+/* industry band */
+.industry{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin:26px 0}
+.industry h2{margin:0 0 4px;font-size:16px;font-weight:700}
+.industry .lead{color:var(--muted);font-size:13.5px;margin:0 0 16px}
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:720px){.igrid{grid-template-columns:1fr}}
+.icard{border:1px solid var(--border2);border-radius:10px;padding:13px 14px;background:var(--panel2)}
+.icard .t{font-weight:650;font-size:13.5px;margin-bottom:4px;display:flex;gap:7px;align-items:baseline}
+.icard .t .yr{font-family:var(--mono);font-size:10.5px;color:var(--accent-ink);background:var(--accent-soft);padding:1px 6px;border-radius:5px;white-space:nowrap}
+.icard p{margin:0;font-size:12.8px;color:var(--muted);line-height:1.55}
+.verdict-strip{margin-top:16px;padding:12px 15px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;font-size:13.5px}
+.verdict-strip b{color:var(--accent-ink)}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:28px 0 8px;font-size:12.5px;color:var(--muted)}
+.pri{display:inline-flex;align-items:center;gap:6px;font-weight:650}
+.pri .d{width:10px;height:10px;border-radius:3px}
+.pri.p0 .d{background:var(--p0)} .pri.p1 .d{background:var(--p1)} .pri.p2 .d{background:var(--p2)}
+.eff{font-family:var(--mono);font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px;border:1px solid var(--border);color:var(--muted)}
+
+/* phases */
+.phase{background:var(--panel);border:1px solid var(--border);border-left:5px solid var(--pc);border-radius:13px;padding:0;margin:16px 0;overflow:hidden}
+.p-0{--pc:var(--p0)} .p-1{--pc:var(--p1)} .p-2{--pc:var(--p2)}
+.phead{padding:18px 22px 16px;border-bottom:1px solid var(--border2);background:linear-gradient(to right,var(--pc-bg),transparent 70%)}
+.phase.p-0 .phead{--pc-bg:var(--p0-bg)} .phase.p-1 .phead{--pc-bg:var(--p1-bg)} .phase.p-2 .phead{--pc-bg:var(--p2-bg)}
+.pnum{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--pc)}
+.phead h3{margin:3px 0 6px;font-size:20px;font-weight:730;letter-spacing:-.01em}
+.pgoal{color:var(--muted);font-size:13.8px;margin:0}
+.pmeta{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;align-items:center}
+.pbadge{font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:6px;color:#fff;background:var(--pc)}
+.pcount{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;background:var(--panel);border:1px solid var(--border);color:var(--muted)}
+.pbody{padding:8px 22px 20px}
+
+/* 중 groups */
+.mid{padding:15px 0;border-bottom:1px dashed var(--border2)}
+.mid:last-child{border-bottom:none}
+.mid > .mh{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;margin-bottom:9px}
+.mid .mcode{font-family:var(--mono);font-size:12px;color:var(--pc);font-weight:700}
+.mid .mt{font-weight:660;font-size:15px}
+.small{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.small li{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start;font-size:13.3px;color:var(--ink)}
+.small li .b{color:var(--pc);font-weight:700;padding-top:1px}
+.small li .txt{color:var(--muted)}
+.small li .txt b{color:var(--ink);font-weight:620}
+.refs{display:inline}
+.ref{font-family:var(--mono);font-size:11.3px;color:var(--accent-ink);background:var(--accent-soft);padding:0 5px;border-radius:4px;white-space:nowrap;margin-right:3px;display:inline-block;margin-top:2px}
+.inote{margin-top:12px;font-size:12.5px;color:var(--muted);background:var(--panel2);border:1px solid var(--border2);border-radius:9px;padding:9px 12px;line-height:1.5}
+.inote b{color:var(--accent-ink)}
+
+/* sequencing */
+.seq{background:var(--panel);border:1px solid var(--border);border-radius:13px;padding:20px 22px;margin-top:26px}
+.seq h2{margin:0 0 14px;font-size:16px;font-weight:700}
+.track{display:flex;flex-direction:column;gap:0}
+.trow{display:grid;grid-template-columns:74px 1fr;gap:14px;align-items:start;padding:9px 0;border-top:1px solid var(--border2)}
+.trow:first-child{border-top:none}
+.twhen{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--accent-ink);padding-top:2px}
+.twhat{font-size:13.5px}.twhat b{font-weight:660}
+.twhat .k{color:var(--muted);font-size:12.7px}
+
+footer{margin-top:36px;padding-top:20px;border-top:1px solid var(--border);color:var(--faint);font-size:12.3px;line-height:1.7}
+footer a{color:var(--accent)}
+.srcs{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 14px}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="brand"><span class="dot"></span><b>ESVA</b> <span class="eyebrow" style="align-self:center">Recovery &amp; Modernization Roadmap</span></div>
+    <h1>쓸만한 상태로 복구 → 사내 AX 무기화</h1>
+    <p class="sub">전수 감사 <b>147건</b>을 3개 복구 페이즈로 정리하고, 그 위에 사내 개조 + 2026 트렌드 정합 2개 페이즈를 얹는다. 각 페이즈는 <b>대(大)→중(中)→소(小)</b>로 세분화하고, 소항목은 감사 리포트의 실제 파일:라인에 물려 있다.</p>
+    <div class="arrowline">
+      <span class="state bad">현재 · 미완성 v0.2 (핵심흐름 파손)</span>
+      <span class="arrow">→</span>
+      <span class="state">복구 · 돌아가는 데모</span>
+      <span class="arrow">→</span>
+      <span class="state good">목표 · 사내 AX 납품가능</span>
+    </div>
+    <div class="nowchips">
+      <span class="nowchip"><b>147</b> 확정결함</span>
+      <span class="nowchip">CRITICAL <b>2</b> · HIGH <b>27</b></span>
+      <span class="nowchip">계산결과 화면표시 <b>0</b></span>
+      <span class="nowchip">검증층 <b>미배선</b></span>
+    </div>
+  </header>
+
+  <section class="industry">
+    <h2>왜 지금인가 — 2026 업계 현황</h2>
+    <p class="lead">ESVA의 설계 컨셉은 2026 업계 표준과 이미 정합한다. 문제는 컨셉이 아니라 "안 돌아감"이다.</p>
+    <div class="igrid">
+      <div class="icard">
+        <div class="t"><span class="yr">2026.07</span> SK AX × KEPCO E&amp;C</div>
+        <p>발전소 설계~운영·정비 전주기에 agentic AI 플랫폼 "AXgenticWire" 투입. 사용자 업계(변전·발전 인프라) 한복판에서 이미 AX가 진행 중 — 남의 얘기가 아님.</p>
+      </div>
+      <div class="icard">
+        <div class="t"><span class="yr">2026</span> 규제산업 RAG 표준화</div>
+        <p>on-prem·데이터주권·RBAC·<b>전 과정 감사추적</b>이 table stakes. 체계적 eval이 배포 후 이슈를 50~70% 줄인다는 게 정설. ESVA의 영수증/BYOK가 정확히 이 방향.</p>
+      </div>
+      <div class="icard">
+        <div class="t"><span class="yr">2026</span> 다층 agentic 검증</div>
+        <p>프로덕션 LLM은 "환각한다"가 기본 전제. 오프라인 골든eval + 런타임 가드레일 + 트레이싱 3종 세트, 안전영역은 <b>claim-level 검증</b> 필수. ESVA의 4팀/토론 검증과 동형.</p>
+      </div>
+      <div class="icard">
+        <div class="t"><span class="yr">선례</span> 버티컬 규정판정 AI</div>
+        <p>Electrical Code AI(NEC RAG), 의료기기 규정 cross-jurisdiction 판정 RAG(arXiv) 등 — ESVA의 KEC/NEC/IEC 다국가 판정과 같은 패턴이 이미 검증됨.</p>
+      </div>
+    </div>
+    <div class="verdict-strip"><b>결론:</b> "검증 가능한 판정을 판다"는 명제는 2026 기준으로 옳다. 단, 그 검증층이 지금은 발화하지 않는다 — 그래서 복구 우선순위 = 비즈니스 우선순위다.</div>
+  </section>
+
+  <div class="legend">
+    <span class="pri p0"><span class="d"></span>P0 복구필수 (앱이 안 돎)</span>
+    <span class="pri p1"><span class="d"></span>P1 신뢰·보안 (배포 전)</span>
+    <span class="pri p2"><span class="d"></span>P2 개조·현대화</span>
+    <span style="margin-left:auto">공수 <span class="eff">S</span> ≤1일 · <span class="eff">M</span> 수일 · <span class="eff">L</span> 1–2주+</span>
+  </div>
+
+  <!-- 대1 -->
+  <section class="phase p-0">
+    <div class="phead">
+      <div class="pnum">대(大) 1</div>
+      <h3>코어 흐름 복구 — "앱이 실제로 돌아가게"</h3>
+      <p class="pgoal">성공한 계산이 화면에 뜨고, 영수증이 열리고, 프로젝트가 저장된다. 데모 가능 상태 = AX 발표의 최소 전제.</p>
+      <div class="pmeta"><span class="pbadge">P0</span><span class="pcount">감사 26건 (HIGH 7)</span><span class="eff">M · 3–5일</span></div>
+    </div>
+    <div class="pbody">
+      <div class="mid"><div class="mh"><span class="mcode">중 1.1</span><span class="mt">계산 결과 배선 (최우선)</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>응답 언랩 버그</b> — API는 <span class="ref">{data:{result,receipt}}</span> 주는데 프론트가 <span class="ref">data.result</span> 읽음 → 모든 계산이 성공해도 결과·PDF·공유 전부 빈 값. <span class="refs"><span class="ref">useCalculator.ts:63</span><span class="ref">compare/page.tsx:285</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">에러 표시 <span class="ref">[object Object]</span> — 에러 shape 언랩. <span class="ref">useCalculator.ts:58</span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 1.2</span><span class="mt">영수증·리포트 경로 복구</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>누락 엔드포인트 신설</b> — UI가 부르는 <span class="ref">/api/receipt/[id]</span> 라우트가 없어 영수증 페이지 전멸. <span class="ref">receipt/[id]/page:319</span></span></li>
+          <li><span class="b">소</span><span class="txt">리포트 게이지 판정이 값에서 조작돼 항상 PASS/FAIL 고정. <span class="ref">report/[id]/page:77</span></span></li>
+          <li><span class="b">소</span><span class="txt">결과 게이지가 <span class="ref">calculatorId</span> vs <span class="ref">calcId</span> 불일치로 미렌더. <span class="ref">calc/[category]/[id]:510</span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 1.3</span><span class="mt">계산기 ID 정합 (라우팅 대유행)</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>ID 표준화 1곳</b> — 실제 라우트 ID를 단일 소스로. sitemap ~40 URL이 soft-404. <span class="ref">sitemap.ts:66</span></span></li>
+          <li><span class="b">소</span><span class="txt">OCR/SLD "실행" 링크·관련계산·영수증 링크가 존재않는 ID/1-segment로 404. <span class="refs"><span class="ref">ocr/page:349</span><span class="ref">sld/page:271</span><span class="ref">community/[id]:417</span></span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 1.4</span><span class="mt">프로젝트 인증 헤더</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">프로젝트 생성/조회/변경 fetch가 Authorization 없이 호출 → 전부 401. <span class="refs"><span class="ref">projects/new:37</span><span class="ref">projects/[id]:369</span><span class="ref">projects/page:166</span></span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 1.5</span><span class="mt">CI 그린화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">테스트 5개 <span class="ref">@jest/globals</span> 임포트 <b>(완료·PR #23)</b> + <span class="ref">void||void</span> 잘못된 OR 수정. <span class="ref">nec-articles.test:37</span></span></li>
+        </ul>
+      </div>
+      <div class="inote"><b>업계 연결:</b> 돌아가는 데모 없이는 임원 AX 발표 자체가 성립 안 됨. 대1은 "제품이 존재한다"를 만드는 최소 작업.</div>
+    </div>
+  </section>
+
+  <!-- 대2 -->
+  <section class="phase p-1">
+    <div class="phead">
+      <div class="pnum">대(大) 2</div>
+      <h3>신뢰·안전 계층 복구 — "검증이 실제로 발화하게"</h3>
+      <p class="pgoal">물리검증이 돌고, 안전계산이 보수적이고, 표준판정이 실체가 있다. ESVA가 파는 것을 존재하게 만드는 핵심 작업.</p>
+      <div class="pmeta"><span class="pbadge">P1</span><span class="pcount">감사 78건 (HIGH 12)</span><span class="eff">L · 2–4주</span></div>
+    </div>
+    <div class="pbody">
+      <div class="mid"><div class="mh"><span class="mcode">중 2.1</span><span class="mt">검증 파이프라인 실체화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>물리검증 no-op</b> — calcId를 물리 파라미터명 대신 넘겨 항상 <span class="ref">{valid:true}</span>. 0.1% 대조가 상시 통과. <span class="ref">debate-protocol:130</span></span></li>
+          <li><span class="b">소</span><span class="txt">합의실패 시 "보수값"이 하이픈/언더스코어 불일치로 <b>최저(비안전)값</b> 채택. <span class="ref">debate-protocol:395</span></span></li>
+          <li><span class="b">소</span><span class="txt">HOLD(RFI 대기)를 PASS로 집계 + 합의실패가 최종 리포트에 미반영. <span class="refs"><span class="ref">consensus-team:191</span><span class="ref">consensus-team:346</span></span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 2.2</span><span class="mt">안전계산 비보수(non-conservative) 제거</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>보호계전 OCR 계수 전치</b> — IEC 60255 지수/상수 뒤바뀌어 트립시간 ~140x 빠름. 변전소 정정 치명. <span class="refs"><span class="ref">tcc-data:195</span><span class="ref">tcc-data:197</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">암페어시티 온도보정 3종(KEC/NEC/IEC) 한 칸씩 밀려 허용전류 과대 → 언더사이징. <span class="refs"><span class="ref">nec-ampacity:163</span><span class="ref">kec-ampacity:144</span><span class="ref">iec-ampacity:160</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">임피던스전압 ~2자릿수 오차 · N+1이 50% 사이징(무여유) · 모터효율 η². <span class="refs"><span class="ref">impedance-voltage:65</span><span class="ref">substation-capacity:118</span><span class="ref">motor-efficiency:90</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">arc-flash 작업거리 미검증(0-division→∞) · 복소 VD 리액턴스 누락. <span class="refs"><span class="ref">arc-flash:142</span><span class="ref">complex-voltage-drop:95</span></span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 2.3</span><span class="mt">표준 판정 실체화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>placeholder value:0</b> — 안전 임계값이 0으로 스텁 → 미달 전선이 PASS / 정상값이 FAIL. <span class="refs"><span class="ref">nec-articles:34</span><span class="ref">kec-full:185</span><span class="ref">kec-full:231</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">AWG 최소사이즈 비교가 역스케일 무시(부등호 반대) · registry가 <span class="ref">result</span> 필드 무시. <span class="refs"><span class="ref">nec-articles:101</span><span class="ref">registry:142</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">KEC full/extended 중복 ID ~26개가 조용히 엉뚱한 조문으로 해소. <span class="ref">kec/index:60</span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 2.4</span><span class="mt">출처검증 강화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">숫자 뒤 200자 내 태그 존재만 확인 → 무관 태그로 조작숫자 통과. tool-result 실대조로 교체. <span class="ref">output-filter:105</span></span></li>
+        </ul>
+      </div>
+      <div class="inote"><b>업계 연결:</b> 2026 안전영역은 claim-level 검증이 필수 표준 — 지금은 검증이 장식이다. 사내에서 "AI가 arc-flash/정정 오답 뱉음" 1회 = 프로젝트 사망. 대2가 곧 "검증을 판다"는 명제의 실체.</div>
+    </div>
+  </section>
+
+  <!-- 대3 -->
+  <section class="phase p-1">
+    <div class="phead">
+      <div class="pnum">대(大) 3</div>
+      <h3>인증·보안·자원 하드닝 — "배포 가능 경계"</h3>
+      <p class="pgoal">위조 토큰으로 남의 데이터를 못 읽고, 무한 증식으로 죽지 않고, 키가 새지 않는다.</p>
+      <div class="pmeta"><span class="pbadge">P1</span><span class="pcount">감사 43건 (CRITICAL 2 · HIGH 8)</span><span class="eff">M–L · 1–3주</span></div>
+    </div>
+    <div class="pbody">
+      <div class="mid"><div class="mh"><span class="mcode">중 3.1</span><span class="mt">인증 통일 (CRITICAL)</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>서명검증 없는 atob JWT 5곳</b> → 단일 <span class="ref">verifyIdToken</span>으로 교체. 위조 토큰 = 인증우회/IDOR. <span class="refs"><span class="ref">calculate/[id]:29</span><span class="ref">projects/[id]:42</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">admin 역할검사 없음 + export/notifications 무인증 IDOR. <span class="refs"><span class="ref">admin/route:205</span><span class="ref">export/route:104</span><span class="ref">notifications:34</span></span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 3.2</span><span class="mt">인젝션·XSS</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">report-pdf HTML 미이스케이프(XSS) · community 검색 필터 인젝션 · CSV 수식인젝션 · 로그인 open redirect. <span class="refs"><span class="ref">report-pdf:28</span><span class="ref">community:149</span><span class="ref">admin/page:300</span><span class="ref">login:56</span></span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 3.3</span><span class="mt">자원·DoS (바운드 규칙 위반)</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt"><b>무한 증식 Map</b> — MAX_ENTRIES/cleanup 없는 in-memory Map(CLAUDE.md 규칙 위반). <span class="refs"><span class="ref">rate-limit:145</span><span class="ref">middleware:16</span><span class="ref">ari-engine:72</span><span class="ref">isolation:18</span></span></span></li>
+          <li><span class="b">소</span><span class="txt">외부 fetch 타임아웃 누락(hang) · SSRF 가드 <span class="ref">assertUrlAllowedForFetch</span> 실호출 0 + 우회 가능. <span class="ref">fetch-url-guard:65</span></span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 3.4</span><span class="mt">BYOK 실암호화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">정적 salt PBKDF2 → 소스에서 키 도출 가능(암호화 아닌 난독화). 서버 키 미저장 원칙 재확인. <span class="refs"><span class="ref">ai-providers:141</span><span class="ref">ai-providers:151</span></span></span></li>
+        </ul>
+      </div>
+      <div class="inote"><b>업계 연결:</b> 규제산업/유틸리티 배포 = RBAC·감사로그·데이터주권이 최소요건(2026). 인증 경계부터 못 막으면 보안팀 관문에서 즉시 반려.</div>
+    </div>
+  </section>
+
+  <!-- 대4 -->
+  <section class="phase p-2">
+    <div class="phead">
+      <div class="pnum">대(大) 4</div>
+      <h3>사내 AX 개조 — "변전소 내부툴로"</h3>
+      <p class="pgoal">학생~현직 풀스펙 소비자 제품을, 변전소 신입 온보딩~기술사 검증의 사내 도구로 재편.</p>
+      <div class="pmeta"><span class="pbadge">P2</span><span class="pcount">신규 개발 (+ 감사 소수)</span><span class="eff">L · 3–6주</span></div>
+    </div>
+    <div class="pbody">
+      <div class="mid"><div class="mh"><span class="mcode">중 4.1</span><span class="mt">3티어 재정의</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">초급 = <b>신입 온보딩/기술전수</b>(숙련인력 은퇴 대응) · 중급 = 실무 검토 보조 · 고급 = 기술사 사인오프 보조. 버릴 티어 없음.</span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 4.2</span><span class="mt">데이터 국산화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">학생 예제 → 사내 변전소 규격/한전 설계기준/사내 표준. 규정셋 우선순위 = KEC + 사내규정.</span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 4.3</span><span class="mt">배포·거버넌스</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">BYOK → 사내 승인모델 고정(보안팀 요건) · on-prem/프라이빗 옵션 · RBAC · 감사로그 실체화.</span></li>
+          <li><span class="b">소</span><span class="txt">멀티유저 정합 — <span class="ref">_activeCountry</span> 프로세스 전역상태를 요청 스코프로. <span class="ref">country-defaults:79</span></span></li>
+        </ul>
+      </div>
+      <div class="inote"><b>업계 연결:</b> SK AX×KEPCO E&amp;C가 전주기 AXgenticWire를 까는 지금, 범용으로 붙으면 짐. <b>변전 도메인 우위로 좁고 깊게</b>가 사내 승부처.</div>
+    </div>
+  </section>
+
+  <!-- 대5 -->
+  <section class="phase p-2">
+    <div class="phead">
+      <div class="pnum">대(大) 5</div>
+      <h3>2026 트렌드 정합 — "SK AX/KEPCO급 신뢰성"</h3>
+      <p class="pgoal">eval·관측·다층검증·감사증적을 갖춰 규제산업 배포 기준(2026)에 도달.</p>
+      <div class="pmeta"><span class="pbadge">P2</span><span class="pcount">신규 개발 (+ 감사 소수)</span><span class="eff">L · 지속</span></div>
+    </div>
+    <div class="pbody">
+      <div class="mid"><div class="mh"><span class="mcode">중 5.1</span><span class="mt">Eval 하네스</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">골든 데이터셋 + 계산정확도(±0.01%) 회귀 + 표준판정 회귀. 배포 후 이슈 50~70%↓의 근거.</span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 5.2</span><span class="mt">관측·추적</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">런타임 가드레일 + 트레이싱 + 드리프트 알림(Langfuse/Arize류). 감사관 대응 = 규제산업 비협상 요건.</span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 5.3</span><span class="mt">검증 아키텍처 현대화</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">claim-level 다층 verifier(metamorphic/self-consistency) · 지식그래프 GraphRAG 강화. 기존 4팀 토론과 접목.</span></li>
+        </ul>
+      </div>
+      <div class="mid"><div class="mh"><span class="mcode">중 5.4</span><span class="mt">영수증 → 감사증적 승격</span></div>
+        <ul class="small">
+          <li><span class="b">소</span><span class="txt">해시에 <span class="ref">standardVersion/formula/steps</span> 포함(현재 제외로 서로 다른 에디션이 동일 CID). EU AI Act류 추적성. <span class="ref">receipt-hash:91</span></span></li>
+        </ul>
+      </div>
+      <div class="inote"><b>업계 연결:</b> eval·관측 없는 RAG는 2026 기준 "미완성". 이 페이즈가 "검증을 판다"는 ESVA 명제의 대외 증거가 된다.</div>
+    </div>
+  </section>
+
+  <section class="seq">
+    <h2>권장 실행 순서</h2>
+    <div class="track">
+      <div class="trow"><div class="twhen">주 1–2</div><div class="twhat"><b>대1 코어흐름</b> 전량 + <b>대3 중3.1 인증 CRITICAL</b> 병행 <span class="k">— 앱이 돌아가고, 위조우회는 막힌 데모.</span></div></div>
+      <div class="trow"><div class="twhen">주 3–6</div><div class="twhat"><b>대2 신뢰·안전</b> 집중(중2.1 검증배선 → 중2.2 안전계산 → 중2.3 표준) <span class="k">— "검증을 판다"의 실체 복구.</span></div></div>
+      <div class="trow"><div class="twhen">주 5–8</div><div class="twhat"><b>대3 잔여</b>(인젝션·자원·BYOK) 마무리 <span class="k">— 보안팀 관문 통과 상태.</span></div></div>
+      <div class="trow"><div class="twhen">주 6–12</div><div class="twhat"><b>대4 사내 개조</b> — 티어·데이터·거버넌스 <span class="k">— 사내 파일럿 투입.</span></div></div>
+      <div class="trow"><div class="twhen">지속</div><div class="twhat"><b>대5 트렌드 정합</b> — eval·관측·감사증적 <span class="k">— 납품·확산 신뢰성.</span></div></div>
+    </div>
+  </section>
+
+  <footer>
+    <b>근거.</b> 소항목의 파일:라인은 전수 감사 리포트(확정 147건)에 물려 있음. 대1–3 합계 = 147건 전량, 대4–5는 신규 개발. CI는 요금제/환경 제약과 별개로 마지막 런에서 실제 테스트 버그(<span class="mono">nec-articles.test:37</span>)까지 확인됨 → 중1.5.
+    <div class="srcs">
+      <b>업계 출처:</b>
+      <a href="https://en.sedaily.com/technology/2026/07/02/sk-ax-partners-with-kepco-ec-to-bring-ai-to-power-plant">SK AX×KEPCO E&amp;C (Seoul Economic, 2026.07)</a>
+      <a href="https://www.trccompanies.com/insights/8-digital-transformation-trends-redefining-the-utility-market-in-2026/">Utility DX Trends 2026 (TRC)</a>
+      <a href="https://squirro.com/squirro-blog/state-of-rag-genai">State of RAG 2026 (Squirro)</a>
+      <a href="https://www.getmaxim.ai/articles/top-5-ai-agent-evaluation-tools-in-2026/">AI Agent Eval 2026 (Maxim)</a>
+      <a href="https://arxiv.org/pdf/2506.18511">Cross-jurisdiction 규정판정 RAG (arXiv 2506.18511)</a>
+      <a href="https://electricalcodeai.com/">Electrical Code AI</a>
+    </div>
+  </footer>
+</div>
