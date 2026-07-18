@@ -97,7 +97,7 @@ const CONFINED_SPACE_MANDATORY: Omit<SafetyCheckItem, 'isMissing'>[] = [
     description: '119, 관리자, 작업 현장 간 연락 체계 사전 수립 및 공유.',
     regulation: '산안법 제625조',
     riskLevel: 'high',
-    alternative: 'ESVA 앱 비상연락 버튼으로 관리자 전원에게 즉시 SOS 발송.',
+    alternative: '작업 전 119와 현장 관리자 연락처를 직접 확보할 것. (앱 SOS 버튼은 화면 경보만 제공하며 외부 발송 기능은 없음)',
   },
 ];
 

@@ -180,7 +180,7 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
       <p className="text-xs text-[var(--color-text-secondary)] mb-4">
         {intervalMin}분마다 생존 신고 필요 →{' '}
         <span className="text-[var(--color-text-primary)] font-medium">
-          미응답 {intervalMin * 2}분 시 관리자 {supervisorCount}명 자동 신고
+          미응답 {intervalMin * 2}분 시 이 화면에 응급 경보 표시 (외부 자동 신고 없음 — 별도 연락 수단 필수)
         </span>
       </p>
 

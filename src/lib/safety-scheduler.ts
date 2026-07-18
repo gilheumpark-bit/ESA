@@ -179,9 +179,9 @@ export function calcDeadManConfig(intent: SafetyIntentResult): DeadManConfig {
     sosMultiplier: 2,     // 2주기 = SOS
     messages: {
       remind: `⚡ ${intervalMin}분 경과. 생존 신고 한 번 눌러주세요!`,
-      warn1: `소장님, 바쁘고 귀찮더라도 1번은 봐주세요 ㅋㅋ 안 누르면 관리자한테 연락 갑니다.`,
+      warn1: `소장님, 바쁘고 귀찮더라도 1번은 봐주세요 ㅋㅋ 안 누르면 화면에 응급 경보가 뜹니다.`,
       warn2: `많이 바쁘신가요? 안전을 위해 생존 신고 한 번 눌러주세요! 마지막 기회입니다.`,
-      sos: `${intervalMin * 2}분간 응답 없음 — 응급상황으로 판단, 관리자에게 자동 신고 들어갑니다.`,
+      sos: `${intervalMin * 2}분간 응답 없음 — 응급상황으로 판단. 이 화면에 경보를 표시합니다. 외부 신고는 직접 하셔야 합니다.`,
     },
   };
 }

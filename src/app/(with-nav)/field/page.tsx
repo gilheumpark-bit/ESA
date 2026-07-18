@@ -153,7 +153,7 @@ export default function FieldSafetyPage() {
       <div className="max-w-xl mx-auto px-4 py-16 text-center">
         <div className="text-6xl mb-6">✅</div>
         <h1 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2">작업 완료</h1>
-        <p className="text-[var(--color-text-secondary)] mb-4">전원 이상 없음 및 작업 종료 — 관리자에게 알림 발송됨.</p>
+        <p className="text-[var(--color-text-secondary)] mb-4">전원 이상 없음 및 작업 종료 — 앱에 기록되었습니다. 관리자 통보는 직접 확인해주세요.</p>
         {doneMsg && (
           <p className="text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 text-[var(--color-text-muted)] mb-6">
             {doneMsg}
