@@ -10,7 +10,7 @@
  * PART 3: 메인 페이지
  */
 
-import { useState, useCallback, useId } from 'react';
+import { useState, useCallback, useId, useMemo } from 'react';
 import { SafetyCheckList } from '@/components/SafetyCheckList';
 import { DeadManSwitch } from '@/components/DeadManSwitch';
 import { parseSafetyIntent } from '@/lib/safety-intent-parser';
@@ -145,7 +145,14 @@ export default function FieldSafetyPage() {
     }
   };
 
-  const deadManConfig = analysis ? calcDeadManConfig(analysis.intent) : null;
+  // calcDeadManConfig는 호출마다 새 객체를 반환한다. 메모하지 않으면
+  // DeadManSwitch의 타이머 effect(deps에 config 포함)가 매 렌더마다 재실행되어
+  // sosCalledRef가 초기화된다. 그 결과 SOS 발동 직후 상태가 '모니터링 중'으로
+  // 되돌아가고 카운트다운이 생존 신고 없이 재시작됐다.
+  const deadManConfig = useMemo(
+    () => (analysis ? calcDeadManConfig(analysis.intent) : null),
+    [analysis],
+  );
 
   // ── 완료 화면
   if (step === 'done') {
