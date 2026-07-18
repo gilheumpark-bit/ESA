@@ -18,6 +18,7 @@ import type { CodeArticle, Condition, JudgmentResult } from './kec/types';
 import { makePass, makeFail, makeHold } from './kec/types';
 import { getIECArticle } from './iec/iec-articles';
 import { getJISArticle } from './jis/jis-articles';
+import { getNECArticleFull } from './nec/nec-articles';
 
 /**
  * 차단용량 판정: 차단기/개폐기의 정격 차단용량이 설치점 예상 단락전류
@@ -68,6 +69,55 @@ function evaluateBreakingCapacity(
   ]);
 }
 
+/**
+ * 허용전류 판정: 부하전류가 전선 허용전류 이하여야 한다
+ * (NEC Table 310.16, IEC 60364-5-52 등).
+ *
+ * 임계값(wireAmpacity)은 사람이 추정하는 값이 아니라 공인 허용전류표
+ * (getNecAmpacity/getIecAmpacity, SourceTag 보유)가 산출하는 값이다.
+ * 평가기는 두 값을 코드 규칙(부하전류 ≤ 허용전류)대로 비교만 한다.
+ * 허용전류가 없으면 비교 대상이 없으므로 HOLD (절대 FAIL·PASS 없음).
+ */
+function evaluateAmpacity(
+  article: CodeArticle,
+  params: Record<string, number>,
+): JudgmentResult {
+  const load = params.loadCurrent;
+  const ampacity = params.wireAmpacity;
+
+  const missing: string[] = [];
+  if (load == null || !Number.isFinite(load)) {
+    missing.push('loadCurrent (부하전류)');
+  }
+  if (ampacity == null || !Number.isFinite(ampacity)) {
+    missing.push('wireAmpacity (전선 허용전류 — 공인 허용전류표에서 산출)');
+  }
+  if (missing.length > 0) {
+    return makeHold(article, missing);
+  }
+
+  const cond: Condition = {
+    param: 'loadCurrent',
+    operator: '<=',
+    value: ampacity,
+    unit: 'A',
+    result: 'PASS',
+    note: '부하전류 ≤ 전선 허용전류',
+  };
+  const source = `출처: ${article.standard} ${article.article} (${article.version})`;
+
+  if (load <= ampacity) {
+    return makePass(article, [cond], [
+      source,
+      `부하전류 ${load}A ≤ 전선 허용전류 ${ampacity}A`,
+    ]);
+  }
+  return makeFail(article, [], [cond], [
+    source,
+    `부하전류 ${load}A > 전선 허용전류 ${ampacity}A — 전선 과부하 위험`,
+  ]);
+}
+
 /** 조항 조회 + 평가를 묶는다. 조항이 없으면 null (디스패처가 폴백). */
 function withArticle(
   article: CodeArticle | null,
@@ -87,6 +137,8 @@ export const DEDICATED_EVALUATORS: Map<
   ['IEC-434.1', (p) => withArticle(getIECArticle('IEC-434.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['IEC-533.1', (p) => withArticle(getIECArticle('IEC-533.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['JIS-434.1', (p) => withArticle(getJISArticle('JIS-434.1'), (a) => evaluateBreakingCapacity(a, p))],
+  ['NEC-310.16', (p) => withArticle(getNECArticleFull('NEC-310.16'), (a) => evaluateAmpacity(a, p))],
+  ['IEC-523.1', (p) => withArticle(getIECArticle('IEC-523.1'), (a) => evaluateAmpacity(a, p))],
 ]);
 
 // IDENTITY_SEAL: standards/dedicated-evaluators | role=자리표시자 조항 실판정 승격 | inputs=params | outputs=JudgmentResult

@@ -66,3 +66,41 @@ describe('차단용량 전용 평가기 (IEC-434.1 / IEC-533.1 / JIS-434.1)', ()
     expect(r.notes.some(n => n.includes('50') && n.includes('10'))).toBe(true);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 허용전류 조항 — 전용 평가기 (NEC-310.16 / IEC-523.1)
+//
+// 부하전류 ≤ 전선 허용전류. 임계값(wireAmpacity)은 공인 허용전류표
+// (getNecAmpacity/getIecAmpacity, SourceTag 보유)가 산출하는 값이며,
+// 평가기는 두 값을 코드 규칙대로 비교만 한다. 허용전류 미입력 시 HOLD.
+//
+// 수정 전 결함: {loadCurrent:50}만으로 FAIL (50 <= 0 이 거짓 → 정상 반려).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('허용전류 전용 평가기 (NEC-310.16 / IEC-523.1)', () => {
+  test('부하전류 ≤ 허용전류 → PASS', () => {
+    expect(evaluateStandard('US', 'NEC-310.16', {
+      loadCurrent: 50, wireAmpacity: 65,
+    }).judgment).toBe('PASS');
+  });
+
+  test('부하전류 > 허용전류 → FAIL (전선 과부하)', () => {
+    expect(evaluateStandard('US', 'NEC-310.16', {
+      loadCurrent: 80, wireAmpacity: 65,
+    }).judgment).toBe('FAIL');
+  });
+
+  test('허용전류 없이는 판정하지 않는다 (HOLD, FAIL 아님)', () => {
+    // 수정 전에는 이 입력이 FAIL이었다(정상 부하를 반려).
+    expect(evaluateStandard('US', 'NEC-310.16', { loadCurrent: 50 }).judgment).toBe('HOLD');
+  });
+
+  test('IEC-523.1도 동일 규칙', () => {
+    expect(evaluateStandard('INT', 'IEC-523.1', {
+      loadCurrent: 20, wireAmpacity: 24,
+    }).judgment).toBe('PASS');
+    expect(evaluateStandard('INT', 'IEC-523.1', {
+      loadCurrent: 30, wireAmpacity: 24,
+    }).judgment).toBe('FAIL');
+  });
+});
