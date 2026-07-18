@@ -9,7 +9,6 @@
  *   const vdLimit = input.allowableDropPercent ?? defaults.vdBranch;
  */
 
-import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   getSafetyProfile,
   type CountryCode,
@@ -72,36 +71,40 @@ export function getCalcDefaults(country: CountryCode = 'KR'): CalcDefaults {
 }
 
 /**
- * 활성 국가 코드는 요청 스코프로 관리한다.
+ * 활성 국가 코드는 계산 디스패치를 감싸는 동기 스코프로 관리한다.
  *
- * 단일 프로세스 Next.js 서버에서 모듈 전역 변수를 쓰면 동시 요청 간
- * 국가 값이 누출된다(한 요청의 국가가 다른 요청에 섞임). 이를 막기 위해
- * Node AsyncLocalStorage로 요청별 격리를 강제한다.
+ * 계산 fn은 동기이므로, 전역을 set→실행→복원하면 동시 요청 간 누출 없이
+ * 요청별 국가가 정확히 적용된다(중간에 비동기 인터리브 지점이 없다).
+ * node:async_hooks(AsyncLocalStorage)는 이 모듈이 클라이언트 번들에 끌려
+ * 들어갈 때 빌드를 깨므로 사용하지 않는다.
  *
  * 서버 사이드: `runWithCountry(country, fn)`으로 계산 디스패치를 감싼다.
- * 스토어가 없으면(클라이언트/미설정) 기본값 'KR'.
  */
-const countryStore = new AsyncLocalStorage<CountryCode>();
+let _activeCountry: CountryCode = 'KR';
 
-/** 주어진 국가 스코프 안에서 fn을 실행한다. 중첩 실행은 안쪽 값이 우선. */
+/** 주어진 국가 스코프 안에서 동기 fn을 실행한다. 중첩 실행은 안쪽 값이 우선, 종료 시 이전 값 복원. */
 export function runWithCountry<T>(country: CountryCode, fn: () => T): T {
-  return countryStore.run(country, fn);
+  const prev = _activeCountry;
+  _activeCountry = country;
+  try {
+    return fn();
+  } finally {
+    _activeCountry = prev;
+  }
 }
 
 /**
- * @deprecated 요청 스코프 격리가 안 되는 전역 변수 방식. `runWithCountry`로 마이그레이션.
- * 마이그레이션 기간 동안 기존 호출부 호환을 위해 얇은 shim으로만 유지한다.
+ * @deprecated 전역을 직접 설정하는 방식. 요청 격리를 위해 `runWithCountry`로 감싸는 것을 권장.
  */
-let _legacyCountry: CountryCode = 'KR';
 export function setActiveCountry(country: CountryCode): void {
-  _legacyCountry = country;
+  _activeCountry = country;
 }
 
 export function getActiveCountry(): CountryCode {
-  return countryStore.getStore() ?? _legacyCountry;
+  return _activeCountry;
 }
 
-/** 현재 활성 국가의 기본값 조회 (편의 함수) — 요청 스코프 → legacy → 'KR' 순. */
+/** 현재 활성 국가의 기본값 조회 (편의 함수). */
 export function activeDefaults(): CalcDefaults {
-  return getCalcDefaults(countryStore.getStore() ?? _legacyCountry);
+  return getCalcDefaults(_activeCountry);
 }
