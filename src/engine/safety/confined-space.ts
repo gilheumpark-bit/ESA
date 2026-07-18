@@ -283,8 +283,10 @@ export function analyzeSafety(intent: SafetyIntentResult): SafetyAnalysisResult 
     allItems.push(...markMissing(HEAT_CHECK_ITEMS, intent));
   }
 
-  // 위치가 없거나 일반 실내/옥외인 경우 기본 전기 안전 항목 추가
-  if (!intent.isConfinedSpace && !intent.location) {
+  // 기본 전기 안전 항목 — 밀폐공간(전용 필수항목 보유)을 제외한 모든 전기 작업에 적용.
+  // 이전에는 `&& !intent.location` 조건이 붙어 있어, 작업 위치를 입력할수록
+  // 체크리스트가 비는 역전이 있었다(전기실·옥상 → 0항목 'low' 판정).
+  if (!intent.isConfinedSpace) {
     allItems.push(
       ...markMissing([
         {
