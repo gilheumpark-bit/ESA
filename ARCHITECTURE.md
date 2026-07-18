@@ -58,8 +58,8 @@ User Request
 ┌─────────────────────────────────────────────────┐
 │  ENGINE LAYER                                   │
 │                                                 │
-│  Calculators (56+)  │  Standards (245+)         │
-│  ├─ Pure functions   │  ├─ KEC 160+ articles    │
+│  Calculators (57)   │  Standards (210)          │
+│  ├─ Pure functions   │  ├─ KEC 109 articles     │
 │  ├─ ±0.01% accuracy  │  ├─ NEC 42 articles      │
 │  ├─ Sandboxed        │  ├─ IEC 25 articles       │
 │  ├─ Uncertainty      │  ├─ JIS 18 articles       │
@@ -105,7 +105,7 @@ User Request
 Users supply their own LLM API keys. Keys are AES-GCM encrypted in the browser session. Server never stores keys. Timeout-guarded resolution with multi-provider failover.
 
 ### 2. Sandbox Isolation
-All 56+ calculator functions are pure — no side effects, no network access. Inputs validated at boundary with `assertPositive()`, `assertRange()`, `assertOneOf()`. Config-driven thresholds from `calc-thresholds.ts`.
+All 57 calculator functions are pure — no side effects, no network access. Inputs validated at boundary with `assertPositive()`, `assertRange()`, `assertOneOf()`. Config-driven thresholds from `calc-thresholds.ts`.
 
 ### 3. Receipt Transparency
 Every AI response generates a receipt: timestamp, model ID, token count, confidence score, source tags. SHA-256 hash for integrity verification. Optional IPFS pinning for immutability.
@@ -129,7 +129,7 @@ Multiple teams analyze the same input independently. Results compared for disagr
 | `src/agent/debate/` | Physics validation + consensus | 8 laws, 3 rounds |
 | `src/agent/vision/` | VLM + splitter + symbol DB | 150+ symbols |
 | `src/agent/sandbox/` | 17 isolated sandboxes | 6 tool types |
-| `src/engine/calculators/` | 56+ pure functions | `plugin-registry.ts` |
+| `src/engine/calculators/` | 57 pure functions | `index.ts` (CALCULATOR_REGISTRY) |
 | `src/engine/standards/` | KEC/NEC/IEC/JIS DSL | `registry.ts` |
 | `src/engine/constants/` | 170+ constants + thresholds | `electrical.ts`, `calc-thresholds.ts` |
 | `src/engine/verification/` | Audit + quality + sensitivity | `multi-team-review.ts` |

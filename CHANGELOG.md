@@ -2,6 +2,27 @@
 
 All notable changes to ESVA are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- **Calculator input-contract drift (57/57 restored)** — `CALCULATOR_PARAMS` (the UI form field names) had drifted from the calculator functions' actual input names. With no rename layer between form → API → calculator, 52 of 57 calculators threw `"<field> ... got undefined"` in production; unit tests missed it because they call the functions directly. Realigned every field name to the calculator contract (verbatim from each interface), fixed silent unit bugs (surge-arrester kV→V 1000× error, power-loss Ω/km·km, ground-resistance rod diameter mm) and enum values. Now 57/57 produce a value + `SourceTag` through the real form path.
+- **Rate limiting not actually invoked** — `applyRateLimit` was imported but never called on API routes; wired across routes (note: `middleware.ts` also applies a 60/min gate first, so route-level `default` profiles are redundant — tracked).
+- **Safety features**: confined-space returned an empty checklist (risk "low") for hazardous non-confined locations (e.g. 전기실); dead-man switch used `requestAnimationFrame` and froze when the tab backgrounded; SOS state auto-reset within frames; checked safety items were not recorded in the completion receipt (compliance always 0%).
+- **Standards judgment**: articles carrying a `value: 0` placeholder threshold auto-PASS'd (`>= 0`) or always-FAIL'd (`<= 0`); now return **HOLD** with the source rule.
+
+### Added
+- **Array-input calculator forms** — `CalculatorForm` gains `type: 'array'` (repeatable rows, `flatten` for primitive arrays); wires the 7 list-input calculators (loads/sections/transformers/emergencyLoads) that a flat form could not express.
+- **Dedicated standards evaluators** — breaking-capacity (IEC-434.1/533.1, JIS-434.1) and ampacity (NEC-310.16, IEC-523.1) promoted from HOLD to real judgment; thresholds come only from authoritative tables or measured inputs.
+- **AX design** — `/preview/ax` (thread home + answer + mobile, receipt-as-first-class, governance status bar); AX palette + typography (navy + amber, warm paper, IBM Plex Sans KR / Noto Serif KR / IBM Plex Mono) applied app-wide via the token system.
+- **Observability** — Sentry instrumentation + client/server/edge configs (DSN-gated, no hardcoded secrets); `SECURITY.md`; `/api/analytics`.
+- **Regression guard** — `calculator-params-contract.test.ts` exercises all 57 calculators through the real form-submit path (value + source), preventing contract drift from returning.
+
+### Changed
+- App-wide theme re-mapped to AX: `--color-primary` navy `#1e3a5f`, `--color-accent` amber `#b45309`, warm-paper surfaces, IBM Plex Sans KR body font (light + warm-dark).
+
+### Removed
+- Safety copy that promised delivery not yet implemented ("관리자에게 즉시 발송", "자동 신고") — no SMS/push/email channel exists, so the claims were removed until delivery is built.
+
 ## [0.2.0] - 2026-04-14
 
 ### Added

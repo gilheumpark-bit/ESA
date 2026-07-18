@@ -13,9 +13,9 @@
   <a href="https://github.com/gilheumpark-bit/ESA/blob/main/LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg" /></a>
   <img alt="Node" src="https://img.shields.io/badge/Node-20+-green.svg" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-blue.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-22_suites_/_336_pass-brightgreen.svg" />
-  <img alt="Calculators" src="https://img.shields.io/badge/Calculators-56+-orange.svg" />
-  <img alt="Standards" src="https://img.shields.io/badge/Standards-245+_articles-blueviolet.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/Tests-27_suites_/_441_pass-brightgreen.svg" />
+  <img alt="Calculators" src="https://img.shields.io/badge/Calculators-57-orange.svg" />
+  <img alt="Standards" src="https://img.shields.io/badge/Standards-210_articles-blueviolet.svg" />
 </p>
 
 <p align="center">
@@ -40,8 +40,8 @@ ESVA is a professional electrical engineering platform that combines multi-model
 
 ### Key Value Propositions
 
-- **Multi-Standard Search** — KEC (160+), NEC (42), IEC (25), JIS (18) = 245+ articles with condition-tree DSL
-- **56+ Validated Calculators** — Voltage drop, cable sizing, arc flash, short-circuit, grounding, solar PV, and more (±0.01% accuracy)
+- **Multi-Standard Search** — KEC (109), NEC (41), IEC (25), JIS (19), NER (9), ESA (7) = 210 articles with condition-tree DSL
+- **57 Validated Calculators** — Voltage drop, cable sizing, arc flash, short-circuit, grounding, solar PV, and more (±0.01% accuracy)
 - **4-Team Agent System** — SLD/Layout/Standards/Consensus with debate protocol and 8 physics-law validations
 - **Receipt Transparency** — Every AI response comes with a verifiable receipt (SHA-256 hash, date-stamped, model-tracked)
 - **BYOK (Bring Your Own Key)** — Users supply their own LLM API keys; ESVA never stores keys server-side
@@ -56,7 +56,7 @@ ESVA is a professional electrical engineering platform that combines multi-model
 - EngRank scoring algorithm with transparent ranking reasoning
 - Vector search via Weaviate with local fallback
 
-### Engineering Calculators (56+)
+### Engineering Calculators (57)
 
 | Category | Examples |
 |----------|---------|
@@ -72,18 +72,23 @@ ESVA is a professional electrical engineering platform that combines multi-model
 
 All calculators: pure functions, sandboxed, no side effects, uncertainty range tracking.
 
-### Standards Compliance (245+ articles)
+### Standards Compliance (210 articles · 194 evaluable)
 
 | Standard | Articles | Coverage |
 |----------|----------|----------|
-| **KEC 2021** | 160+ | 55 core + 100+ extended, 8 individual evaluators |
-| **NEC 2023** | 42 | Full cross-references to KEC/IEC/JIS equivalents |
-| **IEC 60364** | 25 | 6th edition + Amendment, 20 cross-references |
-| **JIS C 0364** | 18 | A/B/C/D grounding, seismic, medical, EV |
+| **KEC 2021** | 109 | Core + extended, individual + generic evaluators |
+| **NEC 2023** | 41 | Full cross-references to KEC/IEC/JIS equivalents |
+| **IEC 60364** | 25 | 6th edition + Amendment, cross-references |
+| **JIS C 0364** | 19 | A/B/C/D grounding, seismic, medical, EV |
+| **NER (내선규정)** | 9 | Korean internal wiring rules |
+| **ESA (전기사업법)** | 7 | Korean electricity business act |
+
+> **210 defined**, **194 registered in the judgment chain** — NER/ESA (16) are searchable but not yet wired into `evaluateStandard` (return HOLD in the chain).
 
 - Condition-tree DSL with AND/OR composite conditions
-- Generic evaluator for 97% of articles + 8 specialized evaluators
-- Ampacity tables: KEC (456 values), NEC (162 values), IEC (200+ values)
+- Generic evaluator + dedicated evaluators (breaker sizing, ampacity, breaking-capacity)
+- **Placeholder-safe judgments** — articles whose threshold is an unfilled placeholder (`value: 0`) return **HOLD** instead of a fabricated pass/fail; thresholds come only from authoritative tables or measured inputs, never a guess
+- Ampacity tables: KEC, NEC (Table 310.16), IEC 60364-5-52 — each result carries a `SourceTag`
 
 ### 4-Team Agent Architecture
 
@@ -139,7 +144,7 @@ Input → Orchestrator → ┬─ TEAM-SLD (계통도 분석)
 ├──────────────────────────────────────────────────────┤
 │  Engine Layer                                        │
 │  ┌────────┐ ┌──────────┐ ┌────────┐ ┌────────────┐ │
-│  │Calc(56)│ │Std(245)  │ │Topology│ │Receipt     │ │
+│  │Calc(57)│ │Std(210)  │ │Topology│ │Receipt     │ │
 │  │±0.01%  │ │KEC/NEC/  │ │BFS     │ │SHA-256     │ │
 │  │uncert. │ │IEC/JIS   │ │Graph   │ │IPFS        │ │
 │  │range   │ │AND/OR DSL│ │Cache   │ │            │ │
@@ -207,7 +212,7 @@ WEAVIATE_API_KEY=
 npm run dev          # Start dev server (Turbopack)
 npm run build        # Production build
 npm run lint         # ESLint
-npm test             # All tests (22 suites, 336 tests)
+npm test             # All tests (27 suites, 441 tests)
 npm run test:calc    # Calculator accuracy tests only
 npm run test:watch   # Watch mode
 ```
@@ -245,7 +250,7 @@ npm run test:watch   # Watch mode
 
 ## Testing
 
-22 test suites / 336 tests. Calculator tests enforce **±0.01% accuracy** against reference values.
+27 test suites / 441 tests. Calculator tests enforce **±0.01% accuracy** against reference values; a param-contract suite exercises all 57 calculators through the real form-submit path.
 
 | Category | Suites | Tests | Coverage |
 |----------|--------|-------|----------|
@@ -314,8 +319,8 @@ src/
 ├── app/                    # Next.js App Router (19 pages, 31 API routes)
 ├── agent/                  # 4-Team agent + debate + vision + 17 sandboxes
 ├── engine/
-│   ├── calculators/        # 56+ pure-function calculators
-│   ├── standards/          # KEC/NEC/IEC/JIS condition-tree DSL (245+ articles)
+│   ├── calculators/        # 57 pure-function calculators
+│   ├── standards/          # KEC/NEC/IEC/JIS/NER/ESA condition-tree DSL (210 articles)
 │   ├── constants/          # 170+ electrical constants + calc thresholds
 │   ├── conversion/         # Metric↔Imperial adapter + unit conversion
 │   ├── verification/       # Audit engine + quality checklist + sensitivity
