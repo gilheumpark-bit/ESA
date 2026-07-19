@@ -15,15 +15,17 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Calculator, Receipt, Brain, Loader2 } from 'lucide-react';
 import ESVALogo from '@/components/ESVALogo';
 import { useAuth } from '@/contexts/AuthContext';
+import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Benefits Data
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// 계산기 수 SoT = engine/calculators/count.ts (하드코딩 금지)
 const BENEFITS = [
   {
     icon: Calculator,
-    text: '56개 전기 계산기 무료',
+    text: `${CALCULATOR_COUNT}개 전기 계산기 무료`,
     sub: 'KEC, NEC, IEC 기준 지원',
   },
   {

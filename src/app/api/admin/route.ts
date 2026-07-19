@@ -22,13 +22,14 @@ import { verifyIdToken } from '@/lib/firebase-id-token';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface AdminDashboardResponse {
-  success: boolean;
+  ok: boolean;
+  /** 'database' = 실측값 / 'demo' = Supabase 미연결·테이블 부재 → 데모 데이터 */
+  source: 'database' | 'demo';
   data: AdminDashboardData;
-  /** true면 Supabase 미연결 → 데모 데이터 표시 중 */
-  isDemo: boolean;
 }
 
 export interface AdminDashboardData {
+  /** 테넌트 구성 — DB에 테넌트 테이블이 아직 없으므로 database 모드에서는 null */
   tenant: {
     id: string;
     name: string;
@@ -39,7 +40,7 @@ export interface AdminDashboardData {
     features: string[];
     ssoType?: string;
     ssoIssuer?: string;
-  };
+  } | null;
   users: {
     id: string;
     name: string;
@@ -61,11 +62,12 @@ export interface AdminDashboardData {
   usage: {
     label: string;
     value: string;
-    delta: string;
+    /** 증감 표시 — 집계원이 없는 database 모드에서는 생략 */
+    delta?: string;
   }[];
   counts: {
-    userCount: number;
-    calculationCount: number;
+    userCount: number | null;
+    calculationCount: number | null;
   };
 }
 
@@ -140,6 +142,10 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
       .from('calculation_receipts')
       .select('*', { count: 'exact', head: true });
 
+    // 핵심 테이블이 하나도 안 읽히면 DB가 준비되지 않은 것 → demo 모드로 강등.
+    // (이전엔 이 경우에도 목업을 'database'로 라벨링해 반환했다.)
+    if (userCount == null && calcCount == null) return null;
+
     // Recent audit log entries (latest 20)
     const { data: auditRows } = await supabase
       .from('audit_log')
@@ -154,17 +160,25 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
       .order('last_sign_in', { ascending: false })
       .limit(50);
 
-    const mock = getMockData();
+    // usage 타일: 실측 가능한 지표만 노출.
+    // API 호출 수·저장 용량·월별 증감은 집계원이 없어 제외한다 (지어내지 않음).
+    const usage: AdminDashboardData['usage'] = [];
+    if (userCount != null) {
+      usage.push({ label: '등록 사용자', value: userCount.toLocaleString('ko-KR') });
+    }
+    if (calcCount != null) {
+      usage.push({ label: '누적 계산 수', value: calcCount.toLocaleString('ko-KR') });
+    }
 
     return {
-      tenant: mock.tenant, // Tenant config is not in DB yet — keep mock
+      tenant: null, // 테넌트 구성 테이블 미구축 — 목업으로 채우지 않는다
       users: userRows?.map(u => ({
         id: u.id,
         name: u.display_name ?? u.email?.split('@')[0] ?? 'Unknown',
         email: u.email ?? '',
         role: u.role ?? 'user',
         lastLogin: u.last_sign_in ?? '',
-      })) ?? mock.users,
+      })) ?? [],
       auditLog: auditRows?.map(r => ({
         id: r.id,
         userId: r.user_id ?? r.userId ?? '',
@@ -174,16 +188,16 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
         details: r.details ?? undefined,
         ip: r.ip ?? undefined,
         createdAt: r.created_at ?? '',
-      })) ?? mock.auditLog,
-      auditTotalPages: mock.auditTotalPages,
-      usage: mock.usage, // Usage stats require aggregation — keep mock for now
+      })) ?? [],
+      auditTotalPages: 1, // 최신 20건 단일 페이지만 제공 — 가짜 페이지 수 금지
+      usage,
       counts: {
-        userCount: userCount ?? mock.counts.userCount,
-        calculationCount: calcCount ?? mock.counts.calculationCount,
+        userCount: userCount ?? null,
+        calculationCount: calcCount ?? null,
       },
     };
   } catch {
-    // Any Supabase error → fall back to mock
+    // Any Supabase error → fall back to demo data
     return null;
   }
 }
@@ -259,9 +273,10 @@ export async function GET(request: NextRequest) {
   const liveData = await fetchLiveData();
   const data = liveData ?? getMockData();
 
-  return NextResponse.json({
+  const response: AdminDashboardResponse = {
     ok: true,
-    source: liveData ? 'database' : 'mock',
+    source: liveData ? 'database' : 'demo',
     data,
-  });
+  };
+  return NextResponse.json(response);
 }

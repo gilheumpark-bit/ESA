@@ -14,6 +14,8 @@ import InlineCalcResult from '@/components/InlineCalcResult';
 import QuickCalcButtons from '@/components/QuickCalcButtons';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { CALCULATOR_COUNT } from '@/engine/calculators/count';
+import { STANDARD_REFS } from '@/data/standards/standard-refs';
+import { ELECTRICAL_TERMS } from '@/data/iec-60050/electrical-terms';
 
 // ── 실시간 카운터 훅 ──
 function useCountUp(target: number, duration = 1200) {
@@ -87,12 +89,13 @@ export default function HomePage() {
     [handleSearch],
   );
 
-  // SoT: CALCULATOR_COUNT comes from engine/calculators/count.ts (57 as of 2026-05-12).
-  // articleCount/termCount are still local constants until CLAUDE.md's "90 articles total" /
-  // "250+ terms" claims have matching SoT modules (tracked as BUG-005 doc drift).
+  // SoT: CALCULATOR_COUNT = engine/calculators/count.ts.
+  // 표준 참조 수 = STANDARD_REFS.length (data/standards/standard-refs.ts — /standards가 표시하는 목록),
+  // 용어 수 = ELECTRICAL_TERMS.length (data/iec-60050/electrical-terms.ts — /glossary가 표시하는 목록).
+  // 하드코딩 62/151은 데이터와 어긋난 채 드리프트해 제거됨 (BUG-005 해소).
   const calcCounter = useCountUp(CALCULATOR_COUNT);
-  const articleCounter = useCountUp(62);
-  const termCounter = useCountUp(151);
+  const standardsCounter = useCountUp(STANDARD_REFS.length);
+  const termCounter = useCountUp(ELECTRICAL_TERMS.length);
 
   return (
     <main className="min-h-screen bg-[var(--bg-primary)]" suppressHydrationWarning>
@@ -211,9 +214,9 @@ export default function HomePage() {
             <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">계산기</span>
           </div>
           <div className="h-4 w-px bg-[var(--border-default)]" />
-          <div ref={articleCounter.ref} className="text-center">
-            <span className="text-lg font-bold text-[var(--color-primary)]">{articleCounter.count}</span>
-            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">KEC 조항</span>
+          <div ref={standardsCounter.ref} className="text-center">
+            <span className="text-lg font-bold text-[var(--color-primary)]">{standardsCounter.count}</span>
+            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">표준 참조</span>
           </div>
           <div className="h-4 w-px bg-[var(--border-default)]" />
           <div ref={termCounter.ref} className="text-center">
@@ -286,8 +289,8 @@ export default function HomePage() {
             <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-400 shadow-lg" suppressHydrationWarning>
               <BookOpen size={18} className="text-white" />
             </div>
-            <h3 className="text-[13px] font-bold text-[var(--text-primary)]">기준서 62조항</h3>
-            <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">KEC/NEC/IEC<br />교차참조 + 허용전류표</p>
+            <h3 className="text-[13px] font-bold text-[var(--text-primary)]">기준서 브라우저</h3>
+            <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">KEC/NEC/IEC {STANDARD_REFS.length}개 표준<br />교차참조 + 허용전류표</p>
           </Link>
 
         </div>

@@ -6,8 +6,7 @@
  * a. 내 계산 통계: 이번 달 계산 횟수 + top5 bar chart
  * b. 최근 계산: 최근 10개 영수증
  * c. 규격 업데이트: 최근 개정된 규격 알림
- * d. 글로벌 규격 비교: 국가별 비교 radar chart
- * e. 뉴스 브리핑: 카테고리별 TOP 3
+ * d. 글로벌 규격 비교: 국가별 비교 radar chart (프리셋 기준값)
  *
  * PART 1: Data hooks
  * PART 2: Dashboard sections
@@ -21,10 +20,8 @@ import {
   Clock,
   FileText,
   Globe,
-  Newspaper,
   ArrowRight,
   TrendingUp,
-  ExternalLink,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type { CalcUsageData } from '@/components/charts/CalcUsageChart';
@@ -55,20 +52,11 @@ interface StandardUpdate {
   link?: string;
 }
 
-interface NewsItem {
-  id: string;
-  title: string;
-  category: string;
-  link: string;
-  date: string;
-}
-
 function useDashboardData() {
   const [calcUsage, setCalcUsage] = useState<CalcUsageData[]>([]);
   const [totalCalcs, setTotalCalcs] = useState(0);
   const [recentCalcs, setRecentCalcs] = useState<RecentCalc[]>([]);
   const [standardUpdates, setStandardUpdates] = useState<StandardUpdate[]>([]);
-  const [news, _setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -115,7 +103,7 @@ function useDashboardData() {
     return () => { cancelled = true; };
   }, []);
 
-  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, news, loading };
+  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -225,6 +213,9 @@ function GlobalCompareSection() {
         <div className="flex items-center gap-2">
           <Globe size={18} className="text-[var(--color-primary)]" />
           <h2 className="text-base font-semibold text-[var(--text-primary)]">글로벌 규격 비교</h2>
+          <span className="rounded bg-[var(--bg-secondary)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
+            프리셋 예시
+          </span>
         </div>
         <select
           value={selectedPreset}
@@ -241,46 +232,6 @@ function GlobalCompareSection() {
         countries={countries}
         height={300}
       />
-    </div>
-  );
-}
-
-function NewsBriefingSection({ news }: { news: NewsItem[] }) {
-  // Group by category, take top 3
-  const categories = [...new Set(news.map(n => n.category))];
-
-  return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <Newspaper size={18} className="text-[var(--color-primary)]" />
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">뉴스 브리핑</h2>
-      </div>
-      <div className="space-y-4">
-        {categories.slice(0, 3).map(category => {
-          const items = news.filter(n => n.category === category).slice(0, 3);
-          return (
-            <div key={category}>
-              <h3 className="mb-2 text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-                {category}
-              </h3>
-              <div className="space-y-1.5">
-                {items.map(item => (
-                  <a
-                    key={item.id}
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    <span className="flex-1 truncate">{item.title}</span>
-                    <ExternalLink size={12} className="shrink-0 opacity-50" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -307,7 +258,7 @@ function formatDate(dateStr: string): string {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, news, loading } = useDashboardData();
+  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading } = useDashboardData();
 
   if (loading) {
     return (
@@ -342,11 +293,6 @@ export default function DashboardPage() {
 
         {/* c. 규격 업데이트 */}
         <StandardUpdatesSection updates={standardUpdates} />
-
-        {/* e. 뉴스 브리핑 (full width) */}
-        <div className="lg:col-span-2">
-          <NewsBriefingSection news={news} />
-        </div>
       </div>
     </div>
   );

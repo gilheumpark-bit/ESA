@@ -70,16 +70,18 @@ interface UserRow {
 interface UsageStat {
   label: string;
   value: string;
-  delta: string;
+  /** 증감 표시 — 실측 집계가 없는 database 모드에서는 생략됨 */
+  delta?: string;
 }
 
 interface AdminData {
-  tenant: TenantInfo;
+  /** database 모드에서는 테넌트 테이블 미구축으로 null */
+  tenant: TenantInfo | null;
   users: UserRow[];
   auditLog: AuditRow[];
   auditTotalPages: number;
   usage: UsageStat[];
-  counts: { userCount: number; calculationCount: number };
+  counts: { userCount: number | null; calculationCount: number | null };
 }
 
 type AdminTab = 'tenant' | 'sso' | 'users' | 'audit' | 'usage';
@@ -162,7 +164,22 @@ function DashboardSkeleton() {
 // PART 3 — Section Components
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function TenantSection({ tenant }: { tenant: TenantInfo }) {
+function TenantNotConfigured() {
+  return (
+    <div className="rounded-xl border border-dashed border-[var(--border-default)] p-8 text-center">
+      <Building2 size={32} className="mx-auto text-[var(--text-tertiary)]" />
+      <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">
+        테넌트 구성이 아직 없습니다
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">
+        플랜·SSO 등 테넌트 설정은 엔터프라이즈 온보딩 시 ESVA 관리팀이 구성합니다.
+      </p>
+    </div>
+  );
+}
+
+function TenantSection({ tenant }: { tenant: TenantInfo | null }) {
+  if (!tenant) return <TenantNotConfigured />;
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -189,7 +206,8 @@ function TenantSection({ tenant }: { tenant: TenantInfo }) {
   );
 }
 
-function SSOSection({ tenant }: { tenant: TenantInfo }) {
+function SSOSection({ tenant }: { tenant: TenantInfo | null }) {
+  if (!tenant) return <TenantNotConfigured />;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--border-default)] p-4">
@@ -268,7 +286,7 @@ function UsageSection({ stats }: { stats: UsageStat[] }) {
         >
           <p className="text-xs font-medium text-[var(--text-tertiary)]">{stat.label}</p>
           <p className="mt-1 text-2xl font-bold text-[var(--text-primary)]">{stat.value}</p>
-          <p className="mt-0.5 text-xs text-green-600">{stat.delta}</p>
+          {stat.delta && <p className="mt-0.5 text-xs text-green-600">{stat.delta}</p>}
         </div>
       ))}
     </div>
@@ -447,7 +465,7 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<AdminTab>('tenant');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdminData | null>(null);
-  const [dataSource, setDataSource] = useState<'database' | 'mock'>('mock');
+  const [dataSource, setDataSource] = useState<'database' | 'demo'>('demo');
 
   // Fetch admin data from API on mount
   useEffect(() => {
@@ -456,27 +474,35 @@ export default function AdminDashboard() {
     async function fetchAdmin() {
       setLoading(true);
       try {
-        const res = await fetch('/api/admin');
+        // API는 Firebase JWT를 요구한다 — 대시보드 페이지와 동일한 토큰 패턴
+        const { getIdToken } = await import('@/lib/firebase');
+        const token = await getIdToken();
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/admin', { headers });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
 
         if (!cancelled && json.ok) {
-          // Overlay user-specific tenant info
+          // Overlay user-specific tenant info (database 모드에서는 tenant가 null)
           const adminData = json.data as AdminData;
-          if (user?.displayName) {
-            adminData.tenant.name = `${user.displayName}의 조직`;
-          }
-          if (user?.email) {
-            adminData.tenant.domain = user.email.split('@')[1] ?? adminData.tenant.domain;
+          if (adminData.tenant) {
+            if (user?.displayName) {
+              adminData.tenant.name = `${user.displayName}의 조직`;
+            }
+            if (user?.email) {
+              adminData.tenant.domain = user.email.split('@')[1] ?? adminData.tenant.domain;
+            }
           }
           setData(adminData);
-          setDataSource(json.source ?? 'mock');
+          setDataSource(json.source === 'database' ? 'database' : 'demo');
         }
       } catch {
-        // Graceful degradation — fall back to inline mock
+        // Graceful degradation — fall back to inline demo data
         if (!cancelled) {
           setData(getFallbackData(user));
-          setDataSource('mock');
+          setDataSource('demo');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -516,8 +542,8 @@ export default function AdminDashboard() {
           )}
         </div>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          {data?.tenant.name ?? 'ESVA Enterprise'} - Enterprise 관리
-          {dataSource === 'mock' && !loading && (
+          {data?.tenant?.name ?? 'ESVA Enterprise'} - Enterprise 관리
+          {dataSource === 'demo' && !loading && (
             <span className="ml-2 rounded bg-yellow-100 px-1.5 py-0.5 text-xs text-yellow-700">
               데모 데이터
             </span>
