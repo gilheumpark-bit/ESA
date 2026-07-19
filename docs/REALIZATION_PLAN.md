@@ -89,5 +89,21 @@
 
 ---
 
-## 3. 실행 순서
+## 3. 실행 상태 (2026-07-20 갱신)
+
+| 배치 | 상태 | 커밋 |
+|---|---|---|
+| A 안전(A1~A4) | ✅ 완료 | 838daf4·b189741·c4a08a4 (aa94609 혼입→분리 재커밋) |
+| B 배선(#1 checkout·#2 export·#3 receipt·notarize) | ✅ 완료 | 0aea260·2deeaca·df98c81 (+배치 B3) |
+| D 표면 정리(D1~D4+Onboarding) | ✅ 완료 | 651641c·7a92dd4 일부 |
+| C 도면(C1 UI배선·C2 node-id·C3 플래그 ON) | ✅ 완료 — 잠복 3버그(ctor interop·LINE vertices·끝점 결속)까지 | 4629e41·7a92dd4 |
+| C 잔여 C4(/api/review·batch UI) | ⏸ 보류 — 명확한 표면 없음(YAGNI), dormant 유지 선언 |
+| C2 무결성(G2 ESA/NER·G3 verifyReceipt) | ✅ 완료 | 0717c05 |
+| C2 잔여 G1(평가기 승격)·G4(SJC judge 결정)·dead 모듈 정리 | 🔜 다음 회차 |
+| E/F 결제·인프라 | ⏸ 외부 리소스 대기(Stripe/Weaviate/SMTP) — writer 봉인 스냅샷 보강도 이때 |
+
+라이브 실증 하이라이트: 도면 파이프라인 최초 개통 — 실 DXF 업로드→토폴로지 valid(고립 0)→
+4팀 리뷰→ESVA Verified 리포트(honest-HOLD 마킹) 생성, /report/[id] 인계 배선.
+
+## 3-구. 실행 순서
 A(안전) → B(배선) → D(정리) → C(핵심기능·큰 작업) → E/F(외부 의존, 사용자 리소스 대기). 각 배치 종료마다 게이트(jest·tsc·build) + `[심사 증거]`. E/F는 코드까지만·활성화는 키/호스트 제공 시.
