@@ -2,9 +2,13 @@
  * Transformer Impedance Voltage Calculator
  *
  * Formulae:
- *   Impedance:          Zt = Vn / (√3 × In)  (for 3-phase)        [Ω]
  *   Rated current:      In = S / (√3 × Vn)                        [A]
- *   Impedance voltage:  Vz% = (Iz × Zt / Vn) × 100               [%]
+ *   Actual impedance:   Zt = Vn / (√3 × Iz)  (for 3-phase)        [Ω]
+ *   Impedance voltage:  Vz% = (In / Iz) × 100                     [%]
+ *
+ * The impedance voltage (%Z) is the transformer nameplate parameter defined by
+ * the short-circuit relation Isc = In × (100 / %Z), i.e. %Z = (In / Isc) × 100.
+ * A distribution transformer sits at ~4–6%.
  *
  * Standards: IEC 60076-1 (Power Transformers)
  */
@@ -51,22 +55,22 @@ export function calculateImpedanceVoltage(input: ImpedanceVoltageInput): Detaile
     unit: 'A',
   });
 
-  // Step 2: 임피던스 계산
-  const Zt = Vn / (Math.sqrt(3) * In);
+  // Step 2: 실제 임피던스 계산 (단락전류 기준)
+  const Zt = Vn / (Math.sqrt(3) * Iz);
   steps.push({
     step: 2,
-    title: 'Calculate transformer impedance',
-    formula: 'Z_t = \\frac{V_n}{\\sqrt{3} \\times I_n}',
+    title: 'Calculate transformer impedance (from short-circuit current)',
+    formula: 'Z_t = \\frac{V_n}{\\sqrt{3} \\times I_z}',
     value: round(Zt, 4),
     unit: 'Ω',
   });
 
-  // Step 3: 임피던스 전압 (%) 계산
-  const VzPercent = (Iz * Zt / Vn) * 100;
+  // Step 3: 임피던스 전압 (%) 계산 — %Z = (I_n / I_sc) × 100
+  const VzPercent = (In / Iz) * 100;
   steps.push({
     step: 3,
     title: 'Calculate impedance voltage percentage',
-    formula: 'V_z\\% = \\frac{I_z \\times Z_t}{V_n} \\times 100',
+    formula: 'V_z\\% = \\frac{I_n}{I_z} \\times 100',
     value: round(VzPercent, 2),
     unit: '%',
   });
@@ -81,12 +85,12 @@ export function calculateImpedanceVoltage(input: ImpedanceVoltageInput): Detaile
   return {
     value: round(VzPercent, 2),
     unit: '%',
-    formula: 'V_z\\% = \\frac{I_z \\times Z_t}{V_n} \\times 100',
+    formula: 'V_z\\% = \\frac{I_n}{I_z} \\times 100',
     steps,
     source: [createSource('IEC', '60076-1', { edition: '2011' })],
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'warning'),
     additionalOutputs: {
-      impedance: { value: round(Zt, 4), unit: 'Ω', formula: 'Z_t = \\frac{V_n}{\\sqrt{3} \\times I_n}' },
+      impedance: { value: round(Zt, 4), unit: 'Ω', formula: 'Z_t = \\frac{V_n}{\\sqrt{3} \\times I_z}' },
       ratedCurrent: { value: round(In, 2), unit: 'A', formula: 'I_n = \\frac{S}{\\sqrt{3} \\times V_n}' },
     },
   };

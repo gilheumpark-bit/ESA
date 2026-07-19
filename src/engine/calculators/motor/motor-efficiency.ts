@@ -58,6 +58,19 @@ function lookupEfficiency(ieClass: IEClass, ratedPower: number): number {
   return table[String(closest)];
 }
 
+/**
+ * Partial-load efficiency (simplified model): treats the rated loss fraction as
+ * load-dependent so efficiency dips below rated at part load. Must be applied
+ * consistently to EVERY IE class being compared — mixing this with a rated-load
+ * figure for the baseline would invert the savings sign.
+ */
+function partialLoadEfficiency(etaRated: number, loadRatio: number): number {
+  const etaPartial =
+    (etaRated * loadRatio) /
+    (loadRatio + ((1 - etaRated) / etaRated) * loadRatio * loadRatio);
+  return Math.min(etaPartial, etaRated);
+}
+
 // ── Calculator ──────────────────────────────────────────────────────────────
 
 export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedCalcResult {
@@ -85,10 +98,9 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
   });
 
   // Step 2: Adjust for partial load (simplified parabolic model)
-  // eta(load) = eta_rated * loadRatio / (loadRatio + (1-eta_rated)/eta_rated * loadRatio^2 + constant losses)
+  // eta(load) = eta_rated * loadRatio / (loadRatio + (1-eta_rated)/eta_rated * loadRatio^2)
   // Simplified: at partial load, efficiency dips slightly
-  const etaPartial = etaRated * loadRatio / (loadRatio + ((1 - etaRated) / etaRated) * loadRatio * loadRatio);
-  const etaActual = Math.min(etaPartial, etaRated);
+  const etaActual = partialLoadEfficiency(etaRated, loadRatio);
   steps.push({
     step: 2,
     title: '부분부하 효율 보정 (Partial load efficiency)',
@@ -119,8 +131,9 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
     unit: 'KRW/yr',
   });
 
-  // Step 5: Savings vs IE1
-  const etaIE1 = lookupEfficiency('IE1', ratedPower);
+  // Step 5: Savings vs IE1 — compare at the SAME (partial) load basis as etaActual,
+  // otherwise a partial-load IEx vs rated-load IE1 comparison inverts the sign.
+  const etaIE1 = partialLoadEfficiency(lookupEfficiency('IE1', ratedPower), loadRatio);
   const PinIE1 = Pout / etaIE1;
   const costIE1 = PinIE1 * annualHours * rate;
   const savings = costIE1 - annualCost;

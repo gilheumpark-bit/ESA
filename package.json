@@ -11,7 +11,7 @@
     "lint": "eslint .",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:calc": "jest --testPathPattern=calculators"
+    "test:calc": "jest --testPathPatterns=calculators"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
