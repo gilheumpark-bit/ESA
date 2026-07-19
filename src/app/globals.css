@@ -3,42 +3,42 @@
 :root {
   color-scheme: light;
 
-  /* ESVA Design Tokens — Professional Vertical AI */
-  --color-primary: #1d4ed8;
-  --color-primary-hover: #1e40af;
-  --color-primary-light: #3b82f6;
-  --color-accent: #f59e0b;
-  --color-accent-hover: #d97706;
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
+  /* ESVA Design Tokens — AX 최종안 (웜 페이퍼 · 네이비 + 앰버) */
+  --color-primary: #1e3a5f;        /* 네이비 */
+  --color-primary-hover: #16304f;
+  --color-primary-light: #2d5280;
+  --color-accent: #b45309;         /* 앰버 */
+  --color-accent-hover: #92400e;
+  --color-success: #1a7a4a;        /* 적합 그린 */
+  --color-warning: #b45309;
+  --color-error: #b42318;
 
-  --bg-primary: #ffffff;
-  --bg-secondary: #f8fafc;
-  --bg-tertiary: #f1f5f9;
+  --bg-primary: #fbfaf7;           /* 앱 표면 */
+  --bg-secondary: #f6f4ee;         /* 레일·상태바 */
+  --bg-tertiary: #efeadf;
 
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #94a3b8;
+  --text-primary: #1c1b17;         /* 잉크 */
+  --text-secondary: #5c5a53;
+  --text-tertiary: #8a8577;
 
-  --border-default: #e2e8f0;
-  --border-hover: #cbd5e1;
+  --border-default: #e9e5db;
+  --border-hover: #ddd7c8;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #1d4ed8, #3b82f6);
-  --gradient-accent: linear-gradient(135deg, #f59e0b, #f97316);
-  --gradient-hero: linear-gradient(135deg, #eff6ff 0%, #fefce8 50%, #fff7ed 100%);
+  --gradient-primary: linear-gradient(135deg, #1e3a5f, #2d5280);
+  --gradient-accent: linear-gradient(135deg, #b45309, #d97706);
+  --gradient-hero: linear-gradient(135deg, #fbfaf7 0%, #f6f4ee 50%, #fdf3e3 100%);
 
   /* Glass */
-  --bg-glass: rgba(255, 255, 255, 0.7);
-  --bg-glass-border: rgba(255, 255, 255, 0.2);
+  --bg-glass: rgba(251, 250, 247, 0.7);
+  --bg-glass-border: rgba(28, 27, 23, 0.06);
 
-  /* Shadows — Vercel-style depth */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.03);
-  --shadow-card-hover: 0 20px 40px -12px rgba(0, 0, 0, 0.12);
-  --shadow-glow-primary: 0 0 20px rgba(29, 78, 216, 0.15);
-  --shadow-glow-accent: 0 0 20px rgba(245, 158, 11, 0.15);
+  /* Shadows — 웜 페이퍼 depth */
+  --shadow-sm: 0 1px 2px 0 rgba(35, 33, 27, 0.04);
+  --shadow-card: 0 4px 6px -1px rgba(35, 33, 27, 0.06), 0 2px 4px -2px rgba(35, 33, 27, 0.04);
+  --shadow-card-hover: 0 20px 40px -12px rgba(35, 33, 27, 0.14);
+  --shadow-glow-primary: 0 0 20px rgba(30, 58, 95, 0.15);
+  --shadow-glow-accent: 0 0 20px rgba(180, 83, 9, 0.15);
 
   --z-dropdown: 50;
   --z-modal: 100;
@@ -48,28 +48,32 @@
 html.dark {
   color-scheme: dark;
 
-  --color-primary: #3b82f6;
-  --color-primary-hover: #60a5fa;
-  --color-primary-light: #60a5fa;
+  /* AX 웜 다크 — 딥 웜뉴트럴 + 앰버 강조 (시안은 라이트 전용이라 웜톤으로 파생) */
+  --color-primary: #6b93c4;        /* 다크에서 가독 위해 밝은 네이비 */
+  --color-primary-hover: #85a8d3;
+  --color-primary-light: #85a8d3;
+  --color-accent: #d97706;
+  --color-accent-hover: #f59e0b;
+  --color-success: #34a06a;
 
-  --bg-primary: #0a0f1e;
-  --bg-secondary: #111827;
-  --bg-tertiary: #1f2937;
+  --bg-primary: #17150f;           /* 웜 니어블랙 */
+  --bg-secondary: #1e1c15;
+  --bg-tertiary: #26241c;
 
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #64748b;
+  --text-primary: #f2efe6;         /* 웜 오프화이트 */
+  --text-secondary: #b8b3a6;
+  --text-tertiary: #8a8577;
 
-  --border-default: #1f2937;
-  --border-hover: #374151;
+  --border-default: #2c2a22;
+  --border-hover: #3a382e;
 
-  --gradient-hero: linear-gradient(135deg, #0a0f1e 0%, #1a1207 50%, #1a0f07 100%);
-  --bg-glass: rgba(10, 15, 30, 0.7);
+  --gradient-hero: linear-gradient(135deg, #17150f 0%, #1e1a10 50%, #1f1708 100%);
+  --bg-glass: rgba(23, 21, 15, 0.7);
   --bg-glass-border: rgba(255, 255, 255, 0.05);
 
-  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  --shadow-card-hover: 0 20px 40px -12px rgba(0, 0, 0, 0.5);
-  --shadow-glow-primary: 0 0 20px rgba(59, 130, 246, 0.2);
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.35);
+  --shadow-card-hover: 0 20px 40px -12px rgba(0, 0, 0, 0.55);
+  --shadow-glow-primary: 0 0 20px rgba(107, 147, 196, 0.2);
 }
 
 /* ═══ Global Animations ═══ */

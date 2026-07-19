@@ -74,6 +74,8 @@ const APP: EnvVarDef[] = [
   { key: 'NEXT_PUBLIC_ALLOWED_ORIGINS', required: false },
   { key: 'NODE_ENV', required: false, fallback: 'development' },
   { key: 'LOG_LEVEL', required: false, fallback: 'info' },
+  // 서버 간 내부 호출 인증용 공유 시크릿. 미설정 시 내부 우회 비활성(fail-closed).
+  { key: 'INTERNAL_API_SECRET', required: false },
 ];
 
 export const ENV_GROUPS: EnvGroup = {

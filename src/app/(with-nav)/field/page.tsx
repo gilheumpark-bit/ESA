@@ -10,7 +10,7 @@
  * PART 3: 메인 페이지
  */
 
-import { useState, useCallback, useId } from 'react';
+import { useState, useCallback, useId, useMemo } from 'react';
 import { SafetyCheckList } from '@/components/SafetyCheckList';
 import { DeadManSwitch } from '@/components/DeadManSwitch';
 import { parseSafetyIntent } from '@/lib/safety-intent-parser';
@@ -89,6 +89,8 @@ export default function FieldSafetyPage() {
   const [sosLog, setSosLog] = useState<number[]>([]);
   const [, setIsDone] = useState(false);
   const [doneMsg, setDoneMsg] = useState('');
+  // 체크리스트에서 실제로 이행한 항목 id. 완료 영수증의 이행률 근거가 된다.
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
 
   const handleAnalyze = useCallback(() => {
     if (!query.trim()) return;
@@ -130,7 +132,7 @@ export default function FieldSafetyPage() {
           workSite: analysis.intent.location?.ko ?? '현장',
           workerCount: analysis.intent.workers ?? 0,
           supervisorIds: [],
-          checklistDone: [],
+          checklistDone: checkedIds,
           checklistTotal: analysis.checkItems.length,
           completedAt: new Date().toISOString(),
         }),
@@ -145,7 +147,14 @@ export default function FieldSafetyPage() {
     }
   };
 
-  const deadManConfig = analysis ? calcDeadManConfig(analysis.intent) : null;
+  // calcDeadManConfig는 호출마다 새 객체를 반환한다. 메모하지 않으면
+  // DeadManSwitch의 타이머 effect(deps에 config 포함)가 매 렌더마다 재실행되어
+  // sosCalledRef가 초기화된다. 그 결과 SOS 발동 직후 상태가 '모니터링 중'으로
+  // 되돌아가고 카운트다운이 생존 신고 없이 재시작됐다.
+  const deadManConfig = useMemo(
+    () => (analysis ? calcDeadManConfig(analysis.intent) : null),
+    [analysis],
+  );
 
   // ── 완료 화면
   if (step === 'done') {
@@ -153,7 +162,7 @@ export default function FieldSafetyPage() {
       <div className="max-w-xl mx-auto px-4 py-16 text-center">
         <div className="text-6xl mb-6">✅</div>
         <h1 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2">작업 완료</h1>
-        <p className="text-[var(--color-text-secondary)] mb-4">전원 이상 없음 및 작업 종료 — 관리자에게 알림 발송됨.</p>
+        <p className="text-[var(--color-text-secondary)] mb-4">전원 이상 없음 및 작업 종료 — 앱에 기록되었습니다. 관리자 통보는 직접 확인해주세요.</p>
         {doneMsg && (
           <p className="text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 text-[var(--color-text-muted)] mb-6">
             {doneMsg}
@@ -245,7 +254,7 @@ export default function FieldSafetyPage() {
           </div>
 
           {/* 체크리스트 */}
-          <SafetyCheckList analysis={analysis} />
+          <SafetyCheckList analysis={analysis} onCheckedChange={setCheckedIds} />
 
           {/* 스케줄 */}
           {schedule && <SchedulePanel schedule={schedule} />}

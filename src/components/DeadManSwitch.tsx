@@ -45,6 +45,47 @@ interface TimerState {
   progress: number; // 0~1 (현재 단계 진행률)
 }
 
+/**
+ * 마지막 생존 신고 이후 경과 시간만으로 단계를 판정하는 순수 함수.
+ *
+ * tick이 몇 번 돌았는지에 의존하지 않는 것이 핵심이다. 백그라운드에서
+ * 타이머가 throttle 되거나 아예 멈췄다 복귀해도, 복귀 시점의 벽시계
+ * 경과만 넣으면 올바른 단계가 나온다.
+ */
+export function computeDeadManStage(
+  elapsedMs: number,
+  config: Pick<DeadManConfig, 'intervalMs' | 'warn1Multiplier' | 'warn2Multiplier' | 'sosMultiplier'>,
+): { stage: DeadManStage; nextDeadlineMs: number; progress: number } {
+  const { intervalMs, warn1Multiplier, warn2Multiplier, sosMultiplier } = config;
+
+  const warn1At = intervalMs * warn1Multiplier;
+  const warn2At = intervalMs * warn2Multiplier;
+  const sosAt = intervalMs * sosMultiplier;
+
+  if (elapsedMs < warn1At) {
+    return {
+      stage: 'active',
+      nextDeadlineMs: warn1At - elapsedMs,
+      progress: elapsedMs / warn1At,
+    };
+  }
+  if (elapsedMs < warn2At) {
+    return {
+      stage: 'warn1',
+      nextDeadlineMs: warn2At - elapsedMs,
+      progress: (elapsedMs - warn1At) / (warn2At - warn1At),
+    };
+  }
+  if (elapsedMs < sosAt) {
+    return {
+      stage: 'warn2',
+      nextDeadlineMs: sosAt - elapsedMs,
+      progress: (elapsedMs - warn2At) / (sosAt - warn2At),
+    };
+  }
+  return { stage: 'sos', nextDeadlineMs: 0, progress: 1 };
+}
+
 function useDeadManTimer(
   config: DeadManConfig,
   isRunning: boolean,
@@ -59,7 +100,6 @@ function useDeadManTimer(
 
   const startRef = useRef<number>(0);
   const lastAckRef = useRef<number>(0);
-  const rafRef = useRef<number>(0);
   const sosCalledRef = useRef(false);
 
   // 생존 신고 (리셋)
@@ -76,7 +116,6 @@ function useDeadManTimer(
 
   useEffect(() => {
     if (!isRunning) {
-      cancelAnimationFrame(rafRef.current);
       setState(prev => ({ ...prev, stage: 'idle', elapsedMs: 0, progress: 0 }));
       return;
     }
@@ -88,47 +127,30 @@ function useDeadManTimer(
     const tick = () => {
       const now = Date.now();
       const elapsed = now - lastAckRef.current;
-      const { intervalMs, warn1Multiplier, warn2Multiplier, sosMultiplier } = config;
+      const { stage, nextDeadlineMs, progress } = computeDeadManStage(elapsed, config);
 
-      const warn1At = intervalMs * warn1Multiplier;
-      const warn2At = intervalMs * warn2Multiplier;
-      const sosAt = intervalMs * sosMultiplier;
-
-      let stage: DeadManStage;
-      let nextDeadline: number;
-      let progress: number;
-
-      if (elapsed < warn1At) {
-        stage = 'active';
-        nextDeadline = warn1At - elapsed;
-        progress = elapsed / warn1At;
-      } else if (elapsed < warn2At) {
-        stage = 'warn1';
-        nextDeadline = warn2At - elapsed;
-        progress = (elapsed - warn1At) / (warn2At - warn1At);
-      } else if (elapsed < sosAt) {
-        stage = 'warn2';
-        nextDeadline = sosAt - elapsed;
-        progress = (elapsed - warn2At) / (sosAt - warn2At);
-      } else {
-        stage = 'sos';
-        nextDeadline = 0;
-        progress = 1;
-        if (!sosCalledRef.current) {
-          sosCalledRef.current = true;
-          onSos?.(now);
-        }
+      if (stage === 'sos' && !sosCalledRef.current) {
+        sosCalledRef.current = true;
+        onSos?.(now);
       }
 
-      setState({ stage, elapsedMs: elapsed, nextDeadlineMs: nextDeadline, progress });
-
-      if (stage !== 'sos') {
-        rafRef.current = requestAnimationFrame(tick);
-      }
+      setState({ stage, elapsedMs: elapsed, nextDeadlineMs, progress });
     };
 
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+    tick();
+    // 1초 간격 벽시계 폴링. 이전에는 requestAnimationFrame 루프였는데,
+    // 브라우저가 숨겨진 탭에서 rAF를 완전히 정지시키므로 화면이 꺼지면
+    // 감시가 멈췄다. setInterval도 백그라운드에서 throttle 되지만 정지하지는
+    // 않으며, 단계 판정이 tick 횟수가 아닌 경과 시간 기준이므로 복귀 시점에
+    // 올바른 단계가 즉시 계산된다.
+    const intervalId = setInterval(tick, 1000);
+    // 복귀 즉시 재계산해 throttle로 인한 표시 지연을 없앤다.
+    document.addEventListener('visibilitychange', tick);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [isRunning, config, onSos]);
 
   return [state, acknowledge];
@@ -180,7 +202,7 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
       <p className="text-xs text-[var(--color-text-secondary)] mb-4">
         {intervalMin}분마다 생존 신고 필요 →{' '}
         <span className="text-[var(--color-text-primary)] font-medium">
-          미응답 {intervalMin * 2}분 시 관리자 {supervisorCount}명 자동 신고
+          미응답 {intervalMin * 2}분 시 이 화면에 응급 경보 표시 (외부 자동 신고 없음 — 별도 연락 수단 필수)
         </span>
       </p>
 

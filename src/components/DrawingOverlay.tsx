@@ -25,7 +25,7 @@ interface Props {
 const SEVERITY_COLORS: Record<MarkingSeverity, { bg: string; border: string; icon: typeof XCircle }> = {
   error:   { bg: '#ef4444', border: '#dc2626', icon: XCircle },
   warning: { bg: '#f59e0b', border: '#d97706', icon: AlertTriangle },
-  info:    { bg: '#3b82f6', border: '#2563eb', icon: AlertTriangle },
+  info:    { bg: '#1e3a5f', border: '#16304f', icon: AlertTriangle },
   success: { bg: '#10b981', border: '#059669', icon: CheckCircle2 },
 };
 

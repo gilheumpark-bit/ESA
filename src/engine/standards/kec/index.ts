@@ -6,6 +6,7 @@
  */
 
 import { CodeArticle, Condition, JudgmentResult, makeHold } from './types';
+import { isPlaceholderThreshold } from '../evaluator-guard';
 import {
   KEC_232_52_MAIN,
   KEC_232_52_BRANCH,
@@ -129,6 +130,18 @@ function evaluateConditionTree(
   article: CodeArticle,
   params: Record<string, number>,
 ): JudgmentResult {
+  // 자리표시자 임계값(value:0)을 든 조항은 자동 판정 불가 → 보류.
+  // 그대로 비교하면 `>= 0`은 무조건 PASS(위험 통과), `<= 0`은 항상 FAIL(정상 반려)이 된다.
+  const placeholders = article.conditions.filter(isPlaceholderThreshold);
+  if (placeholders.length > 0) {
+    return makeHold(
+      article,
+      placeholders.map(
+        c => `${c.param} — 조항 임계값이 자리표시자이므로 자동 판정 보류. 적용 규칙: ${c.note ?? '조항 원문 참조'}`,
+      ),
+    );
+  }
+
   const missingParams: string[] = [];
   let hasFail = false;
   const details: string[] = [];

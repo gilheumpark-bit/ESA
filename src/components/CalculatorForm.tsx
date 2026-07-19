@@ -5,11 +5,12 @@
  *
  * PART 1: Types and constants
  * PART 2: Individual field renderers
- * PART 3: Main form component with validation
+ * PART 3: Submit-value assembly (pure, testable)
+ * PART 4: Main form component with validation
  */
 
 import { useState, useCallback, type FormEvent } from 'react';
-import { Calculator, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { Calculator, Loader2, AlertCircle, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { ParamDef } from '@/engine/standards/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -17,7 +18,7 @@ import type { ParamDef } from '@/engine/standards/types';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface CalculatorFormProps {
-  params: ParamDef[];
+  params: ExtendedParamDef[];
   onSubmit: (values: Record<string, unknown>) => void;
   isLoading?: boolean;
   error?: string | null;
@@ -28,8 +29,9 @@ interface CalculatorFormProps {
   mode?: 'full' | 'compact';
 }
 
-/** Extended ParamDef with enum options for select fields */
-export interface ExtendedParamDef extends ParamDef {
+/** Extended ParamDef with enum options, array support, and UI metadata. */
+export interface ExtendedParamDef extends Omit<ParamDef, 'type'> {
+  type: 'number' | 'string' | 'boolean' | 'array';
   options?: { value: string; label: string }[];
   min?: number;
   max?: number;
@@ -37,7 +39,23 @@ export interface ExtendedParamDef extends ParamDef {
   defaultValue?: unknown;
   required?: boolean;
   placeholder?: string;
+  /** For type:'array' — the per-row sub-fields. */
+  itemSchema?: ExtendedParamDef[];
+  /** For type:'array' — minimum rows required (default 1). */
+  minItems?: number;
+  /** For type:'array' — initial row count (default = minItems). */
+  defaultItems?: number;
+  /**
+   * For type:'array' with a single-field itemSchema — submit a bare primitive
+   * array (e.g. number[]) instead of an array of objects. e.g. individualMaxDemands: number[].
+   */
+  flatten?: boolean;
 }
+
+/** One row of an array field: sub-field name → raw value. */
+type ArrayRow = Record<string, string | boolean>;
+/** A form field's raw state value. */
+type FieldValue = string | boolean | ArrayRow[];
 
 interface FieldError {
   field: string;
@@ -48,27 +66,33 @@ interface FieldError {
 // PART 2 — Field Renderers
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function FieldLabel({ param }: { param: ExtendedParamDef }) {
+  return (
+    <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
+      {param.description || param.name}
+      {param.unit && (
+        <span className="ml-1 font-normal text-[var(--text-tertiary)]">({param.unit})</span>
+      )}
+    </label>
+  );
+}
+
+const INPUT_CLS = (error?: string) => `
+  h-10 w-full rounded-lg border bg-[var(--bg-primary)] px-3
+  text-sm text-[var(--text-primary)] outline-none transition-colors
+  placeholder:text-[var(--text-tertiary)]
+  focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]
+  ${error ? 'border-[var(--color-error)]' : 'border-[var(--border-default)]'}
+`;
+
 function NumberField({
-  param,
-  value,
-  onChange,
-  error,
+  param, value, onChange, error, hideLabel,
 }: {
-  param: ExtendedParamDef;
-  value: string;
-  onChange: (val: string) => void;
-  error?: string;
+  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-        {param.description || param.name}
-        {param.unit && (
-          <span className="ml-1 font-normal text-[var(--text-tertiary)]">
-            ({param.unit})
-          </span>
-        )}
-      </label>
+      {!hideLabel && <FieldLabel param={param} />}
       <div className="relative">
         <input
           type="number"
@@ -78,13 +102,7 @@ function NumberField({
           max={param.max}
           step={param.step ?? 'any'}
           placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
-          className={`
-            h-10 w-full rounded-lg border bg-[var(--bg-primary)] px-3 pr-12
-            text-sm text-[var(--text-primary)] outline-none transition-colors
-            placeholder:text-[var(--text-tertiary)]
-            focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]
-            ${error ? 'border-[var(--color-error)]' : 'border-[var(--border-default)]'}
-          `}
+          className={`${INPUT_CLS(error)} pr-12`}
         />
         {param.unit && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--text-tertiary)]">
@@ -94,8 +112,31 @@ function NumberField({
       </div>
       {error && (
         <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
-          <AlertCircle size={12} />
-          {error}
+          <AlertCircle size={12} />{error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function TextField({
+  param, value, onChange, error, hideLabel,
+}: {
+  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean;
+}) {
+  return (
+    <div>
+      {!hideLabel && <FieldLabel param={param} />}
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
+        className={INPUT_CLS(error)}
+      />
+      {error && (
+        <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
+          <AlertCircle size={12} />{error}
         </p>
       )}
     </div>
@@ -103,47 +144,22 @@ function NumberField({
 }
 
 function SelectField({
-  param,
-  value,
-  onChange,
-  error,
+  param, value, onChange, error, hideLabel,
 }: {
-  param: ExtendedParamDef;
-  value: string;
-  onChange: (val: string) => void;
-  error?: string;
+  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
-        {param.description || param.name}
-        {param.unit && (
-          <span className="ml-1 font-normal text-[var(--text-tertiary)]">
-            ({param.unit})
-          </span>
-        )}
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`
-          h-10 w-full rounded-lg border bg-[var(--bg-primary)] px-3
-          text-sm text-[var(--text-primary)] outline-none transition-colors
-          focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]
-          ${error ? 'border-[var(--color-error)]' : 'border-[var(--border-default)]'}
-        `}
-      >
+      {!hideLabel && <FieldLabel param={param} />}
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLS(error)}>
         <option value="">선택하세요</option>
         {param.options?.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
       {error && (
         <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
-          <AlertCircle size={12} />
-          {error}
+          <AlertCircle size={12} />{error}
         </p>
       )}
     </div>
@@ -151,13 +167,9 @@ function SelectField({
 }
 
 function BooleanField({
-  param,
-  value,
-  onChange,
+  param, value, onChange,
 }: {
-  param: ExtendedParamDef;
-  value: boolean;
-  onChange: (val: boolean) => void;
+  param: ExtendedParamDef; value: boolean; onChange: (val: boolean) => void;
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -166,32 +178,157 @@ function BooleanField({
         role="switch"
         aria-checked={value}
         onClick={() => onChange(!value)}
-        className={`
-          relative h-6 w-11 rounded-full transition-colors
-          ${value ? 'bg-[var(--color-primary)]' : 'bg-[var(--border-default)]'}
-        `}
+        className={`relative h-6 w-11 rounded-full transition-colors ${value ? 'bg-[var(--color-primary)]' : 'bg-[var(--border-default)]'}`}
       >
-        <span
-          className={`
-            absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform
-            ${value ? 'translate-x-5' : 'translate-x-0'}
-          `}
-        />
+        <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
       </button>
       <div>
-        <span className="text-sm font-medium text-[var(--text-primary)]">
-          {param.name}
-        </span>
-        {param.description && (
-          <p className="text-xs text-[var(--text-tertiary)]">{param.description}</p>
-        )}
+        <span className="text-sm font-medium text-[var(--text-primary)]">{param.description || param.name}</span>
       </div>
     </div>
   );
 }
 
+/** Render a single sub-field inside an array row (label hidden — column header carries it). */
+function RowField({
+  sub, value, onChange,
+}: {
+  sub: ExtendedParamDef; value: string | boolean; onChange: (v: string | boolean) => void;
+}) {
+  if (sub.type === 'boolean') {
+    return <BooleanField param={sub} value={value as boolean} onChange={(v) => onChange(v)} />;
+  }
+  if (sub.type === 'string' && sub.options) {
+    return <SelectField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel />;
+  }
+  if (sub.type === 'string') {
+    return <TextField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel />;
+  }
+  return <NumberField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel />;
+}
+
+function ArrayField({
+  param, rows, onChange, error,
+}: {
+  param: ExtendedParamDef; rows: ArrayRow[]; onChange: (rows: ArrayRow[]) => void; error?: string;
+}) {
+  const schema = param.itemSchema ?? [];
+  const minItems = param.minItems ?? 1;
+
+  const addRow = () => onChange([...rows, makeRow(schema)]);
+  const removeRow = (i: number) => onChange(rows.filter((_, idx) => idx !== i));
+  const updateCell = (i: number, name: string, v: string | boolean) =>
+    onChange(rows.map((r, idx) => (idx === i ? { ...r, [name]: v } : r)));
+
+  return (
+    <div>
+      <FieldLabel param={param} />
+      <div className="space-y-2">
+        {rows.map((row, i) => (
+          <div key={i} className="rounded-lg border border-[var(--border-default)] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--text-tertiary)]">#{i + 1}</span>
+              <button
+                type="button"
+                onClick={() => removeRow(i)}
+                disabled={rows.length <= minItems}
+                aria-label={`행 ${i + 1} 삭제`}
+                className="text-[var(--text-tertiary)] transition-colors hover:text-[var(--color-error)] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {schema.map((sub) => (
+                <div key={sub.name}>
+                  <span className="mb-1 block text-xs text-[var(--text-tertiary)]">
+                    {sub.description || sub.name}{sub.unit ? ` (${sub.unit})` : ''}
+                  </span>
+                  <RowField
+                    sub={sub}
+                    value={row[sub.name] ?? (sub.type === 'boolean' ? false : '')}
+                    onChange={(v) => updateCell(i, sub.name, v)}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={addRow}
+        className="mt-2 flex items-center gap-1 text-sm text-[var(--color-primary)] transition-colors hover:opacity-80"
+      >
+        <Plus size={14} /> 행 추가
+      </button>
+      {error && (
+        <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
+          <AlertCircle size={12} />{error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 3 — Main Form
+// PART 3 — Submit-value assembly (pure, testable)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Build a fresh array row from an item schema, using defaults. */
+export function makeRow(schema: ExtendedParamDef[]): ArrayRow {
+  const row: ArrayRow = {};
+  for (const s of schema) {
+    if (s.type === 'boolean') row[s.name] = (s.defaultValue as boolean) ?? false;
+    else row[s.name] = s.defaultValue != null ? String(s.defaultValue) : '';
+  }
+  return row;
+}
+
+/** Parse a single scalar raw value per its param type. */
+function parseScalar(param: ExtendedParamDef, raw: string | boolean): unknown {
+  if (param.type === 'number') {
+    const str = String(raw ?? '');
+    return str.trim() === '' ? undefined : parseFloat(str);
+  }
+  if (param.type === 'boolean') return Boolean(raw);
+  return raw as string;
+}
+
+/**
+ * Assemble the submit payload from raw form state.
+ * Numbers → parseFloat, arrays → object rows (or bare primitives when flatten).
+ * Pure function so the form's data contract is unit-testable.
+ */
+export function assembleSubmitValues(
+  params: ExtendedParamDef[],
+  values: Record<string, FieldValue>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const param of params) {
+    const raw = values[param.name];
+    if (param.type === 'array') {
+      const rows = (Array.isArray(raw) ? raw : []) as ArrayRow[];
+      const schema = param.itemSchema ?? [];
+      if (param.flatten && schema.length === 1) {
+        const field = schema[0];
+        out[param.name] = rows.map((r) => parseScalar(field, r[field.name])).filter((v) => v !== undefined);
+      } else {
+        out[param.name] = rows.map((r) => {
+          const obj: Record<string, unknown> = {};
+          for (const s of schema) obj[s.name] = parseScalar(s, r[s.name]);
+          return obj;
+        });
+      }
+    } else {
+      out[param.name] = parseScalar(param, raw as string | boolean);
+    }
+  }
+  return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 4 — Main Form
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function CalculatorForm({
@@ -203,22 +340,26 @@ export default function CalculatorForm({
   initialValues,
   mode = 'full',
 }: CalculatorFormProps) {
-  const extParams = params as ExtendedParamDef[];
+  const extParams = params;
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  // compact 모드: defaultValue 있는 필드 = 고급, 없는 필드 = 필수
+  // compact 모드: defaultValue 있는 필드 = 고급, 없는 필드 = 필수 (array는 항상 필수 표시)
   const requiredParams = mode === 'compact'
-    ? extParams.filter(p => p.defaultValue === undefined)
+    ? extParams.filter((p) => p.type === 'array' || p.defaultValue === undefined)
     : extParams;
   const advancedParams = mode === 'compact'
-    ? extParams.filter(p => p.defaultValue !== undefined)
+    ? extParams.filter((p) => p.type !== 'array' && p.defaultValue !== undefined)
     : [];
 
-  // Initialize form state from defaults, then overlay initialValues (e.g. from URL)
-  const [values, setValues] = useState<Record<string, string | boolean>>(() => {
-    const initial: Record<string, string | boolean> = {};
+  const [values, setValues] = useState<Record<string, FieldValue>>(() => {
+    const initial: Record<string, FieldValue> = {};
     for (const p of extParams) {
-      // Check initialValues first, then defaultValue
+      if (p.type === 'array') {
+        const schema = p.itemSchema ?? [];
+        const count = Math.max(p.defaultItems ?? p.minItems ?? 1, p.minItems ?? 1);
+        initial[p.name] = Array.from({ length: count }, () => makeRow(schema));
+        continue;
+      }
       const urlVal = initialValues?.[p.name];
       if (p.type === 'boolean') {
         initial[p.name] = urlVal != null ? Boolean(urlVal) : (p.defaultValue as boolean) ?? false;
@@ -231,7 +372,7 @@ export default function CalculatorForm({
 
   const [fieldErrors, setFieldErrors] = useState<FieldError[]>([]);
 
-  const updateValue = useCallback((name: string, val: string | boolean) => {
+  const updateValue = useCallback((name: string, val: FieldValue) => {
     setValues((prev) => ({ ...prev, [name]: val }));
     setFieldErrors((prev) => prev.filter((e) => e.field !== name));
   }, []);
@@ -242,6 +383,25 @@ export default function CalculatorForm({
     for (const param of extParams) {
       const raw = values[param.name];
 
+      if (param.type === 'array') {
+        const rows = (Array.isArray(raw) ? raw : []) as ArrayRow[];
+        const minItems = param.minItems ?? 1;
+        if (rows.length < minItems) {
+          errors.push({ field: param.name, message: `최소 ${minItems}개 항목이 필요합니다` });
+          continue;
+        }
+        for (const s of param.itemSchema ?? []) {
+          if (s.type === 'number' && s.required !== false) {
+            const anyEmpty = rows.some((r) => String(r[s.name] ?? '').trim() === '');
+            if (anyEmpty) {
+              errors.push({ field: param.name, message: `모든 행의 "${s.description || s.name}"를 입력하세요` });
+              break;
+            }
+          }
+        }
+        continue;
+      }
+
       if (param.type === 'number') {
         const strVal = raw as string;
         if (param.required !== false && strVal.trim() === '') {
@@ -250,13 +410,9 @@ export default function CalculatorForm({
         }
         if (strVal.trim() !== '') {
           const num = parseFloat(strVal);
-          if (isNaN(num)) {
-            errors.push({ field: param.name, message: '유효한 숫자를 입력하세요' });
-          } else if (param.min !== undefined && num < param.min) {
-            errors.push({ field: param.name, message: `최소값: ${param.min}` });
-          } else if (param.max !== undefined && num > param.max) {
-            errors.push({ field: param.name, message: `최대값: ${param.max}` });
-          }
+          if (isNaN(num)) errors.push({ field: param.name, message: '유효한 숫자를 입력하세요' });
+          else if (param.min !== undefined && num < param.min) errors.push({ field: param.name, message: `최소값: ${param.min}` });
+          else if (param.max !== undefined && num > param.max) errors.push({ field: param.name, message: `최대값: ${param.max}` });
         }
       }
 
@@ -276,28 +432,25 @@ export default function CalculatorForm({
     (e: FormEvent) => {
       e.preventDefault();
       if (!validate()) return;
-
-      // Convert string values to numbers where appropriate
-      const parsed: Record<string, unknown> = {};
-      for (const param of extParams) {
-        const raw = values[param.name];
-        if (param.type === 'number') {
-          const str = raw as string;
-          parsed[param.name] = str.trim() === '' ? undefined : parseFloat(str);
-        } else if (param.type === 'boolean') {
-          parsed[param.name] = raw as boolean;
-        } else {
-          parsed[param.name] = raw as string;
-        }
-      }
-
-      onSubmit(parsed);
+      onSubmit(assembleSubmitValues(extParams, values));
     },
     [validate, extParams, values, onSubmit],
   );
 
   const renderField = (param: ExtendedParamDef) => {
     const fieldError = fieldErrors.find((e) => e.field === param.name)?.message;
+
+    if (param.type === 'array') {
+      return (
+        <ArrayField
+          key={param.name}
+          param={param}
+          rows={(Array.isArray(values[param.name]) ? values[param.name] : []) as ArrayRow[]}
+          onChange={(r) => updateValue(param.name, r)}
+          error={fieldError}
+        />
+      );
+    }
 
     if (param.type === 'boolean') {
       return (
@@ -313,6 +466,18 @@ export default function CalculatorForm({
     if (param.type === 'string' && param.options) {
       return (
         <SelectField
+          key={param.name}
+          param={param}
+          value={values[param.name] as string}
+          onChange={(v) => updateValue(param.name, v)}
+          error={fieldError}
+        />
+      );
+    }
+
+    if (param.type === 'string') {
+      return (
+        <TextField
           key={param.name}
           param={param}
           value={values[param.name] as string}
@@ -349,11 +514,7 @@ export default function CalculatorForm({
             <ChevronDown size={16} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
             고급 옵션 ({advancedParams.length}개)
           </button>
-          {showAdvanced && (
-            <div className="mt-3 space-y-4">
-              {advancedParams.map(renderField)}
-            </div>
-          )}
+          {showAdvanced && <div className="mt-3 space-y-4">{advancedParams.map(renderField)}</div>}
         </div>
       )}
 
@@ -377,15 +538,9 @@ export default function CalculatorForm({
         "
       >
         {isLoading ? (
-          <>
-            <Loader2 size={18} className="animate-spin" />
-            계산 중...
-          </>
+          <><Loader2 size={18} className="animate-spin" />계산 중...</>
         ) : (
-          <>
-            <Calculator size={18} />
-            계산하기
-          </>
+          <><Calculator size={18} />계산하기</>
         )}
       </button>
     </form>

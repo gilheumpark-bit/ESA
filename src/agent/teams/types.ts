@@ -230,6 +230,9 @@ export interface ESVAVerifiedReport {
   // 요약
   summary: ReportSummary;
 
+  /** 팀 간 합의 실패 등으로 사람(PE) 검토가 필요한지 — UI가 상시 노출해야 함 */
+  requiresHumanReview?: boolean;
+
   // 영수증 추적
   receiptIds: string[];
   hash: string;               // SHA-256 of entire report

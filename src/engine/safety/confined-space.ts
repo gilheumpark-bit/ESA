@@ -97,7 +97,7 @@ const CONFINED_SPACE_MANDATORY: Omit<SafetyCheckItem, 'isMissing'>[] = [
     description: '119, 관리자, 작업 현장 간 연락 체계 사전 수립 및 공유.',
     regulation: '산안법 제625조',
     riskLevel: 'high',
-    alternative: 'ESVA 앱 비상연락 버튼으로 관리자 전원에게 즉시 SOS 발송.',
+    alternative: '작업 전 119와 현장 관리자 연락처를 직접 확보할 것. (앱 SOS 버튼은 화면 경보만 제공하며 외부 발송 기능은 없음)',
   },
 ];
 
@@ -283,8 +283,10 @@ export function analyzeSafety(intent: SafetyIntentResult): SafetyAnalysisResult 
     allItems.push(...markMissing(HEAT_CHECK_ITEMS, intent));
   }
 
-  // 위치가 없거나 일반 실내/옥외인 경우 기본 전기 안전 항목 추가
-  if (!intent.isConfinedSpace && !intent.location) {
+  // 기본 전기 안전 항목 — 밀폐공간(전용 필수항목 보유)을 제외한 모든 전기 작업에 적용.
+  // 이전에는 `&& !intent.location` 조건이 붙어 있어, 작업 위치를 입력할수록
+  // 체크리스트가 비는 역전이 있었다(전기실·옥상 → 0항목 'low' 판정).
+  if (!intent.isConfinedSpace) {
     allItems.push(
       ...markMissing([
         {

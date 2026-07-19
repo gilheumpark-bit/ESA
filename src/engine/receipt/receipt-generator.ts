@@ -118,7 +118,18 @@ export async function generateReceipt(opts: GenerateReceiptOpts): Promise<Receip
   const calculatedAt = new Date().toISOString();
   const isStandardCurrent = checkStandardCurrent(opts.standardVersion);
 
-  const receiptHash = await hashReceipt(opts.inputs, opts.calcResult);
+  const receiptHash = await hashReceipt({
+    calcId: opts.calcId,
+    appliedStandard: opts.standard,
+    standardVersion: opts.standardVersion,
+    unitSystem: opts.unitSystem ?? 'SI',
+    inputs: opts.inputs,
+    result: opts.calcResult,
+    steps: opts.steps,
+    formulaUsed: opts.formulaUsed,
+    standardsUsed: opts.standardsUsed,
+    engineVersion: ENGINE_VERSION,
+  });
 
   const receipt: Receipt = {
     id: await generateUuid(),

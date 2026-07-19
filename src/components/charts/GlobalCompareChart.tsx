@@ -36,7 +36,7 @@ interface GlobalCompareChartProps {
 }
 
 const DEFAULT_COUNTRIES: CountryConfig[] = [
-  { key: 'KR', name: '한국 (KEC)', color: '#3b82f6' },
+  { key: 'KR', name: '한국 (KEC)', color: '#1e3a5f' },
   { key: 'US', name: '미국 (NEC)', color: '#ef4444' },
   { key: 'IEC', name: 'IEC', color: '#10b981' },
   { key: 'JP', name: '일본 (JEAC)', color: '#f59e0b' },

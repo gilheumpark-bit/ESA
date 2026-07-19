@@ -32,6 +32,8 @@ import { IEC_ARTICLES, getIECArticle } from './iec/iec-articles';
 import { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
 import { NER_ARTICLES, getNERArticle, searchNER, NER_META } from './ner/ner-articles';
 import { ESA_ARTICLES, getESAArticle, searchESA, ESA_META } from './esa/esa-articles';
+import { isPlaceholderThreshold } from './evaluator-guard';
+import { DEDICATED_EVALUATORS } from './dedicated-evaluators';
 export { NEC_ARTICLES_FULL, getNECArticleFull } from './nec/nec-articles';
 export { IEC_ARTICLES, getIECArticle } from './iec/iec-articles';
 export { JIS_ARTICLES, getJISArticle } from './jis/jis-articles';
@@ -113,11 +115,41 @@ export function getCodeArticle(
  * @param params - 평가 파라미터
  * @returns JudgmentResult
  */
+/**
+ * 조항이 자리표시자 임계값(value:0)을 들고 있으면 자동 판정을 보류시킨다.
+ *
+ * 해당 조항들은 `note`에 진짜 규칙이 산문으로만 적혀 있고 기계가 비교할
+ * 수치는 채워지지 않았다. 그대로 비교하면 `>= 0`은 무조건 PASS(위험 통과),
+ * `<= 0`은 항상 FAIL(정상 반려)이 된다. 임계값을 추측해 채우는 것은
+ * 전기 실무자의 판단 영역이므로, 여기서는 판정을 보류하고 원문 규칙을 넘긴다.
+ *
+ * @returns 자리표시자가 있으면 HOLD 결과, 없으면 null
+ */
+function holdIfPlaceholder(article: CodeArticle): JudgmentResult | null {
+  const placeholders = article.conditions.filter(isPlaceholderThreshold);
+  if (placeholders.length === 0) return null;
+  return makeHold(
+    article,
+    placeholders.map(
+      c =>
+        `${c.param} — 조항 임계값이 자리표시자이므로 자동 판정 보류. 적용 규칙: ${c.note ?? '조항 원문 참조'}`,
+    ),
+  );
+}
+
 export function evaluateStandard(
   country: string,
   articleId: string,
   params: Record<string, number>,
 ): JudgmentResult {
+  // 전용 평가기 우선 — 자리표시자 조항 중 실판정으로 승격된 것.
+  // 범용 경로(자리표시자 가드 포함)보다 먼저 조회한다. null이면 폴백.
+  const dedicated = DEDICATED_EVALUATORS.get(articleId);
+  if (dedicated) {
+    const result = dedicated(params);
+    if (result) return result;
+  }
+
   // KEC 라우팅
   if (country === 'KR' || articleId.startsWith('KEC')) {
     return evaluateKEC(articleId, params);
@@ -127,6 +159,8 @@ export function evaluateStandard(
   if (country === 'INT' || articleId.startsWith('IEC')) {
     const iecArticle = getIECArticle(articleId.replace('IEC-', ''));
     if (iecArticle) {
+      const held = holdIfPlaceholder(iecArticle);
+      if (held) return held;
       const matched = iecArticle.conditions.filter(c => {
         const val = params[c.param];
         if (val === undefined) return false;
@@ -143,6 +177,8 @@ export function evaluateStandard(
   if (country === 'US' || articleId.startsWith('NEC')) {
     const necArticle = getNECArticleFull(articleId.replace('NEC-', ''));
     if (necArticle) {
+      const held = holdIfPlaceholder(necArticle);
+      if (held) return held;
       const matched = necArticle.conditions.filter(c => {
         const val = params[c.param];
         if (val === undefined) return false;
@@ -159,6 +195,8 @@ export function evaluateStandard(
   if (country === 'JP' || articleId.startsWith('JIS')) {
     const jisArticle = getJISArticle(articleId.replace('JIS-', ''));
     if (jisArticle) {
+      const held = holdIfPlaceholder(jisArticle);
+      if (held) return held;
       const matched = jisArticle.conditions.filter(c => {
         const val = params[c.param];
         if (val === undefined) return false;

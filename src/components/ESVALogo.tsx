@@ -28,12 +28,12 @@ function BoltIcon({ size }: { size: number }) {
       {/* 원형 배경 — 그래디언트 */}
       <defs>
         <linearGradient id="esva-bolt-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#f59e0b" />
-          <stop offset="100%" stopColor="#f97316" />
+          <stop offset="0%" stopColor="#d97706" />
+          <stop offset="100%" stopColor="#b45309" />
         </linearGradient>
         <linearGradient id="esva-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#1d4ed8" />
-          <stop offset="100%" stopColor="#3b82f6" />
+          <stop offset="0%" stopColor="#1e3a5f" />
+          <stop offset="100%" stopColor="#2d5280" />
         </linearGradient>
       </defs>
       {/* 외곽 링 */}
@@ -55,10 +55,10 @@ export default function ESVALogo({ size = 'md', className = '', showText = true 
       <BoltIcon size={s.icon} />
       {showText && (
         <span className={`${s.text} font-bold tracking-tight`}>
-          <span className="bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-blue-300">
+          <span className="bg-gradient-to-r from-[#1e3a5f] to-[#2d5280] bg-clip-text text-transparent dark:from-[#6b93c4] dark:to-[#85a8d3]">
             ES
           </span>
-          <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-[#b45309] to-[#d97706] bg-clip-text text-transparent">
             VA
           </span>
         </span>
