@@ -17,44 +17,15 @@ import type { Receipt } from '@engine/receipt/types';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
-
-interface JWTClaims {
-  user_id?: string;
-  sub?: string;
-  user_tier?: Tier;
-  tier?: Tier;
-}
-
-function parseJWTClaims(request: NextRequest): JWTClaims | null {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) return null;
-
-  const token = authHeader.slice(7);
-  if (!token || token.length < 10) return null;
-
-  try {
-
-    const payloadB64 = token.split('.')[1];
-    if (!payloadB64) return null;
-    return JSON.parse(atob(payloadB64)) as JWTClaims;
-  } catch {
-    return null;
-  }
-}
-
-// extractUserId now uses shared verified helper; parseJWTClaims kept for resolveUserTier
+// 티어는 서버 DB에서만 결정한다. 이전 구현은 서명 미검증 atob 파싱으로
+// JWT claims의 user_tier/tier를 신뢰하는 fast-path를 뒀는데, 이 리포엔
+// setCustomUserClaims가 없어 정당하게 발화할 수 없는 순수 권한상승
+// 위험점이었다(unverified-input → AUTHZ). 제거하고 DB 단일 출처로.
 
 const VALID_TIERS: Tier[] = ['free', 'pro', 'team', 'enterprise'];
 
-async function resolveUserTier(userId: string, request: NextRequest): Promise<Tier> {
-  // 1) Try JWT claims first (fast path)
-  const claims = parseJWTClaims(request);
-  const jwtTier = claims?.user_tier ?? claims?.tier;
-  if (jwtTier && VALID_TIERS.includes(jwtTier)) {
-    return jwtTier;
-  }
-
-  // 2) Look up from Supabase user profile
+async function resolveUserTier(userId: string): Promise<Tier> {
+  // Look up from Supabase user profile (single source of truth)
   try {
     const admin = getSupabaseAdmin();
     const { data } = await admin
@@ -93,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Tier check — notarization requires Pro or higher
-    const userTier: Tier = await resolveUserTier(userId, request);
+    const userTier: Tier = await resolveUserTier(userId);
     if (!isTierAtLeast(userTier, 'pro')) {
       return NextResponse.json(
         {
