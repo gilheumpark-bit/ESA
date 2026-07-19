@@ -27,7 +27,7 @@ import {
   X,
   Send,
   ArrowRightLeft,
-  Youtube,
+  MonitorPlay,
   Loader2,
 } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
@@ -511,7 +511,7 @@ function YouTubeSummaryCard({ url }: { url: string }) {
         disabled={loading}
         className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
       >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <Youtube size={12} />}
+        {loading ? <Loader2 size={12} className="animate-spin" /> : <MonitorPlay size={12} />}
         YouTube 요약
       </button>
     );
@@ -520,7 +520,7 @@ function YouTubeSummaryCard({ url }: { url: string }) {
   return (
     <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm dark:border-red-800 dark:bg-red-900/20">
       <div className="flex items-center gap-2 mb-2">
-        <Youtube size={14} className="text-red-600" />
+        <MonitorPlay size={14} className="text-red-600" />
         <span className="font-semibold text-red-800 dark:text-red-300">YouTube 요약</span>
       </div>
       {error ? (
