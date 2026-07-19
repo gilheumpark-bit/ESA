@@ -146,7 +146,7 @@ function withArticle(
 export const DEDICATED_EVALUATORS: Map<
   string,
   (params: Record<string, number>) => JudgmentResult | null
-> = new Map([
+> = new Map<string, (params: Record<string, number>) => JudgmentResult | null>([
   ['IEC-434.1', (p) => withArticle(getIECArticle('IEC-434.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['IEC-533.1', (p) => withArticle(getIECArticle('IEC-533.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['JIS-434.1', (p) => withArticle(getJISArticle('JIS-434.1'), (a) => evaluateBreakingCapacity(a, p))],
