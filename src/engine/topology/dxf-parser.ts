@@ -10,7 +10,7 @@
  * PART 4: Public API
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
+ 
 const DxfParser = require('dxf-parser');
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 

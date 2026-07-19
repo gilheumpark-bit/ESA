@@ -133,7 +133,7 @@ interface ErrorContext {
   userId?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 let sentryCaptureException: ((err: unknown, ctx?: any) => string) | null = null;
 let sentryInitAttempted = false;
 

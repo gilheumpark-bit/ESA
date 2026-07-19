@@ -322,7 +322,7 @@ export function compareSafetyFactors(
     for (const c of countries) {
       const profile = getSafetyProfile(c);
       const parts = key.split('.');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       let val: any = profile;
       for (const p of parts) val = val?.[p];
       row[c] = val ?? 'N/A';
