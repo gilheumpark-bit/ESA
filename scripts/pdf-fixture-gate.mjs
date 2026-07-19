@@ -86,6 +86,11 @@ const grid =
   stroke(100, 150, 100, 100) + stroke(200, 100, 300, 100) + stroke(300, 100, 300, 150) + stroke(300, 150, 200, 150);
 
 const fillOnly = text(100, 700, 'NOTE AREA') + '100 100 m 200 100 l 200 150 l 100 150 l h f\n';
+// R3c — 키워드 없는 순수 스펙/표제란 라벨은 phantom 컴포넌트가 되면 안 된다
+// (독립 심사 IND-1 adversary 라이브 재현: "수전전압 22.9kV"·"380V"·"3P 3W
+// 220V" 같은 도면 상시 라벨이 phantom load + 가짜 부하계산을 만들었다).
+const bareSpecs = text(100, 700, '수전전압 22.9kV') + text(100, 680, '380/220V') +
+  text(100, 660, '100A') + text(100, 640, '3P 3W 220V');
 
 const singleG = text(100, 700, 'G') + text(100, 600, 'GEN 500KVA') + stroke(105, 698, 105, 605);
 // R8b — 단독 M(모터 심볼이자 흔한 라벨)은 스펙 증거 없이는 phantom 모터가
@@ -131,6 +136,15 @@ await sleep(800);
     r.status === 200 && r.json?.parserInfo?.confidence === 0.3
       && String(r.json?.data?.rawDescription ?? '').includes('0 line segments'),
     `status ${r.status} conf ${r.json?.parserInfo?.confidence} desc ${r.json?.data?.rawDescription}`);
+}
+await sleep(800);
+{
+  const r = await post('bare-specs.pdf', buildPdf(bareSpecs));
+  const comps = r.json?.data?.components ?? [];
+  const calc = r.json?.calcChain ?? [];
+  check('R3c 키워드 없는 스펙/표제란 → phantom 0 + 가짜 계산 0',
+    r.status === 200 && comps.length === 0 && calc.length === 0,
+    `status ${r.status} comps ${JSON.stringify(comps.map(c => [c.label, c.type]))} calc ${calc.length}`);
 }
 await sleep(800);
 {

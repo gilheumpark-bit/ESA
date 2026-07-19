@@ -262,11 +262,24 @@ export async function parsePdfToSLD(
   let compIdx = 0;
   let connIdx = 0;
 
-  // 텍스트 중 심볼 키워드를 포함한 것 → 컴포넌트.
-  // 부하(load) 승격은 스펙 증거(전압/전류/용량 파싱 성공)가 있을 때만 —
-  // 이전의 "큰 글씨(fontHeight>8)면 부하" 규칙은 실도면 표제란("자격종목"·
-  // "척도"·"국가기술자격 실기시험문제")을 부하 설비로 환각해 부하계산
-  // 제안까지 오염시켰다(박문각 실기 도면 라이브 실측 발각).
+  // 텍스트 → 컴포넌트 승격 규칙 (설비 근거 = 심볼 키워드).
+  //
+  // 컴포넌트는 반드시 설비 종류를 가리키는 **키워드**가 있어야 생성된다:
+  //   - 확신 키워드(2글자+ TR/MCCB/GEN/PANEL...) → 승격
+  //   - weak 키워드(1글자 M) → 스펙 증거가 있을 때만 승격("M 5.5kW"=모터,
+  //     단독 "M"=제외)
+  //   - 키워드 없음 → **어떤 스펙이 있어도 컴포넌트 아님** (주석/라벨로 간주)
+  //
+  // 이전 규칙("스펙 증거만 있으면 부하로 승격")은 표제란·모선 전압 라벨을
+  // phantom 부하로 환각했다: 도면의 "수전전압 22.9kV"·"380/220V"·"3P 3W 220V"
+  // 같은 라벨은 항상 전압/전류 스펙을 담으므로 스펙-게이트를 통과해 가짜
+  // 부하 + 가짜 부하계산을 만들었다(독립 심사 IND-1 adversary가 conf 0.85
+  // 실도면 경로에서 라이브 재현 — R8/R8b 단일문자 그림자와 같은 결함군의
+  // 최상위층). 설비는 심볼로 존재하지 스펙 텍스트로 존재하지 않는다.
+  // 트레이드오프: 키워드 없이 스펙만 붙은 실부하(예: "HEATER 45kW")는 이제
+  // 라벨 없는 텍스트로 남는다 — false-positive(가짜 계산)가 false-negative
+  // (보이는 미표기 노드)보다 위험하다는 제품 방향(엄밀·정확·신뢰). 스펙
+  // 텍스트는 아래 케이블-스펙 근접 매핑에서 연결에 붙는 용도로는 계속 쓰인다.
   const usedTexts = new Set<number>();
   for (let i = 0; i < texts.length; i++) {
     const t = texts[i];
@@ -274,11 +287,8 @@ export async function parsePdfToSLD(
     const type = detection.type;
     const specProbe = parseSpecText(t.text);
     const hasSpecEvidence = Boolean(specProbe.voltage || specProbe.current || specProbe.power);
-    // 확신 타입(2글자+ 키워드)은 그대로 승격. weak(1글자) 타입과 일반 부하는
-    // 스펙 증거가 있을 때만 승격 — 단독 "M" phantom 모터 + 가짜 기동전류
-    // 계산을 차단한다(독립 심사 라이브 재현).
-    const confidentType = type !== 'load' && !detection.weak;
-    if (confidentType || hasSpecEvidence) {
+    const promote = type !== 'load' && (!detection.weak || hasSpecEvidence);
+    if (promote) {
       const spec = specProbe;
       rawAnchors.push({ id: `comp_${compIdx + 1}`, x: t.x, y: t.y });
       components.push({
