@@ -1,0 +1,51 @@
+{
+  "id": "L2-03-raw-geometry",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "중",
+  "fileDifficulty": [
+    "raw-geometry"
+  ],
+  "description": "블록을 전혀 쓰지 않고 심볼을 raw LINE/CIRCLE로 직접 작도한 도면. 오래된 도면·타 CAD 변환본에서 흔하다.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 3,
+    "edgeCount": 2,
+    "nodes": [
+      {
+        "name": "M-RAW-1",
+        "type": "motor",
+        "x": 200,
+        "y": 400
+      },
+      {
+        "name": "M-RAW-2",
+        "type": "motor",
+        "x": 400,
+        "y": 400
+      },
+      {
+        "name": "G-RAW-1",
+        "type": "generator",
+        "x": 600,
+        "y": 400
+      }
+    ],
+    "edges": [
+      {
+        "from": "M-RAW-1",
+        "to": "M-RAW-2"
+      },
+      {
+        "from": "M-RAW-2",
+        "to": "G-RAW-1"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

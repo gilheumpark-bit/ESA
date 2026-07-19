@@ -1,0 +1,72 @@
+{
+  "id": "L1-05-block-naming",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "초",
+  "fileDifficulty": [
+    "clean-dxf",
+    "block-naming"
+  ],
+  "description": "블록명 어휘 다양화 — MCC·METER·SWGR·LIGHT 등 실무 명칭. 심볼 타입 분류기가 이름을 제대로 읽는지가 초점.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 5,
+    "edgeCount": 4,
+    "nodes": [
+      {
+        "name": "SWGR-1",
+        "type": "panel",
+        "x": 100,
+        "y": 600
+      },
+      {
+        "name": "METER-1",
+        "type": "meter",
+        "x": 100,
+        "y": 500
+      },
+      {
+        "name": "MCC-1",
+        "type": "panel",
+        "x": 100,
+        "y": 400
+      },
+      {
+        "name": "LIGHT-1",
+        "type": "load",
+        "x": 40,
+        "y": 300
+      },
+      {
+        "name": "CAP-1",
+        "type": "capacitor",
+        "x": 160,
+        "y": 300
+      }
+    ],
+    "edges": [
+      {
+        "from": "SWGR-1",
+        "to": "METER-1"
+      },
+      {
+        "from": "METER-1",
+        "to": "MCC-1"
+      },
+      {
+        "from": "MCC-1",
+        "to": "LIGHT-1"
+      },
+      {
+        "from": "MCC-1",
+        "to": "CAP-1"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

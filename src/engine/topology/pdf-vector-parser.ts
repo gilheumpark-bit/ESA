@@ -11,7 +11,7 @@
  */
 
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
-import { snapConnectionEndpoints, type SnapAnchor } from './endpoint-snap';
+import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './endpoint-snap';
 
 // =========================================================================
 // PART 1 — Types
@@ -129,8 +129,23 @@ export async function parsePdfToSLD(
   // pdfjs-dist 동적 임포트 (서버 번들 최소화)
   const pdfjsLib = await import('pdfjs-dist');
 
-  const doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
-  const page = await doc.getPage(pageNumber);
+  // 손상·비PDF·페이지 범위 초과는 사용자 입력 문제지 서버 장애가 아니다.
+  // 여기서 흡수하지 않으면 라우트가 500을 내며 내부 오류 문자열까지 노출한다
+  // (DXF 파서와 동일 계약으로 맞춤 — 파싱 실패는 예외가 아니라 결과다).
+  let doc: Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>;
+  let page: Awaited<ReturnType<typeof doc.getPage>>;
+  try {
+    doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
+    page = await doc.getPage(pageNumber);
+  } catch (err) {
+    return {
+      components: [],
+      connections: [],
+      suggestedCalculations: [],
+      confidence: 0,
+      rawDescription: `PDF parse failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
   const viewport = page.getViewport({ scale: 1.0 });
 
   // 텍스트 추출
@@ -220,8 +235,8 @@ export async function parsePdfToSLD(
 
     connections.push({
       id: `conn_${++connIdx}`,
-      from: `node_at_${Math.round(seg.x1)}_${Math.round(seg.y1)}`,
-      to: `node_at_${Math.round(seg.x2)}_${Math.round(seg.y2)}`,
+      from: formatEndpointId({ x: seg.x1, y: seg.y1 }),
+      to: formatEndpointId({ x: seg.x2, y: seg.y2 }),
       length: `${Math.round(lengthM * 100) / 100}m`,
       conductorSize: undefined,
       cableType: undefined,

@@ -438,15 +438,23 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
       note: `총 ${routes.length}개 경로, 총 배선 길이 ${totalWiringLength.toFixed(1)}m`,
     });
 
-    // 비용 최적화 제안
-    if (routes.some(r => r.method === 'conduit' && r.length > 30)) {
+    // 장거리 전선관 구간 안내
+    //
+    // 절감률(구 '자재비 15~25%')은 근거 없는 상수였다. 도면 내용과 무관하게
+    // 항상 같은 숫자가 나갔고 출처도 계산 근거도 없었다. 자재 단가·시공 조건에
+    // 따라 갈리는 값이라 여기서 추정하지 않는다 — 구간 사실만 제시하고
+    // 비교 판단은 견적 단계로 넘긴다.
+    const longConduitRoutes = routes.filter(r => r.method === 'conduit' && r.length > 30);
+    if (longConduitRoutes.length > 0) {
+      const longest = Math.max(...longConduitRoutes.map(r => r.length));
       recommendations.push({
         id: 'rec-tray',
         category: 'cost',
         title: '케이블트레이 적용 검토',
-        description: '30m 이상 구간은 전선관 대신 케이블트레이가 시공비 절감 가능',
+        description:
+          `30m 초과 전선관 구간 ${longConduitRoutes.length}개(최장 ${longest.toFixed(1)}m). ` +
+          '장거리 구간은 케이블트레이가 대안이 될 수 있으나, 절감 여부는 자재 단가·시공 조건에 따라 달라지므로 견적 대조 필요.',
         impact: 'medium',
-        estimatedSaving: '자재비 15~25% 절감',
       });
     }
 

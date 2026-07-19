@@ -1,0 +1,232 @@
+{
+  "id": "L3-03-emergency",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "고",
+  "fileDifficulty": [
+    "large-scale",
+    "mixed-dialect"
+  ],
+  "description": "비상발전기 + UPS + 절체개폐기 이중 계통. 상용/비상 두 전원.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 21,
+    "edgeCount": 20,
+    "nodes": [
+      {
+        "name": "VCB-UTILITY",
+        "type": "breaker",
+        "x": 300,
+        "y": 1200
+      },
+      {
+        "name": "GEN-EMERGENCY",
+        "type": "generator",
+        "x": 1100,
+        "y": 1200
+      },
+      {
+        "name": "ATS-1",
+        "type": "switch",
+        "x": 700,
+        "y": 1060
+      },
+      {
+        "name": "UPS-1",
+        "type": "ups",
+        "x": 900,
+        "y": 940
+      },
+      {
+        "name": "BUSBAR-EM",
+        "type": "bus",
+        "x": 700,
+        "y": 920
+      },
+      {
+        "name": "DB-EM1",
+        "type": "panel",
+        "x": 200,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM1",
+        "type": "load",
+        "x": 200,
+        "y": 650
+      },
+      {
+        "name": "DB-EM2",
+        "type": "panel",
+        "x": 340,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM2",
+        "type": "load",
+        "x": 340,
+        "y": 650
+      },
+      {
+        "name": "DB-EM3",
+        "type": "panel",
+        "x": 480,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM3",
+        "type": "load",
+        "x": 480,
+        "y": 650
+      },
+      {
+        "name": "DB-EM4",
+        "type": "panel",
+        "x": 620,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM4",
+        "type": "load",
+        "x": 620,
+        "y": 650
+      },
+      {
+        "name": "DB-EM5",
+        "type": "panel",
+        "x": 760,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM5",
+        "type": "load",
+        "x": 760,
+        "y": 650
+      },
+      {
+        "name": "DB-EM6",
+        "type": "panel",
+        "x": 900,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM6",
+        "type": "load",
+        "x": 900,
+        "y": 650
+      },
+      {
+        "name": "DB-EM7",
+        "type": "panel",
+        "x": 1040,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM7",
+        "type": "load",
+        "x": 1040,
+        "y": 650
+      },
+      {
+        "name": "DB-EM8",
+        "type": "panel",
+        "x": 1180,
+        "y": 780
+      },
+      {
+        "name": "LOAD-EM8",
+        "type": "load",
+        "x": 1180,
+        "y": 650
+      }
+    ],
+    "edges": [
+      {
+        "from": "VCB-UTILITY",
+        "to": "ATS-1"
+      },
+      {
+        "from": "GEN-EMERGENCY",
+        "to": "ATS-1"
+      },
+      {
+        "from": "ATS-1",
+        "to": "BUSBAR-EM"
+      },
+      {
+        "from": "ATS-1",
+        "to": "UPS-1"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM1"
+      },
+      {
+        "from": "DB-EM1",
+        "to": "LOAD-EM1"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM2"
+      },
+      {
+        "from": "DB-EM2",
+        "to": "LOAD-EM2"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM3"
+      },
+      {
+        "from": "DB-EM3",
+        "to": "LOAD-EM3"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM4"
+      },
+      {
+        "from": "DB-EM4",
+        "to": "LOAD-EM4"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM5"
+      },
+      {
+        "from": "DB-EM5",
+        "to": "LOAD-EM5"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM6"
+      },
+      {
+        "from": "DB-EM6",
+        "to": "LOAD-EM6"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM7"
+      },
+      {
+        "from": "DB-EM7",
+        "to": "LOAD-EM7"
+      },
+      {
+        "from": "BUSBAR-EM",
+        "to": "DB-EM8"
+      },
+      {
+        "from": "DB-EM8",
+        "to": "LOAD-EM8"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

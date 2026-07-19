@@ -36,11 +36,28 @@ export interface SnapResult {
   stats: { snapped: number; junctioned: number; droppedSelfLoops: number };
 }
 
-const NODE_AT = /^node_at_(-?\d+)_(-?\d+)$/;
+const NODE_AT = /^node_at_(-?[\d.]+)_(-?[\d.]+)$/;
 
 function parseNodeAt(id: string): { x: number; y: number } | null {
   const m = id.match(NODE_AT);
-  return m ? { x: parseInt(m[1], 10), y: parseInt(m[2], 10) } : null;
+  if (!m) return null;
+  const x = Number(m[1]);
+  const y = Number(m[2]);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+}
+
+/**
+ * 끝점 좌표 → 합성 노드 id.
+ *
+ * 구현은 `Math.round(x)`로 정수 격자에 붙였다. 도면 단위가 미터라 좌표가
+ * 0.3~0.9 범위였던 픽스처에서 모든 끝점이 0/1로 뭉개져 결선 재현율이 0%가 됐다
+ * (L3-02 unit-meter 기준선). 격자 크기를 좌표계에 고정하면 어떤 값을 고르든
+ * 어떤 축척에서는 틀린다 — 정밀도를 보존하고, 근접 끝점 병합은 아래
+ * 허용반경 군집화에 맡긴다.
+ */
+export function formatEndpointId(p: { x: number; y: number }): string {
+  const fmt = (v: number) => String(Number(v.toFixed(6)));
+  return `node_at_${fmt(p.x)}_${fmt(p.y)}`;
 }
 
 /** bbox 대각선 5% (점군이 퇴화하면 1 — 어떤 단위계든 0 반경은 피한다) */
@@ -96,14 +113,18 @@ export function snapConnectionEndpoints(
       return best.id;
     }
 
-    // 접점 승격(좌표 병합 — 같은 자리의 끝점들은 같은 노드)
-    const key = `${coords.x}_${coords.y}`;
-    let junction = junctionByKey.get(key);
-    if (!junction) {
-      junction = { id: `junction_${key}`, x: coords.x, y: coords.y };
-      junctionByKey.set(key, junction);
-      junctioned += 1;
+    // 접점 승격 — 같은 자리의 끝점들은 같은 노드.
+    // 정확히 일치하는 좌표만 병합하면 부동소수 오차·미세 어긋남이 각각 별개
+    // 접점이 된다. 허용반경 내 기존 접점이 있으면 그쪽으로 흡수한다.
+    for (const existing of junctionByKey.values()) {
+      if (Math.hypot(existing.x - coords.x, existing.y - coords.y) <= tolerance) {
+        return existing.id;
+      }
     }
+    const key = `${coords.x}_${coords.y}`;
+    const junction: JunctionPoint = { id: `junction_${key}`, x: coords.x, y: coords.y };
+    junctionByKey.set(key, junction);
+    junctioned += 1;
     return junction.id;
   };
 

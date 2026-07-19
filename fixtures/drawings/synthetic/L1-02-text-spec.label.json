@@ -1,0 +1,55 @@
+{
+  "id": "L1-02-text-spec",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "초",
+  "fileDifficulty": [
+    "clean-dxf",
+    "text-spec"
+  ],
+  "description": "정격 텍스트 부착 — TEXT 엔티티가 심볼 근처에 놓임. 스펙 추출 검증.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 3,
+    "edgeCount": 2,
+    "nodes": [
+      {
+        "name": "TR-1",
+        "type": "transformer",
+        "x": 100,
+        "y": 600,
+        "rating": "500kVA"
+      },
+      {
+        "name": "ACB-1",
+        "type": "breaker",
+        "x": 100,
+        "y": 500,
+        "current": "800A"
+      },
+      {
+        "name": "DB-1",
+        "type": "panel",
+        "x": 100,
+        "y": 400,
+        "voltage": "380V"
+      }
+    ],
+    "edges": [
+      {
+        "from": "TR-1",
+        "to": "ACB-1"
+      },
+      {
+        "from": "ACB-1",
+        "to": "DB-1"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

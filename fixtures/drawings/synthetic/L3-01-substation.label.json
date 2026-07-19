@@ -1,0 +1,461 @@
+{
+  "id": "L3-01-substation",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "고",
+  "fileDifficulty": [
+    "large-scale"
+  ],
+  "description": "수전설비 2뱅크 + 계통 분리. 대규모 방사형.",
+  "labelMode": "sampled",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 44,
+    "edgeCount": 43,
+    "nodes": [
+      {
+        "name": "VCB-INCOMING",
+        "type": "breaker",
+        "x": 1000,
+        "y": 1400
+      },
+      {
+        "name": "MAINBUS",
+        "type": "bus",
+        "x": 1000,
+        "y": 1300
+      },
+      {
+        "name": "TR-B1",
+        "type": "transformer",
+        "x": 400,
+        "y": 1150
+      },
+      {
+        "name": "ACB-B1",
+        "type": "breaker",
+        "x": 400,
+        "y": 1030
+      },
+      {
+        "name": "BUSBAR-B1",
+        "type": "bus",
+        "x": 400,
+        "y": 910
+      },
+      {
+        "name": "MCC-B1F1",
+        "type": "panel",
+        "x": 0,
+        "y": 760
+      },
+      {
+        "name": "MTR-B1F1M1",
+        "type": "motor",
+        "x": -40,
+        "y": 620
+      },
+      {
+        "name": "MTR-B1F1M2",
+        "type": "motor",
+        "x": 40,
+        "y": 620
+      },
+      {
+        "name": "MCC-B1F2",
+        "type": "panel",
+        "x": 160,
+        "y": 760
+      },
+      {
+        "name": "MTR-B1F2M1",
+        "type": "motor",
+        "x": 120,
+        "y": 620
+      },
+      {
+        "name": "MTR-B1F2M2",
+        "type": "motor",
+        "x": 200,
+        "y": 620
+      },
+      {
+        "name": "MCC-B1F3",
+        "type": "panel",
+        "x": 320,
+        "y": 760
+      },
+      {
+        "name": "MTR-B1F3M1",
+        "type": "motor",
+        "x": 280,
+        "y": 620
+      },
+      {
+        "name": "MTR-B1F3M2",
+        "type": "motor",
+        "x": 360,
+        "y": 620
+      },
+      {
+        "name": "MCC-B1F4",
+        "type": "panel",
+        "x": 480,
+        "y": 760
+      },
+      {
+        "name": "MTR-B1F4M1",
+        "type": "motor",
+        "x": 440,
+        "y": 620
+      },
+      {
+        "name": "MTR-B1F4M2",
+        "type": "motor",
+        "x": 520,
+        "y": 620
+      },
+      {
+        "name": "MCC-B1F5",
+        "type": "panel",
+        "x": 640,
+        "y": 760
+      },
+      {
+        "name": "MTR-B1F5M1",
+        "type": "motor",
+        "x": 600,
+        "y": 620
+      },
+      {
+        "name": "MTR-B1F5M2",
+        "type": "motor",
+        "x": 680,
+        "y": 620
+      },
+      {
+        "name": "MCC-B1F6",
+        "type": "panel",
+        "x": 800,
+        "y": 760
+      },
+      {
+        "name": "MTR-B1F6M1",
+        "type": "motor",
+        "x": 760,
+        "y": 620
+      },
+      {
+        "name": "MTR-B1F6M2",
+        "type": "motor",
+        "x": 840,
+        "y": 620
+      },
+      {
+        "name": "TR-B2",
+        "type": "transformer",
+        "x": 1600,
+        "y": 1150
+      },
+      {
+        "name": "ACB-B2",
+        "type": "breaker",
+        "x": 1600,
+        "y": 1030
+      },
+      {
+        "name": "BUSBAR-B2",
+        "type": "bus",
+        "x": 1600,
+        "y": 910
+      },
+      {
+        "name": "MCC-B2F1",
+        "type": "panel",
+        "x": 1200,
+        "y": 760
+      },
+      {
+        "name": "MTR-B2F1M1",
+        "type": "motor",
+        "x": 1160,
+        "y": 620
+      },
+      {
+        "name": "MTR-B2F1M2",
+        "type": "motor",
+        "x": 1240,
+        "y": 620
+      },
+      {
+        "name": "MCC-B2F2",
+        "type": "panel",
+        "x": 1360,
+        "y": 760
+      },
+      {
+        "name": "MTR-B2F2M1",
+        "type": "motor",
+        "x": 1320,
+        "y": 620
+      },
+      {
+        "name": "MTR-B2F2M2",
+        "type": "motor",
+        "x": 1400,
+        "y": 620
+      },
+      {
+        "name": "MCC-B2F3",
+        "type": "panel",
+        "x": 1520,
+        "y": 760
+      },
+      {
+        "name": "MTR-B2F3M1",
+        "type": "motor",
+        "x": 1480,
+        "y": 620
+      },
+      {
+        "name": "MTR-B2F3M2",
+        "type": "motor",
+        "x": 1560,
+        "y": 620
+      },
+      {
+        "name": "MCC-B2F4",
+        "type": "panel",
+        "x": 1680,
+        "y": 760
+      },
+      {
+        "name": "MTR-B2F4M1",
+        "type": "motor",
+        "x": 1640,
+        "y": 620
+      },
+      {
+        "name": "MTR-B2F4M2",
+        "type": "motor",
+        "x": 1720,
+        "y": 620
+      },
+      {
+        "name": "MCC-B2F5",
+        "type": "panel",
+        "x": 1840,
+        "y": 760
+      },
+      {
+        "name": "MTR-B2F5M1",
+        "type": "motor",
+        "x": 1800,
+        "y": 620
+      },
+      {
+        "name": "MTR-B2F5M2",
+        "type": "motor",
+        "x": 1880,
+        "y": 620
+      },
+      {
+        "name": "MCC-B2F6",
+        "type": "panel",
+        "x": 2000,
+        "y": 760
+      },
+      {
+        "name": "MTR-B2F6M1",
+        "type": "motor",
+        "x": 1960,
+        "y": 620
+      },
+      {
+        "name": "MTR-B2F6M2",
+        "type": "motor",
+        "x": 2040,
+        "y": 620
+      }
+    ],
+    "edges": [
+      {
+        "from": "VCB-INCOMING",
+        "to": "MAINBUS"
+      },
+      {
+        "from": "MAINBUS",
+        "to": "TR-B1"
+      },
+      {
+        "from": "TR-B1",
+        "to": "ACB-B1"
+      },
+      {
+        "from": "ACB-B1",
+        "to": "BUSBAR-B1"
+      },
+      {
+        "from": "BUSBAR-B1",
+        "to": "MCC-B1F1"
+      },
+      {
+        "from": "MCC-B1F1",
+        "to": "MTR-B1F1M1"
+      },
+      {
+        "from": "MCC-B1F1",
+        "to": "MTR-B1F1M2"
+      },
+      {
+        "from": "BUSBAR-B1",
+        "to": "MCC-B1F2"
+      },
+      {
+        "from": "MCC-B1F2",
+        "to": "MTR-B1F2M1"
+      },
+      {
+        "from": "MCC-B1F2",
+        "to": "MTR-B1F2M2"
+      },
+      {
+        "from": "BUSBAR-B1",
+        "to": "MCC-B1F3"
+      },
+      {
+        "from": "MCC-B1F3",
+        "to": "MTR-B1F3M1"
+      },
+      {
+        "from": "MCC-B1F3",
+        "to": "MTR-B1F3M2"
+      },
+      {
+        "from": "BUSBAR-B1",
+        "to": "MCC-B1F4"
+      },
+      {
+        "from": "MCC-B1F4",
+        "to": "MTR-B1F4M1"
+      },
+      {
+        "from": "MCC-B1F4",
+        "to": "MTR-B1F4M2"
+      },
+      {
+        "from": "BUSBAR-B1",
+        "to": "MCC-B1F5"
+      },
+      {
+        "from": "MCC-B1F5",
+        "to": "MTR-B1F5M1"
+      },
+      {
+        "from": "MCC-B1F5",
+        "to": "MTR-B1F5M2"
+      },
+      {
+        "from": "BUSBAR-B1",
+        "to": "MCC-B1F6"
+      },
+      {
+        "from": "MCC-B1F6",
+        "to": "MTR-B1F6M1"
+      },
+      {
+        "from": "MCC-B1F6",
+        "to": "MTR-B1F6M2"
+      },
+      {
+        "from": "MAINBUS",
+        "to": "TR-B2"
+      },
+      {
+        "from": "TR-B2",
+        "to": "ACB-B2"
+      },
+      {
+        "from": "ACB-B2",
+        "to": "BUSBAR-B2"
+      },
+      {
+        "from": "BUSBAR-B2",
+        "to": "MCC-B2F1"
+      },
+      {
+        "from": "MCC-B2F1",
+        "to": "MTR-B2F1M1"
+      },
+      {
+        "from": "MCC-B2F1",
+        "to": "MTR-B2F1M2"
+      },
+      {
+        "from": "BUSBAR-B2",
+        "to": "MCC-B2F2"
+      },
+      {
+        "from": "MCC-B2F2",
+        "to": "MTR-B2F2M1"
+      },
+      {
+        "from": "MCC-B2F2",
+        "to": "MTR-B2F2M2"
+      },
+      {
+        "from": "BUSBAR-B2",
+        "to": "MCC-B2F3"
+      },
+      {
+        "from": "MCC-B2F3",
+        "to": "MTR-B2F3M1"
+      },
+      {
+        "from": "MCC-B2F3",
+        "to": "MTR-B2F3M2"
+      },
+      {
+        "from": "BUSBAR-B2",
+        "to": "MCC-B2F4"
+      },
+      {
+        "from": "MCC-B2F4",
+        "to": "MTR-B2F4M1"
+      },
+      {
+        "from": "MCC-B2F4",
+        "to": "MTR-B2F4M2"
+      },
+      {
+        "from": "BUSBAR-B2",
+        "to": "MCC-B2F5"
+      },
+      {
+        "from": "MCC-B2F5",
+        "to": "MTR-B2F5M1"
+      },
+      {
+        "from": "MCC-B2F5",
+        "to": "MTR-B2F5M2"
+      },
+      {
+        "from": "BUSBAR-B2",
+        "to": "MCC-B2F6"
+      },
+      {
+        "from": "MCC-B2F6",
+        "to": "MTR-B2F6M1"
+      },
+      {
+        "from": "MCC-B2F6",
+        "to": "MTR-B2F6M2"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

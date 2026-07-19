@@ -11,7 +11,10 @@
     "lint": "eslint .",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:calc": "jest --testPathPatterns=calculators"
+    "test:calc": "jest --testPathPatterns=calculators",
+    "fixtures:drawings": "node scripts/fixtures/generate-drawings.mjs",
+    "test:drawings": "jest --testPathPatterns=topology",
+    "report:drawings": "jest --testPathPatterns=drawing-baseline --silent=false"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",

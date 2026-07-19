@@ -1,0 +1,61 @@
+{
+  "id": "L2-02-nested-block",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "중",
+  "fileDifficulty": [
+    "nested-block"
+  ],
+  "description": "블록 정의 안에 INSERT가 중첩된 도면 — 심볼을 묶어 하나의 큐비클 블록으로 만드는 관례. 모델스페이스만 순회하면 내부 심볼이 통째로 사라진다.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 4,
+    "edgeCount": 3,
+    "nodes": [
+      {
+        "name": "ACB-MAIN",
+        "type": "breaker",
+        "x": 400,
+        "y": 700
+      },
+      {
+        "name": "CUBICLE-1",
+        "type": "panel",
+        "x": 400,
+        "y": 600
+      },
+      {
+        "name": "LOAD-1",
+        "type": "load",
+        "x": 320,
+        "y": 480
+      },
+      {
+        "name": "LOAD-2",
+        "type": "load",
+        "x": 480,
+        "y": 480
+      }
+    ],
+    "edges": [
+      {
+        "from": "ACB-MAIN",
+        "to": "CUBICLE-1"
+      },
+      {
+        "from": "CUBICLE-1",
+        "to": "LOAD-1"
+      },
+      {
+        "from": "CUBICLE-1",
+        "to": "LOAD-2"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "id": "L2-01-3phase-tr",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "중",
+  "fileDifficulty": [
+    "dxf-r12"
+  ],
+  "description": "3상 수전 → 변압기 → ACB → MCC 3면 → 전동기. DXF R12 방언.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 12,
+    "edgeCount": 11,
+    "nodes": [
+      {
+        "name": "VCB-IN",
+        "type": "breaker",
+        "x": 400,
+        "y": 900
+      },
+      {
+        "name": "CT-1",
+        "type": "meter",
+        "x": 400,
+        "y": 820
+      },
+      {
+        "name": "TR-1",
+        "type": "transformer",
+        "x": 400,
+        "y": 740
+      },
+      {
+        "name": "ACB-1",
+        "type": "breaker",
+        "x": 400,
+        "y": 660
+      },
+      {
+        "name": "BUSBAR-1",
+        "type": "bus",
+        "x": 400,
+        "y": 580
+      },
+      {
+        "name": "MCC-A",
+        "type": "panel",
+        "x": 200,
+        "y": 480
+      },
+      {
+        "name": "MCC-B",
+        "type": "panel",
+        "x": 400,
+        "y": 480
+      },
+      {
+        "name": "MCC-C",
+        "type": "panel",
+        "x": 600,
+        "y": 480
+      },
+      {
+        "name": "MTR-A1",
+        "type": "motor",
+        "x": 150,
+        "y": 380
+      },
+      {
+        "name": "MTR-A2",
+        "type": "motor",
+        "x": 250,
+        "y": 380
+      },
+      {
+        "name": "MTR-B1",
+        "type": "motor",
+        "x": 400,
+        "y": 380
+      },
+      {
+        "name": "MTR-C1",
+        "type": "motor",
+        "x": 600,
+        "y": 380
+      }
+    ],
+    "edges": [
+      {
+        "from": "VCB-IN",
+        "to": "CT-1"
+      },
+      {
+        "from": "CT-1",
+        "to": "TR-1"
+      },
+      {
+        "from": "TR-1",
+        "to": "ACB-1"
+      },
+      {
+        "from": "ACB-1",
+        "to": "BUSBAR-1"
+      },
+      {
+        "from": "BUSBAR-1",
+        "to": "MCC-A"
+      },
+      {
+        "from": "BUSBAR-1",
+        "to": "MCC-B"
+      },
+      {
+        "from": "BUSBAR-1",
+        "to": "MCC-C"
+      },
+      {
+        "from": "MCC-A",
+        "to": "MTR-A1"
+      },
+      {
+        "from": "MCC-A",
+        "to": "MTR-A2"
+      },
+      {
+        "from": "MCC-B",
+        "to": "MTR-B1"
+      },
+      {
+        "from": "MCC-C",
+        "to": "MTR-C1"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

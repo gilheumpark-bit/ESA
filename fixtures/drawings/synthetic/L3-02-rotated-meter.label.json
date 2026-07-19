@@ -1,0 +1,82 @@
+{
+  "id": "L3-02-rotated-meter",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "고",
+  "fileDifficulty": [
+    "rotated",
+    "unit-meter"
+  ],
+  "description": "회전된 INSERT + 도면 단위가 미터(INSUNITS=6). 좌표 스케일이 바뀌면 끝점 접합 허용오차(bbox 대각선 5%)와 텍스트 근접 임계가 함께 흔들린다.",
+  "labelMode": "full",
+  "coordScale": 0.001,
+  "expected": {
+    "nodeCount": 6,
+    "edgeCount": 5,
+    "nodes": [
+      {
+        "name": "VCB-R",
+        "type": "breaker",
+        "x": 0.4,
+        "y": 0.8
+      },
+      {
+        "name": "TR-R",
+        "type": "transformer",
+        "x": 0.4,
+        "y": 0.7000000000000001
+      },
+      {
+        "name": "ACB-R",
+        "type": "breaker",
+        "x": 0.4,
+        "y": 0.6
+      },
+      {
+        "name": "MCC-R",
+        "type": "panel",
+        "x": 0.4,
+        "y": 0.5
+      },
+      {
+        "name": "MTR-R1",
+        "type": "motor",
+        "x": 0.32,
+        "y": 0.4
+      },
+      {
+        "name": "MTR-R2",
+        "type": "motor",
+        "x": 0.48,
+        "y": 0.4
+      }
+    ],
+    "edges": [
+      {
+        "from": "VCB-R",
+        "to": "TR-R"
+      },
+      {
+        "from": "TR-R",
+        "to": "ACB-R"
+      },
+      {
+        "from": "ACB-R",
+        "to": "MCC-R"
+      },
+      {
+        "from": "MCC-R",
+        "to": "MTR-R1"
+      },
+      {
+        "from": "MCC-R",
+        "to": "MTR-R2"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}
