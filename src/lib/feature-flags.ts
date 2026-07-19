@@ -37,7 +37,9 @@ export interface FeatureFlags {
 // ============================================================
 
 const FLAGS: FeatureFlags = {
-  DRAWING_PARSER: false,
+  // 2026-07-20 ON: DXF/PDF 벡터 파서 실구현 + 끝점 결속(endpoint-snap) 수리 +
+  // 미검증 판정 honest-HOLD 배선 완료로 기본 활성. (이전: Phase 2 예정으로 OFF)
+  DRAWING_PARSER: true,
   BYOK_MULTI_KEY: true,
   EXCEL_EXPORT: true,
   AI_SEARCH: true,

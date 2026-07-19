@@ -11,6 +11,7 @@
  */
 
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
+import { snapConnectionEndpoints, type SnapAnchor } from './endpoint-snap';
 
 // =========================================================================
 // PART 1 — Types
@@ -184,6 +185,9 @@ export async function parsePdfToSLD(
   // SLD 변환
   const components: SLDComponent[] = [];
   const connections: SLDConnection[] = [];
+  // 컴포넌트 position은 0-100 정규화 좌표지만 선분 끝점은 raw pt 좌표라
+  // 스냅은 raw 공간에서 해야 한다 — raw 앵커를 병행 수집한다.
+  const rawAnchors: SnapAnchor[] = [];
   let compIdx = 0;
   let connIdx = 0;
 
@@ -194,6 +198,7 @@ export async function parsePdfToSLD(
     const type = detectComponentType(t.text);
     if (type !== 'load' || t.fontHeight > 8) { // 큰 텍스트 or 심볼 키워드
       const spec = parseSpecText(t.text);
+      rawAnchors.push({ id: `comp_${compIdx + 1}`, x: t.x, y: t.y });
       components.push({
         id: `comp_${++compIdx}`,
         type,
@@ -248,12 +253,27 @@ export async function parsePdfToSLD(
     }
   }
 
+  // 끝점 결속(raw 공간) — comp_N ↔ node_at 불일치로 전 엣지가 허공이던 결함 수리.
+  const snap = snapConnectionEndpoints(rawAnchors, connections);
+  for (const j of snap.junctions) {
+    components.push({
+      id: j.id,
+      type: 'bus',
+      label: '접점 (junction)',
+      position: {
+        x: Math.round((j.x / viewport.width) * 100),
+        y: Math.round((j.y / viewport.height) * 100),
+      },
+      properties: { synthetic: 'junction' },
+    });
+  }
+
   return {
     components,
-    connections,
+    connections: snap.connections,
     suggestedCalculations: [],
     confidence: 0.85, // PDF 벡터는 DXF(0.95)보다 약간 낮지만 VLM(0.5~0.7)보다 높음
-    rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${connections.length} connections, ${texts.length} text items, ${lines.length} line segments`,
+    rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text items, ${lines.length} line segments`,
   };
 }
 

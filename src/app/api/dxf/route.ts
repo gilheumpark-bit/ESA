@@ -30,7 +30,16 @@ export async function POST(req: NextRequest) {
     const blocked = applyRateLimit(req, 'dxf');
     if (blocked) return blocked;
 
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      // multipart가 아닌 요청(빈 본문 등)은 서버 오류가 아니라 클라이언트 오류
+      return NextResponse.json(
+        { error: 'multipart/form-data 요청이 필요합니다 (file 필드에 .dxf).' },
+        { status: 400 },
+      );
+    }
     const dxfFile = formData.get('file') as File | null;
 
     if (!dxfFile) {

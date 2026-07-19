@@ -10,9 +10,17 @@
  * PART 4: Public API
  */
 
- 
-const DxfParser = require('dxf-parser');
+import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
+import { snapConnectionEndpoints } from './endpoint-snap';
+
+// CJS/ESM interop: Node require는 생성자 함수를 직접 주지만 Turbopack 서버
+// 런타임은 { default: 생성자 } namespace를 준다 — 라이브에서 "DxfParser is
+// not a constructor"로 발각(플래그 OFF가 숨기던 잠복 버그). 양쪽 수용.
+type DxfParserCtor = new () => { parseSync(content: string): unknown };
+const DxfParser: DxfParserCtor =
+  (DxfParserModule as unknown as { default?: DxfParserCtor }).default ??
+  (DxfParserModule as unknown as DxfParserCtor);
 
 // =========================================================================
 // PART 1 — DXF Entity Types (dxf-parser 출력)
@@ -209,12 +217,17 @@ export function parseDxfToSLD(
 
       // ── LINE → 연결 (케이블) ──
       case 'LINE': {
-        if (!entity.startPoint || !entity.endPoint) break;
-        const length = euclideanDist(entity.startPoint, entity.endPoint) * unitScale;
+        // dxf-parser 라이브러리는 LINE을 vertices[2]로 준다(startPoint/endPoint
+        // 아님) — 기존 분기는 항상 skip돼 LINE 연결이 한 번도 추출되지 않았다
+        // (플래그 OFF가 숨기던 잠복 사망 경로). 두 형태 모두 수용.
+        const lineStart = entity.vertices?.[0] ?? entity.startPoint;
+        const lineEnd = entity.vertices?.[1] ?? entity.endPoint;
+        if (!lineStart || !lineEnd) break;
+        const length = euclideanDist(lineStart, lineEnd) * unitScale;
         connections.push({
           id: `conn_${++connIdx}`,
-          from: `node_at_${Math.round(entity.startPoint.x)}_${Math.round(entity.startPoint.y)}`,
-          to: `node_at_${Math.round(entity.endPoint.x)}_${Math.round(entity.endPoint.y)}`,
+          from: `node_at_${Math.round(lineStart.x)}_${Math.round(lineStart.y)}`,
+          to: `node_at_${Math.round(lineEnd.x)}_${Math.round(lineEnd.y)}`,
           length: `${Math.round(length * 100) / 100}m`,
           conductorSize: undefined,
           cableType: undefined,
@@ -297,12 +310,28 @@ export function parseDxfToSLD(
     }
   }
 
+  // Pass 3: 끝점 결속 — comp_N ↔ node_at_x_y 불일치로 전 엣지가 허공이던 결함 수리.
+  // 반경 내 끝점은 컴포넌트로 스냅, 밖은 접점(bus) 승격, 자기루프 제거.
+  const snap = snapConnectionEndpoints(
+    components.map((c) => ({ id: c.id, x: c.position.x, y: c.position.y })),
+    connections,
+  );
+  for (const j of snap.junctions) {
+    components.push({
+      id: j.id,
+      type: 'bus',
+      label: '접점 (junction)',
+      position: { x: j.x, y: j.y },
+      properties: { synthetic: 'junction' },
+    });
+  }
+
   return {
     components,
-    connections,
+    connections: snap.connections,
     suggestedCalculations: [],
     confidence: 0.95, // 벡터 파싱은 VLM보다 높은 신뢰도
-    rawDescription: `DXF parsed: ${components.length} components, ${connections.length} connections, ${texts.length} text labels`,
+    rawDescription: `DXF parsed: ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text labels`,
   };
 }
 
