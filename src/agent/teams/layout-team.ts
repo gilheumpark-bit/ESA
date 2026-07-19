@@ -388,18 +388,31 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
           label: `${route.from} → ${route.to} 전선관`,
           value: conduitSize,
           unit: 'mm',
-          compliant: true,
+          // 충전율·공인 표 대조 전 — 산출 수치만 제공, 적합 판정 금지
+          compliant: null,
+          note: '전선관 호칭 산출값 — 충전율·KEC 표 대조 전 HOLD. 현장 시공 규격 확인 필요.',
           standardRef: 'KEC 232.31',
+        });
+        standards.push({
+          standard: 'KEC',
+          clause: '232.31',
+          title: '전선관',
+          judgment: 'HOLD',
+          note: `${route.from}→${route.to}: ${conduitSize}mm 산출, 충전율 미검증`,
         });
       }
 
+      // 50m는 권장 휴리스틱이지 강제 조항 판정이 아님 → HOLD + 권고만
       calculations.push({
         id: `calc-dist-${route.from}-${route.to}`,
         calculatorId: 'wiring-distance',
         label: `${route.from} → ${route.to} 배선 거리`,
         value: route.length,
         unit: 'm',
-        compliant: route.length <= 50, // 분기 회로 50m 이내 권장
+        compliant: null,
+        note: route.length > 50
+          ? '권장 분기 거리 50m 초과 — 규정 PASS/FAIL 아님. 전압강하·중간 분전반 검토 권고.'
+          : '거리 산출값 — 전압강하 계산과 별도 확인.',
         standardRef: 'KEC 232.52',
       });
 
@@ -407,11 +420,11 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
         violations.push({
           id: `vio-dist-${route.from}-${route.to}`,
           severity: 'major',
-          title: '배선 거리 과다',
-          description: `${route.from} → ${route.to} 구간 ${route.length.toFixed(1)}m > 권장 50m`,
+          title: '배선 거리 과다 (권고)',
+          description: `${route.from} → ${route.to} 구간 ${route.length.toFixed(1)}m > 권장 50m (강제 조항 판정 아님)`,
           location: `${route.from} → ${route.to}`,
           standardRef: 'KEC 232.52',
-          suggestedFix: '중간 분전반 추가 또는 케이블 굵기 증가 검토',
+          suggestedFix: '중간 분전반 추가 또는 케이블 굵기 증가·전압강하 정밀 계산 검토',
         });
       }
     }

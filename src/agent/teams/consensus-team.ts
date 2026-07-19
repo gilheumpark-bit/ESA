@@ -112,9 +112,9 @@ function generateMarkings(
     });
   }
 
-  // 계산 결과 비적합 → 빨강
+  // 계산 결과 비적합 → 빨강 (null=HOLD는 제외)
   for (const calc of merged.allCalculations ?? []) {
-    if (!calc.compliant) {
+    if (calc.compliant === false) {
       markings.push({
         id: `mark-${markIdx++}`,
         severity: 'error',
@@ -123,6 +123,16 @@ function generateMarkings(
         detail: `계산값 ${calc.value} ${calc.unit}`,
         standardRef: calc.standardRef,
         calculatedValue: `${calc.value} ${calc.unit}`,
+      });
+    } else if (calc.compliant === null) {
+      markings.push({
+        id: `mark-${markIdx++}`,
+        severity: 'warning',
+        location: calc.label,
+        message: `${calc.label}: 판정 보류(HOLD)`,
+        detail: calc.note ?? `계산값 ${calc.value} ${calc.unit} — 미검증`,
+        standardRef: calc.standardRef,
+        calculatedValue: Number.isFinite(calc.value) ? `${calc.value} ${calc.unit}` : undefined,
       });
     }
   }
@@ -143,7 +153,7 @@ function generateMarkings(
 
   // 적합 항목 → 초록
   for (const calc of merged.allCalculations ?? []) {
-    if (calc.compliant) {
+    if (calc.compliant === true) {
       markings.push({
         id: `mark-${markIdx++}`,
         severity: 'success',
@@ -175,21 +185,30 @@ function computeGrade(score: number): VerifiedGrade {
 function computeVerdict(merged: MergedResults): ReportVerdict {
   const hasCritical = merged.allViolations.some(v => v.severity === 'critical');
   const hasFail = (merged.allStandards ?? []).some(s => s.judgment === 'FAIL' || s.judgment === 'BLOCK');
+  const hasCalcFail = (merged.allCalculations ?? []).some(c => c.compliant === false);
+  const hasHold =
+    (merged.allCalculations ?? []).some(c => c.compliant === null) ||
+    (merged.allStandards ?? []).some(s => s.judgment === 'HOLD');
 
-  if (hasCritical || hasFail) return 'FAIL';
-  if (merged.allViolations.length > 0) return 'CONDITIONAL';
+  if (hasCritical || hasFail || hasCalcFail) return 'FAIL';
+  if (merged.allViolations.length > 0 || hasHold) return 'CONDITIONAL';
   return 'PASS';
 }
 
 function computeScore(merged: MergedResults): number {
-  const totalChecks =
-    (merged.allCalculations?.length ?? 0) + (merged.allStandards?.length ?? 0);
-  if (totalChecks === 0) return 50;
+  const calcs = merged.allCalculations ?? [];
+  const stds = merged.allStandards ?? [];
+  // HOLD/미검증은 분모에서 제외 — 빈 데이터 고득점 방지
+  const scoredCalcs = calcs.filter(c => c.compliant !== null);
+  const scoredStds = stds.filter(s => s.judgment !== 'HOLD');
+  const totalChecks = scoredCalcs.length + scoredStds.length;
+  if (totalChecks === 0) {
+    // 전부 HOLD면 점수 0 — "검증됨" 오인 차단
+    return calcs.length + stds.length > 0 ? 0 : 50;
+  }
 
-  const passedCalcs = (merged.allCalculations ?? []).filter(c => c.compliant).length;
-  const passedStds = (merged.allStandards ?? []).filter(s =>
-    s.judgment === 'PASS' || s.judgment === 'HOLD'
-  ).length;
+  const passedCalcs = scoredCalcs.filter(c => c.compliant === true).length;
+  const passedStds = scoredStds.filter(s => s.judgment === 'PASS').length;
 
   const passRate = (passedCalcs + passedStds) / totalChecks;
 
@@ -206,23 +225,33 @@ function buildSummary(
   score: number,
 ): ReportSummary {
   const passedChecks =
-    (merged.allCalculations ?? []).filter(c => c.compliant).length +
+    (merged.allCalculations ?? []).filter(c => c.compliant === true).length +
     (merged.allStandards ?? []).filter(s => s.judgment === 'PASS').length;
   const failedChecks =
-    (merged.allCalculations ?? []).filter(c => !c.compliant).length +
+    (merged.allCalculations ?? []).filter(c => c.compliant === false).length +
     (merged.allStandards ?? []).filter(s => s.judgment === 'FAIL' || s.judgment === 'BLOCK').length;
+  const holdChecks =
+    (merged.allCalculations ?? []).filter(c => c.compliant === null).length +
+    (merged.allStandards ?? []).filter(s => s.judgment === 'HOLD').length;
 
   const appliedStandards = [...new Set(
     (merged.allStandards ?? []).map(s => `${s.standard}`)
   )];
 
-  const textKo = verdict === 'PASS'
-    ? `전체 ${passedChecks + failedChecks}개 검증 항목 중 ${passedChecks}개 적합. 종합 ${score}점 (${computeGrade(score)}등급).`
-    : `전체 ${passedChecks + failedChecks}개 검증 항목 중 ${failedChecks}개 부적합 발견. 종합 ${score}점. 수정 후 재검토 필요.`;
+  const totalJudged = passedChecks + failedChecks + holdChecks;
+  const textKo =
+    verdict === 'PASS'
+      ? `전체 ${totalJudged}개 항목 중 ${passedChecks}개 적합. 종합 ${score}점 (${computeGrade(score)}등급).`
+      : verdict === 'CONDITIONAL'
+        ? `전체 ${totalJudged}개 항목 중 적합 ${passedChecks}·부적합 ${failedChecks}·보류(HOLD) ${holdChecks}. 종합 ${score}점. 추가 입력·수동 검증 필요.`
+        : `전체 ${totalJudged}개 항목 중 ${failedChecks}개 부적합 발견(HOLD ${holdChecks}). 종합 ${score}점. 수정 후 재검토 필요.`;
 
-  const textEn = verdict === 'PASS'
-    ? `${passedChecks} of ${passedChecks + failedChecks} checks passed. Score: ${score} (Grade ${computeGrade(score)}).`
-    : `${failedChecks} of ${passedChecks + failedChecks} checks failed. Score: ${score}. Revision required.`;
+  const textEn =
+    verdict === 'PASS'
+      ? `${passedChecks} of ${totalJudged} checks passed. Score: ${score} (Grade ${computeGrade(score)}).`
+      : verdict === 'CONDITIONAL'
+        ? `${passedChecks} pass / ${failedChecks} fail / ${holdChecks} hold of ${totalJudged}. Score: ${score}. Further verification required.`
+        : `${failedChecks} of ${totalJudged} checks failed (${holdChecks} hold). Score: ${score}. Revision required.`;
 
   return {
     totalComponents: merged.componentCount,

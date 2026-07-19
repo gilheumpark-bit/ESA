@@ -396,6 +396,18 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
                 return updated;
               });
             }
+            // 서버 output-filter: 무근거 수치 차단 시 필터 본문으로 교체
+            if (parsed.filter && parsed.filter.passed === false && parsed.filter.filteredText) {
+              const notice = parsed.filter.notice
+                ? `\n\n⚠️ ${parsed.filter.notice}`
+                : '';
+              assistantText = `${parsed.filter.filteredText}${notice}`;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: 'assistant', content: assistantText };
+                return updated;
+              });
+            }
           } catch { /* skip malformed */ }
         }
       }

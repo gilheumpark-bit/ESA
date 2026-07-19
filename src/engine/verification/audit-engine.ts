@@ -101,7 +101,9 @@ export function runAudit(params: Record<string, unknown>): AuditReport {
     const domainScore = qualityReport.scores[area.domain] ?? 0;
     const grade = scoreToGrade(domainScore);
 
-    const domainResults = qualityReport.results.filter(r => r.domain === area.domain && !r.passed);
+    const domainResults = qualityReport.results.filter(
+      r => r.domain === area.domain && r.outcome === 'fail',
+    );
     const findings = domainResults.map(r => `[${r.severity.toUpperCase()}] ${r.title}`);
 
     return { area, score: domainScore, grade, findings };

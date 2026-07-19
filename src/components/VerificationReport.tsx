@@ -362,12 +362,15 @@ function TeamResultCard({ result }: { result: TeamResult }) {
         <div className="mt-3 space-y-1">
           {result.calculations.slice(0, 5).map(calc => (
             <div key={calc.id} className="flex items-center gap-2 text-xs">
-              {calc.compliant
+              {calc.compliant === true
                 ? <CheckCircle2 size={12} className="text-green-500" />
-                : <XCircle size={12} className="text-red-500" />}
+                : calc.compliant === null
+                  ? <AlertTriangle size={12} className="text-amber-500" />
+                  : <XCircle size={12} className="text-red-500" />}
               <span className="text-[var(--text-secondary)]">{calc.label}:</span>
               <span className="font-mono font-medium text-[var(--text-primary)]">
-                {calc.value} {calc.unit}
+                {Number.isFinite(calc.value) ? `${calc.value} ${calc.unit}` : `— ${calc.unit}`}
+                {calc.compliant === null ? ' (HOLD)' : ''}
               </span>
               {calc.standardRef && (
                 <span className="text-[var(--text-tertiary)]">({calc.standardRef})</span>

@@ -176,35 +176,71 @@ async function runCalculations(
   const standards: StandardEntry[] = [];
   const violations: ViolationEntry[] = [];
 
-  // 트랜스포머 → 용량 계산
+  // 트랜스포머 → 도면 표기 전사만 (용량 적합성은 계산기 미실행 → HOLD)
   const transformers = components.filter(c => c.type === 'transformer');
   for (const tr of transformers) {
     if (tr.rating) {
       calculations.push({
         id: `calc-tr-${tr.id}`,
         calculatorId: 'transformer-capacity',
-        label: `${tr.label} 용량`,
+        label: `${tr.label} 용량 (도면 표기)`,
         value: parseFloat(tr.rating) || 0,
         unit: 'kVA',
-        compliant: true,
+        compliant: null,
+        note: '도면 인식 값 전사 — transformer-capacity 계산기·부하 조건 미적용. 수동 검증 또는 /calc 경로 필요.',
         standardRef: 'KEC 311.1',
+      });
+      standards.push({
+        standard: 'KEC',
+        clause: '311.1',
+        title: '변압기 용량',
+        judgment: 'HOLD',
+        note: `${tr.label}: 표기 ${tr.rating} — 적합성 미판정`,
       });
     }
   }
 
-  // 케이블 구간 → 전압강하 계산
+  // 케이블 구간 → 부하전류가 연결에 있을 때만 간이 VD; 없으면 HOLD (가정 100A 금지)
   for (const conn of connections) {
     if (conn.length && conn.length > 0) {
-      const vd = estimateVoltageDrop(conn);
-      const compliant = vd <= activeDefaults().vdBranch; // 국가별 VD 한도 (KR=3%, IEC=4%)
+      const vdEstimate = estimateVoltageDrop(conn);
+      if (vdEstimate == null) {
+        calculations.push({
+          id: `calc-vd-${conn.from}-${conn.to}`,
+          calculatorId: 'voltage-drop',
+          label: `${conn.from} → ${conn.to} 전압강하`,
+          value: NaN,
+          unit: '%',
+          formula: 'VD = (√3 × I × L × R) / V × 100',
+          compliant: null,
+          note: '부하전류(I) 미추출 — 가정값 사용 금지. 토폴로지·명판 전류 입력 후 재계산.',
+          standardRef: 'KEC 232.52',
+        });
+        standards.push({
+          standard: 'KEC',
+          clause: '232.52',
+          title: '전압강하',
+          judgment: 'HOLD',
+          note: `${conn.from}→${conn.to}: 전류 미상, 판정 보류`,
+        });
+        continue;
+      }
+
+      const { vd, currentA, assumed } = vdEstimate;
+      const limit = activeDefaults().vdBranch;
+      // 전류가 도면에서 온 경우에만 PASS/FAIL; 추정 전류면 수치만 참고 HOLD
+      const compliant: boolean | null = assumed ? null : vd <= limit;
       calculations.push({
         id: `calc-vd-${conn.from}-${conn.to}`,
         calculatorId: 'voltage-drop',
         label: `${conn.from} → ${conn.to} 전압강하`,
         value: Math.round(vd * 100) / 100,
         unit: '%',
-        formula: 'VD = (2 × L × I × R) / (1000 × V) × 100',
+        formula: 'VD = (√3 × I × L × R) / V × 100',
         compliant,
+        note: assumed
+          ? `참고 추정(I=${currentA}A 미검증). 정밀 계산기 경로 필요.`
+          : `I=${currentA}A, 한도 ${limit}%`,
         standardRef: 'KEC 232.52',
       });
 
@@ -212,16 +248,16 @@ async function runCalculations(
         standard: 'KEC',
         clause: '232.52',
         title: '전압강하',
-        judgment: compliant ? 'PASS' : 'FAIL',
-        note: `${vd.toFixed(2)}% (허용: 3%)`,
+        judgment: compliant === null ? 'HOLD' : compliant ? 'PASS' : 'FAIL',
+        note: `${vd.toFixed(2)}% (허용: ${limit}%)`,
       });
 
-      if (!compliant) {
+      if (compliant === false) {
         violations.push({
           id: `vio-vd-${conn.from}-${conn.to}`,
           severity: 'critical',
           title: '전압강하 기준 초과',
-          description: `${conn.from} → ${conn.to} 구간 전압강하 ${vd.toFixed(2)}% > 허용 3%`,
+          description: `${conn.from} → ${conn.to} 구간 전압강하 ${vd.toFixed(2)}% > 허용 ${limit}%`,
           location: `${conn.from} → ${conn.to}`,
           standardRef: 'KEC 232.52',
           suggestedFix: '케이블 굵기 증가 또는 배전반 위치 변경 검토',
@@ -230,7 +266,7 @@ async function runCalculations(
     }
   }
 
-  // 차단기 → 보호 협조
+  // 차단기 → 도면 표기 전사만 (협조·선정 검증 미실행 → HOLD)
   const breakers = components.filter(c => c.type === 'breaker');
   for (const br of breakers) {
     if (br.rating) {
@@ -238,11 +274,19 @@ async function runCalculations(
       calculations.push({
         id: `calc-br-${br.id}`,
         calculatorId: 'breaker-sizing',
-        label: `${br.label} 차단기 정격`,
+        label: `${br.label} 차단기 정격 (도면 표기)`,
         value: rating,
         unit: 'A',
-        compliant: true,
+        compliant: null,
+        note: '도면 표기 전사 — 부하전류·허용전류·차단용량 검증 없음. 수동 검증 필요.',
         standardRef: 'KEC 212.3',
+      });
+      standards.push({
+        standard: 'KEC',
+        clause: '212.3',
+        title: '차단기 정격',
+        judgment: 'HOLD',
+        note: `${br.label}: 표기 ${rating}A — 적합성 미판정`,
       });
     }
   }
@@ -250,18 +294,29 @@ async function runCalculations(
   return { calculations, standards, violations };
 }
 
-/** 간이 전압강하 추정 (정밀 계산은 calc engine 사용) */
-function estimateVoltageDrop(conn: ExtractedConnection): number {
-  // 상수는 top-level import로 가져옴 (ELECTRICAL_CONSTANTS)
+/**
+ * 간이 전압강하 추정.
+ * 부하전류를 연결 메타에서 얻지 못하면 null — 가정 100A 사용 금지.
+ */
+function estimateVoltageDrop(
+  conn: ExtractedConnection,
+): { vd: number; currentA: number; assumed: boolean } | null {
   const length = conn.length ?? 10;
   const cableSpec = conn.cableType ?? '35sq';
   const sizeMatch = cableSpec.match(/(\d+)sq/);
-  const size = sizeMatch ? parseInt(sizeMatch[1]) : 35;
+  const size = sizeMatch ? parseInt(sizeMatch[1], 10) : 35;
   const resistance = RESISTIVITY.CU_20C / size; // Ω/m per conductor
-  const current = 100; // 가정 부하전류 (실제값은 토폴로지에서 추출)
-  // VD% = (√3 × I × L × R) / V × 100
-  const vd = (PHYSICS.SQRT3 * current * length * resistance) / 380 * 100;
-  return Math.round(vd * 100) / 100;
+
+  // ExtractedConnection에 전류 필드가 없으므로 cableType 내 "100A" 패턴만 인정
+  const ampMatch = cableSpec.match(/(\d+(?:\.\d+)?)\s*A\b/i);
+  if (!ampMatch) {
+    return null;
+  }
+  const currentA = parseFloat(ampMatch[1]);
+  if (!Number.isFinite(currentA) || currentA <= 0) return null;
+
+  const vd = (PHYSICS.SQRT3 * currentA * length * resistance) / 380 * 100;
+  return { vd: Math.round(vd * 100) / 100, currentA, assumed: false };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

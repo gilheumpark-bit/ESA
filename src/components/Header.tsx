@@ -51,7 +51,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/tools/sld',    label: 'SLD',     icon: Zap },
   { href: '/standards',    label: '기준서',   icon: FileText },
   { href: '/glossary',     label: '용어사전', icon: BookOpen },
-  { href: '/report/demo',  label: '검증보고서', icon: ClipboardCheck },
+  // 검증보고서는 세션 실결과만 존재 — 데모 링크 제거 (거짓 점수 오인 방지)
+  { href: '/history',      label: '이력',    icon: ClipboardCheck },
   { href: '/settings',     label: '설정',    icon: Settings },
 ];
 

@@ -166,11 +166,42 @@ async function buildStreamingResponse(
 
   return new ReadableStream({
     async start(controller) {
+      let fullText = '';
       try {
         for await (const part of result.textStream) {
+          fullText += part;
           const chunk = encoder.encode(`data: ${JSON.stringify({ text: part })}\n\n`);
           controller.enqueue(chunk);
         }
+
+        // 스트림 종료 후 출력 필터: 무근거 수치·확률 표현 차단 마커 전송
+        // (chat 경로는 tool call 없음 → 수치 단독 주장 차단)
+        try {
+          const { filterLLMOutput } = await import('@/engine/llm/output-filter');
+          const filtered = filterLLMOutput(fullText, []);
+          if (!filtered.passed) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  filter: {
+                    passed: false,
+                    blockedCount: filtered.blocked.length,
+                    filteredText: filtered.filtered,
+                    notice:
+                      '출력 필터: 출처 없는 수치·확률적 표현이 차단되었습니다. 계산기·기준서 도구 경로를 사용하세요.',
+                  },
+                })}\n\n`,
+              ),
+            );
+          } else {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ filter: { passed: true } })}\n\n`),
+            );
+          }
+        } catch (filterErr) {
+          console.warn('[ESVA /api/chat] output-filter failed:', filterErr);
+        }
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       } catch (err) {

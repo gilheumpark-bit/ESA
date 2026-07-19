@@ -108,7 +108,7 @@ export default function FieldSafetyPage() {
 
   const handleSos = useCallback((ts: number) => {
     setSosLog(prev => [...prev, ts]);
-    // SOS 신호 → /api/field/sos 전송 (best-effort: 클라이언트 이벤트 특성상 fire-and-forget 허용)
+    // SOS → 인앱 알림+서버 로그만. SMS/전화/이메일 발송 없음 (정직 라벨).
     void fetch('/api/field/sos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -272,6 +272,12 @@ export default function FieldSafetyPage() {
       {/* STEP 3: 모니터링 (데드맨 스위치) */}
       {step === 'monitor' && analysis && deadManConfig && (
         <div className="space-y-4">
+          <div
+            role="status"
+            className="rounded-lg border border-amber-400/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100"
+          >
+            SOS는 앱 알림·서버 로그만 기록합니다. SMS·전화·이메일 자동 통보는 없습니다. 비상 시 관리자에게 직접 연락하세요.
+          </div>
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-[var(--color-text-primary)]">실시간 안전 모니터링</h2>
             <button

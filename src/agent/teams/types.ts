@@ -103,7 +103,13 @@ export interface CalculationEntry {
   value: number;
   unit: string;
   formula?: string;
-  compliant: boolean;
+  /**
+   * true = 검증 통과, false = 검증 실패, null = 미검증(HOLD).
+   * 가정값·도면 표기 전사만 있는 경우 반드시 null — 거짓 적합 금지.
+   */
+  compliant: boolean | null;
+  /** HOLD/추정 사유 (UI·리포트 노출) */
+  note?: string;
   standardRef?: string;
 }
 

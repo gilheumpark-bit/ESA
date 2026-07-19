@@ -71,8 +71,8 @@ export interface CalculationResult {
   value: number;
   /** 단위 */
   unit: string;
-  /** 적합/부적합 */
-  compliant: boolean;
+  /** 적합/부적합 — null = HOLD(미검증) */
+  compliant: boolean | null;
   /** 수식 전개 (LaTeX) */
   formula: string;
 }
@@ -255,14 +255,23 @@ const reportStep: PipelineStep = {
 
     const auditGrade = ctx.auditReport?.overallGrade ?? 'C';
     const compositeScore = ctx.multiTeamReport?.compositeScore ?? 0;
-    const verdict = calc.compliant && auditGrade !== 'F' ? 'PASS' : 'FAIL';
-    const summary = calc.compliant
-      ? `${calc.calculatorId} 검토 결과 KEC 기준 적합 (${calc.value}${calc.unit}, 등급 ${auditGrade})`
-      : `${calc.calculatorId} 검토 결과 KEC 기준 부적합 (${calc.value}${calc.unit}, 등급 ${auditGrade})`;
+    // null compliant = HOLD (미검증) — PASS/FAIL 확정 금지
+    const verdict =
+      calc.compliant === null
+        ? 'HOLD'
+        : calc.compliant === true && auditGrade !== 'F'
+          ? 'PASS'
+          : 'FAIL';
+    const summary =
+      calc.compliant === null
+        ? `${calc.calculatorId} 검토 보류(HOLD) — 입력·교차검증 부족 (${calc.value}${calc.unit}, 등급 ${auditGrade})`
+        : calc.compliant === true
+          ? `${calc.calculatorId} 검토 결과 KEC 기준 적합 (${calc.value}${calc.unit}, 등급 ${auditGrade})`
+          : `${calc.calculatorId} 검토 결과 KEC 기준 부적합 (${calc.value}${calc.unit}, 등급 ${auditGrade})`;
 
-    // 부적합 시 자동 규격 상향 루프 실행
+    // 부적합 시 자동 규격 상향 루프 실행 (HOLD는 루프 금지)
     let autoFix: VerifyFixResult | undefined;
-    if (!calc.compliant) {
+    if (calc.compliant === false) {
       try {
         autoFix = await runVerifyFixLoop(
           { cableSize: ctx.params!.minCableSize_sq ?? 0 },
@@ -298,7 +307,11 @@ const reportStep: PipelineStep = {
       autoFix,
       recommendation: autoFix?.finalCompliant
         ? `케이블 규격을 ${autoFix.recommendedSpec['cableSize']}sq로 상향하면 기준 적합합니다.`
-        : calc.compliant ? undefined : '케이블 규격 상향 또는 선로 경로 재검토를 권장합니다.',
+        : calc.compliant === true
+          ? undefined
+          : calc.compliant === null
+            ? '필수 파라미터를 보완한 뒤 재검증하세요 (현재 HOLD).'
+            : '케이블 규격 상향 또는 선로 경로 재검토를 권장합니다.',
     };
 
     return { ...ctx, stage: 'REPORT', report };

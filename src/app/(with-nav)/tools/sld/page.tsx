@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { decryptKey } from '@/lib/ai-providers';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 const BYOK_PREFIX = 'esa-byok-';
 const VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;
@@ -355,8 +356,12 @@ export default function SLDAnalysisPage() {
     }
   }, [imageFile]);
 
-  // DXF 벡터 파싱
+  // DXF 벡터 파싱 (DRAWING_PARSER 플래그 필수)
   const handleDxfUpload = useCallback(async (file: File) => {
+    if (!isFeatureEnabled('DRAWING_PARSER')) {
+      setError('DXF 파싱이 비활성입니다 (DRAWING_PARSER=false). 이미지 AI 분석을 사용하거나 플래그를 켜세요.');
+      return;
+    }
     setLoading(true);
     setError(null);
     setAnalysis(null);
@@ -366,7 +371,7 @@ export default function SLDAnalysisPage() {
       formData.append('file', file);
       const res = await fetch('/api/dxf', { method: 'POST', body: formData });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? 'DXF 파싱 실패');
+      if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'DXF 파싱 실패');
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
     } catch (err) {
@@ -376,8 +381,12 @@ export default function SLDAnalysisPage() {
     }
   }, []);
 
-  // PDF 벡터 파싱
+  // PDF 벡터 파싱 (DRAWING_PARSER 플래그 필수)
   const handlePdfUpload = useCallback(async (file: File) => {
+    if (!isFeatureEnabled('DRAWING_PARSER')) {
+      setError('PDF 파싱이 비활성입니다 (DRAWING_PARSER=false). 이미지 AI 분석을 사용하거나 플래그를 켜세요.');
+      return;
+    }
     setLoading(true);
     setError(null);
     setAnalysis(null);
@@ -387,7 +396,7 @@ export default function SLDAnalysisPage() {
       formData.append('file', file);
       const res = await fetch('/api/pdf-drawing', { method: 'POST', body: formData });
       const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? 'PDF 파싱 실패');
+      if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'PDF 파싱 실패');
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
     } catch (err) {
@@ -408,29 +417,46 @@ export default function SLDAnalysisPage() {
           도면을 업로드하면 AI가 기기 구성을 분석하고 필요한 계산 순서를 자동으로 생성합니다.
         </p>
 
-        {/* 분석 모드 탭 */}
+        {/* 분석 모드 탭 — DXF/PDF는 DRAWING_PARSER 플래그 없으면 비활성 */}
         <div className="mt-4 flex gap-1 rounded-lg bg-[var(--bg-secondary)] p-1">
-          {[
-            { id: 'image' as const, label: '이미지 AI 분석' },
-            { id: 'dxf' as const, label: 'DXF 벡터 파싱' },
-            { id: 'pdf' as const, label: 'PDF 벡터 파싱' },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => { setActiveTab(tab.id); setError(null); }}
+          {([
+            { id: 'image' as const, label: '이미지 AI 분석', enabled: true },
+            { id: 'dxf' as const, label: 'DXF 벡터 파싱', enabled: isFeatureEnabled('DRAWING_PARSER') },
+            { id: 'pdf' as const, label: 'PDF 벡터 파싱', enabled: isFeatureEnabled('DRAWING_PARSER') },
+          ]).map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              disabled={!tab.enabled}
+              onClick={() => {
+                if (!tab.enabled) {
+                  setError(`${tab.label}은 DRAWING_PARSER 플래그가 꺼져 있습니다 (기본 OFF).`);
+                  return;
+                }
+                setActiveTab(tab.id);
+                setError(null);
+              }}
               aria-label={`${tab.label} 탭 선택`}
               aria-pressed={activeTab === tab.id}
+              aria-disabled={!tab.enabled}
               className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-[var(--bg-primary)] text-[var(--color-primary)] shadow-sm'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}>
-              {tab.label}
+                !tab.enabled
+                  ? 'cursor-not-allowed text-[var(--text-tertiary)] opacity-50'
+                  : activeTab === tab.id
+                    ? 'bg-[var(--bg-primary)] text-[var(--color-primary)] shadow-sm'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              {tab.label}{!tab.enabled ? ' (OFF)' : ''}
             </button>
           ))}
         </div>
         <p className="mt-2 text-xs text-[var(--text-tertiary)]">
           {activeTab === 'image'
-            ? 'Vision AI로 도면 이미지를 분석합니다 (BYOK API 키 필요)'
-            : 'AI 없이 벡터 좌표에서 직접 추출하여 정확도가 높습니다 (API 키 불필요)'}
+            ? 'Vision AI로 도면 이미지를 분석합니다 (BYOK API 키 필요). 인식 값은 미검증(HOLD)일 수 있습니다.'
+            : isFeatureEnabled('DRAWING_PARSER')
+              ? 'AI 없이 벡터 좌표에서 직접 추출합니다 (API 키 불필요).'
+              : 'DXF/PDF 파서는 현재 비활성(DRAWING_PARSER=false)입니다. 이미지 AI 분석을 사용하세요.'}
         </p>
       </div>
 

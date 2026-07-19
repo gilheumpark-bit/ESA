@@ -258,14 +258,23 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
           const { queryBreakerRating } = await import('@/engine/standards/kec/kec-table-query');
           const brResult = queryBreakerRating(loadCurrent);
           if (brResult && brResult.recommended > 0) {
+            // 추천 정격 산출 ≠ 현장 적합 확정. 부하·허용전류·차단용량 교차검증 전 HOLD.
             calculations.push({
               id: 'calc-breaker',
               calculatorId: 'breaker-sizing',
-              label: '차단기 정격',
+              label: '차단기 정격 (표 조회 추천)',
               value: brResult.recommended,
               unit: 'A',
-              compliant: true,
+              compliant: null,
+              note: `부하 ${loadCurrent}A 기준 추천 ${brResult.recommended}A — 전선 허용전류·차단용량 교차검증 전 HOLD.`,
               standardRef: 'KEC 212.3',
+            });
+            standards.push({
+              standard: 'KEC',
+              clause: '212.3',
+              title: '차단기 정격',
+              judgment: 'HOLD',
+              note: `추천 ${brResult.recommended}A (부하 ${loadCurrent}A) — 교차검증 필요`,
             });
           }
         }

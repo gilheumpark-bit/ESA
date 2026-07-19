@@ -5,6 +5,13 @@ All notable changes to ESVA are documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **False compliance (SLD/Layout/Standards)** — Hardcoded `compliant: true` and assumed 100A load removed. Unverified ratings return `compliant: null` (HOLD) with explicit notes; consensus no longer scores HOLD as pass/fail.
+- **Receipt 404 path** — Added `GET /api/receipt/[id]` alias (loads calculation receipts); UI path no longer dead.
+- **Demo verification report** — Removed demo fallback and `/report/demo` nav link; missing reports show honest empty state. Excel export uses POST `/api/export`.
+- **Quality checklist empty PASS** — Required missing params yield `needs-data` (not pass); empty input overall score is 0.
+- **Chat unsourced numbers** — Wired `filterLLMOutput` after stream; search chat panel replaces text when filter fails.
+- **DXF/PDF when FLAG-OFF** — SLD tabs disabled with reason when `DRAWING_PARSER=false`.
+- **SOS honesty** — API/UI state that only in-app log exists (no SMS/email/push).
 - **Calculator input-contract drift (57/57 restored)** — `CALCULATOR_PARAMS` (the UI form field names) had drifted from the calculator functions' actual input names. With no rename layer between form → API → calculator, 52 of 57 calculators threw `"<field> ... got undefined"` in production; unit tests missed it because they call the functions directly. Realigned every field name to the calculator contract (verbatim from each interface), fixed silent unit bugs (surge-arrester kV→V 1000× error, power-loss Ω/km·km, ground-resistance rod diameter mm) and enum values. Now 57/57 produce a value + `SourceTag` through the real form path.
 - **Rate limiting not actually invoked** — `applyRateLimit` was imported but never called on API routes; wired across routes (note: `middleware.ts` also applies a 60/min gate first, so route-level `default` profiles are redundant — tracked).
 - **Safety features**: confined-space returned an empty checklist (risk "low") for hazardous non-confined locations (e.g. 전기실); dead-man switch used `requestAnimationFrame` and froze when the tab backgrounded; SOS state auto-reset within frames; checked safety items were not recorded in the completion receipt (compliance always 0%).

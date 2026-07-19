@@ -66,7 +66,10 @@ export const POST = withApiHandler(
       received: true,
       notificationId: notification.id,
       timestamp: isoTime,
-      message: '긴급 신호 수신 완료 — 즉시 현장 확인 바랍니다.',
+      // 외부 발송 채널 없음 — 인앱 알림 + 서버 로그만
+      channels: { inApp: true, sms: false, email: false, push: false },
+      message:
+        'SOS 기록 완료(인앱 알림+서버 로그). SMS·전화·이메일 자동 통보는 없습니다. 현장 관리자에게 직접 연락하세요.',
     });
   },
 );
