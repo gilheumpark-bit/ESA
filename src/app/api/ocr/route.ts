@@ -6,6 +6,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { recognizeNameplate, suggestCalculators } from '@/lib/ocr-nameplate';
 
@@ -17,7 +18,11 @@ export async function POST(req: NextRequest) {
     if (blocked) return blocked;
 
     const formData = await req.formData();
-    const imageFile = formData.get('image') as File | null;
+    const imagePart = getFormFile(formData, 'image');
+    if (!imagePart.ok) {
+      return NextResponse.json({ error: imagePart.message }, { status: 400 });
+    }
+    const imageFile = imagePart.file;
     const provider = (formData.get('provider') as string) || 'openai';
     const model = (formData.get('model') as string) || '';
     const apiKey = (formData.get('apiKey') as string) || '';

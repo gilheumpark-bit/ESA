@@ -7,6 +7,7 @@
 
 import { NextRequest } from 'next/server';
 import { withApiHandler } from '@/lib/api';
+import { getFormFile } from '@/lib/api/form-file';
 import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
@@ -37,14 +38,21 @@ export const POST = withApiHandler(
     // Multipart: 도면 파일 + 메타데이터
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
-      const file = formData.get('file') as File | null;
+      const filePart = getFormFile(formData, 'file');
+      if (!filePart.ok) {
+        return ctx.error('ESVA-4400', filePart.message, 400);
+      }
+      const file = filePart.file;
       query = ctx.sanitize((formData.get('query') as string) ?? '') || undefined;
       projectName = ctx.sanitize((formData.get('projectName') as string) ?? '미지정 프로젝트');
       projectType = ctx.sanitize((formData.get('projectType') as string) ?? '전기 설비');
 
-      const paramsStr = formData.get('params') as string;
-      if (paramsStr) {
-        try { params = JSON.parse(paramsStr); } catch { /* ignore */ }
+      const paramsStr = formData.get('params');
+      if (typeof paramsStr === 'string' && paramsStr.length > 0) {
+        // 무효 params를 조용히 버리면 사용자는 적용됐다고 오인한다 — rules와 동일 원칙
+        try { params = JSON.parse(paramsStr); } catch {
+          return ctx.error('ESVA-4400', 'params가 JSON이 아닙니다', 400);
+        }
       }
 
       if (file) {
@@ -55,14 +63,14 @@ export const POST = withApiHandler(
 
       // 사내 규정(선택) — 무효 룰셋을 조용히 버리고 검토를 진행하면 사용자는
       // "규정 대조가 됐다"고 오인한다. fail-closed: 오류 목록과 함께 400.
-      const rulesEntry = formData.get('rules');
-      if (rulesEntry !== null) {
-        // formData.get은 string | File — 문자열이면 .size가 undefined라
-        // 크기 캡 비교(undefined > N)가 항상 통과했다 (독립 심사 발각).
-        if (typeof rulesEntry === 'string') {
-          return ctx.error('ESVA-4400', '사내 규정은 파일(rules)로 첨부해야 합니다', 400);
-        }
-        const rulesFile = rulesEntry as File;
+      // 문자열 파트면 .size가 undefined라 크기 캡 비교(undefined > N)가 항상
+      // 통과했다 (독립 심사 발각) — getFormFile이 타입을 판별한다.
+      const rulesPart = getFormFile(formData, 'rules');
+      if (!rulesPart.ok) {
+        return ctx.error('ESVA-4400', rulesPart.message, 400);
+      }
+      const rulesFile = rulesPart.file;
+      if (rulesFile) {
         if (rulesFile.size > RULES_MAX_BYTES) {
           return ctx.error('ESVA-4413', `사내 규정 파일이 너무 큽니다 (최대 ${RULES_MAX_BYTES / 1024}KB)`, 400);
         }

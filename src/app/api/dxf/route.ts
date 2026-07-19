@@ -6,6 +6,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
@@ -40,7 +41,12 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const dxfFile = formData.get('file') as File | null;
+    // as File 무검증 캐스팅이면 문자열 파트에서 .name/.size 접근이 500으로 터진다
+    const dxfPart = getFormFile(formData, 'file');
+    if (!dxfPart.ok) {
+      return NextResponse.json({ error: dxfPart.message }, { status: 400 });
+    }
+    const dxfFile = dxfPart.file;
 
     if (!dxfFile) {
       return NextResponse.json({ error: 'No DXF file provided.' }, { status: 400 });

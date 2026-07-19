@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const raw = await req.text();
-    if (raw.length > MAX_REQUEST_SIZE) {
+    if (Buffer.byteLength(raw, 'utf8') > MAX_REQUEST_SIZE) {
       return NextResponse.json({ error: 'body_too_large' }, { status: 413 });
     }
 

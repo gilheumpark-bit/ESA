@@ -7,6 +7,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
@@ -37,7 +38,11 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    const pdfFile = formData.get('file') as File | null;
+    const pdfPart = getFormFile(formData, 'file');
+    if (!pdfPart.ok) {
+      return NextResponse.json({ error: pdfPart.message }, { status: 400 });
+    }
+    const pdfFile = pdfPart.file;
 
     if (!pdfFile) {
       return NextResponse.json({ error: 'No PDF file provided.' }, { status: 400 });
