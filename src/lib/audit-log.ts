@@ -80,7 +80,7 @@ function getSupabaseClientSafe() {
     if (!url || !key) return null;
 
     // Dynamic import to avoid hard dependency
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { createClient } = require('@supabase/supabase-js');
     return createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false },

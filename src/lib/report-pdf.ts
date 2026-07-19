@@ -1,6 +1,6 @@
 /** ESVA 리포트 PDF (HTML 인쇄용) 생성 */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type ReportData = Record<string, any>;
 
 export function generatePDFResponse(report: ReportData): string {

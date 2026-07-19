@@ -12,7 +12,7 @@ interface ExportOptions {
   liveFormulas?: boolean;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 type ReceiptData = Record<string, any>;
 
 // ---------------------------------------------------------------------------

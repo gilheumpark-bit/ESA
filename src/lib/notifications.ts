@@ -75,7 +75,7 @@ function getSupabaseClientSafe() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!url || !key) return null;
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const { createClient } = require('@supabase/supabase-js');
     return createClient(url, key, {
       auth: { autoRefreshToken: false, persistSession: false },

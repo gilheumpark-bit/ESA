@@ -97,7 +97,7 @@ export interface CalculatorRegistryEntry {
    * Registry는 다양한 계산기를 단일 Map에 저장하므로 input 타입을 통합할 수 없음.
    * 각 계산기는 내부에서 assertPositive/assertRange로 런타임 검증.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   calculator: (input: any) => DetailedCalcResult;
 }
 

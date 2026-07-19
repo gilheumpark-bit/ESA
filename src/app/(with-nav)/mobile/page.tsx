@@ -445,12 +445,12 @@ function VoiceButton() {
     setError(null);
 
     // Feature detection
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const SpeechRecognitionCtor =
       (typeof window !== 'undefined' &&
         ((window as unknown as Record<string, unknown>).SpeechRecognition ??
          (window as unknown as Record<string, unknown>).webkitSpeechRecognition)) as
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         (new () => any) | false;
 
     if (!SpeechRecognitionCtor) {
@@ -465,7 +465,7 @@ function VoiceButton() {
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     recognition.onresult = (event: any) => {
       const transcript = event.results?.[0]?.[0]?.transcript as string | undefined;
       if (transcript) {
@@ -474,7 +474,7 @@ function VoiceButton() {
       setListening(false);
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     recognition.onerror = (event: any) => {
       setListening(false);
       if (event.error === 'not-allowed') {

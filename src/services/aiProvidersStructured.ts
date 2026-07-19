@@ -17,10 +17,10 @@ export async function generateJsonOpenAICompat(
   apiKey: string,
   model: string,
   prompt: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   fallback: any,
   baseUrl?: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
 ): Promise<any> {
   const isLocal = provider === 'ollama' || provider === 'lmstudio';
   const url = baseUrl
@@ -76,9 +76,9 @@ export async function generateJsonClaude(
   model: string,
   prompt: string,
   schema: object | undefined,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   fallback: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
 ): Promise<any> {
   const tool = {
     name: 'structured_output',
