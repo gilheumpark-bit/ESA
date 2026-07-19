@@ -55,6 +55,19 @@ export async function POST(req: NextRequest) {
     const pdfBytes = await pdfFile.arrayBuffer();
 
     const analysis = await parsePdfToSLD(pdfBytes, { pageNumber });
+
+    // DXF 라우트와 동일 계약 — 파싱 실패는 success:true가 아니라 400이다.
+    if (analysis.confidence === 0 && analysis.components.length === 0) {
+      apiLog({
+        level: 'warn', event: 'pdf-drawing-parse', route: '/api/pdf-drawing',
+        error: analysis.rawDescription, durationMs: timer.elapsed(),
+      });
+      return NextResponse.json(
+        { error: 'PDF를 읽을 수 없습니다. 파일이 손상됐거나 해당 페이지가 없습니다.', detail: analysis.rawDescription },
+        { status: 400 },
+      );
+    }
+
     const topology = buildTopologyFromSLD(analysis);
     const validation = topology.validate();
     const calcChain = generateCalcChainFromSLD(analysis);

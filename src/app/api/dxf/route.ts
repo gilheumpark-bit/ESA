@@ -59,6 +59,21 @@ export async function POST(req: NextRequest) {
 
     // 벡터 파싱 (VLM 없이)
     const analysis = parseDxfToSLD(dxfContent, { unitScale });
+
+    // 파싱 실패를 success:true로 넘기면 사용자는 "빈 도면"과 "잘못된 파일"을
+    // 구분할 수 없다. 파서는 confidence 0으로 신호하고, 라우트가 이를 400으로
+    // 번역한다 (서버 장애가 아니라 입력 문제이므로 500이 아니다).
+    if (analysis.confidence === 0 && analysis.components.length === 0) {
+      apiLog({
+        level: 'warn', event: 'dxf-parse', route: '/api/dxf',
+        error: analysis.rawDescription, durationMs: timer.elapsed(),
+      });
+      return NextResponse.json(
+        { error: 'DXF 파일을 읽을 수 없습니다. 파일이 손상됐거나 DXF 형식이 아닙니다.', detail: analysis.rawDescription },
+        { status: 400 },
+      );
+    }
+
     const topology = buildTopologyFromSLD(analysis);
     const validation = topology.validate();
     const calcChain = generateCalcChainFromSLD(analysis);

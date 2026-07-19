@@ -13,6 +13,7 @@
 import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 import { snapConnectionEndpoints, formatEndpointId as endpointId } from './endpoint-snap';
+import { parseSpecText, type ParsedSpec } from './spec-text';
 
 // CJS/ESM interop: Node require는 생성자 함수를 직접 주지만 Turbopack 서버
 // 런타임은 { default: 생성자 } namespace를 준다 — 라이브에서 "DxfParser is
@@ -130,48 +131,7 @@ const DEFAULT_IGNORED_LAYERS =
 // PART 3 — 텍스트 스펙 파서
 // =========================================================================
 
-interface ParsedSpec {
-  cableType?: string;
-  conductorSize?: number;
-  voltage?: number;
-  current?: number;
-  power?: number;
-  powerUnit?: string;
-}
-
-/** 도면 텍스트에서 전기 스펙 추출 */
-function parseSpecText(text: string): ParsedSpec {
-  const spec: ParsedSpec = {};
-
-  // 케이블 종류: CV, XLPE, HIV, FR-CV 등
-  const cableMatch = text.match(/\b(FR-CV|CV|XLPE|HIV|TFR-CV|HFIX|IV|VV)\b/i);
-  if (cableMatch) spec.cableType = cableMatch[1].toUpperCase();
-
-  // 도체 단면적: 16sq, 25mm2, 4C 16sq 등
-  const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:sq|mm2|㎟)/i);
-  if (sizeMatch) spec.conductorSize = parseFloat(sizeMatch[1]);
-
-  // 전압: 22.9kV, 380V, 220V 등
-  const voltMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kV|V)/i);
-  if (voltMatch) {
-    const v = parseFloat(voltMatch[1]);
-    const unit = voltMatch[0].toLowerCase();
-    spec.voltage = unit.includes('kv') ? v * 1000 : v;
-  }
-
-  // 전류: 100A, 50AT 등
-  const ampMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:A|AT)\b/);
-  if (ampMatch) spec.current = parseFloat(ampMatch[1]);
-
-  // 전력: 15kW, 100kVA, 10HP 등
-  const pwrMatch = text.match(/(\d+(?:\.\d+)?)\s*(kW|kVA|HP|MW|MVA)/i);
-  if (pwrMatch) {
-    spec.power = parseFloat(pwrMatch[1]);
-    spec.powerUnit = pwrMatch[2];
-  }
-
-  return spec;
-}
+// 스펙 파싱은 PDF 파서와 공유한다 (spec-text.ts) — 복사본이 갈라지지 않도록.
 
 // =========================================================================
 // PART 4 — 유클리디안 거리 계산

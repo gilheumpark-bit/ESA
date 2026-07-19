@@ -12,6 +12,7 @@
 
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './endpoint-snap';
+import { parseSpecText } from './spec-text';
 
 // =========================================================================
 // PART 1 — Types
@@ -70,38 +71,7 @@ function detectComponentType(text: string): SLDComponentType {
 }
 
 // =========================================================================
-// PART 3 — 스펙 텍스트 파서 (DXF 파서와 공유 가능한 로직)
-// =========================================================================
-
-interface ParsedSpec {
-  cableType?: string;
-  conductorSize?: number;
-  voltage?: number;
-  current?: number;
-  power?: number;
-  powerUnit?: string;
-}
-
-function parseSpecText(text: string): ParsedSpec {
-  const spec: ParsedSpec = {};
-  const cableMatch = text.match(/\b(FR-CV|CV|XLPE|HIV|TFR-CV|HFIX|IV|VV)\b/i);
-  if (cableMatch) spec.cableType = cableMatch[1].toUpperCase();
-  const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:sq|mm2|㎟)/i);
-  if (sizeMatch) spec.conductorSize = parseFloat(sizeMatch[1]);
-  const voltMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:kV|V)/i);
-  if (voltMatch) {
-    const v = parseFloat(voltMatch[1]);
-    spec.voltage = voltMatch[0].toLowerCase().includes('kv') ? v * 1000 : v;
-  }
-  const ampMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:A|AT)\b/);
-  if (ampMatch) spec.current = parseFloat(ampMatch[1]);
-  const pwrMatch = text.match(/(\d+(?:\.\d+)?)\s*(kW|kVA|HP|MW|MVA)/i);
-  if (pwrMatch) { spec.power = parseFloat(pwrMatch[1]); spec.powerUnit = pwrMatch[2]; }
-  return spec;
-}
-
-// =========================================================================
-// PART 4 — 유클리디안 거리
+// PART 3 — 유클리디안 거리
 // =========================================================================
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
