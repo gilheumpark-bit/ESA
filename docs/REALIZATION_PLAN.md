@@ -104,6 +104,7 @@
 | 도면 캘리브레이션(합성 15장) | ✅ 완료 — 결함 8종 적출·수리, 회귀 하네스+CI. 상세 `DRAWING_VALIDATION_RESULT.md` | 6829418·29365de |
 | 사내 규정 룰 로딩 통로 | ✅ 완료 — 룰셋 린트+평가+파이프라인+린트 API+UI. 독립 심사(IND-1)가 CRITICAL 2 실행재현→전량 수리. 상세 `CUSTOM_RULES_DESIGN.md` | 91ea1cb·25b6bdb |
 | 동종 잠복 소탕(심사 반경 4) | ✅ 완료 — as File 5곳→getFormFile·UTF-16 캡→byteLength·params 침묵 버림→400. 내장 조항 result:'FAIL' 0건 확인 | cfd8ce8 |
+| 실도면 실측(공개 5종·사용자 승인 수집) | ✅ 완료 — PDF 경로 전체 사문(R1 DOMMatrix·R2 worker) 포함 결함 8계열 적출·수리. KIMM 실도면 17p 무크래시 판독·래스터 정직 400·환각 61→0. `gate:pdf` 라이브 게이트 7/7 잠금. 판독 정확도 V는 골든 라벨 없어 미확보(선언). 상세 `DRAWING_VALIDATION_RESULT.md` 2차 절 |
 | E/F 결제·인프라 | ⏸ **유일 잔여** — 외부 리소스 대기(Stripe 키/Weaviate/SMTP). writer 봉인 스냅샷·G1 추가승격(원문 확인 필요분)도 이때 |
 
 라이브 실증 하이라이트: 도면 파이프라인 최초 개통 — 실 DXF 업로드→토폴로지 valid(고립 0)→

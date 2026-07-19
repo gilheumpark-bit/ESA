@@ -32,9 +32,11 @@ export async function POST(req: NextRequest) {
     try {
       formData = await req.formData();
     } catch {
-      // multipart가 아닌 요청(빈 본문 등)은 서버 오류가 아니라 클라이언트 오류
+      // 비multipart 요청뿐 아니라 프록시 본문 캡 초과로 절단된 multipart도
+      // 여기로 온다 — "multipart가 아니다"로 단정하면 오진이다(24.8MB 실도면
+      // 실측 발각). 원인 중립으로 안내한다.
       return NextResponse.json(
-        { error: 'multipart/form-data 요청이 필요합니다 (file 필드에 .pdf).' },
+        { error: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 .pdf)인지, 파일이 100MB 이하인지 확인하세요.' },
         { status: 400 },
       );
     }
@@ -68,7 +70,7 @@ export async function POST(req: NextRequest) {
         error: analysis.rawDescription, durationMs: timer.elapsed(),
       });
       return NextResponse.json(
-        { error: 'PDF를 읽을 수 없습니다. 파일이 손상됐거나 해당 페이지가 없습니다.', detail: analysis.rawDescription },
+        { error: 'PDF를 읽을 수 없습니다. 파일이 손상됐거나, 해당 페이지가 없거나, 스캔/이미지 도면(벡터 정보 없음)입니다.', detail: analysis.rawDescription },
         { status: 400 },
       );
     }

@@ -35,9 +35,11 @@ export async function POST(req: NextRequest) {
     try {
       formData = await req.formData();
     } catch {
-      // multipart가 아닌 요청(빈 본문 등)은 서버 오류가 아니라 클라이언트 오류
+      // 비multipart 요청뿐 아니라 프록시 본문 캡 초과로 절단된 multipart도
+      // 여기로 온다 — "multipart가 아니다"로 단정하면 오진이다(PDF 라우트
+      // 24.8MB 실도면 실측에서 발각된 동종 패턴).
       return NextResponse.json(
-        { error: 'multipart/form-data 요청이 필요합니다 (file 필드에 .dxf).' },
+        { error: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 .dxf)인지, 파일이 50MB 이하인지 확인하세요.' },
         { status: 400 },
       );
     }

@@ -5,7 +5,17 @@ const nextConfig: NextConfig = {
   /** Required for Docker multi-stage build (see Dockerfile → .next/standalone). */
   output: 'standalone',
 
+  // pdfjs-dist는 번들 제외 필수 — Turbopack이 말아 넣으면 내부 fake-worker의
+  // 동적 임포트(pdf.worker.mjs)가 청크 경로에서 끊겨 모든 PDF 파싱이 실패한다
+  // (실도면 라이브 실측으로 발각). node_modules에서 직접 로드해야 워커가 산다.
+  serverExternalPackages: ['pdfjs-dist'],
+
   experimental: {
+    // proxy.ts 사용 시 요청 본문이 기본 10MB에서 절단된다(공식 문서 확인).
+    // 실측: 24.8MB 실도면 업로드가 절단돼 formData 파싱이 깨지고 "multipart가
+    // 아니다"로 오진됐다. PDF 라우트의 계약 상한(100MB)에 맞춘다 — 파일별
+    // 상한(DXF 50MB·PDF 100MB·rules 1MB)은 각 라우트가 계속 집행한다.
+    proxyClientMaxBodySize: '100mb',
     optimizePackageImports: [
       'lucide-react',
       'recharts',

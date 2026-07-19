@@ -14,7 +14,8 @@
     "test:calc": "jest --testPathPatterns=calculators",
     "fixtures:drawings": "node scripts/fixtures/generate-drawings.mjs",
     "test:drawings": "jest --testPathPatterns=topology",
-    "report:drawings": "jest --testPathPatterns=drawing-baseline --silent=false"
+    "report:drawings": "jest --testPathPatterns=drawing-baseline --silent=false",
+    "gate:pdf": "node scripts/pdf-fixture-gate.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
