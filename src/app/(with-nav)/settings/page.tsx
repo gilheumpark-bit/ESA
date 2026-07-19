@@ -10,7 +10,7 @@
  * PART 3: Main page component
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, type UserTier } from '@/contexts/AuthContext';
@@ -153,6 +153,52 @@ function BYOKSection() {
 
 function PlanSection({ tier }: { tier: UserTier }) {
   const badge = TIER_BADGES[tier];
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  // /api/checkout은 POST 전용(GET 405) + Bearer 인증 + { priceId, returnUrl } 본문.
+  // 구현 전 이 버튼은 <a href="/api/checkout">라 405로 죽어 있었다.
+  const priceId = process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY ?? '';
+
+  const handleUpgrade = async () => {
+    setUpgradeError(null);
+    if (!priceId) {
+      setUpgradeError('결제 상품이 아직 설정되지 않았습니다 (Stripe 미구성).');
+      return;
+    }
+    setUpgrading(true);
+    try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      if (!token) {
+        window.location.assign('/login');
+        return;
+      }
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ priceId, returnUrl: window.location.href }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.status === 503) {
+        setUpgradeError('결제 시스템이 아직 활성화되지 않았습니다.');
+        return;
+      }
+      if (!res.ok || !json?.success || !json?.data?.url) {
+        setUpgradeError(json?.error?.message ?? `결제 세션 생성 실패 (${res.status})`);
+        return;
+      }
+      window.location.assign(json.data.url);
+    } catch {
+      setUpgradeError('네트워크 오류 — 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setUpgrading(false);
+    }
+  };
+
   return (
     <SectionCard title="Plan & Billing">
       <div className="flex items-center justify-between">
@@ -167,14 +213,21 @@ function PlanSection({ tier }: { tier: UserTier }) {
           </span>
         </div>
         {tier !== 'enterprise' && (
-          <a
-            href="/api/checkout"
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          <button
+            type="button"
+            onClick={handleUpgrade}
+            disabled={upgrading}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Upgrade
-          </a>
+            {upgrading ? 'Redirecting…' : 'Upgrade'}
+          </button>
         )}
       </div>
+      {upgradeError && (
+        <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
+          {upgradeError}
+        </p>
+      )}
     </SectionCard>
   );
 }
