@@ -99,8 +99,8 @@
 | C 도면(C1 UI배선·C2 node-id·C3 플래그 ON) | ✅ 완료 — 잠복 3버그(ctor interop·LINE vertices·끝점 결속)까지 | 4629e41·7a92dd4 |
 | C 잔여 C4(/api/review·batch UI) | ⏸ 보류 — 명확한 표면 없음(YAGNI), dormant 유지 선언 |
 | C2 무결성(G2 ESA/NER·G3 verifyReceipt) | ✅ 완료 | 0717c05 |
-| C2 잔여 G1(평가기 승격)·G4(SJC judge 결정)·dead 모듈 정리 | 🔜 다음 회차 |
-| E/F 결제·인프라 | ⏸ 외부 리소스 대기(Stripe/Weaviate/SMTP) — writer 봉인 스냅샷 보강도 이때 |
+| C2 잔여 G1·G4·dead 정리·D2 onpremise | ✅ 완료 — G1 6조항 승격(실평가기 13→19·430.32 의도 보류)·G4 judge/source-tracker 삭제 결정·dead 6모듈 제거+DORMANT_MANIFEST·D2 chat 배선(SSRF 사설만) |
+| E/F 결제·인프라 | ⏸ **유일 잔여** — 외부 리소스 대기(Stripe 키/Weaviate/SMTP). writer 봉인 스냅샷·G1 추가승격(원문 확인 필요분)도 이때 |
 
 라이브 실증 하이라이트: 도면 파이프라인 최초 개통 — 실 DXF 업로드→토폴로지 valid(고립 0)→
 4팀 리뷰→ESVA Verified 리포트(honest-HOLD 마킹) 생성, /report/[id] 인계 배선.
