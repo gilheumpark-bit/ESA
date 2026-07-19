@@ -131,6 +131,143 @@ function evaluateInformational(article: CodeArticle): JudgmentResult {
   ]);
 }
 
+/**
+ * OCPD ≤ 전선 허용전류 (NEC 240.4). 두 값 모두 입력(정격표·허용전류표 산출)이며
+ * 코드 규칙대로 비교만 한다. 발명된 임계값 없음.
+ */
+function evaluateOcpdVsAmpacity(
+  article: CodeArticle,
+  params: Record<string, number>,
+): JudgmentResult {
+  const ocpd = params.ocpdRating;
+  const ampacity = params.wireAmpacity;
+  const missing: string[] = [];
+  if (ocpd == null || !Number.isFinite(ocpd)) missing.push('ocpdRating (과전류보호장치 정격)');
+  if (ampacity == null || !Number.isFinite(ampacity)) missing.push('wireAmpacity (전선 허용전류 — 공인표 산출)');
+  if (missing.length > 0) return makeHold(article, missing);
+
+  const cond: Condition = {
+    param: 'ocpdRating', operator: '<=', value: ampacity, unit: 'A', result: 'PASS',
+    note: 'OCPD 정격 ≤ 전선 허용전류 (예외 240.4(B)는 별도 검토)',
+  };
+  const source = `출처: ${article.standard} ${article.article} (${article.version})`;
+  if (ocpd <= ampacity) {
+    return makePass(article, [cond], [source, `OCPD ${ocpd}A ≤ 허용전류 ${ampacity}A`]);
+  }
+  return makeFail(article, [], [cond], [source, `OCPD ${ocpd}A > 허용전류 ${ampacity}A — 전선 과부하 보호 실패`]);
+}
+
+/**
+ * 허용전류 ≥ 비연속부하 + 연속부하×1.25 (NEC 210.19/215.2).
+ * 1.25는 NEC 원문의 공표 계수(연속부하 125%)다 — 추정치가 아니다.
+ */
+function evaluateContinuousLoadAmpacity(
+  article: CodeArticle,
+  params: Record<string, number>,
+  ampacityParam: string,
+): JudgmentResult {
+  const ampacity = params[ampacityParam];
+  const noncontinuous = params.noncontinuousLoad_A;
+  const continuous = params.continuousLoad_A;
+  const missing: string[] = [];
+  if (ampacity == null || !Number.isFinite(ampacity)) missing.push(`${ampacityParam} (전선 허용전류)`);
+  if (noncontinuous == null || !Number.isFinite(noncontinuous)) missing.push('noncontinuousLoad_A (비연속부하 전류)');
+  if (continuous == null || !Number.isFinite(continuous)) missing.push('continuousLoad_A (연속부하 전류)');
+  if (missing.length > 0) return makeHold(article, missing);
+
+  const required = noncontinuous + continuous * 1.25;
+  const cond: Condition = {
+    param: ampacityParam, operator: '>=', value: Math.round(required * 100) / 100, unit: 'A', result: 'PASS',
+    note: '허용전류 ≥ 비연속 + 연속×1.25 (NEC 공표 계수)',
+  };
+  const source = `출처: ${article.standard} ${article.article} (${article.version})`;
+  if (ampacity >= required) {
+    return makePass(article, [cond], [source, `허용전류 ${ampacity}A ≥ ${noncontinuous}+${continuous}×1.25=${cond.value}A`]);
+  }
+  return makeFail(article, [], [cond], [source, `허용전류 ${ampacity}A < 요구 ${cond.value}A — 연속부하 여유 부족`]);
+}
+
+/**
+ * 전동기 분기 전선 ≥ FLC×1.25 (NEC 430.22) / 다중 전동기 ≥ 최대FLC×1.25 + ΣFLC
+ * (NEC 430.24). 1.25는 NEC 원문 공표 계수.
+ */
+function evaluateMotorBranchConductor(
+  article: CodeArticle,
+  params: Record<string, number>,
+): JudgmentResult {
+  const ampacity = params.branchConductorAmpacity;
+  const flc = params.motorFLC_A;
+  const missing: string[] = [];
+  if (ampacity == null || !Number.isFinite(ampacity)) missing.push('branchConductorAmpacity (분기 전선 허용전류)');
+  if (flc == null || !Number.isFinite(flc)) missing.push('motorFLC_A (전동기 FLC — NEC 표 값)');
+  if (missing.length > 0) return makeHold(article, missing);
+
+  const required = flc * 1.25;
+  const cond: Condition = {
+    param: 'branchConductorAmpacity', operator: '>=', value: Math.round(required * 100) / 100, unit: 'A', result: 'PASS',
+    note: '분기 전선 허용전류 ≥ FLC×1.25',
+  };
+  const source = `출처: ${article.standard} ${article.article} (${article.version})`;
+  if (ampacity >= required) {
+    return makePass(article, [cond], [source, `허용전류 ${ampacity}A ≥ FLC ${flc}×1.25=${cond.value}A`]);
+  }
+  return makeFail(article, [], [cond], [source, `허용전류 ${ampacity}A < 요구 ${cond.value}A`]);
+}
+
+function evaluateMultiMotorConductor(
+  article: CodeArticle,
+  params: Record<string, number>,
+): JudgmentResult {
+  const ampacity = params.multiMotorConductorAmpacity;
+  const largest = params.largestMotorFLC_A;
+  const others = params.otherMotorsFLCSum_A;
+  const missing: string[] = [];
+  if (ampacity == null || !Number.isFinite(ampacity)) missing.push('multiMotorConductorAmpacity (회로 전선 허용전류)');
+  if (largest == null || !Number.isFinite(largest)) missing.push('largestMotorFLC_A (최대 전동기 FLC)');
+  if (others == null || !Number.isFinite(others)) missing.push('otherMotorsFLCSum_A (나머지 전동기 FLC 합)');
+  if (missing.length > 0) return makeHold(article, missing);
+
+  const required = largest * 1.25 + others;
+  const cond: Condition = {
+    param: 'multiMotorConductorAmpacity', operator: '>=', value: Math.round(required * 100) / 100, unit: 'A', result: 'PASS',
+    note: '≥ 최대 FLC×1.25 + 나머지 FLC 합',
+  };
+  const source = `출처: ${article.standard} ${article.article} (${article.version})`;
+  if (ampacity >= required) {
+    return makePass(article, [cond], [source, `허용전류 ${ampacity}A ≥ ${largest}×1.25+${others}=${cond.value}A`]);
+  }
+  return makeFail(article, [], [cond], [source, `허용전류 ${ampacity}A < 요구 ${cond.value}A`]);
+}
+
+/**
+ * 보호도체(PE) 단면적 (IEC 60364-5-54 Table 54.3 공표 규칙):
+ * 상도체 S ≤16mm² → PE ≥ S · 16<S≤35 → PE ≥ 16 · S>35 → PE ≥ S/2.
+ * 브래킷과 계수 전부 표준 원문의 공표 값 — 추정 없음. (등전위본딩 계산기와 동일 근거)
+ */
+function evaluateProtectiveConductorSize(
+  article: CodeArticle,
+  params: Record<string, number>,
+): JudgmentResult {
+  const phase = params.phaseConductorSize_mm2;
+  const pe = params.protectiveConductorSize_mm2;
+  const missing: string[] = [];
+  if (phase == null || !Number.isFinite(phase)) missing.push('phaseConductorSize_mm2 (상도체 단면적)');
+  if (pe == null || !Number.isFinite(pe)) missing.push('protectiveConductorSize_mm2 (보호도체 단면적)');
+  if (missing.length > 0) return makeHold(article, missing);
+
+  const required = phase <= 16 ? phase : phase <= 35 ? 16 : phase / 2;
+  const bracket = phase <= 16 ? 'S≤16 → PE≥S' : phase <= 35 ? '16<S≤35 → PE≥16' : 'S>35 → PE≥S/2';
+  const cond: Condition = {
+    param: 'protectiveConductorSize_mm2', operator: '>=', value: Math.round(required * 100) / 100, unit: 'mm²', result: 'PASS',
+    note: `Table 54.3: ${bracket}`,
+  };
+  const source = `출처: ${article.standard} ${article.article} (${article.version}) Table 54.3`;
+  if (pe >= required) {
+    return makePass(article, [cond], [source, `PE ${pe}mm² ≥ 요구 ${cond.value}mm² (${bracket})`]);
+  }
+  return makeFail(article, [], [cond], [source, `PE ${pe}mm² < 요구 ${cond.value}mm² (${bracket})`]);
+}
+
 /** 조항 조회 + 평가를 묶는다. 조항이 없으면 null (디스패처가 폴백). */
 function withArticle(
   article: CodeArticle | null,
@@ -151,6 +288,13 @@ export const DEDICATED_EVALUATORS: Map<
   ['IEC-533.1', (p) => withArticle(getIECArticle('IEC-533.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['JIS-434.1', (p) => withArticle(getJISArticle('JIS-434.1'), (a) => evaluateBreakingCapacity(a, p))],
   ['NEC-310.16', (p) => withArticle(getNECArticleFull('NEC-310.16'), (a) => evaluateAmpacity(a, p))],
+  // G1 승격 (2026-07-20): 입력↔입력 비교 + 표준 원문 공표 계수(1.25·Table 54.3)만.
+  ['NEC-240.4', (p) => withArticle(getNECArticleFull('NEC-240.4'), (a) => evaluateOcpdVsAmpacity(a, p))],
+  ['NEC-210.19', (p) => withArticle(getNECArticleFull('NEC-210.19'), (a) => evaluateContinuousLoadAmpacity(a, p, 'conductorAmpacity'))],
+  ['NEC-215.2', (p) => withArticle(getNECArticleFull('NEC-215.2'), (a) => evaluateContinuousLoadAmpacity(a, p, 'feederAmpacity'))],
+  ['NEC-430.22', (p) => withArticle(getNECArticleFull('NEC-430.22'), (a) => evaluateMotorBranchConductor(a, p))],
+  ['NEC-430.24', (p) => withArticle(getNECArticleFull('NEC-430.24'), (a) => evaluateMultiMotorConductor(a, p))],
+  ['IEC-543.1', (p) => withArticle(getIECArticle('IEC-543.1'), (a) => evaluateProtectiveConductorSize(a, p))],
   ['IEC-523.1', (p) => withArticle(getIECArticle('IEC-523.1'), (a) => evaluateAmpacity(a, p))],
   // 분류·적용범위 조항 — pass/fail 대상 아님, 정확한 사유로 HOLD
   ['KEC-111.1', () => withArticle(getKECArticle('KEC-111.1'), evaluateInformational)],

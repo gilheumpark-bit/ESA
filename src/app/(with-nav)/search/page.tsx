@@ -345,13 +345,34 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
     setStreaming(true);
 
     try {
+      // On-Premise 모드(설정에서 활성 시): 저장 설정을 소비해 사설 LLM으로 라우팅.
+      // 배선 전엔 settings/onpremise 저장값이 write-only(읽는 코드 0)였다 — D2.
+      let providerBody: Record<string, unknown> = {
+        provider: 'openai',
+        model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-4.1-mini',
+      };
+      try {
+        const raw = sessionStorage.getItem('esva-onpremise');
+        if (raw) {
+          const onprem = JSON.parse(raw) as {
+            enabled?: boolean; serverUrl?: string; apiType?: string; modelName?: string; apiKey?: string;
+          };
+          if (onprem.enabled && onprem.serverUrl && onprem.modelName) {
+            providerBody = {
+              provider: 'onpremise',
+              model: onprem.modelName,
+              onpremise: { serverUrl: onprem.serverUrl, apiType: onprem.apiType ?? 'ollama', apiKey: onprem.apiKey || undefined },
+            };
+          }
+        }
+      } catch { /* 설정 파싱 실패 시 기본(클라우드) 유지 */ }
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: allMessages,
-          provider: 'openai',
-          model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-4.1-mini',
+          ...providerBody,
           systemPrompt: `You are an electrical engineering assistant for ESVA (전기 검색 AI). Answer in Korean. Be concise. Reference KEC/NEC/IEC standards when relevant. Current query context: "${query}"`,
           temperature: 0.7,
           maxTokens: 1024,

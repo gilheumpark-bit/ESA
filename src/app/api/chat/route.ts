@@ -28,6 +28,38 @@ interface ChatRequestBody {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  /** provider==='onpremise'일 때: settings/onpremise 저장 설정(사설 IP만 허용) */
+  onpremise?: {
+    serverUrl: string;
+    apiType: 'ollama' | 'vllm' | 'localai' | 'openai-compat';
+    apiKey?: string;
+  };
+}
+
+/**
+ * On-premise SSRF 정책 — onpremise-test 라우트와 동일(사설 IP·localhost만).
+ * 공개 IP로의 서버사이드 요청을 차단한다.
+ */
+function isPrivateOnpremiseUrl(serverUrl: string): { ok: boolean; reason?: string } {
+  try {
+    const parsed = new URL(serverUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { ok: false, reason: 'http/https만 허용' };
+    }
+    const hostname = parsed.hostname;
+    const isPrivate =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      /^10\./.test(hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+      /^192\.168\./.test(hostname) ||
+      hostname === '::1';
+    return isPrivate
+      ? { ok: true }
+      : { ok: false, reason: `사설 IP만 허용 (got: ${hostname})` };
+  } catch {
+    return { ok: false, reason: '잘못된 URL' };
+  }
 }
 
 /** Daily token budget per IP: 500K tokens */
@@ -109,6 +141,7 @@ async function buildStreamingResponse(
   apiKey: string,
   temperature: number,
   maxTokens: number,
+  onpremBaseUrl?: string,
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
 
@@ -124,6 +157,15 @@ async function buildStreamingResponse(
 
   let sdkProvider;
   switch (provider) {
+    case 'onpremise': {
+      // 사설 LLM 서버(ollama/vllm/localai/openai-compat) — 전부 OpenAI 호환
+      // /v1 엔드포인트를 노출한다(onpremise-test의 chat 경로와 동일 규약).
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const base = (onpremBaseUrl ?? '').replace(/\/+$/, '');
+      const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
+      sdkProvider = createOpenAI({ apiKey, baseURL });
+      break;
+    }
     case 'openai': {
       const { createOpenAI } = await import('@ai-sdk/openai');
       sdkProvider = createOpenAI({ apiKey });
@@ -272,13 +314,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate provider
-    const providerConfig = PROVIDERS[body.provider];
-    if (!providerConfig) {
-      return jsonWithEsa(
-        { success: false, error: { code: 'ESVA-3013', message: `Unknown provider: ${body.provider}` } },
-        { status: 400 },
-      );
+    // Validate provider — 'onpremise'는 클라우드 레지스트리(PROVIDERS) 밖의
+    // 사용자 사설 서버 경로다(settings/onpremise 저장 설정 소비 — D2 배선).
+    const isOnpremise = body.provider === 'onpremise';
+    if (isOnpremise) {
+      const serverUrl = body.onpremise?.serverUrl;
+      if (!serverUrl) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-3016', message: 'onpremise.serverUrl 누락 — 설정 페이지에서 저장 후 사용' } },
+          { status: 400 },
+        );
+      }
+      const ssrf = isPrivateOnpremiseUrl(serverUrl);
+      if (!ssrf.ok) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-3015', message: `SSRF blocked: ${ssrf.reason}` } },
+          { status: 403 },
+        );
+      }
+    } else {
+      const providerConfig = PROVIDERS[body.provider];
+      if (!providerConfig) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-3013', message: `Unknown provider: ${body.provider}` } },
+          { status: 400 },
+        );
+      }
     }
 
     const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
@@ -310,10 +371,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve API key: BYOK -> env -> error
+    // Resolve API key: BYOK -> env -> error (onpremise는 클라우드 키 불요 —
+    // 로컬 서버 인증키가 있으면 그것, 없으면 SDK 요구용 placeholder)
     let resolvedKey: string;
     try {
-      const resolved = resolveProviderKey(body.provider, body.apiKey);
+      const resolved = isOnpremise
+        ? { key: body.onpremise?.apiKey || 'onpremise-local' }
+        : resolveProviderKey(body.provider, body.apiKey);
       resolvedKey = resolved.key;
     } catch (keyErr) {
       return jsonWithEsa(
@@ -352,6 +416,7 @@ export async function POST(request: NextRequest) {
       resolvedKey,
       temperature,
       maxTokens,
+      isOnpremise ? body.onpremise?.serverUrl : undefined,
     );
 
     return new Response(stream, {
