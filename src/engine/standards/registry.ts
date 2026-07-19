@@ -11,6 +11,7 @@
 
 import {
   CodeArticle,
+  Condition,
   JudgmentResult,
   makeHold,
   makePass,
@@ -49,15 +50,65 @@ import type { CountryCode as _CC } from '@/engine/constants/safety-factors';
 export type CountryCode = _CC;
 
 /** 지원 기준서명 */
-export type StandardName = 'KEC' | 'NEC' | 'IEC' | 'JIS';
+export type StandardName = 'KEC' | 'NEC' | 'IEC' | 'JIS' | 'NER' | 'ESA';
 
-/** 국가-기준서 매핑 */
+/**
+ * 국가-기준서 매핑.
+ * NER(한국전기내선규정)·ESA(전기사업법)는 둘 다 country='KR'이다(NER_META/ESA_META 실측)
+ * — KEC를 보완하는 국내 규정/법령이므로 KR 아래에 등재하고, 기술기준 정본인 KEC를 첫 항에 둔다.
+ */
 const COUNTRY_STANDARDS: Partial<Record<CountryCode, StandardName[]>> = {
-  KR:  ['KEC'],
+  KR:  ['KEC', 'NER', 'ESA'],
   US:  ['NEC'],
   INT: ['IEC'],
   JP:  ['JIS'],
 };
+
+// ---------------------------------------------------------------------------
+// PART 1.5 — NER/ESA 산문 조문 어댑터
+// ---------------------------------------------------------------------------
+
+/** NER/ESA 조문의 공통 구조 (NerArticle·EsaArticle이 구조적으로 공유하는 필드). */
+interface ProseArticleLike {
+  id: string;
+  article: string;
+  title: string;
+  summary: string;
+  edition: string;
+}
+
+/**
+ * NER/ESA 조문 → CodeArticle 어댑터.
+ *
+ * 두 기준서의 조문은 산문 규정이라 기계 비교 가능한 임계값이 없다. 임계값을 여기서
+ * 추측해 채우는 것은 금지(공인값만 허용 — evaluator-guard.ts 헤더 참조)이므로, 저장소의
+ * 자리표시자 관행(value:0 + note에 규칙 원문)으로 변환한다. 그러면 holdIfPlaceholder가
+ * HOLD로 보류하고 적용 규칙(summary)을 사용자에게 그대로 넘긴다.
+ * 실판정 승격 경로는 기존과 동일하게 DEDICATED_EVALUATORS다.
+ */
+function proseToCodeArticle(
+  a: ProseArticleLike,
+  meta: { readonly country: string; readonly shortName: string },
+): CodeArticle {
+  const placeholder: Condition = {
+    param: a.article,
+    operator: '>=',
+    value: 0, // 자리표시자 sentinel — 실제 임계값 아님 (isPlaceholderThreshold가 HOLD 처리)
+    unit: '',
+    result: 'PASS',
+    note: a.summary,
+  };
+  return {
+    id: a.id,
+    country: meta.country,
+    standard: meta.shortName,
+    article: a.article,
+    title: a.title,
+    conditions: [placeholder],
+    effectiveDate: '', // 조문 데이터에 시행일 없음 — 지어내지 않는다
+    version: a.edition,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // PART 2 — 레지스트리 인터페이스
@@ -76,6 +127,17 @@ export function getCodeArticle(
   standard: string,
   article: string,
 ): CodeArticle | null {
+  // NER/ESA 처리 — 두 기준서 모두 country가 KEC와 같은 'KR'(각 META.country 실측)이므로
+  // 국가 코드로는 분기할 수 없고 기준서명으로만 분기한다. KEC 분기(country==='KR' 선점)보다 앞.
+  if (standard === 'NER') {
+    const ner = getNERArticle(article) ?? getNERArticle(`NER-${article}`);
+    return ner ? proseToCodeArticle(ner, NER_META) : null;
+  }
+  if (standard === 'ESA') {
+    const esa = getESAArticle(article) ?? getESAArticle(`ESA-${article}`);
+    return esa ? proseToCodeArticle(esa, ESA_META) : null;
+  }
+
   // KEC 처리
   if (standard === 'KEC' || country === 'KR') {
     // KEC_ARTICLES에서 article 번호가 일치하는 것을 찾는다
@@ -148,6 +210,40 @@ export function evaluateStandard(
   if (dedicated) {
     const result = dedicated(params);
     if (result) return result;
+  }
+
+  // NER/ESA 라우팅 — 두 기준서 모두 country='KR'(NER_META/ESA_META 실측)이라 KEC와 국가를
+  // 공유하므로 articleId 접두사로만 분기하며, KEC 라우팅보다 앞이어야 한다
+  // (country==='KR'이 먼저 잡히면 evaluateKEC가 미등록 id에 throw한다 — kec/index.ts:113).
+  // 산문 조문은 어댑터가 자리표시자 조건으로 변환하므로 holdIfPlaceholder가 HOLD로 보류하고
+  // 적용 규칙 원문을 note로 넘긴다(임계값 지어내기 금지). 실판정 승격은 DEDICATED_EVALUATORS.
+  if (articleId.startsWith('NER') || articleId.startsWith('ESA')) {
+    const isNer = articleId.startsWith('NER');
+    const prose = isNer
+      ? getNERArticle(articleId) ?? getNERArticle(`NER-${articleId}`)
+      : getESAArticle(articleId) ?? getESAArticle(`ESA-${articleId}`);
+    if (prose) {
+      const adapted = proseToCodeArticle(prose, isNer ? NER_META : ESA_META);
+      return (
+        holdIfPlaceholder(adapted) ??
+        // 어댑터는 항상 자리표시자 조건을 생성하므로 실행상 도달하지 않는다 — 방어적 보류.
+        makeHold(adapted, [`${adapted.id} — 산문 조문: 기계 판정 임계값 없음, 원문 참조`])
+      );
+    }
+    // 미등록 NER/ESA id — 아래 KEC 분기(country==='KR')로 흘러가면 throw하므로 여기서 보류 반환.
+    return makeHold(
+      {
+        id: articleId,
+        country,
+        standard: isNer ? NER_META.shortName : ESA_META.shortName,
+        article: articleId,
+        title: `미등록 조문: ${articleId}`,
+        conditions: [],
+        effectiveDate: '',
+        version: '',
+      },
+      [`조문 미등록: ${country}/${articleId}`],
+    );
   }
 
   // KEC 라우팅
@@ -235,7 +331,14 @@ export function getSupportedStandards(country: CountryCode): StandardName[] {
  * 현재 레지스트리에 등록된 모든 조항 수를 반환한다.
  */
 export function getRegisteredArticleCount(): number {
-  return KEC_ARTICLES.size + NEC_ARTICLES_FULL.size + IEC_ARTICLES.size + JIS_ARTICLES.size;
+  return (
+    KEC_ARTICLES.size +
+    NEC_ARTICLES_FULL.size +
+    IEC_ARTICLES.size +
+    JIS_ARTICLES.size +
+    NER_ARTICLES.length + // NER/ESA는 Map이 아니라 배열 정본
+    ESA_ARTICLES.length
+  );
 }
 
 // NEC 조항은 src/engine/standards/nec/nec-articles.ts에서 통합 관리 (19조)
