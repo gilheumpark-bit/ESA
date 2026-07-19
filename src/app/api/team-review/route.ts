@@ -55,8 +55,14 @@ export const POST = withApiHandler(
 
       // 사내 규정(선택) — 무효 룰셋을 조용히 버리고 검토를 진행하면 사용자는
       // "규정 대조가 됐다"고 오인한다. fail-closed: 오류 목록과 함께 400.
-      const rulesFile = formData.get('rules') as File | null;
-      if (rulesFile) {
+      const rulesEntry = formData.get('rules');
+      if (rulesEntry !== null) {
+        // formData.get은 string | File — 문자열이면 .size가 undefined라
+        // 크기 캡 비교(undefined > N)가 항상 통과했다 (독립 심사 발각).
+        if (typeof rulesEntry === 'string') {
+          return ctx.error('ESVA-4400', '사내 규정은 파일(rules)로 첨부해야 합니다', 400);
+        }
+        const rulesFile = rulesEntry as File;
         if (rulesFile.size > RULES_MAX_BYTES) {
           return ctx.error('ESVA-4413', `사내 규정 파일이 너무 큽니다 (최대 ${RULES_MAX_BYTES / 1024}KB)`, 400);
         }
@@ -84,6 +90,11 @@ export const POST = withApiHandler(
       projectType = body.projectType ?? projectType;
       params = body.params ?? {};
       sessionId = body.sessionId ?? sessionId;
+      // JSON 경로에서 rules를 조용히 무시하면 클라이언트는 대조가 됐다고
+      // 오인한다 — 지원 경로(multipart)를 명시하고 거절 (독립 심사 발각).
+      if (body.rules !== undefined) {
+        return ctx.error('ESVA-4400', '사내 규정은 multipart form-data의 rules 파일 파트로만 첨부할 수 있습니다', 400);
+      }
     }
 
     perf.checkpoint('parse');
@@ -139,14 +150,27 @@ export const POST = withApiHandler(
       // 렌더하는 전체 ESVAVerifiedReport. 요약(report)만으론 페이지가 뜰 수
       // 없어 이 기능이 UI에서 영구 미도달이었다(Batch C1 배선).
       reportFull: result.report ?? null,
-      // 사내 규정 적용 정보 — 어떤 룰셋이 대조됐는지·린트 경고를 숨기지 않는다
+      // 사내 규정 적용 정보 — 어떤 룰셋이 대조됐는지·린트 경고를 숨기지 않는다.
+      // evaluatedBy: 실제로 사내규정 판정 행을 낸 팀. 빈 배열이면 룰셋이
+      // 린트는 통과했으나 **아무 팀도 평가하지 않았다**는 뜻(예: layout 분류)
+      // — "적용됨"으로 오인하지 않도록 명시한다 (독립 심사 발각).
       customRules: customRuleSet
-        ? {
-            name: customRuleSet.name,
-            version: customRuleSet.version,
-            articleCount: customRuleSet.articles.length,
-            warnings: ruleWarnings,
-          }
+        ? (() => {
+            const label = customRuleSet.standardLabel ?? '사내규정';
+            const evaluatedBy = result.teamResults
+              .filter(tr => (tr.standards ?? []).some(s => s.standard === label))
+              .map(tr => tr.teamId);
+            return {
+              name: customRuleSet.name,
+              version: customRuleSet.version,
+              articleCount: customRuleSet.articles.length,
+              evaluated: evaluatedBy.length > 0,
+              evaluatedBy,
+              warnings: evaluatedBy.length > 0
+                ? ruleWarnings
+                : [...ruleWarnings, '이 입력 분류에서는 사내 규정이 평가되지 않았습니다 (SLD 도면 경로에서만 지원)'],
+            };
+          })()
         : null,
       durationMs,
     }, perfHeaders(durationMs));

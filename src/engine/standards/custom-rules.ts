@@ -197,8 +197,12 @@ export function parseCustomRuleSet(raw: unknown): RuleLintResult {
 
     let appliesTo: string[] | undefined;
     if (a.appliesTo !== undefined) {
-      if (!Array.isArray(a.appliesTo) || a.appliesTo.some((t) => typeof t !== 'string')) {
-        errors.push(`${at}: appliesTo는 문자열 배열이어야 합니다`);
+      if (
+        !Array.isArray(a.appliesTo) ||
+        a.appliesTo.length > CAPS.conditionsPerArticle ||
+        a.appliesTo.some((t) => typeof t !== 'string' || t.length > CAPS.stringLength)
+      ) {
+        errors.push(`${at}: appliesTo는 문자열(각 ≤${CAPS.stringLength}자) 배열(≤${CAPS.conditionsPerArticle}개)이어야 합니다`);
       } else {
         appliesTo = (a.appliesTo as string[]).map((t) => t.trim().toLowerCase());
         for (const t of appliesTo) {
@@ -244,10 +248,14 @@ export function parseCustomRuleSet(raw: unknown): RuleLintResult {
       if (value === null) errors.push(`${ct}: value는 유한한 숫자여야 합니다`);
       const result = typeof c.result === 'string' && VALID_RESULTS.has(c.result) ? (c.result as 'PASS' | 'FAIL') : null;
       if (!result) errors.push(`${ct}: result는 PASS|FAIL 중 하나여야 합니다`);
-      const unit = typeof c.unit === 'string' && c.unit.length <= CAPS.stringLength ? c.unit : '';
-      const note =
-        typeof c.note === 'string' && c.note.length <= CAPS.stringLength ? c.note : '';
-      if (typeof c.note === 'string' && c.note.length > CAPS.stringLength) {
+      // unit·note 초과는 둘 다 오류 — 조용히 잘라내면 "무효를 조용히 버리지
+      // 않는다" 원칙과 모순 (unit만 침묵 치환이던 비일관 — 독립 심사 발각)
+      const unit = typeof c.unit === 'string' ? c.unit : '';
+      if (unit.length > CAPS.stringLength) {
+        errors.push(`${ct}: unit이 ${CAPS.stringLength}자를 초과합니다`);
+      }
+      const note = typeof c.note === 'string' ? c.note : '';
+      if (note.length > CAPS.stringLength) {
         errors.push(`${ct}: note가 ${CAPS.stringLength}자를 초과합니다`);
       }
 
@@ -341,9 +349,9 @@ function judgeArticle(
     };
   }
 
-  const failed: Condition[] = [];
+  const violated: Condition[] = [];
   const missing: string[] = [];
-  let matchedCount = 0;
+  let okCount = 0;
 
   for (const cond of a.conditions) {
     const actual = readParam(params, cond.param);
@@ -351,23 +359,34 @@ function judgeArticle(
       missing.push(cond.param);
       continue;
     }
-    if (evaluateCondition(cond, actual)) matchedCount += 1;
-    else failed.push(cond);
+    // result 필드가 조건의 방향을 정한다:
+    //   result:'PASS' → "이 조건이 성립해야 적합"  (충족 = 적합, 미충족 = 위반)
+    //   result:'FAIL' → "이 조건이 성립하면 위반"  (충족 = 위반, 미충족 = 적합)
+    //
+    // 종전 구현은 result를 읽지 않고 충족=적합으로만 처리해서, 저자가 위반
+    // 조건형(`vd > 3 → FAIL`)으로 쓰면 판정이 완전히 반전됐다(실위반 5% →
+    // PASS, 실적합 2% → FAIL). 독립 심사가 실행 재현으로 발각.
+    const satisfied = evaluateCondition(cond, actual);
+    const isViolation = cond.result === 'FAIL' ? satisfied : !satisfied;
+    if (isViolation) violated.push(cond);
+    else okCount += 1;
   }
 
-  if (failed.length > 0) {
-    const f = failed[0];
-    const actual = readParam(params, f.param);
-    return {
-      ...base,
-      judgment: 'FAIL',
-      note:
-        `${f.param}=${actual}${f.unit} — 기준 ${f.operator} ${f.value}${f.unit} 위반` +
-        (f.note ? ` (${f.note})` : ''),
-    };
+  if (violated.length > 0) {
+    // 다중 위반 시 첫 건만 보이던 것도 함께 수리 — 최대 3건 나열
+    const parts = violated.slice(0, 3).map((f) => {
+      const actual = readParam(params, f.param);
+      const desc =
+        f.result === 'FAIL'
+          ? `${f.param}=${actual}${f.unit} — 위반 조건 성립 (${f.operator} ${f.value}${f.unit})`
+          : `${f.param}=${actual}${f.unit} — 기준 ${f.operator} ${f.value}${f.unit} 미충족`;
+      return desc + (f.note ? ` (${f.note})` : '');
+    });
+    const more = violated.length > 3 ? ` 외 ${violated.length - 3}건` : '';
+    return { ...base, judgment: 'FAIL', note: parts.join(' · ') + more };
   }
 
-  if (missing.length === 0 && matchedCount === a.conditions.length) {
+  if (missing.length === 0 && okCount === a.conditions.length) {
     return { ...base, judgment: 'PASS', note: `전 조건 충족 (${a.conditions.length}건)` };
   }
 

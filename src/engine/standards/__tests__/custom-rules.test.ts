@@ -266,6 +266,79 @@ describe('평가 — global scope', () => {
   });
 });
 
+describe('평가 — result 필드 방향 (독립 심사 CRITICAL 재현 잠금)', () => {
+  // 심사 리프로: 위반 조건형(vd > 3 → FAIL)으로 작성 시 판정이 반전됐었다.
+  // 실위반 5% → PASS, 실적합 2% → FAIL. 네 사분면 전부 잠근다.
+  function vdRule(operator: '<=' | '>', value: number, result: 'PASS' | 'FAIL'): CustomRuleSet {
+    return {
+      name: 't', version: '1', standardLabel: '사내규정',
+      articles: [{
+        article: 'VD-X', title: '전압강하', scope: 'connection', severity: 'major',
+        conditions: [{ param: 'voltageDropPercent', operator, value, unit: '%', result, note: '' }],
+      }],
+    };
+  }
+  const withVd = (vd: number): RuleEvalExtraction => ({
+    components: [], connections: [{ from: 'a', to: 'b', voltageDropPercent: vd }],
+  });
+  const judge = (rs: CustomRuleSet, vd: number) =>
+    evaluateCustomRules(rs, withVd(vd))[0].judgment;
+
+  it('PASS형(vd <= 3 이어야 적합): 2%→PASS · 5%→FAIL', () => {
+    expect(judge(vdRule('<=', 3, 'PASS'), 2)).toBe('PASS');
+    expect(judge(vdRule('<=', 3, 'PASS'), 5)).toBe('FAIL');
+  });
+
+  it('FAIL형(vd > 3 이면 위반): 2%→PASS · 5%→FAIL — 반전 회귀 가드', () => {
+    expect(judge(vdRule('>', 3, 'FAIL'), 2)).toBe('PASS');
+    expect(judge(vdRule('>', 3, 'FAIL'), 5)).toBe('FAIL');
+  });
+
+  it('FAIL형 위반 note는 위반 조건 성립으로 서술한다', () => {
+    const f = evaluateCustomRules(vdRule('>', 3, 'FAIL'), withVd(5))[0];
+    expect(f.note).toMatch(/위반 조건 성립/);
+  });
+
+  it('다중 위반 시 최대 3건이 note에 나열된다 (첫 건만 노출 회귀 가드)', () => {
+    const rs: CustomRuleSet = {
+      name: 't', version: '1', standardLabel: '사내규정',
+      articles: [{
+        article: 'M-1', title: '다중', scope: 'connection', severity: 'major',
+        conditions: [
+          { param: 'voltageDropPercent', operator: '<=', value: 1, unit: '%', result: 'PASS', note: '' },
+          { param: 'lengthM', operator: '<=', value: 5, unit: 'm', result: 'PASS', note: '' },
+        ],
+      }],
+    };
+    const f = evaluateCustomRules(rs, {
+      components: [], connections: [{ from: 'a', to: 'b', voltageDropPercent: 9, lengthM: 50 }],
+    })[0];
+    expect(f.judgment).toBe('FAIL');
+    expect(f.note).toMatch(/voltageDropPercent/);
+    expect(f.note).toMatch(/lengthM/);
+  });
+});
+
+describe('린트 — 심사 후속 캡', () => {
+  it('appliesTo 원소 길이·배열 캡 초과 → 오류', () => {
+    const raw = validRaw();
+    (raw.articles as Array<Record<string, unknown>>)[1].appliesTo = ['x'.repeat(301)];
+    expect(parseCustomRuleSet(raw).ok).toBe(false);
+
+    const raw2 = validRaw();
+    (raw2.articles as Array<Record<string, unknown>>)[1].appliesTo = Array.from({ length: 21 }, () => 'transformer');
+    expect(parseCustomRuleSet(raw2).ok).toBe(false);
+  });
+
+  it('unit 초과는 조용히 잘리지 않고 오류다 (note와 동일 취급)', () => {
+    const raw = validRaw();
+    ((raw.articles as Array<Record<string, unknown>>)[0].conditions as Array<Record<string, unknown>>)[0].unit = 'u'.repeat(301);
+    const r = parseCustomRuleSet(raw);
+    expect(r.ok).toBe(false);
+    expect(r.errors.join(' ')).toMatch(/unit/);
+  });
+});
+
 describe('평가 — 안전·경계', () => {
   it('자리표시자 조항은 평가 시 HOLD', () => {
     const rs = parsed();

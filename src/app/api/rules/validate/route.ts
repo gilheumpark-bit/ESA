@@ -19,7 +19,9 @@ export const POST = withApiHandler(
   { rateLimit: 'calculate', checkOrigin: true },
   async (req: NextRequest, ctx) => {
     const text = await req.text();
-    if (text.length > RULES_MAX_BYTES) {
+    // text.length는 UTF-16 단위라 한글 위주 룰셋에서 실바이트의 1/3까지 과소측정
+    // — 캡은 전송 바이트 기준이어야 한다 (독립 심사 발각).
+    if (Buffer.byteLength(text, 'utf8') > RULES_MAX_BYTES) {
       return ctx.error('ESVA-4413', `룰셋이 너무 큽니다 (최대 ${RULES_MAX_BYTES / 1024}KB)`, 400);
     }
 

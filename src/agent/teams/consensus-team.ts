@@ -38,6 +38,14 @@ interface MergedResults {
   connectionCount: number;
 }
 
+/** 판정 심각도 순위 — 같은 조항 키 병합 시 최악값 보존용 */
+const JUDGMENT_RANK: Record<'PASS' | 'HOLD' | 'FAIL' | 'BLOCK', number> = {
+  PASS: 0,
+  HOLD: 1,
+  FAIL: 2,
+  BLOCK: 3,
+};
+
 function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
   const allCalculations: NonNullable<TeamResult['calculations']> = [];
   const allStandards: NonNullable<TeamResult['standards']> = [];
@@ -46,9 +54,9 @@ function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
   let componentCount = 0;
   let connectionCount = 0;
 
-  // 중복 제거 Set
+  // 중복 제거 — standards는 키→인덱스 맵(최악 판정 교체를 위해)
   const seenCalcIds = new Set<string>();
-  const seenStdKeys = new Set<string>();
+  const seenStdKeys = new Map<string, number>();
 
   for (const tr of teamResults) {
     componentCount += tr.components?.length ?? 0;
@@ -65,10 +73,21 @@ function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
 
     if (tr.standards) {
       for (const std of tr.standards) {
+        // 같은 조항 키의 중복은 제거하되 **최악 판정을 보존**한다.
+        //
+        // 종전에는 먼저 온 행이 무조건 이겨서, 같은 조항이 인스턴스마다 다른
+        // 판정을 낼 때(변압기 2대 중 1대만 위반 등) 뒤에 온 FAIL이 병합표에서
+        // 사라지고 hasFail 판정까지 놓쳤다 — 독립 심사가 실행 재현으로 발각.
+        // KEC 232.52(결선마다 같은 clause) 등 기존 행도 같은 결함이었다.
+        // 병합표는 "조항별 최악 상태" 요약이고, 인스턴스 전량은 각 팀 결과에
+        // 원본대로 남는다.
         const key = `${std.standard}-${std.clause}`;
-        if (!seenStdKeys.has(key)) {
-          seenStdKeys.add(key);
+        const existingIdx = seenStdKeys.get(key);
+        if (existingIdx === undefined) {
+          seenStdKeys.set(key, allStandards.length);
           allStandards.push(std);
+        } else if (JUDGMENT_RANK[std.judgment] > JUDGMENT_RANK[allStandards[existingIdx].judgment]) {
+          allStandards[existingIdx] = std;
         }
       }
     }
