@@ -2,9 +2,12 @@
  * Demand & Diversity Factor Calculator
  *
  * Formulae:
- *   수용률 (Demand Factor)      = 최대수요전력 / 설비용량
- *   부등률 (Diversity Factor)   = Σ개별최대 / 합성최대
- *   부하율 (Utilization Factor) = 평균전력 / 최대수요전력  (= 합성최대 / 설비용량)
+ *   수용률 (Demand Factor)    = 최대수요전력 / 설비용량
+ *   부등률 (Diversity Factor) = Σ개별최대 / 합성최대
+ *   부하율 (Load Factor)      = 평균수요전력 / 최대수요전력
+ *
+ * 부하율은 평균전력(averageDemand)이 주어질 때만 산출한다 — 설비용량만으로는
+ * 계산할 수 없다(수용률과 다른 값). 입력이 없으면 부하율은 출력하지 않는다.
  *
  * Standards: KEC 130, KEC 232.2 (수용률/부등률 정의)
  */
@@ -26,6 +29,11 @@ export interface DemandDiversityInput {
   combinedMaxDemand: number;
   /** Total installed (nameplate) capacity in kW */
   totalInstalled: number;
+  /**
+   * Average demand power in kW (optional). Required for the load factor
+   * 부하율 = 평균수요 / 최대수요. Omitted → load factor is not reported.
+   */
+  averageDemand?: number;
 }
 
 // ── Calculator ──────────────────────────────────────────────────────────────
@@ -40,6 +48,10 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
   }
   assertPositive(input.combinedMaxDemand, 'combinedMaxDemand');
   assertPositive(input.totalInstalled, 'totalInstalled');
+  const hasAverage = input.averageDemand != null && Number.isFinite(input.averageDemand);
+  if (hasAverage) {
+    assertPositive(input.averageDemand as number, 'averageDemand');
+  }
 
   const steps: CalcStep[] = [];
 
@@ -77,15 +89,19 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
     standardRef: 'KEC 232.2',
   });
 
-  // Step 4: Utilization factor (부하율 / 이용률)
-  const utilizationFactor = input.combinedMaxDemand / input.totalInstalled;
-  steps.push({
-    step: 4,
-    title: 'Utilization factor (이용률)',
-    formula: 'U_f = \\frac{P_{combined}}{P_{installed}}',
-    value: round(utilizationFactor, 4),
-    unit: '',
-  });
+  // Step 4: Load factor (부하율) — 평균수요 / 최대수요. 평균수요가 있을 때만.
+  let loadFactor: number | null = null;
+  if (hasAverage) {
+    loadFactor = (input.averageDemand as number) / input.combinedMaxDemand;
+    steps.push({
+      step: 4,
+      title: 'Load factor (부하율)',
+      formula: 'L_f = \\frac{P_{avg}}{P_{combined}}',
+      value: round(loadFactor, 4),
+      unit: '',
+      standardRef: 'KEC 232.2',
+    });
+  }
 
   // PART 3 — Result assembly
   const dfWarning = diversityFactor < 1.0;
@@ -114,11 +130,15 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
         unit: '',
         formula: 'F_{div} = \\frac{\\sum P_{max,i}}{P_{combined}}',
       },
-      utilizationFactor: {
-        value: round(utilizationFactor, 4),
-        unit: '',
-        formula: 'U_f = \\frac{P_{combined}}{P_{installed}}',
-      },
+      ...(loadFactor != null
+        ? {
+            loadFactor: {
+              value: round(loadFactor, 4),
+              unit: '',
+              formula: 'L_f = \\frac{P_{avg}}{P_{combined}}',
+            },
+          }
+        : {}),
     },
   };
 }

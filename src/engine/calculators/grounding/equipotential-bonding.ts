@@ -21,9 +21,11 @@ import {
 // ── Input / Output ──────────────────────────────────────────────────────────
 
 export interface EquipotentialBondingInput {
-  /** Largest phase conductor cross-section in mm² */
-  largestPhase: number;
-  /** Largest protective earth (PE) conductor cross-section in mm² */
+  /**
+   * Largest protective earth (PE) conductor cross-section in mm².
+   * Per IEC 60364-5-54 §544.1.1 the main protective bonding conductor is sized
+   * from the PE conductor only — the phase conductor is not part of this rule.
+   */
   largestPE: number;
 }
 
@@ -34,10 +36,9 @@ const STANDARD_SIZES = [4, 6, 10, 16, 25, 35, 50, 70, 95] as const;
 
 export function calculateEquipotentialBonding(input: EquipotentialBondingInput): DetailedCalcResult {
   // PART 1 — Validation
-  assertPositive(input.largestPhase, 'largestPhase');
   assertPositive(input.largestPE, 'largestPE');
 
-  const { largestPhase: _largestPhase, largestPE } = input;
+  const { largestPE } = input;
 
   // PART 2 — Derivation
   const steps: CalcStep[] = [];

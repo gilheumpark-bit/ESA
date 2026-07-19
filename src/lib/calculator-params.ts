@@ -147,6 +147,7 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     ] },
     { name: 'combinedMaxDemand', type: 'number', unit: 'kW', description: '합성 최대수요', min: 0.01, defaultValue: 120 },
     { name: 'totalInstalled', type: 'number', unit: 'kW', description: '총 설비용량', min: 0.01, defaultValue: 200 },
+    { name: 'averageDemand', type: 'number', unit: 'kW', description: '평균 수요전력 (선택 — 부하율 산출용)', min: 0.01, required: false },
   ],
   'max-demand': [
     { name: 'loads', type: 'array', unit: '', description: '부하 목록', minItems: 1, itemSchema: [
@@ -305,7 +306,6 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     ], defaultValue: 'Cu' },
   ],
   'equipotential-bonding': [
-    { name: 'largestPhase', type: 'number', unit: 'mm²', description: '최대 상도체 단면적', min: 0.5, defaultValue: 35 },
     { name: 'largestPE', type: 'number', unit: 'mm²', description: '최대 보호도체(PE) 단면적', min: 0.5, defaultValue: 16 },
   ],
   'lightning-protection': [
@@ -407,7 +407,8 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
       { value: 'N', label: 'N (단일)' },
       { value: 'N+1', label: 'N+1 (예비 1)' },
     ], defaultValue: 'N' },
-    { name: 'systemVoltage', type: 'number', unit: 'V', description: '계통 전압 (선택)', min: 1, defaultValue: 22900 },
+    { name: 'systemVoltage', type: 'number', unit: 'V', description: '수전(고압) 전압', min: 1, defaultValue: 22900 },
+    { name: 'secondaryVoltage', type: 'number', unit: 'V', description: '2차(저압) 모선 전압', min: 1, defaultValue: 380 },
   ],
   'ct-sizing': [
     { name: 'maxLoadCurrent', type: 'number', unit: 'A', description: '최대 부하 전류', min: 0.1, defaultValue: 200 },

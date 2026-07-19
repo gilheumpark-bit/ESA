@@ -50,6 +50,13 @@ describe('power (non-suite)', () => {
     const { value, extra } = run('demand-diversity', { individualMaxDemands: [50, 50, 50], combinedMaxDemand: 120, totalInstalled: 200 });
     close(value, 1.25);
     close(extra.demandFactor, 0.6);
+    // load factor omitted when averageDemand absent (no longer duplicates demandFactor)
+    expect(extra.loadFactor).toBeUndefined();
+    expect((extra as Record<string, unknown>).utilizationFactor).toBeUndefined();
+  });
+  test('demand-diversity load factor: avg 90 / peak 120 = 0.75 (부하율, 공식 기준)', () => {
+    const { extra } = run('demand-diversity', { individualMaxDemands: [50, 50, 50], combinedMaxDemand: 120, totalInstalled: 200, averageDemand: 90 });
+    close(extra.loadFactor, 0.75);
   });
   test('max-demand: Σ(P·D)/div=(80+50)/1.25=104 kW', () => {
     const { value } = run('max-demand', { loads: [{ name: 'a', ratedPower: 100, demandFactor: 0.8 }, { name: 'b', ratedPower: 100, demandFactor: 0.5 }], diversityFactor: 1.25 });
@@ -80,10 +87,12 @@ describe('lighting / energy', () => {
 });
 
 describe('substation / load', () => {
-  test('substation-capacity: (100/0.8)·1.0·(1+0)=125 kVA; select TR 150', () => {
-    const { value, extra } = run('substation-capacity', { loads: [{ name: 'a', kW: 100, pf: 0.8, demandFactor: 1.0 }], futureGrowth: 0, redundancy: 'N', systemVoltage: 22900 });
+  test('substation-capacity: S=125 kVA; TR 150; LV bus@380=189.9A; HV in@22.9k=3.15A', () => {
+    const { value, extra } = run('substation-capacity', { loads: [{ name: 'a', kW: 100, pf: 0.8, demandFactor: 1.0 }], futureGrowth: 0, redundancy: 'N', systemVoltage: 22900, secondaryVoltage: 380 });
     close(value, 125);
     expect(extra.transformerSize).toBe(150);
+    close(extra.busRating, 189.9, 0.02);        // LV bus at secondaryVoltage 380V
+    close(extra.incomingCurrent, 3.15, 0.03);   // HV incoming at systemVoltage 22.9kV (was ignored)
   });
   test('nec-load-calc dwelling: (3300+3000+1500) → 3000+4800·0.35=4680 VA', () => {
     const { value } = run('nec-load-calc', { occupancyType: 'dwelling', area: 100, smallApplianceCircuits: 2, laundryCircuits: 1, hvacLoad: 0, serviceVoltage: 240, phases: 1 });
@@ -239,8 +248,8 @@ describe('protection', () => {
     const { value } = run('lightning-protection', { buildingHeight: 20, lplClass: 'III', method: 'sphere' });
     expect(value).toBe(45);
   });
-  test('equipotential-bonding: max(0.5·16,6)=8 mm² → select 10 (IEC 60364-5-54)', () => {
-    const { value, extra } = run('equipotential-bonding', { largestPhase: 35, largestPE: 16 });
+  test('equipotential-bonding: max(0.5·16,6)=8 mm² → select 10 (IEC 60364-5-54, PE only)', () => {
+    const { value, extra } = run('equipotential-bonding', { largestPE: 16 });
     close(value, 8);
     expect(extra.selectedBonding).toBe(10);
   });
