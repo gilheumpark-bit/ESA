@@ -13,6 +13,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   Loader2,
@@ -294,12 +295,18 @@ export default function SLDAnalysisPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dxfInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 정밀 검증(4팀 리뷰)용 — 마지막 업로드 원본 파일과 진행 상태.
+  // 배선 전엔 /api/team-review·/report/[id]가 UI에서 영구 미도달이었다(Batch C1).
+  const [drawingFile, setDrawingFile] = useState<File | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   // DXF를 기본탭으로 — API 키 없이 즉시 분석 가능 (BYOK 장벽 제거)
   const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('dxf');
 
@@ -311,10 +318,43 @@ export default function SLDAnalysisPage() {
     setError(null);
   }, []);
 
+  // 정밀 검증: 파싱 결과를 넘어 4팀(orchestrator) 리뷰 → ESVA Verified 리포트.
+  const handleTeamReview = useCallback(async () => {
+    if (!drawingFile) {
+      setReviewError('원본 도면 파일이 없습니다 — 파일을 다시 업로드해 주세요.');
+      return;
+    }
+    setReviewLoading(true);
+    setReviewError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', drawingFile);
+      formData.append('projectName', 'SLD 정밀 검증');
+      formData.append('projectType', '전기 설비');
+      const res = await fetch('/api/team-review', { method: 'POST', body: formData });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error?.message ?? `팀 리뷰 실패 (${res.status})`);
+      }
+      const full = json.data?.reportFull;
+      if (!full?.reportId) {
+        throw new Error('리포트가 생성되지 않았습니다 (팀 실행 실패 — 도면 인식 결과를 확인하세요).');
+      }
+      sessionStorage.setItem(`esva-report-${full.reportId}`, JSON.stringify(full));
+      router.push(`/report/${full.reportId}`);
+    } catch (err) {
+      setReviewError(err instanceof Error ? err.message : '정밀 검증 오류');
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [drawingFile, router]);
+
   const handleReset = useCallback(() => {
     if (preview) URL.revokeObjectURL(preview);
     setImageFile(null);
     setPreview(null);
+    setDrawingFile(null);
+    setReviewError(null);
     setAnalysis(null);
     setCalcChain([]);
     setError(null);
@@ -323,6 +363,7 @@ export default function SLDAnalysisPage() {
   const handleAnalyze = useCallback(async () => {
     if (!imageFile) return;
 
+    if (imageFile) setDrawingFile(imageFile);
     setLoading(true);
     setError(null);
 
@@ -362,6 +403,7 @@ export default function SLDAnalysisPage() {
       setError('DXF 파싱이 비활성입니다 (DRAWING_PARSER=false). 이미지 AI 분석을 사용하거나 플래그를 켜세요.');
       return;
     }
+    setDrawingFile(file);
     setLoading(true);
     setError(null);
     setAnalysis(null);
@@ -387,6 +429,7 @@ export default function SLDAnalysisPage() {
       setError('PDF 파싱이 비활성입니다 (DRAWING_PARSER=false). 이미지 AI 분석을 사용하거나 플래그를 켜세요.');
       return;
     }
+    setDrawingFile(file);
     setLoading(true);
     setError(null);
     setAnalysis(null);
@@ -559,14 +602,40 @@ export default function SLDAnalysisPage() {
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
               분석 결과
             </h2>
-            <button
-              onClick={handleReset}
-              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
-            >
-              <RefreshCw size={12} />
-              다시 분석
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleTeamReview}
+                disabled={reviewLoading || !drawingFile}
+                className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {reviewLoading ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    4팀 검증 중… (수십 초)
+                  </>
+                ) : (
+                  <>
+                    <GitBranch size={12} />
+                    정밀 검증 (4팀 리뷰)
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleReset}
+                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
+              >
+                <RefreshCw size={12} />
+                다시 분석
+              </button>
+            </div>
           </div>
+
+          {reviewError && (
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
+              <p className="text-sm text-[var(--color-error)]">{reviewError}</p>
+            </div>
+          )}
 
           {/* System info */}
           {(analysis.systemVoltage || analysis.systemType) && (

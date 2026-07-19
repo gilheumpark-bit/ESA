@@ -103,6 +103,10 @@ export const POST = withApiHandler(
             debateCount: result.report.debateResults.length,
           }
         : null,
+      // /report/[id] 페이지가 sessionStorage(esva-report-{id})로 인계받아
+      // 렌더하는 전체 ESVAVerifiedReport. 요약(report)만으론 페이지가 뜰 수
+      // 없어 이 기능이 UI에서 영구 미도달이었다(Batch C1 배선).
+      reportFull: result.report ?? null,
       durationMs,
     }, perfHeaders(durationMs));
   },

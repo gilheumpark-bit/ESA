@@ -4,7 +4,7 @@
  * 3-step walkthrough for new users:
  *   1. ESVA 소개 (what ESVA does)
  *   2. BYOK AI 검색 (how to set up API key)
- *   3. 56개 전기 계산기 (try your first calculation)
+ *   3. 전기 계산기 (CALCULATOR_COUNT 정본) (try your first calculation)
  *
  * PART 1: Step definitions
  * PART 2: Onboarding component
@@ -13,6 +13,7 @@
 'use client';
 
 import { useOnboarding } from '@/hooks/useOnboarding';
+import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 
 // ─── PART 1: Step Definitions ──────────────────────────────────
 
@@ -41,10 +42,10 @@ const STEPS: OnboardingStep[] = [
     icon: 'M15 7h3a5 5 0 0 1 5 5 5 5 0 0 1-5 5h-3m-6 0H6a5 5 0 0 1-5-5 5 5 0 0 1 5-5h3M8 12h8', // link
   },
   {
-    title: '56개 전기 계산기',
+    title: `${CALCULATOR_COUNT}개 전기 계산기`,
     description:
       '전압강하, 케이블 사이징, 단락전류, 접지저항 등 ' +
-      '56개 이상의 검증된 전기공학 계산기를 무료로 사용하세요. ' +
+      `${CALCULATOR_COUNT}개의 검증된 전기공학 계산기를 무료로 사용하세요. ` +
       '모든 결과에는 검증 가능한 영수증이 발행됩니다.',
     icon: 'M4 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5zM4 13a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6zM16 13a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-6z', // calculator
   },

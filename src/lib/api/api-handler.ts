@@ -58,6 +58,10 @@ function isOriginAllowed(origin: string | null): boolean {
   if (!origin) return true; // same-origin
   if (ALLOWED_ORIGINS.has(origin)) return true;
   if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  // dev: launch.json이 3010 등 임의 포트를 쓰는데 목록은 3000/3001 고정이라
+  // 브라우저 same-origin POST(Origin 항상 동봉)가 dev에서 전부 403이었다.
+  // 프로덕션 목록은 불변 — 개발 환경의 localhost만 포트 무관 허용.
+  if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) return true;
   return false;
 }
 
