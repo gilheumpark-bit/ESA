@@ -62,7 +62,9 @@ async function post(name, bytes, page = 1) {
 }
 
 const failures = [];
+let totalChecks = 0;
 function check(caseName, cond, detail) {
+  totalChecks += 1;
   if (cond) { console.log(`  PASS ${caseName}`); }
   else { console.log(`  FAIL ${caseName} — ${detail}`); failures.push(caseName); }
 }
@@ -86,6 +88,11 @@ const grid =
 const fillOnly = text(100, 700, 'NOTE AREA') + '100 100 m 200 100 l 200 150 l 100 150 l h f\n';
 
 const singleG = text(100, 700, 'G') + text(100, 600, 'GEN 500KVA') + stroke(105, 698, 105, 605);
+// R8b — 단독 M(모터 심볼이자 흔한 라벨)은 스펙 증거 없이는 phantom 모터가
+// 되면 안 된다(독립 심사 adversary 라이브 재현). "M 5.5KW"는 스펙 증거가
+// 있으니 모터로 승격돼야 한다 — 반례로 함께 검증.
+const singleM = text(100, 700, 'M') + text(100, 680, 'PUMP ROOM') +
+  text(100, 600, 'M 5.5kW') + stroke(105, 698, 105, 605);
 
 console.log(`PDF fixture gate → ${ROUTE}`);
 
@@ -135,6 +142,14 @@ await sleep(800);
 }
 await sleep(800);
 {
+  const r = await post('single-m.pdf', buildPdf(singleM));
+  const motors = (r.json?.data?.components ?? []).filter(x => x.type === 'motor');
+  check('R8b 단독 M≠모터(스펙 무) · "M 5.5KW"=모터 1건',
+    r.status === 200 && motors.length === 1 && motors[0].rating === '5.5kW',
+    `status ${r.status} motors ${JSON.stringify(motors.map(m => [m.label, m.rating]))}`);
+}
+await sleep(800);
+{
   const r = await post('big-circuit.pdf', buildPdf(circuit, { padToBytes: 12 * 1024 * 1024 }));
   check('R6 12MB 대용량: 프록시 절단 없이 200 파싱',
     r.status === 200 && (r.json?.data?.components?.length ?? 0) >= 2,
@@ -148,5 +163,5 @@ await sleep(800);
     r.status === 400, `status ${r.status} body ${JSON.stringify(r.json)?.slice(0, 120)}`);
 }
 
-console.log(failures.length === 0 ? '\nGATE PASS (7/7)' : `\nGATE FAIL — ${failures.length}건: ${failures.join(', ')}`);
+console.log(failures.length === 0 ? `\nGATE PASS (${totalChecks}/${totalChecks})` : `\nGATE FAIL — ${failures.length}/${totalChecks}건: ${failures.join(', ')}`);
 process.exit(failures.length === 0 ? 0 : 1);

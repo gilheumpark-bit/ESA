@@ -66,11 +66,32 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   { pattern: /\b(OCR|OVR|RELAY|계전기)\b/i, type: 'relay' },
 ];
 
-function detectComponentType(text: string): SLDComponentType {
+interface TypeDetection {
+  type: SLDComponentType;
+  /**
+   * 매칭된 토큰이 1글자면 weak — 단독 "M"(모터 심볼이자 흔한 라벨)처럼
+   * 도면 어디에나 있는 글자라 그 자체로는 설비 근거가 못 된다. 이번 커밋이
+   * 단독 "G"(=발전기이자 접지 관례)를 패턴에서 뺀 것과 동일 결함군인데,
+   * 독립 심사(adversary)가 "M은 그대로 phantom 모터를 만든다"고 라이브
+   * 재현했다. G만 빼는 땜질 대신 1글자 토큰 계열을 통째로 weak 처리해
+   * 스펙 증거가 있을 때만 승격시킨다(향후 추가되는 1글자 키도 자동 포함).
+   */
+  weak: boolean;
+}
+
+function detectComponentTypeEx(text: string): TypeDetection {
   for (const { pattern, type } of SYMBOL_KEYWORDS) {
-    if (pattern.test(text)) return type;
+    const match = text.match(pattern);
+    if (match) {
+      const token = (match[1] ?? match[0]).trim();
+      return { type, weak: token.length <= 1 };
+    }
   }
-  return 'load';
+  return { type: 'load', weak: false };
+}
+
+function detectComponentType(text: string): SLDComponentType {
+  return detectComponentTypeEx(text).type;
 }
 
 // =========================================================================
@@ -249,10 +270,15 @@ export async function parsePdfToSLD(
   const usedTexts = new Set<number>();
   for (let i = 0; i < texts.length; i++) {
     const t = texts[i];
-    const type = detectComponentType(t.text);
+    const detection = detectComponentTypeEx(t.text);
+    const type = detection.type;
     const specProbe = parseSpecText(t.text);
     const hasSpecEvidence = Boolean(specProbe.voltage || specProbe.current || specProbe.power);
-    if (type !== 'load' || hasSpecEvidence) {
+    // 확신 타입(2글자+ 키워드)은 그대로 승격. weak(1글자) 타입과 일반 부하는
+    // 스펙 증거가 있을 때만 승격 — 단독 "M" phantom 모터 + 가짜 기동전류
+    // 계산을 차단한다(독립 심사 라이브 재현).
+    const confidentType = type !== 'load' && !detection.weak;
+    if (confidentType || hasSpecEvidence) {
       const spec = specProbe;
       rawAnchors.push({ id: `comp_${compIdx + 1}`, x: t.x, y: t.y });
       components.push({
