@@ -102,6 +102,8 @@
 | C2 잔여 G1·G4·dead 정리·D2 onpremise | ✅ 완료 — G1 6조항 승격(실평가기 13→19·430.32 의도 보류)·G4 judge/source-tracker 삭제 결정·dead 6모듈 제거+DORMANT_MANIFEST·D2 chat 배선(SSRF 사설만) |
 | AI 모델 최신화 | ✅ 완료 — 공식 출처 실측만(OpenAI/Google 공식 페이지·Anthropic 정본), 추정 0 | 33c70b7 |
 | 도면 캘리브레이션(합성 15장) | ✅ 완료 — 결함 8종 적출·수리, 회귀 하네스+CI. 상세 `DRAWING_VALIDATION_RESULT.md` | 6829418·29365de |
+| 사내 규정 룰 로딩 통로 | ✅ 완료 — 룰셋 린트+평가+파이프라인+린트 API+UI. 독립 심사(IND-1)가 CRITICAL 2 실행재현→전량 수리. 상세 `CUSTOM_RULES_DESIGN.md` | 91ea1cb·25b6bdb |
+| 동종 잠복 소탕(심사 반경 4) | ✅ 완료 — as File 5곳→getFormFile·UTF-16 캡→byteLength·params 침묵 버림→400. 내장 조항 result:'FAIL' 0건 확인 | cfd8ce8 |
 | E/F 결제·인프라 | ⏸ **유일 잔여** — 외부 리소스 대기(Stripe 키/Weaviate/SMTP). writer 봉인 스냅샷·G1 추가승격(원문 확인 필요분)도 이때 |
 
 라이브 실증 하이라이트: 도면 파이프라인 최초 개통 — 실 DXF 업로드→토폴로지 valid(고립 0)→
