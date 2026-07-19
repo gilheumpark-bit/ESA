@@ -95,7 +95,7 @@ export async function generateJsonClaude(
     },
     signal: AbortSignal.timeout(STRUCTURED_PROVIDER_TIMEOUT_MS),
     body: JSON.stringify({
-      model: model || 'claude-sonnet-4-20250514',
+      model: model || 'claude-sonnet-5',
       max_tokens: 4096,
       tools: [tool],
       tool_choice: { type: 'tool', name: 'structured_output' },

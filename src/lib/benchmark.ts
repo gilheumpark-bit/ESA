@@ -90,7 +90,7 @@ function getDummyInput(entry: CalculatorRegistryEntry): Record<string, unknown> 
     case 'global':
       return { ambientTemp: 40, baseTemp: 30, current: 100, frequency: 60 };
     case 'ai':
-      return { inputTokens: 1000, outputTokens: 500, model: 'gpt-4.1-mini' };
+      return { inputTokens: 1000, outputTokens: 500, model: 'gpt-5.4-mini' };
     default:
       return { voltage: 380, current: 100 };
   }

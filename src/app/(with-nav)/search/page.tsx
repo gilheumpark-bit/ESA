@@ -349,7 +349,7 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
       // 배선 전엔 settings/onpremise 저장값이 write-only(읽는 코드 0)였다 — D2.
       let providerBody: Record<string, unknown> = {
         provider: 'openai',
-        model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-4.1-mini',
+        model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-5.4-mini',
       };
       try {
         const raw = sessionStorage.getItem('esva-onpremise');

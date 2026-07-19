@@ -42,13 +42,13 @@ export interface VLMAnalysisResult {
 /** VLM 호출 설정 — 하드코딩 대신 중앙 관리 */
 const VLM_CONFIG = {
   gemini: {
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3.5-flash',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
   },
   openai: {
-    defaultModel: 'gpt-4.1',
+    defaultModel: 'gpt-5.5',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,

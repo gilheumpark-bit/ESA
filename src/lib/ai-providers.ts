@@ -54,36 +54,42 @@ export interface ChatMessage {
 
 export const PROVIDERS: Record<string, AIProvider> = {
   gemini: {
+    // 모델 라인업 2026-07-20 갱신 — 출처: ai.google.dev/gemini-api/docs/pricing (공식)
     id: 'gemini',
     name: 'Google Gemini',
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3.5-flash',
     models: [
-      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextWindow: 1_048_576, costTier: 'premium' },
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1_048_576, costTier: 'low' },
-      { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', contextWindow: 1_048_576, costTier: 'free' },
+      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)', contextWindow: 1_048_576, costTier: 'premium' },
+      { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', contextWindow: 1_048_576, costTier: 'medium' },
+      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (구세대)', contextWindow: 1_048_576, costTier: 'free' },
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 1_048_576, costTier: 'low' },
   },
   openai: {
     id: 'openai',
     name: 'OpenAI',
-    defaultModel: 'gpt-4.1-mini',
+    // 2026-07-20 갱신 — 출처: developers.openai.com/api/docs/{pricing,models} (공식).
+    // gpt-4.1 계열은 공식 모델 목록에서 제외(폐기)되어 제거. 5.6 트리오는 1.05M ctx·vision.
+    defaultModel: 'gpt-5.4-mini',
     models: [
-      { id: 'gpt-4.1', name: 'GPT-4.1', contextWindow: 1_047_576, costTier: 'high' },
-      { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', contextWindow: 1_047_576, costTier: 'medium' },
-      { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', contextWindow: 1_047_576, costTier: 'low' },
-      { id: 'o4-mini', name: 'o4-mini', contextWindow: 200_000, costTier: 'medium' },
+      { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol (Frontier)', contextWindow: 1_050_000, costTier: 'premium' },
+      { id: 'gpt-5.5', name: 'GPT-5.5', contextWindow: 400_000, costTier: 'high' },
+      { id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 400_000, costTier: 'medium' },
+      { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', contextWindow: 400_000, costTier: 'low' },
+      { id: 'gpt-5.4-nano', name: 'GPT-5.4 Nano', contextWindow: 400_000, costTier: 'free' },
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 1_047_576, costTier: 'medium' },
   },
   claude: {
     id: 'claude',
     name: 'Anthropic Claude',
-    defaultModel: 'claude-sonnet-4-20250514',
+    // 2026-07-20 갱신 — 구 claude-*-4-20250514는 2026-06-15 폐기(이미 404 위험).
+    defaultModel: 'claude-sonnet-5',
     models: [
-      { id: 'claude-opus-4-20250514', name: 'Claude Opus 4', contextWindow: 200_000, costTier: 'premium' },
-      { id: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4', contextWindow: 200_000, costTier: 'high' },
-      { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', contextWindow: 200_000, costTier: 'low' },
+      { id: 'claude-opus-4-8', name: 'Claude Opus 4.8', contextWindow: 1_000_000, costTier: 'premium' },
+      { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', contextWindow: 1_000_000, costTier: 'high' },
+      { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', contextWindow: 200_000, costTier: 'low' },
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 200_000, costTier: 'high' },
   },

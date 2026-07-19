@@ -439,7 +439,7 @@ async function callOpenAIVision(
       Authorization: `Bearer ${options.apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || 'gpt-4.1',
+      model: options.model || 'gpt-5.5',
       messages: [
         { role: 'system', content: SLD_SYSTEM_PROMPT },
         {
@@ -480,7 +480,7 @@ async function callClaudeVision(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: options.model || 'claude-sonnet-4-20250514',
+      model: options.model || 'claude-sonnet-5',
       max_tokens: 4000,
       system: SLD_SYSTEM_PROMPT,
       messages: [
@@ -515,7 +515,7 @@ async function callGeminiVision(
   mimeType: string,
   options: SLDAnalysisOptions,
 ): Promise<string> {
-  const model = options.model || 'gemini-2.5-flash';
+  const model = options.model || 'gemini-3.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${options.apiKey}`;
 
   const res = await fetch(url, {

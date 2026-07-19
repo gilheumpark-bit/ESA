@@ -62,7 +62,7 @@ const OPENAPI_SPEC = {
           content: { 'application/json': { schema: { type: 'object', required: ['messages', 'provider', 'model'], properties: {
             messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } },
             provider: { type: 'string', enum: ['gemini', 'openai', 'claude', 'groq', 'mistral'] },
-            model: { type: 'string', example: 'gpt-4.1-mini' },
+            model: { type: 'string', example: 'gpt-5.4-mini' },
           } } } },
         },
         responses: { 200: { description: 'SSE 스트림' } },

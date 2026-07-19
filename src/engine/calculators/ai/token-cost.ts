@@ -6,7 +6,10 @@
  *   Daily cost       = costPerRequest x requestCount
  *   Monthly cost     = dailyCost x 30
  *
- * Pricing as of 2026-Q1 (approximate, subject to change)
+ * Pricing as of 2026-07-20 — 공식 출처에서만 기입(추정 금지):
+ *   OpenAI: developers.openai.com/api/docs/pricing
+ *   Anthropic: platform.claude.com/docs (Opus 4.8 $5/$25 · Sonnet 5 $3/$15 표준가 · Haiku 4.5 $1/$5)
+ *   Google: ai.google.dev/gemini-api/docs/pricing
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -22,15 +25,16 @@ import {
 // -- Input / Output ----------------------------------------------------------
 
 export type AIModel =
-  | 'gpt-4.1'
-  | 'gpt-4.1-mini'
-  | 'gpt-4.1-nano'
-  | 'o4-mini'
-  | 'claude-opus-4'
-  | 'claude-sonnet-4'
-  | 'claude-haiku-4.5'
-  | 'gemini-2.5-pro'
-  | 'gemini-2.5-flash';
+  | 'gpt-5.5'
+  | 'gpt-5.4'
+  | 'gpt-5.4-mini'
+  | 'gpt-5.4-nano'
+  | 'claude-opus-4-8'
+  | 'claude-sonnet-5'
+  | 'claude-haiku-4-5'
+  | 'gemini-3.1-pro-preview'
+  | 'gemini-3.5-flash'
+  | 'gemini-3.1-flash-lite';
 
 export interface TokenCostInput {
   /** AI model identifier */
@@ -54,67 +58,78 @@ interface ModelPricing {
 }
 
 const PRICING: Record<AIModel, ModelPricing> = {
-  'gpt-4.1': {
-    name: 'GPT-4.1',
+  // OpenAI — developers.openai.com/api/docs/pricing (2026-07-20 캡처).
+  // 컨텍스트: GPT-5.x는 272K 입력 초과 시 장문 요율 전환(공식) — 총 400K 세대.
+  'gpt-5.5': {
+    name: 'GPT-5.5',
     provider: 'OpenAI',
-    inputPer1M: 2.00,
-    outputPer1M: 8.00,
-    contextWindow: 1048576,
+    inputPer1M: 5.00,
+    outputPer1M: 30.00,
+    contextWindow: 400000,
   },
-  'gpt-4.1-mini': {
-    name: 'GPT-4.1 Mini',
+  'gpt-5.4': {
+    name: 'GPT-5.4',
     provider: 'OpenAI',
-    inputPer1M: 0.40,
-    outputPer1M: 1.60,
-    contextWindow: 1048576,
+    inputPer1M: 2.50,
+    outputPer1M: 15.00,
+    contextWindow: 400000,
   },
-  'gpt-4.1-nano': {
-    name: 'GPT-4.1 Nano',
+  'gpt-5.4-mini': {
+    name: 'GPT-5.4 Mini',
     provider: 'OpenAI',
-    inputPer1M: 0.10,
-    outputPer1M: 0.40,
-    contextWindow: 1048576,
+    inputPer1M: 0.75,
+    outputPer1M: 4.50,
+    contextWindow: 400000,
   },
-  'o4-mini': {
-    name: 'o4-mini',
+  'gpt-5.4-nano': {
+    name: 'GPT-5.4 Nano',
     provider: 'OpenAI',
-    inputPer1M: 1.10,
-    outputPer1M: 4.40,
-    contextWindow: 200000,
+    inputPer1M: 0.20,
+    outputPer1M: 1.25,
+    contextWindow: 400000,
   },
-  'claude-opus-4': {
-    name: 'Claude Opus 4',
+  // Anthropic — 공식 모델 카탈로그 (Sonnet 5는 표준가 기입; 2026-08-31까지 인트로 $2/$10 별도).
+  'claude-opus-4-8': {
+    name: 'Claude Opus 4.8',
     provider: 'Anthropic',
-    inputPer1M: 15.00,
-    outputPer1M: 75.00,
-    contextWindow: 200000,
+    inputPer1M: 5.00,
+    outputPer1M: 25.00,
+    contextWindow: 1000000,
   },
-  'claude-sonnet-4': {
-    name: 'Claude Sonnet 4',
+  'claude-sonnet-5': {
+    name: 'Claude Sonnet 5',
     provider: 'Anthropic',
     inputPer1M: 3.00,
     outputPer1M: 15.00,
-    contextWindow: 200000,
+    contextWindow: 1000000,
   },
-  'claude-haiku-4.5': {
+  'claude-haiku-4-5': {
     name: 'Claude Haiku 4.5',
     provider: 'Anthropic',
-    inputPer1M: 0.80,
-    outputPer1M: 4.00,
+    inputPer1M: 1.00,
+    outputPer1M: 5.00,
     contextWindow: 200000,
   },
-  'gemini-2.5-pro': {
-    name: 'Gemini 2.5 Pro',
+  // Google — ai.google.dev/gemini-api/docs/pricing (2026-07-20 캡처).
+  'gemini-3.1-pro-preview': {
+    name: 'Gemini 3.1 Pro (Preview)',
     provider: 'Google',
-    inputPer1M: 1.25,
-    outputPer1M: 10.00,
+    inputPer1M: 2.00,
+    outputPer1M: 12.00,
     contextWindow: 1048576,
   },
-  'gemini-2.5-flash': {
-    name: 'Gemini 2.5 Flash',
+  'gemini-3.5-flash': {
+    name: 'Gemini 3.5 Flash',
     provider: 'Google',
-    inputPer1M: 0.15,
-    outputPer1M: 0.60,
+    inputPer1M: 1.50,
+    outputPer1M: 9.00,
+    contextWindow: 1048576,
+  },
+  'gemini-3.1-flash-lite': {
+    name: 'Gemini 3.1 Flash-Lite',
+    provider: 'Google',
+    inputPer1M: 0.25,
+    outputPer1M: 1.50,
     contextWindow: 1048576,
   },
 };
