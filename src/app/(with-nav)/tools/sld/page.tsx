@@ -302,6 +302,8 @@ export default function SLDAnalysisPage() {
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 사내 규정(선택) — JSON 룰셋. 서버가 린트하고 무효면 400으로 거절한다.
+  const [rulesFile, setRulesFile] = useState<File | null>(null);
   // 정밀 검증(4팀 리뷰)용 — 마지막 업로드 원본 파일과 진행 상태.
   // 배선 전엔 /api/team-review·/report/[id]가 UI에서 영구 미도달이었다(Batch C1).
   const [drawingFile, setDrawingFile] = useState<File | null>(null);
@@ -331,6 +333,7 @@ export default function SLDAnalysisPage() {
       formData.append('file', drawingFile);
       formData.append('projectName', 'SLD 정밀 검증');
       formData.append('projectType', '전기 설비');
+      if (rulesFile) formData.append('rules', rulesFile);
       const res = await fetch('/api/team-review', { method: 'POST', body: formData });
       const json = await res.json();
       if (!res.ok || !json?.success) {
@@ -347,7 +350,7 @@ export default function SLDAnalysisPage() {
     } finally {
       setReviewLoading(false);
     }
-  }, [drawingFile, router]);
+  }, [drawingFile, rulesFile, router]);
 
   const handleReset = useCallback(() => {
     if (preview) URL.revokeObjectURL(preview);
@@ -628,6 +631,24 @@ export default function SLDAnalysisPage() {
                 다시 분석
               </button>
             </div>
+          </div>
+
+          {/* 사내 규정 첨부(선택) — 정밀 검증 시 KEC와 나란히 대조된다 */}
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
+              사내 규정 (선택, JSON)
+            </span>
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => setRulesFile(e.target.files?.[0] ?? null)}
+              className="text-xs text-[var(--text-secondary)] file:mr-2 file:rounded-md file:border-0 file:bg-[var(--bg-primary)] file:px-2 file:py-1 file:text-xs file:text-[var(--text-primary)]"
+            />
+            {rulesFile && (
+              <span className="text-xs text-[var(--text-tertiary)]">
+                {rulesFile.name} — 정밀 검증 시 함께 대조
+              </span>
+            )}
           </div>
 
           {reviewError && (

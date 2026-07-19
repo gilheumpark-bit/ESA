@@ -9,6 +9,10 @@ import { NextRequest } from 'next/server';
 import { withApiHandler } from '@/lib/api';
 import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
+import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
+
+/** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
+const RULES_MAX_BYTES = 1024 * 1024;
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -27,6 +31,8 @@ export const POST = withApiHandler(
     let fileName: string | undefined;
     let mimeType: string | undefined;
     let params: Record<string, unknown> = {};
+    let customRuleSet: CustomRuleSet | undefined;
+    let ruleWarnings: string[] = [];
 
     // Multipart: 도면 파일 + 메타데이터
     if (contentType.includes('multipart/form-data')) {
@@ -45,6 +51,31 @@ export const POST = withApiHandler(
         fileBuffer = await file.arrayBuffer();
         fileName = file.name;
         mimeType = file.type;
+      }
+
+      // 사내 규정(선택) — 무효 룰셋을 조용히 버리고 검토를 진행하면 사용자는
+      // "규정 대조가 됐다"고 오인한다. fail-closed: 오류 목록과 함께 400.
+      const rulesFile = formData.get('rules') as File | null;
+      if (rulesFile) {
+        if (rulesFile.size > RULES_MAX_BYTES) {
+          return ctx.error('ESVA-4413', `사내 규정 파일이 너무 큽니다 (최대 ${RULES_MAX_BYTES / 1024}KB)`, 400);
+        }
+        let rulesRaw: unknown;
+        try {
+          rulesRaw = JSON.parse(await rulesFile.text());
+        } catch {
+          return ctx.error('ESVA-4400', '사내 규정 파일이 JSON이 아닙니다', 400);
+        }
+        const lint = parseCustomRuleSet(rulesRaw);
+        if (!lint.ok || !lint.ruleSet) {
+          return ctx.error(
+            'ESVA-4400',
+            `사내 규정 검증 실패: ${lint.errors.slice(0, 5).join(' / ')}${lint.errors.length > 5 ? ` 외 ${lint.errors.length - 5}건` : ''}`,
+            400,
+          );
+        }
+        customRuleSet = lint.ruleSet;
+        ruleWarnings = lint.warnings;
       }
     } else {
       const body = await req.json();
@@ -67,6 +98,7 @@ export const POST = withApiHandler(
       params,
       countryCode: (params.countryCode as string) ?? 'KR',
       language: (params.language as string) ?? 'ko',
+      customRuleSet,
     });
 
     perf.checkpoint('orchestrate');
@@ -107,6 +139,15 @@ export const POST = withApiHandler(
       // 렌더하는 전체 ESVAVerifiedReport. 요약(report)만으론 페이지가 뜰 수
       // 없어 이 기능이 UI에서 영구 미도달이었다(Batch C1 배선).
       reportFull: result.report ?? null,
+      // 사내 규정 적용 정보 — 어떤 룰셋이 대조됐는지·린트 경고를 숨기지 않는다
+      customRules: customRuleSet
+        ? {
+            name: customRuleSet.name,
+            version: customRuleSet.version,
+            articleCount: customRuleSet.articles.length,
+            warnings: ruleWarnings,
+          }
+        : null,
       durationMs,
     }, perfHeaders(durationMs));
   },

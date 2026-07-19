@@ -34,6 +34,8 @@ export interface OrchestratorRequest {
   countryCode?: string;
   language?: string;
   dxfLayers?: string[];
+  /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
+  customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
 }
 
 export interface OrchestratorResponse {
@@ -60,6 +62,7 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     params: req.params,
     countryCode: req.countryCode,
     language: req.language,
+    customRuleSet: req.customRuleSet,
   };
 }
 

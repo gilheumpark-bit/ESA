@@ -1,0 +1,59 @@
+{
+  "name": "예시 사내 설계기준 (EXAMPLE — 실제 기준 아님)",
+  "version": "2026-01",
+  "organization": "예시 엔지니어링",
+  "basedOn": "KEC 2021",
+  "standardLabel": "사내규정",
+  "articles": [
+    {
+      "article": "EX-3.2.1",
+      "title": "간선 전압강하 사내 한도 (예시)",
+      "scope": "connection",
+      "severity": "critical",
+      "remedy": "케이블 굵기 한 단계 상향 또는 분전반 위치 재검토",
+      "conditions": [
+        {
+          "param": "voltageDropPercent",
+          "operator": "<=",
+          "value": 2.5,
+          "unit": "%",
+          "result": "PASS",
+          "note": "예시 값 — 사내 기준이 KEC 한도(3%)보다 엄격한 경우의 작성 예"
+        }
+      ]
+    },
+    {
+      "article": "EX-4.1",
+      "title": "변압기 최소 용량 (예시)",
+      "scope": "component",
+      "appliesTo": ["transformer"],
+      "severity": "major",
+      "conditions": [
+        {
+          "param": "ratingKva",
+          "operator": ">=",
+          "value": 500,
+          "unit": "kVA",
+          "result": "PASS",
+          "note": "예시 값 — 실제 기준값은 각 사 설계기준에서 가져올 것"
+        }
+      ]
+    },
+    {
+      "article": "EX-1.1",
+      "title": "수전 계통 변압기 존재 (예시)",
+      "scope": "global",
+      "severity": "major",
+      "conditions": [
+        {
+          "param": "transformerCount",
+          "operator": ">=",
+          "value": 1,
+          "unit": "대",
+          "result": "PASS",
+          "note": ""
+        }
+      ]
+    }
+  ]
+}

@@ -62,6 +62,8 @@ export interface TeamInput {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
+  /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 들어온다 (engine/standards/custom-rules) */
+  customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
 }
 
 export interface ExtractedComponent {

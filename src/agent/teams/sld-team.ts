@@ -320,6 +320,78 @@ function estimateVoltageDrop(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PART 3.5 — 사내 규정(커스텀 룰셋) 평가
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 라우트에서 린트 통과한 룰셋을 추출 결과에 대조한다.
+ * 판정 자체는 engine(custom-rules)이 하고, 여기서는 파이프라인 데이터를
+ * 평가 컨텍스트로 사영하고 결과를 리포트 타입으로 매핑만 한다.
+ *
+ * voltageDropPercent는 실전류 기반 계산이 있을 때만 제공한다 —
+ * 추정치로 사내 기준 PASS/FAIL을 내면 거짓 판정이다(KEC 경로와 동일 원칙).
+ */
+async function runCustomRules(
+  ruleSet: NonNullable<TeamInput['customRuleSet']>,
+  components: ExtractedComponent[],
+  connections: ExtractedConnection[],
+  userParams: Record<string, unknown> | undefined,
+): Promise<{ standards: StandardEntry[]; violations: ViolationEntry[] }> {
+  const { evaluateCustomRules } = await import('@/engine/standards/custom-rules');
+  const { parseSpecText } = await import('@/engine/topology/spec-text');
+
+  const numericParams: Record<string, number> = {};
+  for (const [k, v] of Object.entries(userParams ?? {})) {
+    if (typeof v === 'number' && Number.isFinite(v)) numericParams[k] = v;
+  }
+
+  const findings = evaluateCustomRules(ruleSet, {
+    components: components.map(c => ({ id: c.id, type: c.type, label: c.label, rating: c.rating })),
+    connections: connections.map(conn => {
+      const spec = conn.cableType ? parseSpecText(conn.cableType) : {};
+      const vd = estimateVoltageDrop(conn); // 실전류 표기가 있을 때만 non-null
+      return {
+        from: conn.from,
+        to: conn.to,
+        lengthM: conn.length,
+        conductorSizeSq: spec.conductorSize,
+        currentA: vd?.currentA,
+        voltageDropPercent: vd && !vd.assumed ? vd.vd : undefined,
+      };
+    }),
+    userParams: numericParams,
+  });
+
+  const label = ruleSet.standardLabel ?? '사내규정';
+  const standards: StandardEntry[] = [];
+  const violations: ViolationEntry[] = [];
+
+  findings.forEach((f, i) => {
+    standards.push({
+      standard: label,
+      clause: f.article,
+      title: f.title,
+      judgment: f.judgment,
+      note: `${f.target}: ${f.note}`,
+    });
+    if (f.judgment === 'FAIL') {
+      violations.push({
+        id: `vio-rule-${f.article}-${i}`,
+        severity: f.severity,
+        title: `[${label}] ${f.title}`,
+        description: `${f.target}: ${f.note}`,
+        location: f.target,
+        standardRef: `${label} ${f.article}${ruleSet.basedOn ? ` (기반: ${ruleSet.basedOn})` : ''}`,
+        // 시정 안내는 룰 저자가 제공한 것만 — 엔진이 지어내지 않는다
+        ...(f.remedy ? { suggestedFix: f.remedy } : {}),
+      });
+    }
+  });
+
+  return { standards, violations };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // PART 4 — Team Result Assembly
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -350,6 +422,13 @@ export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
 
     // Step 3: 계산 체인 실행
     const { calculations, standards, violations } = await runCalculations(components, connections);
+
+    // Step 3.5: 사내 규정 평가 (첨부된 경우) — KEC 행과 나란히 리포트에 합류
+    if (input.customRuleSet) {
+      const custom = await runCustomRules(input.customRuleSet, components, connections, input.params);
+      standards.push(...custom.standards);
+      violations.push(...custom.violations);
+    }
 
     // 토폴로지 이상 → 경고 추가
     if (validation.issues && validation.issues.length > 0) {
