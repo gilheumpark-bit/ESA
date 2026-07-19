@@ -25,12 +25,17 @@ const NEC_SIZES_MM2: ReadonlyArray<readonly [string, number]> = [
   ['4/0', 107.2], ['250', 126.7], ['300', 152.0], ['350', 177.3], ['400', 202.7],
 ];
 
+/**
+ * 입력 단면적 **이하**의 최대 NEC 규격(보수). 최근접 스냅은 25mm²를 3 AWG
+ * (26.67mm²)로 올려 허용전류를 +21% 과대평가하므로 쓰지 않는다 — 허용전류
+ * 과대는 과부하·화재 방향의 오차다.
+ */
 function nearestNecSize(mm2: number): readonly [string, number] {
-  let best = NEC_SIZES_MM2[0];
+  let chosen = NEC_SIZES_MM2[0];
   for (const e of NEC_SIZES_MM2) {
-    if (Math.abs(e[1] - mm2) < Math.abs(best[1] - mm2)) best = e;
+    if (e[1] <= mm2) chosen = e;
   }
-  return best;
+  return chosen;
 }
 
 // =========================================================================

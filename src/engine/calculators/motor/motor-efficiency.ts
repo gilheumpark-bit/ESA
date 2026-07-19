@@ -59,16 +59,32 @@ function lookupEfficiency(ieClass: IEClass, ratedPower: number): number {
 }
 
 /**
- * Partial-load efficiency (simplified model): treats the rated loss fraction as
- * load-dependent so efficiency dips below rated at part load. Must be applied
- * consistently to EVERY IE class being compared — mixing this with a rated-load
- * figure for the baseline would invert the savings sign.
+ * Partial-load efficiency — fixed-loss / variable-loss model.
+ *
+ *   P_out(k) = k·P_r
+ *   losses(k) = P_fix + P_var·k²      (iron/windage fixed; copper ∝ k²)
+ *   η(k) = k·P_r / (k·P_r + P_fix + P_var·k²)
+ *
+ * At rated load the total loss is L_r = P_r·(1−η_r)/η_r, split by FIXED_LOSS_SHARE
+ * (IEC 60034-31: induction motors run roughly 40% fixed / 60% load-dependent loss).
+ * This reproduces the real shape — efficiency peaks near 70–100% load and falls off
+ * at light load — and returns exactly η_r at k=1.
+ *
+ * The previous model, `η_r·k / (k + ((1−η_r)/η_r)·k²)`, collapsed to **η_r² at k=1**
+ * (IE3 11 kW: 92.1% → 84.8%) and made efficiency *decrease* as load increased —
+ * physically inverted. Must be applied consistently to every IE class compared.
  */
+const FIXED_LOSS_SHARE = 0.4;
+
 function partialLoadEfficiency(etaRated: number, loadRatio: number): number {
-  const etaPartial =
-    (etaRated * loadRatio) /
-    (loadRatio + ((1 - etaRated) / etaRated) * loadRatio * loadRatio);
-  return Math.min(etaPartial, etaRated);
+  if (loadRatio <= 0) return 0;
+  // Per-unit of rated output power: total rated loss.
+  const ratedLoss = (1 - etaRated) / etaRated;
+  const fixedLoss = ratedLoss * FIXED_LOSS_SHARE;
+  const variableLoss = ratedLoss * (1 - FIXED_LOSS_SHARE);
+  const output = loadRatio;
+  const losses = fixedLoss + variableLoss * loadRatio * loadRatio;
+  return output / (output + losses);
 }
 
 // ── Calculator ──────────────────────────────────────────────────────────────

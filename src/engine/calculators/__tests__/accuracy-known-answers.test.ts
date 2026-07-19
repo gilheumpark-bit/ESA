@@ -125,13 +125,28 @@ describe('motor', () => {
     const { value } = run('braking-resistor', { dcBusVoltage: 700, brakingPower: 10, brakingTime: 5, dutyCycle: 10 });
     close(value, 49);
   });
-  // BUG FIX regression: IE3 is MORE efficient than IE1, so savingsVsIE1 must be POSITIVE.
-  // Pre-fix the IE1 baseline used full-load η while the actual class used partial-load η,
-  // producing a negative (backwards) saving.
-  test('motor-efficiency: IE3 11kW @75% load → value 86.5%, savingsVsIE1 > 0', () => {
+  // 고정손/가변손 모델. IE3 11kW 정격 η=0.921(표) →
+  //   ratedLoss = (1−0.921)/0.921 = 0.085776 pu, fixed = 0.4×= 0.034310, var = 0.6×= 0.051466
+  //   k=0.75: losses = 0.034310 + 0.051466×0.5625 = 0.063260
+  //           η = 0.75/(0.75+0.063260) = 0.92223 → 92.2%
+  test('motor-efficiency: IE3 11kW @75% → 92.2% (고정손/가변손 전개), savingsVsIE1 > 0', () => {
     const { value, extra } = run('motor-efficiency', { ratedPower: 11, loadRatio: 0.75, ieClass: 'IE3', annualHours: 4000, electricityRate: 120 });
-    close(value, 86.5);
+    close(value, 92.2, 0.002);
     expect(extra.savingsVsIE1).toBeGreaterThan(0);
+  });
+  // η² 회귀 가드: 정격부하에서는 표의 정격효율을 그대로 반환해야 한다.
+  // 구 모델은 k=1에서 η_r²(0.921²=84.8%)을 반환했고, 부하가 오를수록 효율이
+  // 떨어지는 물리 역전을 만들었다.
+  test('motor-efficiency: 정격부하(k=1)에서 표 정격효율 92.1% 반환 (η² 아님)', () => {
+    const { value } = run('motor-efficiency', { ratedPower: 11, loadRatio: 1.0, ieClass: 'IE3', annualHours: 4000, electricityRate: 120 });
+    close(value, 92.1, 0.002);
+    expect(value).toBeGreaterThan(0.921 * 0.921 * 100 + 5); // η²=84.8% 회귀 차단
+  });
+  // 효율 곡선이 경부하 → 정격으로 갈수록 상승해야 한다(구 모델은 단조 감소).
+  test('motor-efficiency: 25% 부하 < 75% 부하 (물리 방향)', () => {
+    const light = run('motor-efficiency', { ratedPower: 11, loadRatio: 0.25, ieClass: 'IE3', annualHours: 4000, electricityRate: 120 }).value;
+    const near = run('motor-efficiency', { ratedPower: 11, loadRatio: 0.75, ieClass: 'IE3', annualHours: 4000, electricityRate: 120 }).value;
+    expect(light).toBeLessThan(near);
   });
   test('motor-efficiency: IE1 vs IE1 baseline → savings ≈ 0 (self-consistent)', () => {
     const { extra } = run('motor-efficiency', { ratedPower: 11, loadRatio: 0.75, ieClass: 'IE1', annualHours: 4000, electricityRate: 120 });
@@ -184,11 +199,18 @@ describe('cable / ampacity', () => {
     close(value, 5.261, 0.01);
     close(extra.kcmil, 10.38, 0.02);
   });
-  test('ampacity-compare 25mm² Cu XLPE: KEC 138, NEC ×0.98=135, IEC ×1.02=141', () => {
+  // NEC/IEC는 KEC×배율 추정이 아니라 각 표준 실표에서 온다.
+  // NEC: 25mm² → 보수 하향 스냅 4 AWG(21.15mm²) @90°C = 95A (NEC 310.16)
+  // IEC: 25mm² XLPE Cu = 133A (IEC 60364-5-52)
+  // (구 구현은 NEC=138×0.98=135, IEC=138×1.02=141로 날조 — 허용전류 과대 = 화재 방향)
+  test('ampacity-compare 25mm² Cu XLPE: KEC 138, NEC 실표 95, IEC 실표 133', () => {
     const { value, extra } = run('ampacity-compare', { cableSize: 25, conductor: 'Cu', insulation: 'XLPE', ambientTemp: 30 });
     close(value, 138);
-    close(extra.necAmpacity, 135);
-    close(extra.iecAmpacity, 141);
+    close(extra.necAmpacity, 95);
+    close(extra.iecAmpacity, 133);
+    // 회귀 방지: 다시 KEC 배율 추정으로 돌아가면 실패한다
+    expect(extra.necAmpacity).not.toBe(Math.round(138 * 0.98));
+    expect(extra.iecAmpacity).not.toBe(Math.round(138 * 1.02));
   });
   test('ampacity-global-compare 25mm² XLPE: min=AS 110·√(60/50)=120.5A', () => {
     const { value, extra } = run('ampacity-global-compare', { cableSize: 25, conductor: 'copper', insulation: 'XLPE', ambientTemp: 30 });

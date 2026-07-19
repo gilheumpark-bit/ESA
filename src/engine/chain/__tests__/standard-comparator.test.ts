@@ -20,10 +20,15 @@ describe('compareAmpacity — 실 테이블 위임 (날조 제거)', () => {
     expect(amp(r, 'IEC')).toBe(iecDirect);
   });
 
-  test('NEC 값 = getNecAmpacity 실표 조회값 (25mm² → 최근접 3 AWG, 90°C)', () => {
+  // 보수 스냅: 25mm² 이하의 최대 규격 = 4 AWG(21.15mm²). 3 AWG(26.67mm²)로
+  // 올리면 실제보다 큰 도체의 허용전류를 쓰게 되어 +21% 과대평가(비보수)다.
+  test('NEC 값 = getNecAmpacity 실표 조회값 (25mm² → 보수 하향 4 AWG, 90°C)', () => {
     const r = compareAmpacity(opts);
-    const necDirect = Math.round(getNecAmpacity({ size: '3', conductor: 'Cu', tempRating: 90, ambientTemp: 30 }).corrected);
+    const necDirect = Math.round(getNecAmpacity({ size: '4', conductor: 'Cu', tempRating: 90, ambientTemp: 30 }).corrected);
     expect(amp(r, 'NEC')).toBe(necDirect);
+    // 상향 스냅(3 AWG) 회귀 방지
+    const upward = Math.round(getNecAmpacity({ size: '3', conductor: 'Cu', tempRating: 90, ambientTemp: 30 }).corrected);
+    expect(amp(r, 'NEC')).toBeLessThan(upward);
   });
 
   test('날조 공식(KEC×0.95 / KEC×0.98)이 아니다', () => {
@@ -39,7 +44,7 @@ describe('compareAmpacity — 실 테이블 위임 (날조 제거)', () => {
 
   test('PVC는 NEC 75°C 등급으로 조회', () => {
     const r = compareAmpacity({ ...opts, insulation: 'PVC' });
-    const necDirect = Math.round(getNecAmpacity({ size: '3', conductor: 'Cu', tempRating: 75, ambientTemp: 30 }).corrected);
+    const necDirect = Math.round(getNecAmpacity({ size: '4', conductor: 'Cu', tempRating: 75, ambientTemp: 30 }).corrected);
     expect(amp(r, 'NEC')).toBe(necDirect);
   });
 });

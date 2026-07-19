@@ -247,7 +247,10 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
   'impedance-voltage': [
     { name: 'ratedCapacity', type: 'number', unit: 'kVA', description: '정격 용량', min: 1, defaultValue: 500 },
     { name: 'ratedVoltage', type: 'number', unit: 'V', description: '정격 전압 (선간)', min: 1, defaultValue: 380 },
-    { name: 'shortCircuitCurrent', type: 'number', unit: 'A', description: '단락 전류', min: 0.1, defaultValue: 100 },
+    // %Z = (In/Isc)×100. 500kVA/380V의 정격전류는 759.7A이고 실제 단락전류는
+    // 수천~수만 A다. 기본값 100A는 정격보다 작아 %Z가 759.67%로 나온다(물리 불가).
+    // 통상 %Z 5%에 해당하는 Isc = 759.7/0.05 ≈ 15,000A를 기본값으로 둔다.
+    { name: 'shortCircuitCurrent', type: 'number', unit: 'A', description: '단락 전류 (정격전류보다 훨씬 커야 함)', min: 0.1, defaultValue: 15000 },
   ],
   'inrush-current': [
     { name: 'ratedCapacity', type: 'number', unit: 'kVA', description: '정격 용량', min: 1, defaultValue: 500 },
