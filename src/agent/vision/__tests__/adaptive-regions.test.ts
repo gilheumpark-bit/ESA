@@ -34,6 +34,23 @@ describe('adaptive precision regions', () => {
     expect(() => planAdaptiveBounds(100, 100, 4, 0.26)).toThrow();
   });
 
+  it('partitions non-overlapping regions on shared boundaries without duplicate tiny cells', () => {
+    const bounds = planAdaptiveBounds(5, 5, 4, 0);
+
+    expect(bounds).toEqual([
+      { x: 0, y: 0, w: 2, h: 2 },
+      { x: 2, y: 0, w: 3, h: 2 },
+      { x: 0, y: 2, w: 2, h: 3 },
+      { x: 2, y: 2, w: 3, h: 3 },
+    ]);
+    for (let y = 0; y < 5; y += 1) {
+      for (let x = 0; x < 5; x += 1) {
+        expect(bounds.filter((item) => x >= item.x && x < item.x + item.w && y >= item.y && y < item.y + item.h)).toHaveLength(1);
+      }
+    }
+    expect(planAdaptiveBounds(1, 1, 16, 0.18)).toEqual([{ x: 0, y: 0, w: 1, h: 1 }]);
+  });
+
   it('creates exact PNG crops and maps region bounds back to the original image', async () => {
     const png = await sharp({
       create: { width: 100, height: 60, channels: 3, background: '#336699' },
@@ -59,5 +76,7 @@ describe('adaptive precision regions', () => {
       originalBounds: { x: 5, y: 5, w: 15, h: 10 },
     });
     await expect(cropPrecisionRegions(variant, [{ x: 90, y: 50, w: 20, h: 20 }])).rejects.toThrow();
+    await expect(cropPrecisionRegions({ ...variant, width: 50, height: 30 }, [{ x: 0, y: 0, w: 50, h: 30 }])).rejects.toThrow();
+    await expect(cropPrecisionRegions({ ...variant, width: 200, height: 120 }, [{ x: 0, y: 0, w: 100, h: 60 }])).rejects.toThrow();
   });
 });

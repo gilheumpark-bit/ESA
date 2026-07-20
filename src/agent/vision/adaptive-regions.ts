@@ -40,6 +40,11 @@ function toArrayBuffer(buffer: Uint8Array): ArrayBuffer {
   return Uint8Array.from(buffer).buffer;
 }
 
+function partitionBoundaries(length: number, requestedCells: number): number[] {
+  const cells = Math.min(length, requestedCells);
+  return Array.from({ length: cells + 1 }, (_, index) => Math.floor((index * length) / cells));
+}
+
 export function planAdaptiveBounds(
   width: number,
   height: number,
@@ -52,13 +57,16 @@ export function planAdaptiveBounds(
 
   const side = Math.sqrt(gridSize);
   const bounds: EvidenceBounds[] = [];
-  for (let row = 0; row < side; row += 1) {
-    const baseTop = Math.floor((row * height) / side);
-    const baseBottom = Math.ceil(((row + 1) * height) / side);
+  const horizontalBoundaries = partitionBoundaries(width, side);
+  const verticalBoundaries = partitionBoundaries(height, side);
+  const uniqueBounds = new Set<string>();
+  for (let row = 0; row < verticalBoundaries.length - 1; row += 1) {
+    const baseTop = verticalBoundaries[row];
+    const baseBottom = verticalBoundaries[row + 1];
     const padY = Math.ceil((baseBottom - baseTop) * overlap);
-    for (let column = 0; column < side; column += 1) {
-      const baseLeft = Math.floor((column * width) / side);
-      const baseRight = Math.ceil(((column + 1) * width) / side);
+    for (let column = 0; column < horizontalBoundaries.length - 1; column += 1) {
+      const baseLeft = horizontalBoundaries[column];
+      const baseRight = horizontalBoundaries[column + 1];
       const padX = Math.ceil((baseRight - baseLeft) * overlap);
       const x = Math.max(0, baseLeft - padX);
       const y = Math.max(0, baseTop - padY);
@@ -66,7 +74,11 @@ export function planAdaptiveBounds(
       const bottom = Math.min(height, baseBottom + padY);
       const item = { x, y, w: right - x, h: bottom - y };
       assertBounds(item, width, height);
-      bounds.push(item);
+      const key = `${item.x}:${item.y}:${item.w}:${item.h}`;
+      if (!uniqueBounds.has(key)) {
+        uniqueBounds.add(key);
+        bounds.push(item);
+      }
     }
   }
 
@@ -78,14 +90,27 @@ export async function cropPrecisionRegions(
   bounds: readonly EvidenceBounds[],
 ): Promise<PrecisionRegion[]> {
   assertDimensions(variant.width, variant.height);
-  if (variant.width * variant.height > MAX_INPUT_PIXELS) {
+  const source = Buffer.from(variant.buffer);
+  const metadata = await sharp(source, {
+    animated: false,
+    limitInputPixels: MAX_INPUT_PIXELS,
+  }).metadata();
+  const actualWidth = metadata.width;
+  const actualHeight = metadata.height;
+  if (actualWidth === undefined || actualHeight === undefined) {
+    throw new Error('정밀 crop 입력 이미지의 실제 치수를 읽을 수 없습니다.');
+  }
+  assertDimensions(actualWidth, actualHeight);
+  if (actualWidth !== variant.width || actualHeight !== variant.height) {
+    throw new Error('정밀 crop 입력 이미지 치수가 variant 계약과 일치하지 않습니다.');
+  }
+  if (actualWidth * actualHeight > MAX_INPUT_PIXELS) {
     throw new Error('정밀 crop 입력이 허용 픽셀 수를 초과합니다.');
   }
   for (const item of bounds) {
     assertBounds(item, variant.width, variant.height);
   }
 
-  const source = Buffer.from(variant.buffer);
   const regions: PrecisionRegion[] = [];
   for (let index = 0; index < bounds.length; index += 1) {
     const item = bounds[index];
