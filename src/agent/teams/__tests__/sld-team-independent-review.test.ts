@@ -384,4 +384,36 @@ describe('SLD raster independent council integration', () => {
     expect(runCouncil).not.toHaveBeenCalled();
     expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer', position: { x: 25, y: 75 } })]);
   });
+
+  it('keeps the caller-owned PDF buffer intact across multi-page parser calls', async () => {
+    jest.mocked(parsePdfToSLD).mockImplementation(async (buffer) => {
+      structuredClone(buffer, { transfer: [buffer] });
+      return {
+        components: [{ id: 'PDF-VCB-01', type: 'breaker', label: 'VCB-1', position: { x: 20, y: 20 } }],
+        connections: [],
+        sourceTexts: [],
+        confidence: 0.85,
+        suggestedCalculations: [],
+        rawDescription: '',
+      } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>;
+    });
+    const shared = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]).buffer;
+
+    const first = await executeSLDTeam({
+      sessionId: 'pdf-page-1',
+      classification: 'sld_pdf',
+      fileBuffer: shared,
+      params: { pageNumber: 1 },
+    });
+    const second = await executeSLDTeam({
+      sessionId: 'pdf-page-2',
+      classification: 'sld_pdf',
+      fileBuffer: shared,
+      params: { pageNumber: 2 },
+    });
+
+    expect(shared.byteLength).toBe(8);
+    expect(first.success).toBe(true);
+    expect(second.success).toBe(true);
+  });
 });

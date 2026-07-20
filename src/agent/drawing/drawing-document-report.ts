@@ -98,6 +98,22 @@ export function buildDrawingDocumentV3(input: {
   verificationExtra?: Partial<VerificationBlock>;
 }): DrawingDocumentV3 {
   const holdReasons = collectHoldReasons(input.unresolvedItems, input.jobStatus);
+  if (input.evidenceGraph.symbols.some((item) => item.certainty !== 'confirmed')) {
+    addHoldReason(holdReasons, 'UNREADABLE_SYMBOL');
+  }
+  if (input.evidenceGraph.lines.some((item) => item.certainty === 'unread')) {
+    addHoldReason(holdReasons, 'UNREADABLE_LINE');
+  }
+  if (input.evidenceGraph.lines.some((item) => item.certainty === 'ambiguous')
+    || input.evidenceGraph.relations.some((item) => item.certainty !== 'confirmed')) {
+    addHoldReason(holdReasons, 'LINE_CONTINUITY_UNCERTAIN');
+  }
+  if (input.evidenceGraph.texts.some((item) => item.certainty === 'ambiguous')) {
+    addHoldReason(holdReasons, 'AMBIGUOUS_OCR');
+  }
+  if (input.evidenceGraph.texts.some((item) => item.certainty === 'unread')) {
+    addHoldReason(holdReasons, 'UNREADABLE_TEXT');
+  }
   const receipt = buildDocumentReadReceipt({
     drawingHash: input.documentHash,
     // Completeness is evaluated against the requested page set. The source's
@@ -190,6 +206,10 @@ function collectHoldReasons(
     /* keep unresolved only */
   }
   return [...codes];
+}
+
+function addHoldReason(reasons: ReadFailureCode[], reason: ReadFailureCode): void {
+  if (!reasons.includes(reason)) reasons.push(reason);
 }
 
 function countEvidenceIds(graph: DrawingDocumentV3['evidenceGraph']): number {

@@ -21,6 +21,7 @@ export const maxDuration = 300;
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
+const MIN_VISION_CALLS_PER_PAGE = 18;
 const VISION_PROVIDERS = new Set(['gemini', 'openai', 'claude'] as const);
 const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
 type VisionProvider = 'gemini' | 'openai' | 'claude';
@@ -112,7 +113,9 @@ export async function POST(req: NextRequest) {
     const requestedPages = parseRequestedPages(form.get('pages'));
     if (!requestedPages) return userError('페이지는 all 또는 1,2,3 형식으로 입력해야 합니다.');
 
-    const maxVlmCalls = Number(form.get('maxVlmCalls') ?? 120);
+    const maxVlmCallsEntry = form.get('maxVlmCalls');
+    const hasExplicitVlmBudget = maxVlmCallsEntry !== null && String(maxVlmCallsEntry).trim() !== '';
+    const maxVlmCalls = Number(hasExplicitVlmBudget ? maxVlmCallsEntry : 120);
     if (!Number.isSafeInteger(maxVlmCalls) || maxVlmCalls < 0 || maxVlmCalls > 10_000) {
       return userError('AI 호출 예산은 0~10000 사이의 정수여야 합니다.');
     }
@@ -138,12 +141,23 @@ export async function POST(req: NextRequest) {
       if (requestedPages !== 'all' && requestedPages.some((page) => page >= availablePages)) {
         return userError(`요청 페이지가 도면 범위를 벗어났습니다. 전체 ${availablePages}페이지입니다.`);
       }
+      const estimatedPages = requestedPages === 'all' ? availablePages : requestedPages.length;
+      // A clean page needs one complete symbols/connections/text/logic council
+      // pass (18 calls). A fixed 120-call default made every 7+ page document
+      // structurally incapable of completing even its first precision pass.
+      // An explicit user budget still wins and low-quality retries remain capped.
+      const deferredBudget = hasExplicitVlmBudget
+        ? budget
+        : {
+            ...budget,
+            maxVlmCalls: Math.min(10_000, Math.max(120, estimatedPages * MIN_VISION_CALLS_PER_PAGE)),
+          };
       const documentHash = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
       const job = createJob({
         documentHash,
         ownerId: owner.ownerId,
-        budget,
-        estimatedPages: requestedPages === 'all' ? availablePages : requestedPages.length,
+        budget: deferredBudget,
+        estimatedPages,
       });
       const created = createSourceLease(bytes, documentHash, owner.ownerId);
       if ('error' in created) return userError('암호화 원본 임시 보관소가 준비되지 않았습니다.', 503);

@@ -85,7 +85,10 @@ async function extractFromDrawing(
   // PDF: 벡터 추출
   if (classification === 'sld_pdf' && fileBuffer) {
     const { parsePdfToSLD } = await import('@/engine/topology/pdf-vector-parser');
-    const pdfBytes = new Uint8Array(fileBuffer);
+    // pdf.js may transfer and detach the ArrayBuffer it receives. Each page of
+    // a multi-page job reuses the same leased source, so the parser must get an
+    // owned copy instead of detaching the caller's document after page one.
+    const pdfBytes = Uint8Array.from(new Uint8Array(fileBuffer));
     const analysis = await parsePdfToSLD(
       pdfBytes.buffer as ArrayBuffer,
       { pageNumber: (params?.pageNumber as number) ?? 1 },

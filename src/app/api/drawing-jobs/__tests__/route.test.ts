@@ -94,7 +94,11 @@ describe('drawing jobs API ownership and input boundary', () => {
 
     expect(response.status).toBe(202);
     expect(enumerateDrawingPageCount).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'sample.pdf' }));
-    expect(createJob).toHaveBeenCalledWith(expect.objectContaining({ ownerId: owner.ownerId, estimatedPages: 18 }));
+    expect(createJob).toHaveBeenCalledWith(expect.objectContaining({
+      ownerId: owner.ownerId,
+      estimatedPages: 18,
+      budget: expect.objectContaining({ maxVlmCalls: 324 }),
+    }));
     expect(createSourceLease).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.stringMatching(/^[a-f0-9]{64}$/), owner.ownerId);
     expect(runDocumentAnalysis).not.toHaveBeenCalled();
   });

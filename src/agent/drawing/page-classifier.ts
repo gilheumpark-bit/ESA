@@ -92,7 +92,7 @@ export function surveyPageKind(input: {
   rasterCoverage?: number;
 }): DocumentInventoryPage['drawingKind'] {
   const text = (input.textSample ?? '').toUpperCase();
-  if (!text.trim() && (input.vectorOpCount ?? 0) < 5 && (input.rasterCoverage ?? 0) < 0.05) {
+  if (!text.trim() && (input.vectorOpCount ?? 0) === 0 && (input.rasterCoverage ?? 0) < 0.05) {
     return 'empty';
   }
   if (/LEGEND|범례|SYMBOL/.test(text)) return 'legend';

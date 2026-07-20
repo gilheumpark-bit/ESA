@@ -190,7 +190,7 @@ export function buildPageRelations(
   pageIndex: number,
 ): RelationEdge[] {
   const pageSymbols = symbols.filter((s) => s.evidence[0]?.pageIndex === pageIndex && s.certainty === 'confirmed');
-  const pageLines = lines.filter((l) => l.evidence[0]?.pageIndex === pageIndex && l.certainty === 'confirmed');
+  const pageLines = lines.filter((l) => l.evidence[0]?.pageIndex === pageIndex && l.certainty !== 'unread');
   const relations: RelationEdge[] = [];
   let seq = 0;
 
@@ -208,7 +208,7 @@ export function buildPageRelations(
       from: from.id,
       to: to.id,
       lineId: line.id,
-      certainty: 'confirmed',
+      certainty: line.certainty,
       evidence: [...from.evidence, ...to.evidence, ...line.evidence],
     });
   }

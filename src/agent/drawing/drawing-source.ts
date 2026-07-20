@@ -192,12 +192,13 @@ export async function enumerateDrawingPageCount(
   }
 }
 
-function renderScale(width: number, height: number): number {
+function renderScale(width: number, height: number, pixelLimit = MAX_RENDER_PIXELS): number {
   const longest = Math.max(width, height);
   let scale = longest > 0 ? Math.min(3, Math.max(1, MAX_RENDER_SIDE / longest)) : 1;
   const pixels = width * height * scale * scale;
-  if (pixels > MAX_RENDER_PIXELS) {
-    scale *= Math.sqrt(MAX_RENDER_PIXELS / pixels);
+  const safePixelLimit = Math.max(1, Math.min(MAX_RENDER_PIXELS, pixelLimit) * 0.98);
+  if (pixels > safePixelLimit) {
+    scale *= Math.sqrt(safePixelLimit / pixels);
   }
   return Math.max(0.25, scale);
 }
@@ -231,6 +232,8 @@ async function preparePdf(
   const maxPages = input.budget?.maxPages ?? MAX_PDF_PAGES;
   const maxPixels = input.budget?.maxPixels ?? Number.MAX_SAFE_INTEGER;
   const deadline = Date.now() + (input.budget?.deadlineMs ?? 10 * 60_000);
+  const renderablePageCount = Math.max(1, Math.min(maxPages, requested.length));
+  const perPagePixelLimit = Math.max(1, Math.floor(maxPixels / renderablePageCount));
   let renderedPages = 0;
   let renderedPixels = 0;
 
@@ -268,7 +271,7 @@ async function preparePdf(
       const pageNumber = pageIndex + 1;
       const page = await document.getPage(pageNumber);
       const sourceViewport = page.getViewport({ scale: 1 });
-      const scale = renderScale(sourceViewport.width, sourceViewport.height);
+      const scale = renderScale(sourceViewport.width, sourceViewport.height, perPagePixelLimit);
       const viewport = page.getViewport({ scale });
       const width = Math.max(1, Math.ceil(viewport.width));
       const height = Math.max(1, Math.ceil(viewport.height));

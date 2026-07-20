@@ -481,6 +481,13 @@ export async function runDocumentAnalysis(
     }
     state.status = 'surveying';
     state.quality = page.quality;
+    if (page.preparationError) {
+      // A budget/cancellation sentinel deliberately has no rendered content.
+      // It is not an empty source page; the analysis phase must preserve the
+      // preparation failure and its recovery guidance.
+      state.drawingKind = 'unknown';
+      continue;
+    }
     state.drawingKind = surveyPageKind({
       textSample: page.textSample,
       vectorOpCount: page.vectorOpCount,
@@ -567,7 +574,10 @@ export async function runDocumentAnalysis(
 
     const shouldRunRaster = Boolean(page.imageBuffer)
       && source.formatClass !== 'dxf'
-      && (page.renderMode === 'raster' || page.renderMode === 'hybrid' || source.formatClass === 'raster-image');
+      && (page.renderMode === 'raster'
+        || page.renderMode === 'hybrid'
+        || source.formatClass === 'raster-image'
+        || (page.renderMode === 'vector' && Boolean(input.vision)));
     if (shouldRunRaster && input.vision) {
       // symbols + connections + logic + three independent full-page text
       // reads, plus the three spatial-role precision grids.

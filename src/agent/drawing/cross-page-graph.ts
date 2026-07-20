@@ -16,8 +16,7 @@ const REF_PATTERNS: RegExp[] = [
   /TO\s+SHEET\s+(\d+)/i,
   /FROM\s+([A-Z0-9_-]+)/i,
   /→\s*P?(\d+)/i,
-  /시트\s*(\d+)/i,
-  /SHEET\s*(\d+)/i,
+  /(?:TO|참조)\s*시트\s*(\d+)/i,
 ];
 
 export function extractPageRefHits(texts: TextNode[]): PageRefHit[] {
@@ -87,6 +86,7 @@ export function reconcileCrossPage(
   const byTag = new Map<string, SymbolNode[]>();
   for (const s of symbols) {
     if (s.certainty !== 'confirmed' || !s.rawLabel) continue;
+    if (!isSpecificEquipmentTag(s.rawLabel)) continue;
     const key = `${normalize(s.rawLabel)}|${normalize(s.confirmedType ?? s.typeCandidates[0] ?? '')}`;
     const list = byTag.get(key) ?? [];
     list.push(s);
@@ -221,6 +221,15 @@ function refEvidence(ref: PageRefHit): EvidenceRef {
 
 function normalize(s: string): string {
   return s.trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function isSpecificEquipmentTag(label: string): boolean {
+  const compact = label.trim().toUpperCase();
+  if (/^(?:접점\s*\(JUNCTION\)|JUNCTION|BUS|BUSBAR|모선)$/.test(compact)) return false;
+  // Cross-page inference needs an identifier such as VCB-1, TR_01 or MCCB1.
+  // Ratings/descriptions (for example "MCCB 3P-50/50") are repeated across
+  // panels but do not identify the same physical device.
+  return /^(?:[\p{L}]{1,12}(?:[-_][\p{L}\d]+)+|[\p{L}]{1,8}\d{1,4})$/u.test(compact);
 }
 
 function typesCompatible(a: string, b: string): boolean {

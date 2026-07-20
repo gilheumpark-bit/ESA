@@ -317,4 +317,100 @@ describe('document-orchestrator + evaluator', () => {
     expect(result.document.verification.claimsComplete).toBe(false);
     expect(result.document.title).toContain('취소');
   });
+
+  it('runs Vision precision review for a rendered vector PDF when a BYOK key is present', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'b'.repeat(64), mimeType: 'application/pdf', formatClass: 'vector-pdf',
+      pages: [{
+        pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80,
+        renderScale: 1, renderMode: 'vector', textSample: 'VCB-1', vectorOpCount: 1,
+        rasterOpCount: 0, renderHash: 'vector-rendered', quality, imageBuffer: await makePng(),
+      }],
+    };
+    const review = {
+      snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
+      envelopes: ['symbols', 'connections', 'text', 'logic'].map((role) => ({
+        role, outputHash: `${role}-hash`, drawingHash: source.documentHash,
+        provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
+        data: { warnings: [], confidence: 0.95 },
+      })),
+      failures: [],
+      coverage: {
+        roles: {
+          symbols: { variantId: 'variant:original', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+          connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+          text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 7 },
+          logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+        },
+        plannedCalls: 18, complete: true, maxRegionCallsPerRole: 16,
+      },
+      graph: {
+        drawingHash: source.documentHash,
+        symbols: [{
+          id: 'VCB-01', sourceIds: ['variant:original'], typeCandidates: ['VCB'], rawLabel: 'VCB-1',
+          bounds: { x: 10, y: 10, w: 10, h: 10, page: 1 }, ports: [], confidence: 0.95,
+        }],
+        lines: [], texts: [], edges: [], conflicts: [],
+      },
+    };
+    const executeTeam = jest.fn(async (teamInput: { classification: string }) => (
+      teamInput.classification === 'sld_pdf'
+        ? {
+            success: true,
+            components: [{ id: 'VCB-01', type: 'vcb', label: 'VCB-1', position: { x: 10, y: 10 }, confidence: 0.95 }],
+            connections: [], confidence: 0.95,
+            vectorAudit: { parser: 'pdf', pageNumber: 1, complete: true, roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] },
+          }
+        : {
+            success: true, components: [], connections: [], confidence: 0.95,
+            drawingReview: review,
+            drawingSynthesis: { calculations: [] },
+          }
+    ));
+
+    const result = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-vector-vision',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 18, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification)).toEqual(['sld_pdf', 'sld_image']);
+    expect(result.document.jobStatus).toBe('COMPLETE');
+  });
+
+  it('reports a source-preparation budget stop as failed instead of an empty page', async () => {
+    const quality = {
+      width: 1, height: 1, channels: 4, contrast: 0, edgeDensity: 0,
+      gradientVariance: 0, lowContrast: true, blurry: true,
+      recommendedScale: 4 as const, warnings: ['PARTIAL_BUDGET_EXCEEDED'],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: '9'.repeat(64), mimeType: 'application/pdf', formatClass: 'vector-pdf', totalPageCount: 1,
+      pages: [{
+        pageIndex: 0, width: 1, height: 1, sourceWidth: 1, sourceHeight: 1,
+        renderScale: 1, renderMode: 'raster', textSample: '', vectorOpCount: 0,
+        rasterOpCount: 0, renderHash: 'budget-skipped', quality,
+        preparationError: 'PARTIAL_BUDGET_EXCEEDED',
+      }],
+    };
+    const executeTeam = jest.fn();
+
+    const result = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-budget-preparation',
+      budget: { maxPages: 1, maxVlmCalls: 18, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(result.document.pages[0]).toMatchObject({
+      status: 'failed',
+      error: 'PARTIAL_BUDGET_EXCEEDED',
+    });
+    expect(result.document.pages[0].drawingKind).not.toBe('empty');
+    expect(result.document.jobStatus).toBe('PARTIAL');
+    expect(executeTeam).not.toHaveBeenCalled();
+  });
 });

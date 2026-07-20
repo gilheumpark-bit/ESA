@@ -1,5 +1,6 @@
 import {
   assignDisplayIdsForTexts,
+  buildPageRelations,
   deduplicateLines,
   deduplicateSymbols,
   findUnboundLineItems,
@@ -49,5 +50,19 @@ describe('drawing evidence numbering and merge', () => {
     ]);
     expect(symbols).toHaveLength(2);
     expect(lines).toHaveLength(2);
+  });
+
+  it('keeps a parser-derived low-confidence endpoint relation as an ambiguous relation', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'vcb', type: 'vcb', label: 'VCB-1', bounds: { x: 0, y: 0, w: 10, h: 10 }, confidence: 0.85, pageIndex: 0, regionId: 'vector' },
+      { localId: 'tr', type: 'transformer', label: 'TR-1', bounds: { x: 100, y: 0, w: 10, h: 10 }, confidence: 0.85, pageIndex: 0, regionId: 'vector' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'line', lineKind: 'power', path: [{ x: 5, y: 5 }, { x: 105, y: 5 }], confidence: 0.55, pageIndex: 0, regionId: 'vector' },
+    ]);
+
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([
+      expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[0].id, certainty: 'ambiguous' }),
+    ]);
   });
 });

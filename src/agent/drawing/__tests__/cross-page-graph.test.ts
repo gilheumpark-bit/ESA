@@ -42,6 +42,48 @@ describe('cross-page-graph', () => {
     expect(hits[0].targetPageHint).toBe(6);
   });
 
+  it('does not treat a title-block SHEET number as a cross-page connector', () => {
+    const text: TextNode = {
+      id: 'title-sheet', displayId: 'P01-T001', rawText: 'SHEET 7', confirmedText: 'SHEET 7',
+      candidates: ['SHEET 7'], certainty: 'confirmed',
+      evidence: [{ evidenceId: 'title-sheet-e', pageIndex: 0, bounds: { x: 0, y: 0, w: 40, h: 10 }, confidence: 1 }],
+    };
+
+    expect(extractPageRefHits([text])).toEqual([]);
+  });
+
+  it('does not create a quadratic cross-page graph for generic synthetic junction labels', () => {
+    const junction = (id: string, pageIndex: number): SymbolNode => ({
+      id, displayId: id, rawLabel: '접점 (junction)', confirmedType: 'bus', typeCandidates: ['bus'], certainty: 'confirmed',
+      evidence: [{ evidenceId: `${id}-e`, pageIndex, bounds: { x: 0, y: 0, w: 10, h: 10 }, confidence: 1 }],
+    });
+
+    expect(reconcileCrossPage([
+      junction('j1', 0), junction('j2', 1), junction('j3', 2),
+    ], [], [])).toEqual([]);
+  });
+
+  it('does not mistake repeated breaker ratings for cross-page equipment tags', () => {
+    const ratedBreaker = (id: string, pageIndex: number): SymbolNode => ({
+      id,
+      displayId: id,
+      rawLabel: 'MCCB 3P-50/50',
+      confirmedType: 'breaker',
+      typeCandidates: ['breaker'],
+      certainty: 'confirmed',
+      evidence: [{
+        evidenceId: `${id}-e`,
+        pageIndex,
+        bounds: { x: 0, y: 0, w: 10, h: 10 },
+        confidence: 1,
+      }],
+    });
+
+    expect(reconcileCrossPage([
+      ratedBreaker('mccb-p1', 0), ratedBreaker('mccb-p2', 1), ratedBreaker('mccb-p3', 2),
+    ], [], [])).toEqual([]);
+  });
+
   it('ignores ambiguous page-reference OCR and does not confuse PT with PPT', () => {
     const ambiguous: TextNode = {
       id: 't-amb', displayId: 'P01-T001', rawText: 'TO SHEET 2', candidates: ['TO SHEET 2', 'TO SHEET 7'], certainty: 'ambiguous',
