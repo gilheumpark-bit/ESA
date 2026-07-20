@@ -1,3 +1,5 @@
+import { types as utilTypes } from 'node:util';
+
 import type { EvidenceBounds, Point } from './evidence-types';
 
 const MAX_NORMALIZED_COORDINATE = 1000;
@@ -117,6 +119,12 @@ function invalid(role: ReviewRole, message: string): never {
   throw new Error(`Invalid ${role} review output: ${message}`);
 }
 
+function assertNotProxy(role: ReviewRole, value: object, label: string): void {
+  if (utilTypes.isProxy(value)) {
+    invalid(role, `${label} must not be a Proxy.`);
+  }
+}
+
 function asRecord(role: ReviewRole, value: unknown, label: string): RawRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return invalid(role, `${label} must be an object.`);
@@ -142,6 +150,7 @@ function ownEnumerableDataEntries(
   value: object,
   label: string,
 ): Array<{ key: string; value: unknown }> {
+  assertNotProxy(role, value, label);
   const entries: Array<{ key: string; value: unknown }> = [];
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== 'string') {
@@ -158,6 +167,10 @@ function ownEnumerableDataEntries(
 }
 
 function arrayDataValues(role: ReviewRole, value: unknown[]): unknown[] {
+  assertNotProxy(role, value, 'array');
+  if (Object.getPrototypeOf(value) !== Array.prototype) {
+    invalid(role, 'array must use the standard Array.prototype.');
+  }
   const values = new Array<unknown>(value.length);
   let itemCount = 0;
 
@@ -221,6 +234,7 @@ function assertPayloadBudget(role: ReviewRole, value: unknown): void {
     if (!current.value || typeof current.value !== 'object') {
       continue;
     }
+    assertNotProxy(role, current.value, 'payload value');
     if (seen.has(current.value)) {
       invalid(role, 'payload contains a cycle or shared object reference.');
     }
@@ -279,7 +293,12 @@ function boundedStringArray(
     return invalid(role, `${label} must be a bounded string array.`);
   }
 
-  return value.map((item, index) => boundedString(role, item, `${label}[${index}]`));
+  const values = arrayDataValues(role, value);
+  const strings: string[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    strings.push(boundedString(role, values[index], `${label}[${index}]`));
+  }
+  return strings;
 }
 
 function parsePoint(role: ReviewRole, value: unknown, label: string): Point {
@@ -350,7 +369,12 @@ function parsePoints(role: ReviewRole, value: unknown, label: string, minimumLen
     return invalid(role, `${label} must be a bounded point array.`);
   }
 
-  return value.map((item, index) => parsePoint(role, item, `${label}[${index}]`));
+  const values = arrayDataValues(role, value);
+  const points: Point[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    points.push(parsePoint(role, values[index], `${label}[${index}]`));
+  }
+  return points;
 }
 
 function samePoint(left: Point, right: Point): boolean {
@@ -490,13 +514,18 @@ function parseLogic(role: ReviewRole, value: unknown): LogicEvidence {
   if (!Array.isArray(item.evidenceBounds) || item.evidenceBounds.length === 0 || item.evidenceBounds.length > MAX_DETECTIONS) {
     return invalid(role, 'logic.evidenceBounds must be a non-empty bounded array.');
   }
+  const evidenceBoundValues = arrayDataValues(role, item.evidenceBounds);
+  const evidenceBounds: ReviewBounds[] = [];
+  for (let index = 0; index < evidenceBoundValues.length; index += 1) {
+    evidenceBounds.push(parseBounds(role, evidenceBoundValues[index], `logic.evidenceBounds[${index}]`));
+  }
   return {
     id: boundedString(role, item.id, 'logic.id', MAX_ID_LENGTH),
     topic,
     subjectIds: boundedStringArray(role, item.subjectIds, 'logic.subjectIds', 1),
     attributes: parseAttributes(role, item.attributes),
     statement: boundedString(role, item.statement, 'logic.statement'),
-    evidenceBounds: item.evidenceBounds.map((bound, index) => parseBounds(role, bound, `logic.evidenceBounds[${index}]`)),
+    evidenceBounds,
     confidence: parseConfidence(role, item.confidence, 'logic.confidence'),
   };
 }
@@ -515,7 +544,12 @@ function parseCollection<T>(
     return invalid(role, `${key} must be a bounded array.`);
   }
 
-  return value.map(parse);
+  const values = arrayDataValues(role, value);
+  const parsed: T[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    parsed.push(parse(values[index]));
+  }
+  return parsed;
 }
 
 function assertUniqueLocalIds(

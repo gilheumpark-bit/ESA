@@ -421,4 +421,56 @@ describe('role review contracts', () => {
       parseRoleReviewData('connections', { lines: [inheritedLine] }),
     ).toThrow();
   });
+
+  it('rejects array subclasses before overridden iteration can inject evidence', () => {
+    const symbol = {
+      id: 'symbol-1',
+      rawLabel: 'CB-1',
+      typeCandidates: ['BREAKER'],
+      bounds,
+      ports: [],
+      confidence: 0.8,
+    };
+    class SpoofArray extends Array<typeof symbol> {
+      map<U>(
+        _callbackfn: (value: typeof symbol, index: number, array: typeof symbol[]) => U,
+        _thisArg?: unknown,
+      ): U[] {
+        return [{ ...symbol, id: 'injected', sourceId: 'provider-owned', injected: true } as unknown as U];
+      }
+    }
+    const spoofed = new SpoofArray();
+    spoofed.push(symbol);
+
+    expect(() =>
+      parseRoleReviewData('symbols', { symbols: spoofed }),
+    ).toThrow();
+  });
+
+  it('rejects proxies before their traps can run', () => {
+    const symbol = {
+      id: 'symbol-1',
+      rawLabel: 'CB-1',
+      typeCandidates: ['BREAKER'],
+      bounds,
+      ports: [],
+      confidence: 0.8,
+    };
+    let trapCalled = false;
+    const proxied = new Proxy([symbol], {
+      get() {
+        trapCalled = true;
+        throw new Error('proxy trap must not run');
+      },
+      ownKeys() {
+        trapCalled = true;
+        throw new Error('proxy trap must not run');
+      },
+    });
+
+    expect(() =>
+      parseRoleReviewData('symbols', { symbols: proxied }),
+    ).toThrow();
+    expect(trapCalled).toBe(false);
+  });
 });
