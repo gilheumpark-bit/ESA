@@ -7,6 +7,7 @@
  */
 
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
+import { planAnalysisRegions } from './adaptive-regions';
 
 export interface SplitOptions {
   gridSize: number;
@@ -56,25 +57,13 @@ function normalizedOverlap(value: number): number {
 }
 
 function planRegions(width: number, height: number, gridSize: number, overlap: number) {
-  const cols = gridSize <= 4 ? Math.min(2, gridSize) : Math.min(4, Math.ceil(Math.sqrt(gridSize)));
-  const rows = Math.ceil(gridSize / cols);
-  const baseWidth = Math.ceil(width / cols);
-  const baseHeight = Math.ceil(height / rows);
-  const overlapPx = Math.ceil(Math.max(baseWidth, baseHeight) * overlap);
-  const regions: Array<{ x: number; y: number; w: number; h: number }> = [];
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols && regions.length < gridSize; col++) {
-      const baseX = col * baseWidth;
-      const baseY = row * baseHeight;
-      const x = Math.max(0, baseX - overlapPx);
-      const y = Math.max(0, baseY - overlapPx);
-      const right = Math.min(width, baseX + baseWidth + overlapPx);
-      const bottom = Math.min(height, baseY + baseHeight + overlapPx);
-      regions.push({ x, y, w: right - x, h: bottom - y });
-    }
-  }
-  return regions;
+  return planAnalysisRegions({
+    pageIndex: 0,
+    width,
+    height,
+    gridSize,
+    overlap,
+  }).filter((r) => r.status !== 'skipped-empty').map((r) => r.bounds);
 }
 
 /** Normalize orientation and return actual PNG crops for each planned region. */

@@ -31,6 +31,9 @@ import Link from 'next/link';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import DrawingIntelligenceReport from '@/components/DrawingIntelligenceReport';
+import DrawingEvidenceOverlay from '@/components/DrawingEvidenceOverlay';
+import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -295,6 +298,13 @@ export default function SLDAnalysisPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   // DXF를 기본탭으로 — API 키 없이 즉시 분석 가능 (BYOK 장벽 제거)
   const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('dxf');
+  // V3 전체 문서 판독 작업 (다중 페이지 · COMPLETE/PARTIAL)
+  const [v3Doc, setV3Doc] = useState<DrawingDocumentV3 | null>(null);
+  const [v3JobId, setV3JobId] = useState<string | null>(null);
+  const [v3Loading, setV3Loading] = useState(false);
+  const [v3Error, setV3Error] = useState<string | null>(null);
+  const [selectedDisplayId, setSelectedDisplayId] = useState<string | undefined>();
+  const fullDocInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = useCallback((file: File) => {
     setImageFile(file);
@@ -359,7 +369,62 @@ export default function SLDAnalysisPage() {
     setAnalysis(null);
     setCalcChain([]);
     setError(null);
+    setV3Doc(null);
+    setV3JobId(null);
+    setV3Error(null);
+    setSelectedDisplayId(undefined);
   }, [preview]);
+
+  const handleFullDocumentAnalyze = useCallback(async (file: File) => {
+    setV3Loading(true);
+    setV3Error(null);
+    setV3Doc(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('pages', 'all');
+      if (file.type.startsWith('image/')) {
+        const visionKey = await getFirstAvailableVisionKey();
+        if (visionKey) {
+          formData.append('provider', visionKey.provider);
+          formData.append('apiKey', visionKey.key);
+        }
+      }
+      const res = await fetch('/api/drawing-jobs', { method: 'POST', body: formData });
+      const json = await res.json();
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error?.message ?? `전체 문서 분석 실패 (${res.status})`);
+      }
+      setV3JobId(json.data.jobId);
+      setV3Doc(json.data.document as DrawingDocumentV3);
+    } catch (err) {
+      setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
+    } finally {
+      setV3Loading(false);
+    }
+  }, []);
+
+  const handleV3Correct = useCallback(async (
+    targetDisplayId: string,
+    selectedValue: string,
+    candidates: string[],
+  ) => {
+    if (!v3JobId) return;
+    const res = await fetch(`/api/drawing-jobs/${v3JobId}/corrections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetDisplayId,
+        selectedValue,
+        originalCandidates: candidates,
+        correctedBy: 'user',
+      }),
+    });
+    const json = await res.json();
+    if (res.ok && json?.data?.document) {
+      setV3Doc(json.data.document as DrawingDocumentV3);
+    }
+  }, [v3JobId]);
 
   const handleAnalyze = useCallback(async () => {
     if (!imageFile) return;
@@ -596,6 +661,57 @@ export default function SLDAnalysisPage() {
           </div>
         </div>
       )}
+
+      {/* V3 전체 문서 완전 판독 */}
+      <section className="mt-8 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
+        <h2 className="text-base font-bold text-[var(--text-primary)]">전체 문서 판독 (V3)</h2>
+        <p className="mt-1 text-[12px] text-[var(--text-tertiary)]">
+          모든 페이지 조사 · 역할 분리 심사 · 수량 분리 · 근거 기반 제안. 단일 페이지 `/api/pdf-drawing`과 별도 작업 API입니다.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => fullDocInputRef.current?.click()}
+            disabled={v3Loading}
+            className="rounded-xl bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {v3Loading ? '전체 분석 중…' : 'PDF/DXF/이미지 전체 분석'}
+          </button>
+          <input
+            ref={fullDocInputRef}
+            type="file"
+            accept=".pdf,.dxf,image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFullDocumentAnalyze(file);
+            }}
+          />
+        </div>
+        {v3Error && (
+          <p className="mt-2 text-sm text-[var(--color-error)]">{v3Error}</p>
+        )}
+        {v3Doc && (
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="relative min-h-[280px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)]">
+              <DrawingEvidenceOverlay
+                document={v3Doc}
+                pageIndex={0}
+                width={640}
+                height={360}
+                selectedDisplayId={selectedDisplayId}
+                onSelectDisplayId={setSelectedDisplayId}
+              />
+            </div>
+            <DrawingIntelligenceReport
+              document={v3Doc}
+              selectedDisplayId={selectedDisplayId}
+              onSelectDisplayId={setSelectedDisplayId}
+              onCorrect={handleV3Correct}
+            />
+          </div>
+        )}
+      </section>
 
       {/* Analysis results */}
       {analysis && (
