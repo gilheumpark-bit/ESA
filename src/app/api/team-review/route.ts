@@ -220,8 +220,12 @@ export const POST = withApiHandler(
 
     const persistence = {
       attempted: Boolean(result.report && userId),
-      saved: result.report && userId ? await saveReport(result.report, userId) : false,
+      saved: result.report && userId ? await saveReport(result.report, userId, { signal: requestScope.signal }) : false,
     };
+
+    if (requestScope.signal.aborted) {
+      return ctx.error('ESVA-4504', '요청이 중단되었습니다.', 499);
+    }
 
     const durationMs = perf.end({ teamCount: result.teamResults.length });
 
