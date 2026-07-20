@@ -55,6 +55,47 @@ describe('image quality profiling', () => {
     expect(blurredProfile.gradientVariance).toBeLessThan(crispProfile.gradientVariance);
   });
 
+  it('ignores low-amplitude noise while separating crisp focus, optical blur, and low contrast', async () => {
+    const width = 1000;
+    const height = 1000;
+    const lineColumns = new Set([250, 750]);
+    const crispPixels = Buffer.alloc(width * height, 255);
+    const noisyCrispPixels = Buffer.alloc(width * height);
+    const noiseOnlyPixels = Buffer.alloc(width * height);
+    const lowContrastTexture = Buffer.alloc(width * height);
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = y * width + x;
+        const noise = 248 + ((x * 17 + y * 31) % 8);
+        crispPixels[index] = lineColumns.has(x) ? 0 : 255;
+        noisyCrispPixels[index] = lineColumns.has(x) ? 0 : noise;
+        noiseOnlyPixels[index] = noise;
+        lowContrastTexture[index] = (x + y) % 2 === 0 ? 120 : 136;
+      }
+    }
+
+    const crisp = await sharp(crispPixels, { raw: { width, height, channels: 1 } }).png().toBuffer();
+    const noisyCrisp = await sharp(noisyCrispPixels, { raw: { width, height, channels: 1 } }).png().toBuffer();
+    const blurred = await sharp(crisp).blur(3).png().toBuffer();
+    const lowContrast = await sharp(lowContrastTexture, { raw: { width, height, channels: 1 } }).png().toBuffer();
+    const noiseOnly = await sharp(noiseOnlyPixels, { raw: { width, height, channels: 1 } }).png().toBuffer();
+
+    const [cleanProfile, noisyProfile, blurredProfile, lowContrastProfile, noiseProfile] = await Promise.all([
+      profileImage(toArrayBuffer(crisp)),
+      profileImage(toArrayBuffer(noisyCrisp)),
+      profileImage(toArrayBuffer(blurred)),
+      profileImage(toArrayBuffer(lowContrast)),
+      profileImage(toArrayBuffer(noiseOnly)),
+    ]);
+
+    expect(cleanProfile.blurry).toBe(false);
+    expect(noisyProfile.blurry).toBe(false);
+    expect(blurredProfile.blurry).toBe(true);
+    expect(lowContrastProfile).toMatchObject({ lowContrast: true, blurry: false, warnings: ['LOW_CONTRAST'] });
+    expect(noiseProfile).toMatchObject({ lowContrast: true, blurry: false, warnings: ['LOW_CONTRAST'] });
+  });
+
   it('uses EXIF orientation when reporting image dimensions', async () => {
     const rotated = await sharp({
       create: { width: 20, height: 40, channels: 3, background: '#224466' },

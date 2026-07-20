@@ -6,6 +6,7 @@ const MAX_INPUT_PIXELS = 64_000_000;
 const EDGE_THRESHOLD = 32;
 const FOCUSED_GRADIENT_THRESHOLD = 128;
 const MIN_FOCUSED_GRADIENT_RATIO = 0.05;
+const MAX_SPARSE_WEAK_GRADIENT_DENSITY = 0.05;
 
 type RunningStatistics = {
   count: number;
@@ -67,6 +68,7 @@ export async function profileImage(buffer: ArrayBuffer): Promise<ImageQualityPro
   const gradients: RunningStatistics = { count: 0, mean: 0, sumOfSquares: 0 };
   let edgeCount = 0;
   let nonZeroGradientCount = 0;
+  let meaningfulGradientCount = 0;
   let focusedGradientCount = 0;
   for (let y = 1; y < info.height; y += 1) {
     for (let x = 1; x < info.width; x += 1) {
@@ -76,6 +78,9 @@ export async function profileImage(buffer: ArrayBuffer): Promise<ImageQualityPro
       addSample(gradients, gradient);
       if (gradient > 0) {
         nonZeroGradientCount += 1;
+      }
+      if (gradient >= EDGE_THRESHOLD) {
+        meaningfulGradientCount += 1;
       }
       if (gradient >= FOCUSED_GRADIENT_THRESHOLD) {
         focusedGradientCount += 1;
@@ -90,8 +95,12 @@ export async function profileImage(buffer: ArrayBuffer): Promise<ImageQualityPro
   const edgeDensity = edgeCount / Math.max(1, gradients.count);
   const gradientVariance = variance(gradients);
   const lowContrast = contrast < 0.08;
-  const focusedGradientRatio = focusedGradientCount / Math.max(1, nonZeroGradientCount);
-  const blurry = nonZeroGradientCount > 0 && focusedGradientRatio < MIN_FOCUSED_GRADIENT_RATIO;
+  const focusedGradientRatio = focusedGradientCount / Math.max(1, meaningfulGradientCount);
+  const hasFocusedEdges = meaningfulGradientCount > 0 && focusedGradientRatio >= MIN_FOCUSED_GRADIENT_RATIO;
+  const weakGradientDensity = nonZeroGradientCount / Math.max(1, gradients.count);
+  const blurry = !hasFocusedEdges
+    && weakGradientDensity > 0
+    && weakGradientDensity < MAX_SPARSE_WEAK_GRADIENT_DENSITY;
   const warnings = [lowContrast ? 'LOW_CONTRAST' : '', blurry ? 'BLURRY' : ''].filter(Boolean);
   const dimensions = orientedDimensions(metadata.width, metadata.height, metadata.orientation, info.width, info.height);
 
