@@ -124,7 +124,7 @@ test.describe('검증보고서 페이지', () => {
   test('존재하지 않는 세션은 데모 점수를 만들지 않음', async ({ page }) => {
     await page.goto('/report/demo');
     await expect(page.getByText(
-      '이 세션에서 생성한 보고서를 찾을 수 없습니다. 로그인 후 생성한 보고서는 다른 세션에서도 다시 열 수 있습니다.',
+      '이 세션에서 생성한 보고서를 찾을 수 없습니다. 현재 보고서는 브라우저 세션이 끝나면 다시 열 수 없습니다.',
     )).toBeVisible();
     await expect(page.getByText(
       '데모 점수는 더 이상 표시하지 않습니다. 실제 검증 파이프라인을 실행한 뒤에만 보고서를 볼 수 있습니다.',
