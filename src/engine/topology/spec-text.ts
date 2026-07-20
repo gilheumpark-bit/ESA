@@ -12,6 +12,12 @@ export interface ParsedSpec {
   current?: number;
   power?: number;
   powerUnit?: string;
+  /** 차단기 극수 표기(예: '3P') — 분전반 일람 표기에서 추출 */
+  poles?: string;
+  /** 차단기 프레임 전류(AF) — "3P-50/20"의 50 */
+  frameA?: number;
+  /** 차단기 트립 전류(AT) — "3P-50/20"의 20. 존재 시 정격전류의 정본 */
+  tripA?: number;
 }
 
 export function parseSpecText(text: string): ParsedSpec {
@@ -48,9 +54,26 @@ export function parseSpecText(text: string): ParsedSpec {
     spec.voltage = voltMatch[2].toLowerCase() === 'kv' ? v * 1000 : v;
   }
 
+  // 차단기 극수·AF/AT 정격: "3P-50/20"(bare)·"4P-400AF/400AT"(접미)·"MCCB 100/75"(키워드 문맥).
+  // 실발주 분전반 일람 표기 — 골든 파일럿에서 구조화 결속 0%의 원인으로 실측된 공백.
+  // 날짜(2021/04)·분수(1/2) 오독 방지: P 토큰 또는 차단기 키워드 문맥에서만 bare 슬래시를 읽는다.
+  const polesMatch = rest.match(/(\d)\s*P\b/i);
+  if (polesMatch) spec.poles = `${polesMatch[1]}P`;
+  let ftMatch = rest.match(/(\d{2,4})\s*AF\s*[/-]\s*(\d{2,4})\s*AT\b/i);
+  if (!ftMatch) ftMatch = rest.match(/\dP\s*[-\s]\s*(\d{2,4})\s*\/\s*(\d{2,4})(?!\d)/i);
+  if (!ftMatch && /\b(MCCB|ELCB|ELB|ACB|VCB|MCB|CB|차단기|누전차단기)\b/i.test(text)) {
+    ftMatch = rest.match(/(\d{2,4})\s*\/\s*(\d{2,4})(?!\d)/);
+  }
+  if (ftMatch) {
+    spec.frameA = parseFloat(ftMatch[1]);
+    spec.tripA = parseFloat(ftMatch[2]);
+  }
+
   // 전류: 100A, 50AT
   const ampMatch = rest.match(/(\d+(?:\.\d+)?)\s*(?:A|AT)\b/);
   if (ampMatch) spec.current = parseFloat(ampMatch[1]);
+  // 트립(AT)이 있으면 정격전류의 정본은 트립이다(프레임·잡음 매칭보다 우선).
+  if (spec.tripA !== undefined) spec.current = spec.tripA;
 
   return spec;
 }

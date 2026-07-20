@@ -60,3 +60,49 @@ describe('전류·케이블·단면적', () => {
     expect(parseSpecText('')).toEqual({});
   });
 });
+
+describe('차단기 극수·AF/AT 정격 — 실도면 분전반 일람 표기 (KIMM EE-039 골든 실측)', () => {
+  // 실발주 도면의 차단기 표기는 "MCCB 3P-50/20"(bare)·"4P-400AF/400AT"(접미) 두 형태.
+  // 구현 전 상태: 두 형태 모두 구조화 실패 → 정격 결속 0% (골든 파일럿 실측) → 계산 체인 기아.
+  it('bare 표기 MCCB 3P-50/20 → 3P·50AF·20AT·정격전류 20A', () => {
+    const s = parseSpecText('MCCB 3P-50/20');
+    expect(s.poles).toBe('3P');
+    expect(s.frameA).toBe(50);
+    expect(s.tripA).toBe(20);
+    expect(s.current).toBe(20);
+  });
+
+  it('AF/AT 접미 표기 MCCB 4P-400AF/400AT', () => {
+    const s = parseSpecText('MCCB 4P-400AF/400AT');
+    expect(s.poles).toBe('4P');
+    expect(s.frameA).toBe(400);
+    expect(s.tripA).toBe(400);
+    expect(s.current).toBe(400);
+  });
+
+  it('누전차단기 ELB 2P-30/20도 동일 규칙', () => {
+    const s = parseSpecText('ELB 2P-30/20');
+    expect(s.poles).toBe('2P');
+    expect(s.frameA).toBe(30);
+    expect(s.tripA).toBe(20);
+  });
+
+  it('날짜·분수형 슬래시는 프레임/트립으로 오독하지 않는다', () => {
+    expect(parseSpecText('2021/04').frameA).toBeUndefined();
+    expect(parseSpecText('1/2').frameA).toBeUndefined();
+    expect(parseSpecText('축척 A1/A3').frameA).toBeUndefined();
+  });
+
+  it('P 토큰 없는 100/75는 차단기 키워드 문맥에서만 읽는다', () => {
+    expect(parseSpecText('MCCB 100/75').frameA).toBe(100);
+    expect(parseSpecText('비고 100/75').frameA).toBeUndefined();
+  });
+
+  it('트립(AT)이 있으면 정격전류는 트립이 정본 — 기존 A 단독 매칭과 충돌 없음', () => {
+    const s = parseSpecText('MCCB 3P 225AF/150AT 380V');
+    expect(s.voltage).toBe(380);
+    expect(s.frameA).toBe(225);
+    expect(s.tripA).toBe(150);
+    expect(s.current).toBe(150);
+  });
+});

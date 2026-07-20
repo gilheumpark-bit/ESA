@@ -58,7 +58,7 @@ interface DxfParseResult {
 const BLOCK_SYMBOL_MAP: Record<string, SLDComponentType> = {
   // 차단기류
   'cb': 'breaker', 'mccb': 'breaker', 'acb': 'breaker', 'vcb': 'breaker',
-  'breaker': 'breaker', 'mcb': 'breaker', 'elcb': 'breaker',
+  'breaker': 'breaker', 'mcb': 'breaker', 'elcb': 'breaker', 'elb': 'breaker',
   // 변압기류
   'tr': 'transformer', 'transformer': 'transformer', 'xfmr': 'transformer',
   // 전동기류

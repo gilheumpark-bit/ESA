@@ -51,7 +51,9 @@ export interface PdfParseOptions {
 
 const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   { pattern: /\b(TR|변압기|TRANSFORMER|XFMR)\b/i, type: 'transformer' },
-  { pattern: /\b(CB|ACB|VCB|MCCB|차단기|BREAKER)\b/i, type: 'breaker' },
+  // ELB·ELCB·MCB·누전차단기 추가(2026-07-21): KIMM 실발주 골든 파일럿에서 ELB 20대가
+  // 키워드 부재로 통째 미검출(검출 54/74 실측)된 공백 수리. DXF 파서 사전과 동기.
+  { pattern: /\b(CB|ACB|VCB|MCCB|MCB|ELB|ELCB|차단기|누전차단기|BREAKER)\b/i, type: 'breaker' },
   { pattern: /\b(M|MOTOR|전동기|모터)\b/i, type: 'motor' },
   // 단독 'G'는 제외 — 국내 분전반 도면에서 단독 G는 접지 표기가 관례라,
   // 실도면 18페이지 전 장에 발전기 2대가 검출되는 오탐을 만들었다(라이브
@@ -298,11 +300,20 @@ export async function parsePdfToSLD(
         position: { x: Math.round(t.x / viewport.width * 100), y: Math.round(t.y / viewport.height * 100) },
         voltage: spec.voltage ? `${spec.voltage}V` : undefined,
         current: spec.current ? `${spec.current}A` : undefined,
-        rating: spec.power ? `${spec.power}${spec.powerUnit}` : undefined,
+        rating: spec.power
+          ? `${spec.power}${spec.powerUnit}`
+          : spec.frameA !== undefined ? `${spec.frameA}AF/${spec.tripA}AT` : undefined,
+        properties: spec.poles ? { poles: spec.poles } : undefined,
       });
       usedTexts.add(i);
     }
   }
+
+  // 부하명 행 결속은 의도적으로 미구현(2026-07-21 골든 파일럿 판정): 단순 y-밴드+우측
+  // 근접 휴리스틱을 라이브 실측한 결과 판넬 헤더 텍스트(사용전압·NOTE·GT)를 부하로
+  // 오결속했다(8/8 전부 오탐). 무발명 원칙상 틀린 결속은 무결속보다 위험 — 일람표
+  // 행·열 모델(표 구조 인식)을 갖춘 뒤 별도 배치로 붙인다. 골든 정답은
+  // fixtures/drawings/golden/kimm-panelboard-sld.p14.adjudicated.json의 branchRows.
 
   // 선분 → 연결 (일정 길이 이상)
   const ptToMeter = 0.000352778; // 1pt = 0.352778mm
