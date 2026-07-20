@@ -32,6 +32,29 @@ describe('image quality profiling', () => {
     expect(result.lowContrast).toBe(false);
   });
 
+  it('distinguishes sparse crisp SLD lines from the same lines after optical blur', async () => {
+    const width = 1000;
+    const height = 1000;
+    const crispPixels = Buffer.alloc(width * height, 255);
+    for (const x of [250, 750]) {
+      for (let y = 0; y < height; y += 1) {
+        crispPixels[y * width + x] = 0;
+      }
+    }
+    const crisp = await sharp(crispPixels, {
+      raw: { width, height, channels: 1 },
+    }).png().toBuffer();
+    const blurred = await sharp(crisp).blur(3).png().toBuffer();
+
+    const crispProfile = await profileImage(toArrayBuffer(crisp));
+    const blurredProfile = await profileImage(toArrayBuffer(blurred));
+
+    expect(crispProfile.edgeDensity).toBeLessThan(0.01);
+    expect(crispProfile.blurry).toBe(false);
+    expect(blurredProfile.blurry).toBe(true);
+    expect(blurredProfile.gradientVariance).toBeLessThan(crispProfile.gradientVariance);
+  });
+
   it('uses EXIF orientation when reporting image dimensions', async () => {
     const rotated = await sharp({
       create: { width: 20, height: 40, channels: 3, background: '#224466' },
