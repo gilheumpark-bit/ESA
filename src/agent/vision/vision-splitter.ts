@@ -7,6 +7,9 @@
  */
 
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
+import { cropPrecisionRegions, planAdaptiveBounds } from './adaptive-regions';
+import { profileImage } from './image-quality';
+import { createImageVariants } from './image-variants';
 
 export interface SplitOptions {
   gridSize: number;
@@ -16,6 +19,11 @@ export interface SplitOptions {
   apiKey?: string;
   maxConcurrency?: number;
   deduplicateTolerance?: number;
+  /**
+   * Enables the explicit adaptive preparation path. It defaults to true there;
+   * splitAndAnalyze intentionally keeps its legacy original-crop VLM path.
+   */
+  precision?: boolean;
 }
 
 export interface VisionSplitResult {
@@ -40,6 +48,40 @@ export interface MergedVisionResult {
 }
 
 const MAX_INPUT_PIXELS = 40_000_000;
+
+function precisionGridSize(recommendedScale: 1 | 2 | 4): 4 | 9 | 16 {
+  if (recommendedScale === 4) return 16;
+  if (recommendedScale === 2) return 9;
+  return 4;
+}
+
+/**
+ * Prepare physical crops for later role selection without calling any Vision LLM.
+ * Set precision to false to retain only original-variant, 4-region preparation.
+ */
+export async function preparePrecisionRegions(
+  imageBuffer: ArrayBuffer,
+  options: Pick<SplitOptions, 'precision'> = {},
+) {
+  const profile = await profileImage(imageBuffer);
+  const variants = await createImageVariants(imageBuffer, profile);
+  const precision = options.precision ?? true;
+  const selected = precision
+    ? variants.filter((variant) =>
+      variant.kind === 'original'
+      || variant.kind === 'text-high-contrast'
+      || variant.kind === 'line-enhanced')
+    : variants.filter((variant) => variant.kind === 'original');
+  const gridSize = precision ? precisionGridSize(profile.recommendedScale) : 4;
+  const regions = [];
+
+  for (const variant of selected) {
+    const bounds = planAdaptiveBounds(variant.width, variant.height, gridSize, 0.18);
+    regions.push(...await cropPrecisionRegions(variant, bounds));
+  }
+
+  return { profile, variants, regions };
+}
 
 function normalizedGridSize(value: number): number {
   if (!Number.isInteger(value) || value < 1 || value > 16) {
