@@ -91,7 +91,7 @@
 ### 3. 테스트 (Testing) — /10
 
 평가 포인트:
-- **테스트 커버리지**: 22 suites / 323 tests — 주요 모듈 커버 여부
+- **테스트 커버리지**: 89 suites / 749 tests — 주요 모듈 커버 여부
 - **계산기 정확도**: ±0.01% 오차 범위 내 reference value 검증
 - **기준서 DSL 테스트**: KEC/NEC/IEC condition tree 평가 정확성
 - **LLM 도구 테스트**: Intent parser, output filter, judge, source tracker
@@ -101,7 +101,7 @@
 
 실행 명령:
 ```bash
-npm test              # 전체 22 suites
+npm test              # 전체 89 suites
 npm run test:calc     # 계산기 정확도만
 ```
 
