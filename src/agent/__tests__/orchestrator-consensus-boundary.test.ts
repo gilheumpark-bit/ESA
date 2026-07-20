@@ -2,6 +2,7 @@ import { runOrchestrator } from '../orchestrator';
 import { executeSLDTeam } from '../teams/sld-team';
 import { executeStandardsTeam } from '../teams/standards-team';
 import { executeConsensusTeam } from '../teams/consensus-team';
+import type { DrawingSynthesis } from '../electrical/synthesis';
 
 jest.mock('../teams/sld-team', () => ({ executeSLDTeam: jest.fn() }));
 jest.mock('../teams/layout-team', () => ({ executeLayoutTeam: jest.fn() }));
@@ -17,6 +18,30 @@ const baseTeamResult = {
   success: true,
   confidence: 0.9,
   durationMs: 1,
+};
+
+const completeDrawingSynthesis: DrawingSynthesis = {
+  drawingHash: 'drawing-hash-boundary',
+  requiredRoles: ['symbols', 'connections', 'text', 'logic'],
+  completedRoles: ['symbols', 'connections', 'text', 'logic'],
+  missingRoles: [],
+  reviewIntegrity: { coverageComplete: true, roleFailures: [] },
+  stages: {
+    normalizer: 'COMPLETE',
+    invariants: 'COMPLETE',
+    calculator: 'COMPLETE',
+    logicResolver: 'COMPLETE',
+    synthesis: 'COMPLETE',
+  },
+  evidenceRegistry: [],
+  calculations: [],
+  issues: [],
+  conflicts: [],
+  claims: [],
+  recommendations: [],
+  graphConflicts: [],
+  verdict: 'PASS',
+  requiresHumanReview: false,
 };
 
 function drawingRequest() {
@@ -55,14 +80,18 @@ describe('orchestrator consensus boundary', () => {
     expect(mockConsensus).not.toHaveBeenCalled();
   });
 
-  test('records the distinct teams that actually participated in consensus', async () => {
+  test('does not count TEAM-STD as an independent image reviewer', async () => {
+    mockSLD.mockResolvedValue({ teamId: 'TEAM-SLD', ...baseTeamResult, drawingSynthesis: completeDrawingSynthesis });
+    mockConsensus.mockResolvedValue({
+      teamResult: { teamId: 'TEAM-CONSENSUS', ...baseTeamResult },
+      report: { reportId: 'RPT-TEST', drawingSynthesis: completeDrawingSynthesis } as never,
+    });
+
     const result = await runOrchestrator(drawingRequest());
 
     expect(result).toHaveProperty('consensus.executed', true);
-    expect(result).toHaveProperty(
-      'consensus.participatingTeams',
-      expect.arrayContaining(['TEAM-SLD', 'TEAM-STD']),
-    );
+    expect(result).toHaveProperty('consensus.participatingTeams', ['TEAM-SLD']);
+    expect(result).toHaveProperty('consensus.reason', '원본 격리 심사 4개를 메인 종합 단계에서 대조했습니다.');
     expect(mockConsensus).toHaveBeenCalledTimes(1);
   });
 
