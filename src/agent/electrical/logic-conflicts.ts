@@ -20,6 +20,8 @@ export interface LogicConflict {
   graphEvidenceIds: string[];
   graphOriginalEvidenceIds: string[];
   graphSourceIds: string[];
+  graphEvidencePages: number[];
+  graphEvidenceBounds: ReviewBounds[];
   logicEvidenceIds: string[];
   logicEvidenceBounds: ReviewBounds[];
   graphConflictIds: string[];
@@ -226,7 +228,7 @@ function makeConflict(
   kind: LogicConflictKind,
   reasonCode: string,
   resolutions: readonly Resolution[],
-  extras: { stableIds?: string[]; originals?: string[]; sources?: string[]; bounds?: ReviewBounds[] } = {},
+  extras: { stableIds?: string[]; originals?: string[]; sources?: string[]; pages?: number[]; graphBounds?: ReviewBounds[]; bounds?: ReviewBounds[] } = {},
 ): LogicConflict {
   const symbols = resolutions.flatMap((resolution) => resolution.candidates);
   const referenceKey = sorted(resolutions.map((resolution) => resolution.reference)).join('+') || 'integrity';
@@ -242,6 +244,8 @@ function makeConflict(
     graphEvidenceIds: sorted([...symbols.map((symbol) => symbol.id), ...(extras.stableIds ?? [])]),
     graphOriginalEvidenceIds: sorted([...symbols.flatMap((symbol) => symbol.originalEvidenceIds), ...(extras.originals ?? [])]),
     graphSourceIds: sorted([...symbols.flatMap((symbol) => symbol.sourceIds), ...(extras.sources ?? [])]),
+    graphEvidencePages: [...new Set([...symbols.map((symbol) => symbol.bounds.page), ...(extras.pages ?? [])])].sort((left, right) => left - right),
+    graphEvidenceBounds: sortedBounds([...symbols.map((symbol) => symbol.bounds), ...(extras.graphBounds ?? [])]),
     logicEvidenceIds: sorted([item.id, ...(item.sourceId ? [item.sourceId] : [])]),
     logicEvidenceBounds: sortedBounds([...(item.evidenceBounds ?? []), ...(extras.bounds ?? [])]),
     graphConflictIds: sorted(graph.conflicts),
@@ -255,6 +259,7 @@ function lineEvidenceExtras(graph: SpatialEvidenceGraph, stableIds: readonly str
     stableIds: lines.map((line) => line.id),
     originals: lines.flatMap((line) => line.originalEvidenceIds),
     sources: lines.flatMap((line) => line.sourceIds),
+    pages: lines.flatMap((line) => line.pages),
   };
 }
 
@@ -265,6 +270,7 @@ function relationExtras(graph: SpatialEvidenceGraph, edgeIds: readonly string[])
     stableIds: [...edges.flatMap((edge) => [edge.id, edge.lineId]), ...lineExtras.stableIds],
     originals: lineExtras.originals,
     sources: lineExtras.sources,
+    pages: lineExtras.pages,
   };
 }
 
@@ -277,6 +283,8 @@ function graphConflictExtras(graph: SpatialEvidenceGraph) {
     stableIds: [...matchedLines.map((line) => line.id), ...matchedSymbols.map((symbol) => symbol.id)],
     originals: [...matchedLines.flatMap((line) => line.originalEvidenceIds), ...matchedSymbols.flatMap((symbol) => symbol.originalEvidenceIds)],
     sources: [...matchedLines.flatMap((line) => line.sourceIds), ...matchedSymbols.flatMap((symbol) => symbol.sourceIds)],
+    pages: [...matchedLines.flatMap((line) => line.pages), ...matchedSymbols.map((symbol) => symbol.bounds.page)],
+    graphBounds: matchedSymbols.map((symbol) => symbol.bounds),
   };
 }
 
@@ -354,7 +362,8 @@ function compareVoltage(normalized: NormalizedElectricalGraph, item: LogicEviden
   if (values.length !== 1) return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', values.length === 0 ? 'VOLTAGE_EVIDENCE_MISSING' : 'AMBIGUOUS_VOLTAGE_EVIDENCE', [resolution])];
   if (values[0] === asserted) return [];
   return [makeConflict(graph, item, 'CONTRADICTION', 'VOLTAGE_MISMATCH', [resolution], {
-    stableIds: specs.map((spec) => spec.evidenceId), originals: specs.flatMap((spec) => spec.originalEvidenceIds), sources: specs.flatMap((spec) => spec.sourceIds), bounds: specs.map((spec) => ({ ...spec.bounds })),
+    stableIds: specs.map((spec) => spec.evidenceId), originals: specs.flatMap((spec) => spec.originalEvidenceIds), sources: specs.flatMap((spec) => spec.sourceIds),
+    pages: specs.map((spec) => spec.bounds.page), graphBounds: specs.map((spec) => ({ ...spec.bounds })),
   })];
 }
 

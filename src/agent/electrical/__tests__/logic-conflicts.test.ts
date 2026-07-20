@@ -93,6 +93,11 @@ describe('independent logic conflict comparison', () => {
     ]));
     expect(reverse).toEqual([expect.objectContaining({ kind: 'CONTRADICTION', topic: 'DIRECTION', severity: 'critical', status: 'open' })]);
     expect(reverse[0].graphOriginalEvidenceIds).toContain('orig-line-1');
+    expect(reverse[0].graphEvidencePages).toEqual([1]);
+    expect(reverse[0].graphEvidenceBounds).toEqual(expect.arrayContaining([
+      expect.objectContaining({ page: 1, x: 100 }),
+      expect.objectContaining({ page: 1, x: 300 }),
+    ]));
 
     const absent = compareLogicToGraph(normalized(), envelope([
       statement({ id: 'absent', topic: 'DIRECTION', subjectIds: ['local:vcb', 'local:load'], attributes: { fromId: 'local:vcb', toId: 'local:load' }, evidenceBounds: [bounds(100), bounds(500)] }),
