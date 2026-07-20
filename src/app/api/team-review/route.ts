@@ -12,7 +12,6 @@ import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
-import { saveReport } from '@/lib/report-store';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
 const RULES_MAX_BYTES = 1024 * 1024;
@@ -218,14 +217,9 @@ export const POST = withApiHandler(
       return ctx.error('ESVA-4500', result.error ?? '팀 리뷰 실행 실패', 500);
     }
 
-    const persistence = {
-      attempted: Boolean(result.report && userId),
-      saved: result.report && userId ? await saveReport(result.report, userId, { signal: requestScope.signal }) : false,
-    };
-
-    if (requestScope.signal.aborted) {
-      return ctx.error('ESVA-4504', '요청이 중단되었습니다.', 499);
-    }
+    // 결과 전달이 완료된 뒤의 별도 명시 저장만 영속화할 수 있다. 이 request는
+    // disconnect 시 remote write를 남기지 않도록 session-only report를 반환한다.
+    const persistence = { attempted: false, saved: false };
 
     const durationMs = perf.end({ teamCount: result.teamResults.length });
 
@@ -238,6 +232,7 @@ export const POST = withApiHandler(
       teamCount: result.teamResults.length,
       consensus: result.consensus,
       persistence,
+      persisted: false,
       teamSummary: result.teamResults.map(tr => ({
         teamId: tr.teamId,
         success: tr.success,

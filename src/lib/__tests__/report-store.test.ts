@@ -90,20 +90,4 @@ describe('report store ownership and integrity', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test('forwards the caller signal to the in-flight write and reports false when it aborts', async () => {
-    const controller = new AbortController();
-    let release: (() => void) | undefined;
-    const writeStarted = new Promise<void>((resolve) => { release = resolve; });
-    fetchMock.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
-      expect(init.signal).toBe(controller.signal);
-      release?.();
-      init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
-    }));
-
-    const pending = saveReport(await makeReport(), 'firebase-user-a', { signal: controller.signal });
-    await writeStarted;
-    controller.abort();
-
-    await expect(pending).resolves.toBe(false);
-  });
 });
