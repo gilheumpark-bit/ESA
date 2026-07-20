@@ -9,7 +9,9 @@ const MAX_ID_LENGTH = 240;
 const DEFAULT_SNAP_TOLERANCE = 24;
 const DEFAULT_DEDUPE_IOU = 0.5;
 const LINE_TOLERANCE = 1e-6;
-const GEOMETRY_TOLERANCE = 2;
+const ENDPOINT_DEDUPE_TOLERANCE = 1;
+const INTERIOR_POLYLINE_TOLERANCE = 2;
+const POINT_DEDUPE_TOLERANCE = 2;
 const MAX_NESTED_ITEMS = 10_000;
 const MAX_TOTAL_POINTS = 10_000;
 const MAX_TOTAL_STRINGS = 200_000;
@@ -394,19 +396,30 @@ function resamplePolyline(path: readonly Point[], count: number): Point[] {
   return samples;
 }
 
-function endpointMatch(left: LineEvidence, right: LineEvidence, reverse: boolean): boolean {
-  return samePoint(left.start, reverse ? right.end : right.start, GEOMETRY_TOLERANCE)
-    && samePoint(left.end, reverse ? right.start : right.end, GEOMETRY_TOLERANCE);
+function endpointMatch(left: LineEvidence, right: LineEvidence, reverse: boolean, tolerance: number): boolean {
+  return samePoint(left.start, reverse ? right.end : right.start, tolerance)
+    && samePoint(left.end, reverse ? right.start : right.end, tolerance);
 }
 
-function sameLine(left: LineEvidence, right: LineEvidence): boolean {
-  if (left.lineKind !== right.lineKind) return false;
-  const reverse = endpointMatch(left, right, true);
-  if (!reverse && !endpointMatch(left, right, false)) return false;
+function hasUniformNonZeroOffset(left: readonly Point[], right: readonly Point[]): boolean {
+  const offset = { x: right[0].x - left[0].x, y: right[0].y - left[0].y };
+  if (Math.hypot(offset.x, offset.y) <= LINE_TOLERANCE) return false;
+  return left.every((point, index) => Math.hypot(
+    (right[index].x - point.x) - offset.x,
+    (right[index].y - point.y) - offset.y,
+  ) <= LINE_TOLERANCE);
+}
+
+function lineRelation(left: LineEvidence, right: LineEvidence): 'duplicate' | 'near-parallel' | 'different' {
+  if (left.lineKind !== right.lineKind) return 'different';
+  const reverse = endpointMatch(left, right, true, INTERIOR_POLYLINE_TOLERANCE);
+  if (!reverse && !endpointMatch(left, right, false, INTERIOR_POLYLINE_TOLERANCE)) return 'different';
   const sampleCount = Math.max(2, Math.min(128, Math.max(left.path.length, right.path.length)));
   const leftSamples = resamplePolyline(left.path, sampleCount);
   const rightSamples = resamplePolyline(reverse ? [...right.path].reverse() : right.path, sampleCount);
-  return leftSamples.every((point, index) => samePoint(point, rightSamples[index], GEOMETRY_TOLERANCE));
+  if (!leftSamples.every((point, index) => samePoint(point, rightSamples[index], INTERIOR_POLYLINE_TOLERANCE))) return 'different';
+  if (!endpointMatch(left, right, reverse, ENDPOINT_DEDUPE_TOLERANCE)) return 'near-parallel';
+  return hasUniformNonZeroOffset(leftSamples, rightSamples) ? 'near-parallel' : 'duplicate';
 }
 
 function sourcePages(symbols: readonly SymbolEvidence[]): Map<string, number[]> {
@@ -425,6 +438,7 @@ function deduplicateLines(
   lines: readonly LineEvidence[],
   pagesBySource: ReadonlyMap<string, number[]>,
   fallbackPages: readonly number[],
+  conflicts: string[],
 ): LineRecord[] {
   const ordered = [...lines].sort((left, right) =>
     left.lineKind.localeCompare(right.lineKind)
@@ -437,14 +451,21 @@ function deduplicateLines(
       ? pagesBySource.get(candidate.sourceId) ?? (fallbackPages.length === 1 ? [...fallbackPages] : [])
       : fallbackPages.length === 1 ? [...fallbackPages] : [];
     if (candidatePages.length !== 1) invalid('line page cannot be inferred safely from an ambiguous drawing frame.');
-    const match = accepted.find((record) =>
-      (record.pages.length === 0 || candidatePages.length === 0 || record.pages.join(',') === candidatePages.join(','))
-      && sameLine(record.item, candidate));
+    const comparable = accepted.filter((record) =>
+      record.pages.join(',') === candidatePages.join(','));
+    const match = comparable.find((record) => lineRelation(record.item, candidate) === 'duplicate');
     if (match) {
       match.evidence.push(candidate);
       match.pages = [...new Set([...match.pages, ...candidatePages])].sort((left, right) => left - right);
     }
-    else accepted.push({ item: candidate, evidence: [candidate], pages: [...candidatePages] });
+    else {
+      for (const record of comparable) {
+        if (lineRelation(record.item, candidate) === 'near-parallel') {
+          conflicts.push(`AMBIGUOUS_NEAR_PARALLEL_LINE:${stableIds([...record.evidence.map((item) => item.id), candidate.id]).join('|')}`);
+        }
+      }
+      accepted.push({ item: candidate, evidence: [candidate], pages: [...candidatePages] });
+    }
   }
   return accepted.sort((left, right) =>
     (left.pages[0] ?? Number.MAX_SAFE_INTEGER) - (right.pages[0] ?? Number.MAX_SAFE_INTEGER)
@@ -473,13 +494,13 @@ function deduplicatePoints(
   const accepted: Array<{ page: number; point: Point; originalEvidenceIds: string[] }> = [];
   const buckets = new Map<string, number[]>();
   for (const value of values.sort((left, right) => left.page - right.page || left.point.y - right.point.y || left.point.x - right.point.x)) {
-    const bucketX = Math.floor(value.point.x / GEOMETRY_TOLERANCE);
-    const bucketY = Math.floor(value.point.y / GEOMETRY_TOLERANCE);
+    const bucketX = Math.floor(value.point.x / POINT_DEDUPE_TOLERANCE);
+    const bucketY = Math.floor(value.point.y / POINT_DEDUPE_TOLERANCE);
     let match: { page: number; point: Point; originalEvidenceIds: string[] } | undefined;
     for (let x = bucketX - 1; x <= bucketX + 1 && !match; x += 1) {
       for (let y = bucketY - 1; y <= bucketY + 1 && !match; y += 1) {
         for (const index of buckets.get(`${value.page}:${x}:${y}`) ?? []) {
-          if (samePoint(accepted[index].point, value.point, GEOMETRY_TOLERANCE)) {
+          if (samePoint(accepted[index].point, value.point, POINT_DEDUPE_TOLERANCE)) {
             match = accepted[index];
             break;
           }
@@ -551,7 +572,7 @@ export function assembleSpatialGraph(
 
   const pagesBySource = sourcePages(symbolEvidence);
   const fallbackPages = [...new Set(symbolEvidence.map((item) => item.bounds.page))].sort((left, right) => left - right);
-  const lineRecords = deduplicateLines(lineEvidence, pagesBySource, fallbackPages);
+  const lineRecords = deduplicateLines(lineEvidence, pagesBySource, fallbackPages, conflicts);
   const lines: SpatialLine[] = lineRecords.map((record, index) => {
     const originalEvidenceIds = stableIds(record.evidence.map((item) => item.id));
     return {

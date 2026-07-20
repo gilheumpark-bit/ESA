@@ -121,16 +121,26 @@ describe('source-linked spatial graph', () => {
     expect(graph.crossovers).toHaveLength(1);
   });
 
-  it('does not merge a distinct parallel path while rejecting oversized nested point input before assembly', () => {
+  it('preserves boundary-near parallel conductors with a deterministic HOLD conflict while leaving distant parallels conflict-free', () => {
     const parallel = fixture();
+    parallel[1].data.lines?.push({
+      id: 'line-boundary', sourceId: 'region:1', lineKind: 'power',
+      path: [{ x: 20, y: 52 }, { x: 80, y: 52 }], start: { x: 20, y: 52 }, end: { x: 80, y: 52 },
+      junctions: [], crossovers: [], confidence: 0.7,
+    });
     parallel[1].data.lines?.push({
       id: 'line-parallel', sourceId: 'region:1', lineKind: 'power',
       path: [{ x: 20, y: 56 }, { x: 80, y: 56 }], start: { x: 20, y: 56 }, end: { x: 80, y: 56 },
       junctions: [], crossovers: [], confidence: 0.7,
     });
     reseal(parallel);
-    expect(assembleSpatialGraph(parallel).lines).toHaveLength(2);
+    const graph = assembleSpatialGraph(parallel);
+    expect(graph.lines).toHaveLength(3);
+    expect(graph.conflicts).toContain('AMBIGUOUS_NEAR_PARALLEL_LINE:line-a|line-boundary');
+    expect(graph.conflicts.some((item) => item.includes('line-parallel'))).toBe(false);
+  });
 
+  it('rejects oversized nested point input before assembly', () => {
     const oversized = fixture();
     const line = oversized[1].data.lines?.[0] as NonNullable<RoleReviewData['lines']>[number];
     line.path = Array.from({ length: 10_001 }, (_, index) => ({ x: index, y: 50 }));
