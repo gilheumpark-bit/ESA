@@ -25,7 +25,7 @@ describe('cross-page-graph', () => {
     ];
     const rels = reconcileCrossPage(symbols, [], []);
     expect(rels.some((r) => r.status === 'confirmed')).toBe(false);
-    expect(rels.some((r) => r.status === 'candidate' && r.reason === 'same-label-no-page-ref')).toBe(true);
+    expect(rels.some((r) => r.status === 'candidate' && r.reason === 'same-label-voltage-unknown')).toBe(true);
   });
 
   it('extracts TO SHEET N references', () => {
@@ -40,5 +40,25 @@ describe('cross-page-graph', () => {
     }];
     const hits = extractPageRefHits(texts);
     expect(hits[0].targetPageHint).toBe(6);
+  });
+
+  it('ignores ambiguous page-reference OCR and does not confuse PT with PPT', () => {
+    const ambiguous: TextNode = {
+      id: 't-amb', displayId: 'P01-T001', rawText: 'TO SHEET 2', candidates: ['TO SHEET 2', 'TO SHEET 7'], certainty: 'ambiguous',
+      evidence: [{ evidenceId: 'te', pageIndex: 0, bounds: { x: 0, y: 0, w: 50, h: 10 }, confidence: 0.5 }],
+    };
+    expect(extractPageRefHits([ambiguous])).toEqual([]);
+
+    const symbol = (id: string, type: string, pageIndex: number): SymbolNode => ({
+      id, displayId: id, rawLabel: 'PT-1', confirmedType: type, typeCandidates: [type], certainty: 'confirmed',
+      evidence: [{ evidenceId: `${id}-e`, pageIndex, bounds: { x: 0, y: 20, w: 10, h: 10 }, confidence: 1 }],
+    });
+    const ref: TextNode = { ...ambiguous, id: 't-ref', certainty: 'confirmed', confirmedText: 'TO SHEET 2', candidates: ['TO SHEET 2'] };
+    const volts: TextNode[] = [0, 1].map((pageIndex) => ({
+      id: `kv-${pageIndex}`, displayId: `kv-${pageIndex}`, rawText: '22.9kV', confirmedText: '22.9kV', candidates: ['22.9kV'], certainty: 'confirmed',
+      evidence: [{ evidenceId: `kv-e-${pageIndex}`, pageIndex, bounds: { x: 0, y: 20, w: 20, h: 10 }, confidence: 1 }],
+    }));
+    const rels = reconcileCrossPage([symbol('pt', 'pt', 0), symbol('ppt', 'ppt', 1)], [ref, ...volts], extractPageRefHits([ref]));
+    expect(rels.some((relation) => relation.status === 'confirmed')).toBe(false);
   });
 });

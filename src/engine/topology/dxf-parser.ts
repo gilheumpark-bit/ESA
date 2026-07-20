@@ -467,6 +467,7 @@ export function parseDxfToSLD(
   return {
     components,
     connections: snap.connections,
+    sourceTexts: texts.map((item) => ({ text: item.text, position: { x: item.x, y: item.y }, confidence: 0.99 })),
     suggestedCalculations: [],
     confidence: 0.95, // 벡터 파싱은 VLM보다 높은 신뢰도
     rawDescription: `DXF parsed: ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text labels`,

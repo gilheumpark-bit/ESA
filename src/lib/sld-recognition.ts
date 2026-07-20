@@ -59,6 +59,8 @@ export interface CalcSuggestion {
 export interface SLDAnalysis {
   components: SLDComponent[];
   connections: SLDConnection[];
+  /** Parser-originated text anchors in the same coordinate space as components. */
+  sourceTexts?: Array<{ text: string; position: { x: number; y: number }; confidence: number }>;
   suggestedCalculations: CalcSuggestion[];
   systemVoltage?: string;
   systemType?: string;

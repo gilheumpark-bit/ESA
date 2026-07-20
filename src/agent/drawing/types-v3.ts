@@ -209,6 +209,8 @@ export interface UnresolvedItem {
 
 export interface UserCorrection {
   correctionId: string;
+  idempotencyKey: string;
+  correctionKind: 'text' | 'type' | 'label';
   targetDisplayId: string;
   originalCandidates: string[];
   selectedValue: string;

@@ -52,4 +52,13 @@ describe('count-register', () => {
     expect(row.ambiguous).toBe(1);
     expect(row.physicalEquipmentCount).toBeNull();
   });
+
+  it('counts a boundary coverage gap as missing suspected instead of zero', () => {
+    const symbols = [sym({ id: 'a', displayId: 'P01-S001', confirmedType: 'vcb' })];
+    const rows = buildEquipmentCounts(symbols, new Map([['a', 'E001']]), [], [{
+      id: 'clip-1', code: 'BOUNDARY_CLIP', pageIndex: 0,
+      bounds: { x: 0, y: 0, w: 100, h: 100 }, note: '경계 잘림',
+    }]);
+    expect(rows[0]).toMatchObject({ missingSuspected: 1, countStatus: 'HOLD' });
+  });
 });

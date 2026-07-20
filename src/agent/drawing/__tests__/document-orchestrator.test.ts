@@ -1,5 +1,5 @@
 import { runDocumentAnalysis } from '../document-orchestrator';
-import { _resetJobsForTests, updateJob } from '../drawing-job-store';
+import { _resetJobsForTests, cancelOwnedJob, createJob, updateJob } from '../drawing-job-store';
 import { evaluatePredictionAgainstLabel } from '../sld-evaluator-v2';
 import { DRAWING_DOCUMENT_SCHEMA_VERSION } from '../types-v3';
 import type { PreparedDrawingPage, PreparedDrawingSource } from '../drawing-source';
@@ -149,6 +149,7 @@ describe('document-orchestrator + evaluator', () => {
         components: [{ id: `VCB-${pageNumber}`, type: 'vcb', label: `VCB-${pageNumber}`, position: { x: 10, y: 10 }, confidence: 0.95 }],
         connections: [],
         confidence: 0.95,
+        vectorAudit: { parser: 'pdf', pageNumber, complete: true, roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] },
       };
     });
     const deps = { prepareSource: async () => source, executeTeam: executeTeam as never };
@@ -269,5 +270,51 @@ describe('document-orchestrator + evaluator', () => {
     expect(result.document.unresolvedItems).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'LOW_RESOLUTION_HOLD', recommendedUpload: expect.objectContaining({ minLongEdgePx: 2400, minCharHeightPx: 12 }) }),
     ]));
+  });
+
+  it('does not claim vector coverage complete without a role audit receipt', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'a'.repeat(64), mimeType: 'application/dxf', formatClass: 'dxf',
+      pages: [{ pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80, renderScale: 1, renderMode: 'vector', textSample: 'VCB', vectorOpCount: 1, rasterOpCount: 0, renderHash: 'vector-no-audit', quality }],
+    };
+    const result = await runDocumentAnalysis(
+      { bytes: await makePng(), mimeType: 'application/dxf', ownerId: 'owner-vector' },
+      { prepareSource: async () => source, executeTeam: async () => ({ success: true, components: [{ id: 'v1', type: 'vcb', label: 'VCB-1', position: { x: 10, y: 10 }, confidence: 0.95 }], connections: [], confidence: 0.95 }) as never },
+    );
+    expect(result.document.jobStatus).toBe('PARTIAL');
+    expect(result.document.coverageLedger.regionsFailed).toBeGreaterThan(0);
+    expect(result.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'ROLE_CALL_FAILED' }),
+    ]));
+  });
+
+  it('keeps cancellation authoritative when it arrives during analysis', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'c'.repeat(64), mimeType: 'application/dxf', formatClass: 'dxf',
+      pages: [{ pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80, renderScale: 1, renderMode: 'vector', textSample: 'VCB', vectorOpCount: 1, rasterOpCount: 0, renderHash: 'cancel-vector', quality }],
+    };
+    const budget = { maxPages: 1, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 };
+    const queued = createJob({ documentHash: source.documentHash, ownerId: 'owner-cancel', budget, estimatedPages: 1 });
+    const result = await runDocumentAnalysis(
+      { bytes: await makePng(), mimeType: 'application/dxf', ownerId: 'owner-cancel', jobId: queued.jobId, budget },
+      { prepareSource: async () => source, executeTeam: async () => {
+        cancelOwnedJob(queued.jobId, 'owner-cancel');
+        return { success: true, components: [{ id: 'v1', type: 'vcb', label: 'VCB-1', position: { x: 10, y: 10 }, confidence: 0.95 }], connections: [], confidence: 0.95, vectorAudit: { parser: 'dxf', pageNumber: 1, complete: true, roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] } } as never;
+      } },
+    );
+    expect(result.job.status).toBe('CANCELLED');
+    expect(result.document.jobStatus).toBe('CANCELLED');
+    expect(result.document.verification.claimsComplete).toBe(false);
+    expect(result.document.title).toContain('취소');
   });
 });

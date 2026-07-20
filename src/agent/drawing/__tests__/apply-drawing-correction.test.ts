@@ -39,6 +39,7 @@ describe('applyDrawingCorrection', () => {
   it('recomputes derived fields and invalidates calculations that used corrected evidence', () => {
     const corrected = applyDrawingCorrection(documentFixture(), {
       targetDisplayId: 'P01-T001', selectedValue: '100A', correctedBy: 'authenticated-user',
+      correctionKind: 'text', idempotencyKey: 'request-0001',
     });
 
     expect(corrected.evidenceGraph.texts[0]).toMatchObject({ confirmedText: '100A', certainty: 'confirmed', holdCode: undefined });
@@ -49,6 +50,16 @@ describe('applyDrawingCorrection', () => {
     expect(corrected.jobStatus).toBe('PARTIAL');
     expect(corrected.verification.verified95).toBe(false);
     expect(corrected.userCorrections[0].affectedEntityIds).toEqual(expect.arrayContaining(['P01-T001', 'P01-calc-1']));
+    expect(corrected.userCorrections[0]).toMatchObject({ correctionKind: 'text', idempotencyKey: 'request-0001', recalcBefore: expect.any(Object), recalcAfter: expect.any(Object) });
     expect(corrected.createdAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('changes a symbol type without overwriting its equipment label', () => {
+    const source = documentFixture();
+    const corrected = applyDrawingCorrection(source, {
+      targetDisplayId: 'P01-S001', selectedValue: 'mccb', correctionKind: 'type',
+      idempotencyKey: 'request-0002', correctedBy: 'authenticated-user',
+    });
+    expect(corrected.evidenceGraph.symbols[0]).toMatchObject({ confirmedType: 'mccb', rawLabel: 'VCB-1' });
   });
 });

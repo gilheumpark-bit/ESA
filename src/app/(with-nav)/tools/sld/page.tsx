@@ -12,7 +12,7 @@
  * PART 5: Main page component
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Upload,
@@ -37,6 +37,8 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
+
+const V3_JOB_SESSION_KEY = 'esva-sld-v3-active-job';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -311,6 +313,7 @@ export default function SLDAnalysisPage() {
   const [v3SourceFile, setV3SourceFile] = useState<File | null>(null);
   const [v3PageIndex, setV3PageIndex] = useState(0);
   const [v3Cancelling, setV3Cancelling] = useState(false);
+  const [v3JobStatus, setV3JobStatus] = useState<string | null>(null);
   const fullDocInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = useCallback((file: File) => {
@@ -393,6 +396,8 @@ export default function SLDAnalysisPage() {
     setV3SourceFile(null);
     setV3PageIndex(0);
     setV3Cancelling(false);
+    setV3JobStatus(null);
+    sessionStorage.removeItem(V3_JOB_SESSION_KEY);
   }, [preview]);
 
   const handleFullDocumentAnalyze = useCallback(async (file: File) => {
@@ -422,6 +427,8 @@ export default function SLDAnalysisPage() {
       }
       const jobId = String(created.data.jobId);
       setV3JobId(jobId);
+      setV3JobStatus(String(created.data.status));
+      sessionStorage.setItem(V3_JOB_SESSION_KEY, jobId);
 
       const runForm = new FormData();
       const visionKey = await getFirstAvailableVisionKey();
@@ -439,6 +446,7 @@ export default function SLDAnalysisPage() {
         throw new Error(result?.error?.message ?? `전체 문서 분석 실패 (${runResponse.status})`);
       }
       setV3Doc(result.data.document as DrawingDocumentV3);
+      setV3JobStatus(String(result.data.status));
       setV3ResumeAvailable(Boolean(result.data.resumeAvailable));
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
@@ -446,6 +454,64 @@ export default function SLDAnalysisPage() {
       setV3Loading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (v3JobId) return;
+    const savedJobId = sessionStorage.getItem(V3_JOB_SESSION_KEY);
+    if (!savedJobId) return;
+    let disposed = false;
+    void (async () => {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(savedJobId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        cache: 'no-store',
+      });
+      const json = await response.json().catch(() => null);
+      if (disposed) return;
+      if (!response.ok || !json?.success) {
+        sessionStorage.removeItem(V3_JOB_SESSION_KEY);
+        return;
+      }
+      setV3JobId(savedJobId);
+      setV3JobStatus(String(json.data.status));
+      if (json.data.document) {
+        const restored = json.data.document as DrawingDocumentV3;
+        setV3Doc(restored);
+        setV3ResumeAvailable(restored.jobStatus === 'PARTIAL');
+      }
+      if (!['COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(String(json.data.status))) setV3Loading(true);
+    })();
+    return () => { disposed = true; };
+  }, [v3JobId]);
+
+  useEffect(() => {
+    if (!v3Loading || !v3JobId) return;
+    let disposed = false;
+    const poll = async () => {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        cache: 'no-store',
+      });
+      const json = await response.json().catch(() => null);
+      if (disposed || !response.ok || !json?.success) return;
+      setV3JobStatus(String(json.data.status));
+      if (json.data.document) {
+        const polled = json.data.document as DrawingDocumentV3;
+        setV3Doc(polled);
+        setV3ResumeAvailable(polled.jobStatus === 'PARTIAL');
+      }
+      if (['COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(String(json.data.status))) setV3Loading(false);
+    };
+    void poll();
+    const timer = window.setInterval(() => { void poll(); }, 1_500);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [v3JobId, v3Loading]);
 
   const handleV3Cancel = useCallback(async () => {
     if (!v3JobId || v3Cancelling) return;
@@ -461,6 +527,8 @@ export default function SLDAnalysisPage() {
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '취소 요청을 처리하지 못했습니다.');
       setV3ResumeAvailable(false);
+      setV3JobStatus('CANCELLED');
+      sessionStorage.removeItem(V3_JOB_SESSION_KEY);
       setV3Error('분석을 취소했습니다. 보안을 위해 서버의 임시 원본도 삭제했습니다.');
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '분석 취소 오류');
@@ -490,6 +558,7 @@ export default function SLDAnalysisPage() {
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '분석 재개에 실패했습니다.');
       setV3Doc(json.data.document as DrawingDocumentV3);
+      setV3JobStatus(String(json.data.status));
       setV3ResumeAvailable(Boolean(json.data.resumeAvailable));
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 재개 오류');
@@ -515,6 +584,9 @@ export default function SLDAnalysisPage() {
       body: JSON.stringify({
         targetDisplayId,
         selectedValue,
+        correctionKind: targetDisplayId.includes('-T') ? 'text' : 'type',
+        expectedUpdatedAt: v3Doc?.updatedAt,
+        idempotencyKey: crypto.randomUUID(),
       }),
     });
     const json = await res.json();
@@ -524,7 +596,7 @@ export default function SLDAnalysisPage() {
     } else {
       setV3Error(json?.error?.message ?? '수정값을 반영하지 못했습니다.');
     }
-  }, [v3JobId]);
+  }, [v3Doc?.updatedAt, v3JobId]);
 
   const handleV3Select = useCallback((displayId: string) => {
     setSelectedDisplayId(displayId);
@@ -781,6 +853,7 @@ export default function SLDAnalysisPage() {
         <p className="mt-1 text-[12px] text-[var(--text-tertiary)]">
           모든 페이지 조사 · 역할 분리 심사 · 수량 분리 · 근거 기반 제안. 단일 페이지 `/api/pdf-drawing`과 별도 작업 API입니다.
         </p>
+        {v3JobStatus && <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]" role="status">작업 상태: {v3JobStatus}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"

@@ -21,7 +21,7 @@
 | V3 보고서·평가 V2·벤치 | `drawing-document-report.ts`, `sld-evaluator-v2.ts`, `sld-benchmark-runner.ts` |
 | API | `POST/GET /api/drawing-jobs`, `POST /api/drawing-jobs/[jobId]/corrections` |
 | UI | `DrawingIntelligenceReport.tsx`, `DrawingEvidenceOverlay.tsx`, `/tools/sld` V3 섹션 |
-| 게이트 | `npm run gate:sld-golden`, `npm run test:drawing-v3` |
+| 게이트 | V3 계약: `npm run gate:sld-v3-contract`, 전체 회귀: `npm run test:drawing-v3`; 기존 `gate:sld-golden`은 구형 리포트 manifest 감사이며 V3 배지를 활성화하지 않음 |
 
 **정직 잔여 (V 실증 전):** 실현장 골든 라벨셋 라벨링·공급자 3회 반복 측정·`verified95` 서명 영수증 대조는 데이터 준비 후 §15-8~9. 생성형 업스케일 없음.
 

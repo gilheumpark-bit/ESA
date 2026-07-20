@@ -43,16 +43,26 @@ export function DrawingDocumentV3Overlay({
   const source = pageBounds(document, pageIndex);
   const sx = width / source.width;
   const sy = height / source.height;
+  const selectedRelation = document.evidenceGraph.relations.find((relation) => relation.displayId === selectedDisplayId);
+  const selectedCrossPage = document.crossPageRelations.find((relation) => relation.displayId === selectedDisplayId);
+  const relatedSymbolIds = new Set([
+    selectedRelation?.from,
+    selectedRelation?.to,
+    selectedCrossPage?.fromRef,
+    selectedCrossPage?.toRef,
+  ].filter((id): id is string => Boolean(id)));
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="absolute inset-0 h-full w-full" aria-label={`도면 ${pageIndex + 1}페이지 분석 근거`}>
-      {lines.map((line) => (
-        <g key={line.id}>
+      {lines.map((line) => {
+        const selected = selectedDisplayId === line.displayId || selectedRelation?.lineId === line.id;
+        return (
+          <g key={line.id}>
           <polyline
             points={line.path.map((point) => `${point.x * sx},${point.y * sy}`).join(' ')}
             fill="none"
-            stroke={selectedDisplayId === line.displayId ? '#b42318' : '#b45309'}
-            strokeWidth={selectedDisplayId === line.displayId ? 4 : 2}
+            stroke={selected ? '#b42318' : '#b45309'}
+            strokeWidth={selected ? 4 : 2}
             vectorEffect="non-scaling-stroke"
           />
           <polyline
@@ -70,12 +80,13 @@ export function DrawingDocumentV3Overlay({
               if (event.key === 'Enter' || event.key === ' ') onSelectDisplayId?.(line.displayId);
             }}
           />
-        </g>
-      ))}
+          </g>
+        );
+      })}
       {symbols.map((symbol) => {
         const evidence = symbol.evidence.find((item) => item.pageIndex === pageIndex);
         if (!evidence) return null;
-        const selected = selectedDisplayId === symbol.displayId;
+        const selected = selectedDisplayId === symbol.displayId || relatedSymbolIds.has(symbol.id);
         return (
           <g key={symbol.id} role="button" tabIndex={0} aria-label={`${symbol.displayId} 기기`} onClick={() => onSelectDisplayId?.(symbol.displayId)} onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') onSelectDisplayId?.(symbol.displayId);

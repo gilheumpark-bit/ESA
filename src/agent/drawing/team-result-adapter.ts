@@ -157,7 +157,10 @@ export function adaptTeamResult(
   }
 
   const components = result.components ?? [];
-  const positions = components.flatMap((component) => component.position ? [component.position] : []);
+  const positions = [
+    ...components.flatMap((component) => component.position ? [component.position] : []),
+    ...(result.vectorTexts ?? []).map((item) => item.position),
+  ];
   const mapPosition = sourcePositionMapper(positions, context);
   const mapped = new Map<string, Position>();
   const symbolSize = clamp(Math.min(context.width, context.height) * 0.025, 16, 64);
@@ -194,6 +197,25 @@ export function adaptTeamResult(
     }
   }
 
+  const vectorTexts: RawTextSeed[] = (result.vectorTexts ?? []).map((item, index) => {
+    const point = mapPosition(item.position);
+    const height = clamp(symbolSize * 0.55, 10, 24);
+    const width = clamp(height * Math.max(1, item.text.length) * 0.58, 10, context.width * 0.4);
+    return {
+      text: item.text,
+      candidates: [item.text],
+      bounds: {
+        x: clamp(point.x, 0, Math.max(0, context.width - width)),
+        y: clamp(point.y - height, 0, Math.max(0, context.height - height)),
+        w: width,
+        h: height,
+      },
+      pageIndex: context.pageIndex,
+      readings: [],
+      sourceEvidenceIds: [`vector-text-p${context.pageIndex}-${index}`],
+    };
+  });
+
   const lines: RawLineHit[] = [];
   for (let index = 0; index < (result.connections ?? []).length; index += 1) {
     const connection = result.connections?.[index];
@@ -213,5 +235,9 @@ export function adaptTeamResult(
       certainty: result.confidence >= 0.8 ? 'confirmed' : 'ambiguous',
     });
   }
-  return { symbols, lines, texts: reviewedTexts.length > 0 ? reviewedTexts : texts };
+  return {
+    symbols,
+    lines,
+    texts: reviewedTexts.length > 0 ? reviewedTexts : vectorTexts.length > 0 ? vectorTexts : texts,
+  };
 }

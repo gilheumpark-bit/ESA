@@ -18,6 +18,7 @@ export interface RecommendationInput {
   unresolved: UnresolvedItem[];
   hasGroundPath?: boolean;
   coverageEvidenceIds?: string[];
+  coverageComplete?: boolean;
 }
 
 export function buildRecommendations(input: RecommendationInput): RecommendationV3[] {
@@ -34,15 +35,16 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
   }
   for (const s of confirmed) {
     if (!connected.has(s.id) && !isBusLike(s)) {
+      const supported = input.coverageComplete === true;
       out.push(rec(++seq, {
         severity: 'major',
         problem: `${s.displayId} 장치가 확정 결선에 연결되지 않았습니다 (고아 장치).`,
         relatedDisplayIds: [s.displayId],
         evidenceIds: s.evidence.map((e) => e.evidenceId),
-        status: 'SUPPORTED',
+        status: supported ? 'SUPPORTED' : 'HOLD',
         recommendedAction: '결선 누락·구획 경계 잘림·페이지 참조를 확인하십시오.',
-        requiredInputs: [],
-        standardRefs: [],
+        requiredInputs: supported ? [] : ['전체 관련 구획 판독 완료'],
+        standardRefs: ['ESA-SLD-RULE:ORPHAN-CONNECTION'],
         calcReceiptIds: [],
       }));
     }
@@ -60,15 +62,16 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
         return node ? isProtection(node) : false;
       });
       if (!hasProtection) {
+        const supported = input.coverageComplete === true;
         out.push(rec(++seq, {
           severity: 'critical',
           problem: `${src.displayId} → ${load.displayId} 경로에 보호기가 확인되지 않습니다.`,
           relatedDisplayIds: [src.displayId, load.displayId],
           evidenceIds: path.flatMap((id) =>
             confirmed.find((s) => s.id === id)?.evidence.map((e) => e.evidenceId) ?? []),
-          status: 'SUPPORTED',
+          status: supported ? 'SUPPORTED' : 'HOLD',
           recommendedAction: '경로상 차단기·퓨즈 존재 여부와 도면 누락을 재확인하십시오.',
-          requiredInputs: [],
+          requiredInputs: supported ? [] : ['전체 관련 구획 판독 완료'],
           standardRefs: ['KEC 보호 일반'],
           calcReceiptIds: [],
         }));
@@ -101,7 +104,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
   // Ground
   if (input.hasGroundPath === false) {
     const coverageEvidence = [...new Set(input.coverageEvidenceIds ?? [])];
-    const supported = coverageEvidence.length > 0;
+    const supported = input.coverageComplete === true && coverageEvidence.length > 0;
     out.push(rec(++seq, {
       severity: 'critical',
       problem: '접지 경로가 확정 그래프에서 확인되지 않았습니다.',
@@ -173,7 +176,7 @@ export function hasRequiredLinks(r: RecommendationV3): boolean {
   if (r.status === 'HOLD') return true;
   if (r.status === 'SUPPORTED') {
     return r.evidenceIds.length > 0
-      && (r.calcReceiptIds.length > 0 || r.standardRefs.length > 0 || r.requiredInputs.length === 0);
+      && (r.calcReceiptIds.length > 0 || r.standardRefs.length > 0);
   }
   // CONDITIONAL may lack calc but must state required inputs
   return r.requiredInputs.length > 0 || r.evidenceIds.length > 0;

@@ -17,6 +17,7 @@ describe('recommendation-engine', () => {
       relations: [],
       calculations: [],
       unresolved: [],
+      coverageComplete: true,
     });
     const hold = recs.find((r) => r.status === 'HOLD' && r.problem.includes('P03-S012'));
     expect(hold).toBeDefined();
@@ -55,6 +56,7 @@ describe('recommendation-engine', () => {
       }],
       calculations: [],
       unresolved: [],
+      coverageComplete: true,
     });
     expect(recs.some((r) => r.problem.includes('보호기'))).toBe(true);
   });
@@ -65,10 +67,21 @@ describe('recommendation-engine', () => {
       unresolved: [{ id: 'u1', code: 'LINE_CONTINUITY_UNCERTAIN', displayId: 'P01-L001', pageIndex: 0, bounds: { x: 0, y: 0, w: 20, h: 2 }, note: '종단 장치 미확정' }],
       hasGroundPath: false,
       coverageEvidenceIds: ['coverage-call-1'],
+      coverageComplete: true,
     });
     expect(recs).toEqual(expect.arrayContaining([
       expect.objectContaining({ problem: expect.stringContaining('접지 경로'), status: 'SUPPORTED', evidenceIds: expect.arrayContaining(['coverage-call-1']) }),
       expect.objectContaining({ problem: expect.stringContaining('P01-L001'), status: 'HOLD' }),
     ]));
+  });
+
+  it('keeps absence findings on HOLD while coverage is partial', () => {
+    const recs = buildRecommendations({
+      symbols: [mk('s1', 'generator'), mk('s2', 'load')],
+      relations: [{ id: 'r1', displayId: 'P01-R001', from: 's1', to: 's2', certainty: 'confirmed', evidence: [mk('e', 'line').evidence[0]] }],
+      calculations: [], unresolved: [], hasGroundPath: false,
+      coverageEvidenceIds: ['coverage-call-1'], coverageComplete: false,
+    });
+    expect(recs.filter((r) => /보호기|접지 경로/.test(r.problem)).every((r) => r.status === 'HOLD')).toBe(true);
   });
 });

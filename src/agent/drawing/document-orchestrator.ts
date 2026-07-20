@@ -111,7 +111,9 @@ function normalizeBudget(input: Partial<DocumentBudget> | undefined): DocumentBu
 function requestedPageIndexes(source: PreparedDrawingSource, requested: OrchestrateInput['requestedPages']): number[] {
   const available = new Set(source.pages.map((page) => page.pageIndex));
   if (requested === undefined || requested === 'all') return [...available].sort((a, b) => a - b);
-  return [...new Set(requested)].filter((page) => available.has(page)).sort((a, b) => a - b);
+  const unique = [...new Set(requested)];
+  if (unique.some((page) => !available.has(page))) throw new Error('DRAWING_REQUESTED_PAGE_OUT_OF_RANGE');
+  return unique.sort((a, b) => a - b);
 }
 
 function gridSizeFor(page: PreparedDrawingPage): 4 | 9 | 16 {
@@ -182,17 +184,28 @@ function markAllFailed(
   return next;
 }
 
-function markVectorComplete(
+function markVectorCoverage(
   regions: CoverageRegionRecord[],
+  audit: TeamResult['vectorAudit'],
   receipt: string,
-): CoverageRegionRecord[] {
+): { regions: CoverageRegionRecord[]; roles: RoleId[] } {
   let next = regions;
+  const completedRoles: RoleId[] = [];
   for (const region of regions) {
     for (const role of region.requiredRoles) {
-      next = recordRoleCall(next, region.regionId, role, `${receipt}:${role}`, true);
+      const success = Boolean(audit?.complete && audit.roles.includes(role));
+      next = recordRoleCall(
+        next,
+        region.regionId,
+        role,
+        `${receipt}:${role}`,
+        success,
+        success ? undefined : `vector ${role} audit receipt missing`,
+      );
+      if (success && !completedRoles.includes(role)) completedRoles.push(role);
     }
   }
-  return next;
+  return { regions: next, roles: completedRoles };
 }
 
 function councilEnvelope(result: TeamResult, role: Exclude<RoleId, 'coverage-auditor'>) {
@@ -379,18 +392,24 @@ export async function runDocumentAnalysis(
   deps: DocumentAnalysisDependencies = {},
 ): Promise<{ job: DrawingJobRecord; document: DrawingDocumentV3 }> {
   const budget = normalizeBudget(input.budget);
+  const ownerId = input.ownerId ?? 'internal';
+  const jobBeforePreparation = input.jobId ? getOwnedJob(input.jobId, ownerId) : undefined;
+  if (input.jobId && !jobBeforePreparation) throw new Error('DRAWING_JOB_NOT_FOUND');
+  const requestedSpec = input.requestedPages ?? jobBeforePreparation?.document?.requestedPages ?? 'all';
   const source = await (deps.prepareSource ?? prepareDrawingSource)({
     bytes: input.bytes,
     mimeType: input.mimeType,
     fileName: input.fileName,
+    requestedPages: requestedSpec,
+    budget,
+    signal: input.signal,
+    shouldCancel: () => Boolean(input.jobId && getOwnedJob(input.jobId, ownerId)?.cancelRequested),
   });
-  const ownerId = input.ownerId ?? 'internal';
   const previousJob = input.jobId ? getOwnedJob(input.jobId, ownerId) : undefined;
   if (input.jobId && !previousJob) throw new Error('DRAWING_JOB_NOT_FOUND');
   if (previousJob && previousJob.documentHash !== source.documentHash) {
     throw new Error('DRAWING_JOB_SOURCE_MISMATCH');
   }
-  const requestedSpec = input.requestedPages ?? previousJob?.document?.requestedPages ?? 'all';
   const requested = requestedPageIndexes(source, requestedSpec);
   if (requested.length === 0) throw new Error('DRAWING_REQUESTED_PAGES_EMPTY');
 
@@ -401,7 +420,7 @@ export async function runDocumentAnalysis(
       estimatedPages: requested.length,
     });
   if (previousJob) {
-    updateJob(job.jobId, { budget, cancelRequested: false, error: undefined, status: 'QUEUED' });
+    updateJob(job.jobId, { budget, error: undefined });
   }
   updateJob(job.jobId, {
     estimated: {
@@ -478,6 +497,22 @@ export async function runDocumentAnalysis(
     const rasterPlans = rasterCoveragePlans(page);
     const vectorPlans = vectorCoveragePlans(page);
 
+    if (page.preparationError) {
+      state.status = 'failed';
+      state.error = page.preparationError;
+      const plans = createCoverageRegions(vectorPlans);
+      regionRecords.push(...markAllFailed(plans, page.preparationError));
+      addUnresolved(
+        unresolved,
+        page,
+        'PARTIAL_BUDGET_EXCEEDED',
+        page.preparationError === 'CANCELLED'
+          ? '사용자 취소로 페이지 준비를 중단했습니다.'
+          : '페이지 렌더 준비가 페이지·픽셀·시간 예산을 초과했습니다.',
+      );
+      continue;
+    }
+
     if (
       attemptedPages >= budget.maxPages
       || Date.now() >= deadline
@@ -514,8 +549,16 @@ export async function runDocumentAnalysis(
         mergeAdapted(vectorResult, page, source, symbolHits, lineHits, textSeeds);
         pageHasUsableResult = true;
         if (!input.vision || source.formatClass === 'dxf') {
-          pageRegions = markVectorComplete(createCoverageRegions(vectorPlans), `vector:${page.renderHash}`);
-          ALL_ROLES.forEach((role) => rolesPresent.add(role));
+          const vectorCoverage = markVectorCoverage(
+            createCoverageRegions(vectorPlans),
+            vectorResult.vectorAudit,
+            `vector:${page.renderHash}`,
+          );
+          pageRegions = vectorCoverage.regions;
+          vectorCoverage.roles.forEach((role) => rolesPresent.add(role));
+          if (!vectorResult.vectorAudit?.complete) {
+            addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서의 역할별 분석·검증 영수증이 완전하지 않습니다.');
+          }
         }
       } else if (!input.vision || source.formatClass === 'dxf') {
         addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서가 설비와 관계를 확정하지 못했습니다.');
@@ -639,6 +682,9 @@ export async function runDocumentAnalysis(
   for (const symbol of symbols) symbol.equipmentId = equipmentLinks.get(symbol.id);
 
   const coverageLedger = buildCoverageLedger(regionRecords, [...rolesPresent], unresolvedRescans);
+  const coverageComplete = coverageLedger.allPlannedFinished
+    && coverageLedger.regionsFailed === 0
+    && coverageLedger.unresolvedRescans === 0;
   updateJob(job.jobId, { status: 'SYNTHESIZING' });
   const equipmentCounts = buildEquipmentCounts(symbols, equipmentLinks, crossPageRelations, unresolved);
   const ratedValues = extractRatedValues(texts, symbols);
@@ -652,14 +698,12 @@ export async function runDocumentAnalysis(
     calculations,
     unresolved,
     hasGroundPath: lines.some((line) => line.lineKind === 'ground' && line.certainty === 'confirmed'),
+    coverageComplete,
     coverageEvidenceIds: coverageLedger.regions.flatMap((region) =>
       (region.roleCalls['coverage-auditor'] ?? []).filter((call) => call.success).map((call) => call.callId)),
   });
 
   const completePages = pageStates.every((page) => page.status === 'complete' || page.status === 'skipped-empty');
-  const coverageComplete = coverageLedger.allPlannedFinished
-    && coverageLedger.regionsFailed === 0
-    && coverageLedger.unresolvedRescans === 0;
   const cancelled = Boolean(input.signal?.aborted || getJob(job.jobId)?.cancelRequested);
   const jobStatus: DrawingDocumentV3['jobStatus'] = cancelled
     ? 'CANCELLED'
@@ -668,7 +712,7 @@ export async function runDocumentAnalysis(
       : 'PARTIAL';
   const builtDocument = buildDrawingDocumentV3({
     documentHash: source.documentHash,
-    documentPageCount: source.pages.length,
+    documentPageCount: source.totalPageCount ?? source.pages.length,
     jobStatus,
     requestedPages: requestedSpec === 'all' ? 'all' : requested,
     pages: pageStates,

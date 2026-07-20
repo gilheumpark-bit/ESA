@@ -44,7 +44,7 @@ describe('SLD evaluator V2 spatial and signed gate', () => {
       { type: 'transformer', label: 'TR-1', bounds: { x: 70, y: 10, w: 20, h: 20 }, pageIndex: 0 },
     ],
     edges: [{ fromLabel: 'VCB-1', toLabel: 'TR-1', pageIndex: 0 }],
-    texts: [{ text: '100A', pageIndex: 0 }],
+    texts: [{ text: '100A', pageIndex: 0, bounds: { x: 30, y: 30, w: 20, h: 8 } }],
     junctions: [{ pageIndex: 0, x: 50, y: 20, kind: 'junction' as const }],
     logicFindings: [{ pageIndex: 0, expected: 'recommendation' as const, contains: '접지 경로 누락' }],
   };
@@ -64,9 +64,32 @@ describe('SLD evaluator V2 spatial and signed gate', () => {
     const shifted = fixture();
     shifted.evidenceGraph.symbols[0].evidence[0].bounds.x = 500;
     shifted.evidenceGraph.lines[0].junctions[0].x = 500;
+    shifted.evidenceGraph.texts[0].evidence[0].bounds.x = 500;
     const failed = evaluatePredictionAgainstLabel(shifted, label);
     expect(failed.metrics.symbolMacroF1).toBeLessThan(1);
     expect(failed.metrics.junctionAccuracy).toBe(0);
+    expect(failed.metrics.textFieldAccuracy).toBe(0);
+
+    const reversed = fixture();
+    reversed.evidenceGraph.relations[0] = { ...reversed.evidenceGraph.relations[0], from: 's2', to: 's1' };
+    expect(evaluatePredictionAgainstLabel(reversed, label).metrics.edgeF1).toBe(0);
+  });
+
+  it('recomputes thresholds instead of trusting a tampered pass boolean', () => {
+    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+    const prediction = fixture();
+    prediction.recommendations[0].evidenceIds = ['se1'];
+    prediction.evidenceGraph.relations[0] = { ...prediction.evidenceGraph.relations[0], from: 's2', to: 's1' };
+    const low = evaluatePredictionAgainstLabel(prediction, label, {
+      datasetId: 'dataset-low', datasetKind: 'real-adjudicated', provider: 'gemini', model: 'gemini-test', runCount: 3,
+      signingPrivateKeyPem: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+    });
+    low.passesAllThresholds = true;
+    const fingerprint = { ...prediction.verification.productionFingerprint!, provider: 'gemini', model: 'gemini-test' };
+    expect(shouldActivateVerified95(low, fingerprint, {
+      publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      requiredStrata: ['real-adjudicated-low-resolution'], realAdjudicated: true,
+    })).toBe(false);
   });
 
   it('requires an external signature, real adjudicated data, strata and three runs before badge activation', () => {
@@ -120,5 +143,14 @@ describe('SLD evaluator V2 spatial and signed gate', () => {
       publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       requiredStrata: ['real-adjudicated-low-resolution'], realAdjudicated: true,
     })).toBe(false);
+  });
+
+  it('rejects a claimed three-run suite when only one run receipt exists', () => {
+    const prediction = fixture();
+    prediction.recommendations[0].evidenceIds = ['se1'];
+    const single = evaluatePredictionAgainstLabel(prediction, label, { datasetId: 'dataset-single' });
+    expect(() => buildEvaluationSuiteResult([single], {
+      provider: 'gemini', model: 'gemini-test', datasetKind: 'real-adjudicated', runsPerCase: 3,
+    })).toThrow('EVAL_SUITE_RUN_EVIDENCE_MISMATCH');
   });
 });

@@ -388,6 +388,14 @@ export async function parsePdfToSLD(
   return {
     components,
     connections: snap.connections,
+    sourceTexts: texts.map((item) => ({
+      text: item.text,
+      position: {
+        x: Math.max(0, Math.min(100, (item.x / Math.max(1, viewport.width)) * 100)),
+        y: Math.max(0, Math.min(100, (item.y / Math.max(1, viewport.height)) * 100)),
+      },
+      confidence: 0.99,
+    })),
     suggestedCalculations: [],
     confidence,
     rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text items, ${lines.length} line segments${structureNote}`,

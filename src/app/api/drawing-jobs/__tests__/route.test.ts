@@ -4,6 +4,7 @@ import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { cancelOwnedJob, createJob, getOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { createSourceLease, isSourceLeaseAvailable } from '@/agent/drawing/source-lease-store';
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
+import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
 import { DELETE, GET, POST } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
@@ -14,6 +15,7 @@ jest.mock('@/agent/drawing/drawing-job-store', () => ({
   updateOwnedJob: jest.fn(),
   cancelOwnedJob: jest.fn(),
   createJob: jest.fn(),
+  isDrawingJobStoreAvailable: jest.fn(() => true),
 }));
 jest.mock('@/agent/drawing/source-lease-store', () => ({
   createSourceLease: jest.fn(),
@@ -24,12 +26,18 @@ jest.mock('@/agent/drawing/drawing-api-owner', () => ({
   resolveDrawingOwner: jest.fn(),
   applyDrawingOwnerCookie: jest.fn(),
 }));
+jest.mock('@/agent/drawing/drawing-source', () => ({
+  enumerateDrawingPageCount: jest.fn(async () => 18),
+}));
 
 const owner = { ownerId: 'user:test-user', authenticated: true };
 
-function formRequest(extras: Record<string, string> = {}): NextRequest {
+function formRequest(
+  extras: Record<string, string> = {},
+  file = new File([Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])], 'sample.png', { type: 'image/png' }),
+): NextRequest {
   const form = new FormData();
-  form.set('file', new File(['drawing'], 'sample.png', { type: 'image/png' }));
+  form.set('file', file);
   for (const [key, value] of Object.entries(extras)) form.set(key, value);
   return new NextRequest('http://localhost:3000/api/drawing-jobs', {
     method: 'POST',
@@ -79,10 +87,14 @@ describe('drawing jobs API ownership and input boundary', () => {
     jest.mocked(createJob).mockReturnValue({ jobId: 'job-deferred', status: 'QUEUED', estimated: { pages: 1 } } as never);
     jest.mocked(createSourceLease).mockReturnValue({ leaseId: 'lease-a', documentHash: 'a'.repeat(64), expiresAt: Date.now() + 60_000 });
 
-    const response = await POST(formRequest({ deferred: '1' }));
+    const response = await POST(formRequest(
+      { deferred: '1' },
+      new File(['%PDF-1.7\n'], 'sample.pdf', { type: 'application/pdf' }),
+    ));
 
     expect(response.status).toBe(202);
-    expect(createJob).toHaveBeenCalledWith(expect.objectContaining({ ownerId: owner.ownerId }));
+    expect(enumerateDrawingPageCount).toHaveBeenCalledWith(expect.objectContaining({ fileName: 'sample.pdf' }));
+    expect(createJob).toHaveBeenCalledWith(expect.objectContaining({ ownerId: owner.ownerId, estimatedPages: 18 }));
     expect(createSourceLease).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.stringMatching(/^[a-f0-9]{64}$/), owner.ownerId);
     expect(runDocumentAnalysis).not.toHaveBeenCalled();
   });
@@ -108,5 +120,24 @@ describe('drawing jobs API ownership and input boundary', () => {
     const response = await POST(formRequest({ apiKey: 'request-key', provider: 'openai' }));
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain(diagnostic);
+  });
+
+  it('rejects extension-only spoofed files and marks responses private no-store', async () => {
+    const spoofed = await POST(formRequest({}, new File(['not-a-png'], 'sample.png', { type: 'image/png' })));
+    expect(spoofed.status).toBe(400);
+    expect(spoofed.headers.get('cache-control')).toBe('private, no-store');
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('does not retain a source lease for a completed synchronous analysis', async () => {
+    jest.mocked(isSourceLeaseAvailable).mockReturnValue(true);
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job: { jobId: 'job-complete', status: 'COMPLETE', estimated: {} },
+      document: { documentHash: 'a'.repeat(64), jobStatus: 'COMPLETE' },
+    } as never);
+    const response = await POST(formRequest({ leaseSource: '1' }));
+    expect(response.status).toBe(200);
+    expect(createSourceLease).not.toHaveBeenCalled();
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
   });
 });

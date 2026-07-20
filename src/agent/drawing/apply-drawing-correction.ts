@@ -11,6 +11,8 @@ import type { DrawingDocumentV3, UnresolvedItem, UserCorrection } from './types-
 export interface DrawingCorrectionInput {
   targetDisplayId: string;
   selectedValue: string;
+  correctionKind: 'text' | 'type' | 'label';
+  idempotencyKey: string;
   correctedBy: string;
   sourceAvailable?: boolean;
 }
@@ -22,13 +24,15 @@ export function applyDrawingCorrection(
   const textTarget = current.evidenceGraph.texts.find((item) => item.displayId === input.targetDisplayId);
   const symbolTarget = current.evidenceGraph.symbols.find((item) => item.displayId === input.targetDisplayId);
   if (!textTarget && !symbolTarget) throw new Error('DRAWING_CORRECTION_TARGET_NOT_FOUND');
+  if (input.correctionKind === 'text' && !textTarget) throw new Error('DRAWING_CORRECTION_KIND_MISMATCH');
+  if (input.correctionKind !== 'text' && !symbolTarget) throw new Error('DRAWING_CORRECTION_KIND_MISMATCH');
 
   const targetEvidenceIds = new Set([
     ...(textTarget?.evidence.map((item) => item.evidenceId) ?? []),
     ...(symbolTarget?.evidence.map((item) => item.evidenceId) ?? []),
   ]);
   const targetPage = textTarget?.evidence[0]?.pageIndex ?? symbolTarget?.evidence[0]?.pageIndex ?? 0;
-  const texts = current.evidenceGraph.texts.map((item) => item.displayId === input.targetDisplayId
+  const texts = current.evidenceGraph.texts.map((item) => input.correctionKind === 'text' && item.displayId === input.targetDisplayId
     ? {
       ...item,
       confirmedText: input.selectedValue,
@@ -37,15 +41,18 @@ export function applyDrawingCorrection(
       holdCode: undefined,
     }
     : { ...item });
-  const symbols = current.evidenceGraph.symbols.map((item) => item.displayId === input.targetDisplayId
-    ? {
-      ...item,
-      confirmedType: input.selectedValue,
-      typeCandidates: [...new Set([...item.typeCandidates, input.selectedValue])],
-      rawLabel: input.selectedValue,
-      certainty: 'confirmed' as const,
+  const symbols = current.evidenceGraph.symbols.map((item) => {
+    if (item.displayId !== input.targetDisplayId || input.correctionKind === 'text') return { ...item };
+    if (input.correctionKind === 'type') {
+      return {
+        ...item,
+        confirmedType: input.selectedValue,
+        typeCandidates: [...new Set([...item.typeCandidates, input.selectedValue])],
+        certainty: 'confirmed' as const,
+      };
     }
-    : { ...item });
+    return { ...item, rawLabel: input.selectedValue };
+  });
   const lines = current.evidenceGraph.lines.map((item) => ({ ...item }));
   const relations = current.pages.flatMap((page) => buildPageRelations(symbols, lines, page.pageIndex));
   const crossPageRelations = reconcileCrossPage(symbols, texts, extractPageRefHits(texts));
@@ -106,6 +113,9 @@ export function applyDrawingCorrection(
     calculations,
     unresolved,
     hasGroundPath: lines.some((line) => line.lineKind === 'ground' && line.certainty === 'confirmed'),
+    coverageComplete: current.coverageLedger.allPlannedFinished
+      && current.coverageLedger.regionsFailed === 0
+      && current.coverageLedger.unresolvedRescans === 0,
     coverageEvidenceIds: current.coverageLedger.regions.flatMap((region) =>
       (region.roleCalls['coverage-auditor'] ?? []).filter((call) => call.success).map((call) => call.callId)),
   });
@@ -115,13 +125,27 @@ export function applyDrawingCorrection(
     ...relations.filter((relation) => relation.from === symbolTarget?.id || relation.to === symbolTarget?.id).map((relation) => relation.displayId),
   ])];
   const correction: UserCorrection = {
-    correctionId: `corr-${randomUUID()}`,
+    correctionId: `corr-${input.idempotencyKey}`,
+    idempotencyKey: input.idempotencyKey,
+    correctionKind: input.correctionKind,
     targetDisplayId: input.targetDisplayId,
-    originalCandidates: textTarget?.candidates ?? symbolTarget?.typeCandidates ?? [],
+    originalCandidates: textTarget?.candidates
+      ?? (input.correctionKind === 'label' ? [symbolTarget?.rawLabel ?? ''].filter(Boolean) : symbolTarget?.typeCandidates)
+      ?? [],
     selectedValue: input.selectedValue,
     correctedAt: new Date().toISOString(),
     correctedBy: input.correctedBy,
     affectedEntityIds,
+    recalcBefore: {
+      equipmentCounts: current.equipmentCounts,
+      ratedValues: current.ratedValues,
+      calculations: current.calculations.map((item) => ({ id: item.id, value: item.value, unit: item.unit, compliant: item.compliant, receiptHash: item.receiptHash })),
+    },
+    recalcAfter: {
+      equipmentCounts,
+      ratedValues,
+      calculations: calculations.map((item) => ({ id: item.id, value: item.value, unit: item.unit, compliant: item.compliant, receiptHash: item.receiptHash })),
+    },
     goldenEligible: false,
   };
   const needsReanalysis = staleCalculations.length > 0;

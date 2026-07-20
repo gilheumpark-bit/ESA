@@ -10,9 +10,10 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile } from '@/lib/api';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
-import { cancelOwnedJob, createJob, getOwnedJob, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { createSourceLease, isSourceLeaseAvailable, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyDrawingOwnerCookie, resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
+import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,29 @@ function serverVisionKey(provider: VisionProvider): string {
 }
 
 function userError(message: string, status = 400) {
-  return NextResponse.json({ success: false, error: { message } }, { status });
+  return privateJson({ success: false, error: { message } }, { status });
+}
+
+function privateJson(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set('Cache-Control', 'private, no-store');
+  return NextResponse.json(body, { ...init, headers });
+}
+
+function hasValidDrawingSignature(kind: 'image' | 'pdf' | 'dxf', bytes: ArrayBuffer, fileName: string): boolean {
+  const view = new Uint8Array(bytes);
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (kind === 'pdf') return view.length >= 5 && Buffer.from(view.subarray(0, 5)).toString('ascii') === '%PDF-';
+  if (kind === 'image') {
+    if (extension === 'png') return view.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => view[index] === byte);
+    if (extension === 'jpg' || extension === 'jpeg') return view.length >= 3 && view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff;
+    if (extension === 'webp') return view.length >= 12
+      && Buffer.from(view.subarray(0, 4)).toString('ascii') === 'RIFF'
+      && Buffer.from(view.subarray(8, 12)).toString('ascii') === 'WEBP';
+    return false;
+  }
+  const header = Buffer.from(view.subarray(0, Math.min(view.length, 4096))).toString('latin1');
+  return header.startsWith('AutoCAD Binary DXF') || /(?:^|\r?\n)\s*0\s*\r?\n\s*SECTION(?:\r?\n|$)/i.test(header);
 }
 
 export async function POST(req: NextRequest) {
@@ -60,7 +83,7 @@ export async function POST(req: NextRequest) {
     req.headers.get('host'),
     req.headers.get('x-forwarded-proto'),
   )) {
-    return NextResponse.json({ success: false, error: { message: 'Invalid origin' } }, { status: 403 });
+    return privateJson({ success: false, error: { message: 'Invalid origin' } }, { status: 403 });
   }
   const blocked = applyRateLimit(req, 'sld');
   if (blocked) return blocked;
@@ -71,11 +94,11 @@ export async function POST(req: NextRequest) {
     const form = await req.formData();
     const filePart = getFormFile(form, 'file');
     if (!filePart.ok) {
-      return NextResponse.json({ success: false, error: { message: filePart.message } }, { status: 400 });
+      return privateJson({ success: false, error: { message: filePart.message } }, { status: 400 });
     }
     const file = filePart.file;
     if (!file) {
-      return NextResponse.json({ success: false, error: { message: 'file required' } }, { status: 400 });
+      return privateJson({ success: false, error: { message: 'file required' } }, { status: 400 });
     }
     const drawingKind = allowedDrawing(file);
     if (!drawingKind) return userError('PNG, JPG, WEBP, PDF 또는 DXF 도면만 분석할 수 있습니다.');
@@ -83,6 +106,9 @@ export async function POST(req: NextRequest) {
     if (file.size > byteLimit) return userError(`도면 파일이 너무 큽니다. 최대 ${byteLimit / 1024 / 1024}MB입니다.`);
 
     const bytes = await file.arrayBuffer();
+    if (!hasValidDrawingSignature(drawingKind, bytes, file.name)) {
+      return userError('파일 확장자와 실제 도면 형식이 일치하지 않습니다. 원본 파일을 확인해주세요.');
+    }
     const requestedPages = parseRequestedPages(form.get('pages'));
     if (!requestedPages) return userError('페이지는 all 또는 1,2,3 형식으로 입력해야 합니다.');
 
@@ -97,13 +123,27 @@ export async function POST(req: NextRequest) {
       deadlineMs: 270_000,
     };
     if (form.get('deferred') === '1') {
+      if (!isDrawingJobStoreAvailable()) return userError('지속형 작업 저장소가 설정되지 않아 취소·재개 작업을 시작할 수 없습니다.', 503);
       if (!isSourceLeaseAvailable()) return userError('암호화 원본 임시 보관소가 설정되지 않아 취소·재개 작업을 시작할 수 없습니다.', 503);
+      let availablePages: number;
+      try {
+        availablePages = await enumerateDrawingPageCount({
+          bytes,
+          mimeType: file.type || 'application/octet-stream',
+          fileName: file.name,
+        });
+      } catch {
+        return userError('도면의 페이지 구조를 읽을 수 없습니다. 원본 파일을 확인해주세요.');
+      }
+      if (requestedPages !== 'all' && requestedPages.some((page) => page >= availablePages)) {
+        return userError(`요청 페이지가 도면 범위를 벗어났습니다. 전체 ${availablePages}페이지입니다.`);
+      }
       const documentHash = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
       const job = createJob({
         documentHash,
         ownerId: owner.ownerId,
         budget,
-        estimatedPages: requestedPages === 'all' ? 1 : requestedPages.length,
+        estimatedPages: requestedPages === 'all' ? availablePages : requestedPages.length,
       });
       const created = createSourceLease(bytes, documentHash, owner.ownerId);
       if ('error' in created) return userError('암호화 원본 임시 보관소가 준비되지 않았습니다.', 503);
@@ -111,7 +151,7 @@ export async function POST(req: NextRequest) {
         sourceLease: { leaseId: created.leaseId, expiresAt: created.expiresAt },
         sourceMetadata: { mimeType: file.type || 'application/octet-stream', fileName: file.name, requestedPages },
       });
-      const response = NextResponse.json({
+      const response = privateJson({
         success: true,
         data: { jobId: job.jobId, status: job.status, estimated: job.estimated, lease: { expiresAt: created.expiresAt } },
       }, { status: 202 });
@@ -150,7 +190,7 @@ export async function POST(req: NextRequest) {
     });
 
     let lease: { expiresAt: number } | { unavailable: true } | undefined;
-    if (form.get('leaseSource') === '1') {
+    if (form.get('leaseSource') === '1' && document.jobStatus === 'PARTIAL') {
       if (!isSourceLeaseAvailable()) {
         lease = { unavailable: true };
       } else {
@@ -163,7 +203,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const response = NextResponse.json({
+    const response = privateJson({
       success: true,
       data: {
         jobId: job.jobId,
@@ -179,7 +219,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const reference = randomUUID();
     console.error('[drawing-jobs]', { reference, errorType: err instanceof Error ? err.name : 'UnknownError' });
-    return NextResponse.json({ success: false, error: { message: '도면 분석을 완료하지 못했습니다.', reference } }, { status: 500 });
+    return privateJson({ success: false, error: { message: '도면 분석을 완료하지 못했습니다.', reference } }, { status: 500 });
   }
 }
 
@@ -190,13 +230,13 @@ export async function GET(req: NextRequest) {
   if (!owner) return userError('작업 세션이 만료되었습니다.', 401);
   const jobId = req.nextUrl.searchParams.get('jobId');
   if (!jobId) {
-    return NextResponse.json({ success: false, error: { message: 'jobId required' } }, { status: 400 });
+    return privateJson({ success: false, error: { message: 'jobId required' } }, { status: 400 });
   }
   const job = getOwnedJob(jobId, owner.ownerId);
   if (!job) {
-    return NextResponse.json({ success: false, error: { message: 'not found' } }, { status: 404 });
+    return privateJson({ success: false, error: { message: 'not found' } }, { status: 404 });
   }
-  return NextResponse.json({
+  return privateJson({
     success: true,
     data: {
       jobId: job.jobId,
@@ -223,5 +263,5 @@ export async function DELETE(req: NextRequest) {
   if (!job || !cancelOwnedJob(jobId, owner.ownerId)) return userError('not found', 404);
   if (job.sourceLease) releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);
   updateOwnedJob(jobId, owner.ownerId, { sourceLease: undefined });
-  return NextResponse.json({ success: true, data: { status: 'CANCELLED' } });
+  return privateJson({ success: true, data: { status: 'CANCELLED' } });
 }

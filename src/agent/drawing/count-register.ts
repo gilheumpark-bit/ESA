@@ -48,10 +48,9 @@ export function buildEquipmentCounts(
       physicalEquipmentCount = null;
     }
 
-    const missingSuspected = unreadRelated
-      + unresolved.filter((u) => u.code === 'EMPTY_REGION_RESULT' || u.code === 'BOUNDARY_CLIP').length > 0
-      ? Math.max(unreadRelated, unresolved.some((u) => u.code === 'EMPTY_REGION_RESULT') ? 1 : 0)
-      : 0;
+    const hasStructuralCoverageGap = unresolved.some((u) =>
+      u.code === 'EMPTY_REGION_RESULT' || u.code === 'BOUNDARY_CLIP');
+    const missingSuspected = unreadRelated + (hasStructuralCoverageGap ? 1 : 0);
 
     const countStatus = resolveCountStatus({
       ambiguous: ambiguousList.length,

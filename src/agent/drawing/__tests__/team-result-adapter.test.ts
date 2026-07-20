@@ -62,4 +62,20 @@ describe('adaptTeamResult', () => {
     ]);
     expect(adapted.texts[0].sourceEvidenceIds).toEqual(['o', 'u', 'h']);
   });
+
+  it('keeps all parser-originated vector text anchors, not only component labels', () => {
+    const result: TeamResult = {
+      teamId: 'TEAM-SLD', success: true,
+      components: [{ id: 'a', type: 'breaker', label: 'VCB-1', position: { x: 10, y: 20 }, confidence: 0.95 }],
+      connections: [], confidence: 0.95, durationMs: 1,
+      vectorTexts: [
+        { text: 'VCB-1', position: { x: 10, y: 20 }, confidence: 0.99 },
+        { text: '정격 100A', position: { x: 30, y: 20 }, confidence: 0.99 },
+        { text: 'TO SHEET 2', position: { x: 90, y: 90 }, confidence: 0.99 },
+      ],
+    };
+    const adapted = adaptTeamResult(result, { pageIndex: 0, width: 1_000, height: 500 });
+    expect(adapted.texts.map((item) => item.text)).toEqual(['VCB-1', '정격 100A', 'TO SHEET 2']);
+    expect(adapted.texts.every((item) => item.sourceEvidenceIds?.[0]?.startsWith('vector-text-p0-'))).toBe(true);
+  });
 });

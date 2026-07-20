@@ -131,6 +131,17 @@ export interface TeamResult {
   error?: string;
   drawingReview?: DrawingReviewArtifact;
   drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
+  vectorTexts?: Array<{ text: string; position: { x: number; y: number }; confidence: number }>;
+  /**
+   * 벡터 입력은 결과 배열의 존재만으로 역할 완료를 주장하지 않는다.
+   * 파서와 토폴로지 검증을 실제로 통과한 역할만 문서 coverage에 승계한다.
+   */
+  vectorAudit?: {
+    parser: 'dxf' | 'pdf';
+    pageNumber: number;
+    complete: boolean;
+    roles: Array<'symbols' | 'connections' | 'text' | 'logic' | 'coverage-auditor'>;
+  };
 }
 
 export interface CalculationEntry {

@@ -37,4 +37,17 @@ describe('drawing evidence numbering and merge', () => {
       expect.objectContaining({ code: 'LINE_CONTINUITY_UNCERTAIN', displayId: 'P01-L001', pageIndex: 0 }),
     ]));
   });
+
+  it('does not merge overlapping PT/PPT symbols or power/ground lines', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'pt', type: 'pt', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'a' },
+      { localId: 'ppt', type: 'ppt', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'b' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'p', lineKind: 'power', path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], confidence: 0.9, pageIndex: 0, regionId: 'a' },
+      { localId: 'g', lineKind: 'ground', path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], confidence: 0.9, pageIndex: 0, regionId: 'b' },
+    ]);
+    expect(symbols).toHaveLength(2);
+    expect(lines).toHaveLength(2);
+  });
 });

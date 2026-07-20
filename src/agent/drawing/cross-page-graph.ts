@@ -23,7 +23,8 @@ const REF_PATTERNS: RegExp[] = [
 export function extractPageRefHits(texts: TextNode[]): PageRefHit[] {
   const hits: PageRefHit[] = [];
   for (const t of texts) {
-    const raw = t.confirmedText ?? t.rawText;
+    if (t.certainty !== 'confirmed' || !t.confirmedText) continue;
+    const raw = t.confirmedText;
     for (const re of REF_PATTERNS) {
       const m = raw.match(re);
       if (!m) continue;
@@ -107,8 +108,8 @@ export function reconcileCrossPage(
             && ((r.fromRef === a.id && r.toRef === b.id) || (r.fromRef === b.id && r.toRef === a.id)),
         );
         if (hasExplicit) continue;
-        const voltageOk = voltageCompatible(a, b, texts);
-        if (!voltageOk) {
+        const voltageStatus = voltageCompatibility(a, b, texts);
+        if (voltageStatus === 'conflict') {
           relations.push(makeRel(++seq, pa, pb, 'hold', 'label-match-voltage-conflict', {
             fromRef: a.id,
             toRef: b.id,
@@ -116,7 +117,9 @@ export function reconcileCrossPage(
           }));
           continue;
         }
-        relations.push(makeRel(++seq, pa, pb, 'candidate', 'same-label-no-page-ref', {
+        relations.push(makeRel(++seq, pa, pb, 'candidate', voltageStatus === 'unknown'
+          ? 'same-label-voltage-unknown'
+          : 'same-label-no-page-ref', {
           fromRef: a.id,
           toRef: b.id,
           evidence: [...a.evidence, ...b.evidence],
@@ -140,7 +143,7 @@ function findCompatiblePair(
         to.confirmedType ?? to.typeCandidates[0] ?? '',
       );
       if (!typeOk) continue;
-      if (!voltageCompatible(from, to, texts)) continue;
+      if (voltageCompatibility(from, to, texts) !== 'compatible') continue;
       if (from.rawLabel && to.rawLabel && normalize(from.rawLabel) === normalize(to.rawLabel)) {
         return { from, to };
       }
@@ -153,18 +156,18 @@ function findCompatiblePair(
     if (typesCompatible(
       from.confirmedType ?? from.typeCandidates[0] ?? '',
       to.confirmedType ?? to.typeCandidates[0] ?? '',
-    ) && voltageCompatible(from, to, texts)) {
+    ) && voltageCompatibility(from, to, texts) === 'compatible') {
       return { from, to };
     }
   }
   return null;
 }
 
-function voltageCompatible(a: SymbolNode, b: SymbolNode, texts: TextNode[]): boolean {
+function voltageCompatibility(a: SymbolNode, b: SymbolNode, texts: TextNode[]): 'compatible' | 'conflict' | 'unknown' {
   const va = nearbyVoltage(a, texts);
   const vb = nearbyVoltage(b, texts);
-  if (va == null || vb == null) return true;
-  return Math.abs(va - vb) / Math.max(va, vb) < 0.15;
+  if (va == null || vb == null) return 'unknown';
+  return Math.abs(va - vb) / Math.max(va, vb) < 0.15 ? 'compatible' : 'conflict';
 }
 
 function nearbyVoltage(s: SymbolNode, texts: TextNode[]): number | null {
@@ -179,7 +182,8 @@ function nearbyVoltage(s: SymbolNode, texts: TextNode[]): number | null {
     const tx = tb.x + tb.w / 2;
     const ty = tb.y + tb.h / 2;
     if (Math.hypot(cx - tx, cy - ty) > 120) continue;
-    const m = (t.confirmedText ?? t.rawText).match(/(\d+(?:\.\d+)?)\s*kV/i);
+    if (t.certainty !== 'confirmed' || !t.confirmedText) continue;
+    const m = t.confirmedText.match(/(\d+(?:\.\d+)?)\s*kV/i);
     if (m) return Number(m[1]);
   }
   return null;
@@ -220,8 +224,16 @@ function normalize(s: string): string {
 }
 
 function typesCompatible(a: string, b: string): boolean {
-  if (!a || !b) return true;
-  const na = a.toLowerCase();
-  const nb = b.toLowerCase();
-  return na === nb || na.includes(nb) || nb.includes(na);
+  if (!a || !b) return false;
+  return canonicalType(a) === canonicalType(b);
+}
+
+function canonicalType(value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+  const aliases: Record<string, string> = {
+    voltagetransformer: 'pt',
+    potentialtransformer: 'pt',
+    circuitbreaker: 'breaker',
+  };
+  return aliases[normalized] ?? normalized;
 }

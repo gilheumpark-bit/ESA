@@ -46,7 +46,12 @@ import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
  */
 async function extractFromDrawing(
   input: TeamInput,
-): Promise<{ components: ExtractedComponent[]; connections: ExtractedConnection[]; confidence: number }> {
+): Promise<{
+  components: ExtractedComponent[];
+  connections: ExtractedConnection[];
+  confidence: number;
+  vectorTexts?: Array<{ text: string; position: { x: number; y: number }; confidence: number }>;
+}> {
   const { classification, fileBuffer, params } = input;
 
   // DXF: 결정론적 벡터 파싱. 좌표를 직접 읽지만 블록 의미 인식은 불완전할 수 있다.
@@ -73,6 +78,7 @@ async function extractFromDrawing(
         length: typeof conn.length === 'string' ? parseFloat(conn.length) || undefined : conn.length,
       })),
       confidence: analysis.confidence ?? 0.95,
+      vectorTexts: analysis.sourceTexts ?? [],
     };
   }
 
@@ -100,6 +106,7 @@ async function extractFromDrawing(
         length: typeof conn.length === 'string' ? parseFloat(conn.length) || undefined : conn.length,
       })),
       confidence: analysis.confidence ?? 0.80,
+      vectorTexts: analysis.sourceTexts ?? [],
     };
   }
 
@@ -606,6 +613,7 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       : undefined;
     const extracted = rasterReview ?? await extractFromDrawing(input);
     const { components, connections, confidence } = extracted;
+    const vectorTexts = 'vectorTexts' in extracted ? extracted.vectorTexts : undefined;
 
     if (rasterReview) {
       const drawingSynthesis = synthesizeRasterReview(rasterReview.artifact, deps);
@@ -668,7 +676,14 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       standards,
       violations,
       confidence,
+      vectorTexts,
       durationMs: Date.now() - start,
+      vectorAudit: {
+        parser: input.classification === 'sld_dxf' ? 'dxf' : 'pdf',
+        pageNumber: Number(input.params?.pageNumber ?? 1),
+        complete: true,
+        roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'],
+      },
     };
   } catch (err) {
     const message = input.signal?.aborted ? '요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.' : err instanceof Error ? err.message : String(err);

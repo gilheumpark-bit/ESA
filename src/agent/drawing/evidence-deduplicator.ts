@@ -2,6 +2,8 @@
  * Merge overlapping region detections into original-coordinate entities.
  */
 
+import { createHash } from 'node:crypto';
+
 import type { EvidenceBounds } from '../vision/evidence-types';
 import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, UnresolvedItem } from './types-v3';
 
@@ -83,7 +85,7 @@ export function deduplicateSymbols(
     const seq = (pageSequences.get(hit.pageIndex) ?? 0) + 1;
     pageSequences.set(hit.pageIndex, seq);
     const displayId = `P${String(page).padStart(2, '0')}-S${String(seq).padStart(3, '0')}`;
-    const id = `sym-${hit.pageIndex}-${seq}`;
+    const id = stableId('sym', [hit.pageIndex, normalizeType(hit.type), normalizeLabel(hit.label), boundsKey(hit.bounds)]);
     kept.push({
       id,
       displayId,
@@ -111,6 +113,7 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
     const end = hit.path[hit.path.length - 1];
     const dup = kept.find((k) => {
       if (k.evidence[0]?.pageIndex !== hit.pageIndex) return false;
+      if (k.lineKind !== hit.lineKind) return false;
       const ks = k.path[0];
       const ke = k.path[k.path.length - 1];
       return (dist(ks, start) <= tolerance && dist(ke, end) <= tolerance)
@@ -128,7 +131,7 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
     const seq = (pageSequences.get(hit.pageIndex) ?? 0) + 1;
     pageSequences.set(hit.pageIndex, seq);
     const displayId = `P${String(page).padStart(2, '0')}-L${String(seq).padStart(3, '0')}`;
-    const id = `line-${hit.pageIndex}-${seq}`;
+    const id = stableId('line', [hit.pageIndex, hit.lineKind, hit.path.map((point) => `${Math.round(point.x)},${Math.round(point.y)}`).join(';')]);
     kept.push({
       id,
       displayId,
@@ -261,8 +264,24 @@ function labelsCompatible(a?: string, b?: string): boolean {
 }
 
 function typesCompatible(a: string, b: string): boolean {
-  if (!a || !b) return true;
-  return a === b || a.includes(b) || b.includes(a);
+  if (!a || !b) return false;
+  return normalizeType(a) === normalizeType(b);
+}
+
+function normalizeType(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]+/g, '');
+}
+
+function normalizeLabel(value?: string): string {
+  return value?.trim().toUpperCase().replace(/\s+/g, '') ?? '';
+}
+
+function boundsKey(bounds: EvidenceBounds): string {
+  return [bounds.x, bounds.y, bounds.w, bounds.h].map((value) => Math.round(value)).join(',');
+}
+
+function stableId(prefix: string, parts: Array<string | number>): string {
+  return `${prefix}-${createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 16)}`;
 }
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {

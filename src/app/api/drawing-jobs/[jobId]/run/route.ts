@@ -23,7 +23,13 @@ function serverKey(provider: VisionProvider): string {
 }
 
 function userError(message: string, status: number) {
-  return NextResponse.json({ success: false, error: { message } }, { status });
+  return privateJson({ success: false, error: { message } }, { status });
+}
+
+function privateJson(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set('Cache-Control', 'private, no-store');
+  return NextResponse.json(body, { ...init, headers });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
@@ -71,7 +77,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
       releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);
       updateOwnedJob(jobId, owner.ownerId, { sourceLease: undefined });
     }
-    return NextResponse.json({
+    return privateJson({
       success: true,
       data: {
         jobId,
@@ -85,6 +91,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
     releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);
     updateOwnedJob(jobId, owner.ownerId, { status: 'FAILED', error: reference, sourceLease: undefined });
     console.error('[drawing-job-run]', { reference, errorType: cause instanceof Error ? cause.name : 'UnknownError' });
-    return NextResponse.json({ success: false, error: { message: '도면 분석을 실행하지 못했습니다.', reference } }, { status: 500 });
+    return privateJson({ success: false, error: { message: '도면 분석을 실행하지 못했습니다.', reference } }, { status: 500 });
   }
 }

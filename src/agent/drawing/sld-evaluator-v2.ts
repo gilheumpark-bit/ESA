@@ -25,7 +25,7 @@ export interface GoldenLabel {
   documentHash?: string;
   symbols: Array<{ type: string; label?: string; bounds: Bounds; pageIndex: number }>;
   edges: Array<{ fromLabel: string; toLabel: string; pageIndex: number }>;
-  texts: Array<{ text: string; pageIndex: number }>;
+  texts: Array<{ text: string; pageIndex: number; bounds: Bounds }>;
   junctions?: Array<{ pageIndex: number; x: number; y: number; kind: JunctionKind; tolerancePx?: number }>;
   crossPageRefs?: Array<{ fromPage: number; toPage: number; fromRef?: string; toRef?: string }>;
   logicFindings?: Array<{
@@ -200,29 +200,38 @@ function pageCountExactRate(prediction: DrawingDocumentV3, label: GoldenLabel): 
 
 function textFieldAccuracy(prediction: DrawingDocumentV3, label: GoldenLabel): number {
   const predicted = prediction.evidenceGraph.texts.filter((item) => item.certainty === 'confirmed');
-  const used = new Set<number>();
-  let matches = 0;
-  for (const expected of label.texts) {
-    const index = predicted.findIndex((item, candidateIndex) => !used.has(candidateIndex)
-      && item.evidence[0]?.pageIndex === expected.pageIndex
-      && normalize(item.confirmedText ?? item.rawText) === normalize(expected.text));
-    if (index >= 0) {
-      used.add(index);
-      matches += 1;
-    }
+  const candidates: Array<{ predictedIndex: number; labelIndex: number; overlap: number }> = [];
+  predicted.forEach((item, predictedIndex) => {
+    const evidence = item.evidence[0];
+    if (!evidence) return;
+    label.texts.forEach((expected, labelIndex) => {
+      if (evidence.pageIndex !== expected.pageIndex
+        || normalize(item.confirmedText ?? item.rawText) !== normalize(expected.text)) return;
+      const overlap = iou(evidence.bounds, expected.bounds);
+      if (overlap >= 0.5) candidates.push({ predictedIndex, labelIndex, overlap });
+    });
+  });
+  candidates.sort((left, right) => right.overlap - left.overlap
+    || left.predictedIndex - right.predictedIndex
+    || left.labelIndex - right.labelIndex);
+  const usedPredictions = new Set<number>();
+  const usedLabels = new Set<number>();
+  for (const candidate of candidates) {
+    if (usedPredictions.has(candidate.predictedIndex) || usedLabels.has(candidate.labelIndex)) continue;
+    usedPredictions.add(candidate.predictedIndex);
+    usedLabels.add(candidate.labelIndex);
   }
   return Math.max(predicted.length, label.texts.length) === 0
     ? 1
-    : matches / Math.max(predicted.length, label.texts.length);
+    : usedLabels.size / Math.max(predicted.length, label.texts.length);
 }
 
-function undirectedKey(pageIndex: number, left: string, right: string): string {
-  const ends = [normalize(left), normalize(right)].sort();
-  return `${pageIndex}:${ends[0]}<->${ends[1]}`;
+function directedKey(pageIndex: number, from: string, to: string): string {
+  return `${pageIndex}:${normalize(from)}->${normalize(to)}`;
 }
 
 function edgeF1(prediction: DrawingDocumentV3, label: GoldenLabel, matches: Map<string, number>): number {
-  const expected = new Set(label.edges.map((edge) => undirectedKey(edge.pageIndex, edge.fromLabel, edge.toLabel)));
+  const expected = new Set(label.edges.map((edge) => directedKey(edge.pageIndex, edge.fromLabel, edge.toLabel)));
   const predictedKeys: string[] = [];
   for (const edge of prediction.evidenceGraph.relations.filter((item) => item.certainty === 'confirmed')) {
     const fromLabelIndex = matches.get(edge.from);
@@ -234,7 +243,7 @@ function edgeF1(prediction: DrawingDocumentV3, label: GoldenLabel, matches: Map<
     const from = label.symbols[fromLabelIndex];
     const to = label.symbols[toLabelIndex];
     if (!from || !to) continue;
-    predictedKeys.push(undirectedKey(from.pageIndex, from.label ?? `@${fromLabelIndex}`, to.label ?? `@${toLabelIndex}`));
+    predictedKeys.push(directedKey(from.pageIndex, from.label ?? `@${fromLabelIndex}`, to.label ?? `@${toLabelIndex}`));
   }
   const uniquePredicted = new Set(predictedKeys);
   const tp = [...uniquePredicted].filter((key) => expected.has(key)).length;
@@ -277,9 +286,7 @@ function junctionAccuracy(prediction: DrawingDocumentV3, label: GoldenLabel): nu
 
 function crossPageRefF1(prediction: DrawingDocumentV3, label: GoldenLabel): number {
   const key = (item: { fromPage: number; toPage: number; fromRef?: string; toRef?: string }) => {
-    const pages = [item.fromPage, item.toPage].sort((left, right) => left - right);
-    const refs = [normalize(item.fromRef), normalize(item.toRef)].sort();
-    return `${pages.join('->')}:${refs.join('<->')}`;
+    return `${item.fromPage}->${item.toPage}:${normalize(item.fromRef)}->${normalize(item.toRef)}`;
   };
   const expected = new Set((label.crossPageRefs ?? []).map(key));
   const predicted = new Set(prediction.crossPageRelations
@@ -409,6 +416,13 @@ export function buildEvaluationSuiteResult(
   if (results.length === 0) throw new Error('EVAL_SUITE_EMPTY');
   if (!options.provider.trim() || !options.model.trim()) throw new Error('EVAL_SUITE_FINGERPRINT_REQUIRED');
   if (!Number.isSafeInteger(options.runsPerCase) || options.runsPerCase < 1) throw new Error('EVAL_SUITE_RUN_COUNT_INVALID');
+  const runGroups = new Map<string, number>();
+  for (const result of results) {
+    runGroups.set(result.datasetHash, (runGroups.get(result.datasetHash) ?? 0) + 1);
+  }
+  if ([...runGroups.values()].some((count) => count !== options.runsPerCase)) {
+    throw new Error('EVAL_SUITE_RUN_EVIDENCE_MISMATCH');
+  }
   const strataRows = new Map<string, MetricSet[]>();
   for (const result of results) {
     for (const [stratum, metrics] of Object.entries(result.strata)) {
@@ -499,8 +513,9 @@ export function shouldActivateVerified95(
     maxAgeMs?: number;
   },
 ): boolean {
-  if (!evalResult.passesAllThresholds || !options?.publicKeyPem || !options.realAdjudicated) return false;
+  if (failedMetricNames(evalResult.metrics).length > 0 || !options?.publicKeyPem || !options.realAdjudicated) return false;
   if (evalResult.receipt.signatureAlgorithm !== 'ed25519' || !evalResult.receipt.signature || evalResult.receipt.runCount < 3) return false;
+  if (evalResult.receipt.evaluatorVersion !== EVALUATOR_VERSION) return false;
   if (evalResult.receipt.datasetKind !== 'real-adjudicated' || !evalResult.receipt.provider || !evalResult.receipt.model) return false;
   if (!productionFingerprint.provider || !productionFingerprint.model) return false;
   if (evalResult.receipt.engineVersion !== productionFingerprint.engineVersion

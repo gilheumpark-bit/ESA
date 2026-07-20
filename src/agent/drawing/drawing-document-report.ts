@@ -27,6 +27,7 @@ export function buildDocumentReadReceipt(input: {
   pages: PageAnalysisState[];
   coverage: CoverageLedger;
   holdReasons: ReadFailureCode[];
+  jobStatus: JobStatus;
   requiredRoles?: RoleId[];
 }): DocumentReadReceipt {
   const required: RoleId[] = input.requiredRoles ?? [
@@ -54,6 +55,8 @@ export function buildDocumentReadReceipt(input: {
   if (input.holdReasons.includes('PARTIAL_BUDGET_EXCEEDED')) {
     status = 'PARTIAL';
   }
+  if (input.jobStatus === 'FAILED') status = 'FAILED';
+  if (input.jobStatus === 'CANCELLED') status = 'CANCELLED';
 
   const claimsComplete = status === 'COMPLETE'
     && input.holdReasons.length === 0
@@ -103,15 +106,20 @@ export function buildDrawingDocumentV3(input: {
     pages: input.pages,
     coverage: input.coverageLedger,
     holdReasons,
+    jobStatus: input.jobStatus,
   });
 
   const evidenceIds = countEvidenceIds(input.evidenceGraph);
   const linked = countLinkedClaims(input.evidenceGraph, input.recommendations);
   const evidenceTraceRate = evidenceIds === 0 ? 1 : linked / Math.max(1, evidenceIds);
 
-  const title = receipt.claimsComplete
-    ? '전체 도면 판독표'
-    : '부분 분석 결과';
+  const title = input.jobStatus === 'CANCELLED'
+    ? '분석 취소 결과'
+    : input.jobStatus === 'FAILED'
+      ? '분석 실패 결과'
+      : receipt.claimsComplete
+        ? '전체 도면 판독표'
+        : '부분 분석 결과';
 
   const now = new Date().toISOString();
   const verification: VerificationBlock = {

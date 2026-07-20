@@ -29,6 +29,7 @@ export interface PreparedDrawingPage {
   imageBuffer?: ArrayBuffer;
   renderHash: string;
   quality: ImageQualityProfile;
+  preparationError?: 'PARTIAL_BUDGET_EXCEEDED' | 'CANCELLED';
 }
 
 export interface PreparedDrawingSource {
@@ -36,12 +37,17 @@ export interface PreparedDrawingSource {
   mimeType: string;
   formatClass: PreparedFormatClass;
   pages: PreparedDrawingPage[];
+  totalPageCount?: number;
 }
 
 export interface PrepareDrawingSourceInput {
   bytes: ArrayBuffer;
   mimeType: string;
   fileName?: string;
+  requestedPages?: number[] | 'all';
+  budget?: { maxPages: number; maxPixels: number; deadlineMs: number };
+  signal?: AbortSignal;
+  shouldCancel?: () => boolean;
 }
 
 const MAX_PDF_PAGES = 500;
@@ -91,6 +97,7 @@ async function prepareImage(
     documentHash,
     mimeType: input.mimeType,
     formatClass: 'raster-image',
+    totalPageCount: 1,
     pages: [{
       pageIndex: 0,
       width: original.width,
@@ -134,6 +141,7 @@ function prepareDxf(
     documentHash,
     mimeType: input.mimeType,
     formatClass: 'dxf',
+    totalPageCount: 1,
     pages: [{
       pageIndex: 0,
       width,
@@ -158,6 +166,30 @@ function installPdfCanvasGlobals(): void {
   globals.DOMMatrix ??= DOMMatrix;
   globals.ImageData ??= ImageData;
   globals.Path2D ??= Path2D;
+}
+
+/** Enumerates pages without rendering them, so queued-job cost estimates are honest. */
+export async function enumerateDrawingPageCount(
+  input: PrepareDrawingSourceInput,
+): Promise<number> {
+  assertSource(input);
+  if (!isPdf(input)) return 1;
+  installPdfCanvasGlobals();
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  let loadingTask: ReturnType<typeof pdfjs.getDocument> | undefined;
+  try {
+    loadingTask = pdfjs.getDocument({ data: new Uint8Array(input.bytes.slice(0)) });
+    const document = await loadingTask.promise;
+    if (!Number.isSafeInteger(document.numPages) || document.numPages < 1 || document.numPages > MAX_PDF_PAGES) {
+      throw new Error('DRAWING_SOURCE_PDF_PAGE_LIMIT');
+    }
+    return document.numPages;
+  } catch (cause) {
+    if (cause instanceof Error && cause.message === 'DRAWING_SOURCE_PDF_PAGE_LIMIT') throw cause;
+    throw new Error('DRAWING_SOURCE_PDF_INVALID');
+  } finally {
+    await loadingTask?.destroy().catch(() => undefined);
+  }
 }
 
 function renderScale(width: number, height: number): number {
@@ -189,15 +221,63 @@ async function preparePdf(
     throw new Error('DRAWING_SOURCE_PDF_PAGE_LIMIT');
   }
 
+  const requested = input.requestedPages === undefined || input.requestedPages === 'all'
+    ? Array.from({ length: document.numPages }, (_, index) => index)
+    : [...new Set(input.requestedPages)].sort((left, right) => left - right);
+  if (requested.length === 0 || requested.some((pageIndex) => !Number.isSafeInteger(pageIndex) || pageIndex < 0 || pageIndex >= document.numPages)) {
+    await loadingTask!.destroy();
+    throw new Error('DRAWING_REQUESTED_PAGE_OUT_OF_RANGE');
+  }
+  const maxPages = input.budget?.maxPages ?? MAX_PDF_PAGES;
+  const maxPixels = input.budget?.maxPixels ?? Number.MAX_SAFE_INTEGER;
+  const deadline = Date.now() + (input.budget?.deadlineMs ?? 10 * 60_000);
+  let renderedPages = 0;
+  let renderedPixels = 0;
+
+  const skippedPage = (
+    pageIndex: number,
+    reason: PreparedDrawingPage['preparationError'],
+  ): PreparedDrawingPage => ({
+    pageIndex,
+    width: 1,
+    height: 1,
+    sourceWidth: 1,
+    sourceHeight: 1,
+    renderScale: 1,
+    renderMode: 'raster',
+    textSample: '',
+    vectorOpCount: 0,
+    rasterOpCount: 0,
+    renderHash: sha256(documentHash, `page:${pageIndex}:${reason}`),
+    quality: {
+      width: 1, height: 1, channels: 4, contrast: 0, edgeDensity: 0,
+      gradientVariance: 0, lowContrast: true, blurry: true,
+      recommendedScale: 4, warnings: reason ? [reason] : [],
+    },
+    preparationError: reason,
+  });
+
   const pages: PreparedDrawingPage[] = [];
   try {
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    for (const pageIndex of requested) {
+      const cancelled = input.signal?.aborted || input.shouldCancel?.();
+      if (cancelled || renderedPages >= maxPages || Date.now() >= deadline) {
+        pages.push(skippedPage(pageIndex, cancelled ? 'CANCELLED' : 'PARTIAL_BUDGET_EXCEEDED'));
+        continue;
+      }
+      const pageNumber = pageIndex + 1;
       const page = await document.getPage(pageNumber);
       const sourceViewport = page.getViewport({ scale: 1 });
       const scale = renderScale(sourceViewport.width, sourceViewport.height);
       const viewport = page.getViewport({ scale });
       const width = Math.max(1, Math.ceil(viewport.width));
       const height = Math.max(1, Math.ceil(viewport.height));
+      const pagePixels = width * height;
+      if (renderedPixels + pagePixels > maxPixels) {
+        pages.push(skippedPage(pageIndex, 'PARTIAL_BUDGET_EXCEEDED'));
+        page.cleanup();
+        continue;
+      }
 
       const [operatorList, textContent] = await Promise.all([
         page.getOperatorList(),
@@ -240,7 +320,7 @@ async function preparePdf(
         .slice(0, 20_000);
 
       pages.push({
-        pageIndex: pageNumber - 1,
+        pageIndex,
         width,
         height,
         sourceWidth: sourceViewport.width,
@@ -251,9 +331,11 @@ async function preparePdf(
         vectorOpCount,
         rasterOpCount,
         imageBuffer,
-        renderHash: sha256(imageBuffer, `page:${pageNumber - 1}`),
+        renderHash: sha256(imageBuffer, `page:${pageIndex}`),
         quality,
       });
+      renderedPages += 1;
+      renderedPixels += pagePixels;
       page.cleanup();
     }
   } finally {
@@ -266,7 +348,7 @@ async function preparePdf(
     : modes.size === 1 && modes.has('raster')
       ? 'raster-pdf'
       : 'mixed-pdf';
-  return { documentHash, mimeType: input.mimeType, formatClass, pages };
+  return { documentHash, mimeType: input.mimeType, formatClass, pages, totalPageCount: document.numPages };
 }
 
 export async function prepareDrawingSource(
