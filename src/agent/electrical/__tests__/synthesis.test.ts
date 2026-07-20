@@ -181,6 +181,7 @@ function input(options: {
   calculations?: DrawingCalculationReceipt[];
   issues?: ElectricalIssue[];
   logicConflicts?: LogicConflict[];
+  logicEnvelope?: RoleReviewEnvelope;
   claims?: DrawingSynthesisInput['claims'];
   recommendations?: DrawingSynthesisInput['recommendations'];
 } = {}): DrawingSynthesisInput {
@@ -190,7 +191,7 @@ function input(options: {
     coverageComplete: options.coverageComplete ?? true,
     roleFailures: options.roleFailures ?? [],
     normalizedGraph: options.normalizedGraph ?? normalized(),
-    logicEnvelope: logicEnvelope(),
+    logicEnvelope: options.logicEnvelope ?? logicEnvelope(),
     issues: options.issues ?? [],
     calculations: options.calculations ?? [calculation()],
     logicConflicts: options.logicConflicts ?? [],
@@ -349,6 +350,60 @@ describe('synthesizeDrawingReview', () => {
 
     expect(result.issues).toEqual([]);
     expect(result.evidenceRegistry.some((record) => record.id === foreignIssue.id)).toBe(false);
+    expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
+  it('rejects an issue whose provenance aliases only current logic evidence', () => {
+    const logicOnlyIssue = issue('FAIL');
+    logicOnlyIssue.evidence.stableIds = ['LOGIC-1'];
+    logicOnlyIssue.evidence.originalEvidenceIds = ['LOGIC-1'];
+    logicOnlyIssue.evidence.sourceIds = ['source:LOGIC-1'];
+
+    const result = synthesizeDrawingReview(input({ issues: [logicOnlyIssue] }));
+
+    expect(result.issues).toEqual([]);
+    expect(result.evidenceRegistry.some((record) => record.id === logicOnlyIssue.id)).toBe(false);
+    expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
+  it('rejects a receipt whose input evidence aliases only current logic evidence', () => {
+    const sourceReceipt = calculation();
+    const logicOnlyReceipt: DrawingCalculationReceipt = {
+      ...sourceReceipt,
+      id: 'drawing-calc:logic-only',
+      inputEvidence: sourceReceipt.inputEvidence.map((evidence) => ({
+        ...evidence,
+        evidenceId: 'LOGIC-1',
+        originalEvidenceIds: ['LOGIC-1'],
+        sourceIds: ['source:LOGIC-1'],
+      })),
+    };
+    const recommendation = {
+      id: 'rec-logic-receipt', category: 'safety' as const, title: 'logic receipt', description: 'logic receipt', impact: 'high' as const,
+      evidenceIds: [logicOnlyReceipt.id], requiredInputs: [],
+    };
+
+    const result = synthesizeDrawingReview(input({ calculations: [logicOnlyReceipt], recommendations: [recommendation] }));
+    expect(result.calculations).toEqual([]);
+    expect(result.evidenceRegistry.some((record) => record.id === logicOnlyReceipt.id)).toBe(false);
+    expect(result.recommendations).toEqual([expect.objectContaining({ status: 'HOLD', evidenceIds: [] })]);
+    expect(() => synthesizeDrawingReview(input({
+      calculations: [logicOnlyReceipt],
+      claims: [{ id: 'claim-logic-receipt', text: 'unsupported receipt', evidenceIds: [logicOnlyReceipt.id], status: 'verified', requiredInputs: [] }],
+    }))).toThrow(UnsupportedSynthesisClaimError);
+  });
+
+  it('rejects a conflict when graph and logic namespaces share the same alias', () => {
+    const collidingLogic = logicEnvelope();
+    if (!collidingLogic.data.logic?.[0]) throw new Error('logic fixture is missing');
+    collidingLogic.data.logic[0].id = 'TR-1';
+    const collision = conflict('CONTRADICTION', 'open');
+    collision.logicEvidenceIds = ['TR-1'];
+
+    const result = synthesizeDrawingReview(input({ logicEnvelope: collidingLogic, logicConflicts: [collision] }));
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.evidenceRegistry.some((record) => record.id === collision.id)).toBe(false);
     expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 

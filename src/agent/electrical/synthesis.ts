@@ -248,6 +248,16 @@ function resolveAll(registry: Registry, evidenceIds: readonly string[], aliases 
   return resolved.every((record): record is SynthesisEvidenceRecord => record !== undefined) ? resolved : undefined;
 }
 
+function resolveCurrentGraphEvidence(registry: Registry, evidenceIds: readonly string[]): SynthesisEvidenceRecord[] | undefined {
+  const graphRecords = resolveAll(registry, evidenceIds, registry.graphAliases);
+  return graphRecords === undefined || resolveAll(registry, evidenceIds) === undefined ? undefined : graphRecords;
+}
+
+function resolveCurrentLogicEvidence(registry: Registry, evidenceIds: readonly string[]): SynthesisEvidenceRecord[] | undefined {
+  const logicRecords = resolveAll(registry, evidenceIds, registry.logicAliases);
+  return logicRecords === undefined || resolveAll(registry, evidenceIds) === undefined ? undefined : logicRecords;
+}
+
 function addDerivedRecord(
   registry: Registry,
   drawingHash: string,
@@ -272,12 +282,12 @@ function receiptParents(registry: Registry, receipt: DrawingCalculationReceipt):
     ...evidence.originalEvidenceIds,
     ...evidence.sourceIds,
   ]);
-  return resolveAll(registry, identifiers);
+  return resolveCurrentGraphEvidence(registry, identifiers);
 }
 
 function issueParents(registry: Registry, issue: ElectricalIssue, drawingHash: string): SynthesisEvidenceRecord[] | undefined {
   if (issue.evidence.drawingHash !== drawingHash) return undefined;
-  return resolveAll(registry, [
+  return resolveCurrentGraphEvidence(registry, [
     ...issue.evidence.stableIds,
     ...issue.evidence.originalEvidenceIds,
     ...issue.evidence.sourceIds,
@@ -285,12 +295,12 @@ function issueParents(registry: Registry, issue: ElectricalIssue, drawingHash: s
 }
 
 function conflictParents(registry: Registry, conflict: LogicConflict): SynthesisEvidenceRecord[] | undefined {
-  const graphParents = resolveAll(registry, [
+  const graphParents = resolveCurrentGraphEvidence(registry, [
     ...conflict.graphEvidenceIds,
     ...conflict.graphOriginalEvidenceIds,
     ...conflict.graphSourceIds,
-  ], registry.graphAliases);
-  const logicParents = resolveAll(registry, conflict.logicEvidenceIds, registry.logicAliases);
+  ]);
+  const logicParents = resolveCurrentLogicEvidence(registry, conflict.logicEvidenceIds);
   return graphParents === undefined || logicParents === undefined ? undefined : [...graphParents, ...logicParents];
 }
 
