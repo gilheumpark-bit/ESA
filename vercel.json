@@ -1,9 +1,10 @@
 {
   "framework": "nextjs",
+  "fluid": true,
   "regions": ["icn1"],
   "functions": {
     "src/app/api/**/*.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }

@@ -20,7 +20,22 @@ const DRAWING_MAX_BYTES = 20 * 1024 * 1024;
 const VISION_KEY_MAX_CHARS = 4096;
 const VISION_MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
 const VISION_PROVIDERS = new Set(['openai', 'gemini', 'claude'] as const);
+const TEAM_REVIEW_SOFT_DEADLINE_MS = 270_000;
 type VisionProvider = 'openai' | 'gemini' | 'claude';
+
+export function createRequestSignal(requestSignal: AbortSignal) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromRequest = () => controller.abort();
+  if (requestSignal.aborted) controller.abort();
+  requestSignal.addEventListener('abort', abortFromRequest, { once: true });
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, TEAM_REVIEW_SOFT_DEADLINE_MS);
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    dispose: () => { clearTimeout(timer); requestSignal.removeEventListener('abort', abortFromRequest); },
+  };
+}
 
 function drawingKind(file: File): 'image' | 'pdf' | 'dxf' | null {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -38,12 +53,14 @@ function hasServerVisionKey(provider: VisionProvider): boolean {
 }
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export const POST = withApiHandler(
   { rateLimit: 'sld', checkOrigin: true },
   async (req: NextRequest, ctx) => {
     const perf = startPerf('team-review');
+    const requestScope = createRequestSignal(req.signal);
+    try {
     const userId = await extractVerifiedUserId(req);
     const suppliedAuth = req.headers.has('authorization');
     if (suppliedAuth && !userId) {
@@ -186,10 +203,17 @@ export const POST = withApiHandler(
       language: (params.language as string) ?? 'ko',
       vision,
       customRuleSet,
+      signal: requestScope.signal,
     });
 
     perf.checkpoint('orchestrate');
 
+    if (requestScope.timedOut()) {
+      return ctx.error('ESVA-4504', '팀 리뷰 처리 시간이 초과되었습니다.', 504);
+    }
+    if (requestScope.signal.aborted) {
+      return ctx.error('ESVA-4504', '요청이 중단되었습니다.', 499);
+    }
     if (!result.success) {
       return ctx.error('ESVA-4500', result.error ?? '팀 리뷰 실행 실패', 500);
     }
@@ -257,5 +281,8 @@ export const POST = withApiHandler(
         : null,
       durationMs,
     }, perfHeaders(durationMs));
+    } finally {
+      requestScope.dispose();
+    }
   },
 );

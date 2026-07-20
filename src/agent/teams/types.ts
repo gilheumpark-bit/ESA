@@ -62,6 +62,8 @@ export interface TeamInput {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
+  /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
+  signal?: AbortSignal;
   /** 이미지 도면에서만 사용. API 키는 현재 요청 메모리에만 머물고 결과·로그에 포함하지 않는다. */
   vision?: {
     provider: 'openai' | 'gemini' | 'claude';

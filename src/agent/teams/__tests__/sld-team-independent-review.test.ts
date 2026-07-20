@@ -87,20 +87,48 @@ function rasterInput(extra: Partial<TeamInput> = {}): TeamInput {
 
 describe('SLD raster independent council integration', () => {
   it('runs one full-region council, maps stable graph IDs, and keeps the BYOK secret out of the result', async () => {
+    const controller = new AbortController();
     const prepareRaster = jest.fn(async () => prepared());
     const resolveVisionKey = jest.fn(() => ({ key: KEY, source: 'user' as const }));
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
 
-    const result = await executeSLDTeam(rasterInput(), { prepareRaster, resolveVisionKey, runCouncil });
+    const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), { prepareRaster, resolveVisionKey, runCouncil });
 
     expect(runCouncil).toHaveBeenCalledTimes(1);
-    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, options: expect.objectContaining({ apiKey: KEY }) }));
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, signal: controller.signal, timeoutMs: 15_000, maxRetries: 0 }) }));
     expect(prepareRaster).toHaveBeenCalledTimes(1);
     expect(resolveVisionKey).toHaveBeenCalledWith('openai', ` ${KEY} `);
     expect(result.success).toBe(true);
     expect(result.components).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'VCB-01', type: 'breaker_vcb' }), expect.objectContaining({ id: 'TR-01', type: 'transformer' })]));
     expect(result.connections).toEqual([expect.objectContaining({ from: 'VCB-01', to: 'TR-01' })]);
     expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 16, complete: true, maxRegionCallsPerRole: 16 } });
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('stops before raster preparation and council dispatch when the request is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const prepareRaster = jest.fn(async () => prepared());
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+
+    const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), { prepareRaster, runCouncil, resolveVisionKey: () => ({ key: KEY, source: 'user' }) });
+
+    expect(result.success).toBe(false);
+    expect(prepareRaster).not.toHaveBeenCalled();
+    expect(runCouncil).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('fails closed when the request aborts while a council dependency is in flight', async () => {
+    const controller = new AbortController();
+    const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => { controller.abort(); return { envelopes: envelopes(), failures: [] }; },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.');
     expect(JSON.stringify(result)).not.toContain(KEY);
   });
 

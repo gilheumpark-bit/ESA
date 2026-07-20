@@ -110,6 +110,13 @@ export interface SLDTeamDeps {
 const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
 const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_REGION_CALLS_PER_ROLE = 16;
+const COUNCIL_MAX_CONCURRENT_CALLS = 4;
+const COUNCIL_SOURCE_TIMEOUT_MS = 15_000;
+const COUNCIL_SOURCE_MAX_RETRIES = 0;
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error('request aborted');
+}
 
 async function preparePrecisionRegions(buffer: ArrayBuffer, mimeType: string): Promise<PreparedRaster> {
   const prepared = await preparePlan1PrecisionRegions(buffer);
@@ -166,7 +173,9 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   complete: boolean;
 }> {
   if (!input.fileBuffer || !input.vision) throw new Error('이미지 독립 검토에는 파일과 Vision provider가 필요합니다.');
+  throwIfAborted(input.signal);
   const prepared = await (deps.prepareRaster ?? preparePrecisionRegions)(input.fileBuffer, input.mimeType ?? 'image/png');
+  throwIfAborted(input.signal);
   const resolved = (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
   onResolvedKey(resolved.key);
   const council = await (deps.runCouncil ?? runDrawingCouncil)({
@@ -174,8 +183,10 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     variants: prepared.variants,
     regions: prepared.regions,
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
-    options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model },
+    maxConcurrentCalls: COUNCIL_MAX_CONCURRENT_CALLS,
+    options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model, signal: input.signal, timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS, maxRetries: COUNCIL_SOURCE_MAX_RETRIES },
   });
+  throwIfAborted(input.signal);
   const selectedRoles = ['symbols', 'connections', 'text'] as const;
   const expectedRegionCount = precisionGridSize(prepared.snapshot.quality.recommendedScale);
   const requiredSymbolVariantKind = prepared.snapshot.quality.recommendedScale === 4
@@ -593,7 +604,7 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       ...(rasterReview ? { drawingReview: rasterReview.artifact } : {}),
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = input.signal?.aborted ? '요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.' : err instanceof Error ? err.message : String(err);
     return {
       teamId: 'TEAM-SLD',
       success: false,
