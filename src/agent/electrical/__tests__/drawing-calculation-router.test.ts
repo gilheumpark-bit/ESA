@@ -298,6 +298,76 @@ describe('routeDrawingCalculations', () => {
     expect(receipt?.optionalDefaultsUsed).toEqual([]);
   });
 
+  it('fails closed when the normalizer rejects an explicit zero-percent transformer growth margin', () => {
+    const source = calculationGraph();
+    setTextRaw(source, 'TR-TEXT', '총부하 500kW 역률 0.9 효율 95% 수용률 80% 안전율 0%');
+    const normalized = normalizeElectricalGraph(source);
+    const receipt = receiptFor(routeDrawingCalculations(normalized), 'transformer-capacity', 'TR-01');
+
+    expect(normalized.specs.some((spec) => spec.field === 'safetyMargin')).toBe(false);
+    expect(normalized.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE',
+        evidenceId: 'TR-TEXT',
+        field: 'safetyMargin',
+      }),
+    ]));
+    expect(receipt).toMatchObject({ status: 'SKIPPED', judgment: 'HOLD' });
+    expect(receipt?.missingInputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ adapterField: 'growthMargin', normalizedFields: ['safetyMargin'] }),
+    ]));
+    expect(receipt?.optionalDefaultsUsed).toEqual([]);
+  });
+
+  it.each([
+    {
+      label: 'ambiguous transformer growth margin',
+      textId: 'TR-TEXT',
+      raw: '총부하 500kW 역률 0.9 효율 95% 수용률 80% 안전율 0.1 안전율 0.2',
+      calculatorId: 'transformer-capacity',
+      ownerId: 'TR-01',
+      adapterField: 'growthMargin',
+      warningField: 'safetyMargin',
+      issueKey: 'ambiguousInputs',
+    },
+    {
+      label: 'malformed cable ampacity',
+      textId: 'VCB-TEXT',
+      raw: '380V 부하전류 120A 단락전류 25kA 허용전류 0A 역률 0.9',
+      calculatorId: 'breaker-sizing',
+      ownerId: 'VCB-01',
+      adapterField: 'cableAmpacity',
+      warningField: 'cableAmpacity_A',
+      issueKey: 'missingInputs',
+    },
+    {
+      label: 'ambiguous cable ampacity',
+      textId: 'VCB-TEXT',
+      raw: '380V 부하전류 120A 단락전류 25kA 허용전류 150A 허용전류 160A 역률 0.9',
+      calculatorId: 'breaker-sizing',
+      ownerId: 'VCB-01',
+      adapterField: 'cableAmpacity',
+      warningField: 'cableAmpacity_A',
+      issueKey: 'ambiguousInputs',
+    },
+  ] as const)('maps $label normalizer warnings to optional-input HOLD', ({
+    textId, raw, calculatorId, ownerId, adapterField, warningField, issueKey,
+  }) => {
+    const source = calculationGraph();
+    setTextRaw(source, textId, raw);
+    const normalized = normalizeElectricalGraph(source);
+    const receipt = receiptFor(routeDrawingCalculations(normalized), calculatorId, ownerId);
+
+    expect(normalized.specs.some((spec) => spec.field === warningField)).toBe(false);
+    expect(normalized.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ evidenceId: textId, field: warningField }),
+    ]));
+    expect(receipt).toMatchObject({ status: 'SKIPPED', judgment: 'HOLD' });
+    expect(receipt?.[issueKey]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ adapterField }),
+    ]));
+  });
+
   it('fails closed instead of dropping ambiguous explicit cable ampacity evidence', () => {
     const source = calculationGraph();
     source.texts.push(text('AMPACITY-TEXT-2', '허용전류 160A', 110));

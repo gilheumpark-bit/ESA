@@ -7,7 +7,7 @@ import type { BreakerSizingInput } from '@/engine/calculators/protection/breaker
 import type { TransformerCapacityInput } from '@/engine/calculators/transformer/transformer-capacity';
 import type { CTSizingInput } from '@/engine/calculators/substation/ct-sizing';
 import { normalizeElectricalGraph } from './domain-normalizer';
-import type { NormalizedElectricalGraph, NormalizedSpec } from './domain-normalizer';
+import type { NormalizationWarning, NormalizedElectricalGraph, NormalizedSpec } from './domain-normalizer';
 
 type CalculatorId = 'voltage-drop' | 'breaker-sizing' | 'transformer-capacity' | 'ct-sizing';
 type CalculatorStatus = 'SKIPPED' | 'CALCULATED' | 'ERROR';
@@ -58,7 +58,7 @@ export interface DrawingCalculationRouterOptions {
 }
 
 type TrustedSpecIndex = ReadonlyMap<string, readonly NormalizedSpec[]>;
-type Scope = { readonly ownerId: string; readonly page: number; readonly key: string; readonly specs: readonly NormalizedSpec[]; readonly issues: readonly string[]; readonly isResolvedOwnerContext: boolean; readonly trustedSpecs: TrustedSpecIndex; readonly contextAmbiguous?: boolean };
+type Scope = { readonly ownerId: string; readonly page: number; readonly key: string; readonly specs: readonly NormalizedSpec[]; readonly warnings: readonly NormalizationWarning[]; readonly issues: readonly string[]; readonly isResolvedOwnerContext: boolean; readonly trustedSpecs: TrustedSpecIndex; readonly contextAmbiguous?: boolean };
 type Binding = { readonly adapterField: string; readonly fields: readonly NormalizedSpec['field'][]; readonly unit: string; readonly targetUnit: string; readonly valid: (value: number | string) => boolean };
 type Resolved = { readonly evidence: CalculationInputEvidence; readonly value: number | string };
 type OptionalResolution =
@@ -166,6 +166,13 @@ function resolve(scope: Scope, graph: NormalizedElectricalGraph, binding: Bindin
 }
 
 function resolveOptional(scope: Scope, graph: NormalizedElectricalGraph, binding: Binding): OptionalResolution {
+  const warnings = scope.warnings.filter((warning) => warning.field !== undefined && binding.fields.includes(warning.field));
+  if (warnings.some((warning) => warning.code === 'HOLD_AMBIGUOUS_FIELD_VALUE' || warning.code === 'HOLD_AMBIGUOUS_TEXT_OWNER')) {
+    return { state: 'ambiguous', issue: issue(binding) };
+  }
+  if (warnings.some((warning) => warning.code.startsWith('HOLD_'))) {
+    return { state: 'invalid', issue: issue(binding) };
+  }
   const present = binding.fields.some((field) => scope.specs.some((spec) => spec.field === field));
   if (!present) return { state: 'absent' };
   if (!scope.isResolvedOwnerContext) return { state: 'invalid', issue: issue(binding) };
@@ -190,6 +197,17 @@ function makeScopeIssues(graph: NormalizedElectricalGraph): readonly string[] {
   ].sort(compareText);
 }
 
+function warningsForScope(graph: NormalizedElectricalGraph, ownerId: string, page: number): readonly NormalizationWarning[] {
+  return graph.warnings.filter((warning) => {
+    if (warning.page !== undefined && warning.page !== page) return false;
+    if (warning.evidenceId === undefined) return true;
+    const linkedOwners = graph.graph.textLinks
+      .filter((link) => link.textId === warning.evidenceId)
+      .map((link) => link.symbolId);
+    return linkedOwners.length === 0 || linkedOwners.includes(ownerId);
+  });
+}
+
 function scopesFor(graph: NormalizedElectricalGraph, trustedSpecs: TrustedSpecIndex): Scope[] {
   const groups = new Map<string, NormalizedSpec[]>();
   for (const spec of graph.specs) {
@@ -210,6 +228,7 @@ function scopesFor(graph: NormalizedElectricalGraph, trustedSpecs: TrustedSpecIn
         page,
         key,
         specs,
+        warnings: warningsForScope(graph, ownerId, page),
         issues: isResolvedOwnerContext ? issues : [...issues, `OWNER_CONTEXT_UNRESOLVED:${ownerId}@p${page}`].sort(compareText),
         isResolvedOwnerContext,
         trustedSpecs,
@@ -265,6 +284,7 @@ function voltageDropScope(graph: NormalizedElectricalGraph, scopes: readonly Sco
   return {
     ...scope,
     specs: [...scope.specs, ...connections[0].provider.specs],
+    warnings: [...scope.warnings, ...connections[0].provider.warnings],
     issues: [...new Set([...scope.issues, ...connections[0].provider.issues])].sort(compareText),
   };
 }
