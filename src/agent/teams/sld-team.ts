@@ -20,11 +20,9 @@ import type {
   DrawingReviewArtifact,
 } from './types';
 import { resolveSymbol } from '../vision/symbol-db';
-import { runDrawingCouncil } from '../vision/drawing-council';
+import { runDrawingCouncil, selectCouncilVariant } from '../vision/drawing-council';
 import { assembleSpatialGraph, type SpatialEvidenceGraph } from '../vision/spatial-graph';
-import { profileImage } from '../vision/image-quality';
-import { createImageVariants } from '../vision/image-variants';
-import { cropPrecisionRegions, planAdaptiveBounds } from '../vision/adaptive-regions';
+import { preparePrecisionRegions as preparePlan1PrecisionRegions, precisionGridSize } from '../vision/vision-splitter';
 import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
 import type { RoleReviewEnvelope } from '../vision/review-types';
 import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
@@ -114,15 +112,12 @@ const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_REGION_CALLS_PER_ROLE = 16;
 
 async function preparePrecisionRegions(buffer: ArrayBuffer, mimeType: string): Promise<PreparedRaster> {
-  const quality = await profileImage(buffer);
-  const variants = await createImageVariants(buffer, quality);
-  const snapshot = createDrawingSnapshot(buffer, mimeType, quality);
-  const selected = variants.filter((variant) => variant.kind === 'original' || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast');
-  const groups = await Promise.all(selected.map((variant) => cropPrecisionRegions(
-    variant,
-    planAdaptiveBounds(variant.width, variant.height, 4, 0.1),
-  )));
-  return { snapshot, variants, regions: groups.flat() };
+  const prepared = await preparePlan1PrecisionRegions(buffer);
+  return {
+    snapshot: createDrawingSnapshot(buffer, mimeType, prepared.profile),
+    variants: prepared.variants,
+    regions: prepared.regions,
+  };
 }
 
 function safeSnapshot(snapshot: DrawingSnapshot): DrawingReviewArtifact['snapshot'] {
@@ -158,7 +153,11 @@ function graphLegacy(graph: SpatialEvidenceGraph, envelopeConfidence: number): {
   };
 }
 
-async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps): Promise<{
+function redactSecret(value: string, secret: string | undefined): string {
+  return secret ? value.split(secret).join('[REDACTED]') : value;
+}
+
+async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolvedKey: (key: string) => void): Promise<{
   artifact: DrawingReviewArtifact;
   components: ExtractedComponent[];
   connections: ExtractedConnection[];
@@ -169,6 +168,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps): Promise
   if (!input.fileBuffer || !input.vision) throw new Error('이미지 독립 검토에는 파일과 Vision provider가 필요합니다.');
   const prepared = await (deps.prepareRaster ?? preparePrecisionRegions)(input.fileBuffer, input.mimeType ?? 'image/png');
   const resolved = (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
+  onResolvedKey(resolved.key);
   const council = await (deps.runCouncil ?? runDrawingCouncil)({
     snapshot: prepared.snapshot,
     variants: prepared.variants,
@@ -176,24 +176,46 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps): Promise
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model },
   });
+  const selectedRoles = ['symbols', 'connections', 'text'] as const;
+  const expectedRegionCount = precisionGridSize(prepared.snapshot.quality.recommendedScale);
+  const coverageRoles = {
+    logic: { variantId: selectCouncilVariant('logic', prepared.variants, prepared.snapshot.quality.recommendedScale).id, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+    ...Object.fromEntries(selectedRoles.map((role) => {
+      const variantId = selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale).id;
+      const actualRegionCount = prepared.regions.filter((region) => region.variantId === variantId).length;
+      return [role, { variantId, expectedRegionCount, actualRegionCount, plannedCalls: 1 + actualRegionCount }];
+    })),
+  } as DrawingReviewArtifact['coverage']['roles'];
+  const selectedVariantIds = new Set(selectedRoles.map((role) => coverageRoles[role].variantId));
+  const coverageComplete = selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
+    && prepared.regions.length === expectedRegionCount * selectedRoles.length
+    && prepared.regions.every((region) => selectedVariantIds.has(region.variantId));
+  const failures = council.failures.map((failure) => ({ ...failure, error: redactSecret(failure.error, resolved.key) }));
   const artifact: DrawingReviewArtifact = {
     snapshot: safeSnapshot(prepared.snapshot),
     envelopes: council.envelopes,
-    failures: council.failures,
+    failures,
     coverage: {
-      selectedVariantIds: prepared.variants.filter((variant) => variant.kind === 'original' || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast').map((variant) => variant.id).sort(),
-      fullVariantIds: prepared.variants.filter((variant) => variant.kind === 'original' || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast').map((variant) => variant.id).sort(),
-      regionCount: prepared.regions.length,
+      roles: coverageRoles,
+      plannedCalls: Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
+      complete: coverageComplete,
       maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     },
   };
   const roleSet = new Set(council.envelopes.map((item) => item.role));
   const missing = REQUIRED_COUNCIL_ROLES.filter((role) => !roleSet.has(role));
-  const fatal = council.failures.filter((failure) => failure.fatal);
+  const fatal = failures.filter((failure) => failure.fatal);
   const holds = [
     ...missing.map((role) => hold(`필수 ${role} review 결과가 없습니다.`)),
     ...fatal.map((failure) => hold(`${failure.role} review 실패: ${failure.sourceId}`)),
-    ...council.failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
+    ...failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
+    ...(!coverageComplete ? selectedRoles.flatMap((role) => {
+      const coverage = coverageRoles[role];
+      return coverage.actualRegionCount === coverage.expectedRegionCount ? [] : [hold(`${role} precision coverage expected ${coverage.expectedRegionCount}, actual ${coverage.actualRegionCount}.`)];
+    }) : []),
+    ...(!coverageComplete && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
+      ? [hold('precision coverage에 선택되지 않은 variant 또는 초과 region이 포함되었습니다.')]
+      : []),
   ];
   let graph: SpatialEvidenceGraph | undefined;
   const graphEnvelopes = council.envelopes.filter((item): item is RoleReviewEnvelope => GRAPH_COUNCIL_ROLES.includes(item.role as (typeof GRAPH_COUNCIL_ROLES)[number]));
@@ -209,7 +231,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps): Promise
   if (!graph) holds.push(hold('symbols/connections/text graph가 불완전합니다.'));
   if (graph && graph.symbols.length === 0) holds.push(hold('graph symbols가 비어 있습니다.'));
   if (graph && graph.edges.length === 0) holds.push(hold('graph edges가 비어 있습니다.'));
-  const complete = missing.length === 0 && fatal.length === 0 && graph !== undefined && graph.symbols.length > 0 && graph.edges.length > 0;
+  const complete = coverageComplete && missing.length === 0 && fatal.length === 0 && graph !== undefined && graph.symbols.length > 0 && graph.edges.length > 0;
   const envelopeConfidence = council.envelopes.length === 0 ? 0 : Math.min(...council.envelopes.map((item) => item.data.confidence));
   const legacy = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
   return { artifact, ...legacy, holds, complete };
@@ -486,11 +508,12 @@ async function runCustomRules(
  */
 export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): Promise<TeamResult> {
   const start = Date.now();
+  let transientVisionKey = input.vision?.apiKey?.trim();
 
   try {
     // Step 1: 도면에서 컴포넌트/연결 추출
     const rasterReview = input.classification === 'sld_image'
-      ? await reviewRasterDrawing(input, deps)
+      ? await reviewRasterDrawing(input, deps, (key) => { transientVisionKey = key; })
       : undefined;
     const extracted = rasterReview ?? await extractFromDrawing(input);
     const { components, connections, confidence } = extracted;
@@ -562,14 +585,13 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       ...(rasterReview ? { drawingReview: rasterReview.artifact } : {}),
     };
   } catch (err) {
-    const secret = input.vision?.apiKey?.trim();
     const message = err instanceof Error ? err.message : String(err);
     return {
       teamId: 'TEAM-SLD',
       success: false,
       confidence: 0,
       durationMs: Date.now() - start,
-      error: secret ? message.split(secret).join('[REDACTED]') : message,
+      error: redactSecret(message, transientVisionKey),
     };
   }
 }

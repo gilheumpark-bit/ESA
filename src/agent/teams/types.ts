@@ -102,9 +102,14 @@ export interface DrawingReviewArtifact {
   graph?: import('../vision/spatial-graph').SpatialEvidenceGraph;
   failures: import('../vision/drawing-council').RoleFailure[];
   coverage: {
-    selectedVariantIds: string[];
-    fullVariantIds: string[];
-    regionCount: number;
+    roles: Record<'symbols' | 'connections' | 'text' | 'logic', {
+      variantId: string;
+      expectedRegionCount: number;
+      actualRegionCount: number;
+      plannedCalls: number;
+    }>;
+    plannedCalls: number;
+    complete: boolean;
     maxRegionCallsPerRole: number;
   };
 }

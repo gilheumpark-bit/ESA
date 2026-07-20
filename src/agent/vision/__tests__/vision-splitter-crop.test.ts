@@ -110,7 +110,7 @@ describe('vision image splitting', () => {
     ]);
     expect(prepared.regions).toHaveLength(48);
     expect(new Set(prepared.regions.map((region) => region.variantId))).toEqual(
-      new Set(['variant:original', 'variant:text-high-contrast', 'variant:line-enhanced']),
+      new Set(['variant:upscale-4x', 'variant:text-high-contrast', 'variant:line-enhanced']),
     );
   });
 });

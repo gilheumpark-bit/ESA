@@ -49,7 +49,7 @@ export interface MergedVisionResult {
 
 const MAX_INPUT_PIXELS = 40_000_000;
 
-function precisionGridSize(recommendedScale: 1 | 2 | 4): 4 | 9 | 16 {
+export function precisionGridSize(recommendedScale: 1 | 2 | 4): 4 | 9 | 16 {
   if (recommendedScale === 4) return 16;
   if (recommendedScale === 2) return 9;
   return 4;
@@ -68,7 +68,7 @@ export async function preparePrecisionRegions(
   const precision = options.precision ?? true;
   const selected = precision
     ? variants.filter((variant) =>
-      variant.kind === 'original'
+      variant.kind === (profile.recommendedScale === 4 ? 'upscale-4x' : profile.recommendedScale === 2 ? 'upscale-2x' : 'original')
       || variant.kind === 'text-high-contrast'
       || variant.kind === 'line-enhanced')
     : variants.filter((variant) => variant.kind === 'original');

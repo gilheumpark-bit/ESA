@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { executeSLDTeam } from '../sld-team';
+import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
+import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import type { TeamInput } from '../types';
 import type { DrawingSnapshot, ImageVariant, PrecisionRegion } from '../../vision/evidence-types';
 import type { RoleReviewData, RoleReviewEnvelope, ReviewRole } from '../../vision/review-types';
+
+jest.mock('@/engine/topology/pdf-vector-parser', () => ({ parsePdfToSLD: jest.fn() }));
 
 const DRAWING_HASH = 'd'.repeat(64);
 const KEY = 'sk-independent-review-test-key-123456';
@@ -51,10 +57,13 @@ const snapshot: DrawingSnapshot = {
   quality: { width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.2, gradientVariance: 1, lowContrast: false, blurry: false, recommendedScale: 1, warnings: [] },
 };
 
-function prepared() {
-  const variants = ['original', 'line-enhanced', 'text-high-contrast'].map((kind) => ({ id: `variant:${kind}`, kind, buffer: new ArrayBuffer(1), width: 100, height: 80, transform: { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0 } })) as ImageVariant[];
-  const regions = variants.flatMap((variant) => Array.from({ length: 4 }, (_, index) => ({ id: `${variant.id}:region:${index}`, variantId: variant.id, variantBounds: { x: index * 25, y: 0, w: 25, h: 80 }, originalBounds: { x: index * 25, y: 0, w: 25, h: 80 }, buffer: new ArrayBuffer(1) }))) as PrecisionRegion[];
-  return { snapshot, variants, regions };
+function prepared(scale: 1 | 2 | 4 = 1) {
+  const selectedSymbol = scale === 4 ? 'upscale-4x' : scale === 2 ? 'upscale-2x' : 'original';
+  const regionCount = scale === 4 ? 16 : scale === 2 ? 9 : 4;
+  const variants = ['original', 'upscale-2x', 'upscale-4x', 'line-enhanced', 'text-high-contrast'].map((kind) => ({ id: `variant:${kind}`, kind, buffer: new ArrayBuffer(1), width: 100, height: 80, transform: { scaleX: 1, scaleY: 1, offsetX: 0, offsetY: 0 } })) as ImageVariant[];
+  const selected = variants.filter((variant) => variant.kind === selectedSymbol || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast');
+  const regions = selected.flatMap((variant) => Array.from({ length: regionCount }, (_, index) => ({ id: `${variant.id}:region:${index}`, variantId: variant.id, variantBounds: { x: 0, y: 0, w: 25, h: 80 }, originalBounds: { x: 0, y: 0, w: 25, h: 80 }, buffer: new ArrayBuffer(1) }))) as PrecisionRegion[];
+  return { snapshot: { ...snapshot, quality: { ...snapshot.quality, recommendedScale: scale } }, variants, regions };
 }
 
 function rasterInput(extra: Partial<TeamInput> = {}): TeamInput {
@@ -76,8 +85,30 @@ describe('SLD raster independent council integration', () => {
     expect(result.success).toBe(true);
     expect(result.components).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'VCB-01', type: 'breaker_vcb' }), expect.objectContaining({ id: 'TR-01', type: 'transformer' })]));
     expect(result.connections).toEqual([expect.objectContaining({ from: 'VCB-01', to: 'TR-01' })]);
-    expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { regionCount: 12, maxRegionCallsPerRole: 16 } });
+    expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 16, complete: true, maxRegionCallsPerRole: 16 } });
     expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it.each([
+    [1, 'variant:original', 4, 16],
+    [2, 'variant:upscale-2x', 9, 31],
+    [4, 'variant:upscale-4x', 16, 52],
+  ] as const)('plans scale %i with %s symbols and exact adaptive calls', async (scale, symbolVariant, regionCount, plannedCalls) => {
+    const prepareRaster = jest.fn(async () => prepared(scale));
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const result = await executeSLDTeam(rasterInput(), { prepareRaster, resolveVisionKey: () => ({ key: KEY, source: 'user' }), runCouncil });
+
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ regions: expect.any(Array) }));
+    expect(result.drawingReview?.coverage).toMatchObject({
+      plannedCalls,
+      complete: true,
+      roles: {
+        symbols: { variantId: symbolVariant, expectedRegionCount: regionCount, actualRegionCount: regionCount, plannedCalls: regionCount + 1 },
+        connections: { variantId: 'variant:line-enhanced', expectedRegionCount: regionCount, actualRegionCount: regionCount },
+        text: { variantId: 'variant:text-high-contrast', expectedRegionCount: regionCount, actualRegionCount: regionCount },
+        logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+      },
+    });
   });
 
   it.each(['symbols', 'connections', 'text', 'logic'] as const)('fails closed and exposes HOLD when required %s review is absent', async (missing) => {
@@ -87,6 +118,17 @@ describe('SLD raster independent council integration', () => {
     expect(result.success).toBe(false);
     expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD', note: expect.stringContaining(missing) })]));
     expect(result.drawingReview?.envelopes).toHaveLength(3);
+  });
+
+  it.each(['symbols', 'connections'] as const)('fails closed when the %s graph evidence is empty', async (role) => {
+    const incomplete = envelopes().map((envelope) => {
+      if (envelope.role !== role) return envelope;
+      return role === 'symbols' ? sealed('symbols', { symbols: [] }) : sealed('connections', { lines: [] });
+    });
+    const result = await executeSLDTeam(rasterInput(), { prepareRaster: async () => prepared(), resolveVisionKey: () => ({ key: KEY, source: 'user' }), runCouncil: async () => ({ envelopes: incomplete, failures: [] }) });
+
+    expect(result.success).toBe(false);
+    expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD', note: expect.stringMatching(/graph(?:가 불완전| edges가 비어)/) })]));
   });
 
   it('preserves nonfatal failures and graph conflicts as HOLD instead of silently returning a clean review', async () => {
@@ -112,14 +154,17 @@ describe('SLD raster independent council integration', () => {
   it('uses the selected provider env fallback only and redacts a key-resolution failure', async () => {
     const previousGemini = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
     const previousOpenAI = process.env.OPENAI_API_KEY;
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'gemini-server-only-key';
-    process.env.OPENAI_API_KEY = 'openai-other-provider-key';
-    const runCouncil = jest.fn(async () => ({ envelopes: envelopes().map((item) => item.role === 'symbols' ? { ...item, provider: 'gemini' as const } : { ...item, provider: 'gemini' as const }), failures: [] }));
-    // The synthetic gemini envelope seal is intentionally not used here; resolution is asserted before graph assembly.
-    await executeSLDTeam(rasterInput({ vision: { provider: 'gemini' } }), { prepareRaster: async () => prepared(), runCouncil });
-    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ options: expect.objectContaining({ apiKey: 'gemini-server-only-key' }) }));
-    if (previousGemini === undefined) delete process.env.GOOGLE_GENERATIVE_AI_API_KEY; else process.env.GOOGLE_GENERATIVE_AI_API_KEY = previousGemini;
-    if (previousOpenAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousOpenAI;
+    try {
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'gemini-server-only-key';
+      process.env.OPENAI_API_KEY = 'openai-other-provider-key';
+      const runCouncil = jest.fn(async () => { throw new Error('gemini-server-only-key leaked'); });
+      const envResult = await executeSLDTeam(rasterInput({ vision: { provider: 'gemini' } }), { prepareRaster: async () => prepared(), runCouncil });
+      expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ options: expect.objectContaining({ apiKey: 'gemini-server-only-key' }) }));
+      expect(JSON.stringify(envResult)).not.toContain('gemini-server-only-key');
+    } finally {
+      if (previousGemini === undefined) delete process.env.GOOGLE_GENERATIVE_AI_API_KEY; else process.env.GOOGLE_GENERATIVE_AI_API_KEY = previousGemini;
+      if (previousOpenAI === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previousOpenAI;
+    }
 
     const result = await executeSLDTeam(rasterInput(), { prepareRaster: async () => prepared(), resolveVisionKey: () => { throw new Error(KEY); } });
     expect(result.success).toBe(false);
@@ -147,5 +192,26 @@ describe('SLD raster independent council integration', () => {
     await executeSLDTeam({ sessionId: 'pdf-no-council', classification: 'sld_pdf' }, { prepareRaster, runCouncil, resolveVisionKey: () => ({ key: KEY, source: 'user' }) });
     expect(prepareRaster).not.toHaveBeenCalled();
     expect(runCouncil).not.toHaveBeenCalled();
+  });
+
+  it('parses the real DXF fixture from fileBuffer and bypasses the council', async () => {
+    const dxf = readFileSync(join(process.cwd(), 'fixtures/drawings/synthetic/L1-02-text-spec.dxf'));
+    const expected = parseDxfToSLD(dxf.toString('utf8'));
+    const runCouncil = jest.fn();
+    const result = await executeSLDTeam({ sessionId: 'dxf-fixture', classification: 'sld_dxf', fileBuffer: dxf.buffer.slice(dxf.byteOffset, dxf.byteOffset + dxf.byteLength) }, { runCouncil });
+
+    expect(runCouncil).not.toHaveBeenCalled();
+    expect(result.components?.map((component) => component.id)).toEqual(expected.components.map((component) => component.id));
+    expect(result.connections?.map((connection) => [connection.from, connection.to])).toEqual(expected.connections.map((connection) => [connection.from, connection.to]));
+  });
+
+  it('uses the PDF parser mock with a non-empty buffer and bypasses the council', async () => {
+    jest.mocked(parsePdfToSLD).mockResolvedValue({ components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR' }], connections: [], confidence: 1, suggestedCalculations: [], rawDescription: '' } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>);
+    const runCouncil = jest.fn();
+    const result = await executeSLDTeam({ sessionId: 'pdf-mock', classification: 'sld_pdf', fileBuffer: new Uint8Array([37, 80, 68, 70]).buffer }, { runCouncil });
+
+    expect(parsePdfToSLD).toHaveBeenCalled();
+    expect(runCouncil).not.toHaveBeenCalled();
+    expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer' })]);
   });
 });

@@ -244,16 +244,21 @@ function validateInput(input: DrawingCouncilInput): CouncilLimits {
   return { maxRegionCalls, maxConcurrentCalls };
 }
 
-function pickVariant(role: VLMReviewRole, variants: readonly ImageVariant[]): ImageVariant {
+export function selectCouncilVariant(role: VLMReviewRole, variants: readonly ImageVariant[], recommendedScale?: 1 | 2 | 4): ImageVariant {
   const original = variants.find((variant) => variant.kind === 'original');
   if (!original) invalid('original variant is missing.');
   if (role === 'text') return variants.find((variant) => variant.kind === 'text-high-contrast') ?? original;
   if (role === 'connections') return variants.find((variant) => variant.kind === 'line-enhanced') ?? original;
+  if (role === 'symbols') {
+    if (recommendedScale === 4) return variants.find((variant) => variant.kind === 'upscale-4x') ?? original;
+    if (recommendedScale === 2) return variants.find((variant) => variant.kind === 'upscale-2x') ?? original;
+    return original;
+  }
   return original;
 }
 
 function planSources(role: VLMReviewRole, input: DrawingCouncilInput, maxRegionCalls: number): ReviewSource[] {
-  const variant = pickVariant(role, input.variants);
+  const variant = selectCouncilVariant(role, input.variants, input.snapshot.quality.recommendedScale);
   const full: ReviewSource = {
     id: variant.id,
     namespace: 's0',

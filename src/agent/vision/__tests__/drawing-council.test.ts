@@ -103,6 +103,23 @@ describe('sealed independent drawing council', () => {
     expect(result.envelopes.find((item) => item.role === 'logic')?.data.logic).toHaveLength(1);
   });
 
+  it.each([
+    [1, 'variant:original'],
+    [2, 'variant:upscale-2x'],
+    [4, 'variant:upscale-4x'],
+  ] as const)('selects the scale %i symbol full source while retaining role-specific full sources', async (recommendedScale, symbolSourceId) => {
+    const inputVariants = [...variants(),
+      { id: 'variant:upscale-2x', kind: 'upscale-2x' as const, buffer: new ArrayBuffer(5), width: 200, height: 160, transform: { scaleX: 2, scaleY: 2, offsetX: 0, offsetY: 0 } },
+      { id: 'variant:upscale-4x', kind: 'upscale-4x' as const, buffer: new ArrayBuffer(6), width: 400, height: 320, transform: { scaleX: 4, scaleY: 4, offsetX: 0, offsetY: 0 } },
+    ];
+    const result = await runDrawingCouncil({ snapshot: { ...snapshot(), quality: { ...snapshot().quality, recommendedScale } }, variants: inputVariants, regions: [], options }, async (buffer, _mime, role) => resultFor(role, buffer.byteLength));
+
+    expect(result.envelopes.find((item) => item.role === 'symbols')?.data.symbols?.[0]?.sourceId).toBe(symbolSourceId);
+    expect(result.envelopes.find((item) => item.role === 'connections')?.data.lines?.[0]?.sourceId).toBe('variant:lines');
+    expect(result.envelopes.find((item) => item.role === 'text')?.data.texts?.[0]?.sourceId).toBe('variant:text');
+    expect(result.envelopes.find((item) => item.role === 'logic')?.data.logic?.[0]?.sourceId).toBe('variant:original');
+  });
+
   it('remaps normalized geometry to original pixels, namespaces source ids, and rewrites logic references', async () => {
     const result = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 }, async (buffer, _mime, role) => resultFor(role, buffer.byteLength));
     const symbols = result.envelopes.find((item) => item.role === 'symbols')?.data.symbols ?? [];
