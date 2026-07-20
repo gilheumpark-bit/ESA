@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: codex/sld-v3-completion
-codeBaselineCommit: 419273e8b69f1323e8ad359fc3f698ecf4eab461
-updatedAt: 2026-07-21T05:01:09.3417634+09:00
+codeBaselineCommit: ebe3bb95a463ee5a9157e9c75ca50e14db76862f
+updatedAt: 2026-07-21T06:05:49.1223001+09:00
 trigger: architecture
-changedDomains: [agent, app, components, engine, lib]
+changedDomains: [agent, app]
 ---
 
 # ESA 프로젝트 상태
@@ -44,17 +44,19 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 부분 coverage에서는 접지 없음·보호기 없음·고아 장치를 SUPPORTED로 확정하지 않고 HOLD한다.
 - 정정 API에 문서 버전 compare-and-swap, 요청 고유키, 문자/종류/기기명 분리, 전후 재계산 영수증을 넣었다.
 - V3 평가기는 문자 공간, 관계·페이지 방향, 실제 3회 반복 영수증, 서명 지표 재계산을 검증하며 구형 manifest gate와 분리된다.
+- 다중 페이지 PDF 파서에 페이지별 소유 바이트를 전달해 첫 페이지 뒤 원본 버퍼가 분리되는 결함을 막고, 총 픽셀 예산을 요청 페이지 전체에 분배해 뒤 페이지 탈락을 막았다.
+- 반복 정격을 고유 기기 태그로 오인하던 교차 페이지 조합을 차단하고, 모호한 기호·선·문자·관계가 남으면 페이지 처리가 끝나도 판독 상태를 HOLD로 표시한다.
 
 ## 부분 완료
 
-- 이미지·DXF·PDF의 코드 경로와 합성 fixture는 닫혔지만 공급자별 현장 도면 정확도는 실도면 독립 라벨이 준비돼야 계량할 수 있다.
+- 이미지·DXF·PDF의 코드 경로와 공개 PDF 전체 페이지 왕복은 닫혔다. 외부 AI 공급자별 정밀 판독 정확도는 같은 공개 자료의 독립 정답 라벨과 실제 키가 준비돼야 계량할 수 있다.
 - 이메일·푸시 알림은 수신 설정과 인앱 저장만 있으며 실제 발송자는 연결하지 않았다.
 - 기준서 화면은 저장소 스냅샷을 탐색하지만 관할 기관 최신 원문을 자동 동기화하지 않는다.
 - 공유 인메모리 레이트 리밋은 단일 프로세스 보호만 제공한다. V3 작업 저장은 내구 볼륨으로 전환했지만 전역 레이트 리밋은 별도다.
 
 ## 미검증
 
-- 서명된 `real-adjudicated` 현장 도면 데이터셋에서 symbol macro-F1, text field accuracy, edge-F1, junction accuracy, critical logic recall을 재현하는 외부 실증.
+- 독립 정답을 붙인 공개 교보재 데이터셋에서 symbol macro-F1, text field accuracy, edge-F1, junction accuracy, critical logic recall을 재현하는 외부 평가.
 - 실제 OpenAI, Gemini, Claude 키로 같은 도면을 반복 호출한 공급자별 누락·오탐·비용·timeout.
 - 대상 Supabase 마이그레이션 적용 뒤 새 세션에서 원본 메타데이터·보고서·티어를 읽는 왕복.
 - Stripe 테스트 모드 Checkout→서명 웹훅→티어 반영→새 로그인→Portal 전체 흐름.
@@ -63,26 +65,27 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 ## 보류
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
-- 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 브라우저 실증은 로컬에서 만든 비민감 합성 SLD로 수행했다.
-- 코드 기준선은 `419273e`다. 생성된 `.next/`, `test-results/`와 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
+- 코드 기준선은 `ebe3bb9`다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
 - `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
-- `npm test -- --runInBand`: exit 0, 132개 스위트·1,081개 테스트 통과.
+- `npm test -- --runInBand`: exit 0, 133개 스위트·1,091개 테스트 통과.
 - `npm run build`: exit 0, Next.js 16.2.10 production build와 64개 route 항목 생성, Turbopack 경고 0건.
 - `npm run gate:pdf`: exit 0, 회로·표제란·격자·오탐·12MB·비PDF 거부 fixture 9/9 통과.
-- V3 전용: 20개 스위트·65개 테스트, topology 5개 스위트·77개 테스트, `gate:sld-v3-contract` 5/5 통과.
+- V3 전용: 21개 스위트·74개 테스트, topology 5개 스위트·77개 테스트, `gate:sld-v3-contract` 5/5 통과.
 - 브라우저 실증: 운영 저장소 미설정 503 fail-closed, 명시적 로컬 모드 합성 DXF COMPLETE(1페이지·구획 1/1·미확정 0), 새로고침 결과 복구, 데스크톱·390px 모바일 수평 넘침 0을 확인했다.
+- 공개 PDF 생산 API: 대산전기 11/11페이지·관계 244건(HOLD, 저신뢰 관계 명시), 한국기계연구원 18/18페이지·확정 관계 1,168건(COMPLETE), 두 파일 모두 실패·빈 페이지 오판정·가짜 페이지 간 관계 0.
 - 독립 코드·회귀·비밀자료 심사에서 최종 P0~P2와 회사 원본·키·대형 생성물 유입 0건을 확인했다.
 - `npm run gate:sld-golden`: exit 1, `verified95=false`; 실패 사유는 키·예측·실도면 데이터 부재와 claim 비활성이다.
 
 ## 다음 첫 행동
 
-1. 회사 기밀을 제거한 대표 실도면을 별도 라벨러가 판정하고 `real-adjudicated` 데이터셋·예측·평가 서명을 만든다.
-2. V3 `runBenchmarkSuite`로 공급자·모델별 동일 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
+1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
+2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
 3. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate, AI 공급자 순으로 write→persist→새 세션 read-back을 검증한다.
 
 ## 상세 문서

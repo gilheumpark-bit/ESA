@@ -8,15 +8,15 @@
 |---|---|---|---|
 | §1 목표·완료 정의 | `document-orchestrator.ts` → `drawing-document-report.ts`가 페이지·구획·미확정 항목을 합산하고 COMPLETE/PARTIAL을 결정 | `document-orchestrator.test.ts`, `drawing-document-report.test.ts` | 완료 |
 | §2 역할 분리 | `drawing-council.ts`가 symbols, connections, text, logic을 별도 호출하고 `sld-team.ts`가 봉투를 합산 | `drawing-council.test.ts`, `sld-team-independent-review.test.ts` | 완료 |
-| §3 전체·정밀 스캔 | `drawing-source.ts`가 이미지·PDF·DXF를 준비하고 전체 이미지와 4/9/16 정밀 구획을 실행한다. PDF는 요청 페이지·총 픽셀·시간·취소 예산 안에서만 순차 렌더한다 | `drawing-source.test.ts`, `drawing-council.test.ts`, 실PDF 18페이지 왕복 | 완료 |
+| §3 전체·정밀 스캔 | `drawing-source.ts`가 이미지·PDF·DXF를 준비하고 전체 이미지와 4/9/16 정밀 구획을 실행한다. PDF 총 픽셀 예산은 요청 페이지 전체에 분배해 뒤 페이지가 탈락하지 않게 하고, 요청 페이지·시간·취소 예산 안에서 순차 렌더한다 | `drawing-source.test.ts`, `drawing-council.test.ts`, 공개 PDF 11/11·18/18 왕복 | 완료 |
 | §4 OCR·사용자 수정 | original, 4x, high-contrast의 서로 다른 호출만 3중 판독으로 인정한다. PDF/DXF의 전체 좌표 문자를 근거 그래프에 전달하고, 수정 종류·버전·고유키를 검증한 뒤 전후 파생값 영수증을 남긴다 | `ocr-adjudicator.test.ts`, `team-result-adapter.test.ts`, `apply-drawing-correction.test.ts`, correction API tests | 완료 |
 | §5 번호 체계 | `evidence-deduplicator.ts`가 Pxx-S/L/T 번호를 결정적으로 부여하고 원본 근거 ID를 보존 | `evidence-deduplicator.test.ts` | 완료 |
 | §6 수량 체크 | `count-register.ts`가 기호 출현, 확정, 모호, 누락 의심, 물리 장치 수를 분리 | `count-register.test.ts` | 완료 |
-| §7 다중 페이지·재개 | `POST /api/drawing-jobs` → `/{jobId}/run|resume`, 공유 내구 볼륨의 원자적 작업 JSON, AES-256-GCM 원본 임대, 브라우저 폴링·세션 복구를 연결했다. 운영 저장소가 없으면 재개는 503으로 닫힌다 | API route tests, 내구 디스크 왕복 tests, 브라우저 생성→실행→새로고침 복구 | 완료 |
-| §8 페이지 간 병합 | `cross-page-graph.ts`가 명시 페이지 참조만 확정하고 같은 라벨은 후보로 보류 | `cross-page-graph.test.ts` | 완료 |
+| §7 다중 페이지·재개 | `POST /api/drawing-jobs` → `/{jobId}/run|resume`, 공유 내구 볼륨의 원자적 작업 JSON, AES-256-GCM 원본 임대, 브라우저 폴링·세션 복구를 연결했다. 기본 Vision 예산은 요청 페이지당 18호출을 보장하며 사용자의 명시 예산은 그대로 존중한다. 운영 저장소가 없으면 재개는 503으로 닫힌다 | API route tests, 내구 디스크 왕복 tests, 브라우저 생성→실행→새로고침 복구 | 완료 |
+| §8 페이지 간 병합 | `cross-page-graph.ts`가 방향이 명시된 페이지 참조만 확정한다. 같은 라벨 후보는 `VCB-1` 같은 고유 태그 문법에 한정하고 `MCCB 3P-50/50` 같은 반복 정격과 표제란 시트 번호를 제외한다 | `cross-page-graph.test.ts`, 공개 18페이지 PDF 가짜 교차 관계 5,515→0 | 완료 |
 | §9 논리·계산·제안 | `calculation-adapter.ts`, `recommendation-engine.ts`, `rated-value-extractor.ts`가 근거 결박과 HOLD를 강제 | `calculation-adapter.test.ts`, `recommendation-engine.test.ts` | 완료 |
-| §10 보고서 | `/tools/sld`가 `DrawingSourcePreview`, `DrawingDocumentV3Overlay`, `DrawingDocumentV3Report`를 통해 원본·번호·관계·수정·제안을 연결 | 브라우저 실PDF 업로드, 페이지 전환, 데스크톱·모바일·콘솔 검증 | 완료 |
-| §11 95% 실증 | `sld-evaluator-v2.ts`, `sld-benchmark-runner.ts`, `drawing-evaluation-gate.ts`가 문자·기호 공간 일대일 매칭, 관계·페이지 방향, 층별 최저값, 실제 3회 영수증, Ed25519를 검증한다. 구형 manifest gate와 V3 gate는 분리했다 | `npm run gate:sld-v3-contract`, 적대 변조 tests | 구현 완료·현장 실증 대기 |
+| §10 보고서 | `/tools/sld`가 `DrawingSourcePreview`, `DrawingDocumentV3Overlay`, `DrawingDocumentV3Report`를 통해 원본·번호·관계·수정·제안을 연결한다. 기기·선·문자·관계 중 모호 판독이 남으면 페이지 처리가 끝나도 상단 판독 상태는 HOLD다 | 브라우저 실PDF 업로드, 페이지 전환, `drawing-document-report.test.ts`, 데스크톱·모바일·콘솔 검증 | 완료 |
+| §11 95% 평가 게이트 | `sld-evaluator-v2.ts`, `sld-benchmark-runner.ts`, `drawing-evaluation-gate.ts`가 문자·기호 공간 일대일 매칭, 관계·페이지 방향, 층별 최저값, 실제 3회 영수증, Ed25519를 검증한다. 구형 manifest gate와 V3 gate는 분리했다 | `npm run gate:sld-v3-contract`, 적대 변조 tests | 구현 완료·외부 정답 라벨 평가 대기 |
 | §12 데이터 계약 | `types-v3.ts`가 페이지, 증거 그래프, 수량, 계산, 제안, 수정, 평가 영수증을 정본화 | TypeScript 전체 검사와 V3 테스트 | 완료 |
 | §13 모듈·API 경계 | 원본 준비, 오케스트레이션, 평가, 수정, API, UI를 분리하고 실제 호출처를 연결 | 0-caller 반증 grep과 production build | 완료 |
 | §14 수용 기준 | 아래 FR-AC-01~15를 생산 코드와 회귀 테스트에 결박 | 전체 Jest와 본 문서의 FR 표 | 완료 |
@@ -44,7 +44,8 @@
 
 ## 실증 경계
 
-- 실파일 파싱 왕복: 합성 DXF 1페이지는 COMPLETE, 기호 5개·선로 4개. 공개 교보재 PDF 18페이지는 AI 키 없이 페이지 전체 렌더 후 1페이지 완료·17페이지 실패·미확정 25건의 PARTIAL로 정직하게 종료했다.
-- `verified95`는 두 경우 모두 false다. 승인된 real-adjudicated 현장 데이터셋, 독립 라벨 합의, 동일 생산 공급자·모델 3회 반복, Ed25519 영수증이 없으므로 현장 95% 달성 주장은 보류한다.
+- 공개 파일 생산 API 왕복(외부 AI 키 없음): 대산전기 교보재 PDF는 11/11페이지, 기기 267·선 244·문자 842·관계 244를 반환했다. 모든 관계가 저신뢰 벡터 근거이므로 `jobStatus=COMPLETE`와 별개로 `documentStatus=HOLD`, `claimsComplete=false`다.
+- 한국기계연구원 분전반 PDF는 18/18페이지, 기기 1,183·선 1,168·문자 5,802·확정 관계 1,168을 반환했고 실패·빈 페이지 오판정·모호 관계·가짜 페이지 간 관계가 모두 0이었다. `documentStatus=COMPLETE`, `claimsComplete=true`다.
+- `verified95`는 두 경우 모두 false다. 이 값은 페이지 완독 여부와 별개인 외부 정답 라벨 평가 배지이며, 독립 정답·동일 공급자/모델 3회 반복·Ed25519 영수증이 없으면 활성화하지 않는다.
 - 운영의 중단·재개는 `DRAWING_JOB_STORE_DIR` 공유 내구 볼륨과 `DRAWING_SOURCE_LEASE_SECRET`이 실제로 설정됐을 때만 열린다. Docker 구성에는 전용 영구 볼륨이 배선됐고, 저장소 미설정 운영 실측은 503 fail-closed였다.
 - 로컬 샌드박스 브라우저 실측에서 합성 DXF는 생성→실행→COMPLETE(1페이지, 구획 1/1, 미확정 0)→새로고침 결과 복구까지 성공했고 데스크톱·390px 모바일의 전역 가로 넘침은 0이었다.

@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: codex/sld-v3-completion
-codeBaselineCommit: 419273e8b69f1323e8ad359fc3f698ecf4eab461
-updatedAt: 2026-07-21T05:01:09.3417634+09:00
+codeBaselineCommit: ebe3bb95a463ee5a9157e9c75ca50e14db76862f
+updatedAt: 2026-07-21T06:05:49.1223001+09:00
 trigger: architecture
-changedDomains: [agent, app, components, engine, lib]
+changedDomains: [agent, app]
 ---
 
 # 2026-07-21 SLD V3 §1–15 구현 인수인계
@@ -29,7 +29,7 @@ changedDomains: [agent, app, components, engine, lib]
 ## 기준선
 
 - 브랜치: `codex/sld-v3-completion`
-- 코드 기준 커밋: `419273e8b69f1323e8ad359fc3f698ecf4eab461`
+- 코드 기준 커밋: `ebe3bb95a463ee5a9157e9c75ca50e14db76862f`
 - 상세 절·수용기준: `docs/project/SLD_V3_TRACEABILITY.md`
 
 ## 완료
@@ -53,42 +53,51 @@ changedDomains: [agent, app, components, engine, lib]
 - PDF/DXF 전체 문자를 내부에서만 읽고 버림: 모든 파서 좌표 문자를 V3 근거 그래프로 전달.
 - 장시간 POST만 대기: 1.5초 GET 폴링, 작업 상태 노출, sessionStorage 작업 ID 복구.
 
+### 공개 PDF 전 페이지 판독 수리
+
+- PDF 파서에 넘기는 바이트를 페이지마다 복사해 pdf.js 전송 뒤 원본 버퍼가 분리되는 문제를 차단했다.
+- `constructPath` 하나에 많은 도형이 들어가는 PDF를 빈 페이지로 오판정하지 않게 했고, 총 픽셀 예산은 모든 요청 페이지에 분배한다.
+- 저신뢰 벡터 선도 관계 번호와 양 종단을 생성하되 certainty를 승격하지 않고, 모호 관계가 남으면 문서 판독 상태를 HOLD로 둔다.
+- `MCCB 3P-50/50` 같은 반복 정격과 표제란 `SHEET N`을 페이지 간 고유 연결 태그로 쓰지 않는다.
+- 기본 Vision 호출 예산을 페이지당 최소 18회로 계산하고, 사용자가 직접 넣은 예산은 그대로 유지한다.
+
 ## 부분 완료
 
-- V3 95% 평가 실행기와 서명 게이트는 생산 코드에 연결됐지만 현장 데이터가 없어 배지는 계속 false다.
+- V3 95% 평가 실행기와 서명 게이트는 생산 코드에 연결됐지만 외부 정답 라벨과 서명이 없어 배지는 계속 false다.
 - 공유 내구 디렉터리는 로컬·Docker 볼륨 계약까지 확인했다. 실제 다중 인스턴스 스테이징 장애 전환은 운영 자격증명 준비 후 검증한다.
 
 ## 미검증
 
-- 독립 라벨링한 real-adjudicated 현장 도면에서 공급자별 정확도·비용·timeout.
+- 독립 정답을 붙인 공개 교보재에서 공급자별 정확도·비용·timeout.
 - 새 서버 인스턴스가 기존 진행 작업을 조회하고 resume하는 스테이징 왕복.
 - 운영 키 회전 중 기존 암호화 임대 만료·정리 절차.
 
 ## 보류
 
-- `verified95` 활성화는 실도면 독립 라벨, 공급자·모델별 3회 실행, 모든 strata 통과, 승인 Ed25519 키가 없으므로 HOLD다.
+- `verified95` 활성화는 외부 독립 정답, 공급자·모델별 3회 실행, 모든 strata 통과, 승인 Ed25519 키가 없으므로 HOLD다.
 - 회사 기밀 도면, 운영 DB, 실결제, 외부 AI 키는 이번 검증에 사용하지 않았다.
 
 ## 검증
 
 - `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
 - TypeScript·ESLint 경고 0.
-- Jest: 132 suites, 1,081 tests PASS.
+- Jest: 133 suites, 1,091 tests PASS.
 - Next.js 16.2.10 production build: 64 route entries, compile/type/static generation PASS.
 - PDF fixture gate: 9/9 PASS.
-- V3 전용: 20 suites, 65 tests PASS.
+- V3 전용: 21 suites, 74 tests PASS.
 - topology: 5 suites, 77 tests PASS.
 - `npm run gate:sld-v3-contract`: 5/5 PASS.
 - 브라우저: 저장소 미설정 503 fail-closed; 로컬 샌드박스 DXF COMPLETE, 1페이지·구획 1/1·미확정 0; 새로고침 복구; 390px 전역 가로 넘침 0.
+- 공개 PDF 생산 API: 대산전기 11/11페이지·관계 244건(HOLD, 저신뢰 관계), 한국기계연구원 18/18페이지·확정 관계 1,168건(COMPLETE). 실패·빈 페이지 오판정·가짜 페이지 간 관계는 두 파일 모두 0.
 
 ## 현실 증거 경계
 
-- `verified95`는 구현돼 있지만 활성화하지 않았다. 독립 라벨링한 real-adjudicated 실도면, 동일 공급자·모델 데이터셋별 3회 실행, 모든 필수 strata 95% 이상, Ed25519 영수증이 필요하다.
-- 공개 교보재 PDF 실측은 회사 자료가 아니며 PARTIAL/HOLD 정직성 확인 용도다. 현장 정확도 점수로 사용하지 않는다.
+- `verified95`는 구현돼 있지만 활성화하지 않았다. 독립 정답을 붙인 공개 데이터셋, 동일 공급자·모델 데이터셋별 3회 실행, 모든 필수 strata 95% 이상, Ed25519 영수증이 필요하다.
+- 공개 교보재 PDF 실측은 회사 자료가 아니며 현재 제품 목표 범위의 전 페이지 처리·관계 출력·HOLD 정직성 확인에 사용했다.
 - 운영 배포자는 `DRAWING_JOB_STORE_DIR`, `DRAWING_SOURCE_LEASE_SECRET`, `SLD_V3_EVAL_*`를 실제 인프라·키에 연결해야 한다.
 
 ## 다음 첫 행동
 
-1. 기밀을 제거한 대표 실도면을 이중 라벨링하고 불일치 합의본을 만든다.
-2. 공급자·모델별 `runBenchmarkSuite`를 데이터셋마다 3회 실행해 suite receipt를 생성한다.
+1. 현재 공개 교보재의 기호·문자·관계 정답표를 별도 판정자가 작성하고 불일치 합의본을 만든다.
+2. 공급자·모델별 `runBenchmarkSuite`를 같은 공개 데이터셋에서 3회 실행해 suite receipt를 생성한다.
 3. 운영 공유 볼륨과 키를 설정한 스테이징에서 업로드→중단→새 인스턴스 GET→resume→정정 CAS 왕복을 재현한다.
