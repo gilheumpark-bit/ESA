@@ -302,6 +302,24 @@ describe('normalizeElectricalGraph', () => {
     expect(specsFor(result, 'TEXT-091').some((spec) => spec.field === 'breaking_kA')).toBe(false);
   });
 
+  it('keeps rated current distinct and does not leak a previous semantic label', () => {
+    const result = normalizeElectricalGraph(graph({
+      texts: [
+        text('TEXT-092', '부하전류 630A 정격전류 100A', 0),
+        text('TEXT-093', '부하전류 630A 별도 표기 100A', 100),
+      ],
+    }));
+
+    expect(specsFor(result, 'TEXT-092')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'loadCurrent_A', value: 630 }),
+      expect.objectContaining({ field: 'current_A', value: 100 }),
+    ]));
+    expect(specsFor(result, 'TEXT-093')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'loadCurrent_A', value: 630 }),
+      expect.objectContaining({ field: 'current_A', value: 100 }),
+    ]));
+  });
+
   it('fails closed when aggregate parsed specs exceed the global budget', () => {
     const texts = Array.from({ length: 20_001 }, (_, index) => text(`TEXT-BUDGET-${index}`, '3상', index * 30));
     expect(() => normalizeElectricalGraph(graph({ texts }))).toThrow('normalization spec budget exceeded');

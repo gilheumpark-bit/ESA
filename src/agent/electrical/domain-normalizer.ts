@@ -234,15 +234,21 @@ function readMatches(raw: string, pattern: RegExp, unitScale: Record<string, num
 
 function nearestLabelField(raw: string, valueStart: number, labels: readonly [RegExp, ElectricalField][], fallback: ElectricalField): ElectricalField {
   let nearest = -1;
+  let nearestEnd = -1;
   let field = fallback;
   for (const [label, candidate] of labels) {
     const flags = label.flags.includes('g') ? label.flags : `${label.flags}g`;
     const matcher = new RegExp(label.source, flags);
     for (const match of raw.matchAll(matcher)) {
       const start = match.index ?? -1;
-      if (start <= valueStart && start >= nearest) { nearest = start; field = candidate; }
+      if (start <= valueStart && start >= nearest) {
+        nearest = start;
+        nearestEnd = start + match[0].length;
+        field = candidate;
+      }
     }
   }
+  if (nearestEnd < 0 || !/^[\s:：=\-\u2013\u2014()[\]]*$/.test(raw.slice(nearestEnd, valueStart))) return fallback;
   return field;
 }
 
@@ -251,6 +257,7 @@ const CURRENT_LABELS: readonly [RegExp, ElectricalField][] = [
   [/(?:허용\s*전류|cable\s*ampacity|ampacity)/i, 'cableAmpacity_A'],
   [/(?:1차\s*전류|primary\s*current)/i, 'primaryCurrent_A'],
   [/(?:2차\s*전류|secondary\s*current)/i, 'secondaryCurrent_A'],
+  [/(?:정격\s*전류|rated\s*current)/i, 'current_A'],
 ];
 
 const BREAKING_LABELS: readonly [RegExp, ElectricalField][] = [
