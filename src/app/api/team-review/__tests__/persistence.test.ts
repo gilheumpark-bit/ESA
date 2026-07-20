@@ -119,6 +119,32 @@ describe('POST /api/team-review report persistence', () => {
     expect(mockSaveReport).not.toHaveBeenCalled();
   });
 
+  test('aborts an already-started report write with the same request-scoped signal', async () => {
+    const controller = new AbortController();
+    let started: (() => void) | undefined;
+    const startedWrite = new Promise<void>((resolve) => { started = resolve; });
+    mockSaveReport.mockImplementationOnce((_report, _userId, options) => new Promise((resolve) => {
+      started?.();
+      if (!options?.signal) { resolve(false); return; }
+      options?.signal?.addEventListener('abort', () => resolve(false), { once: true });
+    }));
+    const req = new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000', 'X-Forwarded-For': '198.51.100.81' },
+      body: JSON.stringify({ query: 'write abort' }),
+    });
+    const responsePromise = POST(req);
+    await startedWrite;
+    const orchestratorSignal = mockRunOrchestrator.mock.calls[0][0].signal;
+    const persistenceSignal = mockSaveReport.mock.calls[0][2]?.signal;
+    controller.abort();
+    const response = await responsePromise;
+
+    expect(persistenceSignal).toBe(orchestratorSignal);
+    expect(response.status).toBe(499);
+  });
+
   test('persists an authenticated report and discloses the persistence result', async () => {
     const req = new NextRequest('http://localhost:3000/api/team-review', {
       method: 'POST',
@@ -135,7 +161,7 @@ describe('POST /api/team-review report persistence', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mockSaveReport).toHaveBeenCalledWith(report, 'firebase-user-a');
+    expect(mockSaveReport).toHaveBeenCalledWith(report, 'firebase-user-a', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(body.data.persistence).toEqual({ attempted: true, saved: true });
   });
 

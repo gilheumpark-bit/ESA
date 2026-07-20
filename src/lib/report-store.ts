@@ -15,6 +15,11 @@ import { verifyReportIntegrity } from '@/lib/report-integrity';
 
 const log = createLogger('report-store');
 
+export interface SaveReportOptions {
+  /** 요청 취소를 저장 I/O까지 전파한다. */
+  signal?: AbortSignal;
+}
+
 function getServerConfig(): { url: string; serviceKey: string } | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -31,13 +36,16 @@ function getServerConfig(): { url: string; serviceKey: string } | null {
 export async function saveReport(
   report: ESVAVerifiedReport,
   userId: string,
+  options: SaveReportOptions = {},
 ): Promise<boolean> {
   try {
+    if (options.signal?.aborted) return false;
     const config = getServerConfig();
     if (!config || !userId || !(await verifyReportIntegrity(report))) {
       log.warn('Secure report persistence unavailable or report integrity invalid');
       return false;
     }
+    if (options.signal?.aborted) return false;
 
     const res = await fetch(`${config.url}/rest/v1/esva_reports`, {
       method: 'POST',
@@ -58,8 +66,10 @@ export async function saveReport(
         report_json: report,
         hash: report.hash || null,
       }),
+      signal: options.signal,
     });
 
+    if (options.signal?.aborted) return false;
     if (res.ok) {
       log.info('Report saved to Supabase', { reportId: report.reportId });
       return true;
@@ -68,6 +78,7 @@ export async function saveReport(
     log.warn('Supabase save failed', { status: res.status });
     return false;
   } catch (err) {
+    if (options.signal?.aborted) return false;
     log.error('Report save error', { error: String(err) });
     return false;
   }
