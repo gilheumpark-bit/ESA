@@ -132,9 +132,67 @@ function assertAllowedKeys(
   allowed: readonly string[],
 ): void {
   const allowedKeys = new Set(allowed);
-  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+  if (ownEnumerableDataEntries(role, value, label).some(({ key }) => !allowedKeys.has(key))) {
     invalid(role, `${label} contains an unsupported field.`);
   }
+}
+
+function ownEnumerableDataEntries(
+  role: ReviewRole,
+  value: object,
+  label: string,
+): Array<{ key: string; value: unknown }> {
+  const entries: Array<{ key: string; value: unknown }> = [];
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string') {
+      invalid(role, `${label} contains a symbol property.`);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) {
+      invalid(role, `${label} contains a hidden or accessor property.`);
+    }
+    entries.push({ key, value: descriptor.value });
+  }
+
+  return entries;
+}
+
+function arrayDataValues(role: ReviewRole, value: unknown[]): unknown[] {
+  const values = new Array<unknown>(value.length);
+  let itemCount = 0;
+
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (key === 'length') {
+      if (!descriptor || descriptor.enumerable || !('value' in descriptor) || descriptor.value !== value.length) {
+        invalid(role, 'array has a non-standard length property.');
+      }
+      continue;
+    }
+    if (typeof key !== 'string') {
+      invalid(role, 'array contains a symbol property.');
+    }
+    const index = Number(key);
+    if (
+      !descriptor ||
+      !descriptor.enumerable ||
+      !('value' in descriptor) ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= value.length ||
+      String(index) !== key
+    ) {
+      invalid(role, 'array contains a custom, hidden, or accessor property.');
+    }
+    values[index] = descriptor.value;
+    itemCount += 1;
+  }
+
+  if (itemCount !== value.length) {
+    invalid(role, 'array contains a sparse index.');
+  }
+
+  return values;
 }
 
 function assertPayloadBudget(role: ReviewRole, value: unknown): void {
@@ -169,11 +227,21 @@ function assertPayloadBudget(role: ReviewRole, value: unknown): void {
     seen.add(current.value);
 
     if (Array.isArray(current.value)) {
-      arrayItems += current.value.length;
+      const values = arrayDataValues(role, current.value);
+      arrayItems += values.length;
       if (arrayItems > MAX_PAYLOAD_ARRAY_ITEMS) {
         invalid(role, 'payload exceeds the cumulative array-item budget.');
       }
-      for (const item of current.value) {
+      stringChars += 'length'.length;
+      if (stringChars > MAX_PAYLOAD_STRING_CHARS) {
+        invalid(role, 'payload exceeds the cumulative string budget.');
+      }
+      for (let index = 0; index < values.length; index += 1) {
+        stringChars += String(index).length;
+        if (stringChars > MAX_PAYLOAD_STRING_CHARS) {
+          invalid(role, 'payload exceeds the cumulative string budget.');
+        }
+        const item = values[index];
         stack.push({ value: item, depth: current.depth + 1 });
       }
       continue;
@@ -183,8 +251,12 @@ function assertPayloadBudget(role: ReviewRole, value: unknown): void {
     if (prototype !== Object.prototype && prototype !== null) {
       invalid(role, 'payload contains a non-plain object.');
     }
-    for (const key of Object.keys(current.value)) {
-      stack.push({ value: (current.value as RawRecord)[key], depth: current.depth + 1 });
+    for (const entry of ownEnumerableDataEntries(role, current.value, 'payload object')) {
+      stringChars += entry.key.length;
+      if (stringChars > MAX_PAYLOAD_STRING_CHARS) {
+        invalid(role, 'payload exceeds the cumulative string budget.');
+      }
+      stack.push({ value: entry.value, depth: current.depth + 1 });
     }
   }
 }

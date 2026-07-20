@@ -341,4 +341,84 @@ describe('role review contracts', () => {
     expect(() => parseRoleReviewData('overview', cyclic)).toThrow();
     expect(() => parseRoleReviewData('overview', deep)).toThrow();
   });
+
+  it('rejects hidden own keys and hidden connection arrays before parsing them', () => {
+    const symbol = {
+      id: 'symbol-1',
+      rawLabel: 'CB-1',
+      typeCandidates: ['BREAKER'],
+      bounds,
+      ports: [],
+      confidence: 0.8,
+    };
+    Object.defineProperty(symbol, 'injected', {
+      value: true,
+      enumerable: false,
+    });
+    Object.defineProperty(symbol, Symbol('injected'), {
+      value: true,
+      enumerable: false,
+    });
+
+    const createPoints = () =>
+      Array.from({ length: 10_000 }, (_, index) => ({ x: index % 1000, y: 1 }));
+    const path = createPoints();
+    const line = {
+      id: 'line-1',
+      lineKind: 'power',
+      start: { ...path[0] },
+      end: { ...path[path.length - 1] },
+      confidence: 0.8,
+    };
+    Object.defineProperties(line, {
+      path: { value: path, enumerable: false },
+      junctions: { value: createPoints(), enumerable: false },
+      crossovers: { value: createPoints(), enumerable: false },
+    });
+
+    expect(() => parseRoleReviewData('symbols', { symbols: [symbol] })).toThrow();
+    expect(() =>
+      parseRoleReviewData('connections', { lines: [line] }),
+    ).toThrow();
+  });
+
+  it('rejects accessors and inherited required fields without invoking a getter', () => {
+    let getterCalled = false;
+    const accessorLine = {
+      id: 'line-accessor',
+      lineKind: 'power',
+      start: { x: 0, y: 0 },
+      end: { x: 1, y: 1 },
+      junctions: [],
+      crossovers: [],
+      confidence: 0.8,
+    };
+    Object.defineProperty(accessorLine, 'path', {
+      enumerable: true,
+      get() {
+        getterCalled = true;
+        return [{ x: 0, y: 0 }, { x: 1, y: 1 }];
+      },
+    });
+    const inheritedLine = Object.create({
+      path: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+    }) as Record<string, unknown>;
+    Object.assign(inheritedLine, {
+      id: 'line-inherited',
+      lineKind: 'power',
+      start: { x: 0, y: 0 },
+      end: { x: 1, y: 1 },
+      junctions: [],
+      crossovers: [],
+      confidence: 0.8,
+    });
+
+    expect(() =>
+      parseRoleReviewData('connections', { lines: [accessorLine] }),
+    ).toThrow();
+    expect(getterCalled).toBe(false);
+    expect(() =>
+      parseRoleReviewData('connections', { lines: [inheritedLine] }),
+    ).toThrow();
+  });
 });
