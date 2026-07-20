@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: feat/esva-v1.0
-codeBaselineCommit: 31b6f095afbf2aa004cf23dc7fac60c1a12a54b1
-updatedAt: 2026-07-20T11:39:33.7302794+09:00
+codeBaselineCommit: 84fd528de86c33845da2b0a43cfc085b76c18137
+updatedAt: 2026-07-20T13:49:45.1246470+09:00
 trigger: architecture
 changedDomains: [agent, app, engine, lib, supabase]
 ---
@@ -36,7 +36,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - Next.js 16 `proxy.ts`, Weaviate v3, 현재 공급자 모델 목록과 Gemini 헤더 기반 키 전달로 정리했다.
 - 768px 헤더 오버플로와 주요 폼의 레이블·버튼 이름·키보드 상태를 수리했다.
 - 호출처가 없는 구형 AI 서비스, YouTube 501 API, 가짜 도면 마킹, 미배선 Vision 선택지를 제거했다.
-- 최종 소스에서 TypeScript, ESLint, 88개 Jest 스위트·748개 테스트, production build, PDF fixture 9/9, 중앙 enforcement, npm audit를 통과했다.
+- 최종 소스에서 TypeScript, ESLint, 89개 Jest 스위트·749개 테스트, production build, PDF fixture 9/9, 중앙 enforcement, npm audit를 통과했다.
 - production build를 3011 포트에서 기동해 33개 페이지를 375·768·1280·1440px로 순회하고, 단상 전력 계산의 입력→URL→1,870W 결과 왕복과 브라우저 오류 로그 0건을 확인했다.
 
 ## 부분 완료
@@ -57,7 +57,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 ## 보류
 
 - 운영 DB, 실결제, 외부 AI 키, Pinata 자격증명이 제공되지 않아 운영 데이터 쓰기와 유료 호출은 수행하지 않는다.
-- 작업 트리는 사용자의 기존 `next-env.d.ts` 변경과 생성된 `test-results/`를 보존한 채 미커밋 상태다.
+- 전체 리뷰·수리 코드는 구현 커밋 `84fd528`에 고정했다. 사용자의 기존 `next-env.d.ts` 변경과 생성된 `test-results/`는 커밋에 넣지 않고 그대로 보존했다.
 
 ## 다음 첫 행동
 

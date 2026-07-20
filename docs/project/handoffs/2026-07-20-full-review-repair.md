@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: feat/esva-v1.0
-codeBaselineCommit: 31b6f095afbf2aa004cf23dc7fac60c1a12a54b1
-updatedAt: 2026-07-20T11:39:33.7302794+09:00
+codeBaselineCommit: 84fd528de86c33845da2b0a43cfc085b76c18137
+updatedAt: 2026-07-20T13:49:45.1246470+09:00
 trigger: architecture
 changedDomains: [agent, app, engine, lib, supabase]
 ---
@@ -28,7 +28,7 @@ changedDomains: [agent, app, engine, lib, supabase]
 
 - 작업 시작 전부터 수정 상태였던 `next-env.d.ts`는 건드리거나 되돌리지 않았다.
 - 기존 또는 생성된 `test-results/`는 삭제하지 않았다.
-- 커밋, 푸시, 운영 DB 변경, 실제 결제, 외부 유료 AI 호출은 수행하지 않았다.
+- 운영 DB 변경, 실제 결제, 외부 유료 AI 호출은 수행하지 않았다.
 
 ## 완료
 
@@ -52,14 +52,14 @@ changedDomains: [agent, app, engine, lib, supabase]
 ## 보류
 
 - 외부 자격증명과 안전한 스테이징 대상이 없어 실서비스 데이터 쓰기·결제·유료 AI 호출을 보류한다.
-- 현재 변경은 미커밋이므로 `codeBaselineCommit`은 작업 시작 HEAD를 가리킨다. 다음 작업자는 Git diff와 본 문서를 함께 대조해야 한다.
+- 전체 리뷰·수리 코드는 `codeBaselineCommit`에 고정했다. 다음 작업자는 해당 커밋과 현재 Git 상태를 대조한다.
 
 ## 검증
 
 - `git diff --check`: exit 0. 줄 끝 변환 안내 외 공백 오류는 0건이다.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
-- `npm test -- --runInBand`: exit 0, 88개 스위트·748개 테스트 통과.
+- `npm test -- --runInBand`: exit 0, 89개 스위트·749개 테스트 통과.
 - `npm run build`: exit 0, Next.js 16.2.10 production build와 64개 정적 생성 항목 완료.
 - `npm run gate:pdf`: exit 0, 회로·표제란·그리드·필터·12MB 경계·비PDF 거부를 포함한 fixture 9/9 통과.
 - 중앙 `scripts/enforce.ps1 -Path .`: exit 0, 확정 BLOCKER 0건, 문맥 REVIEW 0건, 범용 휴리스틱 WARN 49건, `PASS-WITH-REVIEW`.
@@ -67,7 +67,7 @@ changedDomains: [agent, app, engine, lib, supabase]
 - production health: HTTP 200, 외부 서비스가 없는 로컬 환경을 정직하게 `degraded`로 반환.
 - 브라우저: 33개 페이지를 375·768·1280·1440px에서 순회해 본문 1개 이상, 이름 없는 컨트롤·깨진 이미지·빈 링크·원시 배포 설정명·Next 오류·수평 오버플로 문제 0건을 확인했다.
 - 최종 SLD 화면은 네 해상도에서 별도 재검증했고, 단상 전력 계산은 `220V × 10A × 0.85 = 1,870W`와 URL 입력 반영을 확인했다. 새 브라우저 세션의 error/warn 로그는 0건이다.
-- 인수인계 검증기는 문서 계약 문제 0건을 반환한다. 현재 작업이 사용자 요청에 따라 미커밋이므로 baseline 대비 신선도 판정은 의도적으로 `STALE`이다.
+- 인수인계 검증기는 문서 계약 문제 0건을 반환했다. `codeBaselineCommit`은 전체 리뷰·수리 구현 커밋을 직접 가리킨다.
 
 ## 다음 첫 행동
 
