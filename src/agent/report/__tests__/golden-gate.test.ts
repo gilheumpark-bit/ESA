@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { verifyGoldenGateReceiptSignature } from '../metrics';
+import { verifyCurrentGoldenGate } from '../golden-gate';
 
 const SCRIPT = resolve(process.cwd(), 'scripts/sld-golden-gate.mjs');
 const EVALUATOR_VERSION = 'sld-golden-evaluator-v1';
@@ -259,5 +260,49 @@ describe('SLD golden receipt and enforcement boundary', () => {
     const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
     expect(receipt.verified95).toBe(false);
     expect(receipt.failures).toContain('LABELS_INVALID:fixture');
+  });
+
+  it('rechecks a signed current receipt against the manifest, real adjudication, metrics, and age', async () => {
+    const fixture = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+    expect(run(fixture.root, fixture.receipt, 'enforce').status).toBe(0);
+
+    await expect(verifyCurrentGoldenGate({
+      root: fixture.root,
+      manifestPath: 'manifest.json',
+      receiptPath: 'receipt.json',
+      publicKeyPem: PUBLIC_KEY_PEM.toString(),
+      now: Date.now(),
+    })).resolves.toEqual({ verified95: true, reason: 'VERIFIED' });
+
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    receipt.datasetsEvaluated[0].kind = 'synthetic';
+    writeFileSync(fixture.receipt, JSON.stringify(receipt), 'utf8');
+    await expect(verifyCurrentGoldenGate({
+      root: fixture.root,
+      manifestPath: 'manifest.json',
+      receiptPath: 'receipt.json',
+      publicKeyPem: PUBLIC_KEY_PEM.toString(),
+      now: Date.now(),
+    })).resolves.toEqual({ verified95: false, reason: 'SIGNATURE_INVALID' });
+  });
+
+  it('rejects a re-signed receipt when evaluated dataset hashes do not match its expected dataset set', async () => {
+    const fixture = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+    expect(run(fixture.root, fixture.receipt, 'enforce').status).toBe(0);
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    receipt.datasetsEvaluated[0].labelsHash = 'f'.repeat(64);
+    const { receiptAttestation: _attestation, ...claim } = receipt;
+    receipt.receiptAttestation = {
+      algorithm: 'ed25519',
+      keyFingerprint: PUBLIC_KEY_FINGERPRINT,
+      signature: sign(null, Buffer.from(canonicalize(claim)), KEY_PAIR.privateKey).toString('base64'),
+    };
+    writeFileSync(fixture.receipt, JSON.stringify(receipt), 'utf8');
+
+    await expect(verifyCurrentGoldenGate({
+      root: fixture.root, manifestPath: 'manifest.json', receiptPath: 'receipt.json', publicKeyPem: PUBLIC_KEY_PEM.toString(), now: Date.now(),
+    })).resolves.toEqual({ verified95: false, reason: 'DATASET_MISMATCH' });
   });
 });
