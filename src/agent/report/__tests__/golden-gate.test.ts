@@ -305,4 +305,60 @@ describe('SLD golden receipt and enforcement boundary', () => {
       root: fixture.root, manifestPath: 'manifest.json', receiptPath: 'receipt.json', publicKeyPem: PUBLIC_KEY_PEM.toString(), now: Date.now(),
     })).resolves.toEqual({ verified95: false, reason: 'DATASET_MISMATCH' });
   });
+
+  it('rejects a re-signed receipt that duplicates one evaluated dataset and omits another', async () => {
+    const fixture = setup({ kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+    const manifest = JSON.parse(readFileSync(join(fixture.root, 'manifest.json'), 'utf8'));
+    manifest.datasets.push({
+      id: 'fixture-2',
+      kind: 'real-adjudicated',
+      labels: 'labels-2.json',
+      predictions: 'predictions-2.json',
+    });
+    const manifestRaw = `${JSON.stringify(manifest)}\n`;
+    const manifestHash = createHash('sha256').update(manifestRaw).digest('hex');
+    writeFileSync(join(fixture.root, 'manifest.json'), manifestRaw, 'utf8');
+
+    for (const [id, labels, predictions, body] of [
+      ['fixture', 'labels.json', 'predictions.json', '{"label":"fixture"}\n'],
+      ['fixture-2', 'labels-2.json', 'predictions-2.json', '{"label":"fixture-2"}\n'],
+    ] as const) {
+      writeFileSync(join(fixture.root, labels), body, 'utf8');
+      const claim = {
+        schemaVersion: 2,
+        datasetId: id,
+        datasetKind: 'real-adjudicated',
+        manifestRevision: manifest.revision,
+        manifestHash,
+        evaluatorVersion: EVALUATOR_VERSION,
+        labelsHash: singleFileEvidenceHash(labels, body),
+        metrics: metrics(),
+      };
+      const signature = sign(null, Buffer.from(canonicalize(claim)), KEY_PAIR.privateKey).toString('base64');
+      writeFileSync(join(fixture.root, predictions), `${JSON.stringify({
+        ...claim,
+        attestation: { algorithm: 'ed25519', signature },
+      })}\n`, 'utf8');
+    }
+
+    expect(run(fixture.root, fixture.receipt, 'enforce').status).toBe(0);
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    receipt.datasetsEvaluated[1] = structuredClone(receipt.datasetsEvaluated[0]);
+    const { receiptAttestation: _attestation, ...claim } = receipt;
+    receipt.receiptAttestation = {
+      algorithm: 'ed25519',
+      keyFingerprint: PUBLIC_KEY_FINGERPRINT,
+      signature: sign(null, Buffer.from(canonicalize(claim)), KEY_PAIR.privateKey).toString('base64'),
+    };
+    writeFileSync(fixture.receipt, JSON.stringify(receipt), 'utf8');
+
+    await expect(verifyCurrentGoldenGate({
+      root: fixture.root,
+      manifestPath: 'manifest.json',
+      receiptPath: 'receipt.json',
+      publicKeyPem: PUBLIC_KEY_PEM.toString(),
+      now: Date.now(),
+    })).resolves.toEqual({ verified95: false, reason: 'DATASET_MISMATCH' });
+  });
 });

@@ -170,7 +170,7 @@ describe('drawing intelligence report v2', () => {
     expect(report.verified95).toBe(false);
   });
 
-  it('AUDIT_RECHECK keeps ambiguous claim and recommendation aliases unresolved', () => {
+  it('keeps ambiguous claim and recommendation aliases unresolved', () => {
     const review = artifact();
     review.graph!.texts[0].sourceIds = ['shared'];
     review.graph!.texts.push({
@@ -190,10 +190,11 @@ describe('drawing intelligence report v2', () => {
     ]));
   });
 
-  it('AUDIT_RECHECK deeply freezes nested report values', () => {
+  it('deeply freezes nested report values', () => {
     const report = buildDrawingIntelligenceReport({ drawingReview: artifact(), synthesis: synthesis(), verified95: false });
 
     expect(Object.isFrozen(report.lines[0].path[0])).toBe(true);
     expect(Object.isFrozen(report.issues[0].evidence.bounds[0])).toBe(true);
   });
+
 });

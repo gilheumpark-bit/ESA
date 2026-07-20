@@ -177,12 +177,18 @@ export async function verifyCurrentGoldenGate(options: {
         return fail('DATASET_MISMATCH');
       }
     }
+    const evaluatedIds = new Set<string>();
     for (const dataset of receipt.datasetsEvaluated) {
       if (!isRecord(dataset) || typeof dataset.id !== 'string') return fail('DATASET_MISMATCH');
+      if (evaluatedIds.has(dataset.id)) return fail('DATASET_MISMATCH');
+      evaluatedIds.add(dataset.id);
       const manifestDataset = expected.get(dataset.id);
       const signedDataset = signedExpected.get(dataset.id);
       if (!manifestDataset || !signedDataset || dataset.kind !== manifestDataset.kind || dataset.kind !== signedDataset.kind || dataset.labelsHash !== signedDataset.labelsHash || dataset.predictionsHash !== signedDataset.predictionsHash || dataset.evaluatorVersion !== EVALUATOR_VERSION || dataset.attestationVerified !== true) return fail('DATASET_MISMATCH');
       if (!validMetrics(dataset.metrics, manifest.thresholds as Record<string, unknown>)) return fail('METRICS_INVALID');
+    }
+    if (evaluatedIds.size !== expected.size || expectedIds.some((id) => !evaluatedIds.has(id))) {
+      return fail('DATASET_MISMATCH');
     }
     if (!receipt.datasetsEvaluated.some((dataset) => isRecord(dataset) && dataset.kind === 'real-adjudicated') || receipt.hasAdjudicatedRealData !== true) return fail('NO_REAL_ADJUDICATED_DATASET');
     if (!validMetrics(receipt.metrics, manifest.thresholds as Record<string, unknown>)) return fail('METRICS_INVALID');
