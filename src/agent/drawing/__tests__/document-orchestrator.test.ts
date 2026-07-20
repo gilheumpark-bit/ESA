@@ -293,6 +293,59 @@ describe('document-orchestrator + evaluator', () => {
     ]));
   });
 
+  it('credits individually completed vector roles while keeping incomplete audit coverage PARTIAL', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: '7'.repeat(64), mimeType: 'application/dxf', formatClass: 'dxf',
+      pages: [{ pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80, renderScale: 1, renderMode: 'vector', textSample: 'VCB', vectorOpCount: 1, rasterOpCount: 0, renderHash: 'vector-partial-audit', quality }],
+    };
+    const result = await runDocumentAnalysis(
+      { bytes: await makePng(), mimeType: 'application/dxf', ownerId: 'owner-vector-partial' },
+      { prepareSource: async () => source, executeTeam: async () => ({
+        success: true,
+        components: [{ id: 'v1', type: 'vcb', label: 'VCB-1', position: { x: 10, y: 10 }, confidence: 0.95 }],
+        connections: [], confidence: 0.95,
+        vectorAudit: { parser: 'dxf', pageNumber: 1, complete: false, roles: ['symbols'] },
+      }) as never },
+    );
+
+    const full = result.document.coverageLedger.regions[0];
+    expect(full.roleCalls.symbols).toEqual([expect.objectContaining({ success: true })]);
+    expect(full.roleCalls.connections).toEqual([expect.objectContaining({ success: false })]);
+    expect(result.document.jobStatus).toBe('PARTIAL');
+  });
+
+  it('enforces maxVlmCalls cumulatively across resume runs', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.2,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: [],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: '8'.repeat(64), mimeType: 'image/png', formatClass: 'raster-image',
+      pages: [{ pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80, renderScale: 1, renderMode: 'raster', textSample: 'VCB', vectorOpCount: 0, rasterOpCount: 1, renderHash: 'resume-budget', quality, imageBuffer: await makePng() }],
+    };
+    const budget = { maxPages: 1, maxVlmCalls: 18, maxPixels: 100_000, deadlineMs: 60_000 };
+    const queued = createJob({ documentHash: source.documentHash, ownerId: 'owner-budget-resume', budget, estimatedPages: 1 });
+    updateJob(queued.jobId, { vlmCallsUsed: 17 });
+    const executeTeam = jest.fn();
+
+    const result = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-budget-resume', jobId: queued.jobId,
+      budget, vision: { provider: 'openai', apiKey: 'test-request-key' },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam).not.toHaveBeenCalled();
+    expect(result.job.vlmCallsUsed).toBe(17);
+    expect(result.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'PARTIAL_BUDGET_EXCEEDED' }),
+    ]));
+  });
+
   it('keeps cancellation authoritative when it arrives during analysis', async () => {
     const quality = {
       width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,

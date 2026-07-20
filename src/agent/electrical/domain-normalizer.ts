@@ -2,6 +2,7 @@ import type { SpatialEvidenceGraph, SpatialSymbol, SpatialText } from '../vision
 
 export type ElectricalField =
   | 'voltage_V'
+  | 'ratedVoltage_V'
   | 'current_A'
   | 'loadCurrent_A'
   | 'cableAmpacity_A'
@@ -151,7 +152,11 @@ function parseNumber(token: string): number | undefined {
     if (dots.length === 1) {
       const index = dots[0];
       const tail = unsigned.slice(index + 1);
-      canonical = tail.length <= 2 ? `${unsigned.slice(0, index)}.${tail}` : /^\d{1,3}\.\d{3}$/.test(unsigned) ? unsigned.replace('.', '') : '';
+      // A single dot is the engineering decimal separator. Treating three
+      // decimal places as grouping turns 0.400 kV into 400 kV and 6.600 kV
+      // into 6,600 kV. Grouped-dot locale input remains supported when a
+      // decimal comma is also present or when there are multiple dot groups.
+      canonical = /^\d+\.\d+$/.test(unsigned) ? unsigned : '';
     } else {
       canonical = /^\d{1,3}(?:\.\d{3})+$/.test(unsigned) ? unsigned.replace(/\./g, '') : '';
     }
@@ -284,6 +289,11 @@ const BREAKING_LABELS: readonly [RegExp, ElectricalField][] = [
   [/(?:정격\s*차단\s*전류|rated\s*breaking\s*current|breaking\s*current)/i, 'breaking_kA'],
 ];
 
+const VOLTAGE_LABELS: readonly [RegExp, ElectricalField][] = [
+  [/(?:정격\s*전압|rated\s*voltage)/i, 'ratedVoltage_V'],
+  [/(?:계통\s*전압|운전\s*전압|공급\s*전압|system\s*voltage|operating\s*voltage|supply\s*voltage)/i, 'voltage_V'],
+];
+
 function readLabeledValues(raw: string, label: string, text: SpatialText, field: ElectricalField, warnings: NormalizationWarning[], budget: ParseBudget, percent = false, range?: readonly [number, number]): number[] {
   const values: number[] = [];
   const pattern = new RegExp(`(?:${label})\\s*(?<![\\d.,])(${NUMBER})(?![\\d.,])\\s*(%)?`, 'gi');
@@ -360,7 +370,16 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
   else if (ctValues.length === 1) addSpec(specs, text, 'ctRatio', ctValues[0], 'ratio');
 
   const bounded = `(?<![\\d.,])(${NUMBER})(?![\\d.,])`;
-  const voltage = readMatches(raw, new RegExp(`${bounded}\\s*(kV|V)(?![A-Za-z])`, 'gi'), { kv: 1000, v: 1 }, text, 'voltage_V', occupied, warnings, budget);
+  const voltage = readMatches(
+    raw,
+    new RegExp(`${bounded}\\s*(kV|V)(?![A-Za-z])`, 'gi'),
+    { kv: 1000, v: 1 },
+    text,
+    (start) => nearestLabelField(raw, start, VOLTAGE_LABELS, 'voltage_V'),
+    occupied,
+    warnings,
+    budget,
+  );
   const capacity = readMatches(raw, new RegExp(`${bounded}\\s*(MVA|kVA)(?![A-Za-z])`, 'gi'), { mva: 1000, kva: 1 }, text, 'capacity_kVA', occupied, warnings, budget);
   const breaking = readMatches(
     raw,
@@ -392,7 +411,7 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
     warnings,
     budget,
   );
-  addUniqueNumeric(specs, warnings, text, 'voltage_V', 'V', voltage.map((item) => item.value));
+  addGroupedMatches(specs, warnings, text, 'V', voltage);
   addUniqueNumeric(specs, warnings, text, 'capacity_kVA', 'kVA', capacity.map((item) => item.value));
   addGroupedMatches(specs, warnings, text, 'kA', breaking);
   addGroupedMatches(specs, warnings, text, 'A', current);

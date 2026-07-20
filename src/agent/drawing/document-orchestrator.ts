@@ -193,7 +193,7 @@ function markVectorCoverage(
   const completedRoles: RoleId[] = [];
   for (const region of regions) {
     for (const role of region.requiredRoles) {
-      const success = Boolean(audit?.complete && audit.roles.includes(role));
+      const success = Boolean(audit?.roles.includes(role));
       next = recordRoleCall(
         next,
         region.regionId,
@@ -419,6 +419,7 @@ export async function runDocumentAnalysis(
       budget,
       estimatedPages: requested.length,
     });
+  const previousVlmCalls = previousJob?.vlmCallsUsed ?? 0;
   if (previousJob) {
     updateJob(job.jobId, { budget, error: undefined });
   }
@@ -582,7 +583,7 @@ export async function runDocumentAnalysis(
       // symbols + connections + logic + three independent full-page text
       // reads, plus the three spatial-role precision grids.
       const plannedCalls = 6 + gridSizeFor(page) * 3;
-      if (vlmCalls + plannedCalls > budget.maxVlmCalls) {
+      if (previousVlmCalls + vlmCalls + plannedCalls > budget.maxVlmCalls) {
         pageRegions = markAllFailed(createCoverageRegions(rasterPlans), 'PARTIAL_BUDGET_EXCEEDED');
         addUnresolved(unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지 독립 심사 예상 호출 수가 문서 호출 예산을 초과합니다.');
       } else {
@@ -615,7 +616,7 @@ export async function runDocumentAnalysis(
           if (!gapsRemain) break;
           rescanAttempt += 1;
           const canRetry = rescanAttempt <= 2
-            && vlmCalls + plannedCalls <= budget.maxVlmCalls
+            && previousVlmCalls + vlmCalls + plannedCalls <= budget.maxVlmCalls
             && Date.now() < deadline
             && !input.signal?.aborted
             && !getJob(job.jobId)?.cancelRequested;
@@ -642,7 +643,7 @@ export async function runDocumentAnalysis(
     if (state.status === 'failed' && !state.error) state.error = 'PAGE_ANALYSIS_PARTIAL';
   }
 
-  updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: vlmCalls });
+  updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: previousVlmCalls + vlmCalls });
   const texts = [...previousSeeds.texts, ...adjudicateTextSeeds(textSeeds, unresolved)]
     .sort((left, right) => (left.evidence[0]?.pageIndex ?? 0) - (right.evidence[0]?.pageIndex ?? 0)
       || left.displayId.localeCompare(right.displayId));
@@ -765,7 +766,7 @@ export async function runDocumentAnalysis(
   const finalJob = updateJob(job.jobId, {
     status: jobStatus,
     document: safeDocument,
-    vlmCallsUsed: (previousJob?.vlmCallsUsed ?? 0) + vlmCalls,
+    vlmCallsUsed: previousVlmCalls + vlmCalls,
     pageDigests,
   })!;
   return { job: finalJob, document: safeDocument };

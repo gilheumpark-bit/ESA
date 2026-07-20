@@ -11,6 +11,7 @@ import type { RoleReviewData, RoleReviewEnvelope, ReviewRole } from '../../visio
 import { normalizeElectricalGraph } from '../../electrical/domain-normalizer';
 import { synthesizeDrawingReview } from '../../electrical/synthesis';
 import type { ElectricalIssue } from '../../electrical/electrical-invariants';
+import type { SpatialEvidenceGraph, SpatialSymbol, SpatialText } from '../../vision/spatial-graph';
 
 jest.mock('@/engine/topology/pdf-vector-parser', () => ({ parsePdfToSLD: jest.fn() }));
 
@@ -88,7 +89,64 @@ function rasterInput(extra: Partial<TeamInput> = {}): TeamInput {
   return { sessionId: 'sld-independent-test', classification: 'sld_image', fileBuffer: new ArrayBuffer(8), fileName: 'fixture.png', mimeType: 'image/png', vision: { provider: 'openai', apiKey: ` ${KEY} ` }, ...extra };
 }
 
+function calculationReadyGraph(): SpatialEvidenceGraph {
+  const symbol = (id: string, type: string, x: number): SpatialSymbol => ({
+    id, originalEvidenceId: `original:${id}`, originalEvidenceIds: [`original:${id}`], sourceIds: [`source:${id}`],
+    typeCandidates: [type], rawLabel: id, bounds: { x, y: 0, w: 10, h: 10, page: 1 }, ports: [], confidence: 0.9,
+  });
+  const text = (id: string, raw: string, x: number): SpatialText => ({
+    id, originalEvidenceId: `original:${id}`, originalEvidenceIds: [`original:${id}`], sourceIds: [`source:${id}`],
+    raw, candidates: [raw], bounds: { x, y: 0, w: 10, h: 10, page: 1 }, confidence: 0.9,
+  });
+  const symbols = [
+    symbol('CABLE-01', 'CABLE', 0), symbol('VCB-01', 'VCB', 100),
+    symbol('TR-01', 'TRANSFORMER', 200), symbol('CT-01', 'CT', 300),
+  ];
+  const texts = [
+    text('CABLE-TEXT', 'CV 3C 35mm2 Cu 80m', 0), text('PHASE-TEXT', '3상', 0),
+    text('VCB-TEXT', '380V 부하전류 120A 단락전류 25kA 허용전류 150A 역률 0.9', 100),
+    text('TR-TEXT', '총부하 500kW 역률 0.9 효율 95% 수용률 80% 안전율 0.1', 200),
+    text('CT-TEXT', '최대부하전류 120A burden 15VA lead length 30m lead size 2.5mm2 accuracy class 5P', 300),
+  ];
+  return {
+    drawingHash: DRAWING_HASH,
+    symbols,
+    lines: [{
+      id: 'LINE-001', originalEvidenceId: 'original:LINE-001', originalEvidenceIds: ['original:LINE-001'], sourceIds: ['source:LINE-001'],
+      lineKind: 'power', path: [{ x: 10, y: 5 }, { x: 100, y: 5 }], start: { x: 10, y: 5 }, end: { x: 100, y: 5 },
+      junctions: [], crossovers: [], confidence: 0.9, pages: [1],
+    }],
+    texts,
+    junctions: [], crossovers: [], conflicts: [],
+    edges: [{ id: 'EDGE-001', from: 'CABLE-01', to: 'VCB-01', lineId: 'LINE-001', confidence: 0.9 }],
+    textLinks: texts.map((item, index) => ({
+      id: `LINK-${index + 1}`, textId: item.id,
+      symbolId: index < 2 ? 'CABLE-01' : index === 2 ? 'VCB-01' : index === 3 ? 'TR-01' : 'CT-01', confidence: 1,
+    })),
+  };
+}
+
 describe('SLD raster independent council integration', () => {
+  it('can reach PASS through the production router while preserving expected SKIPPED calculation receipts', async () => {
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({ envelopes: envelopes(), failures: [] }),
+      assembleGraph: () => calculationReadyGraph(),
+      validateInvariants: () => [],
+    });
+
+    expect(result.drawingSynthesis).toMatchObject({
+      verdict: 'PASS',
+      requiresHumanReview: false,
+      stages: { calculator: 'COMPLETE' },
+    });
+    expect(result.drawingSynthesis?.calculations.length).toBeGreaterThan(0);
+    expect(result.drawingSynthesis?.calculations.some((receipt) => receipt.status === 'CALCULATED')).toBe(true);
+    expect(result.drawingSynthesis?.calculations.some((receipt) => receipt.status === 'SKIPPED')).toBe(true);
+    expect(result.drawingSynthesis?.calculations.some((receipt) => receipt.missingInputs.length > 0)).toBe(true);
+  });
+
   it('runs one full-region council, maps stable graph IDs, and keeps the BYOK secret out of the result', async () => {
     const controller = new AbortController();
     const prepareRaster = jest.fn(async () => prepared());
@@ -383,6 +441,23 @@ describe('SLD raster independent council integration', () => {
     expect(parsePdfToSLD).toHaveBeenCalled();
     expect(runCouncil).not.toHaveBeenCalled();
     expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer', position: { x: 25, y: 75 } })]);
+  });
+
+  it('reports only vector roles that actually produced evidence and passed topology validation', async () => {
+    jest.mocked(parsePdfToSLD).mockResolvedValue({
+      components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR', position: { x: 25, y: 75 } }],
+      connections: [{ from: 'PDF-TR-01', to: 'MISSING-LOAD' }],
+      sourceTexts: [], confidence: 1, suggestedCalculations: [], rawDescription: '',
+    } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>);
+
+    const result = await executeSLDTeam({
+      sessionId: 'pdf-vector-audit', classification: 'sld_pdf',
+      fileBuffer: new Uint8Array([37, 80, 68, 70]).buffer,
+    });
+
+    expect(result.vectorAudit).toEqual({
+      parser: 'pdf', pageNumber: 1, complete: false, roles: ['symbols', 'connections'],
+    });
   });
 
   it('keeps the caller-owned PDF buffer intact across multi-page parser calls', async () => {

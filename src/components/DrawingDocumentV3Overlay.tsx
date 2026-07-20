@@ -61,7 +61,7 @@ export function DrawingDocumentV3Overlay({
           <polyline
             points={line.path.map((point) => `${point.x * sx},${point.y * sy}`).join(' ')}
             fill="none"
-            stroke={selected ? '#b42318' : '#b45309'}
+            stroke={selected ? 'var(--color-error)' : 'var(--color-warning)'}
             strokeWidth={selected ? 4 : 2}
             vectorEffect="non-scaling-stroke"
           />
@@ -74,7 +74,7 @@ export function DrawingDocumentV3Overlay({
             stroke="transparent"
             strokeWidth="14"
             vectorEffect="non-scaling-stroke"
-            className="cursor-pointer focus:outline-none"
+            className="drawing-overlay-target drawing-overlay-line-target cursor-pointer"
             onClick={() => onSelectDisplayId?.(line.displayId)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ' ') onSelectDisplayId?.(line.displayId);
@@ -90,18 +90,18 @@ export function DrawingDocumentV3Overlay({
         return (
           <g key={symbol.id} role="button" tabIndex={0} aria-label={`${symbol.displayId} 기기`} onClick={() => onSelectDisplayId?.(symbol.displayId)} onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') onSelectDisplayId?.(symbol.displayId);
-          }} className="cursor-pointer">
-            <rect x={evidence.bounds.x * sx} y={evidence.bounds.y * sy} width={Math.max(8, evidence.bounds.w * sx)} height={Math.max(8, evidence.bounds.h * sy)} fill={selected ? 'rgba(180,35,24,.18)' : 'rgba(30,58,95,.09)'} stroke={selected ? '#b42318' : '#1e3a5f'} strokeWidth={selected ? 3 : 2} />
-            <text x={evidence.bounds.x * sx} y={Math.max(12, evidence.bounds.y * sy - 3)} fontSize="11" fontWeight="700" fill="#1e3a5f">{symbol.displayId}</text>
+          }} className="drawing-overlay-target cursor-pointer">
+            <rect x={evidence.bounds.x * sx} y={evidence.bounds.y * sy} width={Math.max(8, evidence.bounds.w * sx)} height={Math.max(8, evidence.bounds.h * sy)} fill={selected ? 'var(--color-error)' : 'var(--color-primary)'} fillOpacity={selected ? 0.18 : 0.09} stroke={selected ? 'var(--color-error)' : 'var(--color-primary)'} strokeWidth={selected ? 3 : 2} />
+            <text x={evidence.bounds.x * sx} y={Math.max(12, evidence.bounds.y * sy - 3)} fontSize="11" fontWeight="700" fill="var(--color-primary)">{symbol.displayId}</text>
           </g>
         );
       })}
       {texts.map((node) => {
         const evidence = node.evidence.find((item) => item.pageIndex === pageIndex);
         if (!evidence) return null;
-        return <text key={node.id} role="button" tabIndex={0} aria-label={`${node.displayId} 문자`} className="cursor-pointer" onClick={() => onSelectDisplayId?.(node.displayId)} onKeyDown={(event) => {
+        return <text key={node.id} role="button" tabIndex={0} aria-label={`${node.displayId} 문자`} className="drawing-overlay-target cursor-pointer" onClick={() => onSelectDisplayId?.(node.displayId)} onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') onSelectDisplayId?.(node.displayId);
-        }} x={evidence.bounds.x * sx} y={(evidence.bounds.y + evidence.bounds.h) * sy} fontSize="10" fontWeight={selectedDisplayId === node.displayId ? '700' : '500'} fill={node.certainty === 'confirmed' ? '#047857' : '#b45309'}>{node.displayId}</text>;
+        }} x={evidence.bounds.x * sx} y={(evidence.bounds.y + evidence.bounds.h) * sy} fontSize="10" fontWeight={selectedDisplayId === node.displayId ? '700' : '500'} fill={node.certainty === 'confirmed' ? 'var(--color-success)' : 'var(--color-warning)'}>{node.displayId}</text>;
       })}
     </svg>
   );

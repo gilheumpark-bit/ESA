@@ -328,6 +328,17 @@ test.describe('도면 분석', () => {
     await expect(dxfTab).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByRole('button', { name: '단선도 이미지 업로드' })).toBeVisible();
   });
+
+  test('공개 합성 DXF 업로드부터 기기·관계 결과까지 실주행', async ({ page }) => {
+    await page.goto('/tools/sld');
+    await page.locator('input[accept=".dxf"]').setInputFiles('fixtures/drawings/synthetic/L1-01-basic-radial.dxf');
+
+    await expect(page.getByRole('heading', { name: '분석 결과' })).toBeVisible();
+    await expect(page.getByText('인식된 기기 (5개)')).toBeVisible();
+    await expect(page.getByText('연결 맵 (4개)')).toBeVisible();
+    await expect(page.getByText('MCCB-MAIN', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('LOAD-C', { exact: true }).first()).toBeVisible();
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

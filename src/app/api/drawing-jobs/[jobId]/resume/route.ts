@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
       vision: apiKey ? { provider, apiKey, model: model || undefined } : undefined,
       ownerId: owner.ownerId,
       jobId,
-      signal: req.signal,
+      signal: undefined,
     });
     if (result.document.jobStatus === 'COMPLETE') {
       releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);

@@ -89,7 +89,7 @@ export function DrawingEvidenceOverlay({
                   key={item.id}
                   points={item.path.map((point) => `${point.x},${point.y}`).join(' ')}
                   fill="none"
-                  stroke={selected ? '#b42318' : '#b45309'}
+                  stroke={selected ? 'var(--color-error)' : 'var(--color-warning)'}
                   strokeWidth={selected ? 6 : 3}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -108,8 +108,9 @@ export function DrawingEvidenceOverlay({
                   width={item.bounds.w}
                   height={item.bounds.h}
                   rx={4}
-                  fill={selected ? 'rgba(180, 35, 24, 0.14)' : 'rgba(30, 58, 95, 0.08)'}
-                  stroke={selected ? '#b42318' : '#1e3a5f'}
+                  fill={selected ? 'var(--color-error)' : 'var(--color-primary)'}
+                  fillOpacity={selected ? 0.14 : 0.08}
+                  stroke={selected ? 'var(--color-error)' : 'var(--color-primary)'}
                   strokeWidth={selected ? 5 : 2.5}
                   vectorEffect="non-scaling-stroke"
                 />
@@ -125,8 +126,9 @@ export function DrawingEvidenceOverlay({
                   width={item.bounds.w}
                   height={item.bounds.h}
                   rx={3}
-                  fill={selected ? 'rgba(180, 35, 24, 0.14)' : 'rgba(26, 122, 74, 0.08)'}
-                  stroke={selected ? '#b42318' : '#1a7a4a'}
+                  fill={selected ? 'var(--color-error)' : 'var(--color-success)'}
+                  fillOpacity={selected ? 0.14 : 0.08}
+                  stroke={selected ? 'var(--color-error)' : 'var(--color-success)'}
                   strokeWidth={selected ? 5 : 2}
                   strokeDasharray={selected ? undefined : '5 3'}
                   vectorEffect="non-scaling-stroke"
@@ -154,8 +156,8 @@ export function DrawingEvidenceOverlay({
               >
                 <span className={`rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-bold shadow-sm ${
                   selected
-                    ? 'border-[#b42318] bg-[#b42318] text-white'
-                    : 'border-[#1e3a5f] bg-[var(--bg-primary)] text-[#1e3a5f]'
+                    ? 'border-[var(--color-error)] bg-[var(--color-error)] text-white'
+                    : 'border-[var(--color-primary)] bg-[var(--bg-primary)] text-[var(--color-primary)]'
                 }`}>
                   {number}
                 </span>
@@ -179,8 +181,8 @@ export function DrawingEvidenceOverlay({
               >
                 <span className={`rounded-full border px-1.5 py-0.5 font-mono text-[11px] font-bold shadow-sm ${
                   selected
-                    ? 'border-[#b42318] bg-[#b42318] text-white'
-                    : 'border-[#b45309] bg-[var(--bg-primary)] text-[#92400e]'
+                    ? 'border-[var(--color-error)] bg-[var(--color-error)] text-white'
+                    : 'border-[var(--color-warning)] bg-[var(--bg-primary)] text-[var(--color-warning)]'
                 }`}>
                   {number}
                 </span>
@@ -206,8 +208,8 @@ export function DrawingEvidenceOverlay({
               >
                 <span className={`rounded-sm border px-1.5 py-0.5 font-mono text-[11px] font-bold shadow-sm ${
                   selected
-                    ? 'border-[#b42318] bg-[#b42318] text-white'
-                    : 'border-[#1a7a4a] bg-[var(--bg-primary)] text-[#1a7a4a]'
+                    ? 'border-[var(--color-error)] bg-[var(--color-error)] text-white'
+                    : 'border-[var(--color-success)] bg-[var(--bg-primary)] text-[var(--color-success)]'
                 }`}>
                   {number}
                 </span>

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
-import { cancelOwnedJob, createJob, getOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable } from '@/agent/drawing/drawing-job-store';
 import { createSourceLease, isSourceLeaseAvailable } from '@/agent/drawing/source-lease-store';
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
@@ -52,6 +52,7 @@ describe('drawing jobs API ownership and input boundary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(resolveDrawingOwner).mockResolvedValue(owner);
+    jest.mocked(isDrawingJobStoreAvailable).mockReturnValue(true);
   });
 
   afterAll(() => {
@@ -80,6 +81,18 @@ describe('drawing jobs API ownership and input boundary', () => {
     expect((await POST(formRequest({ pages: '1,bad' }))).status).toBe(400);
     expect((await POST(formRequest({ provider: 'unknown' }))).status).toBe(400);
     expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('returns an explicit 503 for synchronous analysis and lookup when durable job state is unavailable', async () => {
+    jest.mocked(isDrawingJobStoreAvailable).mockReturnValue(false);
+
+    const post = await POST(formRequest());
+    const get = await GET(new NextRequest('http://localhost/api/drawing-jobs?jobId=job-a'));
+
+    expect(post.status).toBe(503);
+    expect(get.status).toBe(503);
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
+    expect(getOwnedJob).not.toHaveBeenCalled();
   });
 
   it('creates an owned encrypted deferred job before any model call', async () => {

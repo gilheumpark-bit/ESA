@@ -309,16 +309,34 @@ describe('synthesizeDrawingReview', () => {
     });
   });
 
-  it.each([
-    { status: 'SKIPPED' as const },
-    { status: 'ERROR' as const, error: { code: 'CALCULATOR_UNAVAILABLE' as const, message: 'safe error' } },
-  ])('keeps a $status calculation at CONDITIONAL with human review', (patch) => {
-    const receipt = { ...calculation(), ...patch };
+  it('preserves an evidence-backed SKIPPED receipt without treating expected missing input as an integrity failure', () => {
+    const receipt = {
+      ...calculation(),
+      status: 'SKIPPED' as const,
+      missingInputs: [{ adapterField: 'length', normalizedFields: ['length_m'] }],
+      calculatorResult: undefined,
+    };
+
+    expect(synthesizeDrawingReview(input({ calculations: [receipt] }))).toMatchObject({
+      verdict: 'PASS',
+      requiresHumanReview: false,
+      stages: { calculator: 'COMPLETE' },
+      calculations: [expect.objectContaining({
+        id: receipt.id,
+        status: 'SKIPPED',
+        missingInputs: [{ adapterField: 'length', normalizedFields: ['length_m'] }],
+      })],
+    });
+  });
+
+  it('preserves an ERROR receipt and keeps calculator failure at CONDITIONAL', () => {
+    const receipt = { ...calculation(), status: 'ERROR' as const, error: { code: 'CALCULATOR_UNAVAILABLE' as const, message: 'safe error' } };
 
     expect(synthesizeDrawingReview(input({ calculations: [receipt] }))).toMatchObject({
       verdict: 'CONDITIONAL',
       requiresHumanReview: true,
       stages: { calculator: 'HOLD' },
+      calculations: [expect.objectContaining({ id: receipt.id, status: 'ERROR' })],
     });
   });
 

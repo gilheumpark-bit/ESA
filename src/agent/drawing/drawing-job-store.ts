@@ -6,7 +6,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, rmdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 
 import { allowEphemeralStorage } from '@/lib/storage-policy';
@@ -81,7 +81,9 @@ function writeDurableJob(root: string, record: DrawingJobRecord): void {
   renameSync(temporary, destination);
 }
 
-function withJobLock<T>(root: string, jobId: string, operation: () => T): T | undefined {
+const JOB_LOCK_STALE_MS = 30_000;
+
+function withJobLock<T>(root: string, jobId: string, operation: () => T): T {
   const lockPath = `${safeJobPath(root, jobId)}.lock`;
   let acquired = false;
   const waitCell = new Int32Array(new SharedArrayBuffer(4));
@@ -92,10 +94,19 @@ function withJobLock<T>(root: string, jobId: string, operation: () => T): T | un
       break;
     } catch (cause) {
       if ((cause as NodeJS.ErrnoException).code !== 'EEXIST') throw cause;
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > JOB_LOCK_STALE_MS) {
+          rmdirSync(lockPath);
+          continue;
+        }
+      } catch (recoveryCause) {
+        if ((recoveryCause as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        if ((recoveryCause as NodeJS.ErrnoException).code !== 'ENOTEMPTY') throw recoveryCause;
+      }
       Atomics.wait(waitCell, 0, 0, 4);
     }
   }
-  if (!acquired) return undefined;
+  if (!acquired) throw new Error('DRAWING_JOB_LOCK_TIMEOUT');
   try {
     return operation();
   } finally {
@@ -192,14 +203,19 @@ export function updateOwnedJobIfDocumentVersion(
   if (root) {
     return withJobLock(root, jobId, () => {
       const current = readDurableJob(root, jobId);
-      if (current?.ownerId !== ownerId || !current.document || current.document.updatedAt !== expectedUpdatedAt) return undefined;
+      if (current?.ownerId !== ownerId
+        || !current.document
+        || !['COMPLETE', 'PARTIAL'].includes(current.status)
+        || current.document.updatedAt !== expectedUpdatedAt) return undefined;
       const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
       writeDurableJob(root, next);
       return next;
     });
   }
   const current = getOwnedJob(jobId, ownerId);
-  if (!current?.document || current.document.updatedAt !== expectedUpdatedAt) return undefined;
+  if (!current?.document
+    || !['COMPLETE', 'PARTIAL'].includes(current.status)
+    || current.document.updatedAt !== expectedUpdatedAt) return undefined;
   return updateJob(jobId, patch);
 }
 

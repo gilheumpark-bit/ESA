@@ -87,11 +87,13 @@ describe('independent logic conflict comparison', () => {
     ]));
   });
 
-  it('distinguishes a confirmed reverse direction from an absent relation', () => {
+  it('holds a reversed geometric edge because endpoint order does not prove power direction', () => {
     const reverse = compareLogicToGraph(normalized(), envelope([
       statement({ id: 'reverse', topic: 'DIRECTION', subjectIds: ['local:tr', 'local:vcb'], attributes: { fromId: 'local:tr', toId: 'local:vcb' }, evidenceBounds: [bounds(300), bounds(100)] }),
     ]));
-    expect(reverse).toEqual([expect.objectContaining({ kind: 'CONTRADICTION', topic: 'DIRECTION', severity: 'critical', status: 'open' })]);
+    expect(reverse).toEqual([expect.objectContaining({
+      kind: 'UNRESOLVED_LOGIC_REFERENCE', topic: 'DIRECTION', severity: 'critical', status: 'hold', reasonCode: 'REVERSED_DIRECTION',
+    })]);
     expect(reverse[0].graphOriginalEvidenceIds).toContain('orig-line-1');
     expect(reverse[0].graphEvidencePages).toEqual([1]);
     expect(reverse[0].graphEvidenceBounds).toEqual(expect.arrayContaining([
@@ -103,6 +105,36 @@ describe('independent logic conflict comparison', () => {
       statement({ id: 'absent', topic: 'DIRECTION', subjectIds: ['local:vcb', 'local:load'], attributes: { fromId: 'local:vcb', toId: 'local:load' }, evidenceBounds: [bounds(100), bounds(500)] }),
     ]));
     expect(absent).toEqual([expect.objectContaining({ kind: 'UNRESOLVED_LOGIC_REFERENCE', status: 'hold' })]);
+  });
+
+  it('holds a valid multi-hop upstream protector instead of declaring a mismatch', () => {
+    const graph = structuredClone(normalized());
+    graph.graph.symbols.push(
+      { id: 'MCCB-01', originalEvidenceId: 'orig-mccb', originalEvidenceIds: ['orig-mccb'], sourceIds: ['source-symbols'], typeCandidates: ['MCCB'], rawLabel: 'MCCB', bounds: bounds(600), ports: [], confidence: 0.99 },
+      { id: 'BUS-01', originalEvidenceId: 'orig-bus', originalEvidenceIds: ['orig-bus'], sourceIds: ['source-symbols'], typeCandidates: ['BUS'], rawLabel: 'BUS', bounds: bounds(700), ports: [], confidence: 0.99 },
+      { id: 'ACB-01', originalEvidenceId: 'orig-acb', originalEvidenceIds: ['orig-acb'], sourceIds: ['source-symbols'], typeCandidates: ['ACB'], rawLabel: 'ACB', bounds: bounds(800), ports: [], confidence: 0.99 },
+    );
+    graph.graph.lines.push(
+      { id: 'LINE-003', originalEvidenceId: 'orig-line-3', originalEvidenceIds: ['orig-line-3'], sourceIds: ['source-lines'], pages: [1], lineKind: 'power', path: [{ x: 540, y: 120 }, { x: 600, y: 120 }], start: { x: 540, y: 120 }, end: { x: 600, y: 120 }, junctions: [], crossovers: [], confidence: 0.98 },
+      { id: 'LINE-004', originalEvidenceId: 'orig-line-4', originalEvidenceIds: ['orig-line-4'], sourceIds: ['source-lines'], pages: [1], lineKind: 'power', path: [{ x: 640, y: 120 }, { x: 700, y: 120 }], start: { x: 640, y: 120 }, end: { x: 700, y: 120 }, junctions: [], crossovers: [], confidence: 0.98 },
+      { id: 'LINE-005', originalEvidenceId: 'orig-line-5', originalEvidenceIds: ['orig-line-5'], sourceIds: ['source-lines'], pages: [1], lineKind: 'power', path: [{ x: 740, y: 120 }, { x: 800, y: 120 }], start: { x: 740, y: 120 }, end: { x: 800, y: 120 }, junctions: [], crossovers: [], confidence: 0.98 },
+    );
+    graph.graph.edges.push(
+      { id: 'EDGE-003', from: 'LOAD-01', to: 'MCCB-01', lineId: 'LINE-003', confidence: 0.98 },
+      { id: 'EDGE-004', from: 'MCCB-01', to: 'BUS-01', lineId: 'LINE-004', confidence: 0.98 },
+      { id: 'EDGE-005', from: 'BUS-01', to: 'ACB-01', lineId: 'LINE-005', confidence: 0.98 },
+    );
+
+    const result = compareLogicToGraph(graph, envelope([
+      statement({
+        id: 'multi-hop-protection', topic: 'PROTECTION_CHAIN', subjectIds: ['LOAD-01'],
+        attributes: { protectedById: 'ACB-01' }, evidenceBounds: [bounds(500), bounds(800)],
+      }),
+    ]));
+
+    expect(result).toEqual([expect.objectContaining({
+      kind: 'UNRESOLVED_LOGIC_REFERENCE', status: 'hold', reasonCode: 'PROTECTOR_PATH_DIRECTION_UNVERIFIED',
+    })]);
   });
 
   it('fails closed on envelope integrity, page ambiguity, and graph conflicts', () => {

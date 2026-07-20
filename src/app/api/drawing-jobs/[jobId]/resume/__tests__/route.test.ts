@@ -75,4 +75,15 @@ describe('drawing job resume API', () => {
       consoleError.mockRestore();
     }
   });
+
+  it('does not bind a resumable analysis lifetime to the HTTP request signal', async () => {
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job, document: { ...job.document, jobStatus: 'PARTIAL' },
+    } as never);
+
+    const response = await POST(validRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ signal: undefined }));
+  });
 });

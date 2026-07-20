@@ -46,7 +46,7 @@ describe('drawing job run API', () => {
     const response = await POST(request(), { params: Promise.resolve({ jobId: 'job-a' }) });
     expect(response.status).toBe(200);
     expect(claimOwnedJobRun).toHaveBeenCalledWith('job-a', owner.ownerId, ['QUEUED']);
-    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ jobId: 'job-a', ownerId: owner.ownerId }));
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ jobId: 'job-a', ownerId: owner.ownerId, signal: undefined }));
   });
 
   it('rejects a duplicate run and redacts fatal provider details', async () => {
@@ -59,6 +59,9 @@ describe('drawing job run API', () => {
     const response = await POST(request(), { params: Promise.resolve({ jobId: 'job-a' }) });
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain(diagnostic);
-    expect(releaseSourceLease).toHaveBeenCalledWith('lease-a', owner.ownerId);
+    expect(releaseSourceLease).not.toHaveBeenCalled();
+    expect(jest.requireMock('@/agent/drawing/drawing-job-store').updateOwnedJob).toHaveBeenCalledWith(
+      'job-a', owner.ownerId, expect.objectContaining({ status: 'QUEUED' }),
+    );
   });
 });

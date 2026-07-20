@@ -100,11 +100,25 @@ describe('normalizeElectricalGraph', () => {
     expect(voltage?.bounds).not.toBe(graph().texts);
   });
 
+  it('keeps rated voltage distinct from the operating voltage domain', () => {
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('VCB-01', 'VCB', 0)],
+      texts: [text('TEXT-RATED-VOLTAGE', '정격전압 25.8kV 계통전압 22.9kV', 0)],
+    }));
+
+    expect(specsFor(result, 'TEXT-RATED-VOLTAGE')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'ratedVoltage_V', value: 25_800 }),
+      expect.objectContaining({ field: 'voltage_V', value: 22_900 }),
+    ]));
+  });
+
   it('parses locale decimals and refuses ambiguous field values and cross-unit captures', () => {
     const result = normalizeElectricalGraph(graph({
       texts: [
         text('TEXT-010', '22,900V 12,5kA', 0),
         text('TEXT-014', '22.900,5V', 50),
+        text('TEXT-015', '0.400kV', 75),
+        text('TEXT-016', '6.600kV', 90),
         text('TEXT-011', '630kVA 12.5kA', 100),
         text('TEXT-012', '380V 400V', 200),
         text('TEXT-013', '-10V 0A 3C 35mm²', 300),
@@ -117,6 +131,12 @@ describe('normalizeElectricalGraph', () => {
     ]));
     expect(specsFor(result, 'TEXT-014')).toEqual([
       expect.objectContaining({ field: 'voltage_V', value: 22900.5, unit: 'V' }),
+    ]);
+    expect(specsFor(result, 'TEXT-015')).toEqual([
+      expect.objectContaining({ field: 'voltage_V', value: 400, unit: 'V' }),
+    ]);
+    expect(specsFor(result, 'TEXT-016')).toEqual([
+      expect.objectContaining({ field: 'voltage_V', value: 6600, unit: 'V' }),
     ]);
     expect(result.specs.some((spec) => spec.field === 'current_A' && spec.evidenceId === 'TEXT-011')).toBe(false);
     expect(result.specs.some((spec) => spec.field === 'voltage_V' && spec.evidenceId === 'TEXT-011')).toBe(false);

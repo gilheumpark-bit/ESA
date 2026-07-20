@@ -323,7 +323,10 @@ function compareDirection(graph: SpatialEvidenceGraph, item: LogicEvidence): Log
   const reverse = graph.edges.filter((edge) => edge.from === to && edge.to === from);
   if (forward.length === 1 && reverse.length === 0) return [];
   if (reverse.length === 1 && forward.length === 0) {
-    return [makeConflict(graph, item, 'CONTRADICTION', 'REVERSED_DIRECTION', resolutions, relationExtras(graph, reverse.map((edge) => edge.id)))];
+    // Spatial edges inherit polyline endpoint order, not source-to-load order.
+    // A reverse match therefore proves connectivity only and must not fail an
+    // otherwise valid drawing until a directional edge contract exists.
+    return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', 'REVERSED_DIRECTION', resolutions, relationExtras(graph, reverse.map((edge) => edge.id)))];
   }
   return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', forward.length + reverse.length === 0 ? 'MISSING_RELATION' : 'AMBIGUOUS_DIRECTION', resolutions)];
 }
@@ -337,6 +340,23 @@ function adjacent(graph: SpatialEvidenceGraph, left: string, right: string): boo
   return graph.edges.some((edge) => (edge.from === left && edge.to === right) || (edge.from === right && edge.to === left));
 }
 
+function connected(graph: SpatialEvidenceGraph, left: string, right: string): boolean {
+  const visited = new Set([left]);
+  const queue = [left];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current === right) return true;
+    for (const edge of graph.edges) {
+      const next = edge.from === current ? edge.to : edge.to === current ? edge.from : undefined;
+      if (next && !visited.has(next)) {
+        visited.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return false;
+}
+
 function compareProtection(graph: SpatialEvidenceGraph, item: LogicEvidence): LogicConflict[] {
   const subjectRef = item.subjectIds[0];
   const protectorRef = item.attributes?.protectedById;
@@ -348,8 +368,16 @@ function compareProtection(graph: SpatialEvidenceGraph, item: LogicEvidence): Lo
   const protector = resolutions[1].stableId as string;
   const assertedProtector = graph.symbols.find((symbol) => symbol.id === protector);
   if (assertedProtector && isProtection(assertedProtector) && adjacent(graph, subject, protector)) return [];
+  if (assertedProtector && isProtection(assertedProtector) && connected(graph, subject, protector)) {
+    return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', 'PROTECTOR_PATH_DIRECTION_UNVERIFIED', resolutions)];
+  }
   const known = graph.symbols.filter((symbol) => isProtection(symbol) && adjacent(graph, subject, symbol.id));
-  if (known.length === 1) return [makeConflict(graph, item, 'CONTRADICTION', 'PROTECTOR_MISMATCH', resolutions.concat({ kind: 'resolved', reference: known[0].id, stableId: known[0].id, candidates: [known[0]], reasonCode: 'RESOLVED' }))];
+  if (known.length === 1 && (!assertedProtector || !isProtection(assertedProtector))) {
+    return [makeConflict(graph, item, 'CONTRADICTION', 'PROTECTOR_MISMATCH', resolutions.concat({ kind: 'resolved', reference: known[0].id, stableId: known[0].id, candidates: [known[0]], reasonCode: 'RESOLVED' }))];
+  }
+  if (known.length === 1) {
+    return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', 'PROTECTOR_PATH_UNRESOLVED', resolutions.concat({ kind: 'resolved', reference: known[0].id, stableId: known[0].id, candidates: [known[0]], reasonCode: 'RESOLVED' }))];
+  }
   return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', known.length > 1 ? 'AMBIGUOUS_PROTECTION_PATH' : 'MISSING_PROTECTION_PATH', resolutions)];
 }
 

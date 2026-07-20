@@ -32,7 +32,8 @@ import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type Pr
 import type { RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
 import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
-import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
+import { calculateVoltageDrop } from '@/engine/calculators/voltage-drop/voltage-drop';
+import { parseSpecText } from '@/engine/topology/spec-text';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Vision Split + Parsing
@@ -320,7 +321,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   const graphEnvelopes = council.envelopes.filter((item): item is RoleReviewEnvelope => GRAPH_COUNCIL_ROLES.includes(item.role as (typeof GRAPH_COUNCIL_ROLES)[number]));
   if (graphEnvelopes.length === GRAPH_COUNCIL_ROLES.length) {
     try {
-      graph = (deps.assembleGraph ?? assembleSpatialGraph)(graphEnvelopes);
+      graph = (deps.assembleGraph ?? assembleSpatialGraph)(graphEnvelopes, { drawingWidth: prepared.snapshot.width });
       artifact.graph = graph;
       for (const conflict of graph.conflicts) holds.push(hold(`graph conflict: ${conflict}`));
     } catch {
@@ -501,28 +502,45 @@ async function runCalculations(
 }
 
 /**
- * 간이 전압강하 추정.
- * 부하전류를 연결 메타에서 얻지 못하면 null — 가정 100A 사용 금지.
+ * 도면에 길이·규격·전압·전류·도체·상·역률이 모두 명시된 경우에만
+ * 정본 계산기로 전압강하를 계산한다. 하나라도 없으면 가정하지 않고 HOLD한다.
  */
 function estimateVoltageDrop(
   conn: ExtractedConnection,
 ): { vd: number; currentA: number; assumed: boolean } | null {
-  const length = conn.length ?? 10;
-  const cableSpec = conn.cableType ?? '35sq';
-  const sizeMatch = cableSpec.match(/(\d+)sq/);
-  const size = sizeMatch ? parseInt(sizeMatch[1], 10) : 35;
-  const resistance = RESISTIVITY.CU_20C / size; // Ω/m per conductor
+  const length = conn.length;
+  if (!Number.isFinite(length) || length === undefined || length <= 0 || !conn.cableType) return null;
+  const spec = parseSpecText(conn.cableType);
+  const cableSize = spec.conductorSize;
+  const current = spec.current;
+  const voltage = spec.voltage;
+  if (!cableSize || !current || !voltage) return null;
 
-  // ExtractedConnection에 전류 필드가 없으므로 cableType 내 "100A" 패턴만 인정
-  const ampMatch = cableSpec.match(/(\d+(?:\.\d+)?)\s*A\b/i);
-  if (!ampMatch) {
-    return null;
-  }
-  const currentA = parseFloat(ampMatch[1]);
-  if (!Number.isFinite(currentA) || currentA <= 0) return null;
+  const conductorMatch = conn.cableType.match(/(?:^|\s)(Cu|Al)(?=\s|$)/i);
+  const phaseMatch = conn.cableType.match(/(?:^|\s)([13])\s*(?:P|PH|상)(?=\s|$)/i);
+  const powerFactorMatch = conn.cableType.match(/(?:PF|역률)\s*[:=]?\s*(\d+(?:\.\d+)?)(%?)/i);
+  if (!conductorMatch || !phaseMatch || !powerFactorMatch) return null;
 
-  const vd = (PHYSICS.SQRT3 * currentA * length * resistance) / 380 * 100;
-  return { vd: Math.round(vd * 100) / 100, currentA, assumed: false };
+  const rawPowerFactor = Number(powerFactorMatch[1]);
+  const powerFactor = powerFactorMatch[2] === '%' ? rawPowerFactor / 100 : rawPowerFactor;
+  if (!Number.isFinite(powerFactor) || powerFactor < 0.01 || powerFactor > 1) return null;
+
+  const result = calculateVoltageDrop({
+    voltage,
+    current,
+    length,
+    cableSize,
+    conductor: conductorMatch[1].toLowerCase() === 'cu' ? 'Cu' : 'Al',
+    powerFactor,
+    phase: Number(phaseMatch[1]) as 1 | 3,
+  });
+  const voltageDropPercent = result.additionalOutputs?.voltageDropPercent?.value;
+  if (!Number.isFinite(voltageDropPercent) || voltageDropPercent === undefined) return null;
+  return {
+    vd: voltageDropPercent,
+    currentA: current,
+    assumed: false,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -544,7 +562,6 @@ async function runCustomRules(
   userParams: Record<string, unknown> | undefined,
 ): Promise<{ standards: StandardEntry[]; violations: ViolationEntry[] }> {
   const { evaluateCustomRules } = await import('@/engine/standards/custom-rules');
-  const { parseSpecText } = await import('@/engine/topology/spec-text');
 
   const numericParams: Record<string, number> = {};
   for (const [k, v] of Object.entries(userParams ?? {})) {
@@ -658,8 +675,9 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
     }
 
     // 토폴로지 이상 → 경고 추가
-    if (validation.issues && validation.issues.length > 0) {
-      for (const issue of validation.issues) {
+    const topologyIssues = validation.issues ?? [];
+    if (topologyIssues.length > 0) {
+      for (const issue of topologyIssues) {
         violations.push({
           id: `vio-topo-${violations.length}`,
           severity: 'major',
@@ -669,6 +687,15 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
         });
       }
     }
+
+    const vectorRoles: NonNullable<TeamResult['vectorAudit']>['roles'] = [];
+    if (components.length > 0) vectorRoles.push('symbols');
+    if (connections.length > 0) vectorRoles.push('connections');
+    if ((vectorTexts?.length ?? 0) > 0) vectorRoles.push('text');
+    if (connections.length > 0 && topologyIssues.length === 0) vectorRoles.push('logic');
+    if (components.length > 0 && topologyIssues.length === 0) vectorRoles.push('coverage-auditor');
+    const vectorAuditComplete = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor']
+      .every((role) => vectorRoles.includes(role as (typeof vectorRoles)[number]));
 
     return {
       teamId: 'TEAM-SLD',
@@ -684,8 +711,8 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       vectorAudit: {
         parser: input.classification === 'sld_dxf' ? 'dxf' : 'pdf',
         pageNumber: Number(input.params?.pageNumber ?? 1),
-        complete: true,
-        roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'],
+        complete: vectorAuditComplete,
+        roles: vectorRoles,
       },
     };
   } catch (err) {

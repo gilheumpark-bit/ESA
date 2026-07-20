@@ -290,7 +290,11 @@ function addDerivedRecord(
 }
 
 function receiptParents(registry: Registry, receipt: DrawingCalculationReceipt): SynthesisEvidenceRecord[] | undefined {
-  if (receipt.status !== 'CALCULATED' || receipt.inputEvidence.length === 0) return undefined;
+  if (receipt.status === 'SKIPPED'
+    && receipt.missingInputs.length === 0
+    && receipt.ambiguousInputs.length === 0) return undefined;
+  if (receipt.status !== 'SKIPPED' && receipt.inputEvidence.length === 0) return undefined;
+  if (receipt.status === 'SKIPPED' && receipt.inputEvidence.length === 0) return [];
   const parents = receipt.inputEvidence.map((evidence) => resolveCurrentGraphEvidence(registry, [
     evidence.evidenceId,
     ...evidence.originalEvidenceIds,
@@ -339,7 +343,7 @@ function stageForInvariants(issues: readonly ElectricalIssue[] | undefined, vali
 function stageForCalculations(receipts: readonly DrawingCalculationReceipt[] | undefined, validReceipts: readonly DrawingCalculationReceipt[]): SynthesisStageStatus {
   if (receipts === undefined) return 'NOT_RUN';
   if (receipts.length === 0 || receipts.length !== validReceipts.length) return 'HOLD';
-  return receipts.some((receipt) => receipt.status !== 'CALCULATED' || receipt.missingInputs.length > 0 || receipt.ambiguousInputs.length > 0) ? 'HOLD' : 'COMPLETE';
+  return receipts.some((receipt) => receipt.status === 'ERROR') ? 'HOLD' : 'COMPLETE';
 }
 
 function stageForLogic(
@@ -406,7 +410,7 @@ export function synthesizeDrawingReview(input: DrawingSynthesisInput): DrawingSy
     }
     const receiptCopy = clone(receipt);
     validCalculations.push(receiptCopy);
-    addDerivedRecord(registry, input.drawingHash, receiptCopy.id, parents);
+    if (receiptCopy.status === 'CALCULATED') addDerivedRecord(registry, input.drawingHash, receiptCopy.id, parents);
   }
   const validIssues: ElectricalIssue[] = [];
   for (const issue of input.issues ?? []) {

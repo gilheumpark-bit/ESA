@@ -233,6 +233,17 @@ describe('electrical invariants', () => {
     expect(validateElectricalInvariants(unresolved)).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'VOLTAGE_DOMAIN_UNRESOLVED', judgment: 'HOLD' })]));
   });
 
+  it('does not compare primary and secondary voltage domains across a PT', () => {
+    const input = makeNormalizedFixture({
+      symbols: [symbol('GEN-01', 'GEN', 'GEN', 0), symbol('PT-01', 'PT', 'PT', 40)],
+      lines: [line('LINE-01')],
+      edges: [edge('EDGE-01', 'GEN-01', 'PT-01', 'LINE-01')],
+      specs: [voltage('GEN-01', 22_900), voltage('PT-01', 110)],
+    });
+
+    expect(validateElectricalInvariants(input).some((issue) => issue.code === 'VOLTAGE_DOMAIN_CONFLICT')).toBe(false);
+  });
+
   it('holds unknown ground paths and accepts no implicit power-edge ground', () => {
     const input = makeNormalizedFixture({
       symbols: [symbol('GEN-01', 'GEN', 'GEN', 0), symbol('LOAD-01', 'LOAD', 'LOAD', 80), symbol('GROUND-01', 'GND', 'GND', 120)],

@@ -25,9 +25,9 @@ function request(body: Record<string, unknown>) {
   });
 }
 
-function job(corrections: Array<Record<string, unknown>> = []) {
+function job(corrections: Array<Record<string, unknown>> = [], status = 'COMPLETE') {
   return {
-    jobId: 'job-a', ownerId: owner.ownerId, sourceLease: undefined,
+    jobId: 'job-a', ownerId: owner.ownerId, sourceLease: undefined, status,
     document: {
       updatedAt, jobStatus: 'COMPLETE', userCorrections: corrections,
       evidenceGraph: {
@@ -75,5 +75,17 @@ describe('drawing correction API concurrency', () => {
     }), { params: Promise.resolve({ jobId: 'job-a' }) });
     expect(response.status).toBe(400);
     expect(applyDrawingCorrection).not.toHaveBeenCalled();
+  });
+
+  it('rejects corrections while analysis is running before applying any mutation', async () => {
+    jest.mocked(getOwnedJob).mockReturnValue(job([], 'ANALYZING_PAGES') as never);
+    const response = await POST(request({
+      targetDisplayId: 'P01-T001', selectedValue: '100A', correctionKind: 'text',
+      expectedUpdatedAt: updatedAt, idempotencyKey: 'request-0004',
+    }), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+    expect(response.status).toBe(409);
+    expect(applyDrawingCorrection).not.toHaveBeenCalled();
+    expect(updateOwnedJobIfDocumentVersion).not.toHaveBeenCalled();
   });
 });

@@ -36,6 +36,11 @@ import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
+import {
+  labelDocumentReadStatus,
+  labelJobStatus,
+  labelPageStatus,
+} from '@/components/drawing-v3-labels';
 import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
 
 const V3_JOB_SESSION_KEY = 'esva-sld-v3-active-job';
@@ -314,7 +319,15 @@ export default function SLDAnalysisPage() {
   const [v3PageIndex, setV3PageIndex] = useState(0);
   const [v3Cancelling, setV3Cancelling] = useState(false);
   const [v3JobStatus, setV3JobStatus] = useState<string | null>(null);
+  const [v3CorrectionTarget, setV3CorrectionTarget] = useState<string | null>(null);
+  const v3CorrectionInFlightRef = useRef<Set<string>>(new Set());
   const fullDocInputRef = useRef<HTMLInputElement>(null);
+  const canResumeV3 = Boolean(
+    v3ResumeAvailable
+    && v3Doc?.jobStatus === 'PARTIAL'
+    && !v3Loading
+    && !v3CorrectionTarget,
+  );
 
   const handleImageSelect = useCallback((file: File) => {
     setImageFile(file);
@@ -397,6 +410,8 @@ export default function SLDAnalysisPage() {
     setV3PageIndex(0);
     setV3Cancelling(false);
     setV3JobStatus(null);
+    setV3CorrectionTarget(null);
+    v3CorrectionInFlightRef.current.clear();
     sessionStorage.removeItem(V3_JOB_SESSION_KEY);
   }, [preview]);
 
@@ -405,6 +420,10 @@ export default function SLDAnalysisPage() {
     setV3Error(null);
     setV3Doc(null);
     setV3JobId(null);
+    setV3JobStatus(null);
+    setV3ResumeAvailable(false);
+    setV3CorrectionTarget(null);
+    v3CorrectionInFlightRef.current.clear();
     setV3SourceFile(file);
     setV3PageIndex(0);
     setSelectedDisplayId(undefined);
@@ -445,9 +464,10 @@ export default function SLDAnalysisPage() {
       if (!runResponse.ok || !result?.success) {
         throw new Error(result?.error?.message ?? `전체 문서 분석 실패 (${runResponse.status})`);
       }
-      setV3Doc(result.data.document as DrawingDocumentV3);
+      const completed = result.data.document as DrawingDocumentV3;
+      setV3Doc(completed);
       setV3JobStatus(String(result.data.status));
-      setV3ResumeAvailable(Boolean(result.data.resumeAvailable));
+      setV3ResumeAvailable(Boolean(result.data.resumeAvailable) && completed.jobStatus === 'PARTIAL');
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
     } finally {
@@ -538,7 +558,7 @@ export default function SLDAnalysisPage() {
   }, [v3Cancelling, v3JobId]);
 
   const handleV3Resume = useCallback(async () => {
-    if (!v3JobId) return;
+    if (!v3JobId || !canResumeV3) return;
     setV3Loading(true);
     setV3Error(null);
     try {
@@ -557,46 +577,58 @@ export default function SLDAnalysisPage() {
       });
       const json = await response.json();
       if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '분석 재개에 실패했습니다.');
-      setV3Doc(json.data.document as DrawingDocumentV3);
+      const resumed = json.data.document as DrawingDocumentV3;
+      setV3Doc(resumed);
       setV3JobStatus(String(json.data.status));
-      setV3ResumeAvailable(Boolean(json.data.resumeAvailable));
+      setV3ResumeAvailable(Boolean(json.data.resumeAvailable) && resumed.jobStatus === 'PARTIAL');
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 재개 오류');
     } finally {
       setV3Loading(false);
     }
-  }, [v3JobId]);
+  }, [canResumeV3, v3JobId]);
 
   const handleV3Correct = useCallback(async (
     targetDisplayId: string,
     selectedValue: string,
     candidates: string[],
   ) => {
-    if (!v3JobId) return;
-    const { getIdToken } = await import('@/lib/firebase');
-    const token = await getIdToken().catch(() => null);
-    const res = await fetch(`/api/drawing-jobs/${v3JobId}/corrections`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        targetDisplayId,
-        selectedValue,
-        correctionKind: targetDisplayId.includes('-T') ? 'text' : 'type',
-        expectedUpdatedAt: v3Doc?.updatedAt,
-        idempotencyKey: crypto.randomUUID(),
-      }),
-    });
-    const json = await res.json();
-    if (res.ok && json?.data?.document) {
-      setV3Doc(json.data.document as DrawingDocumentV3);
-      setV3ResumeAvailable(Boolean(json.data.resumeAvailable));
-    } else {
-      setV3Error(json?.error?.message ?? '수정값을 반영하지 못했습니다.');
+    if (!v3JobId || v3CorrectionInFlightRef.current.has(targetDisplayId) || v3CorrectionInFlightRef.current.size > 0) return;
+    v3CorrectionInFlightRef.current.add(targetDisplayId);
+    setV3CorrectionTarget(targetDisplayId);
+    setV3Error(null);
+    try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const res = await fetch(`/api/drawing-jobs/${v3JobId}/corrections`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          targetDisplayId,
+          selectedValue,
+          correctionKind: targetDisplayId.includes('-T') ? 'text' : 'type',
+          expectedUpdatedAt: v3Doc?.updatedAt,
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.data?.document) {
+        throw new Error(json?.error?.message ?? `수정값을 반영하지 못했습니다. (${res.status})`);
+      }
+      const corrected = json.data.document as DrawingDocumentV3;
+      setV3Doc(corrected);
+      setV3JobStatus(corrected.jobStatus);
+      setV3ResumeAvailable(Boolean(json.data.resumeAvailable) && corrected.jobStatus === 'PARTIAL');
+    } catch (err) {
+      setV3Error(err instanceof Error ? err.message : '수정값 반영 중 오류가 발생했습니다.');
+    } finally {
+      v3CorrectionInFlightRef.current.delete(targetDisplayId);
+      setV3CorrectionTarget((current) => current === targetDisplayId ? null : current);
     }
-  }, [v3Doc?.updatedAt, v3JobId]);
+  }, [v3Doc, v3JobId]);
 
   const handleV3Select = useCallback((displayId: string) => {
     setSelectedDisplayId(displayId);
@@ -853,7 +885,7 @@ export default function SLDAnalysisPage() {
         <p className="mt-1 text-[12px] text-[var(--text-tertiary)]">
           모든 페이지 조사 · 역할 분리 심사 · 수량 분리 · 근거 기반 제안. 단일 페이지 `/api/pdf-drawing`과 별도 작업 API입니다.
         </p>
-        {v3JobStatus && <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]" role="status">작업 상태: {v3JobStatus}</p>}
+        {v3JobStatus && <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]" role="status">작업 상태: {labelJobStatus(v3JobStatus)}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
@@ -863,7 +895,7 @@ export default function SLDAnalysisPage() {
           >
             {v3Loading ? '전체 분석 중…' : 'PDF/DXF/이미지 전체 분석'}
           </button>
-          {v3ResumeAvailable && (
+          {canResumeV3 && (
             <button
               type="button"
               onClick={() => void handleV3Resume()}
@@ -908,7 +940,7 @@ export default function SLDAnalysisPage() {
           <div className="mt-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-y border-[var(--border-default)] py-2">
               <p className="text-xs text-[var(--text-secondary)]">
-                상태 <strong className="text-[var(--text-primary)]">{v3Doc.verification.documentStatus}</strong>
+                상태 <strong className="text-[var(--text-primary)]">{labelDocumentReadStatus(v3Doc.verification.documentStatus)}</strong>
                 {' · '}완료 {v3Doc.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty').length}/{v3Doc.pages.length}페이지
               </p>
               <div className="flex items-center gap-1" aria-label="도면 페이지 이동">
@@ -918,7 +950,7 @@ export default function SLDAnalysisPage() {
                 }} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[var(--border-default)] disabled:opacity-40"><ChevronLeft size={16} aria-hidden="true" /></button>
                 <label htmlFor="v3-page" className="sr-only">표시할 페이지</label>
                 <select id="v3-page" value={v3PageIndex} onChange={(event) => setV3PageIndex(Number(event.target.value))} className="min-h-11 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm tabular-nums">
-                  {v3Doc.pages.map((page) => <option key={page.pageIndex} value={page.pageIndex}>{page.pageIndex + 1}페이지 · {page.status}</option>)}
+                  {v3Doc.pages.map((page) => <option key={page.pageIndex} value={page.pageIndex}>{page.pageIndex + 1}페이지 · {labelPageStatus(page.status)}</option>)}
                 </select>
                 <button type="button" aria-label="다음 페이지" disabled={v3Doc.pages.findIndex((page) => page.pageIndex === v3PageIndex) >= v3Doc.pages.length - 1} onClick={() => {
                   const position = v3Doc.pages.findIndex((page) => page.pageIndex === v3PageIndex);
@@ -937,6 +969,7 @@ export default function SLDAnalysisPage() {
                 selectedDisplayId={selectedDisplayId}
                 onSelectDisplayId={handleV3Select}
                 onCorrect={handleV3Correct}
+                correctingDisplayId={v3CorrectionTarget ?? undefined}
               />
             </div>
           </div>

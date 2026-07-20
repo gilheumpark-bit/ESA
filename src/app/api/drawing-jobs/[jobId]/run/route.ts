@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
       vision: apiKey ? { provider, apiKey, model: model || undefined } : undefined,
       ownerId: owner.ownerId,
       jobId,
-      signal: req.signal,
+      signal: undefined,
     });
     if (result.document.jobStatus === 'COMPLETE' || result.document.jobStatus === 'CANCELLED') {
       releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);
@@ -88,8 +88,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
     });
   } catch (cause) {
     const reference = randomUUID();
-    releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);
-    updateOwnedJob(jobId, owner.ownerId, { status: 'FAILED', error: reference, sourceLease: undefined });
+    updateOwnedJob(jobId, owner.ownerId, { status: 'QUEUED', error: reference });
     console.error('[drawing-job-run]', { reference, errorType: cause instanceof Error ? cause.name : 'UnknownError' });
     return privateJson({ success: false, error: { message: '도면 분석을 실행하지 못했습니다.', reference } }, { status: 500 });
   }

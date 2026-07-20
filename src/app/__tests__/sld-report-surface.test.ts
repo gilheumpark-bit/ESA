@@ -47,4 +47,27 @@ describe('source-linked SLD report surface', () => {
     expect(page).toContain('min-w-0 xl:sticky');
     expect(report).toContain('min-w-0 border');
   });
+
+  it('guards corrections, derives resume eligibility, and localizes V3 states', () => {
+    const page = source('src/app/(with-nav)/tools/sld/page.tsx');
+    const report = source('src/components/DrawingDocumentV3Report.tsx');
+
+    expect(page).toContain('v3CorrectionInFlightRef.current.has(targetDisplayId)');
+    expect(page).toContain("v3Doc?.jobStatus === 'PARTIAL'");
+    expect(page).toContain('labelJobStatus(v3JobStatus)');
+    expect(page).toContain('labelDocumentReadStatus(v3Doc.verification.documentStatus)');
+    expect(report).toContain('labelReadFailureCode(item.code)');
+    expect(report).toContain('correctingDisplayId === item.displayId');
+  });
+
+  it('uses semantic drawing tokens and a visible SVG keyboard focus target', () => {
+    const legacyOverlay = source('src/components/DrawingEvidenceOverlay.tsx');
+    const overlay = source('src/components/DrawingDocumentV3Overlay.tsx');
+
+    expect(legacyOverlay).toContain("stroke={selected ? 'var(--color-error)' : 'var(--color-warning)'}");
+    expect(legacyOverlay).not.toContain('#b42318');
+    expect(overlay).toContain('drawing-overlay-target');
+    expect(overlay).toContain('drawing-overlay-line-target');
+    expect(overlay).not.toContain('#b42318');
+  });
 });

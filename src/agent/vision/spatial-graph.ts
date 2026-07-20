@@ -21,6 +21,7 @@ type InputRole = (typeof INPUT_ROLES)[number];
 export interface SpatialGraphOptions {
   snapTolerance?: number;
   dedupeIou?: number;
+  drawingWidth?: number;
 }
 
 export interface SpatialSymbol extends SymbolEvidence {
@@ -249,12 +250,25 @@ function sealedOutputHash(envelope: RoleReviewEnvelope): string {
   return createHash('sha256').update(canonicalize(seal)).digest('hex');
 }
 
-function validateInput(envelopes: readonly RoleReviewEnvelope[], options: SpatialGraphOptions): { drawingHash: string; snapTolerance: number; dedupeIou: number } {
+function validateInput(envelopes: readonly RoleReviewEnvelope[], options: SpatialGraphOptions): {
+  drawingHash: string;
+  snapTolerance: number;
+  dedupeIou: number;
+  lineEndpointTolerance: number;
+  lineInteriorTolerance: number;
+} {
   if (!Array.isArray(envelopes) || envelopes.length === 0) invalid('envelopes must not be empty.');
   const snapTolerance = options.snapTolerance ?? DEFAULT_SNAP_TOLERANCE;
   const dedupeIou = options.dedupeIou ?? DEFAULT_DEDUPE_IOU;
   if (!Number.isFinite(snapTolerance) || snapTolerance <= 0 || snapTolerance > 10_000) invalid('snapTolerance must be finite, positive, and bounded.');
   if (!Number.isFinite(dedupeIou) || dedupeIou <= 0 || dedupeIou > 1) invalid('dedupeIou must be finite and from 0 to 1.');
+  if (options.drawingWidth !== undefined
+    && (!Number.isFinite(options.drawingWidth) || options.drawingWidth <= 0 || options.drawingWidth > 100_000)) {
+    invalid('drawingWidth must be finite, positive, and bounded.');
+  }
+  const scaledLineTolerance = options.drawingWidth === undefined ? 0 : 2 * options.drawingWidth / 1_000;
+  const lineEndpointTolerance = Math.max(ENDPOINT_DEDUPE_TOLERANCE, scaledLineTolerance);
+  const lineInteriorTolerance = Math.max(INTERIOR_POLYLINE_TOLERANCE, scaledLineTolerance);
 
   const roles = new Set<string>();
   let drawingHash: string | undefined;
@@ -277,7 +291,7 @@ function validateInput(envelopes: readonly RoleReviewEnvelope[], options: Spatia
   }
   if (envelopes.length > INPUT_ROLES.length) invalid('envelopes may not repeat a role.');
   if (evidenceCount > MAX_INPUT_EVIDENCE) invalid(`evidence exceeds the ${MAX_INPUT_EVIDENCE} input budget.`);
-  return { drawingHash: drawingHash as string, snapTolerance, dedupeIou };
+  return { drawingHash: drawingHash as string, snapTolerance, dedupeIou, lineEndpointTolerance, lineInteriorTolerance };
 }
 
 function normalizedCandidates(values: readonly string[]): string[] {
@@ -401,25 +415,30 @@ function endpointMatch(left: LineEvidence, right: LineEvidence, reverse: boolean
     && samePoint(left.end, reverse ? right.start : right.end, tolerance);
 }
 
-function hasUniformNonZeroOffset(left: readonly Point[], right: readonly Point[]): boolean {
+function hasUniformNonZeroOffset(left: readonly Point[], right: readonly Point[], offsetTolerance: number, variationTolerance: number): boolean {
   const offset = { x: right[0].x - left[0].x, y: right[0].y - left[0].y };
-  if (Math.hypot(offset.x, offset.y) <= LINE_TOLERANCE) return false;
+  if (Math.hypot(offset.x, offset.y) <= offsetTolerance) return false;
   return left.every((point, index) => Math.hypot(
     (right[index].x - point.x) - offset.x,
     (right[index].y - point.y) - offset.y,
-  ) <= LINE_TOLERANCE);
+  ) <= variationTolerance);
 }
 
-function lineRelation(left: LineEvidence, right: LineEvidence): 'duplicate' | 'near-parallel' | 'different' {
+function lineRelation(
+  left: LineEvidence,
+  right: LineEvidence,
+  endpointTolerance: number,
+  interiorTolerance: number,
+): 'duplicate' | 'near-parallel' | 'different' {
   if (left.lineKind !== right.lineKind) return 'different';
-  const reverse = endpointMatch(left, right, true, INTERIOR_POLYLINE_TOLERANCE);
-  if (!reverse && !endpointMatch(left, right, false, INTERIOR_POLYLINE_TOLERANCE)) return 'different';
+  const reverse = endpointMatch(left, right, true, interiorTolerance);
+  if (!reverse && !endpointMatch(left, right, false, interiorTolerance)) return 'different';
   const sampleCount = Math.max(2, Math.min(128, Math.max(left.path.length, right.path.length)));
   const leftSamples = resamplePolyline(left.path, sampleCount);
   const rightSamples = resamplePolyline(reverse ? [...right.path].reverse() : right.path, sampleCount);
-  if (!leftSamples.every((point, index) => samePoint(point, rightSamples[index], INTERIOR_POLYLINE_TOLERANCE))) return 'different';
-  if (!endpointMatch(left, right, reverse, ENDPOINT_DEDUPE_TOLERANCE)) return 'near-parallel';
-  return hasUniformNonZeroOffset(leftSamples, rightSamples) ? 'near-parallel' : 'duplicate';
+  if (!leftSamples.every((point, index) => samePoint(point, rightSamples[index], interiorTolerance))) return 'different';
+  if (!endpointMatch(left, right, reverse, endpointTolerance)) return 'near-parallel';
+  return hasUniformNonZeroOffset(leftSamples, rightSamples, endpointTolerance, LINE_TOLERANCE) ? 'near-parallel' : 'duplicate';
 }
 
 function sourcePages(symbols: readonly SymbolEvidence[]): Map<string, number[]> {
@@ -439,6 +458,8 @@ function deduplicateLines(
   pagesBySource: ReadonlyMap<string, number[]>,
   fallbackPages: readonly number[],
   conflicts: string[],
+  endpointTolerance: number,
+  interiorTolerance: number,
 ): LineRecord[] {
   const ordered = [...lines].sort((left, right) =>
     left.lineKind.localeCompare(right.lineKind)
@@ -453,14 +474,14 @@ function deduplicateLines(
     if (candidatePages.length !== 1) invalid('line page cannot be inferred safely from an ambiguous drawing frame.');
     const comparable = accepted.filter((record) =>
       record.pages.join(',') === candidatePages.join(','));
-    const match = comparable.find((record) => lineRelation(record.item, candidate) === 'duplicate');
+    const match = comparable.find((record) => lineRelation(record.item, candidate, endpointTolerance, interiorTolerance) === 'duplicate');
     if (match) {
       match.evidence.push(candidate);
       match.pages = [...new Set([...match.pages, ...candidatePages])].sort((left, right) => left - right);
     }
     else {
       for (const record of comparable) {
-        if (lineRelation(record.item, candidate) === 'near-parallel') {
+        if (lineRelation(record.item, candidate, endpointTolerance, interiorTolerance) === 'near-parallel') {
           conflicts.push(`AMBIGUOUS_NEAR_PARALLEL_LINE:${stableIds([...record.evidence.map((item) => item.id), candidate.id]).join('|')}`);
         }
       }
@@ -543,7 +564,7 @@ export function assembleSpatialGraph(
   envelopes: readonly RoleReviewEnvelope[],
   options: SpatialGraphOptions = {},
 ): SpatialEvidenceGraph {
-  const { drawingHash, snapTolerance, dedupeIou } = validateInput(envelopes, options);
+  const { drawingHash, snapTolerance, dedupeIou, lineEndpointTolerance, lineInteriorTolerance } = validateInput(envelopes, options);
   const symbolEvidence = envelopes.flatMap((envelope) => envelope.data.symbols ?? []);
   const lineEvidence = envelopes.flatMap((envelope) => envelope.data.lines ?? []);
   const textEvidence = envelopes.flatMap((envelope) => envelope.data.texts ?? []);
@@ -572,7 +593,7 @@ export function assembleSpatialGraph(
 
   const pagesBySource = sourcePages(symbolEvidence);
   const fallbackPages = [...new Set(symbolEvidence.map((item) => item.bounds.page))].sort((left, right) => left - right);
-  const lineRecords = deduplicateLines(lineEvidence, pagesBySource, fallbackPages, conflicts);
+  const lineRecords = deduplicateLines(lineEvidence, pagesBySource, fallbackPages, conflicts, lineEndpointTolerance, lineInteriorTolerance);
   const lines: SpatialLine[] = lineRecords.map((record, index) => {
     const originalEvidenceIds = stableIds(record.evidence.map((item) => item.id));
     return {

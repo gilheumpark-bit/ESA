@@ -77,7 +77,7 @@ export default function ReportPage() {
         if (!cancelled) {
           setError(user
             ? '소유한 보고서를 찾을 수 없거나 무결성 검증에 실패했습니다.'
-            : '이 세션에서 생성한 보고서를 찾을 수 없습니다. 로그인 후 생성한 보고서는 다른 세션에서도 다시 열 수 있습니다.');
+            : '이 세션에서 생성한 보고서를 찾을 수 없습니다. 현재 보고서는 브라우저 세션이 끝나면 다시 열 수 없습니다.');
         }
       } catch (err) {
         if (!cancelled) {

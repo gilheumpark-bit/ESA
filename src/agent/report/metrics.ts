@@ -87,7 +87,7 @@ function canonicalizeReceipt(value: unknown): string {
 }
 
 /**
- * A 95% badge consumer must verify the CI-signed receipt instead of trusting
+ * A 95% badge consumer must verify an externally signed receipt instead of trusting
  * a mutable local JSON boolean. The public key fingerprint is part of the
  * signed claim and is checked again against the supplied pinned key.
  */

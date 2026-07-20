@@ -427,8 +427,12 @@ function validVoltage(context: Context, spec: NormalizedSpec): boolean {
     && spec.bounds.page === owner.bounds.page;
 }
 
-function transformer(symbol: SpatialSymbol): boolean {
-  return symbol.typeCandidates.map((candidate) => resolveSymbol(candidate.trim())).some((type) => type === 'transformer' || type === 'transformer_dry' || type === 'transformer_auto');
+function voltageDomainBoundary(symbol: SpatialSymbol): boolean {
+  return symbol.typeCandidates.map((candidate) => resolveSymbol(candidate.trim())).some((type) =>
+    type === 'transformer'
+    || type === 'transformer_dry'
+    || type === 'transformer_auto'
+    || type === 'transformer_vt');
 }
 
 function validateVoltageDomains(context: Context): ElectricalIssue[] {
@@ -446,7 +450,7 @@ function validateVoltageDomains(context: Context): ElectricalIssue[] {
   for (const edge of [...context.graph.edges].sort((left, right) => compareText(left.id, right.id))) {
     const from = context.symbols.get(edge.from);
     const to = context.symbols.get(edge.to);
-    if (!from || !to || transformer(from) || transformer(to)) continue;
+    if (!from || !to || voltageDomainBoundary(from) || voltageDomainBoundary(to)) continue;
     const fromSpecs = validByOwner.get(from.id) ?? [];
     const toSpecs = validByOwner.get(to.id) ?? [];
     const fromValues = sortedUnique(fromSpecs.map((spec) => String(spec.value)));

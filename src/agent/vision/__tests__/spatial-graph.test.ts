@@ -121,6 +121,22 @@ describe('source-linked spatial graph', () => {
     expect(graph.crossovers).toHaveLength(1);
   });
 
+  it('scales coordinate quantization tolerance for a 4000px drawing', () => {
+    const input = fixture();
+    input[1].data.lines?.push({
+      id: 'line-high-resolution-region', sourceId: 'region:1', lineKind: 'power',
+      path: [{ x: 22, y: 52 }, { x: 82, y: 52 }], start: { x: 22, y: 52 }, end: { x: 82, y: 52 },
+      junctions: [], crossovers: [], confidence: 0.7,
+    });
+    reseal(input);
+    const options = { drawingWidth: 4_000 };
+
+    const graph = assembleSpatialGraph(input, options);
+
+    expect(graph.lines).toHaveLength(1);
+    expect(graph.lines[0].originalEvidenceIds).toEqual(['line-a', 'line-high-resolution-region']);
+  });
+
   it('preserves boundary-near parallel conductors with a deterministic HOLD conflict while leaving distant parallels conflict-free', () => {
     const parallel = fixture();
     parallel[1].data.lines?.push({

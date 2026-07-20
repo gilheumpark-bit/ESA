@@ -125,8 +125,10 @@ export async function POST(req: NextRequest) {
       maxPixels: 40_000_000,
       deadlineMs: 270_000,
     };
+    if (!isDrawingJobStoreAvailable()) {
+      return userError('지속형 작업 저장소가 설정되지 않아 도면 분석 작업을 시작할 수 없습니다.', 503);
+    }
     if (form.get('deferred') === '1') {
-      if (!isDrawingJobStoreAvailable()) return userError('지속형 작업 저장소가 설정되지 않아 취소·재개 작업을 시작할 수 없습니다.', 503);
       if (!isSourceLeaseAvailable()) return userError('암호화 원본 임시 보관소가 설정되지 않아 취소·재개 작업을 시작할 수 없습니다.', 503);
       let availablePages: number;
       try {
@@ -242,6 +244,7 @@ export async function GET(req: NextRequest) {
   if (blocked) return blocked;
   const owner = await resolveDrawingOwner(req, false);
   if (!owner) return userError('작업 세션이 만료되었습니다.', 401);
+  if (!isDrawingJobStoreAvailable()) return userError('지속형 작업 저장소가 설정되지 않아 작업을 조회할 수 없습니다.', 503);
   const jobId = req.nextUrl.searchParams.get('jobId');
   if (!jobId) {
     return privateJson({ success: false, error: { message: 'jobId required' } }, { status: 400 });
@@ -271,6 +274,7 @@ export async function DELETE(req: NextRequest) {
   if (blocked) return blocked;
   const owner = await resolveDrawingOwner(req, false);
   if (!owner) return userError('작업 세션이 만료되었습니다.', 401);
+  if (!isDrawingJobStoreAvailable()) return userError('지속형 작업 저장소가 설정되지 않아 작업을 취소할 수 없습니다.', 503);
   const jobId = req.nextUrl.searchParams.get('jobId');
   if (!jobId) return userError('jobId required');
   const job = getOwnedJob(jobId, owner.ownerId);

@@ -5,6 +5,33 @@ import type { DrawingSynthesis } from '../../electrical/synthesis';
 import type { DrawingReviewArtifact } from '../types';
 
 describe('consensus report integrity', () => {
+  test('keeps the report hash valid after JSON removes undefined optional fields', async () => {
+    const { report } = await executeConsensusTeam({
+      sessionId: 'json-roundtrip-integrity-test',
+      projectName: 'JSON Roundtrip',
+      projectType: 'SLD',
+      teamResults: [{
+        teamId: 'TEAM-STD',
+        success: true,
+        confidence: 0.9,
+        durationMs: 1,
+        calculations: [{
+          id: 'calc-undefined-standard',
+          calculatorId: 'voltage-drop',
+          label: '전압강하',
+          value: 1.2,
+          unit: '%',
+          compliant: null,
+          standardRef: undefined,
+        }],
+      }],
+    });
+
+    const roundTripped = JSON.parse(JSON.stringify(report)) as typeof report;
+    const { hash, ...claim } = roundTripped;
+    expect(hash).toBe(createHash('sha256').update(canonicalize(claim)).digest('hex'));
+  });
+
   test('seals the complete report and records real in-report evidence IDs', async () => {
     const { report } = await executeConsensusTeam({
       sessionId: 'integrity-test',

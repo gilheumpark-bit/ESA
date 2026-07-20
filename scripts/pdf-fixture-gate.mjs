@@ -28,13 +28,14 @@ function buildPdf(contentStream, { padToBytes = 0 } = {}) {
     `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`,
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ];
-  let body = '%PDF-1.4\n';
-  // 프록시 본문 캡 게이트용 패딩 — 주석 줄은 PDF 문법상 무해
+  // 프록시 본문 캡 게이트용 패딩. 수십만 개의 주석 줄은 pdfjs가 각 줄을
+  // 토큰화하느라 게이트 자체가 CPU 병목이 된다. 페이지에서 참조하지 않는
+  // 단일 스트림은 동일한 multipart 크기를 만들면서 판독 대상은 오염하지 않는다.
   if (padToBytes > 0) {
-    const line = '% ' + 'x'.repeat(78) + '\n';
-    const need = Math.max(0, Math.ceil((padToBytes - 2000) / line.length));
-    body += line.repeat(need);
+    const paddingLength = Math.max(0, padToBytes - 2000);
+    objects.push(`<< /Length ${paddingLength} >>\nstream\n${'x'.repeat(paddingLength)}\nendstream`);
   }
+  let body = '%PDF-1.4\n';
   const offsets = [];
   objects.forEach((obj, i) => {
     offsets.push(body.length);

@@ -275,3 +275,17 @@ html {
   .no-print { display: none !important; }
   .receipt-container { break-inside: avoid; }
 }
+
+/* SVG 분석 근거는 브라우저 기본 outline이 보이지 않을 수 있어 별도 초점 표식을 둔다. */
+.drawing-overlay-target:focus-visible {
+  outline: none;
+  filter:
+    drop-shadow(0 0 2px var(--bg-primary))
+    drop-shadow(0 0 4px var(--color-primary));
+}
+
+.drawing-overlay-line-target:focus-visible {
+  stroke: var(--color-primary);
+  stroke-width: 4;
+  opacity: 1;
+}

@@ -293,6 +293,10 @@ function positive(value: number | string): boolean {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
+function positiveUpTo(max: number): (value: number | string) => boolean {
+  return (value) => typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= max;
+}
+
 function ranged(min: number, max: number): (value: number | string) => boolean {
   return (value) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 }
@@ -305,7 +309,7 @@ function exactly(values: readonly string[]): (value: number | string) => boolean
   return (value) => typeof value === 'string' && values.includes(value);
 }
 
-const voltage = (): Binding => ({ adapterField: 'voltage', fields: ['voltage_V'], unit: 'V', targetUnit: 'V', valid: positive });
+const voltage = (): Binding => ({ adapterField: 'voltage', fields: ['voltage_V'], unit: 'V', targetUnit: 'V', valid: positiveUpTo(800_000) });
 const current = (): Binding => ({ adapterField: 'current', fields: ['current_A', 'loadCurrent_A'], unit: 'A', targetUnit: 'A', valid: positive });
 const loadCurrent = (): Binding => ({ adapterField: 'loadCurrent', fields: ['loadCurrent_A'], unit: 'A', targetUnit: 'A', valid: positive });
 const faultCurrent = (): Binding => ({ adapterField: 'shortCircuitCurrent', fields: ['faultCurrent_kA'], unit: 'kA', targetUnit: 'kA', valid: positive });

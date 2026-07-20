@@ -130,6 +130,15 @@ describe('routeDrawingCalculations', () => {
     expect(receipt?.missingInputs).toEqual(expect.arrayContaining([expect.objectContaining({ adapterField: 'voltage' })]));
   });
 
+  it('rejects source-backed voltages above the supported 800kV domain boundary', () => {
+    const source = calculationGraph();
+    setTextRaw(source, 'VCB-TEXT', '900kV 부하전류 120A 단락전류 25kA 허용전류 150A 역률 0.9');
+    const receipt = receiptFor(routeDrawingCalculations(normalizeElectricalGraph(source)), 'breaker-sizing', 'VCB-01');
+
+    expect(receipt).toMatchObject({ status: 'SKIPPED', judgment: 'HOLD', calculatorResult: undefined });
+    expect(receipt?.missingInputs).toEqual(expect.arrayContaining([expect.objectContaining({ adapterField: 'voltage' })]));
+  });
+
   it('does not substitute breaking capacity for prospective fault current', () => {
     const source = calculationGraph();
     setTextRaw(source, 'VCB-TEXT', '380V 부하전류 120A 정격차단전류 25kA 허용전류 150A 역률 0.9');
