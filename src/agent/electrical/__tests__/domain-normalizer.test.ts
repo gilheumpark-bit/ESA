@@ -349,6 +349,40 @@ describe('normalizeElectricalGraph', () => {
     ]);
   });
 
+  it('holds an out-of-range normalized efficiency value with source provenance', () => {
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('TR-RANGE', 'TR', 0)],
+      texts: [text('TEXT-103', '효율 120%', 0)],
+    }));
+
+    expect(specsFor(result, 'TEXT-103').some((spec) => spec.field === 'efficiency')).toBe(false);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE',
+        evidenceId: 'TEXT-103',
+        field: 'efficiency',
+        page: 1,
+      }),
+    ]));
+  });
+
+  it('holds an unsupported explicit CT accuracy class with source provenance', () => {
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('CT-RANGE', 'CT', 0)],
+      texts: [text('TEXT-104', 'accuracy class 3P', 0)],
+    }));
+
+    expect(specsFor(result, 'TEXT-104').some((spec) => spec.field === 'ctAccuracyClass')).toBe(false);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE',
+        evidenceId: 'TEXT-104',
+        field: 'ctAccuracyClass',
+        page: 1,
+      }),
+    ]));
+  });
+
   it('fails closed when aggregate parsed specs exceed the global budget', () => {
     const texts = Array.from({ length: 20_001 }, (_, index) => text(`TEXT-BUDGET-${index}`, '3상', index * 30));
     expect(() => normalizeElectricalGraph(graph({ texts }))).toThrow('normalization spec budget exceeded');

@@ -284,7 +284,7 @@ const BREAKING_LABELS: readonly [RegExp, ElectricalField][] = [
   [/(?:정격\s*차단\s*전류|rated\s*breaking\s*current|breaking\s*current)/i, 'breaking_kA'],
 ];
 
-function readLabeledValues(raw: string, label: string, text: SpatialText, field: ElectricalField, warnings: NormalizationWarning[], budget: ParseBudget, percent = false): number[] {
+function readLabeledValues(raw: string, label: string, text: SpatialText, field: ElectricalField, warnings: NormalizationWarning[], budget: ParseBudget, percent = false, range?: readonly [number, number]): number[] {
   const values: number[] = [];
   const pattern = new RegExp(`(?:${label})\\s*(?<![\\d.,])(${NUMBER})(?![\\d.,])\\s*(%)?`, 'gi');
   for (const match of raw.matchAll(pattern)) {
@@ -294,7 +294,12 @@ function readLabeledValues(raw: string, label: string, text: SpatialText, field:
       addWarning(warnings, { code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: text.id, field, page: text.bounds.page });
       continue;
     }
-    values.push(percent && match[2] === '%' ? number / 100 : number);
+    const value = percent && match[2] === '%' ? number / 100 : number;
+    if (range !== undefined && (value < range[0] || value > range[1])) {
+      addWarning(warnings, { code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: text.id, field, page: text.bounds.page });
+      continue;
+    }
+    values.push(value);
   }
   return values;
 }
@@ -400,15 +405,24 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
   addUniqueNumeric(specs, warnings, text, 'powerFactor', 'factor', readLabeledValues(raw, '역률|power\\s*factor|\\bpf\\b', text, 'powerFactor', warnings, budget));
   addUniqueNumeric(specs, warnings, text, 'demandFactor', 'factor', readLabeledValues(raw, '수용률|demand\\s*factor', text, 'demandFactor', warnings, budget, true));
   addUniqueNumeric(specs, warnings, text, 'safetyMargin', 'factor', readLabeledValues(raw, '안전율|safety\\s*margin', text, 'safetyMargin', warnings, budget));
-  addUniqueNumeric(specs, warnings, text, 'efficiency', 'factor', readLabeledValues(raw, '효율|efficiency', text, 'efficiency', warnings, budget, true));
+  addUniqueNumeric(specs, warnings, text, 'efficiency', 'factor', readLabeledValues(raw, '효율|efficiency', text, 'efficiency', warnings, budget, true, [0.01, 1]));
 
   const leadLengths = readMatches(raw, new RegExp(`(?:lead\\s*length|리드\\s*길이)\\s*${bounded}\\s*(미터|m)(?!m|m2|[A-Za-z])`, 'gi'), { '미터': 1, m: 1 }, text, 'leadLength_m', occupied, warnings, budget);
   const leadSizes = readMatches(raw, new RegExp(`(?:lead\\s*size|리드\\s*(?:굵기|단면적))\\s*${bounded}\\s*(mm2|sq)(?![A-Za-z])`, 'gi'), { mm2: 1, sq: 1 }, text, 'leadSize_mm2', occupied, warnings, budget);
   occupied.push(...leadLengths.map(({ start, end }) => ({ start, end })), ...leadSizes.map(({ start, end }) => ({ start, end })));
   addUniqueNumeric(specs, warnings, text, 'leadLength_m', 'm', leadLengths.map((item) => item.value));
   addUniqueNumeric(specs, warnings, text, 'leadSize_mm2', 'mm2', leadSizes.map((item) => item.value));
-  const accuracyClasses = [...raw.matchAll(/(?:정확도\s*(?:등급)?|accuracy\s*class)\s*(0\.2|0\.5|1\.0|5P|10P)\b/gi)]
-    .map((match) => { reserveParsedField(budget); return match[1].toUpperCase(); });
+  const allowedAccuracyClasses = new Set(['0.2', '0.5', '1.0', '5P', '10P']);
+  const accuracyClasses: string[] = [];
+  for (const match of raw.matchAll(/(?:정확도\s*(?:등급)?|accuracy\s*class)\s*([0-9]+(?:\.[0-9]+)?[A-Za-z]*)(?![A-Za-z0-9.])/gi)) {
+    reserveParsedField(budget);
+    const accuracyClass = match[1].toUpperCase();
+    if (!allowedAccuracyClasses.has(accuracyClass)) {
+      addWarning(warnings, { code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: text.id, field: 'ctAccuracyClass', page: text.bounds.page });
+      continue;
+    }
+    accuracyClasses.push(accuracyClass);
+  }
   const distinctAccuracy = [...new Set(accuracyClasses)];
   if (distinctAccuracy.length === 1) addSpec(specs, text, 'ctAccuracyClass', distinctAccuracy[0], 'text');
   if (distinctAccuracy.length > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'ctAccuracyClass', page: text.bounds.page });
