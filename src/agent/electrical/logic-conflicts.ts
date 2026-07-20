@@ -255,11 +255,22 @@ function makeConflict(
 function lineEvidenceExtras(graph: SpatialEvidenceGraph, stableIds: readonly string[]) {
   const wanted = new Set(stableIds);
   const lines = graph.lines.filter((line) => wanted.has(line.id) || line.originalEvidenceIds.some((id) => wanted.has(id)));
+  const graphBounds = lines.flatMap((line) => {
+    const points = [...line.path, line.start, line.end];
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    const x = Math.min(...xs);
+    const y = Math.min(...ys);
+    const w = Math.max(1e-6, Math.max(...xs) - x);
+    const h = Math.max(1e-6, Math.max(...ys) - y);
+    return line.pages.map((page) => ({ x, y, w, h, page }));
+  });
   return {
     stableIds: lines.map((line) => line.id),
     originals: lines.flatMap((line) => line.originalEvidenceIds),
     sources: lines.flatMap((line) => line.sourceIds),
     pages: lines.flatMap((line) => line.pages),
+    graphBounds,
   };
 }
 
@@ -271,6 +282,7 @@ function relationExtras(graph: SpatialEvidenceGraph, edgeIds: readonly string[])
     originals: lineExtras.originals,
     sources: lineExtras.sources,
     pages: lineExtras.pages,
+    graphBounds: lineExtras.graphBounds,
   };
 }
 
@@ -284,7 +296,7 @@ function graphConflictExtras(graph: SpatialEvidenceGraph) {
     originals: [...matchedLines.flatMap((line) => line.originalEvidenceIds), ...matchedSymbols.flatMap((symbol) => symbol.originalEvidenceIds)],
     sources: [...matchedLines.flatMap((line) => line.sourceIds), ...matchedSymbols.flatMap((symbol) => symbol.sourceIds)],
     pages: [...matchedLines.flatMap((line) => line.pages), ...matchedSymbols.map((symbol) => symbol.bounds.page)],
-    graphBounds: matchedSymbols.map((symbol) => symbol.bounds),
+    graphBounds: [...lineEvidenceExtras(graph, matchedLines.map((line) => line.id)).graphBounds, ...matchedSymbols.map((symbol) => symbol.bounds)],
   };
 }
 

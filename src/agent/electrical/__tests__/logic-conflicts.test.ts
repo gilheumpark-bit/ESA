@@ -123,6 +123,9 @@ describe('independent logic conflict comparison', () => {
       kind: 'UNRESOLVED_LOGIC_REFERENCE',
       graphConflictIds: ['AMBIGUOUS_NEAR_PARALLEL_LINE:LINE-001'],
       graphOriginalEvidenceIds: expect.arrayContaining(['orig-line-1']),
+      graphEvidenceBounds: expect.arrayContaining([
+        expect.objectContaining({ page: 1, x: 140, y: 120, w: 160 }),
+      ]),
     }));
   });
 
