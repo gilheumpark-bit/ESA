@@ -84,6 +84,41 @@ function toVariant(
   };
 }
 
+function assertProfile(
+  profile: ImageQualityProfile,
+  sourceWidth: number,
+  sourceHeight: number,
+): void {
+  if (profile.width !== sourceWidth || profile.height !== sourceHeight) {
+    throw new Error('품질 프로필 치수가 방향 정규화된 원본과 일치하지 않습니다.');
+  }
+  if (![1, 2, 4].includes(profile.recommendedScale)) {
+    throw new Error('품질 프로필 recommendedScale 값이 올바르지 않습니다.');
+  }
+  if (
+    !Number.isInteger(profile.width) ||
+    !Number.isInteger(profile.height) ||
+    !Number.isInteger(profile.channels) ||
+    profile.width <= 0 ||
+    profile.height <= 0 ||
+    profile.channels <= 0 ||
+    !Number.isFinite(profile.contrast) ||
+    !Number.isFinite(profile.edgeDensity) ||
+    !Number.isFinite(profile.gradientVariance) ||
+    profile.contrast < 0 ||
+    profile.contrast > 1 ||
+    profile.edgeDensity < 0 ||
+    profile.edgeDensity > 1 ||
+    profile.gradientVariance < 0 ||
+    typeof profile.lowContrast !== 'boolean' ||
+    typeof profile.blurry !== 'boolean' ||
+    !Array.isArray(profile.warnings) ||
+    !profile.warnings.every((warning) => typeof warning === 'string')
+  ) {
+    throw new Error('품질 프로필 구조가 올바르지 않습니다.');
+  }
+}
+
 async function normalizeSource(source: Buffer): Promise<RenderedImage> {
   const { data, info } = await sharp(source, {
     animated: false,
@@ -117,6 +152,7 @@ async function renderVariant(
     pipeline = pipeline.resize({
       width,
       height,
+      fit: 'fill',
       kernel: sharp.kernel.lanczos3,
     });
   }
@@ -140,13 +176,14 @@ async function renderVariant(
 
 export async function createImageVariants(
   buffer: ArrayBuffer,
-  _profile: ImageQualityProfile,
+  profile: ImageQualityProfile,
 ): Promise<ImageVariant[]> {
   if (buffer.byteLength === 0) {
     throw new Error('빈 도면 이미지는 분석할 수 없습니다.');
   }
 
   const normalized = await normalizeSource(Buffer.from(buffer));
+  assertProfile(profile, normalized.width, normalized.height);
   const variants = [
     toVariant('original', normalized, normalized.width, normalized.height),
   ];
