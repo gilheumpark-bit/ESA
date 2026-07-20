@@ -116,7 +116,8 @@ function fullRow(
 ): CalculationReceipt {
   return {
     id: 'r-1234567890',
-    user_id: '', // 공개 영수증 — 소유권 검사(인증) 경로 미진입
+    user_id: '',
+    is_public: true,
     calculator_id: baseClaim.calcId,
     calculator_name: '전압강하 계산기',
     inputs: baseClaim.inputs as Record<string, unknown>,
@@ -124,6 +125,21 @@ function fullRow(
     formula_used: baseClaim.formulaUsed,
     standard_ref: baseClaim.standardVersion,
     lang: 'ko',
+    country_code: 'KR',
+    applied_standard: 'KEC',
+    unit_system: 'SI',
+    difficulty_level: 'basic',
+    steps: [...baseClaim.steps],
+    standards_used: [...baseClaim.standardsUsed],
+    warnings: ['현장 조건 확인'],
+    recommendations: ['책임 엔지니어 검토'],
+    disclaimer_text: '검토용 계산 결과',
+    disclaimer_version: 'v-test',
+    calculated_at: '2026-07-01T00:00:00.000Z',
+    standard_version: baseClaim.standardVersion,
+    engine_version: baseClaim.engineVersion,
+    is_standard_current: false,
+    receipt_hash: sealHash,
     metadata: { ...baseClaim, receiptHash: sealHash, ...metaOverrides },
     created_at: '2026-07-01T00:00:00.000Z',
     ...overrides,
@@ -155,6 +171,24 @@ describe('GET /api/calculate/[id] · /api/receipt/[id] — integrity 필드', ()
     const body = await res.json();
     expect(body.integrity).toBe('VALID');
     expect(body.hash).toBe(sealHash);
+    expect(body).toEqual(expect.objectContaining({
+      calcId: 'voltage-drop',
+      countryCode: 'KR',
+      appliedStandard: 'KEC',
+      result: baseClaim.result,
+      warnings: ['현장 조건 확인'],
+      recommendations: ['책임 엔지니어 검토'],
+      disclaimerText: '검토용 계산 결과',
+      isStandardCurrent: false,
+      isPublic: true,
+      receiptHash: sealHash,
+    }));
+  });
+
+  test('비공개 소유자 없는 행은 공개로 추정하지 않고 인증을 요구한다', async () => {
+    loadMock.mockResolvedValue(fullRow({ user_id: '', is_public: false }));
+    const res = await getReceiptById(req, ctx('r-1234567890'));
+    expect(res.status).toBe(401);
   });
 
   test('TAMPERED: 결과값이 meta·컬럼 양쪽에서 변조되면 재계산 해시가 불일치한다', async () => {

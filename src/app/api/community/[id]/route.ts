@@ -29,7 +29,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Rate limit (R4 stub repair).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'community');
     if (blocked) return blocked;
 
@@ -53,7 +53,7 @@ export async function GET(
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Community GET /id]', message);
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-7061', message } },
+      { success: false, error: { code: 'ESVA-7061', message: '질문을 불러오지 못했습니다.' } },
       { status: 500 },
     );
   }
@@ -71,7 +71,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Rate limit (R4 stub repair).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'community');
     if (blocked) return blocked;
 
@@ -142,7 +142,7 @@ export async function POST(
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Community POST /id]', message);
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-7065', message } },
+      { success: false, error: { code: 'ESVA-7065', message: '답변을 등록하지 못했습니다.' } },
       { status: 500 },
     );
   }

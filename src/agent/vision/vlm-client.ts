@@ -1,7 +1,7 @@
 /**
  * VLM Client — 실제 비전 모델 API 호출
  * ---------------------------------------
- * Gemini 2.5 Flash Vision / OpenAI GPT-4.1 Vision 실 연동.
+ * Gemini / OpenAI / Anthropic Vision 실 연동.
  * BYOK 기반 — 사용자의 API 키로 호출.
  *
  * PART 1: Provider abstraction + config
@@ -17,7 +17,7 @@ import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
 // PART 1 — Provider Abstraction + Configurable Params
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type VLMProvider = 'gemini' | 'openai';
+export type VLMProvider = 'gemini' | 'openai' | 'claude';
 
 export interface VLMOptions {
   provider: VLMProvider;
@@ -48,8 +48,14 @@ const VLM_CONFIG = {
     defaultMaxTokens: 8192,
   },
   openai: {
-    defaultModel: 'gpt-5.5',
+    defaultModel: 'gpt-5.6-terra',
     endpoint: 'https://api.openai.com/v1/chat/completions',
+    defaultTemp: 0.1,
+    defaultMaxTokens: 8192,
+  },
+  claude: {
+    defaultModel: 'claude-sonnet-5',
+    endpoint: 'https://api.anthropic.com/v1/messages',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
   },
@@ -62,7 +68,7 @@ Extract ALL electrical components and connections from this drawing section.
 Return ONLY valid JSON (no markdown):
 {
   "components": [
-    {"id": "unique-id", "type": "transformer|breaker|motor|panel|bus|generator|load|cable_tray|switch|fuse|spd|ground|meter|contactor|vfd|ct|vt|relay|rcd|capacitor|reactor|pv_module|pv_inverter|ev_charger|ups|ats|pdu|battery", "label": "component label/name", "rating": "rating if visible (e.g. 500kVA, 100A)", "x": approx_x_position, "y": approx_y_position, "confidence": 0.0-1.0}
+    {"id": "unique-id", "type": "transformer|breaker|motor|panel|bus|generator|load|cable_tray|switch|fuse|spd|ground|meter|contactor|vfd|ct|vt|relay|rcd|capacitor|reactor|pv_module|pv_inverter|ev_charger|ups|ats|pdu|battery", "label": "component label/name", "rating": "rating if visible (e.g. 500kVA, 100A)", "x": 0_to_1000, "y": 0_to_1000, "confidence": 0.0-1.0}
   ],
   "connections": [
     {"from": "component-id-1", "to": "component-id-2", "cableType": "cable spec if visible", "length": meters_if_shown}
@@ -73,6 +79,9 @@ Rules:
 - Include EVERY symbol, text annotation, and connection line
 - Use standardized type names from the list above
 - Rating must include units (kVA, A, V, kW, mm², AWG)
+- x and y are required integers from 0 to 1000, relative to this cropped image; origin is top-left
+- Only include connection length when a numeric length with a unit is explicitly printed in the crop
+- Convert an explicitly printed connection length to meters; never infer length from pixels or spacing
 - confidence: 1.0=certain, 0.5=uncertain
 - If text is Korean, preserve as-is in label field`;
 
@@ -93,6 +102,9 @@ function validateApiKey(provider: VLMProvider, apiKey: string): void {
   }
   if (provider === 'gemini' && apiKey.length < 20) {
     throw new Error(`[VLM] Gemini API key appears too short. 키를 다시 확인하세요.`);
+  }
+  if (provider === 'claude' && apiKey.length < 20) {
+    throw new Error(`[VLM] Anthropic API key appears too short. 키를 다시 확인하세요.`);
   }
 }
 
@@ -146,11 +158,14 @@ async function analyzeWithGemini(
   const start = Date.now();
   const cfg = VLM_CONFIG.gemini;
   const finalModel = model ?? cfg.defaultModel;
-  const url = `${cfg.endpoint}/${finalModel}:generateContent?key=${apiKey}`;
+  const url = `${cfg.endpoint}/${finalModel}:generateContent`;
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify({
       contents: [{
         parts: [
@@ -192,6 +207,12 @@ async function analyzeWithOpenAI(
   const start = Date.now();
   const cfg = VLM_CONFIG.openai;
   const finalModel = model ?? cfg.defaultModel;
+  // GPT-5 계열은 임의 temperature를 지원하지 않을 수 있다. 최신 Chat
+  // Completions 규격의 max_completion_tokens를 사용하고, 구형 모델에만
+  // 요청자가 지정한 temperature를 전달한다.
+  const generationControls = finalModel.startsWith('gpt-5')
+    ? {}
+    : { temperature: temperature ?? cfg.defaultTemp };
 
   const response = await fetch(cfg.endpoint, {
     method: 'POST',
@@ -211,8 +232,8 @@ async function analyzeWithOpenAI(
           ],
         },
       ],
-      temperature: temperature ?? cfg.defaultTemp,
-      max_tokens: maxTokens ?? cfg.defaultMaxTokens,
+      ...generationControls,
+      max_completion_tokens: maxTokens ?? cfg.defaultMaxTokens,
       response_format: { type: 'json_object' },
     }),
   });
@@ -228,36 +249,121 @@ async function analyzeWithOpenAI(
   return parseVLMResponse(text, finalModel, Date.now() - start);
 }
 
+async function analyzeWithClaude(
+  imageBase64: string,
+  mimeType: string,
+  apiKey: string,
+  model?: string,
+  temperature?: number,
+  maxTokens?: number,
+): Promise<VLMAnalysisResult> {
+  const start = Date.now();
+  const cfg = VLM_CONFIG.claude;
+  const finalModel = model ?? cfg.defaultModel;
+  const response = await fetch(cfg.endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: finalModel,
+      max_tokens: maxTokens ?? cfg.defaultMaxTokens,
+      temperature: temperature ?? cfg.defaultTemp,
+      system: SLD_VISION_PROMPT,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+          { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
+        ],
+      }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+  }
+
+  const data = await response.json();
+  const text = Array.isArray(data.content)
+    ? data.content.filter((part: { type?: string }) => part?.type === 'text').map((part: { text?: string }) => part.text ?? '').join('')
+    : '{}';
+  return parseVLMResponse(text || '{}', finalModel, Date.now() - start);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 5 — Unified Interface
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * VLM JSON 응답 파싱.
- * 형식 불일치 시 graceful 빈 결과 반환.
+ * 형식 불일치·범위 이탈·끊긴 연결은 계산 근거로 승격하지 않고 제거한다.
  */
-function parseVLMResponse(
+export function parseVLMResponse(
   rawText: string,
   model: string,
   durationMs: number,
 ): VLMAnalysisResult {
   try {
-    const parsed = JSON.parse(rawText);
-    const components: ExtractedComponent[] = (parsed.components ?? []).map((c: Record<string, unknown>, i: number) => ({
-      id: (c.id as string) ?? `vlm-${i}`,
-      type: (c.type as string) ?? 'unknown',
-      label: (c.label as string) ?? '',
-      rating: c.rating as string | undefined,
-      position: (c.x != null && c.y != null) ? { x: Number(c.x), y: Number(c.y) } : undefined,
-      confidence: Number(c.confidence ?? 0.7),
-    }));
+    const parsed: unknown = JSON.parse(rawText);
+    if (!parsed || typeof parsed !== 'object') throw new Error('VLM 응답은 객체여야 합니다.');
+    const record = parsed as Record<string, unknown>;
+    if ((record.components != null && !Array.isArray(record.components)) ||
+        (record.connections != null && !Array.isArray(record.connections))) {
+      throw new Error('VLM components/connections는 배열이어야 합니다.');
+    }
 
-    const connections: ExtractedConnection[] = (parsed.connections ?? []).map((conn: Record<string, unknown>) => ({
-      from: String(conn.from ?? ''),
-      to: String(conn.to ?? ''),
-      cableType: conn.cableType as string | undefined,
-      length: conn.length != null ? Number(conn.length) : undefined,
-    }));
+    const componentRows = (record.components ?? []) as unknown[];
+    const components: ExtractedComponent[] = [];
+    const ids = new Set<string>();
+    for (const row of componentRows.slice(0, 2_000)) {
+      if (!row || typeof row !== 'object') continue;
+      const c = row as Record<string, unknown>;
+      const id = safeText(c.id, 128);
+      const type = safeText(c.type, 64);
+      const x = finiteNumber(c.x);
+      const y = finiteNumber(c.y);
+      if (!id || ids.has(id) || !type || x == null || y == null || x < 0 || x > 1000 || y < 0 || y > 1000) continue;
+      ids.add(id);
+      const rawConfidence = finiteNumber(c.confidence) ?? 0.5;
+      const rating = safeText(c.rating, 256);
+      components.push({
+        id,
+        type,
+        label: safeText(c.label, 256) ?? type,
+        ...(rating ? { rating } : {}),
+        position: { x, y },
+        confidence: Math.max(0, Math.min(1, rawConfidence)),
+      });
+    }
+
+    const connectionRows = (record.connections ?? []) as unknown[];
+    const connections: ExtractedConnection[] = [];
+    const seenConnections = new Set<string>();
+    for (const row of connectionRows.slice(0, 5_000)) {
+      if (!row || typeof row !== 'object') continue;
+      const conn = row as Record<string, unknown>;
+      const from = safeText(conn.from, 128);
+      const to = safeText(conn.to, 128);
+      const cableType = safeText(conn.cableType, 256);
+      if (!from || !to || from === to || !ids.has(from) || !ids.has(to)) continue;
+      const key = `${from}\u0000${to}\u0000${cableType ?? ''}`;
+      if (seenConnections.has(key)) continue;
+      seenConnections.add(key);
+      const rawLength = finiteNumber(conn.length);
+      const length = rawLength != null && rawLength > 0 && rawLength <= 1_000_000
+        ? rawLength
+        : undefined;
+      connections.push({
+        from,
+        to,
+        ...(cableType ? { cableType } : {}),
+        ...(length != null ? { length, unit: 'm' } : {}),
+      });
+    }
 
     const avgConf = components.length > 0
       ? components.reduce((s, c) => s + c.confidence, 0) / components.length
@@ -267,6 +373,17 @@ function parseVLMResponse(
   } catch {
     return { components: [], connections: [], rawText, confidence: 0, model, durationMs };
   }
+}
+
+function safeText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength) return undefined;
+  return normalized;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -312,6 +429,8 @@ export async function analyzeDrawingWithVLM(
         return analyzeWithGemini(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
       case 'openai':
         return analyzeWithOpenAI(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
+      case 'claude':
+        return analyzeWithClaude(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
       default:
         throw new Error(`Unsupported VLM provider: ${options.provider}`);
     }

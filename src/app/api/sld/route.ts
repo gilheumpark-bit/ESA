@@ -15,6 +15,7 @@ import { analyzeSLD, generateCalcChainFromSLD, type SLDAnalysis } from '@/lib/sl
 import { buildTopologyFromSLD, type TopologyGraph, type ValidationResult } from '@/engine/topology';
 import { SagaOrchestrator } from '@/lib/saga-transaction';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 export const runtime = 'nodejs';
 
@@ -22,18 +23,32 @@ export async function POST(req: NextRequest) {
   const timer = createRequestTimer();
 
   try {
+    if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
+      return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
+    }
     const blocked = applyRateLimit(req, 'sld');
     if (blocked) return blocked;
 
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch {
+      return NextResponse.json(
+        { error: '도면 요청 본문을 읽을 수 없습니다.', code: 'ESA-4001' },
+        { status: 400 },
+      );
+    }
     const imagePart = getFormFile(formData, 'image');
     if (!imagePart.ok) {
       return NextResponse.json({ error: imagePart.message }, { status: 400 });
     }
     const imageFile = imagePart.file;
-    const provider = (formData.get('provider') as string) || 'openai';
-    const model = (formData.get('model') as string) || '';
-    const apiKey = (formData.get('apiKey') as string) || '';
+    const providerPart = formData.get('provider');
+    const modelPart = formData.get('model');
+    const apiKeyPart = formData.get('apiKey');
+    const provider = typeof providerPart === 'string' && providerPart ? providerPart : 'openai';
+    const model = typeof modelPart === 'string' ? modelPart.trim() : '';
+    const apiKey = typeof apiKeyPart === 'string' ? apiKeyPart.trim() : '';
 
     if (!imageFile) {
       return NextResponse.json({ error: 'No image provided.' }, { status: 400 });
@@ -41,7 +56,13 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       return NextResponse.json({ error: 'API key required (BYOK).' }, { status: 401 });
     }
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!['openai', 'claude', 'gemini'].includes(provider)) {
+      return NextResponse.json({ error: 'Unsupported Vision provider.' }, { status: 400 });
+    }
+    if (apiKey.length > 4096 || (model && !/^[a-zA-Z0-9._:/-]{1,128}$/.test(model))) {
+      return NextResponse.json({ error: 'Invalid Vision credential parameters.' }, { status: 400 });
+    }
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(imageFile.type)) {
       return NextResponse.json({ error: `Invalid image type: ${imageFile.type}` }, { status: 400 });
     }
@@ -99,10 +120,9 @@ export async function POST(req: NextRequest) {
 
     if (sagaResult.status !== 'COMPLETED' || !analysis) {
       return NextResponse.json({
-        error: `SLD 분석 실패 (단계: ${sagaResult.failedStep})`,
-        sagaError: sagaResult.error,
-        completedSteps: sagaResult.completedSteps,
-      }, { status: 500 });
+        error: 'SLD 공급자 분석을 완료하지 못했습니다. API 키·모델·파일을 확인하세요.',
+        code: 'ESA-6001',
+      }, { status: 502 });
     }
 
     const calcChain = generateCalcChainFromSLD(analysis);
@@ -126,9 +146,16 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'SLD analysis failed';
-    apiLog({ level: 'error', event: 'sld-analysis', route: '/api/sld', error: message, durationMs: timer.elapsed() });
-    const status = message.includes('401') || message.includes('403') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    apiLog({
+      level: 'error',
+      event: 'sld-analysis',
+      route: '/api/sld',
+      error: err instanceof Error ? err.name : 'UnknownError',
+      durationMs: timer.elapsed(),
+    });
+    return NextResponse.json(
+      { error: 'SLD 공급자 분석을 완료하지 못했습니다. API 키·모델·파일을 확인하세요.', code: 'ESA-6001' },
+      { status: 502 },
+    );
   }
 }

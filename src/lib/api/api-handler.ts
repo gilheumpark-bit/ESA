@@ -16,6 +16,7 @@ import { log } from '@/lib/logger';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { sanitizeInput } from '@/lib/security-hardening';
 import { getErrorByCode } from '@/data/error-codes';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -46,24 +47,6 @@ type ApiHandlerFn = (req: NextRequest, ctx: ApiContext) => Promise<NextResponse>
 // ═══════════════════════════════════════════════════════════════════════════════
 // CORS
 // ═══════════════════════════════════════════════════════════════════════════════
-
-const ALLOWED_ORIGINS = new Set([
-  'https://esva.engineer',
-  'https://www.esva.engineer',
-  'http://localhost:3000',
-  'http://localhost:3001',
-]);
-
-function isOriginAllowed(origin: string | null): boolean {
-  if (!origin) return true; // same-origin
-  if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
-  // dev: launch.json이 3010 등 임의 포트를 쓰는데 목록은 3000/3001 고정이라
-  // 브라우저 same-origin POST(Origin 항상 동봉)가 dev에서 전부 403이었다.
-  // 프로덕션 목록은 불변 — 개발 환경의 localhost만 포트 무관 허용.
-  if (process.env.NODE_ENV !== 'production' && /^http:\/\/localhost:\d+$/.test(origin)) return true;
-  return false;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Response builders (일관된 형식)
@@ -111,7 +94,13 @@ export function withApiHandler(
     // CORS
     if (options.checkOrigin !== false) {
       const origin = req.headers.get('origin');
-      if (!isOriginAllowed(origin)) {
+      if (!isRequestOriginAllowed(
+        origin,
+        req.url,
+        undefined,
+        req.headers.get('host'),
+        req.headers.get('x-forwarded-proto'),
+      )) {
         log.warn('api', 'CORS blocked', { ip, route, origin });
         return buildError('ESVA-9001', 'Invalid origin', 403);
       }
@@ -166,7 +155,7 @@ export function withApiHandler(
       const code = codeMatch ? codeMatch[0] : 'ESVA-9999';
       const knownError = getErrorByCode(code);
       const httpStatus = knownError?.httpStatus ?? 500;
-      const displayMessage = knownError?.message_ko ?? message;
+      const displayMessage = knownError?.message_ko ?? '내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
 
       return buildError(code, displayMessage, httpStatus);
     }

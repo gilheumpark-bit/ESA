@@ -110,6 +110,7 @@ function ScenarioForm({
           <button
             type="button"
             onClick={() => onRemove(index)}
+            aria-label={`${scenario.label} 삭제`}
             className="rounded p-1 text-[var(--text-tertiary)] transition-colors hover:text-red-500"
           >
             <Trash2 size={14} />
@@ -118,13 +119,16 @@ function ScenarioForm({
       </div>
 
       <div className="space-y-3">
-        {params.map((p) => (
+        {params.map((p) => {
+          const fieldId = `compare-${index}-${p.name}`;
+          return (
           <div key={p.name}>
-            <label className="mb-1 block text-xs text-[var(--text-tertiary)]">
+            <label htmlFor={fieldId} className="mb-1 block text-xs text-[var(--text-tertiary)]">
               {p.description ?? p.name}
               {p.unit && ` (${p.unit})`}
             </label>
             <input
+              id={fieldId}
               type="number"
               value={scenario.inputs[p.name] ?? ''}
               onChange={(e) => onInputChange(index, p.name, e.target.value)}
@@ -133,7 +137,8 @@ function ScenarioForm({
               className="h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
             />
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <button
@@ -151,7 +156,7 @@ function ScenarioForm({
       </button>
 
       {scenario.error && (
-        <p className="mt-2 text-xs text-[var(--color-error)]">{scenario.error}</p>
+        <p className="mt-2 text-xs text-[var(--color-error)]" role="alert">{scenario.error}</p>
       )}
     </div>
   );
@@ -181,48 +186,39 @@ export default function ComparePage() {
   // Read URL params on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const found = CALCULATOR_OPTIONS.find((option) => option.value === params.get('calc'));
+      const initialOption = found ?? CALCULATOR_OPTIONS[0];
+      if (found) setSelectedCalc(found.value);
 
-    const params = new URLSearchParams(window.location.search);
-    const calcParam = params.get('calc');
-    if (calcParam) {
-      const found = CALCULATOR_OPTIONS.find((c) => c.value === calcParam);
-      if (found) {
-        setSelectedCalc(found.value);
-
-        // Parse scenario data from URL
-        const newScenarios: ScenarioState[] = [];
-        for (const key of ['a', 'b', 'c', 'd']) {
-          const raw = params.get(key);
-          if (raw) {
-            try {
-              const parsed = JSON.parse(decodeURIComponent(raw));
-              const label = SCENARIO_LABELS[newScenarios.length] ?? `${key.toUpperCase()}안`;
-              newScenarios.push({
-                label,
-                inputs: parsed,
-                result: null,
-                receipt: null,
-                isLoading: false,
-                error: null,
-              });
-            } catch {
-              // Skip invalid data
-            }
-          }
-        }
-
-        if (newScenarios.length >= 2) {
-          setScenarios(newScenarios);
-          return;
+      const newScenarios: ScenarioState[] = [];
+      for (const key of ['a', 'b', 'c', 'd']) {
+        const raw = params.get(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(decodeURIComponent(raw));
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+          const label = SCENARIO_LABELS[newScenarios.length] ?? `${key.toUpperCase()}안`;
+          newScenarios.push({
+            label,
+            inputs: parsed as Record<string, string>,
+            result: null,
+            receipt: null,
+            isLoading: false,
+            error: null,
+          });
+        } catch {
+          // Ignore malformed shared scenarios and show safe defaults.
         }
       }
-    }
 
-    // Default: 2 scenarios
-    setScenarios([
-      createEmptyScenario('A안', calcOption.params),
-      createEmptyScenario('B안', calcOption.params),
-    ]);
+      setScenarios(newScenarios.length >= 2 ? newScenarios : [
+        createEmptyScenario('A안', initialOption.params),
+        createEmptyScenario('B안', initialOption.params),
+      ]);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Reset scenarios when calculator changes
@@ -373,7 +369,9 @@ export default function ComparePage() {
       <main className="mx-auto max-w-6xl px-4 py-6">
         {/* Calculator selector + actions */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
+          <label htmlFor="compare-calculator" className="sr-only">계산기 선택</label>
           <select
+            id="compare-calculator"
             value={selectedCalc}
             onChange={(e) => handleCalcChange(e.target.value)}
             className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm font-medium text-[var(--text-primary)]"

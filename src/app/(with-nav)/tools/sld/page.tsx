@@ -28,25 +28,9 @@ import {
   PlayCircle,
 } from 'lucide-react';
 import Link from 'next/link';
-import { decryptKey } from '@/lib/ai-providers';
+import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
+import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-
-const BYOK_PREFIX = 'esa-byok-';
-const VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;
-
-async function getFirstAvailableVisionKey(): Promise<{ provider: string; key: string } | null> {
-  if (typeof window === 'undefined') return null;
-  for (const provider of VISION_PROVIDERS) {
-    const stored = localStorage.getItem(BYOK_PREFIX + provider);
-    if (stored) {
-      try {
-        const key = await decryptKey(stored);
-        if (key) return { provider, key };
-      } catch { /* skip */ }
-    }
-  }
-  return null;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -304,7 +288,7 @@ export default function SLDAnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   // 사내 규정(선택) — JSON 룰셋. 서버가 린트하고 무효면 400으로 거절한다.
   const [rulesFile, setRulesFile] = useState<File | null>(null);
-  // 정밀 검증(4팀 리뷰)용 — 마지막 업로드 원본 파일과 진행 상태.
+  // 정밀 검증(3개 전문팀 + 합의 단계)용 — 마지막 업로드 원본 파일과 진행 상태.
   // 배선 전엔 /api/team-review·/report/[id]가 UI에서 영구 미도달이었다(Batch C1).
   const [drawingFile, setDrawingFile] = useState<File | null>(null);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -320,7 +304,7 @@ export default function SLDAnalysisPage() {
     setError(null);
   }, []);
 
-  // 정밀 검증: 파싱 결과를 넘어 4팀(orchestrator) 리뷰 → ESVA Verified 리포트.
+  // 정밀 검토: 파싱 결과를 전문팀 리뷰와 별도 합의 단계로 전달한다.
   const handleTeamReview = useCallback(async () => {
     if (!drawingFile) {
       setReviewError('원본 도면 파일이 없습니다 — 파일을 다시 업로드해 주세요.');
@@ -334,7 +318,21 @@ export default function SLDAnalysisPage() {
       formData.append('projectName', 'SLD 정밀 검증');
       formData.append('projectType', '전기 설비');
       if (rulesFile) formData.append('rules', rulesFile);
-      const res = await fetch('/api/team-review', { method: 'POST', body: formData });
+      if (drawingFile.type.startsWith('image/')) {
+        const visionKey = await getFirstAvailableVisionKey();
+        if (!visionKey) {
+          throw new Error('이미지 전문팀 검토에는 OpenAI, Claude 또는 Gemini BYOK 키가 필요합니다.');
+        }
+        formData.append('provider', visionKey.provider);
+        formData.append('apiKey', visionKey.key);
+      }
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const res = await fetch('/api/team-review', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
       const json = await res.json();
       if (!res.ok || !json?.success) {
         throw new Error(json?.error?.message ?? `팀 리뷰 실패 (${res.status})`);
@@ -460,7 +458,7 @@ export default function SLDAnalysisPage() {
           도면 분석
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          도면을 업로드하면 AI가 기기 구성을 분석하고 필요한 계산 순서를 자동으로 생성합니다.
+          형식에 맞는 분석기로 기기·연결 후보를 추출하고, 확인이 필요한 계산 항목과 HOLD 근거를 정리합니다.
         </p>
 
         {/* 분석 모드 탭 — DXF/PDF는 DRAWING_PARSER 플래그 없으면 비활성 */}
@@ -476,7 +474,7 @@ export default function SLDAnalysisPage() {
               disabled={!tab.enabled}
               onClick={() => {
                 if (!tab.enabled) {
-                  setError(`${tab.label}은 DRAWING_PARSER 플래그가 꺼져 있습니다 (기본 OFF).`);
+                  setError(`${tab.label}은 DRAWING_PARSER 플래그가 꺼져 있습니다.`);
                   return;
                 }
                 setActiveTab(tab.id);
@@ -511,13 +509,13 @@ export default function SLDAnalysisPage() {
         <>
           {preview ? (
             <div className="relative mb-4">
-              <img src={preview} alt="단선도" className="w-full rounded-xl border border-[var(--border-default)] object-contain" style={{ maxHeight: 500 }} />
-              <button onClick={handleReset} aria-label="도면 삭제" className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80">
+              <Image src={preview} alt="단선도" width={1400} height={900} unoptimized className="w-full rounded-xl border border-[var(--border-default)] object-contain" style={{ maxHeight: 500 }} />
+              <button type="button" onClick={handleReset} aria-label="도면 삭제" className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80">
                 <X size={16} />
               </button>
             </div>
           ) : (
-            <button onClick={() => fileInputRef.current?.click()}
+            <button type="button" onClick={() => fileInputRef.current?.click()}
               aria-label="단선도 이미지 업로드"
               className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
               <Upload size={28} />
@@ -534,7 +532,7 @@ export default function SLDAnalysisPage() {
 
       {activeTab === 'dxf' && (
         <>
-          <button onClick={() => dxfInputRef.current?.click()}
+          <button type="button" onClick={() => dxfInputRef.current?.click()}
             className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
             <Upload size={28} />
             <div className="text-center">
@@ -549,7 +547,7 @@ export default function SLDAnalysisPage() {
 
       {activeTab === 'pdf' && (
         <>
-          <button onClick={() => pdfInputRef.current?.click()}
+          <button type="button" onClick={() => pdfInputRef.current?.click()}
             className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
             <Upload size={28} />
             <div className="text-center">
@@ -565,6 +563,7 @@ export default function SLDAnalysisPage() {
       {/* Analyze button */}
       {imageFile && !analysis && (
         <button
+          type="button"
           onClick={handleAnalyze}
           disabled={loading}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
@@ -607,6 +606,7 @@ export default function SLDAnalysisPage() {
             </h2>
             <div className="flex items-center gap-2">
               <button
+                type="button"
                 onClick={handleTeamReview}
                 disabled={reviewLoading || !drawingFile}
                 className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
@@ -614,16 +614,17 @@ export default function SLDAnalysisPage() {
                 {reviewLoading ? (
                   <>
                     <Loader2 size={12} className="animate-spin" />
-                    4팀 검증 중… (수십 초)
+                    전문팀 검증 중… (수십 초)
                   </>
                 ) : (
                   <>
                     <GitBranch size={12} />
-                    정밀 검증 (4팀 리뷰)
+                    정밀 검증 (3개 전문팀 + 합의)
                   </>
                 )}
               </button>
               <button
+                type="button"
                 onClick={handleReset}
                 className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
               >

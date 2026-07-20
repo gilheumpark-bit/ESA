@@ -17,6 +17,15 @@ import { parseSafetyIntent } from '@/lib/safety-intent-parser';
 import { analyzeSafety } from '@/engine/safety/confined-space';
 import { generateSafetySchedule, calcDeadManConfig } from '@/lib/safety-scheduler';
 import type { SafetyAnalysisResult, SafetySchedule } from '@/engine/safety/types';
+import {
+  CalendarClock,
+  Check,
+  CircleCheckBig,
+  ChevronLeft,
+  Gauge,
+  HardHat,
+  Siren,
+} from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
@@ -38,7 +47,7 @@ function SchedulePanel({ schedule }: { schedule: SafetySchedule }) {
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
       <h3 className="font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
-        <span>📅</span> 자동 안전 스케줄
+        <CalendarClock size={18} aria-hidden="true" /> 안전 점검 일정
         <span className="text-xs font-normal text-[var(--color-text-muted)]">
           (데드맨 체크인 {schedule.deadManIntervalMinutes}분 간격)
         </span>
@@ -85,10 +94,11 @@ export default function FieldSafetyPage() {
   const [step, setStep] = useState<PageStep>('input');
   const [analysis, setAnalysis] = useState<SafetyAnalysisResult | null>(null);
   const [schedule, setSchedule] = useState<SafetySchedule | null>(null);
-  const [sessionId] = useState(() => `field-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const [sessionId, setSessionId] = useState('');
   const [sosLog, setSosLog] = useState<number[]>([]);
-  const [, setIsDone] = useState(false);
   const [doneMsg, setDoneMsg] = useState('');
+  const [operationError, setOperationError] = useState('');
+  const [sosDelivery, setSosDelivery] = useState('');
   // 체크리스트에서 실제로 이행한 항목 id. 완료 영수증의 이행률 근거가 된다.
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
 
@@ -97,6 +107,10 @@ export default function FieldSafetyPage() {
     const intent = parseSafetyIntent(query);
     const result = analyzeSafety(intent);
     const sched = generateSafetySchedule(intent);
+    setSessionId(`field-${Date.now()}-${crypto.randomUUID()}`);
+    setOperationError('');
+    setSosDelivery('');
+    setSosLog([]);
     setAnalysis(result);
     setSchedule(sched);
     setStep('checklist');
@@ -108,42 +122,61 @@ export default function FieldSafetyPage() {
 
   const handleSos = useCallback((ts: number) => {
     setSosLog(prev => [...prev, ts]);
-    // SOS → 인앱 알림+서버 로그만. SMS/전화/이메일 발송 없음 (정직 라벨).
-    void fetch('/api/field/sos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId,
-        workSite: analysis?.intent.location?.ko ?? '현장',
-        sosTimestamp: ts,
-        workers: analysis?.intent.workers ?? 0,
-      }),
-    }).catch(err => console.error('[ESVA SOS] 전송 실패:', err));
+    setSosDelivery('SOS 기록을 서버에 전송하는 중입니다.');
+    void (async () => {
+      try {
+        const { getIdToken } = await import('@/lib/firebase');
+        const token = await getIdToken();
+        if (!token) throw new Error('SOS 기록에는 로그인이 필요합니다. 비상 연락망으로 직접 연락하세요.');
+        const response = await fetch('/api/field/sos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            sessionId,
+            workSite: analysis?.intent.location?.ko ?? '현장',
+            sosTimestamp: ts,
+            workers: analysis?.intent.workers ?? 0,
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error?.message ?? 'SOS 기록 전송에 실패했습니다.');
+        setSosDelivery(result.data?.message ?? 'SOS 기록이 저장되었습니다.');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'SOS 기록 전송에 실패했습니다.';
+        setSosDelivery(`${message} 화면 경보만 발동된 상태입니다.`);
+        console.error('[ESVA SOS] 전송 실패:', message);
+      }
+    })();
   }, [sessionId, analysis]);
 
   const handleWorkComplete = async () => {
     if (!analysis) return;
+    setOperationError('');
     try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      if (!token) throw new Error('작업 완료 기록에는 로그인이 필요합니다.');
       const res = await fetch('/api/field/complete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           sessionId,
           workSite: analysis.intent.location?.ko ?? '현장',
           workerCount: analysis.intent.workers ?? 0,
-          supervisorIds: [],
           checklistDone: checkedIds,
           checklistTotal: analysis.checkItems.length,
           completedAt: new Date().toISOString(),
         }),
       });
       const data = await res.json();
-      setDoneMsg(data.data?.receipt?.hash ? `영수증 해시: ${(data.data.receipt.hash as string).slice(0, 16)}…` : '완료 처리됨');
-      setIsDone(true);
+      if (!res.ok) throw new Error(data.error?.message ?? '작업 완료 기록 저장에 실패했습니다.');
+      const hashText = data.data?.receipt?.hash
+        ? `기록 해시: ${(data.data.receipt.hash as string).slice(0, 16)}…`
+        : '작업 완료 기록이 저장되었습니다.';
+      setDoneMsg(`${data.data?.message ?? '작업 완료 기록이 저장되었습니다.'} ${hashText}`);
       setStep('done');
-    } catch {
-      setDoneMsg('완료 처리 중 오류 발생. 수동으로 기록해주세요.');
-      setStep('done');
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : '완료 처리 중 오류가 발생했습니다. 수동으로 기록해 주세요.');
     }
   };
 
@@ -160,16 +193,17 @@ export default function FieldSafetyPage() {
   if (step === 'done') {
     return (
       <div className="max-w-xl mx-auto px-4 py-16 text-center">
-        <div className="text-6xl mb-6">✅</div>
+        <CircleCheckBig size={56} className="mx-auto mb-6 text-green-600" aria-hidden="true" />
         <h1 className="text-2xl font-bold text-[var(--color-text-primary)] mb-2">작업 완료</h1>
-        <p className="text-[var(--color-text-secondary)] mb-4">전원 이상 없음 및 작업 종료 — 앱에 기록되었습니다. 관리자 통보는 직접 확인해주세요.</p>
+        <p className="text-[var(--color-text-secondary)] mb-4">작업 종료가 앱에 기록되었습니다. 실제 전원·현장 이상 유무와 관리자 통보는 직접 확인하세요.</p>
         {doneMsg && (
           <p className="text-xs font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 text-[var(--color-text-muted)] mb-6">
             {doneMsg}
           </p>
         )}
         <button
-          onClick={() => { setStep('input'); setQuery(''); setAnalysis(null); setSchedule(null); setIsDone(false); }}
+          type="button"
+          onClick={() => { setStep('input'); setQuery(''); setAnalysis(null); setSchedule(null); setDoneMsg(''); setOperationError(''); }}
           className="px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white font-semibold hover:bg-[var(--color-primary-hover)] transition-all"
         >
           새 작업 시작
@@ -183,7 +217,7 @@ export default function FieldSafetyPage() {
       {/* 헤더 */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
-          <span>⚡</span> 현장 안전관리
+          <HardHat size={24} aria-hidden="true" /> 현장 안전 체크
         </h1>
         <p className="text-sm text-[var(--color-text-secondary)] mt-1">
           작업 정보를 자연어로 입력하면 산안법/KEC 기반 체크리스트와 안전 스케줄을 자동 생성합니다.
@@ -215,6 +249,7 @@ export default function FieldSafetyPage() {
             <div className="space-y-2">
               {EXAMPLE_QUERIES.map(ex => (
                 <button
+                  type="button"
                   key={ex}
                   onClick={() => handleExampleClick(ex)}
                   className="w-full text-left text-xs px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)] transition-colors truncate"
@@ -226,6 +261,7 @@ export default function FieldSafetyPage() {
           </div>
 
           <button
+            type="button"
             onClick={handleAnalyze}
             disabled={!query.trim()}
             className="w-full py-3.5 rounded-xl font-semibold text-sm bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all active:scale-95"
@@ -246,10 +282,11 @@ export default function FieldSafetyPage() {
               {analysis.intent.hours ? `, ${analysis.intent.hours.start}~${analysis.intent.hours.end}` : ''}
             </div>
             <button
+              type="button"
               onClick={() => { setStep('input'); setAnalysis(null); setSchedule(null); }}
-              className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+              className="inline-flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
             >
-              ← 다시 입력
+              <ChevronLeft size={14} aria-hidden="true" /> 다시 입력
             </button>
           </div>
 
@@ -261,10 +298,11 @@ export default function FieldSafetyPage() {
 
           {/* 모니터링 시작 */}
           <button
+            type="button"
             onClick={() => setStep('monitor')}
             className="w-full py-3.5 rounded-xl font-semibold text-sm bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white transition-all active:scale-95"
           >
-            작업 시작 → 모니터링 켜기
+            작업 시작 · 체크 타이머 열기
           </button>
         </div>
       )}
@@ -276,15 +314,16 @@ export default function FieldSafetyPage() {
             role="status"
             className="rounded-lg border border-amber-400/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-100"
           >
-            SOS는 앱 알림·서버 로그만 기록합니다. SMS·전화·이메일 자동 통보는 없습니다. 비상 시 관리자에게 직접 연락하세요.
+            SOS는 로그인된 사건 기록으로 저장되며, 서버에 수신자 UID가 설정된 경우에만 인앱 알림을 보냅니다. SMS·전화·이메일 자동 통보는 없습니다.
           </div>
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-[var(--color-text-primary)]">실시간 안전 모니터링</h2>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">현장 체크 타이머</h2>
             <button
+              type="button"
               onClick={() => setStep('checklist')}
-              className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+              className="inline-flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
             >
-              ← 체크리스트
+              <ChevronLeft size={14} aria-hidden="true" /> 체크리스트
             </button>
           </div>
 
@@ -298,12 +337,13 @@ export default function FieldSafetyPage() {
           {/* SOS 이력 */}
           {sosLog.length > 0 && (
             <div className="rounded-xl border border-red-700/60 bg-red-950/20 p-4">
-              <p className="text-sm font-semibold text-red-400 mb-2">⚠️ SOS 발동 이력</p>
+              <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-red-400"><Siren size={16} aria-hidden="true" /> SOS 표시 이력</p>
               {sosLog.map((ts, i) => (
                 <p key={i} className="text-xs font-mono text-red-300">
                   {i + 1}회: {new Date(ts).toLocaleTimeString('ko-KR')}
                 </p>
               ))}
+              {sosDelivery && <p role="status" className="mt-2 text-xs text-red-200">{sosDelivery}</p>}
             </div>
           )}
 
@@ -313,12 +353,15 @@ export default function FieldSafetyPage() {
               <p className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2">오늘의 점검 일정</p>
               <div className="flex flex-wrap gap-2">
                 {schedule.checkpoints.map((cp, i) => (
-                  <span key={i} className={`text-xs px-2 py-1 rounded-lg border ${
+                  <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg border ${
                     cp.isGasMeasurement
                       ? 'border-orange-700/50 bg-orange-950/20 text-orange-300'
                       : 'border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]'
                   }`}>
-                    {cp.time} {cp.isGasMeasurement ? '⛽' : '✓'}
+                    {cp.isGasMeasurement
+                      ? <Gauge size={12} aria-label="가스 측정" />
+                      : <Check size={12} aria-label="일반 점검" />}
+                    {cp.time}
                   </span>
                 ))}
               </div>
@@ -327,11 +370,17 @@ export default function FieldSafetyPage() {
 
           {/* 작업 완료 버튼 */}
           <button
+            type="button"
             onClick={handleWorkComplete}
             className="w-full py-4 rounded-xl font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition-all active:scale-95"
           >
-            🏁 퇴근 완료 — 관리자에게 알림 발송
+            작업 완료 기록 저장
           </button>
+          {operationError && (
+            <p role="alert" className="rounded-lg border border-red-400 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/30 dark:text-red-200">
+              {operationError}
+            </p>
+          )}
         </div>
       )}
     </div>

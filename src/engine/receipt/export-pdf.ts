@@ -185,7 +185,7 @@ export function buildExcelData(receipt: Receipt): ExcelReceiptData {
     { key: 'Difficulty', value: receipt.difficultyLevel },
     { key: 'Calculated At', value: receipt.calculatedAt },
     { key: 'Engine Version', value: receipt.engineVersion },
-    { key: 'Standard Current', value: receipt.isStandardCurrent ? 'Yes' : 'No' },
+    { key: 'Standard Currency', value: receipt.isStandardCurrent ? 'Verified current' : 'Unverified' },
     { key: 'Receipt Hash', value: receipt.receiptHash },
     { key: 'Disclaimer Version', value: receipt.disclaimerVersion },
   ];

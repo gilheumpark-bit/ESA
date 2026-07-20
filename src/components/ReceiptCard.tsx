@@ -188,7 +188,7 @@ function CompactCard({ receipt, className }: { receipt: Receipt; className: stri
       <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-tertiary)]">
         <span className="flex items-center gap-1">
           <Shield size={12} />
-          {receipt.isStandardCurrent ? '현행' : '구판'}
+          {receipt.isStandardCurrent ? '현행 확인됨' : '현행 미확인'}
         </span>
         <span className="flex items-center gap-1">
           <Hash size={12} />
@@ -355,9 +355,9 @@ function FullCard({ receipt, className }: { receipt: Receipt; className: string 
         <span>
           기준 상태:{' '}
           {receipt.isStandardCurrent ? (
-            <span className="text-emerald-600">현행</span>
+            <span className="text-emerald-600">현행 확인됨</span>
           ) : (
-            <span className="text-amber-600">구판</span>
+            <span className="text-amber-600">현행 미확인</span>
           )}
         </span>
         {receipt.standardVerifiedAt && (

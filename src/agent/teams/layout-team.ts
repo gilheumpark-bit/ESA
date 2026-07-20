@@ -19,7 +19,7 @@ import type {
   ViolationEntry,
   RecommendationEntry,
 } from './types';
-import { splitAndAnalyze } from '../vision/vision-splitter';
+import { mergeVisionSplitResults, splitAndAnalyze } from '../vision/vision-splitter';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Floor Plan Parsing
@@ -56,10 +56,38 @@ interface WiringSegment {
   from: string;
   to: string;
   method: 'conduit' | 'cable_tray' | 'exposed' | 'underground';
-  length: number;           // meters
-  cableCount: number;
+  length?: number;          // metres; explicit evidence or scaled geometry only
+  lengthSource?: 'drawing_geometry' | 'explicit_annotation' | 'scaled_estimate';
+  cableCount?: number;
   cableSpec?: string;       // "HIV 2.5sq × 3C"
-  conduitSize?: number;     // mm
+}
+
+interface LayoutExtraction {
+  elements: LayoutElement[];
+  segments: WiringSegment[];
+  confidence: number;
+  coordinateScaleM?: number;
+  scaleSource?: string;
+}
+
+function positiveScale(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1_000
+    ? value
+    : undefined;
+}
+
+const DXF_UNIT_SCALE_M: Partial<Record<number, number>> = {
+  1: 0.0254, // inch
+  2: 0.3048, // foot
+  4: 0.001,  // millimetre
+  5: 0.01,   // centimetre
+  6: 1,      // metre
+  10: 0.9144,// yard
+};
+
+function dxfHeaderScale(text: string): number | undefined {
+  const match = text.match(/\$INSUNITS\s*\r?\n\s*70\s*\r?\n\s*(\d+)/);
+  return match ? DXF_UNIT_SCALE_M[Number(match[1])] : undefined;
 }
 
 /**
@@ -69,29 +97,37 @@ interface WiringSegment {
  */
 async function extractLayoutElements(
   input: TeamInput,
-): Promise<{ elements: LayoutElement[]; segments: WiringSegment[]; confidence: number }> {
+): Promise<LayoutExtraction> {
   const { classification, fileBuffer } = input;
 
   if (classification === 'layout_dxf' && fileBuffer) {
-    return parseDxfLayout(fileBuffer);
+    return parseDxfLayout(fileBuffer, input.params);
   }
 
   if (classification === 'layout_image' && fileBuffer) {
-    return parseImageLayout(fileBuffer);
+    return parseImageLayout(fileBuffer, input);
   }
 
   if (classification === 'layout_pdf' && fileBuffer) {
-    return parsePdfLayout(fileBuffer);
+    return parsePdfLayout(fileBuffer, input.params);
   }
 
   return { elements: [], segments: [], confidence: 0 };
 }
 
 /** DXF 평면도 파싱 — 레이어별 요소 분류 */
-async function parseDxfLayout(buffer: ArrayBuffer) {
+async function parseDxfLayout(buffer: ArrayBuffer, params?: Record<string, unknown>): Promise<LayoutExtraction> {
   const text = new TextDecoder().decode(buffer);
   const elements: LayoutElement[] = [];
   const segments: WiringSegment[] = [];
+  const callerScale = positiveScale(params?.unitScale);
+  const headerScale = dxfHeaderScale(text);
+  const coordinateScaleM = callerScale ?? headerScale;
+  const scaleSource = callerScale
+    ? '요청 unitScale'
+    : headerScale
+      ? 'DXF $INSUNITS'
+      : undefined;
 
   // DXF 레이어 → 요소 타입 매핑
   const LAYER_MAP: Record<string, LayoutElementType> = {
@@ -145,66 +181,77 @@ async function parseDxfLayout(buffer: ArrayBuffer) {
     const y1 = parseFloat(lineMatch[3]);
     const x2 = parseFloat(lineMatch[4]);
     const y2 = parseFloat(lineMatch[5]);
-    const length = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2) * 0.001; // mm → m
+    const coordinateLength = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
 
     segments.push({
       from: `pt-${Math.round(x1)}-${Math.round(y1)}`,
       to: `pt-${Math.round(x2)}-${Math.round(y2)}`,
       method: layer.includes('TRAY') ? 'cable_tray' : 'conduit',
-      length,
-      cableCount: 1,
+      ...(coordinateScaleM
+        ? { length: coordinateLength * coordinateScaleM, lengthSource: 'drawing_geometry' as const }
+        : {}),
     });
   }
 
-  return { elements, segments, confidence: 0.90 };
+  return {
+    elements,
+    segments,
+    confidence: elements.length > 0 ? 0.65 : 0,
+    coordinateScaleM,
+    scaleSource,
+  };
 }
 
 /** 이미지 평면도 파싱 — VRAM 분할 병렬 비전 */
-async function parseImageLayout(buffer: ArrayBuffer) {
+async function parseImageLayout(buffer: ArrayBuffer, input: TeamInput): Promise<LayoutExtraction> {
+  const provider = input.vision?.provider
+    ?? (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? 'gemini'
+      : process.env.OPENAI_API_KEY ? 'openai'
+        : process.env.ANTHROPIC_API_KEY ? 'claude'
+          : 'gemini');
   const visionResults = await splitAndAnalyze(buffer, {
     gridSize: 8,      // 8분할 (높은 해상도 평면도)
     overlap: 0.15,
-    model: 'gemini',
+    model: provider,
+    modelName: input.vision?.model,
+    apiKey: input.vision?.apiKey,
   });
+  const merged = mergeVisionSplitResults(visionResults);
 
-  const elements: LayoutElement[] = [];
-  const segments: WiringSegment[] = [];
-  let idx = 0;
+  const elements: LayoutElement[] = merged.components.map(c => ({
+    id: c.id,
+    type: mapToLayoutType(c.type),
+    label: c.label || c.type,
+    position: c.position ?? { x: 0, y: 0 },
+    rating: c.rating,
+  }));
+  const segments: WiringSegment[] = merged.connections.map(conn => ({
+    from: conn.from,
+    to: conn.to,
+    method: 'conduit',
+    ...(typeof conn.length === 'number' && Number.isFinite(conn.length) && conn.length > 0
+      ? { length: conn.length, lengthSource: 'explicit_annotation' as const }
+      : {}),
+    ...(conn.cableType ? { cableSpec: conn.cableType } : {}),
+  }));
+  const coordinateScaleM = positiveScale(input.params?.metersPerCoordinateUnit);
 
-  for (const vr of visionResults) {
-    for (const c of vr.components) {
-      elements.push({
-        id: `layout-${idx++}`,
-        type: mapToLayoutType(c.type),
-        label: c.label || c.type,
-        position: c.position ?? { x: 0, y: 0 },
-        rating: c.rating,
-      });
-    }
-    for (const conn of vr.connections) {
-      segments.push({
-        from: conn.from,
-        to: conn.to,
-        method: 'conduit',
-        length: conn.length ?? 5,
-        cableCount: 1,
-      });
-    }
-  }
-
-  const avgConf = visionResults.length > 0
-    ? visionResults.reduce((s, r) => s + r.regionConfidence, 0) / visionResults.length
-    : 0;
-
-  return { elements, segments, confidence: avgConf };
+  return {
+    elements,
+    segments,
+    confidence: merged.confidence,
+    coordinateScaleM,
+    scaleSource: coordinateScaleM ? '요청 metersPerCoordinateUnit' : undefined,
+  };
 }
 
 /** PDF 평면도 파싱 */
-async function parsePdfLayout(buffer: ArrayBuffer) {
+async function parsePdfLayout(buffer: ArrayBuffer, params?: Record<string, unknown>): Promise<LayoutExtraction> {
   // PDF 벡터 추출 후 레이아웃 요소 분류
   const { parsePdfToSLD } = await import('@/engine/topology/pdf-vector-parser');
   const bytes = new Uint8Array(buffer);
-  const analysis = await parsePdfToSLD(bytes.buffer as ArrayBuffer, { pageNumber: 1 });
+  const pageNumber = typeof params?.pageNumber === 'number' ? params.pageNumber : 1;
+  const analysis = await parsePdfToSLD(bytes.buffer as ArrayBuffer, { pageNumber });
 
   const elements: LayoutElement[] = (analysis.components ?? []).map((c, i) => ({
     id: `layout-${i}`,
@@ -213,7 +260,14 @@ async function parsePdfLayout(buffer: ArrayBuffer) {
     position: c.position ?? { x: 0, y: 0 },
   }));
 
-  return { elements, segments: [], confidence: 0.75 };
+  const coordinateScaleM = positiveScale(params?.metersPerCoordinateUnit);
+  return {
+    elements,
+    segments: [],
+    confidence: analysis.confidence ?? (elements.length > 0 ? 0.6 : 0),
+    coordinateScaleM,
+    scaleSource: coordinateScaleM ? '요청 metersPerCoordinateUnit' : undefined,
+  };
 }
 
 function mapToLayoutType(raw: string): LayoutElementType {
@@ -238,17 +292,24 @@ function mapToLayoutType(raw: string): LayoutElementType {
 function computeWiringRoutes(
   elements: LayoutElement[],
   segments: WiringSegment[],
+  coordinateScaleM?: number,
 ): WiringSegment[] {
   const panels = elements.filter(e => e.type === 'panel');
   const loads = elements.filter(e =>
     ['outlet', 'light', 'motor', 'hvac', 'ev_charger'].includes(e.type)
   );
 
-  if (panels.length === 0 || loads.length === 0) return segments;
+  if (panels.length === 0 || loads.length === 0 || !coordinateScaleM) return segments;
 
   const routes: WiringSegment[] = [...segments];
 
   for (const load of loads) {
+    const alreadyConnected = routes.some(route =>
+      (route.from === load.id && panels.some(panel => panel.id === route.to)) ||
+      (route.to === load.id && panels.some(panel => panel.id === route.from))
+    );
+    if (alreadyConnected) continue;
+
     // 가장 가까운 분전반 찾기 (유클리드 거리)
     let nearestPanel = panels[0];
     let minDist = Infinity;
@@ -268,16 +329,14 @@ function computeWiringRoutes(
     const manhattanDist =
       Math.abs(nearestPanel.position.x - load.position.x) +
       Math.abs(nearestPanel.position.y - load.position.y);
-    const routeLength = manhattanDist * LAYOUT_CONFIG.mmToM * LAYOUT_CONFIG.routeMarginFactor;
-    const cableInfo = CABLE_BY_LOAD_TYPE[load.type] ?? CABLE_BY_LOAD_TYPE.default;
+    const routeLength = manhattanDist * coordinateScaleM;
 
     routes.push({
       from: nearestPanel.id,
       to: load.id,
       method: 'conduit',
       length: Math.round(routeLength * 100) / 100,
-      cableCount: cableInfo.conductorCount,
-      cableSpec: cableInfo.spec,
+      lengthSource: 'scaled_estimate',
     });
   }
 
@@ -293,55 +352,11 @@ function computeWiringRoutes(
  * 국가/표준별 변경 시 이 블록만 수정.
  */
 const LAYOUT_CONFIG = {
-  /** KEC 기준 전선관 충전율 (KEC 232.31) — 3본 이상: 40% */
-  conduitFillRate: 0.40,
-  /** 배선 경로 여유 배수 (직선 대비 실 배선 경로 증가분) */
-  routeMarginFactor: 1.15,
-  /** mm → m 변환 계수 */
-  mmToM: 0.001,
   /** 전압강하 경고 거리 (m) */
   vdWarningDistance: 50,
   /** 케이블트레이 권장 거리 (m) */
   trayRecommendDistance: 30,
 } as const;
-
-/** 컴포넌트 타입별 기본 케이블 사양 — 하드코딩 제거 */
-const CABLE_BY_LOAD_TYPE: Record<string, { spec: string; conductorCount: number }> = {
-  motor: { spec: 'HIV 6sq × 4C', conductorCount: 4 },
-  light: { spec: 'HIV 2.5sq × 3C', conductorCount: 3 },
-  outlet: { spec: 'HIV 2.5sq × 3C', conductorCount: 3 },
-  panel: { spec: 'XLPE 25sq × 3C', conductorCount: 3 },
-  contactor: { spec: 'HIV 4sq × 4C', conductorCount: 4 },
-  ev_charger: { spec: 'XLPE 10sq × 4C', conductorCount: 4 },
-  default: { spec: 'HIV 2.5sq × 3C', conductorCount: 3 },
-};
-
-/** 케이블 외경 테이블 (mm) — KEC/IEC 60228 */
-const CABLE_OD: Record<string, number> = {
-  'HIV 1.5sq': 3.8, 'HIV 2.5sq': 4.5, 'HIV 4sq': 5.3,
-  'HIV 6sq': 6.2, 'HIV 10sq': 7.8, 'HIV 16sq': 9.2,
-  'HIV 25sq': 11.0, 'HIV 35sq': 12.6, 'HIV 50sq': 14.6,
-  'HIV 70sq': 17.0, 'HIV 95sq': 19.5, 'HIV 120sq': 21.6,
-  'XLPE 6sq': 10.2, 'XLPE 10sq': 11.5, 'XLPE 16sq': 12.8,
-  'XLPE 25sq': 14.5, 'XLPE 35sq': 16.2, 'XLPE 50sq': 18.0,
-  'XLPE 70sq': 20.5, 'XLPE 95sq': 23.0, 'XLPE 120sq': 25.5,
-  'XLPE 150sq': 28.2, 'XLPE 185sq': 31.0, 'XLPE 240sq': 35.0,
-};
-
-/** 표준 전선관 규격 (mm 내경) — KEC/IEC 61386 */
-const STANDARD_CONDUIT_SIZES = [16, 22, 28, 36, 42, 54, 70, 82, 92, 104, 130, 156];
-
-function calculateConduitSize(cableSpec: string, cableCount: number): number {
-  const baseName = cableSpec.replace(/\s*×\s*\d+C/, '').trim();
-  const od = CABLE_OD[baseName] ?? 5.0;
-  const totalArea = cableCount * Math.PI * (od / 2) ** 2;
-  const requiredArea = totalArea / LAYOUT_CONFIG.conduitFillRate;
-  const requiredDiameter = Math.sqrt(requiredArea * 4 / Math.PI);
-
-  // 표준 규격 중 최소 만족 크기
-  return STANDARD_CONDUIT_SIZES.find(s => s >= requiredDiameter)
-    ?? STANDARD_CONDUIT_SIZES[STANDARD_CONDUIT_SIZES.length - 1];
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 4 — Team Result Assembly
@@ -352,7 +367,13 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
 
   try {
     // Step 1: 평면도 요소 추출
-    const { elements, segments, confidence } = await extractLayoutElements(input);
+    const {
+      elements,
+      segments,
+      confidence,
+      coordinateScaleM,
+      scaleSource,
+    } = await extractLayoutElements(input);
 
     if (elements.length === 0) {
       return {
@@ -365,7 +386,7 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     }
 
     // Step 2: 배선 경로 계산
-    const routes = computeWiringRoutes(elements, segments);
+    const routes = computeWiringRoutes(elements, segments, coordinateScaleM);
 
     // Step 3: 전선관 계산 + 거리 산출
     const calculations: CalculationEntry[] = [];
@@ -374,33 +395,22 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     const recommendations: RecommendationEntry[] = [];
 
     let totalWiringLength = 0;
+    let measuredRouteCount = 0;
 
     for (const route of routes) {
-      totalWiringLength += route.length;
-
       if (route.cableSpec) {
-        const conduitSize = calculateConduitSize(route.cableSpec, route.cableCount);
-        route.conduitSize = conduitSize;
-
-        calculations.push({
-          id: `calc-conduit-${route.from}-${route.to}`,
-          calculatorId: 'conduit-sizing',
-          label: `${route.from} → ${route.to} 전선관`,
-          value: conduitSize,
-          unit: 'mm',
-          // 충전율·공인 표 대조 전 — 산출 수치만 제공, 적합 판정 금지
-          compliant: null,
-          note: '전선관 호칭 산출값 — 충전율·KEC 표 대조 전 HOLD. 현장 시공 규격 확인 필요.',
-          standardRef: 'KEC 232.31',
-        });
         standards.push({
           standard: 'KEC',
           clause: '232.31',
-          title: '전선관',
+          title: '전선관 산정 보류',
           judgment: 'HOLD',
-          note: `${route.from}→${route.to}: ${conduitSize}mm 산출, 충전율 미검증`,
+          note: `${route.from}→${route.to}: ${route.cableSpec} 표기는 추출했지만 제조사 외경·실제 본수·시공 조건이 없어 호칭을 산정하지 않음`,
         });
       }
+
+      if (typeof route.length !== 'number' || !Number.isFinite(route.length) || route.length <= 0) continue;
+      totalWiringLength += route.length;
+      measuredRouteCount++;
 
       // 50m는 권장 휴리스틱이지 강제 조항 판정이 아님 → HOLD + 권고만
       calculations.push({
@@ -410,21 +420,22 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
         value: route.length,
         unit: 'm',
         compliant: null,
-        note: route.length > 50
+        note: route.lengthSource === 'scaled_estimate'
+          ? '제공된 좌표 축척으로 계산한 직교 경로 추정값 — 실제 배선 경로와 현장 검측 필요.'
+          : route.length > LAYOUT_CONFIG.vdWarningDistance
           ? '권장 분기 거리 50m 초과 — 규정 PASS/FAIL 아님. 전압강하·중간 분전반 검토 권고.'
-          : '거리 산출값 — 전압강하 계산과 별도 확인.',
-        standardRef: 'KEC 232.52',
+          : route.lengthSource === 'explicit_annotation'
+            ? '도면 표기 길이를 비전 모델이 전사한 값 — 원도면 대조 필요.'
+            : '도면 좌표와 확인된 단위로 산출한 값 — 현장 경로와 별도 확인.',
       });
 
-      if (route.length > 50) {
-        violations.push({
-          id: `vio-dist-${route.from}-${route.to}`,
-          severity: 'major',
-          title: '배선 거리 과다 (권고)',
-          description: `${route.from} → ${route.to} 구간 ${route.length.toFixed(1)}m > 권장 50m (강제 조항 판정 아님)`,
-          location: `${route.from} → ${route.to}`,
-          standardRef: 'KEC 232.52',
-          suggestedFix: '중간 분전반 추가 또는 케이블 굵기 증가·전압강하 정밀 계산 검토',
+      if (route.length > LAYOUT_CONFIG.vdWarningDistance) {
+        recommendations.push({
+          id: `rec-dist-${route.from}-${route.to}`,
+          category: 'safety',
+          title: '장거리 분기 전압강하 검토',
+          description: `${route.from} → ${route.to} 구간 ${route.length.toFixed(1)}m. 강제 위반 판정이 아니라 전압강하·중간 분전반 검토가 필요한 권고 항목입니다.`,
+          impact: 'high',
         });
       }
     }
@@ -433,9 +444,11 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     standards.push({
       standard: 'KEC',
       clause: '232.31',
-      title: '전선관 선정',
-      judgment: violations.length === 0 ? 'PASS' : 'HOLD',
-      note: `총 ${routes.length}개 경로, 총 배선 길이 ${totalWiringLength.toFixed(1)}m`,
+      title: '배선 경로·전선관 검토',
+      judgment: 'HOLD',
+      note: routes.length === 0
+        ? `요소 ${elements.length}개를 인식했으나 연결 경로를 확인하지 못함${scaleSource ? ` · 좌표 단위: ${scaleSource}` : ' · 좌표 축척/단위 미확인'}`
+        : `경로 ${routes.length}개 중 길이 근거 ${measuredRouteCount}개${measuredRouteCount > 0 ? ` · 합계 ${totalWiringLength.toFixed(1)}m` : ''}${scaleSource ? ` · 좌표 단위: ${scaleSource}` : ' · 좌표 축척/단위 미확인'}`,
     });
 
     // 장거리 전선관 구간 안내
@@ -444,7 +457,10 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     // 항상 같은 숫자가 나갔고 출처도 계산 근거도 없었다. 자재 단가·시공 조건에
     // 따라 갈리는 값이라 여기서 추정하지 않는다 — 구간 사실만 제시하고
     // 비교 판단은 견적 단계로 넘긴다.
-    const longConduitRoutes = routes.filter(r => r.method === 'conduit' && r.length > 30);
+    const longConduitRoutes = routes.filter(
+      (r): r is WiringSegment & { length: number } =>
+        r.method === 'conduit' && typeof r.length === 'number' && r.length > LAYOUT_CONFIG.trayRecommendDistance,
+    );
     if (longConduitRoutes.length > 0) {
       const longest = Math.max(...longConduitRoutes.map(r => r.length));
       recommendations.push({
@@ -470,8 +486,8 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     const connections: ExtractedConnection[] = routes.map(r => ({
       from: r.from,
       to: r.to,
-      cableType: r.cableSpec,
-      length: r.length,
+      ...(r.cableSpec ? { cableType: r.cableSpec } : {}),
+      ...(typeof r.length === 'number' ? { length: r.length, unit: 'm' } : {}),
     }));
 
     return {

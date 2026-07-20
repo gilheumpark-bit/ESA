@@ -55,9 +55,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(firebaseUser);
           if (firebaseUser) {
             try {
-              const { getUserTier } = await import('@/lib/supabase');
-              const tier = await getUserTier(firebaseUser.uid);
-              setTier(tier);
+              const { getIdToken } = await import('@/lib/firebase');
+              const token = await getIdToken();
+              const response = token
+                ? await fetch('/api/account/tier', {
+                    headers: { Authorization: `Bearer ${token}` },
+                    cache: 'no-store',
+                  })
+                : null;
+              const body = response?.ok
+                ? await response.json() as { data?: { tier?: UserTier } }
+                : null;
+              setTier(body?.data?.tier ?? 'free');
             } catch {
               setTier('free');
             }
@@ -68,12 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       } catch (err) {
         // Firebase not configured — run in anonymous mode
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[ESVA Auth] 초기화 실패:', err instanceof Error ? err.name : 'UnknownError');
+        }
         setUser(null);
         setTier('free');
         setLoading(false);
-        setError(
-          err instanceof Error ? err.message : 'Auth initialization failed',
-        );
+        setError('로그인 서비스를 사용할 수 없습니다. 배포 관리자에게 인증 구성을 확인해 주세요.');
       }
     }
 
@@ -88,7 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const esaUser = await signInWithGoogle();
       setUser(esaUser);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed');
+      console.warn('[ESVA Auth] 로그인 실패:', err instanceof Error ? err.name : 'UnknownError');
+      setError('로그인에 실패했습니다. 잠시 후 다시 시도하거나 배포 관리자에게 문의해 주세요.');
     }
   }, []);
 
@@ -100,7 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       setTier('free');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-out failed');
+      console.warn('[ESVA Auth] 로그아웃 실패:', err instanceof Error ? err.name : 'UnknownError');
+      setError('로그아웃을 완료하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
     }
   }, []);
 

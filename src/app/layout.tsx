@@ -25,7 +25,7 @@ const fontVariables: CSSProperties & Record<`--${string}`, string> = {
 
 export const metadata: Metadata = {
   title: 'ESVA - The Engineer\'s Search Engine',
-  description: '전기 엔지니어링 특화 글로벌 AI 플랫폼. 할루시네이션 없는 출처 기반 답변 + 영수증 계산기 + BYOK.',
+  description: '전기 엔지니어링 특화 AI 플랫폼. 출처와 검증 상태를 표시하는 검색 + 영수증 계산기 + BYOK.',
   keywords: ['전기', 'electrical', 'KEC', 'NEC', 'IEC', '계산기', 'calculator', 'AI', 'search'],
   openGraph: {
     title: 'ESVA - The Engineer\'s Search Engine',
@@ -62,8 +62,10 @@ export default async function RootLayout({
 
   return (
     <html lang={lang} suppressHydrationWarning style={fontVariables}>
-      <body className="min-h-screen bg-[var(--bg-primary)] font-[family-name:var(--font-sans)] text-[var(--text-primary)] antialiased">
+      <head>
         <ThemeInitScript />
+      </head>
+      <body className="min-h-screen bg-[var(--bg-primary)] font-[family-name:var(--font-sans)] text-[var(--text-primary)] antialiased">
         <SkipLink />
         <Providers>{children}</Providers>
       </body>

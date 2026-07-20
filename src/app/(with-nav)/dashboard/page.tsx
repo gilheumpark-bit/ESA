@@ -33,7 +33,7 @@ const GlobalCompareChart = dynamic(() => import('@/components/charts/GlobalCompa
 import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 1 — Data Hooks (Mock data for MVP, production → Supabase)
+// PART 1 — Data Hooks
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface RecentCalc {
@@ -52,17 +52,26 @@ interface StandardUpdate {
   link?: string;
 }
 
-function useDashboardData() {
+function useDashboardData(authenticated: boolean, authLoading: boolean) {
   const [calcUsage, setCalcUsage] = useState<CalcUsageData[]>([]);
   const [totalCalcs, setTotalCalcs] = useState(0);
   const [recentCalcs, setRecentCalcs] = useState<RecentCalc[]>([]);
   const [standardUpdates, setStandardUpdates] = useState<StandardUpdate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
 
     async function fetchDashboard() {
+      if (!authenticated) {
+        setError('로그인이 필요합니다.');
+        setLoading(false);
+        return;
+      }
+
       try {
         // Get auth token for API call
         const { getIdToken } = await import('@/lib/firebase');
@@ -73,7 +82,9 @@ function useDashboardData() {
         }
 
         const res = await fetch('/api/dashboard', { headers });
-        if (!res.ok) throw new Error(`Dashboard API returned ${res.status}`);
+        if (!res.ok) {
+          throw new Error(res.status === 401 ? '로그인이 필요합니다.' : '대시보드 데이터를 불러올 수 없습니다.');
+        }
 
         const json = await res.json();
         if (cancelled) return;
@@ -86,13 +97,9 @@ function useDashboardData() {
           setStandardUpdates(d.standardUpdates ?? []);
         }
       } catch (err) {
-        console.warn('[ESVA Dashboard] Fetch failed, using empty state:', err);
-        // On error: leave empty arrays (graceful degradation)
+        console.warn('[ESVA Dashboard] Fetch failed:', err);
         if (!cancelled) {
-          setCalcUsage([]);
-          setTotalCalcs(0);
-          setRecentCalcs([]);
-          setStandardUpdates([]);
+          setError(err instanceof Error ? err.message : '대시보드 데이터를 불러올 수 없습니다.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -101,9 +108,9 @@ function useDashboardData() {
 
     fetchDashboard();
     return () => { cancelled = true; };
-  }, []);
+  }, [authenticated, authLoading]);
 
-  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading };
+  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -124,7 +131,13 @@ function CalcStatsSection({ data, total }: { data: CalcUsageData[]; total: numbe
           <span className="text-xs text-[var(--text-tertiary)]">이번 달</span>
         </div>
       </div>
-      <CalcUsageChart data={data} height={250} />
+      {data.length > 0 ? (
+        <CalcUsageChart data={data} height={250} />
+      ) : (
+        <p className="flex h-[250px] items-center justify-center text-sm text-[var(--text-tertiary)]">
+          최근 30일 계산 기록이 없습니다.
+        </p>
+      )}
     </div>
   );
 }
@@ -145,6 +158,7 @@ function RecentCalcsSection({ calcs }: { calcs: RecentCalc[] }) {
         </Link>
       </div>
       <div className="space-y-2">
+        {calcs.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-tertiary)]">최근 계산이 없습니다.</p>}
         {calcs.map(calc => (
           <Link
             key={calc.id}
@@ -178,6 +192,7 @@ function StandardUpdatesSection({ updates }: { updates: StandardUpdate[] }) {
         <h2 className="text-base font-semibold text-[var(--text-primary)]">규격 업데이트</h2>
       </div>
       <div className="space-y-3">
+        {updates.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-tertiary)]">도착한 규격 업데이트 알림이 없습니다.</p>}
         {updates.map(update => (
           <div
             key={update.id}
@@ -257,13 +272,25 @@ function formatDate(dateStr: string): string {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading } = useDashboardData();
+  const { user, loading: authLoading } = useAuth();
+  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error } = useDashboardData(Boolean(user), authLoading);
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
+      <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="대시보드 불러오는 중">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-20 text-center">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">대시보드를 열 수 없습니다</h1>
+        <p className="mt-2 text-sm text-[var(--color-error)]" role="alert">{error}</p>
+        <Link href={user ? '/dashboard' : '/login'} className="mt-5 inline-flex text-sm text-[var(--color-primary)] hover:underline">
+          {user ? '다시 시도' : '로그인하기'}
+        </Link>
       </div>
     );
   }

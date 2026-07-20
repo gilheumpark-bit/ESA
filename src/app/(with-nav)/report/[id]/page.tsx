@@ -13,44 +13,77 @@ import { Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import VerificationReport from '@/components/VerificationReport';
 import { CalcResultDashboard } from '@/components/CalcResultGauge';
-import DrawingOverlay from '@/components/DrawingOverlay';
 import type { ESVAVerifiedReport } from '@/agent/teams/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { verifyReportIntegrity } from '@/lib/report-integrity';
 
 export default function ReportPage() {
   const params = useParams();
   const reportId = params.id as string;
+  const { user, loading: authLoading } = useAuth();
   const [report, setReport] = useState<ESVAVerifiedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadReport();
-  }, [reportId]);
+    if (authLoading) return;
+    let cancelled = false;
 
-  async function loadReport() {
-    setLoading(true);
-    setError(null);
-    setReport(null);
+    async function loadReport() {
+      setLoading(true);
+      setError(null);
+      setReport(null);
 
-    try {
-      // 1) 세션 스토리지 (방금 생성된 실보고서)
-      const cached = sessionStorage.getItem(`esva-report-${reportId}`);
-      if (cached) {
-        setReport(JSON.parse(cached) as ESVAVerifiedReport);
-        setLoading(false);
-        return;
+      try {
+        // 1) 방금 생성한 세션 캐시도 해시를 재계산한 뒤 표시한다.
+        const storageKey = `esva-report-${reportId}`;
+        const cached = sessionStorage.getItem(storageKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as ESVAVerifiedReport;
+          if (await verifyReportIntegrity(parsed)) {
+            if (!cancelled) setReport(parsed);
+            return;
+          }
+          sessionStorage.removeItem(storageKey);
+        }
+
+        // 2) 로그인 사용자는 소유자 필터가 적용된 영속 API에서 다시 읽는다.
+        if (user) {
+          const { getIdToken } = await import('@/lib/firebase');
+          const token = await getIdToken();
+          if (token) {
+            const response = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: 'no-store',
+            });
+            if (response.ok) {
+              const body = await response.json() as { data?: ESVAVerifiedReport };
+              if (body.data && await verifyReportIntegrity(body.data)) {
+                sessionStorage.setItem(storageKey, JSON.stringify(body.data));
+                if (!cancelled) setReport(body.data);
+                return;
+              }
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setError(user
+            ? '소유한 보고서를 찾을 수 없거나 무결성 검증에 실패했습니다.'
+            : '이 세션에서 생성한 보고서를 찾을 수 없습니다. 로그인 후 생성한 보고서는 다른 세션에서도 다시 열 수 있습니다.');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '보고서를 불러올 수 없습니다.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-
-      // 2) 영속 API 미구현 — 데모 폴백 금지. 정직한 미발견 처리.
-      setError(
-        '보고서를 찾을 수 없습니다. 이 세션에서 생성한 검증 결과만 볼 수 있습니다. SLD·팀 검증을 다시 실행해 주세요.',
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '보고서를 불러올 수 없습니다.');
-    } finally {
-      setLoading(false);
     }
-  }
+
+    void loadReport();
+    return () => { cancelled = true; };
+  }, [authLoading, reportId, user]);
 
   async function handleExport(format: 'pdf' | 'excel') {
     if (!report) return;
@@ -59,6 +92,7 @@ export default function ReportPage() {
       const html = generatePDFResponse(report);
       const w = window.open('', '_blank');
       if (w) {
+        w.opener = null;
         w.document.write(html);
         w.document.close();
       }
@@ -162,15 +196,6 @@ export default function ReportPage() {
             계산 결과 시각화
           </h2>
           <CalcResultDashboard results={gaugeResults} />
-        </div>
-      )}
-
-      {report.markings.length > 0 && (
-        <div className="mx-auto mb-6 max-w-4xl">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-            도면 검증 마킹
-          </h2>
-          <DrawingOverlay markings={report.markings} width={800} height={400} />
         </div>
       )}
 

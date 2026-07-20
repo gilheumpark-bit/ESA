@@ -1,7 +1,7 @@
 /**
  * Orchestrator Integration Tests
  * --------------------------------
- * 4-Team 오케스트레이터 전체 플로우 검증.
+ * 3개 전문팀과 별도 합의 단계의 전체 플로우 검증.
  */
 
 import { classifyInput, routeToTeams } from '../teams/team-registry';
@@ -35,8 +35,12 @@ describe('Input Classification', () => {
     expect(classifyInput(undefined, undefined, 'KEC 232.52')).toBe('text_query');
   });
 
-  test('Text + file → mixed', () => {
-    expect(classifyInput(undefined, undefined, '전압강하 계산')).toBe('text_query');
+  test('a drawing that explicitly spans SLD and layout → mixed', () => {
+    expect(classifyInput(
+      'application/pdf',
+      'combined.pdf',
+      '계통도와 평면도 통합 검토',
+    )).toBe('mixed');
   });
 });
 
@@ -45,6 +49,7 @@ describe('Team Routing', () => {
     const routing = routeToTeams('sld_dxf');
     expect(routing.primaryTeam).toBe('TEAM-SLD');
     expect(routing.supportTeams).toContain('TEAM-STD');
+    expect(routing.supportTeams).not.toContain('TEAM-CONSENSUS');
     expect(routing.requiresConsensus).toBe(true);
   });
 
@@ -54,9 +59,10 @@ describe('Team Routing', () => {
     expect(routing.supportTeams).toContain('TEAM-STD');
   });
 
-  test('Text query → TEAM-STD primary, no consensus', () => {
+  test('Text query → TEAM-STD only, without a phantom consensus team', () => {
     const routing = routeToTeams('text_query');
     expect(routing.primaryTeam).toBe('TEAM-STD');
+    expect(routing.supportTeams).toEqual([]);
     expect(routing.requiresConsensus).toBe(false);
   });
 
@@ -65,6 +71,7 @@ describe('Team Routing', () => {
     expect(routing.primaryTeam).toBe('TEAM-STD');
     expect(routing.supportTeams).toContain('TEAM-SLD');
     expect(routing.supportTeams).toContain('TEAM-LAYOUT');
+    expect(routing.supportTeams).not.toContain('TEAM-CONSENSUS');
     expect(routing.requiresConsensus).toBe(true);
   });
 });

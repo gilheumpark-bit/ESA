@@ -163,7 +163,7 @@ export default function VerificationReport({ report, onExport }: Props) {
         onToggle={() => toggle('markings')}
       >
         <div className="space-y-2">
-          {markings
+          {[...markings]
             .sort((a, b) => {
               const order: MarkingSeverity[] = ['error', 'warning', 'info', 'success'];
               return order.indexOf(a.severity) - order.indexOf(b.severity);
@@ -209,6 +209,7 @@ export default function VerificationReport({ report, onExport }: Props) {
       {/* ═══ PART 6: Action Bar ═══ */}
       <div className="flex justify-center gap-3 pb-8">
         <button
+          type="button"
           onClick={() => onExport?.('pdf')}
           className="flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
         >
@@ -216,6 +217,7 @@ export default function VerificationReport({ report, onExport }: Props) {
           PDF 다운로드
         </button>
         <button
+          type="button"
           onClick={() => onExport?.('excel')}
           className="flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-6 py-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
@@ -271,6 +273,8 @@ function CollapsibleSection({
   return (
     <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] overflow-hidden">
       <button
+        type="button"
+        aria-expanded={expanded}
         onClick={onToggle}
         className="flex w-full items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-[var(--bg-secondary)]"
       >

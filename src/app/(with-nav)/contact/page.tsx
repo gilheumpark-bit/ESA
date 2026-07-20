@@ -9,6 +9,7 @@
 
 import { useState, FormEvent } from 'react';
 import { Mail, Send, Loader2, CheckCircle2 } from 'lucide-react';
+import Link from 'next/link';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Form State & Submission
@@ -36,6 +37,7 @@ const SUBJECT_OPTIONS = [
   '기능 제안',
   '계산기 오류 신고',
   '계정 관련',
+  '개인정보 문의',
   '기타',
 ];
 
@@ -60,13 +62,16 @@ export default function ContactPage() {
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/feedback', {
+      const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
 
-      if (!res.ok) throw new Error('전송에 실패했습니다');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error ?? '전송에 실패했습니다');
+      }
       setStatus('success');
       setForm(INITIAL_FORM);
     } catch (err) {
@@ -82,15 +87,15 @@ export default function ContactPage() {
           <CheckCircle2 size={48} className="mb-4 text-green-500" />
           <h1 className="text-xl font-bold text-[var(--text-primary)]">문의가 접수되었습니다</h1>
           <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            빠른 시일 내에 답변드리겠습니다.
+            문의가 저장되었습니다. 필요한 경우 입력한 이메일로 답변합니다.
           </p>
           <div className="mt-6 flex gap-3">
-            <a
+            <Link
               href="/"
               className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-5 py-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-tertiary)]"
             >
               홈으로
-            </a>
+            </Link>
             <button
               type="button"
               onClick={() => setStatus('idle')}
@@ -182,11 +187,23 @@ export default function ContactPage() {
               name="message"
               required
               rows={6}
+              maxLength={5000}
               value={form.message}
               onChange={handleChange}
               className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
             />
+            <p className="mt-1 text-right text-xs text-[var(--text-tertiary)]">
+              {form.message.length.toLocaleString()} / 5,000
+            </p>
           </div>
+
+          <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">
+            문의 처리를 위해 이름·이메일·문의 내용을 수집합니다. 자세한 내용은{' '}
+            <Link href="/privacy" className="underline hover:text-[var(--text-primary)]">
+              개인정보처리방침
+            </Link>
+            을 확인해주세요.
+          </p>
 
           {/* Error */}
           {status === 'error' && (

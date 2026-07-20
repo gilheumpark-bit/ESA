@@ -56,8 +56,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ projects: summaries });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ESVA Projects GET]', err);
+    return NextResponse.json({ error: '프로젝트 목록을 불러오지 못했습니다.' }, { status: 500 });
   }
 }
 
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(project, { status: 201 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ESVA Projects POST]', err);
+    return NextResponse.json({ error: '프로젝트를 만들지 못했습니다.' }, { status: 500 });
   }
 }

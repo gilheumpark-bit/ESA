@@ -8,7 +8,7 @@
  * PART 3: Main component with state machine (Loading / Result / MiniForm)
  */
 
-import { useState, useEffect, useCallback, type FormEvent } from 'react';
+import { useState, useEffect, useCallback, useId, type FormEvent } from 'react';
 import Link from 'next/link';
 import {
   Zap,
@@ -38,7 +38,6 @@ interface InlineCalcResultProps {
   onClose?: () => void;
 }
 
-type ViewState = 'loading' | 'result' | 'form';
 
 /** 결과값에서 판정 정보 추출 */
 function extractJudgment(result: DetailedCalcResult): {
@@ -142,6 +141,7 @@ function StepsAccordion({ steps }: { steps: CalcStep[] }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
         className="flex w-full items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
       >
         <ChevronDown
@@ -307,21 +307,25 @@ function ResultCard({
 
 /** 미니 폼 필드 렌더러 */
 function MiniField({
+  id,
   param,
   value,
   onChange,
   error,
 }: {
+  id: string;
   param: ExtendedParamDef;
   value: string;
   onChange: (val: string) => void;
   error?: string;
 }) {
+  const errorId = `${id}-error`;
+
   // Select 타입
   if (param.type === 'string' && param.options) {
     return (
       <div>
-        <label className="mb-1 block text-xs font-medium text-[var(--text-primary)]">
+        <label htmlFor={id} className="mb-1 block text-xs font-medium text-[var(--text-primary)]">
           {param.description ?? param.name}
           {param.unit && (
             <span className="ml-1 font-normal text-[var(--text-tertiary)]">
@@ -330,8 +334,11 @@ function MiniField({
           )}
         </label>
         <select
+          id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           className={`
             h-9 w-full rounded-lg border bg-[var(--bg-primary)] px-2.5
             text-sm text-[var(--text-primary)] outline-none transition-colors
@@ -347,7 +354,7 @@ function MiniField({
           ))}
         </select>
         {error && (
-          <p className="mt-0.5 text-[10px] text-[var(--color-error)]">{error}</p>
+          <p id={errorId} className="mt-0.5 text-[10px] text-[var(--color-error)]">{error}</p>
         )}
       </div>
     );
@@ -356,7 +363,7 @@ function MiniField({
   // Number 타입 (기본)
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-[var(--text-primary)]">
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-[var(--text-primary)]">
         {param.description ?? param.name}
         {param.unit && (
           <span className="ml-1 font-normal text-[var(--text-tertiary)]">
@@ -366,6 +373,7 @@ function MiniField({
       </label>
       <div className="relative">
         <input
+          id={id}
           type="number"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -373,6 +381,8 @@ function MiniField({
           max={param.max}
           step={param.step ?? 'any'}
           placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           className={`
             h-9 w-full rounded-lg border bg-[var(--bg-primary)] px-2.5 pr-10
             text-sm text-[var(--text-primary)] outline-none transition-colors
@@ -388,7 +398,7 @@ function MiniField({
         )}
       </div>
       {error && (
-        <p className="mt-0.5 text-[10px] text-[var(--color-error)]">{error}</p>
+        <p id={errorId} className="mt-0.5 text-[10px] text-[var(--color-error)]">{error}</p>
       )}
     </div>
   );
@@ -412,6 +422,7 @@ function MiniForm({
   error: string | null;
   onClose?: () => void;
 }) {
+  const formId = useId().replace(/:/g, '');
   const [values, setValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const p of [...missingRequired, ...missingOptional]) {
@@ -513,6 +524,7 @@ function MiniForm({
         {missingRequired.map((param) => (
           <MiniField
             key={param.name}
+            id={`${formId}-${param.name}`}
             param={param}
             value={values[param.name] ?? ''}
             onChange={(v) => updateValue(param.name, v)}
@@ -526,6 +538,7 @@ function MiniForm({
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
+              aria-expanded={showAdvanced}
               className="flex w-full items-center gap-1.5 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
             >
               <ChevronDown
@@ -540,6 +553,7 @@ function MiniForm({
                 {missingOptional.map((param) => (
                   <MiniField
                     key={param.name}
+                    id={`${formId}-${param.name}`}
                     param={param}
                     value={values[param.name] ?? ''}
                     onChange={(v) => updateValue(param.name, v)}
@@ -601,43 +615,26 @@ export default function InlineCalcResult({
   onClose,
 }: InlineCalcResultProps) {
   const { execute, result, isLoading, error, reset } = useCalculator(calculatorId);
-  const [viewState, setViewState] = useState<ViewState>(
-    canAutoExecute ? 'loading' : 'form',
-  );
-  const [mergedParams, setMergedParams] = useState<Record<string, unknown>>(extractedParams);
+  const [mergedParams, setMergedParams] = useState<Record<string, unknown>>(() => {
+    const initial: Record<string, unknown> = { ...extractedParams };
+    for (const parameter of allParams) {
+      const extended = parameter as ExtendedParamDef;
+      if (initial[parameter.name] === undefined && extended.defaultValue !== undefined) {
+        initial[parameter.name] = extended.defaultValue;
+      }
+    }
+    return initial;
+  });
 
   // State A: 자동 실행 (canAutoExecute=true일 때 mount 시 실행)
   useEffect(() => {
     if (!canAutoExecute) return;
 
-    // 기본값 병합
-    const withDefaults: Record<string, unknown> = { ...extractedParams };
-    for (const p of allParams) {
-      const ext = p as ExtendedParamDef;
-      if (withDefaults[p.name] === undefined && ext.defaultValue !== undefined) {
-        withDefaults[p.name] = ext.defaultValue;
-      }
-    }
-
-    setMergedParams(withDefaults);
-    execute(withDefaults);
+    const timer = window.setTimeout(() => execute(mergedParams), 0);
+    return () => window.clearTimeout(timer);
     // 마운트 시 1회만 실행
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // 결과 도착 시 뷰 전환
-  useEffect(() => {
-    if (result && !isLoading) {
-      setViewState('result');
-    }
-  }, [result, isLoading]);
-
-  // 에러 발생 시 (자동 실행이었으면 폼으로 전환)
-  useEffect(() => {
-    if (error && !isLoading && viewState === 'loading') {
-      setViewState('form');
-    }
-  }, [error, isLoading, viewState]);
 
   // 미니 폼 제출 핸들러
   const handleFormSubmit = useCallback(
@@ -660,7 +657,6 @@ export default function InlineCalcResult({
       }
 
       setMergedParams(merged);
-      setViewState('loading');
       execute(merged);
     },
     [extractedParams, allParams, execute],

@@ -53,7 +53,7 @@ const LABEL: Record<Lang, {
     step: '단계', title: '항목', result: '계산 결과', warnings: '경고',
     recommendations: '권장 사항', disclaimer: '면책 조항', copyright: '저작권 안내',
     stdRef: '규격 조항', judgment: '판정', unitSystem: '단위계',
-    stdVersion: '규격 버전', stdCurrent: '최신 규격 여부', yes: '예', no: '아니오',
+    stdVersion: '규격 버전', stdCurrent: '현행 확인 상태', yes: '확인됨', no: '미확인',
   },
   en: {
     meta: 'Calculation Info', country: 'Country', standard: 'Standard',
@@ -63,7 +63,7 @@ const LABEL: Record<Lang, {
     result: 'Result', warnings: 'Warnings', recommendations: 'Recommendations',
     disclaimer: 'Disclaimer', copyright: 'Copyright Notice', stdRef: 'Standard Ref',
     judgment: 'Judgment', unitSystem: 'Unit System', stdVersion: 'Standard Version',
-    stdCurrent: 'Standard Current', yes: 'Yes', no: 'No',
+    stdCurrent: 'Standard Currency', yes: 'Verified current', no: 'Unverified',
   },
   ja: {
     meta: '計算情報', country: '国', standard: '規格', difficulty: '難易度',
@@ -72,7 +72,7 @@ const LABEL: Record<Lang, {
     step: 'ステップ', title: '項目', result: '計算結果', warnings: '警告',
     recommendations: '推奨事項', disclaimer: '免責事項', copyright: '著作権表示',
     stdRef: '規格条項', judgment: '判定', unitSystem: '単位系',
-    stdVersion: '規格バージョン', stdCurrent: '最新規格', yes: 'はい', no: 'いいえ',
+    stdVersion: '規格バージョン', stdCurrent: '現行確認状態', yes: '確認済み', no: '未確認',
   },
   zh: {
     meta: '计算信息', country: '国家', standard: '标准', difficulty: '难度',
@@ -81,7 +81,7 @@ const LABEL: Record<Lang, {
     step: '步骤', title: '项目', result: '计算结果', warnings: '警告',
     recommendations: '建议', disclaimer: '免责声明', copyright: '版权声明',
     stdRef: '标准条款', judgment: '判定', unitSystem: '单位制',
-    stdVersion: '标准版本', stdCurrent: '最新标准', yes: '是', no: '否',
+    stdVersion: '标准版本', stdCurrent: '现行确认状态', yes: '已确认', no: '未确认',
   },
 };
 

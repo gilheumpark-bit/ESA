@@ -1,7 +1,8 @@
 /**
- * ESVA IPFS Pinning — Receipt Notarization
- * -----------------------------------------
- * Pin anonymized receipts to IPFS via Pinata for immutable audit trails.
+ * ESVA IPFS Pinning — Receipt Timestamp Registration
+ * --------------------------------------------------
+ * Pin a minimized receipt payload to IPFS and record its CID. This is not
+ * legal notarization, a blockchain transaction, or an independent timestamp.
  *
  * PART 1: Types (AnonymizedReceipt, PinataResponse)
  * PART 2: Receipt anonymization (strip PII, keep verifiable data)
@@ -52,27 +53,70 @@ export interface IpfsPinResult {
 
 // ─── PART 2: Receipt Anonymization ─────────────────────────────
 
-/** Fields that contain or may contain PII */
-const PII_INPUT_KEYS = new Set([
-  'userId', 'user_id', 'email', 'name', 'phone',
-  'address', 'company', 'ip', 'projectName', 'clientName',
+/** Normalized field names that contain identity, credentials, or arbitrary free text. */
+const SENSITIVE_INPUT_KEYS = new Set([
+  'userid', 'username', 'fullname', 'name',
+  'email', 'emailaddress', 'phone', 'phonenumber', 'mobile',
+  'address', 'siteaddress', 'streetaddress', 'company', 'organization',
+  'ip', 'ipaddress', 'projectname', 'clientname', 'customername', 'contactname',
+  'password', 'passphrase', 'apikey', 'token', 'accesstoken', 'refreshtoken',
+  'secret', 'credential', 'authorization', 'cookie', 'session', 'sharetoken',
+  'note', 'notes', 'comment', 'comments', 'message', 'freetext',
 ]);
+
+const MAX_SANITIZE_DEPTH = 8;
+const MAX_OBJECT_FIELDS = 200;
+const MAX_ARRAY_ITEMS = 100;
+const MAX_STRING_LENGTH = 500;
+
+function normalizedKey(key: string): string {
+  return key.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function looksLikeCredential(value: string): boolean {
+  return /^(?:bearer\s+|sk-|AIza|ghp_|github_pat_|xox[baprs]-)/i.test(value.trim())
+    || /^[A-Za-z0-9_-]{32,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}$/.test(value.trim());
+}
+
+function sanitizeString(value: string): string | undefined {
+  if (looksLikeCredential(value)) return undefined;
+  return value
+    .slice(0, MAX_STRING_LENGTH)
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+    .replace(/(?:\+?\d[\d().\s-]{7,}\d)/g, '[redacted-phone]')
+    .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[redacted-ip]');
+}
+
+function sanitizeValue(value: unknown, depth: number): unknown {
+  if (depth > MAX_SANITIZE_DEPTH || value === null) return value === null ? null : undefined;
+  if (typeof value === 'string') return sanitizeString(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, MAX_ARRAY_ITEMS)
+      .map((item) => sanitizeValue(item, depth + 1))
+      .filter((item) => item !== undefined);
+  }
+  if (typeof value !== 'object') return undefined;
+
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value).slice(0, MAX_OBJECT_FIELDS)) {
+    const normalized = normalizedKey(key);
+    if (!normalized || SENSITIVE_INPUT_KEYS.has(normalized)
+      || normalized === 'prototype' || normalized === 'constructor' || normalized === 'proto') continue;
+    const sanitized = sanitizeValue(child, depth + 1);
+    if (sanitized !== undefined) cleaned[key] = sanitized;
+  }
+  return cleaned;
+}
 
 /**
  * Strip personally identifiable information from receipt inputs.
  * Keeps only technical parameters needed for verification.
  */
 function sanitizeInputs(inputs: Record<string, unknown>): Record<string, unknown> {
-  const cleaned: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(inputs)) {
-    if (PII_INPUT_KEYS.has(key)) continue;
-    if (typeof key === 'string' && key.toLowerCase().includes('email')) continue;
-    if (typeof key === 'string' && key.toLowerCase().includes('password')) continue;
-    cleaned[key] = value;
-  }
-
-  return cleaned;
+  return sanitizeValue(inputs, 0) as Record<string, unknown>;
 }
 
 /**

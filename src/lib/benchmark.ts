@@ -90,7 +90,7 @@ function getDummyInput(entry: CalculatorRegistryEntry): Record<string, unknown> 
     case 'global':
       return { ambientTemp: 40, baseTemp: 30, current: 100, frequency: 60 };
     case 'ai':
-      return { inputTokens: 1000, outputTokens: 500, model: 'gpt-5.4-mini' };
+      return { inputTokens: 1000, outputTokens: 500, model: 'gpt-5.6-luna' };
     default:
       return { voltage: 380, current: 100 };
   }
@@ -165,7 +165,7 @@ function round3(n: number): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Run benchmarks on all 56 calculators.
+ * Run benchmarks on every calculator currently registered in the SoT registry.
  */
 export function benchmarkAll(
   iterations: number = DEFAULT_ITERATIONS,

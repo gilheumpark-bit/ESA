@@ -190,3 +190,15 @@ describe('적대 — 퇴화 입력', () => {
     expect(r.components[0].type).toBe('motor');
   });
 });
+
+describe('적대 — 물리 단위 근거', () => {
+  it('단위 없는 좌표에는 미터 길이를 붙이지 않는다', () => {
+    const result = parseDxfToSLD(doc([L(0, 0, 100, 0)]));
+    expect(result.connections[0]?.length).toBeUndefined();
+  });
+
+  it('명시된 unitScale이 있을 때만 좌표 길이를 미터로 환산한다', () => {
+    const result = parseDxfToSLD(doc([L(0, 0, 100, 0)]), { unitScale: 0.001 });
+    expect(result.connections[0]?.length).toBe('0.1m');
+  });
+});

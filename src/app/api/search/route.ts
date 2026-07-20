@@ -37,26 +37,9 @@ import type {
   KnowledgePanel,
   GlobalComparison,
 } from '@search/types';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 // ─── PART 1: CSRF Origin Check ─────────────────────────────────
-
-const ALLOWED_ORIGINS = new Set([
-  'https://esva.engineer',
-  'https://www.esva.engineer',
-]);
-
-// Permissive in dev (any localhost port), strict in prod.
-// Hardcoded ports (3000/3001) were locking out non-default dev servers — BUG-016.
-const LOCALHOST_RE = /^http:\/\/localhost:\d+$/;
-const VERCEL_PREVIEW_RE = /^https:\/\/.*\.vercel\.app$/;
-
-function isOriginAllowed(origin: string | null): boolean {
-  if (!origin) return false;
-  if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (VERCEL_PREVIEW_RE.test(origin)) return true;
-  if (process.env.NODE_ENV !== 'production' && LOCALHOST_RE.test(origin)) return true;
-  return false;
-}
 
 // ─── PART 2: Request Body Schema ────────────────────────────────
 
@@ -86,7 +69,13 @@ export async function POST(request: NextRequest) {
   try {
     // CSRF origin check
     const origin = request.headers.get('origin');
-    if (!isOriginAllowed(origin)) {
+    if (!isRequestOriginAllowed(
+      origin,
+      request.url,
+      undefined,
+      request.headers.get('host'),
+      request.headers.get('x-forwarded-proto'),
+    )) {
       return jsonWithEsa(
         { success: false, error: { code: 'ESVA-3001', message: 'Invalid origin' } },
         { status: 403 },
@@ -376,6 +365,7 @@ export async function POST(request: NextRequest) {
             clause: r.clause ?? '',
             source: r.body,
             url: r.url,
+            edition: r.edition,
           })),
         };
       }

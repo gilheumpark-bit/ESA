@@ -14,6 +14,7 @@ import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 export const runtime = 'nodejs';
 
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
+      return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
+    }
     const blocked = applyRateLimit(req, 'dxf');
     if (blocked) return blocked;
 
@@ -58,7 +62,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File too large (max 100MB).' }, { status: 400 });
     }
 
-    const pageNumber = parseInt((formData.get('page') as string) || '1');
+    const pagePart = formData.get('page');
+    const pageNumber = pagePart == null || pagePart === '' ? 1 : Number(pagePart);
+    if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 10_000) {
+      return NextResponse.json({ error: 'page must be an integer between 1 and 10000.' }, { status: 400 });
+    }
     const pdfBytes = await pdfFile.arrayBuffer();
 
     const analysis = await parsePdfToSLD(pdfBytes, { pageNumber });
@@ -105,8 +113,16 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'PDF drawing parse failed';
-    apiLog({ level: 'error', event: 'pdf-drawing-parse', route: '/api/pdf-drawing', error: message, durationMs: timer.elapsed() });
-    return NextResponse.json({ error: message }, { status: 500 });
+    apiLog({
+      level: 'error',
+      event: 'pdf-drawing-parse',
+      route: '/api/pdf-drawing',
+      error: err instanceof Error ? err.name : 'UnknownError',
+      durationMs: timer.elapsed(),
+    });
+    return NextResponse.json(
+      { error: 'PDF 도면을 처리하는 중 내부 오류가 발생했습니다.', code: 'ESA-9500' },
+      { status: 500 },
+    );
   }
 }

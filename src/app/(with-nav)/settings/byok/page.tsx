@@ -3,7 +3,8 @@
 /**
  * ESVA BYOK Key Management Page
  * -----------------------------
- * 7-provider API key management with encrypted localStorage storage.
+ * Cloud API keys are encrypted with a browser-bound key before ciphertext is
+ * stored locally. Local providers are configured on the on-premise page.
  *
  * PART 1: Types & constants
  * PART 2: Provider key card component
@@ -13,28 +14,28 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   PROVIDERS,
-  encryptKey,
-  decryptKey,
   isLocalProvider,
   type AIProvider,
 } from '@/lib/ai-providers';
+import {
+  deleteStoredProviderKey,
+  loadStoredProviderKey,
+  saveStoredProviderKey,
+} from '@/lib/byok-storage';
 
 // =============================================================================
 // PART 1 — Types & Constants
 // =============================================================================
 
-type KeyStatus = 'empty' | 'saved' | 'testing' | 'valid' | 'invalid';
+type KeyStatus = 'empty' | 'saved' | 'testing' | 'valid' | 'invalid' | 'unavailable';
 
 interface ProviderKeyState {
   maskedKey: string;
   status: KeyStatus;
   rawInput: string;
 }
-
-const STORAGE_PREFIX = 'esa-byok-';
 
 const PROVIDER_ORDER: string[] = [
   'openai',
@@ -46,51 +47,19 @@ const PROVIDER_ORDER: string[] = [
   'lmstudio',
 ];
 
-const STATUS_ICON: Record<KeyStatus, string> = {
-  empty: '',
-  saved: '\u2705',
-  testing: '\u23F3',
-  valid: '\u2705',
-  invalid: '\u274C',
-};
-
 const STATUS_LABEL: Record<KeyStatus, string> = {
   empty: '',
-  saved: 'Saved',
-  testing: 'Testing...',
-  valid: 'Valid',
-  invalid: 'Invalid',
+  saved: '저장됨',
+  testing: '확인 중…',
+  valid: '유효함',
+  invalid: '유효하지 않음',
+  unavailable: '확인 일시 실패',
 };
 
 /** 마지막 4자 마스킹 */
 function maskKey(key: string): string {
   if (key.length <= 4) return '****';
   return '****' + key.slice(-4);
-}
-
-/** localStorage에서 암호화된 키 로드 */
-async function loadStoredKey(providerId: string): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  try {
-    const stored = localStorage.getItem(STORAGE_PREFIX + providerId);
-    if (!stored) return null;
-    return await decryptKey(stored);
-  } catch {
-    return null;
-  }
-}
-
-/** localStorage에 암호화하여 저장 */
-async function saveStoredKey(providerId: string, raw: string): Promise<void> {
-  if (typeof window === 'undefined') return;
-  const encrypted = await encryptKey(raw);
-  localStorage.setItem(STORAGE_PREFIX + providerId, encrypted);
-}
-
-/** localStorage에서 키 삭제 */
-function deleteStoredKey(providerId: string): void {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(STORAGE_PREFIX + providerId);
 }
 
 // =============================================================================
@@ -125,13 +94,13 @@ function ProviderKeyCard({
           </h3>
           {isLocal && (
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              Local -- no API key required
+              로컬 서버 — API 키가 없을 수 있습니다
             </span>
           )}
         </div>
         {state.status !== 'empty' && (
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {STATUS_ICON[state.status]} {STATUS_LABEL[state.status]}
+            {STATUS_LABEL[state.status]}
           </span>
         )}
       </div>
@@ -148,7 +117,14 @@ function ProviderKeyCard({
       {/* 입력 필드: 키 미저장 시 */}
       {showInput && !isLocal && (
         <div className="mb-3">
+          <label
+            htmlFor={`provider-key-${provider.id}`}
+            className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            {provider.name} API 키
+          </label>
           <input
+            id={`provider-key-${provider.id}`}
             type="password"
             value={state.rawInput}
             onChange={(e) => onInputChange(e.target.value)}
@@ -162,26 +138,39 @@ function ProviderKeyCard({
       <div className="flex gap-2">
         {showInput && !isLocal && (
           <button
+            type="button"
             onClick={onSave}
             disabled={!state.rawInput.trim()}
             className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Save
+            저장
           </button>
         )}
-        <button
-          onClick={onTest}
-          disabled={state.status === 'testing' || (state.status === 'empty' && !isLocal)}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-        >
-          Test
-        </button>
+        {!isLocal && (
+          <button
+            type="button"
+            onClick={onTest}
+            disabled={state.status === 'testing' || state.status === 'empty'}
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            키 확인
+          </button>
+        )}
+        {isLocal && (
+          <Link
+            href="/settings/onpremise"
+            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            로컬 서버 설정
+          </Link>
+        )}
         {hasSavedKey && (
           <button
+            type="button"
             onClick={onDelete}
             className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
           >
-            Delete
+            삭제
           </button>
         )}
       </div>
@@ -197,31 +186,30 @@ function QuickStartGuide() {
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
       <h2 className="mb-3 text-lg font-semibold text-amber-900 dark:text-amber-200">
-        API key issuance 3 min guide
+        API 키 발급 빠른 안내
       </h2>
       <ol className="list-inside list-decimal space-y-2 text-sm text-amber-800 dark:text-amber-300">
         <li>
-          <strong>OpenAI</strong> -- platform.openai.com &rarr; API Keys &rarr;
+          <strong>OpenAI</strong> — platform.openai.com &rarr; API Keys &rarr;
           Create new secret key
         </li>
         <li>
-          <strong>Anthropic</strong> -- console.anthropic.com &rarr; API Keys
+          <strong>Anthropic</strong> — console.anthropic.com &rarr; API Keys
           &rarr; Create Key
         </li>
         <li>
-          <strong>Google Gemini</strong> -- aistudio.google.com &rarr; Get API
+          <strong>Google Gemini</strong> — aistudio.google.com &rarr; Get API
           key
         </li>
         <li>
-          <strong>Groq</strong> -- console.groq.com &rarr; API Keys &rarr;
+          <strong>Groq</strong> — console.groq.com &rarr; API Keys &rarr;
           Create
         </li>
         <li>
-          <strong>Mistral</strong> -- console.mistral.ai &rarr; API Keys
+          <strong>Mistral</strong> — console.mistral.ai &rarr; API Keys
         </li>
         <li>
-          <strong>Ollama / LM Studio</strong> -- Install locally, no key
-          needed
+          <strong>Ollama / LM Studio</strong> — 로컬 설치 후 On-Premise 설정에서 연결
         </li>
       </ol>
     </section>
@@ -232,37 +220,36 @@ function FAQ() {
   return (
     <section className="rounded-xl border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50">
       <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-        BYOK FAQ
+        BYOK 자주 묻는 질문
       </h2>
       <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
         <div>
           <p className="font-medium text-zinc-800 dark:text-zinc-200">
-            What is BYOK?
+            BYOK란 무엇인가요?
           </p>
           <p>
-            Bring Your Own Key. You provide your own API keys for AI
-            providers. ESVA encrypts them in your browser and never sends them
-            to our servers.
+            Bring Your Own Key의 약자입니다. 사용자가 AI 공급자 키를 직접 등록하며,
+            ESVA는 이 브라우저에 암호문만 저장합니다. 서버 대행 기능은 해당 요청에서만
+            복호화된 키를 전달하고 저장하지 않습니다.
           </p>
         </div>
         <div>
           <p className="font-medium text-zinc-800 dark:text-zinc-200">
-            Are my keys safe?
+            키는 어떻게 보호되나요?
           </p>
           <p>
-            Keys are encrypted with AES-256-GCM and stored only in your
-            browser&apos;s localStorage. They never leave your device except
-            when making direct API calls.
+            내보낼 수 없는 브라우저 결합 키로 AES-256-GCM 암호화합니다. localStorage의
+            암호문만 복사해서는 복호화할 수 없습니다. 다만 브라우저 세션이 침해되면 사용
+            중인 키가 노출될 수 있으므로 공급자별 한도·만료·교체 정책을 함께 적용하세요.
           </p>
         </div>
         <div>
           <p className="font-medium text-zinc-800 dark:text-zinc-200">
-            Which provider should I use?
+            어떤 공급자를 선택해야 하나요?
           </p>
           <p>
-            Google Gemini Flash is the best value. Claude and GPT-4.1 are
-            premium options. Groq is fast and affordable. Ollama is free and
-            local.
+            데이터 정책, 필요한 모델 능력, 지연시간, 예산을 기준으로 선택하세요. Ollama와
+            LM Studio는 On-Premise 설정을 완료하면 로컬 엔드포인트에서 추론합니다.
           </p>
         </div>
       </div>
@@ -275,20 +262,21 @@ function FAQ() {
 // =============================================================================
 
 export default function BYOKPage() {
-  const { user, loading: authLoading } = useAuth();
-
   const [states, setStates] = useState<Record<string, ProviderKeyState>>({});
   const [loaded, setLoaded] = useState(false);
-
-  // BYOK keys are client-side localStorage only — auth is NOT required.
-  // If logged in, cloud sync is available; otherwise local-only is fine.
+  const [storageError, setStorageError] = useState<string | null>(null);
 
   // localStorage에서 저장된 키 로드
   useEffect(() => {
     async function loadAll() {
       const initial: Record<string, ProviderKeyState> = {};
       for (const id of PROVIDER_ORDER) {
-        const raw = await loadStoredKey(id);
+        let raw: string | null = null;
+        try {
+          raw = await loadStoredProviderKey(id);
+        } catch {
+          setStorageError('기존 키를 안전한 브라우저 저장소로 이전하지 못했습니다. HTTPS 환경의 최신 브라우저에서 키를 다시 등록하세요.');
+        }
         initial[id] = {
           maskedKey: raw ? maskKey(raw) : '',
           status: raw ? 'saved' : 'empty',
@@ -315,80 +303,53 @@ export default function BYOKPage() {
     async (id: string) => {
       const raw = states[id]?.rawInput?.trim();
       if (!raw) return;
-      await saveStoredKey(id, raw);
-      updateState(id, {
-        maskedKey: maskKey(raw),
-        status: 'saved',
-        rawInput: '',
-      });
+      try {
+        await saveStoredProviderKey(id, raw);
+        setStorageError(null);
+        updateState(id, {
+          maskedKey: maskKey(raw),
+          status: 'saved',
+          rawInput: '',
+        });
+      } catch (error) {
+        setStorageError(error instanceof Error ? error.message : 'API 키를 안전하게 저장하지 못했습니다.');
+        updateState(id, { status: 'invalid' });
+      }
     },
     [states, updateState],
   );
 
   const handleTest = useCallback(
     async (id: string) => {
+      if (isLocalProvider(id)) return;
       updateState(id, { status: 'testing' });
 
-      // 로컬 프로바이더: endpoint 연결 확인
-      if (isLocalProvider(id)) {
-        try {
-          const baseUrl =
-            PROVIDERS[id]?.baseUrl ?? 'http://localhost:11434';
-          const res = await fetch(baseUrl, { method: 'GET' });
-          updateState(id, { status: res.ok ? 'valid' : 'invalid' });
-        } catch {
-          updateState(id, { status: 'invalid' });
-        }
-        return;
+      let raw: string | null = null;
+      try {
+        raw = await loadStoredProviderKey(id);
+      } catch (error) {
+        setStorageError(error instanceof Error ? error.message : '저장된 API 키를 복호화하지 못했습니다.');
       }
-
-      // 클라우드 프로바이더: 저장된 키로 간단한 요청 테스트
-      const raw = await loadStoredKey(id);
       if (!raw) {
         updateState(id, { status: 'invalid' });
         return;
       }
 
       try {
-        // 각 프로바이더별 최소 API 호출로 키 유효성 검증
-        let testUrl = '';
-        const headers: Record<string, string> = {};
-
-        switch (id) {
-          case 'openai':
-            testUrl = 'https://api.openai.com/v1/models';
-            headers['Authorization'] = `Bearer ${raw}`;
-            break;
-          case 'claude':
-            testUrl = 'https://api.anthropic.com/v1/messages';
-            headers['x-api-key'] = raw;
-            headers['anthropic-version'] = '2023-06-01';
-            headers['Content-Type'] = 'application/json';
-            break;
-          case 'gemini':
-            testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${raw}`;
-            break;
-          case 'groq':
-            testUrl = 'https://api.groq.com/openai/v1/models';
-            headers['Authorization'] = `Bearer ${raw}`;
-            break;
-          case 'mistral':
-            testUrl = 'https://api.mistral.ai/v1/models';
-            headers['Authorization'] = `Bearer ${raw}`;
-            break;
-        }
-
-        if (!testUrl) {
-          updateState(id, { status: 'saved' });
+        const response = await fetch('/api/settings/byok-test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider: id, apiKey: raw }),
+        });
+        if (!response.ok) {
+          updateState(id, { status: 'unavailable' });
           return;
         }
 
-        const res = await fetch(testUrl, { method: 'GET', headers });
-        // Claude /messages returns 405 on GET but 401 on bad key
-        const ok = res.ok || (id === 'claude' && res.status === 405);
-        updateState(id, { status: ok ? 'valid' : 'invalid' });
+        const body = await response.json() as { data?: { valid?: boolean } };
+        updateState(id, { status: body.data?.valid ? 'valid' : 'invalid' });
       } catch {
-        updateState(id, { status: 'invalid' });
+        updateState(id, { status: 'unavailable' });
       }
     },
     [updateState],
@@ -398,7 +359,7 @@ export default function BYOKPage() {
     (id: string) => {
       const ok = window.confirm('이 API 키를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.');
       if (!ok) return;
-      deleteStoredKey(id);
+      deleteStoredProviderKey(id);
       updateState(id, { maskedKey: '', status: 'empty', rawInput: '' });
     },
     [updateState],
@@ -420,24 +381,20 @@ export default function BYOKPage() {
           href="/settings"
           className="text-sm text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
-          &larr; Settings
+          &larr; 설정
         </Link>
       </div>
 
       <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-        API Key Management
+        API 키 관리
       </h1>
       <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-        Keys are AES-256 encrypted and stored only in your browser.
+        API 키는 이 브라우저에 기기 결합 AES-256-GCM으로 저장됩니다.
       </p>
 
-      {/* Cloud sync note for unauthenticated users */}
-      {!authLoading && !user && (
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-          <Link href="/login" className="font-medium underline hover:no-underline">
-            로그인
-          </Link>
-          하면 클라우드 동기화 가능
+      {storageError && (
+        <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+          {storageError}
         </div>
       )}
 
@@ -469,12 +426,13 @@ export default function BYOKPage() {
       <div className="mb-8 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
         <h3 className="mb-3 text-base font-semibold text-[var(--text-primary)]">팀 공유 방법</h3>
         <div className="space-y-2 text-sm text-[var(--text-secondary)]">
-          <p><strong>1. 공용 API 키 발급:</strong> OpenAI/Claude 대시보드에서 팀 전용 키를 생성합니다.</p>
-          <p><strong>2. 안전한 전달:</strong> 사내 메신저(Slack, Teams)로 키를 팀원에게 전달합니다.</p>
+          <p><strong>1. 사용자를 구분한 키 발급:</strong> 가능하면 팀 공용 키 대신 구성원별 제한 키를 생성합니다.</p>
+          <p><strong>2. 안전한 전달:</strong> 조직의 비밀 관리 도구나 만료되는 일회성 비밀 링크를 사용합니다.</p>
           <p><strong>3. 각 브라우저에서 등록:</strong> 팀원 각자 이 페이지에서 키를 등록합니다.</p>
           <p className="mt-2 text-xs text-[var(--text-tertiary)]">
-            키는 각 브라우저에 AES-256 암호화 저장되며, 서버에 전송되지 않습니다.
-            팀 전체가 동일한 키를 사용하면 비용을 중앙 관리할 수 있습니다.
+            암호문은 각 브라우저에 저장됩니다. OCR·SLD·채팅처럼 ESA 서버가 공급자 호출을
+            대행하는 기능에서는 해당 요청 동안 복호화된 키가 HTTPS로 전달되며 저장하지 않습니다.
+            공급자 콘솔에서 사용 한도, 허용 모델, 만료일을 함께 설정하세요.
           </p>
         </div>
       </div>

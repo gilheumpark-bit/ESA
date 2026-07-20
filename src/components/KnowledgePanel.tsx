@@ -7,7 +7,7 @@
  * PART 2: Main component
  */
 
-import { BookOpen, ExternalLink, CheckCircle, AlertTriangle } from 'lucide-react';
+import { BookOpen, ExternalLink, AlertTriangle } from 'lucide-react';
 import type { SourceTag } from '@/engine/sjc/types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -119,8 +119,6 @@ export default function KnowledgePanel({ data, className = '' }: KnowledgePanelP
 // ─── Sub-component: Standard reference item ────────────────────────────────
 
 function StandardRefItem({ tag }: { tag: SourceTag }) {
-  const isCurrent = !tag.edition || isEditionCurrent(tag.edition);
-
   return (
     <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-secondary)] px-3 py-2">
       <div className="min-w-0 flex-1">
@@ -134,18 +132,11 @@ function StandardRefItem({ tag }: { tag: SourceTag }) {
         )}
       </div>
 
-      {/* Current/outdated badge */}
-      {isCurrent ? (
-        <span className="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-          <CheckCircle size={12} />
-          현행
-        </span>
-      ) : (
-        <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-          <AlertTriangle size={12} />
-          구판
-        </span>
-      )}
+      {/* A year alone cannot prove that an edition is still authoritative. */}
+      <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+        <AlertTriangle size={12} />
+        현행 미확인
+      </span>
 
       {/* External link */}
       {tag.url && (
@@ -161,14 +152,4 @@ function StandardRefItem({ tag }: { tag: SourceTag }) {
       )}
     </div>
   );
-}
-
-// ─── Helper ────────────────────────────────────────────────────────────────
-
-function isEditionCurrent(edition: string): boolean {
-  const year = parseInt(edition, 10);
-  if (isNaN(year)) return true;
-  const currentYear = new Date().getFullYear();
-  // Consider standards within 5 years as current
-  return currentYear - year <= 5;
 }

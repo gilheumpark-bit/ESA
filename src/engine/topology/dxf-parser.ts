@@ -1,7 +1,8 @@
 /**
  * ESVA DXF Vector Parser — CAD 도면의 벡터 데이터를 정밀 추출
  * ──────────────────────────────────────────────────────────────
- * VLM(이미지 AI)의 공간 환각 없이, DXF 벡터 좌표에서 100% 정확한 거리/위치를 추출.
+ * VLM(이미지 AI)의 공간 추정을 피하고 DXF에 기록된 벡터 좌표를 직접 읽는다.
+ * 커스텀 블록·외부 참조·손상 엔티티의 의미 인식까지 보장하는 것은 아니다.
  * 결과는 기존 SLDComponent/SLDConnection 타입으로 변환 → TopologyGraph에 바로 투입.
  *
  * PART 1: DXF Entity → SLD 변환
@@ -220,12 +221,29 @@ function polylineLength(vertices: Array<{ x: number; y: number }>): number {
 
 /** DXF 파서 옵션 */
 export interface DxfParseOptions {
-  /** DXF 단위 → 미터 변환 계수 (기본: 1 = 이미 mm 단위) */
+  /** DXF 좌표 1단위 → 미터 변환 계수. 미지정·헤더 단위 없음이면 물리 길이를 만들지 않는다. */
   unitScale?: number;
   /** 텍스트-심볼 매핑 최대 거리 (DXF 단위, 기본: 도면 bbox 대각선의 3%) */
   textProximityThreshold?: number;
   /** 결선 추출에서 제외할 레이어 (기본: 치수·해칭·도면틀류) */
   ignoreLayers?: RegExp;
+}
+
+const DXF_UNIT_SCALE_M: Partial<Record<number, number>> = {
+  1: 0.0254,
+  2: 0.3048,
+  4: 0.001,
+  5: 0.01,
+  6: 1,
+  10: 0.9144,
+};
+
+function resolveUnitScale(dxfContent: string, requested: unknown): number | undefined {
+  if (typeof requested === 'number' && Number.isFinite(requested) && requested > 0 && requested <= 1_000) {
+    return requested;
+  }
+  const match = dxfContent.match(/\$INSUNITS\s*\r?\n\s*70\s*\r?\n\s*(\d+)/);
+  return match ? DXF_UNIT_SCALE_M[Number(match[1])] : undefined;
 }
 
 /**
@@ -236,7 +254,8 @@ export function parseDxfToSLD(
   dxfContent: string,
   options: DxfParseOptions = {},
 ): SLDAnalysis {
-  const { unitScale = 0.001, ignoreLayers = DEFAULT_IGNORED_LAYERS } = options; // mm → m
+  const { ignoreLayers = DEFAULT_IGNORED_LAYERS } = options;
+  const unitScale = resolveUnitScale(dxfContent, options.unitScale);
 
   // dxf-parser는 형식이 아닌 입력에서 결과를 반환하지 않고 **예외를 던진다**
   // ("Empty file" 등). 아래 실패 분기는 null 반환만 가정하고 있어 사용자가 다른
@@ -317,12 +336,12 @@ export function parseDxfToSLD(
         const lineEnd = entity.vertices?.[1] ?? entity.endPoint;
         if (!lineStart || !lineEnd) break;
         if (isIgnoredLayer(entity.layer)) break;
-        const length = euclideanDist(lineStart, lineEnd) * unitScale;
+        const length = unitScale == null ? undefined : euclideanDist(lineStart, lineEnd) * unitScale;
         connections.push({
           id: `conn_${++connIdx}`,
           from: endpointId(lineStart),
           to: endpointId(lineEnd),
-          length: `${Math.round(length * 100) / 100}m`,
+          ...(length == null ? {} : { length: `${Math.round(length * 100) / 100}m` }),
           conductorSize: undefined,
           cableType: undefined,
         });
@@ -334,14 +353,14 @@ export function parseDxfToSLD(
       case 'POLYLINE': {
         if (!entity.vertices || entity.vertices.length < 2) break;
         if (isIgnoredLayer(entity.layer)) break;
-        const length = polylineLength(entity.vertices) * unitScale;
+        const length = unitScale == null ? undefined : polylineLength(entity.vertices) * unitScale;
         const start = entity.vertices[0];
         const end = entity.vertices[entity.vertices.length - 1];
         connections.push({
           id: `conn_${++connIdx}`,
           from: endpointId(start),
           to: endpointId(end),
-          length: `${Math.round(length * 100) / 100}m`,
+          ...(length == null ? {} : { length: `${Math.round(length * 100) / 100}m` }),
           conductorSize: undefined,
           cableType: undefined,
         });

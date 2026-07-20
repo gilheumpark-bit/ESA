@@ -27,7 +27,37 @@ interface ReviewRequestBody {
     insulation?: 'PVC' | 'XLPE' | 'MI';
     installation?: 'conduit' | 'tray' | 'directBuried' | 'freeAir';
     powerFactor?: number;
+    maxVoltageDropPercent?: number;
   };
+}
+
+function isFiniteInRange(value: unknown, minExclusive: number, maxInclusive: number): value is number {
+  return typeof value === 'number'
+    && Number.isFinite(value)
+    && value > minExclusive
+    && value <= maxInclusive;
+}
+
+function validateReviewParams(params: ReviewRequestBody['params'] | undefined): string | null {
+  if (!params) return '설계 검토 params가 필수입니다.';
+  if (!isFiniteInRange(params.voltage_V, 0, 1_000_000)) return 'voltage_V는 0보다 큰 유한값이어야 합니다.';
+  if (!isFiniteInRange(params.totalLength_m, 0, 1_000_000)) return 'totalLength_m는 0보다 큰 유한값이어야 합니다.';
+  if (!isFiniteInRange(params.cableSize_sq, 0, 1_000_000)) return 'cableSize_sq는 필수이며 0보다 커야 합니다.';
+  if (!isFiniteInRange(params.maxVoltageDropPercent, 0, 20)) return 'maxVoltageDropPercent는 필수이며 0 초과 20 이하이어야 합니다.';
+  if (params.phases !== 1 && params.phases !== 3) return 'phases는 1 또는 3이어야 합니다.';
+  if (params.conductor !== 'Cu' && params.conductor !== 'Al') return 'conductor는 Cu 또는 Al이어야 합니다.';
+  if (!['PVC', 'XLPE', 'MI'].includes(params.insulation ?? '')) return '지원되는 insulation이 필수입니다.';
+  if (!['conduit', 'tray', 'directBuried', 'freeAir'].includes(params.installation ?? '')) return '지원되는 installation이 필수입니다.';
+
+  const hasCurrent = isFiniteInRange(params.current_A, 0, 10_000_000);
+  const hasLoad = isFiniteInRange(params.loadPower_kW, 0, 1_000_000_000);
+  if (params.current_A !== undefined && !hasCurrent) return 'current_A는 0보다 큰 유한값이어야 합니다.';
+  if (params.loadPower_kW !== undefined && !hasLoad) return 'loadPower_kW는 0보다 큰 유한값이어야 합니다.';
+  if (!hasCurrent && !hasLoad) return 'current_A 또는 loadPower_kW 중 하나는 필수입니다.';
+  if (!hasCurrent && (!isFiniteInRange(params.powerFactor, 0, 1))) {
+    return '부하전력으로 전류를 산출할 때 powerFactor가 필수입니다.';
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -40,9 +70,10 @@ export async function POST(req: NextRequest) {
     const body: ReviewRequestBody = await req.json();
     const p = body.params;
 
-    if (!p || !p.voltage_V || !p.totalLength_m) {
+    const validationError = validateReviewParams(p);
+    if (validationError) {
       return NextResponse.json(
-        { success: false, error: { code: 'ESVA-4001', message: 'voltage_V and totalLength_m are required' } },
+        { success: false, error: { code: 'ESVA-4001', message: validationError } },
         { status: 400 },
       );
     }
@@ -62,9 +93,9 @@ export async function POST(req: NextRequest) {
 
       // LOOKUP: KEC 법규 조회
       lookup: async (params: CalcParams) => {
-        const conductor = p.conductor ?? 'Cu';
-        const insulation = p.insulation ?? 'XLPE';
-        const installation = p.installation ?? 'conduit';
+        const conductor = p.conductor!;
+        const insulation = p.insulation!;
+        const installation = p.installation!;
         const appliedClauses: string[] = [];
 
         // 허용전류 조회
@@ -92,7 +123,12 @@ export async function POST(req: NextRequest) {
           appliedClauses.push('KEC 212.3');
         }
 
-        return { ampacity, vdLimit: 5, breakerCandidates, appliedClauses };
+        return {
+          ampacity,
+          vdLimit: p.maxVoltageDropPercent,
+          breakerCandidates,
+          appliedClauses,
+        };
       },
 
       // CALCULATE: 전압강하 계산
@@ -100,7 +136,7 @@ export async function POST(req: NextRequest) {
         const I = p.current_A ?? (params.loadPower_kW
           ? (params.loadPower_kW * 1000) / (params.voltage_V! * (params.phases === 3 ? 1.732 : 1) * (p.powerFactor ?? 0.85))
           : 0);
-        const A = params.minCableSize_sq ?? 16;
+        const A = params.minCableSize_sq!;
         const L = params.totalLength_m;
         const rho = p.conductor === 'Al' ? 0.029 : 0.018;
         const k = params.phases === 3 ? 1.732 : 2;
@@ -147,6 +183,9 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Design review failed';
     apiLog({ level: 'error', event: 'design-review', route: '/api/review', error: message, durationMs: timer.elapsed() });
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: { code: 'ESVA-4999', message: '설계 검토를 완료하지 못했습니다.' } },
+      { status: 500 },
+    );
   }
 }

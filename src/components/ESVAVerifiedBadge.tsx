@@ -1,10 +1,11 @@
 /**
- * ESVA Verified Badge
+ * ESA Review Report Badge
  * -------------------
- * 검증 완료 인증 마크. 등급별 색상 + 점수 표시.
+ * 전문팀 검토 보고서 표식. 법적 인증이 아니라 보고서 등급·판정을 표시한다.
  */
 
 import type { VerifiedGrade, ReportVerdict } from '@/agent/teams/types';
+import { BadgeCheck, CheckCircle2, TriangleAlert, XCircle, type LucideIcon } from 'lucide-react';
 
 interface Props {
   grade: VerifiedGrade;
@@ -25,10 +26,10 @@ const GRADE_COLORS: Record<VerifiedGrade, { bg: string; border: string; text: st
   'F':  { bg: '#991b1b', border: '#7f1d1d', text: '#ffffff' },
 };
 
-const VERDICT_LABEL: Record<ReportVerdict, { ko: string; icon: string }> = {
-  PASS:        { ko: '적합', icon: '✓' },
-  CONDITIONAL: { ko: '조건부', icon: '△' },
-  FAIL:        { ko: '부적합', icon: '✗' },
+const VERDICT_LABEL: Record<ReportVerdict, { ko: string; icon: LucideIcon }> = {
+  PASS: { ko: '검토 범위 내 적합', icon: CheckCircle2 },
+  CONDITIONAL: { ko: '조건부·사람 검토 필요', icon: TriangleAlert },
+  FAIL: { ko: '부적합 항목 발견', icon: XCircle },
 };
 
 const SIZES = {
@@ -47,6 +48,7 @@ export default function ESVAVerifiedBadge({
 }: Props) {
   const colors = GRADE_COLORS[grade];
   const verdictInfo = VERDICT_LABEL[verdict];
+  const VerdictIcon = verdictInfo.icon;
   const sz = SIZES[size];
 
   return (
@@ -66,20 +68,11 @@ export default function ESVAVerifiedBadge({
         <span className={`${sz.text} font-bold opacity-90`}>{score}점</span>
       </div>
 
-      {/* ESVA Verified 라벨 */}
+      {/* 검토 보고서 라벨 */}
       <div className="mt-2 flex items-center gap-1.5">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0">
-          <circle cx="12" cy="12" r="10" stroke={colors.bg} strokeWidth="2" />
-          <path
-            d="M8 12l3 3 5-5"
-            stroke={colors.bg}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <BadgeCheck size={14} className="shrink-0" style={{ color: colors.bg }} aria-hidden="true" />
         <span className={`${sz.text} font-bold`} style={{ color: colors.bg }}>
-          ESVA Verified
+          ESA 검토 보고서
         </span>
       </div>
 
@@ -91,7 +84,9 @@ export default function ESVAVerifiedBadge({
           color: colors.bg,
         }}
       >
-        {verdictInfo.icon} {verdictInfo.ko}
+        <span className="inline-flex items-center gap-1">
+          <VerdictIcon size={13} aria-hidden="true" /> {verdictInfo.ko}
+        </span>
       </span>
 
       {/* 보고서 ID */}

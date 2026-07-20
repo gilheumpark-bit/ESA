@@ -1,7 +1,7 @@
 /**
  * POST /api/team-review
  * ---------------------
- * ESVA 4-Team 설계 리뷰 엔드포인트.
+ * ESVA 3개 전문팀 검토 + 별도 합의 단계 엔드포인트.
  * withApiHandler로 CORS/레이트리밋/에러핸들링/로깅 통합.
  */
 
@@ -11,9 +11,31 @@ import { getFormFile } from '@/lib/api/form-file';
 import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { saveReport } from '@/lib/report-store';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
 const RULES_MAX_BYTES = 1024 * 1024;
+const DRAWING_MAX_BYTES = 20 * 1024 * 1024;
+const VISION_KEY_MAX_CHARS = 4096;
+const VISION_MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
+const VISION_PROVIDERS = new Set(['openai', 'gemini', 'claude'] as const);
+type VisionProvider = 'openai' | 'gemini' | 'claude';
+
+function drawingKind(file: File): 'image' | 'pdf' | 'dxf' | null {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'webp'].includes(extension ?? '') &&
+      ['image/png', 'image/jpeg', 'image/webp', ''].includes(file.type)) return 'image';
+  if (extension === 'pdf' && ['application/pdf', ''].includes(file.type)) return 'pdf';
+  if (extension === 'dxf' && ['', 'application/dxf', 'image/vnd.dxf', 'application/octet-stream', 'text/plain'].includes(file.type)) return 'dxf';
+  return null;
+}
+
+function hasServerVisionKey(provider: VisionProvider): boolean {
+  if (provider === 'openai') return Boolean(process.env.OPENAI_API_KEY?.trim());
+  if (provider === 'gemini') return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -22,6 +44,11 @@ export const POST = withApiHandler(
   { rateLimit: 'sld', checkOrigin: true },
   async (req: NextRequest, ctx) => {
     const perf = startPerf('team-review');
+    const userId = await extractVerifiedUserId(req);
+    const suppliedAuth = req.headers.has('authorization');
+    if (suppliedAuth && !userId) {
+      return ctx.error('ESVA-9401', '유효한 로그인이 필요합니다', 401);
+    }
 
     const contentType = req.headers.get('content-type') ?? '';
     let sessionId = `session-${Date.now().toString(36)}`;
@@ -34,6 +61,11 @@ export const POST = withApiHandler(
     let params: Record<string, unknown> = {};
     let customRuleSet: CustomRuleSet | undefined;
     let ruleWarnings: string[] = [];
+    let vision: {
+      provider: VisionProvider;
+      apiKey?: string;
+      model?: string;
+    } | undefined;
 
     // Multipart: 도면 파일 + 메타데이터
     if (contentType.includes('multipart/form-data')) {
@@ -56,9 +88,44 @@ export const POST = withApiHandler(
       }
 
       if (file) {
+        if (file.size > DRAWING_MAX_BYTES) {
+          return ctx.error('ESVA-4413', `도면 파일이 너무 큽니다 (최대 ${DRAWING_MAX_BYTES / 1024 / 1024}MB)`, 400);
+        }
+        const kind = drawingKind(file);
+        if (!kind) {
+          return ctx.error('ESVA-4415', 'PNG, JPG, WebP, PDF, DXF 도면만 검토할 수 있습니다', 400);
+        }
         fileBuffer = await file.arrayBuffer();
         fileName = file.name;
         mimeType = file.type;
+
+        if (kind === 'image') {
+          const providerRaw = formData.get('provider');
+          const provider = (typeof providerRaw === 'string' && providerRaw.trim()
+            ? providerRaw.trim().toLowerCase()
+            : 'openai') as VisionProvider;
+          if (!VISION_PROVIDERS.has(provider)) {
+            return ctx.error('ESVA-4400', '지원하지 않는 Vision 제공자입니다', 400);
+          }
+          const apiKeyRaw = formData.get('apiKey');
+          const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : '';
+          if (apiKey.length > VISION_KEY_MAX_CHARS) {
+            return ctx.error('ESVA-4400', 'Vision API 키 형식이 올바르지 않습니다', 400);
+          }
+          if (!apiKey && !hasServerVisionKey(provider)) {
+            return ctx.error('ESVA-9401', '이미지 전문팀 검토에는 Vision BYOK 키가 필요합니다', 401);
+          }
+          const modelRaw = formData.get('model');
+          const model = typeof modelRaw === 'string' ? modelRaw.trim() : '';
+          if (model && !VISION_MODEL_PATTERN.test(model)) {
+            return ctx.error('ESVA-4400', 'Vision 모델 이름 형식이 올바르지 않습니다', 400);
+          }
+          vision = {
+            provider,
+            ...(apiKey ? { apiKey } : {}),
+            ...(model ? { model } : {}),
+          };
+        }
       }
 
       // 사내 규정(선택) — 무효 룰셋을 조용히 버리고 검토를 진행하면 사용자는
@@ -117,6 +184,7 @@ export const POST = withApiHandler(
       params,
       countryCode: (params.countryCode as string) ?? 'KR',
       language: (params.language as string) ?? 'ko',
+      vision,
       customRuleSet,
     });
 
@@ -125,6 +193,11 @@ export const POST = withApiHandler(
     if (!result.success) {
       return ctx.error('ESVA-4500', result.error ?? '팀 리뷰 실행 실패', 500);
     }
+
+    const persistence = {
+      attempted: Boolean(result.report && userId),
+      saved: result.report && userId ? await saveReport(result.report, userId) : false,
+    };
 
     const durationMs = perf.end({ teamCount: result.teamResults.length });
 
@@ -135,6 +208,8 @@ export const POST = withApiHandler(
         classification: result.routing.classification,
       },
       teamCount: result.teamResults.length,
+      consensus: result.consensus,
+      persistence,
       teamSummary: result.teamResults.map(tr => ({
         teamId: tr.teamId,
         success: tr.success,

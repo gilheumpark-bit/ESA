@@ -4,11 +4,11 @@
  * Returns tenant overview: user count, calculation count,
  * recent audit log entries, and usage statistics.
  *
- * Attempts to read from Supabase. Falls back to mock data
- * when the database is unavailable or tables do not yet exist.
+ * Reads verified data from Supabase and reports an explicit unavailable state
+ * when the database is not configured.
  *
  * PART 1: Types
- * PART 2: Mock fallback data
+ * PART 2: Unavailable-state data
  * PART 3: Supabase queries
  * PART 4: GET handler
  */
@@ -16,6 +16,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase-id-token';
+import { getSupabaseAdmin } from '@/lib/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -23,8 +24,8 @@ import { verifyIdToken } from '@/lib/firebase-id-token';
 
 export interface AdminDashboardResponse {
   ok: boolean;
-  /** 'database' = 실측값 / 'demo' = Supabase 미연결·테이블 부재 → 데모 데이터 */
-  source: 'database' | 'demo';
+  /** 'database' = 실측값 / 'unavailable' = 저장소 미연결 */
+  source: 'database' | 'unavailable';
   data: AdminDashboardData;
 }
 
@@ -72,45 +73,17 @@ export interface AdminDashboardData {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 2 — Mock fallback data
+// PART 2 — Explicit unavailable state
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function getMockData(): AdminDashboardData {
+function getUnavailableData(): AdminDashboardData {
   return {
-    tenant: {
-      id: 'tenant_001',
-      name: 'ESVA Enterprise',
-      domain: 'company.com',
-      plan: 'Enterprise',
-      maxUsers: 50,
-      currentUsers: 23,
-      features: ['sso', 'audit_log', 'api_access', 'custom_llm', 'dedicated_support', 'custom_calculators'],
-      ssoType: 'oidc',
-      ssoIssuer: 'https://login.microsoftonline.com/tenant-id',
-    },
-    users: [
-      { id: '1', name: '김철수', email: 'chulsoo@company.com', role: 'admin', lastLogin: '2026-04-05' },
-      { id: '2', name: '이영희', email: 'younghee@company.com', role: 'user', lastLogin: '2026-04-04' },
-      { id: '3', name: '박지성', email: 'jisung@company.com', role: 'user', lastLogin: '2026-04-03' },
-    ],
-    auditLog: [
-      { id: '1', userId: 'user1', action: 'calc.execute', resource: 'voltage-drop', createdAt: '2026-04-05T10:30:00Z', ip: '192.168.1.100' },
-      { id: '2', userId: 'user2', action: 'search.query', resource: 'KEC 전압강하', createdAt: '2026-04-05T10:15:00Z', ip: '192.168.1.101' },
-      { id: '3', userId: 'user1', action: 'auth.login', resource: 'sso', createdAt: '2026-04-05T09:00:00Z', ip: '192.168.1.100' },
-      { id: '4', userId: 'user3', action: 'calc.export', resource: 'cable-sizing', createdAt: '2026-04-04T17:45:00Z', ip: '192.168.1.102' },
-      { id: '5', userId: 'user2', action: 'project.create', resource: '신축공사 프로젝트', createdAt: '2026-04-04T14:20:00Z', ip: '192.168.1.101' },
-    ],
-    auditTotalPages: 3,
-    usage: [
-      { label: '이번 달 계산 횟수', value: '2,847', delta: '+12%' },
-      { label: '활성 사용자', value: '23', delta: '+3' },
-      { label: 'API 호출', value: '15,392', delta: '+8%' },
-      { label: '저장 용량', value: '4.2 GB', delta: '+0.3 GB' },
-    ],
-    counts: {
-      userCount: 23,
-      calculationCount: 2847,
-    },
+    tenant: null,
+    users: [],
+    auditLog: [],
+    auditTotalPages: 0,
+    usage: [],
+    counts: { userCount: null, calculationCount: null },
   };
 }
 
@@ -121,20 +94,11 @@ function getMockData(): AdminDashboardData {
 async function fetchLiveData(): Promise<AdminDashboardData | null> {
   try {
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = getSupabaseAdmin();
 
-    if (!url || !serviceKey) return null;
-
-    // Dynamic import to avoid build failures when supabase is not configured
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    // User count — try profiles table, fall back to auth.users is not accessible via client
+    // User count from the Firebase-synced application users table.
     const { count: userCount } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*', { count: 'exact', head: true });
 
     // Calculation count from calculation_receipts
@@ -142,8 +106,8 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
       .from('calculation_receipts')
       .select('*', { count: 'exact', head: true });
 
-    // 핵심 테이블이 하나도 안 읽히면 DB가 준비되지 않은 것 → demo 모드로 강등.
-    // (이전엔 이 경우에도 목업을 'database'로 라벨링해 반환했다.)
+    // 핵심 테이블이 하나도 안 읽히면 DB 미준비 상태를 명시한다.
+    // 목업 값을 실제 데이터처럼 반환하지 않는다.
     if (userCount == null && calcCount == null) return null;
 
     // Recent audit log entries (latest 20)
@@ -153,10 +117,10 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    // Users list (from profiles)
+    // Users list from the same identity source used by authorization.
     const { data: userRows } = await supabase
-      .from('profiles')
-      .select('id, display_name, email, role, last_sign_in')
+      .from('users')
+      .select('id, nickname, email, role, last_sign_in')
       .order('last_sign_in', { ascending: false })
       .limit(50);
 
@@ -174,7 +138,7 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
       tenant: null, // 테넌트 구성 테이블 미구축 — 목업으로 채우지 않는다
       users: userRows?.map(u => ({
         id: u.id,
-        name: u.display_name ?? u.email?.split('@')[0] ?? 'Unknown',
+        name: u.nickname ?? u.email?.split('@')[0] ?? 'Unknown',
         email: u.email ?? '',
         role: u.role ?? 'user',
         lastLogin: u.last_sign_in ?? '',
@@ -197,7 +161,7 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
       },
     };
   } catch {
-    // Any Supabase error → fall back to demo data
+    // Supabase 오류는 명시적인 unavailable 상태로 전환한다.
     return null;
   }
 }
@@ -207,42 +171,24 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Supabase profiles 테이블에서 사용자 role을 조회하여 admin 여부 확인.
- * Supabase 미연결 시 ADMIN_API_TOKEN 환경변수로 폴백.
+ * Firebase UID와 동기화된 users 테이블에서 관리자 역할을 확인한다.
  */
-async function checkAdminRole(uid: string, rawToken: string): Promise<boolean> {
-  // 1차: Supabase profiles 테이블에서 role 확인
+async function checkAdminRole(uid: string): Promise<boolean> {
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (url && serviceKey) {
-      const { createClient } = await import('@supabase/supabase-js');
-      const supabase = createClient(url, serviceKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-      });
-
-      const { data } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', uid)
-        .single();
-
-      if (data?.role === 'admin') return true;
-    }
+    const supabase = getSupabaseAdmin();
+    const { data } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', uid)
+      .single();
+    return data?.role === 'admin';
   } catch {
-    // Supabase 조회 실패 → 폴백으로 진행
+    return false;
   }
-
-  // 2차 폴백: ADMIN_API_TOKEN 환경변수 대조
-  const adminToken = process.env.ADMIN_API_TOKEN;
-  if (adminToken && rawToken === adminToken) return true;
-
-  return false;
 }
 
 export async function GET(request: NextRequest) {
-  // Rate limit (R4 stub repair: applyRateLimit was imported but never invoked).
+  // Per-route abuse limit.
   const blocked = applyRateLimit(request, 'default');
   if (blocked) return blocked;
 
@@ -265,17 +211,17 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Admin role 검증 ──
-  const isAdmin = await checkAdminRole(uid, token);
+  const isAdmin = await checkAdminRole(uid);
   if (!isAdmin) {
     return NextResponse.json({ error: 'Forbidden: admin access required' }, { status: 403 });
   }
 
   const liveData = await fetchLiveData();
-  const data = liveData ?? getMockData();
+  const data = liveData ?? getUnavailableData();
 
   const response: AdminDashboardResponse = {
     ok: true,
-    source: liveData ? 'database' : 'demo',
+    source: liveData ? 'database' : 'unavailable',
     data,
   };
   return NextResponse.json(response);

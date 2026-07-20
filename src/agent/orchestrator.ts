@@ -34,6 +34,8 @@ export interface OrchestratorRequest {
   countryCode?: string;
   language?: string;
   dxfLayers?: string[];
+  /** 이미지 분석용 요청 한정 Vision 자격 증명. 보고서·응답에는 직렬화하지 않는다. */
+  vision?: TeamInput['vision'];
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
 }
@@ -42,6 +44,12 @@ export interface OrchestratorResponse {
   success: boolean;
   routing: TeamRouting;
   teamResults: TeamResult[];
+  consensus: {
+    requested: boolean;
+    executed: boolean;
+    participatingTeams: TeamResult['teamId'][];
+    reason?: string;
+  };
   report?: ESVAVerifiedReport;
   durationMs: number;
   error?: string;
@@ -62,6 +70,7 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     params: req.params,
     countryCode: req.countryCode,
     language: req.language,
+    vision: req.vision,
     customRuleSet: req.customRuleSet,
   };
 }
@@ -141,8 +150,7 @@ export async function runOrchestrator(
     const teamInput = buildTeamInput(request, routing);
 
     // Step 3: 병렬 실행 (1차 팀 + 지원 팀)
-    const allTeamIds = [routing.primaryTeam, ...routing.supportTeams]
-      .filter(t => t !== 'TEAM-CONSENSUS');
+    const allTeamIds = [routing.primaryTeam, ...routing.supportTeams];
 
     const teamPromises = allTeamIds.map(teamId =>
       dispatchWithRetry(teamId, teamInput, 2).catch(err => ({
@@ -154,39 +162,26 @@ export async function runOrchestrator(
       } as TeamResult))
     );
 
-    // 텍스트 쿼리 시 레거시 MainAgent도 병렬 호출 (검색 보강)
-    if (classification === 'text_query' && request.query) {
-      teamPromises.push(
-        (async (): Promise<TeamResult> => {
-          try {
-            const { MainAgent } = await import('./main');
-            const agent = new MainAgent();
-            const agentResult = await agent.processQuery({
-              sessionId: request.sessionId,
-              query: request.query!,
-              language: (request.language ?? 'ko') as 'ko' | 'en' | 'ja',
-              countryCode: (request.countryCode ?? 'KR') as 'KR' | 'US' | 'JP' | 'CN' | 'DE' | 'AU',
-            });
-            return {
-              teamId: 'TEAM-STD',
-              success: true,
-              confidence: 0.8,
-              durationMs: agentResult.timing?.total ?? 0,
-              rawOutput: agentResult.answer,
-            };
-          } catch {
-            return { teamId: 'TEAM-STD', success: false, confidence: 0, durationMs: 0 };
-          }
-        })()
-      );
-    }
-
     const teamResults = await Promise.all(teamPromises);
 
-    // Step 4: 합의 팀 실행 (routing이 합의 필요할 때만)
+    // Step 4: 합의는 서로 다른 전문팀이 2개 이상 성공한 경우에만 실행한다.
+    // 같은 TEAM-STD 구현을 두 번 호출해 독립 협의체처럼 세던 경로는 제거했다.
     let report: ESVAVerifiedReport | undefined;
+    const participatingTeams = [...new Set(
+      teamResults
+        .filter(result => result.success && result.teamId !== 'TEAM-CONSENSUS')
+        .map(result => result.teamId),
+    )];
+    const consensus = {
+      requested: routing.requiresConsensus,
+      executed: false,
+      participatingTeams,
+      reason: routing.requiresConsensus
+        ? '서로 다른 전문팀 2개 이상의 성공 결과가 필요합니다.'
+        : '이 입력 유형은 다중팀 합의를 요청하지 않습니다.',
+    };
 
-    if (routing.requiresConsensus && teamResults.some(r => r.success)) {
+    if (routing.requiresConsensus && participatingTeams.length >= 2) {
       const { teamResult: consensusResult, report: verifiedReport } =
         await executeConsensusTeam({
           sessionId: request.sessionId,
@@ -197,12 +192,15 @@ export async function runOrchestrator(
 
       teamResults.push(consensusResult);
       report = verifiedReport;
+      consensus.executed = true;
+      consensus.reason = '서로 다른 전문팀 결과를 합의·출력 단계에서 병합했습니다.';
     }
 
     return {
       success: teamResults.some(r => r.success),
       routing,
       teamResults,
+      consensus,
       report,
       durationMs: Date.now() - start,
     };
@@ -211,6 +209,12 @@ export async function runOrchestrator(
       success: false,
       routing: routeToTeams('text_query'),
       teamResults: [],
+      consensus: {
+        requested: false,
+        executed: false,
+        participatingTeams: [],
+        reason: '오케스트레이터 실행 전에 오류가 발생했습니다.',
+      },
       durationMs: Date.now() - start,
       error: err instanceof Error ? err.message : String(err),
     };

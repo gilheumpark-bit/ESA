@@ -12,6 +12,17 @@
 
 import { useState, useEffect } from 'react';
 import type { SafetyCheckItem, SafetyAnalysisResult, RiskLevel } from '@/engine/safety/types';
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Lightbulb,
+  ShieldCheck,
+  Siren,
+  TriangleAlert,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 서브 컴포넌트
@@ -24,11 +35,11 @@ const RISK_BADGE: Record<RiskLevel, { label: string; style: string }> = {
   low:      { label: '낮음',       style: 'bg-green-600/20 text-green-400 border-green-700' },
 };
 
-const OVERALL_RISK_HEADER: Record<RiskLevel, { bg: string; icon: string; label: string }> = {
-  critical: { bg: 'bg-red-950/50 border-red-600',    icon: '🚨', label: '즉시 조치 필요' },
-  high:     { bg: 'bg-orange-950/50 border-orange-500', icon: '⚠️', label: '위험도 높음' },
-  medium:   { bg: 'bg-yellow-950/50 border-yellow-600', icon: '⚡', label: '위험도 보통' },
-  low:      { bg: 'bg-green-950/30 border-green-700', icon: '✅', label: '위험도 낮음' },
+const OVERALL_RISK_HEADER: Record<RiskLevel, { bg: string; icon: LucideIcon; label: string }> = {
+  critical: { bg: 'bg-red-950/50 border-red-600', icon: Siren, label: '즉시 조치 필요' },
+  high: { bg: 'bg-orange-950/50 border-orange-500', icon: TriangleAlert, label: '위험도 높음' },
+  medium: { bg: 'bg-yellow-950/50 border-yellow-600', icon: Zap, label: '위험도 보통' },
+  low: { bg: 'bg-green-950/30 border-green-700', icon: ShieldCheck, label: '위험도 낮음' },
 };
 
 interface CheckItemRowProps {
@@ -54,6 +65,7 @@ function CheckItemRow({ item, checked, onToggle }: CheckItemRowProps) {
       <div className="flex items-start gap-3">
         {/* 체크박스 */}
         <button
+          type="button"
           onClick={() => onToggle(item.id)}
           aria-label={checked ? '완료 취소' : '완료 표시'}
           className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded border-2 flex items-center justify-center transition-all ${
@@ -62,7 +74,7 @@ function CheckItemRow({ item, checked, onToggle }: CheckItemRowProps) {
               : 'border-[var(--color-border)] hover:border-green-500'
           }`}
         >
-          {checked && <span className="text-white text-xs">✓</span>}
+          {checked && <Check size={13} className="text-white" aria-hidden="true" />}
         </button>
 
         {/* 내용 */}
@@ -82,14 +94,18 @@ function CheckItemRow({ item, checked, onToggle }: CheckItemRowProps) {
           {item.alternative && !checked && (
             <div className="mt-2">
               <button
+                type="button"
                 onClick={() => setShowAlt(v => !v)}
-                className="text-[11px] text-[var(--color-primary)] hover:underline"
+                className="inline-flex items-center gap-1 text-[11px] text-[var(--color-primary)] hover:underline"
               >
-                {showAlt ? '▲ 대안 숨기기' : '▼ 즉시 대안 보기 (ESA 제안)'}
+                {showAlt
+                  ? <><ChevronUp size={12} aria-hidden="true" /> 대안 숨기기</>
+                  : <><ChevronDown size={12} aria-hidden="true" /> 즉시 대안 보기</>}
               </button>
               {showAlt && (
-                <div className="mt-1.5 p-2 rounded-lg bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 text-xs text-[var(--color-text-primary)]">
-                  💡 {item.alternative}
+                <div className="mt-1.5 flex gap-2 rounded-lg border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 p-2 text-xs text-[var(--color-text-primary)]">
+                  <Lightbulb size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>{item.alternative}</span>
                 </div>
               )}
             </div>
@@ -145,13 +161,14 @@ export function SafetyCheckList({ analysis, className = '', onCheckedChange }: S
   const pct = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
 
   const header = OVERALL_RISK_HEADER[analysis.overallRisk];
+  const RiskIcon = header.icon;
 
   return (
     <div className={`space-y-4 ${className}`}>
       {/* 종합 위험도 요약 */}
       <div className={`rounded-xl border p-4 ${header.bg}`}>
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xl">{header.icon}</span>
+          <RiskIcon size={20} aria-hidden="true" />
           <span className="font-bold text-[var(--color-text-primary)]">{header.label}</span>
         </div>
         <p className="text-sm text-[var(--color-text-secondary)]">{analysis.summaryKo}</p>

@@ -1,120 +1,82 @@
-# ESVA 현실화 계획 (Realization Plan)
+# ESA 현실화 상태와 다음 게이트
 
-> 작성 2026-07-19 · feat/esva-v1.0 · 근거: 전 페이지/API/엔진/제품 인벤토리(에이전트 실측 grep, file:line) + 계산기 57 검증 + 도면 파이프라인 매핑.
-> "현실성 렌즈": REAL(실작동) · PARTIAL(일부) · DORMANT(코드有·호출0) · STUB(빈껍데기) · FAKED(가짜값 하드코딩) · DEMO(목업) · FLAG-OFF(플래그로 꺼짐).
+> 기준일: 2026-07-20 · 브랜치 `feat/esva-v1.0` · 현재 작업 트리 기준
 
----
+이 문서는 “코드가 있다”와 “배포에서 실작동이 확인됐다”를 분리한다. 구현 완료 표시는 저장소 계약과 로컬 회귀 검증을 뜻하며, Supabase·Stripe·Weaviate·외부 AI의 실제 운영 왕복을 대신하지 않는다.
 
-## 1. 마스터 카탈로그 (요약 + 현실화 백로그)
+## 1. 사용자 도달 기능
 
-### 1.1 페이지 (36개)
-- **REAL (대다수)**: 홈·검색·calc 허브·calc 실행·field·standards·glossary·settings·byok·compare·projects×3·community×3·mobile·history·receipt×2·정적(terms/privacy/…)·contact.
-- **DEMO-ONLY**: `/report/[id]`(항상 데모 리포트 — API fetch 주석·sessionStorage 미기록).
-- **DORMANT**: `/preview/ax`·`/preview/ax/answer`·`/preview/concept-v2`·`/preview/concept-v2/answer`(디자인 프로토타입·인바운드 링크 0).
-- **PARTIAL**: `/dashboard`(뉴스 항상 빈값·글로벌비교 하드코딩 프리셋) · `/admin`(실 API + 목업 폴백 "데모 데이터" 배지) · `/settings/onpremise`(설정을 sessionStorage에 쓰지만 **읽는 코드 없음** → 온프렘 활성화 무효).
-
-### 1.2 API (35 라우트)
-- **REAL & 정상 배선**: calculate·sld(BYOK)·autocomplete·chat·community×3·convert·dashboard·export(POST)·feedback·field×2·notifications·ocr·projects×2·search·onpremise-test·standard-convert·youtube (+ health·openapi 인프라).
-- **DORMANT (호출 0)**: `/api/calculate/batch` · `/api/calculate/[id]`(페이지가 부재 라우트 호출) · `/api/team-review` · `/api/benchmark` · `/api/review` · `/api/cron/crawl`(vercel.json 미등록).
-- **FLAG-OFF (기본 403)**: `/api/dxf` · `/api/pdf-drawing` (`DRAWING_PARSER=false`).
-- **FAKED/PARTIAL**: `/api/admin`(usage 타일·tenant 블록 하드코딩 목업, source='database'에도 반환).
-- **배선버그(라우트는 정상, 호출부가 깨짐)**: `/api/checkout` `<a href>` GET→POST전용 **405** · `/api/export` 리포트 `window.open` GET→**405** · `/api/notarize` 미검증 JWT claim 티어 fast-path(권한상승) · receipt 페이지가 부재 `/api/receipt/[id]` 호출.
-
-### 1.3 계산기 (57개) — ✅ 검증 완료(별건)
-전수 known-answer 검증 완료. 2버그(impedance-voltage %Z·motor-efficiency IE1절감) + 3 공식정정 수리·47개 accuracy 테스트 잠금(커밋 7c84d42·e3485e5, jest 496 GREEN). 잔여: push/병합 미실시.
-
-### 1.4 도면 (SLD) 파이프라인
-- **REAL(도달)**: 이미지→VLM 기기인식 + "추천 계산 순서(plan)". DXF/PDF 파서도 실재하나 **FLAG-OFF(403)**.
-- **DORMANT+FAKED(미도달)**: 분석·개선제안(sld/layout/consensus team·`/api/team-review`) 코드는 실재하나 UI 호출 0. **도면→계산 다리 위조**: `sld-team.ts:189/245`가 `compliant:true` 하드코딩, `:261` 가정 100A. 마감 모듈 `executeCalcChain`·`extractCalcParams`·`generateDesignReview` 전부 dead. 파서 node-id 불일치로 연결 그래프 단절.
-
-### 1.5 엔진/표준
-- **REAL**: quality-checklist(19규칙 임계값) · audit-engine(16영역 A~F 가중·critical auto-F) · receipt seal(SHA-256) · standard-refs(78) · knowledge-graph(~80노드) · intent-parser/tools(계산기 라우팅).
-- **표준 판정 DATA-THIN(핵심 리스크)**: 조항은 ~239개(KEC 137·NEC 41·IEC 24·JIS 19·ESA 8·NER 10)지만 **실제 pass/fail 평가기는 ~13개뿐**. 나머지는 evaluator-guard가 HOLD 처리(value:0 placeholder)하거나 KEC-extended 59개처럼 `==1`(플래그 켜짐?) 사소 체크. **ESA·NER은 열람 전용**(evaluateStandard 미라우팅→판정 불가).
-- **위조/미적용(안전)**: `standard-comparator.compareAmpacity`가 NEC/IEC를 **KEC×0.95/×0.98로 날조**(실 테이블 `data/ampacity-tables/` 존재하는데 미사용·compare 페이지 노출) · quality-checklist **입력 없으면 PASS**(빈 데이터=합격) · `/api/chat`이 `output-filter`(무근거 숫자 차단) **미적용** · SJC `judge.ts`+`source-tracker.ts`(엔진 판정·무근거 BLOCK 게이트) **dormant**(계산기는 types.ts 직접 호출) · `verifyReceipt` 변조검증 **프로덕션 호출 0**(seal만 실작동·keyless).
-- **검증 파이프라인 전체가 UI-고아**: audit·quality·multi-team·gen-verify는 `/api/review`, standards-team은 `/api/team-review` 경유인데 둘 다 UI 호출 0.
-- **DEAD(prune/wire 대상)**: `design-review.ts`·`calc-chain-executor.ts`·`chain/index.ts`·`reverse-calc(-extended).ts`·`sensitivity.ts`·`override.ts`·`llm/system-prompt.ts`.
-
-### 1.6 제품/횡단
-- **REAL**: 인증(Firebase+jose JWKS)·API 신원/소유권 검증·BYOK 키(AES-GCM)·community·projects·dashboard·i18n·in-app 알림·rate-limit(인메모리).
-- **공동(空洞) — 결제/티어**: 크레딧 원장 **없음** · Stripe **webhook 없음** · billing 스키마 없음 · `getUserTier`가 부재 `user_profiles` 조회(실테이블 `users`)→항상 free · checkout 405 · **`OPEN_BETA=true`가 전부 가림**(현재 모두 Pro).
-- **DORMANT/STUB**: RAG/Weaviate(미프로비저닝→local 폴백) · team-review(UI 0) · 알림 email/push 발송(prefs만·sender 없음) · analytics(stdout만·집계 없음) · BYOK 클라우드 동기화(문구만).
-- **플래그 기본 OFF 2개**: `DRAWING_PARSER`, `RECEIPT_NOTARIZE`. (별도 `OPEN_BETA=true` 하드코딩)
-
----
-
-## 2. 현실화 계획 (우선순위 배치)
-
-원칙: **안전(거짓 판정 제거) > 깨진 배선 > 죽은 핵심기능 배선 > 정리 > 결제/인프라(외부 의존)**. A~D는 코드 전용(외부 의존 없음)이라 자율 실행 가능. E~F는 외부 리소스(Stripe 키·Weaviate·SMTP) 필요 → 코드는 짜되 활성화는 사용자 제공 대기.
-
-### Batch A — 안전: 거짓 판정 제거 (코드 전용) 🔴
-- **A1** `standard-comparator.compareAmpacity` 날조 제거: NEC/IEC를 KEC×0.95/×0.98이 아니라 실 테이블(`data/ampacity-tables/`)에서 조회. **사용자 도달(compare 페이지)·안전 직결·실테이블 존재 → 최우선.**
-- **A2** `sld-team.ts` 위조 제거: `compliant:true` 하드코딩·가정 100A → 실제 계산기 연결 또는 "수동검증 필요"로 정직 반환(거짓 합격 landmine).
-- **A3** `quality-checklist` "입력 없으면 PASS" → HOLD/needs-data. 빈 데이터 만점 차단.
-- **A4** `/api/chat` `output-filter` 적용(무근거 숫자 차단 게이트를 실제 채팅 경로에). LLM 할루 숫자 방어.
-
-### Batch B — 깨진 배선 수리 (코드 전용)
-- **B1** `/api/export` 리포트 GET→405: `/report/[id]` 다운로드를 POST+blob로.
-- **B2** receipt 페이지: 부재 `/api/receipt/[id]` → `/api/calculate/[id]`로 교정(또는 alias 라우트 신설·응답 shape 정합).
-- **B3** `/api/notarize` 미검증 JWT claim 티어 fast-path 제거(서버 검증만).
-
-### Batch C — 죽은 핵심기능 배선 (코드 전용) — 도면의 "분석·개선제안" 실현
-- **C1** `/api/team-review` → SLD/리포트 UI 연결 + 리포트 실제 생성·저장 → `/report/[id]` DEMO 해제.
-- **C2** 도면→실계산 다리 복구: node-id 통일(연결성)·`extractCalcParams`→`executeCalcChain`로 57계산기 실구동·standard-drawing taxonomy 매핑.
-- **C3** `DRAWING_PARSER` 플래그 ON(DXF/PDF 해제) — 미출시라 저위험.
-- **C4** `/api/review`·`/api/calculate/batch` 가치 있는 곳에 UI 연결.
-
-### Batch D — 죽은/오해 표면 정리 (코드 전용)
-- **D1** `/preview/*` 4페이지: 제거 또는 내부 전용 게이트.
-- **D2** `/settings/onpremise` 저장값을 chat 경로가 읽게 배선(또는 제거).
-- **D3** `/dashboard` 뉴스·하드코딩 프리셋 실데이터화. `/admin` 목업 타일 실API 또는 명확 라벨.
-- **D4** 홈/로그인 하드코딩 통계 수치 → SoT(CALCULATOR_COUNT 등) 참조.
-
-### Batch C2 — 표준 판정 실질화 + 무결성 (코드 전용)
-- **G1** 고빈도 조항 placeholder→dedicated evaluator 승격(NEC/IEC/JIS 과전류·허용전류·접지·전압강하). value:0 HOLD를 실 pass/fail로. (사용자 지침: 임계값은 공인값만·추정 금지)
-- **G2** ESA·NER을 `evaluateStandard`에 라우팅(현재 열람 전용).
-- **G3** `verifyReceipt`를 receipt 조회 경로에 실제 호출(변조검증 노출). HMAC 서명은 별도 검토.
-- **G4** SJC `judge.ts`+`source-tracker.ts`(무근거 BLOCK) 또는 등가 게이트를 실경로에 배선(또는 명시적 제거).
-
-### Batch E — 결제/티어 (외부 의존: Stripe 키) 💰
-- **E1** `getUserTier` → `users` 테이블 + Firebase UID 매핑. tier CHECK에 `team` 추가.
-- **E2** Stripe webhook + fulfillment + billing 스키마 컬럼.
-- **E3** checkout `<a>` → POST fetch(priceId/returnUrl).
-- **E4** `OPEN_BETA` 수명주기 문서화·게이트(E1 없이 끄면 전원 잠김 방지).
-
-### Batch F — 인프라 (외부 의존: Weaviate·SMTP·store)
-- **F1** RAG/Weaviate 프로비저닝 or 검색을 "로컬 전용" 명시.
-- **F2** 알림 email/push 발송 채널 구현 or 토글 제거.
-- **F3** analytics 저장/집계 sink.
-- **F4** 분산 rate-limit(Redis/Upstash).
-
----
-
-## 3. 실행 상태 (2026-07-20 갱신)
-
-| 배치 | 상태 | 커밋 |
+| 영역 | 현재 상태 | 남은 현실 근거 |
 |---|---|---|
-| A 안전(A1~A4) | ✅ 완료 | 838daf4·b189741·c4a08a4 (aa94609 혼입→분리 재커밋) |
-| B 배선(#1 checkout·#2 export·#3 receipt·notarize) | ✅ 완료 | 0aea260·2deeaca·df98c81 (+배치 B3) |
-| D 표면 정리(D1~D4+Onboarding) | ✅ 완료 | 651641c·7a92dd4 일부 |
-| C 도면(C1 UI배선·C2 node-id·C3 플래그 ON) | ✅ 완료 — 잠복 3버그(ctor interop·LINE vertices·끝점 결속)까지 | 4629e41·7a92dd4 |
-| C 잔여 C4(/api/review·batch UI) | ⏸ 보류 — 명확한 표면 없음(YAGNI), dormant 유지 선언 |
-| C2 무결성(G2 ESA/NER·G3 verifyReceipt) | ✅ 완료 | 0717c05 |
-| C2 잔여 G1·G4·dead 정리·D2 onpremise | ✅ 완료 — G1 6조항 승격(실평가기 13→19·430.32 의도 보류)·G4 judge/source-tracker 삭제 결정·dead 6모듈 제거+DORMANT_MANIFEST·D2 chat 배선(SSRF 사설만) |
-| AI 모델 최신화 | ✅ 완료 — 공식 출처 실측만(OpenAI/Google 공식 페이지·Anthropic 정본), 추정 0 | 33c70b7 |
-| 도면 캘리브레이션(합성 15장) | ✅ 완료 — 결함 8종 적출·수리, 회귀 하네스+CI. 상세 `DRAWING_VALIDATION_RESULT.md` | 6829418·29365de |
-| 사내 규정 룰 로딩 통로 | ✅ 완료 — 룰셋 린트+평가+파이프라인+린트 API+UI. 독립 심사(IND-1)가 CRITICAL 2 실행재현→전량 수리. 상세 `CUSTOM_RULES_DESIGN.md` | 91ea1cb·25b6bdb |
-| 동종 잠복 소탕(심사 반경 4) | ✅ 완료 — as File 5곳→getFormFile·UTF-16 캡→byteLength·params 침묵 버림→400. 내장 조항 result:'FAIL' 0건 확인 | cfd8ce8 |
-| 실도면 실측(공개 5종·사용자 승인 수집) | ✅ 완료 — PDF 경로 전체 사문(R1 DOMMatrix·R2 worker) 포함 결함 8계열 적출·수리. KIMM 실도면 17p 무크래시 판독·래스터 정직 400·환각 61→0. `gate:pdf` 라이브 게이트 7/7 잠금. 판독 정확도 V는 골든 라벨 없어 미확보(선언). 상세 `DRAWING_VALIDATION_RESULT.md` 2차 절 |
-| E/F 결제·인프라 | ⏸ **유일 잔여** — 외부 리소스 대기(Stripe 키/Weaviate/SMTP). writer 봉인 스냅샷·G1 추가승격(원문 확인 필요분)도 이때 |
+| 계산기 57개 | 로컬 실행 가능 | 안전 중요 계산은 승인 도구/수계산과 교차 검증 |
+| 기준서 탐색·판정 | 스냅샷 검색 가능, 불충분 근거는 HOLD | 관할 기관 공인 원문과 판본 확인 |
+| 검색·채팅 | 로컬 검색 사용 가능, AI는 조건부 | 실제 공급자 키별 1회 왕복·비용·쿼터 확인 |
+| 이미지 도면 | 실제 크롭·VLM·엄격 파싱·전문팀 배선 구현 | 대표 현장 도면 골든 라벨과 공급자별 인식률 |
+| DXF 도면 | 벡터 파싱·블록/연결·단위 경계 구현 | 실제 CAD 외부참조·커스텀 블록 표본 |
+| PDF 도면 | 선택 페이지 벡터 파싱 구현 | 래스터 전용 PDF는 별도 이미지 경로 필요 |
+| 전문팀 검토 | 계통도·평면도·기준서 3팀 + 별도 합의·보고서 저장 | 외부 AI 키가 필요한 입력의 실제 왕복 |
+| 영수증·보고서 | 소유권/공개 경계, SHA-256 재검증 구현 | 대상 Supabase 마이그레이션 적용·새 세션 read-back |
+| 프로젝트·공유·커뮤니티·현장 | Firebase UID와 Supabase 소유권 경계 구현 | 실제 Firebase/Supabase 환경 E2E |
+| 결제 | Checkout·Portal·서명 웹훅·멱등 DB 함수 구현 | Stripe 테스트 모드 전체 구독 왕복 |
+| 알림·감사로그 | 인앱/DB 계약 구현; 운영 메모리 성공 위장 차단 | DB 마이그레이션과 장애 관측 |
+| Weaviate | v3 클라이언트 계약과 로컬 폴백 구현 | 호스트·키·컬렉션 프로비저닝 |
 
-라이브 실증 하이라이트: 도면 파이프라인 최초 개통 — 실 DXF 업로드→토폴로지 valid(고립 0)→
-4팀 리뷰→ESVA Verified 리포트(honest-HOLD 마킹) 생성, /report/[id] 인계 배선.
+## 2. 이번 전수 점검에서 닫은 핵심 결함
 
-도면 캘리브레이션 이후(2026-07-20): 파서에 테스트 0개·픽스처 0장이던 상태를 합성 15장
-(초5·중5·고5) + 적대 19건으로 덮었다. 기준선 측정에서 5종, 적대 반증에서 1종, **라이브
-왕복에서 2종**이 더 나왔다 — 마지막 둘은 픽스처가 전 지표 100%가 된 뒤에도 남아 있었고,
-그중 하나는 500kVA를 500,000V로 읽어 계산 체인 입력을 오염시키고 있었다. 실증 범위는
-여전히 합성 도면까지이며 **실제 현장 도면 0장**이다.
+### 안전·신뢰성
 
-## 3-구. 실행 순서
-A(안전) → B(배선) → D(정리) → C(핵심기능·큰 작업) → E/F(외부 의존, 사용자 리소스 대기). 각 배치 종료마다 게이트(jest·tsc·build) + `[심사 증거]`. E/F는 코드까지만·활성화는 키/호스트 제공 시.
+- 기준 근거가 없는 PASS, 단일 팀 결과를 합의로 포장하는 경로, 영수증 현행 판본 기본값을 제거했다.
+- AI 채팅 출력 필터를 실제 스트리밍 경로에 연결했다.
+- 이미지/DXF 좌표를 임의 물리 길이로 바꾸던 기본 스케일과 5m/100A 등 합성 가정을 제거했다.
+- VLM·SLD·명판 OCR 응답을 타입 단언하지 않고 배열 크기, 문자열 길이, 좌표, confidence, 연결 ID로 검증한다.
+- OpenAI Chat Completions의 현재 `max_completion_tokens` 계약을 사용하고 GPT-5 계열에서 비지원 `temperature`를 보내지 않는다.
+
+### 인증·개인정보·저장
+
+- 알림, 영수증, 보고서, 프로젝트, 커뮤니티, 현장 API에서 서버 검증 UID와 리소스 소유권을 결박했다.
+- BYOK는 IndexedDB의 추출 불가능한 AES-GCM 키를 사용하고, 원문 키를 로컬 저장·응답·로그·DB에 남기지 않는다.
+- 온프레미스 URL은 관리자 origin 허용 목록과 SSRF 경계를 통과해야 하며, 검색 화면이 저장 설정을 실제로 소비한다.
+- 운영에서 Supabase가 없거나 실패하면 알림·감사로그를 프로세스 메모리에 저장하고 성공한 것처럼 반환하지 않는다.
+
+### 결제·운영
+
+- 브라우저가 Stripe price ID를 지정하지 못하고 서버 플랜 핸들만 선택한다.
+- Checkout, Billing Portal, signed webhook, 이벤트 멱등 원장, 사용자 티어 갱신 계약을 연결했다.
+- 결제 키·가격·웹훅·DB가 모두 준비되지 않으면 UI와 API가 비활성 상태로 실패한다.
+- 공개 health 응답에서 환경·공급자 상세를 숨기고, 운영 토큰이 있을 때만 상세 진단을 제공한다.
+
+### 구조·문서
+
+- Weaviate 구형 API와 별도 schema 파일을 v3 클라이언트로 정리했다.
+- Next.js 16의 `proxy.ts` 경계로 이전했다.
+- 호출처가 없고 성공할 수 없던 YouTube 501 표면과 구형 AI provider 서비스 두 파일을 제거했다.
+- README, 사용자 가이드, API 문서와 프로젝트 지침의 4팀·IPFS·구형 모델·고정 정확도 과장 표현을 현재 구현과 맞췄다.
+
+## 3. 의도적으로 남긴 조건부·휴면 범위
+
+- `/api/review`, `/api/calculate/batch`: 구현과 테스트는 있으나 일반 UI 입력 계약이 확정되지 않아 API-only다.
+- 계산 체인 실행기, 역산·민감도·override: 호출처가 없으며 `docs/DORMANT_MANIFEST.md`의 활성 조건 전에는 제품 기능으로 세지 않는다.
+- 이메일/푸시 sender: 설정 기본값은 false이며 전송 인프라가 연결되기 전에는 인앱 알림만 지원한다.
+- IPFS 타임스탬프 등록: 기능 플래그 기본 OFF. 블록체인·제3자 공증이 아니며, 삭제·개인정보·보존정책과 실제 Pinata 왕복 전에는 활성화하지 않는다.
+- 다중 인스턴스 레이트 리밋: 공유 저장소 또는 신뢰 프록시가 필요하다.
+
+## 4. 출고 전 필수 게이트
+
+1. `git diff --check`
+2. `npx tsc --noEmit`
+3. `npm run lint -- --max-warnings=0`
+4. `npm test -- --runInBand`
+5. `npm run build`
+6. `npm run gate:pdf`
+7. `pwsh -NoProfile -File scripts/enforce.ps1`
+8. 실제 브라우저에서 홈 → 검색 → 계산 → 영수증, 도면 탭, 설정·로그인 경계를 375/768/1440px로 왕복
+
+## 5. 배포 환경에서만 가능한 실증
+
+- Supabase: `001_initial_schema.sql` → `001_reports_table.sql` → `002_firebase_contract.sql` → `003_audit_log_append_only.sql` 적용 후 RLS·소유권·새 세션 read-back.
+- Stripe test mode: Checkout → 서명 웹훅 → 멱등 원장 → 사용자 tier → 새 로그인 세션 → Billing Portal.
+- Weaviate: 실제 컬렉션 생성·insert·검색·재연결.
+- AI: 지원 모델별 최소 1건, 이미지 도면은 공급자별 대표 표본으로 응답 형식·비용·timeout 검증.
+- 이메일/푸시: sender가 없는 현재 상태에서는 미검증이 아니라 미구현으로 유지.
+
+위 항목은 키나 외부 인프라가 없으면 `PASS`가 아니라 `미검증`으로 보고한다.

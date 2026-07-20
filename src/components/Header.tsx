@@ -9,6 +9,7 @@
 
 import { useState, useRef, useEffect, useCallback, useId } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import {
   Search,
@@ -62,7 +63,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function DesktopNav({ pathname }: { pathname: string }) {
   return (
-    <nav className="hidden items-center gap-1 md:flex">
+    <nav className="hidden items-center gap-1 xl:flex">
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const isActive = pathname.startsWith(href);
         return (
@@ -196,7 +197,7 @@ function MobileMenu({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[var(--z-modal)] md:hidden" role="presentation">
+    <div className="fixed inset-0 z-[var(--z-modal)] xl:hidden" role="presentation">
       <div
         className="absolute inset-0 bg-black/40"
         onClick={handlePanelClose}
@@ -297,9 +298,12 @@ function UserMenu() {
         aria-haspopup="menu"
       >
         {user.photoURL ? (
-          <img
+          <Image
             src={user.photoURL}
             alt=""
+            width={32}
+            height={32}
+            unoptimized
             className="h-8 w-8 rounded-full sm:h-7 sm:w-7"
             referrerPolicy="no-referrer"
           />
@@ -377,11 +381,11 @@ export default function Header() {
 
           <DesktopNav pathname={pathname} />
 
-          <div className="mx-3 hidden max-w-xs flex-1 lg:block">
+          <div className="mx-3 hidden max-w-xs flex-1 lg:block xl:hidden 2xl:block">
             <SearchBar size="sm" className="w-full" />
           </div>
 
-          <div className="flex-1 md:hidden" />
+          <div className="flex-1 lg:hidden xl:block 2xl:hidden" />
 
           <ThemeToggle />
 
@@ -393,7 +397,7 @@ export default function Header() {
             ref={menuButtonRef}
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] md:hidden"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] xl:hidden"
             aria-label="메뉴 열기"
             aria-expanded={mobileOpen}
           >
@@ -401,7 +405,7 @@ export default function Header() {
           </button>
         </div>
 
-        <div className="border-t border-[var(--border-default)] px-4 py-2 md:hidden">
+        <div className="border-t border-[var(--border-default)] px-4 py-2 lg:hidden">
           <SearchBar size="sm" className="w-full" />
         </div>
       </header>

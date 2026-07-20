@@ -13,6 +13,7 @@ import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 export const runtime = 'nodejs';
 
@@ -28,6 +29,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
+      return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
+    }
     const blocked = applyRateLimit(req, 'dxf');
     if (blocked) return blocked;
 
@@ -63,10 +67,20 @@ export async function POST(req: NextRequest) {
     }
 
     const dxfContent = await dxfFile.text();
-    const unitScale = parseFloat((formData.get('unitScale') as string) || '0.001');
+    const unitScalePart = formData.get('unitScale');
+    let unitScale: number | undefined;
+    if (unitScalePart != null && unitScalePart !== '') {
+      if (typeof unitScalePart !== 'string') {
+        return NextResponse.json({ error: 'unitScale must be a positive number.' }, { status: 400 });
+      }
+      unitScale = Number(unitScalePart);
+      if (!Number.isFinite(unitScale) || unitScale <= 0 || unitScale > 1_000) {
+        return NextResponse.json({ error: 'unitScale must be a positive number no greater than 1000.' }, { status: 400 });
+      }
+    }
 
     // 벡터 파싱 (VLM 없이)
-    const analysis = parseDxfToSLD(dxfContent, { unitScale });
+    const analysis = parseDxfToSLD(dxfContent, unitScale ? { unitScale } : {});
 
     // 파싱 실패를 success:true로 넘기면 사용자는 "빈 도면"과 "잘못된 파일"을
     // 구분할 수 없다. 파서는 confidence 0으로 신호하고, 라우트가 이를 400으로
@@ -118,8 +132,16 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'DXF parse failed';
-    apiLog({ level: 'error', event: 'dxf-parse', route: '/api/dxf', error: message, durationMs: timer.elapsed() });
-    return NextResponse.json({ error: message }, { status: 500 });
+    apiLog({
+      level: 'error',
+      event: 'dxf-parse',
+      route: '/api/dxf',
+      error: err instanceof Error ? err.name : 'UnknownError',
+      durationMs: timer.elapsed(),
+    });
+    return NextResponse.json(
+      { error: 'DXF 도면을 처리하는 중 내부 오류가 발생했습니다.', code: 'ESA-9500' },
+      { status: 500 },
+    );
   }
 }

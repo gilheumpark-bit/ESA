@@ -1,7 +1,7 @@
 /**
  * ESVA Supabase Client
  * ---------------------
- * User profile/tier lookup, calculation receipt storage, user projects, paginated queries.
+ * User profile/tier lookup, calculation receipt storage, and paginated queries.
  */
 
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -19,19 +19,24 @@ export interface CalculationReceipt {
   standard_ref?: string;
   lang?: string;
   metadata?: Record<string, unknown>;
+  receipt_hash?: string;
+  country_code?: string;
+  applied_standard?: string;
+  unit_system?: 'SI' | 'Imperial';
+  difficulty_level?: string;
+  steps?: unknown[];
+  standards_used?: string[];
+  warnings?: string[];
+  recommendations?: string[];
+  disclaimer_text?: string;
+  disclaimer_version?: string;
+  calculated_at?: string;
+  standard_version?: string;
+  standard_verified_at?: string;
+  engine_version?: string;
+  is_standard_current?: boolean;
+  is_public?: boolean;
   created_at?: string;
-}
-
-export interface ProjectData {
-  id?: string;
-  user_id: string;
-  name: string;
-  description?: string;
-  calculation_ids: string[];
-  tags?: string[];
-  metadata?: Record<string, unknown>;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface PaginationOptions {
@@ -65,8 +70,8 @@ let _client: SupabaseClient | null = null;
 
 function getEnvVar(name: string): string {
   const val = process.env[name] ?? '';
-  if (!val) {
-    console.warn(`[ESVA Supabase] Missing env var: ${name}`);
+  if (!val && process.env.NODE_ENV === 'development') {
+    console.warn('[ESVA Supabase] 필수 저장소 구성이 없습니다.');
   }
   return val;
 }
@@ -82,7 +87,7 @@ export function getSupabaseClient(): SupabaseClient {
   const anonKey = getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   if (!url || !anonKey) {
-    throw new Error('[ESVA] Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+    throw new Error('저장 서비스를 사용할 수 없습니다. 배포 관리자에게 데이터베이스 구성을 확인해 주세요.');
   }
 
   _client = createSupabaseClient(url, anonKey, {
@@ -103,7 +108,7 @@ export function getSupabaseAdmin(): SupabaseClient {
   const serviceKey = getEnvVar('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!url || !serviceKey) {
-    throw new Error('[ESVA] Supabase admin not configured. Set SUPABASE_SERVICE_ROLE_KEY.');
+    throw new Error('서버 저장 서비스를 사용할 수 없습니다.');
   }
 
   return createSupabaseClient(url, serviceKey, {
@@ -113,7 +118,20 @@ export function getSupabaseAdmin(): SupabaseClient {
 
 // ─── PART 2.5: User Profile & Tier Lookup ────────────────────
 
-const USER_PROFILES_TABLE = 'user_profiles';
+const USERS_TABLE = 'users';
+
+/** Ensure the external Firebase identity has a local profile row for FK-backed data. */
+export async function ensureUserProfile(userId: string, email?: string): Promise<void> {
+  const client = getSupabaseAdmin();
+  const profile: { id: string; email?: string } = { id: userId };
+  if (email) profile.email = email;
+  const { error } = await client
+    .from(USERS_TABLE)
+    .upsert(profile, { onConflict: 'id', ignoreDuplicates: false });
+  if (error) {
+    throw new Error(`[ESVA] Failed to sync Firebase user: ${error.message}`);
+  }
+}
 
 /**
  * Supabase에서 유저 구독 티어를 조회한다.
@@ -121,9 +139,9 @@ const USER_PROFILES_TABLE = 'user_profiles';
  */
 export async function getUserTier(userId: string): Promise<UserTier> {
   try {
-    const client = getSupabaseClient();
+    const client = getSupabaseAdmin();
     const { data, error } = await client
-      .from(USER_PROFILES_TABLE)
+      .from(USERS_TABLE)
       .select('tier')
       .eq('id', userId)
       .single();
@@ -139,6 +157,25 @@ export async function getUserTier(userId: string): Promise<UserTier> {
   }
 }
 
+/** Return the Stripe customer bound to this verified Firebase user. */
+export async function getStripeCustomerId(userId: string): Promise<string | null> {
+  const client = getSupabaseAdmin();
+  const { data, error } = await client
+    .from(USERS_TABLE)
+    .select('stripe_customer_id')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(`[ESVA] Failed to load billing profile: ${error.message}`);
+  }
+  const customerId = data?.stripe_customer_id;
+  if (customerId == null || customerId === '') return null;
+  if (typeof customerId !== 'string' || !/^cus_[A-Za-z0-9]+$/.test(customerId)) {
+    throw new Error('[ESVA] Invalid Stripe customer identifier in billing profile.');
+  }
+  return customerId;
+}
+
 // ─── PART 3: Calculation Receipts ─────────────────────────────
 
 const RECEIPTS_TABLE = 'calculation_receipts';
@@ -148,13 +185,15 @@ const RECEIPTS_TABLE = 'calculation_receipts';
  */
 export async function saveCalculation(
   userId: string,
-  receipt: Omit<CalculationReceipt, 'id' | 'user_id' | 'created_at'>,
+  receipt: Omit<CalculationReceipt, 'user_id' | 'created_at'>,
 ): Promise<CalculationReceipt> {
-  const client = getSupabaseClient();
+  await ensureUserProfile(userId);
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(RECEIPTS_TABLE)
     .insert({
+      id: receipt.id,
       user_id: userId,
       calculator_id: receipt.calculator_id,
       calculator_name: receipt.calculator_name,
@@ -164,6 +203,23 @@ export async function saveCalculation(
       standard_ref: receipt.standard_ref ?? null,
       lang: receipt.lang ?? 'ko',
       metadata: receipt.metadata ?? {},
+      receipt_hash: receipt.receipt_hash ?? null,
+      country_code: receipt.country_code ?? 'KR',
+      applied_standard: receipt.applied_standard ?? null,
+      unit_system: receipt.unit_system ?? 'SI',
+      difficulty_level: receipt.difficulty_level ?? 'basic',
+      steps: receipt.steps ?? [],
+      standards_used: receipt.standards_used ?? [],
+      warnings: receipt.warnings ?? [],
+      recommendations: receipt.recommendations ?? [],
+      disclaimer_text: receipt.disclaimer_text ?? null,
+      disclaimer_version: receipt.disclaimer_version ?? null,
+      calculated_at: receipt.calculated_at ?? new Date().toISOString(),
+      standard_version: receipt.standard_version ?? null,
+      standard_verified_at: receipt.standard_verified_at ?? null,
+      engine_version: receipt.engine_version ?? null,
+      is_standard_current: receipt.is_standard_current ?? false,
+      is_public: receipt.is_public ?? false,
     })
     .select()
     .single();
@@ -179,7 +235,7 @@ export async function saveCalculation(
  * Load a single calculation receipt by ID.
  */
 export async function loadCalculation(id: string): Promise<CalculationReceipt | null> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(RECEIPTS_TABLE)
@@ -209,7 +265,7 @@ export async function listUserCalculations(
     ascending = false,
   } = opts;
 
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -250,7 +306,7 @@ export async function listUserCalculations(
  * Delete a calculation receipt (soft or hard based on table config).
  */
 export async function deleteCalculation(id: string, userId: string): Promise<void> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { error } = await client
     .from(RECEIPTS_TABLE)
@@ -261,131 +317,4 @@ export async function deleteCalculation(id: string, userId: string): Promise<voi
   if (error) {
     throw new Error(`[ESVA] Failed to delete calculation: ${error.message}`);
   }
-}
-
-// ─── PART 4: Projects ─────────────────────────────────────────
-
-const PROJECTS_TABLE = 'projects';
-
-/**
- * Save a project (linked calculations).
- */
-export async function saveProject(
-  userId: string,
-  projectData: Omit<ProjectData, 'id' | 'user_id' | 'created_at' | 'updated_at'>,
-): Promise<ProjectData> {
-  const client = getSupabaseClient();
-
-  const { data, error } = await client
-    .from(PROJECTS_TABLE)
-    .insert({
-      user_id: userId,
-      name: projectData.name,
-      description: projectData.description ?? null,
-      calculation_ids: projectData.calculation_ids,
-      tags: projectData.tags ?? [],
-      metadata: projectData.metadata ?? {},
-    })
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`[ESVA] Failed to save project: ${error.message}`);
-  }
-
-  return data as ProjectData;
-}
-
-/**
- * Load a single project by ID.
- */
-export async function loadProject(id: string): Promise<ProjectData | null> {
-  const client = getSupabaseClient();
-
-  const { data, error } = await client
-    .from(PROJECTS_TABLE)
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null;
-    throw new Error(`[ESVA] Failed to load project: ${error.message}`);
-  }
-
-  return data as ProjectData;
-}
-
-/**
- * List projects for a user.
- */
-export async function listUserProjects(
-  userId: string,
-  opts: PaginationOptions = {},
-): Promise<PaginatedResult<ProjectData>> {
-  const {
-    page = 1,
-    pageSize = 20,
-    orderBy = 'updated_at',
-    ascending = false,
-  } = opts;
-
-  const client = getSupabaseClient();
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  const { count, error: countError } = await client
-    .from(PROJECTS_TABLE)
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  if (countError) {
-    throw new Error(`[ESVA] Failed to count projects: ${countError.message}`);
-  }
-
-  const totalCount = count ?? 0;
-
-  const { data, error } = await client
-    .from(PROJECTS_TABLE)
-    .select('*')
-    .eq('user_id', userId)
-    .order(orderBy, { ascending })
-    .range(from, to);
-
-  if (error) {
-    throw new Error(`[ESVA] Failed to list projects: ${error.message}`);
-  }
-
-  return {
-    data: (data ?? []) as ProjectData[],
-    count: totalCount,
-    page,
-    pageSize,
-    totalPages: Math.ceil(totalCount / pageSize),
-  };
-}
-
-/**
- * Update a project.
- */
-export async function updateProject(
-  id: string,
-  userId: string,
-  updates: Partial<Pick<ProjectData, 'name' | 'description' | 'calculation_ids' | 'tags' | 'metadata'>>,
-): Promise<ProjectData> {
-  const client = getSupabaseClient();
-
-  const { data, error } = await client
-    .from(PROJECTS_TABLE)
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('user_id', userId)
-    .select()
-    .single();
-
-  if (error) {
-    throw new Error(`[ESVA] Failed to update project: ${error.message}`);
-  }
-
-  return data as ProjectData;
 }

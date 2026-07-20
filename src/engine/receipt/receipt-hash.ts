@@ -76,6 +76,11 @@ async function sha256Hex(data: string): Promise<string> {
     .join('');
 }
 
+/** Hash any canonical JSON-compatible value with deterministic key ordering. */
+export async function hashCanonicalValue(value: unknown): Promise<string> {
+  return sha256Hex(canonicalize(value));
+}
+
 // ---------------------------------------------------------------------------
 // PART 3 — Public API
 // ---------------------------------------------------------------------------

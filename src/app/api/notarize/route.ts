@@ -1,7 +1,8 @@
 /**
- * ESVA Notarization API — /api/notarize
+ * ESVA IPFS Timestamp API — /api/notarize
  * ──────────────────────────────────────
- * POST: Notarize a calculation receipt (anonymize → IPFS pin → timestamp proof).
+ * POST: Register a minimized receipt payload (minimize → IPFS pin → server proof registry).
+ * The legacy route name is retained for compatibility; this is not legal notarization.
  *
  * PART 1: Auth extraction
  * PART 2: POST handler (load receipt → anonymize → pin → proof → update)
@@ -15,6 +16,8 @@ import { createTimestampProof, getProofForReceipt } from '@/lib/blockchain';
 import { isTierAtLeast, type Tier } from '@/lib/tier-gate';
 import type { Receipt } from '@engine/receipt/types';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { isFeatureEnabledServer } from '@/lib/feature-flags';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
 // 티어는 서버 DB에서만 결정한다. 이전 구현은 서명 미검증 atob 파싱으로
@@ -38,11 +41,11 @@ async function resolveUserTier(userId: string): Promise<Tier> {
       return data.tier as Tier;
     }
   } catch (err) {
-    console.warn('[ESVA Notarize] Failed to look up user tier from DB, defaulting to free:', err);
+    console.warn('[ESVA Timestamp] Tier lookup failed; defaulting to free:', err instanceof Error ? err.name : 'UnknownError');
   }
 
   // 3) Default to free with warning
-  console.warn(`[ESVA Notarize] Could not determine tier for user ${userId}, defaulting to 'free'`);
+  console.warn('[ESVA Timestamp] Could not determine user tier; defaulting to free');
   return 'free';
 }
 
@@ -50,9 +53,26 @@ async function resolveUserTier(userId: string): Promise<Tier> {
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limit (R4 stub repair).
-    const blocked = applyRateLimit(request, 'default');
+    if (!isRequestOriginAllowed(
+      request.headers.get('origin'),
+      request.url,
+      undefined,
+      request.headers.get('host'),
+      request.headers.get('x-forwarded-proto'),
+    )) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-9001', message: 'Invalid origin' } },
+        { status: 403 },
+      );
+    }
+    const blocked = applyRateLimit(request, 'notarize');
     if (blocked) return blocked;
+    if (!isFeatureEnabledServer('RECEIPT_NOTARIZE')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-6001', message: 'IPFS timestamp registration is not enabled' } },
+        { status: 404 },
+      );
+    }
 
     // Auth check
     const userId = await extractVerifiedUserId(request);
@@ -63,7 +83,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Tier check — notarization requires Pro or higher
+    // Tier check — IPFS timestamp registration requires Pro or higher
     const userTier: Tier = await resolveUserTier(userId);
     if (!isTierAtLeast(userTier, 'pro')) {
       return NextResponse.json(
@@ -71,7 +91,7 @@ export async function POST(request: NextRequest) {
           success: false,
           error: {
             code: 'ESVA-2001',
-            message: 'Notarization requires Pro plan or higher',
+            message: 'IPFS timestamp registration requires Pro plan or higher',
             requiredTier: 'pro',
           },
         },
@@ -101,12 +121,12 @@ export async function POST(request: NextRequest) {
     // Verify ownership
     if (stored.user_id !== userId) {
       return NextResponse.json(
-        { success: false, error: { code: 'ESVA-1002', message: 'Not authorized to notarize this receipt' } },
+        { success: false, error: { code: 'ESVA-1002', message: 'Not authorized to register this receipt timestamp' } },
         { status: 403 },
       );
     }
 
-    // Check if already notarized
+    // Check if already registered
     const receiptHash = (stored.metadata as Record<string, string>)?.receiptHash;
     if (receiptHash) {
       const existingProof = await getProofForReceipt(receiptHash);
@@ -117,7 +137,7 @@ export async function POST(request: NextRequest) {
             ipfsCid: existingProof.ipfsCid,
             proof: existingProof,
             verifyUrl: `/receipt/${body.receiptId}?verify=true`,
-            alreadyNotarized: true,
+            alreadyRegistered: true,
           },
         });
       }
@@ -144,7 +164,8 @@ export async function POST(request: NextRequest) {
       calculatedAt: stored.created_at ?? new Date().toISOString(),
       standardVersion: stored.standard_ref ?? '',
       engineVersion: ((stored.metadata as Record<string, string>)?.engineVersion) ?? '1.0.0',
-      isStandardCurrent: true,
+      // A stored edition string alone does not prove current authority.
+      isStandardCurrent: false,
       receiptHash: receiptHash ?? '',
       isPublic: false,
     };
@@ -158,22 +179,25 @@ export async function POST(request: NextRequest) {
     // Step 3: Create timestamp proof
     const proof = await createTimestampProof(anonymized.receiptHash, pinResult.cid);
 
-    // Step 4: Update receipt record with notarization metadata
+    // Step 4: Update receipt record with timestamp registration metadata
     const admin = getSupabaseAdmin();
-    await admin
+    const { error: updateError } = await admin
       .from('calculation_receipts')
       .update({
         metadata: {
           ...(stored.metadata as Record<string, unknown> ?? {}),
           ipfsCid: pinResult.cid,
           ipfsUrl: pinResult.url,
-          proofTxHash: proof.txHash,
-          proofTimestamp: proof.timestamp,
-          proofChain: proof.chain,
-          notarizedAt: new Date().toISOString(),
+          proofRegistryRecordId: proof.txHash,
+          proofRecordedAt: proof.timestamp,
+          proofRegistry: proof.chain,
+          timestampRegisteredAt: new Date().toISOString(),
         },
       })
       .eq('id', stored.id);
+    if (updateError) {
+      throw new Error(`[ESVA-6014] Failed to persist timestamp registration: ${updateError.message}`);
+    }
 
     return NextResponse.json({
       success: true,
@@ -184,11 +208,16 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    console.error('[ESVA Notarize]', message);
+    console.error('[ESVA Timestamp]', err instanceof Error ? err.name : 'UnknownError');
 
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-6099', message } },
+      {
+        success: false,
+        error: {
+          code: 'ESVA-6099',
+          message: 'IPFS 타임스탬프를 등록하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        },
+      },
       { status: 500 },
     );
   }

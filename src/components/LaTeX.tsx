@@ -7,7 +7,7 @@
  * PART 2: LaTeX component
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Dynamic KaTeX Import (bundle optimization)
@@ -68,44 +68,37 @@ function stripDelimiters(formula: string): string {
 }
 
 export default function LaTeX({ formula, display, className = '' }: LaTeXProps) {
-  const containerRef = useRef<HTMLSpanElement>(null);
-  const [fallback, setFallback] = useState(false);
-  const [ready, setReady] = useState(!!katexModule);
-
   const resolvedDisplay = display ?? isDisplayMode(formula);
   const cleanFormula = stripDelimiters(formula);
+  const renderKey = `${resolvedDisplay ? 'display' : 'inline'}:${cleanFormula}`;
+  const [rendered, setRendered] = useState<{ key: string; html?: string; failed?: boolean } | null>(null);
 
-  // Load KaTeX on mount
   useEffect(() => {
-    if (katexModule) {
-      setReady(true);
-      return;
-    }
+    let active = true;
     loadKatex()
-      .then(() => setReady(true))
-      .catch(() => setFallback(true));
-  }, []);
-
-  // Render formula
-  useEffect(() => {
-    if (!ready || !containerRef.current || !katexModule) return;
-
-    try {
-      katexModule.default.render(cleanFormula, containerRef.current, {
-        displayMode: resolvedDisplay,
-        throwOnError: false,
-        strict: false,
-        trust: false,
-        output: 'htmlAndMathml',
+      .then((module) => {
+        if (!active) return;
+        try {
+          const html = module.default.renderToString(cleanFormula, {
+            displayMode: resolvedDisplay,
+            throwOnError: false,
+            strict: false,
+            trust: false,
+            output: 'htmlAndMathml',
+          });
+          setRendered({ key: renderKey, html });
+        } catch {
+          setRendered({ key: renderKey, failed: true });
+        }
+      })
+      .catch(() => {
+        if (active) setRendered({ key: renderKey, failed: true });
       });
-      setFallback(false);
-    } catch {
-      setFallback(true);
-    }
-  }, [ready, cleanFormula, resolvedDisplay]);
+    return () => { active = false; };
+  }, [cleanFormula, renderKey, resolvedDisplay]);
 
   // Fallback: show raw formula in code block
-  if (fallback || !formula) {
+  if (!formula || (rendered?.key === renderKey && rendered.failed)) {
     return resolvedDisplay ? (
       <pre className={`overflow-x-auto rounded bg-[var(--bg-tertiary)] px-3 py-1.5 text-xs text-[var(--text-secondary)] ${className}`}>
         <code>{formula}</code>
@@ -121,18 +114,20 @@ export default function LaTeX({ formula, display, className = '' }: LaTeXProps) 
   if (resolvedDisplay) {
     return (
       <span
-        ref={containerRef}
         className={`katex-display block overflow-x-auto py-1 ${className}`}
         aria-label={`Formula: ${cleanFormula}`}
+        aria-busy={rendered?.key !== renderKey}
+        dangerouslySetInnerHTML={rendered?.key === renderKey && rendered.html ? { __html: rendered.html } : undefined}
       />
     );
   }
 
   return (
     <span
-      ref={containerRef}
       className={`katex-inline ${className}`}
       aria-label={`Formula: ${cleanFormula}`}
+      aria-busy={rendered?.key !== renderKey}
+      dangerouslySetInnerHTML={rendered?.key === renderKey && rendered.html ? { __html: rendered.html } : undefined}
     />
   );
 }

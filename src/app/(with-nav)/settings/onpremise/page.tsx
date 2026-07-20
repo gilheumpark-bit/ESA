@@ -12,55 +12,64 @@
  * PART 4: 메인 페이지
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import {
+  Building2,
+  CheckCircle2,
+  ChevronLeft,
+  Circle,
+  Coins,
+  ExternalLink,
+  Gauge,
+  Loader2,
+  LockKeyhole,
+  Server,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react';
+import {
+  decodeOnPremiseConfig,
+  encodeOnPremiseConfig,
+  type OnPremiseApiType,
+  type OnPremiseClientConfig,
+} from '@/lib/onpremise-storage';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type ApiType = 'ollama' | 'vllm' | 'localai' | 'openai-compat';
 type ConnectionStatus = 'idle' | 'testing' | 'success' | 'failed';
 
-interface OnPremiseConfig {
-  serverUrl: string;
-  apiType: ApiType;
-  modelName: string;
-  apiKey: string;          // 로컬 서버 인증키 (없으면 빈 문자열)
-  contextLength: number;
-  timeout: number;         // 초
-  enabled: boolean;
-}
-
-const DEFAULT_CONFIG: OnPremiseConfig = {
+const DEFAULT_CONFIG: OnPremiseClientConfig = {
   serverUrl: 'http://192.168.1.100:11434',
   apiType: 'ollama',
-  modelName: 'qwen2.5:32b',
+  modelName: 'qwen3:30b',
   apiKey: '',
   contextLength: 32768,
   timeout: 60,
   enabled: false,
 };
 
-const API_TYPE_OPTIONS: { value: ApiType; label: string; placeholder: string; defaultPort: string }[] = [
+const API_TYPE_OPTIONS: { value: OnPremiseApiType; label: string; placeholder: string; defaultPort: string }[] = [
   { value: 'ollama',        label: 'Ollama',          placeholder: 'http://HOST:11434',   defaultPort: '11434' },
   { value: 'vllm',          label: 'vLLM',            placeholder: 'http://HOST:8000',    defaultPort: '8000'  },
   { value: 'localai',       label: 'LocalAI',         placeholder: 'http://HOST:8080',    defaultPort: '8080'  },
   { value: 'openai-compat', label: 'OpenAI-compat',   placeholder: 'http://HOST:PORT/v1', defaultPort: '8080'  },
 ];
 
-const RECOMMENDED_MODELS = [
-  { name: 'qwen2.5:32b',            desc: 'Qwen 2.5 32B — KEC 한국어 처리 최적', vram: '20GB+' },
-  { name: 'llama4:scout',           desc: 'Llama 4 Scout — 빠른 추론',             vram: '8GB+' },
-  { name: 'mistral-small3.1:latest', desc: 'Mistral Small 3.1 — 균형형',           vram: '12GB+' },
-  { name: 'gemma3:27b',             desc: 'Gemma 3 27B — 다국어 강점',             vram: '16GB+' },
+const MODEL_EXAMPLES = [
+  { name: 'qwen3:30b',              desc: 'Qwen 3 30B — 다국어·추론 모델 예시' },
+  { name: 'llama4:scout',           desc: 'Llama 4 Scout — 대형 멀티모달 모델 예시' },
+  { name: 'mistral-small3.1:latest', desc: 'Mistral Small 3.1 — 128K 멀티모달 모델 예시' },
+  { name: 'gemma3:27b',             desc: 'Gemma 3 27B — 다국어 멀티모달 모델 예시' },
 ];
 
-const SECURITY_FEATURES = [
-  { icon: '🔒', title: '망 분리 (Air-gap)', desc: '외부 인터넷 연결 없이 내부망에서만 동작' },
-  { icon: '🏢', title: '데이터 미유출', desc: '도면·현장 데이터가 외부 서버로 전송되지 않음' },
-  { icon: '💰', title: 'API 비용 0원', desc: '토큰 종량제 비용 없음. 고정비 구조로 마진 최대화' },
-  { icon: '⚡', title: '응답 지연 최소', desc: '내부 네트워크로 클라우드 대비 지연 감소' },
+const SECURITY_FEATURES: { icon: LucideIcon; title: string; desc: string }[] = [
+  { icon: LockKeyhole, title: '내부 배포 시 망 분리', desc: 'ESVA와 모델 서버를 같은 내부망에 배포한 경우에만 외부 전송을 차단합니다.' },
+  { icon: Building2, title: '전송 경계 명시', desc: '호스팅형 ESVA에서는 입력이 ESVA 백엔드를 거쳐 지정 서버로 전달됩니다.' },
+  { icon: Coins, title: '클라우드 토큰 비용 제외', desc: '모델 API 종량제 대신 하드웨어·전력·운영 비용이 발생합니다.' },
+  { icon: Gauge, title: '지연은 환경 의존', desc: '네트워크·모델·GPU 구성에서 연결 시험으로 직접 확인합니다.' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -71,14 +80,24 @@ function useConnectionTest() {
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [detail, setDetail] = useState('');
 
-  const test = useCallback(async (config: OnPremiseConfig) => {
+  const test = useCallback(async (config: OnPremiseClientConfig) => {
     setStatus('testing');
     setDetail('서버에 연결 시도 중...');
     try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      if (!token) {
+        setStatus('failed');
+        setDetail('로그인 후 On-Premise 연결을 테스트할 수 있습니다.');
+        return;
+      }
       // 내부망 → 직접 fetch 불가. 서버사이드 프록시로 테스트.
       const res = await fetch('/api/settings/onpremise-test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           serverUrl: config.serverUrl,
           apiType: config.apiType,
@@ -118,11 +137,15 @@ function SectionCard({ title, children }: { title: string; children: React.React
   );
 }
 
-function FieldRow({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
+function FieldRow({ label, note, htmlFor, children }: { label: string; note?: string; htmlFor?: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-start gap-1.5 sm:gap-4">
       <div className="sm:w-36 flex-shrink-0">
-        <p className="text-sm font-medium text-[var(--color-text-primary)]">{label}</p>
+        {htmlFor ? (
+          <label htmlFor={htmlFor} className="text-sm font-medium text-[var(--color-text-primary)]">{label}</label>
+        ) : (
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">{label}</p>
+        )}
         {note && <p className="text-[10px] text-[var(--color-text-muted)]">{note}</p>}
       </div>
       <div className="flex-1">{children}</div>
@@ -137,22 +160,37 @@ const inputCls = 'w-full rounded-lg border border-[var(--color-border)] bg-[var(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function OnPremisePage() {
-  const [config, setConfig] = useState<OnPremiseConfig>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<OnPremiseClientConfig>(DEFAULT_CONFIG);
   const [saved, setSaved] = useState(false);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const { status, detail, test } = useConnectionTest();
 
-  const update = <K extends keyof OnPremiseConfig>(key: K, val: OnPremiseConfig[K]) => {
+  useEffect(() => {
+    const raw = sessionStorage.getItem('esva-onpremise');
+    if (!raw) return;
+    void decodeOnPremiseConfig(raw).then(setConfig).catch(() => {
+      sessionStorage.removeItem('esva-onpremise');
+      setStorageError('기존 설정 형식을 읽을 수 없어 제거했습니다. 인증 키를 포함해 다시 입력하세요.');
+    });
+  }, []);
+
+  const update = <K extends keyof OnPremiseClientConfig>(key: K, val: OnPremiseClientConfig[K]) => {
     setConfig(prev => ({ ...prev, [key]: val }));
     setSaved(false);
+    setStorageError(null);
   };
 
-  const save = () => {
-    // 클라이언트 세션에 저장 (BYOK 방식과 동일)
+  const save = async () => {
     try {
-      sessionStorage.setItem('esva-onpremise', JSON.stringify(config));
-    } catch { /* noop */ }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+      const encoded = await encodeOnPremiseConfig(config);
+      sessionStorage.setItem('esva-onpremise', encoded);
+      setStorageError(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (error) {
+      setSaved(false);
+      setStorageError(error instanceof Error ? error.message : '설정을 안전하게 저장할 수 없습니다.');
+    }
   };
 
   const statusColors: Record<ConnectionStatus, string> = {
@@ -161,9 +199,10 @@ export default function OnPremisePage() {
     success: 'text-green-400',
     failed:  'text-[var(--color-error)]',
   };
-  const statusIcons: Record<ConnectionStatus, string> = {
-    idle: '○', testing: '⏳', success: '✅', failed: '❌',
+  const statusIcons: Record<ConnectionStatus, LucideIcon> = {
+    idle: Circle, testing: Loader2, success: CheckCircle2, failed: XCircle,
   };
+  const StatusIcon = statusIcons[status];
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
@@ -171,24 +210,24 @@ export default function OnPremisePage() {
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Link href="/settings" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
-            ← 설정
+            <ChevronLeft size={12} className="mr-0.5 inline" aria-hidden="true" />설정
           </Link>
         </div>
         <h1 className="text-xl font-bold text-[var(--color-text-primary)] flex items-center gap-2">
-          <span>🖥</span> On-Premise AI 서버
+          <Server size={22} aria-hidden="true" /> On-Premise AI 서버
         </h1>
         <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-          DGX Spark 또는 자체 GPU 서버의 LLM을 연동합니다. 도면·현장 데이터가 외부로 전송되지 않습니다.
+          DGX Spark 또는 자체 GPU 서버의 LLM을 연동합니다. 실제 데이터 경계는 ESVA 배포 위치와 대상 서버 구성에 따라 달라집니다.
         </p>
       </div>
 
       {/* 보안 장점 카드 */}
       <div className="grid grid-cols-2 gap-3">
-        {SECURITY_FEATURES.map(f => (
-          <div key={f.title} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-            <div className="text-xl mb-1">{f.icon}</div>
-            <p className="text-xs font-semibold text-[var(--color-text-primary)]">{f.title}</p>
-            <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{f.desc}</p>
+        {SECURITY_FEATURES.map(({ icon: Icon, title, desc }) => (
+          <div key={title} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <Icon size={18} className="mb-2 text-[var(--color-primary)]" aria-hidden="true" />
+            <p className="text-xs font-semibold text-[var(--color-text-primary)]">{title}</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">{desc}</p>
           </div>
         ))}
       </div>
@@ -198,14 +237,18 @@ export default function OnPremisePage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-[var(--color-text-primary)]">
-              {config.enabled ? '✅ On-Premise 모드 활성' : '클라우드 API(BYOK) 사용 중'}
+              {config.enabled ? 'On-Premise 모드 활성' : '클라우드 API(BYOK) 사용 중'}
             </p>
             <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
               활성화 시 아래 서버로 모든 AI 요청을 라우팅합니다.
             </p>
           </div>
           <button
+            type="button"
             onClick={() => update('enabled', !config.enabled)}
+            role="switch"
+            aria-checked={config.enabled}
+            aria-label="On-Premise 모드"
             className={`relative w-12 h-6 rounded-full transition-colors ${
               config.enabled ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-border)]'
             }`}
@@ -221,11 +264,13 @@ export default function OnPremisePage() {
       <SectionCard title="서버 설정">
         <div className="space-y-4">
           <FieldRow label="API 타입" note="서버 소프트웨어">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="API 타입">
               {API_TYPE_OPTIONS.map(opt => (
                 <button
+                  type="button"
                   key={opt.value}
                   onClick={() => update('apiType', opt.value)}
+                  aria-pressed={config.apiType === opt.value}
                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
                     config.apiType === opt.value
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
@@ -238,8 +283,9 @@ export default function OnPremisePage() {
             </div>
           </FieldRow>
 
-          <FieldRow label="서버 URL" note="내부망 IP/포트">
+          <FieldRow label="서버 URL" note="내부망 IP/포트" htmlFor="onprem-server-url">
             <input
+              id="onprem-server-url"
               type="url"
               value={config.serverUrl}
               onChange={e => update('serverUrl', e.target.value)}
@@ -248,30 +294,36 @@ export default function OnPremisePage() {
             />
           </FieldRow>
 
-          <FieldRow label="모델명">
+          <FieldRow label="모델명" htmlFor="onprem-model-name">
             <input
+              id="onprem-model-name"
               type="text"
               value={config.modelName}
               onChange={e => update('modelName', e.target.value)}
-              placeholder="예: qwen2.5:32b"
+              placeholder="예: qwen3:30b"
               className={inputCls}
             />
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {RECOMMENDED_MODELS.map(m => (
+              {MODEL_EXAMPLES.map(m => (
                 <button
+                  type="button"
                   key={m.name}
                   onClick={() => update('modelName', m.name)}
-                  title={`${m.desc} · VRAM ${m.vram}`}
+                  title={m.desc}
                   className="text-[10px] px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-text-secondary)] transition-colors"
                 >
                   {m.name}
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-[10px] text-[var(--color-text-muted)]">
+              예시 태그입니다. 설치된 모델명과 필요한 메모리는 서버·양자화 버전에서 직접 확인하세요.
+            </p>
           </FieldRow>
 
-          <FieldRow label="인증 키" note="없으면 비워두기">
+          <FieldRow label="인증 키" note="브라우저 결합 암호화 저장" htmlFor="onprem-api-key">
             <input
+              id="onprem-api-key"
               type="password"
               value={config.apiKey}
               onChange={e => update('apiKey', e.target.value)}
@@ -281,8 +333,9 @@ export default function OnPremisePage() {
           </FieldRow>
 
           <div className="grid grid-cols-2 gap-4">
-            <FieldRow label="컨텍스트 길이" note="토큰">
+            <FieldRow label="컨텍스트 길이" note="토큰" htmlFor="onprem-context-length">
               <input
+                id="onprem-context-length"
                 type="number"
                 value={config.contextLength}
                 onChange={e => update('contextLength', parseInt(e.target.value, 10) || 8192)}
@@ -290,8 +343,9 @@ export default function OnPremisePage() {
                 className={inputCls}
               />
             </FieldRow>
-            <FieldRow label="타임아웃" note="초">
+            <FieldRow label="타임아웃" note="초" htmlFor="onprem-timeout">
               <input
+                id="onprem-timeout"
                 type="number"
                 value={config.timeout}
                 onChange={e => update('timeout', parseInt(e.target.value, 10) || 60)}
@@ -307,15 +361,16 @@ export default function OnPremisePage() {
       <SectionCard title="연결 테스트">
         <div className="space-y-3">
           <button
+            type="button"
             onClick={() => test(config)}
             disabled={status === 'testing' || !config.serverUrl}
-            className="w-full py-3 rounded-xl font-semibold text-sm border-2 border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className="flex w-full items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm border-2 border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
-            {status === 'testing' ? '⏳ 연결 테스트 중...' : '🔌 연결 테스트'}
+            {status === 'testing' ? <><Loader2 size={16} className="animate-spin" aria-hidden="true" /> 연결 테스트 중...</> : '연결 테스트'}
           </button>
           {status !== 'idle' && (
-            <div className={`text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] ${statusColors[status]}`}>
-              <span className="mr-2">{statusIcons[status]}</span>
+            <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] ${statusColors[status]}`} role={status === 'failed' ? 'alert' : 'status'}>
+              <StatusIcon size={15} className={status === 'testing' ? 'animate-spin' : ''} aria-hidden="true" />
               {detail}
             </div>
           )}
@@ -329,22 +384,25 @@ export default function OnPremisePage() {
       {/* 저장 */}
       <div className="flex gap-3">
         <button
-          onClick={save}
+          type="button"
+          onClick={() => { void save(); }}
           className="flex-1 py-3 rounded-xl font-semibold text-sm bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white transition-all active:scale-95"
         >
-          {saved ? '✅ 저장 완료' : '설정 저장'}
+          {saved ? '저장 완료' : '설정 저장'}
         </button>
         <button
+          type="button"
           onClick={() => { setConfig(DEFAULT_CONFIG); setSaved(false); }}
           className="px-4 py-3 rounded-xl text-sm border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] transition-all"
         >
           초기화
         </button>
       </div>
+      {storageError && <p className="text-sm text-[var(--color-error)]" role="alert">{storageError}</p>}
 
       {/* 설치 가이드 링크 */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-        <p className="text-sm font-semibold text-[var(--color-text-primary)] mb-2">⚙️ 서버 설치 가이드</p>
+        <p className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)] mb-2"><Server size={16} aria-hidden="true" />서버 설치 가이드</p>
         <div className="space-y-1">
           {[
             { label: 'Ollama 설치 (권장)',           href: 'https://ollama.com' },
@@ -358,7 +416,7 @@ export default function OnPremisePage() {
               rel="noopener noreferrer"
               className="flex items-center justify-between text-xs text-[var(--color-primary)] hover:underline py-0.5"
             >
-              {l.label} <span>↗</span>
+              {l.label} <ExternalLink size={12} aria-hidden="true" />
             </a>
           ))}
         </div>

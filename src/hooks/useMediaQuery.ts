@@ -5,27 +5,21 @@
  * PART 2: useIsMobile / useIsTablet (convenience)
  */
 
-import { useState, useEffect } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Generic useMediaQuery
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
+  const subscribe = useCallback((notify: () => void) => {
     const mql = window.matchMedia(query);
-    setMatches(mql.matches);
-
-    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    const handler = () => notify();
     mql.addEventListener('change', handler);
     return () => mql.removeEventListener('change', handler);
   }, [query]);
-
-  return matches;
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

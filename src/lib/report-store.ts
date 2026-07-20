@@ -11,8 +11,15 @@
 
 import { createLogger } from './logger';
 import type { ESVAVerifiedReport } from '@/agent/teams/types';
+import { verifyReportIntegrity } from '@/lib/report-integrity';
 
 const log = createLogger('report-store');
+
+function getServerConfig(): { url: string; serviceKey: string } | null {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && serviceKey ? { url, serviceKey } : null;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Save Report
@@ -23,30 +30,26 @@ const log = createLogger('report-store');
  */
 export async function saveReport(
   report: ESVAVerifiedReport,
-  userId?: string,
+  userId: string,
 ): Promise<boolean> {
-  // Supabase 시도
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      log.warn('Supabase not configured — report not persisted');
+    const config = getServerConfig();
+    if (!config || !userId || !(await verifyReportIntegrity(report))) {
+      log.warn('Secure report persistence unavailable or report integrity invalid');
       return false;
     }
 
-    const res = await fetch(`${supabaseUrl}/rest/v1/esva_reports`, {
+    const res = await fetch(`${config.url}/rest/v1/esva_reports`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
+        apikey: config.serviceKey,
+        Authorization: `Bearer ${config.serviceKey}`,
         Prefer: 'return=minimal',
       },
       body: JSON.stringify({
         report_id: report.reportId,
-        user_id: userId ?? null,
+        user_id: userId,
         project_name: report.projectName,
         project_type: report.projectType,
         verdict: report.verdict,
@@ -79,30 +82,29 @@ export async function saveReport(
  */
 export async function loadReport(
   reportId: string,
+  userId: string,
 ): Promise<ESVAVerifiedReport | null> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) return null;
+    const config = getServerConfig();
+    if (!config || !reportId || !userId) return null;
 
     const res = await fetch(
-      `${supabaseUrl}/rest/v1/esva_reports?report_id=eq.${encodeURIComponent(reportId)}&select=report_json&limit=1`,
+      `${config.url}/rest/v1/esva_reports?report_id=eq.${encodeURIComponent(reportId)}&user_id=eq.${encodeURIComponent(userId)}&select=report_json&limit=1`,
       {
         headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
+          apikey: config.serviceKey,
+          Authorization: `Bearer ${config.serviceKey}`,
         },
       },
     );
 
     if (!res.ok) return null;
 
-    const rows = await res.json();
-    if (rows.length === 0) return null;
+    const rows = await res.json() as Array<{ report_json?: ESVAVerifiedReport }>;
+    if (!Array.isArray(rows) || rows.length === 0 || !rows[0].report_json) return null;
 
-    return rows[0].report_json as ESVAVerifiedReport;
+    const report = rows[0].report_json;
+    return await verifyReportIntegrity(report) ? report : null;
   } catch {
     return null;
   }
@@ -129,18 +131,15 @@ export async function listReports(
   limit: number = 50,
 ): Promise<ReportListItem[]> {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) return [];
+    const config = getServerConfig();
+    if (!config || !userId) return [];
 
     const res = await fetch(
-      `${supabaseUrl}/rest/v1/esva_reports?user_id=eq.${userId}&select=report_id,project_name,verdict,grade,composite_score,created_at&order=created_at.desc&limit=${limit}`,
+      `${config.url}/rest/v1/esva_reports?user_id=eq.${encodeURIComponent(userId)}&select=report_id,project_name,verdict,grade,composite_score,created_at&order=created_at.desc&limit=${Math.min(Math.max(limit, 1), 50)}`,
       {
         headers: {
-          apikey: supabaseKey,
-          Authorization: `Bearer ${supabaseKey}`,
+          apikey: config.serviceKey,
+          Authorization: `Bearer ${config.serviceKey}`,
         },
       },
     );

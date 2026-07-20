@@ -20,7 +20,7 @@ import { executeQuery, type StructuredQuery } from '@engine/standards/kec/kec-ta
 import { generateReceipt } from '@engine/receipt';
 import type { GenerateReceiptOpts } from '@engine/receipt';
 import { checkCalcAccess, type Tier, type CalcDifficulty } from '@/lib/tier-gate';
-import { saveCalculation } from '@/lib/supabase';
+import { getUserTier, listUserCalculations, saveCalculation } from '@/lib/supabase';
 import { sanitizeInput } from '@/lib/security-hardening';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { setActiveCountry } from '@/engine/calculators/country-defaults';
@@ -61,7 +61,38 @@ const COUNTRY_STANDARD_MAP: Record<string, { standard: string; version: string }
   ME: { standard: 'DEWA', version: 'DEWA 2020' },
 };
 
-// ─── PART 5: POST Handler ───────────────────────────────────────
+// ─── PART 5: GET persistent history ────────────────────────────
+
+export async function GET(request: NextRequest) {
+  const ip = getClientIp(request.headers);
+  const rl = checkRateLimit(ip, 'default');
+  if (!rl.allowed) {
+    return jsonWithEsa(
+      { success: false, error: { code: 'ESVA-4002', message: 'Rate limit exceeded' } },
+      { status: 429 },
+    );
+  }
+
+  const userId = await extractVerifiedUserId(request);
+  if (!userId) {
+    return jsonWithEsa(
+      { success: false, error: { code: 'ESVA-1001', message: 'Authentication required' } },
+      { status: 401 },
+    );
+  }
+
+  const page = Math.max(1, Number.parseInt(request.nextUrl.searchParams.get('page') ?? '1', 10) || 1);
+  const requestedPageSize = Number.parseInt(request.nextUrl.searchParams.get('pageSize') ?? '20', 10) || 20;
+  const pageSize = Math.min(100, Math.max(1, requestedPageSize));
+  const result = await listUserCalculations(userId, { page, pageSize });
+
+  return jsonWithEsa(
+    { success: true, data: result },
+    { headers: { 'Cache-Control': 'private, no-store' } },
+  );
+}
+
+// ─── PART 6: POST Handler ───────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
@@ -126,7 +157,7 @@ export async function POST(request: NextRequest) {
 
     // Validate tier access (default to 'free' for anonymous)
     const userId = await extractVerifiedUserId(request);
-    const userTier: Tier = 'free'; // In production, look up user's tier from DB
+    const userTier: Tier = userId ? await getUserTier(userId) : 'free';
     const calcDifficulty = DIFFICULTY_TO_CALC_DIFFICULTY[entry.difficulty] ?? 'basic';
     const access = checkCalcAccess(userTier, calcDifficulty);
 
@@ -209,6 +240,7 @@ export async function POST(request: NextRequest) {
     if (userId) {
       try {
         await saveCalculation(userId, {
+          id: receipt.id,
           calculator_id: entry.id,
           calculator_name: entry.name,
           inputs: body.inputs,
@@ -216,7 +248,37 @@ export async function POST(request: NextRequest) {
           formula_used: calcResult.formula,
           standard_ref: stdInfo.version,
           lang: body.language ?? 'ko',
-          metadata: { receiptId: receipt.id },
+          receipt_hash: receipt.receiptHash,
+          country_code: receipt.countryCode,
+          applied_standard: receipt.appliedStandard,
+          unit_system: receipt.unitSystem,
+          difficulty_level: receipt.difficultyLevel,
+          steps: receipt.steps,
+          standards_used: receipt.standardsUsed,
+          warnings: receipt.warnings,
+          recommendations: receipt.recommendations,
+          disclaimer_text: receipt.disclaimerText,
+          disclaimer_version: receipt.disclaimerVersion,
+          calculated_at: receipt.calculatedAt,
+          standard_version: receipt.standardVersion,
+          standard_verified_at: receipt.standardVerifiedAt,
+          engine_version: receipt.engineVersion,
+          is_standard_current: receipt.isStandardCurrent,
+          is_public: receipt.isPublic,
+          metadata: {
+            receiptId: receipt.id,
+            receiptHash: receipt.receiptHash,
+            calcId: receipt.calcId,
+            appliedStandard: receipt.appliedStandard,
+            standardVersion: receipt.standardVersion,
+            unitSystem: receipt.unitSystem,
+            inputs: receipt.inputs,
+            result: receipt.result,
+            steps: receipt.steps,
+            formulaUsed: receipt.formulaUsed,
+            standardsUsed: receipt.standardsUsed,
+            engineVersion: receipt.engineVersion,
+          },
         });
       } catch (saveErr) {
         // Non-blocking: log but don't fail the response

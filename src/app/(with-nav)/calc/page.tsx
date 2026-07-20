@@ -373,6 +373,7 @@ export default function CalcHubPage() {
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               type="text"
+              aria-label="계산기 검색"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="계산기 검색 (예: 전압강하, cable, breaker)"

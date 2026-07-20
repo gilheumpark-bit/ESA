@@ -33,14 +33,15 @@ export function useOnboarding(): UseOnboardingReturn {
 
   // Check localStorage on mount
   useEffect(() => {
-    try {
-      const completed = localStorage.getItem(STORAGE_KEY);
-      if (!completed) {
-        setShouldShow(true);
+    const frame = requestAnimationFrame(() => {
+      try {
+        const completed = localStorage.getItem(STORAGE_KEY);
+        if (!completed) setShouldShow(true);
+      } catch {
+        // localStorage unavailable — don't show onboarding to avoid broken state
       }
-    } catch {
-      // localStorage unavailable — don't show onboarding to avoid broken state
-    }
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   const markCompleted = useCallback(() => {

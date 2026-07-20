@@ -9,7 +9,7 @@
  * PART 4: Main form component with validation
  */
 
-import { useState, useCallback, type FormEvent } from 'react';
+import { useState, useCallback, useId, type FormEvent } from 'react';
 import { Calculator, Loader2, AlertCircle, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { ParamDef } from '@/engine/standards/types';
 
@@ -66,15 +66,19 @@ interface FieldError {
 // PART 2 — Field Renderers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function FieldLabel({ param }: { param: ExtendedParamDef }) {
-  return (
-    <label className="mb-1.5 block text-sm font-medium text-[var(--text-primary)]">
+function FieldLabel({ param, htmlFor }: { param: ExtendedParamDef; htmlFor?: string }) {
+  const content = (
+    <>
       {param.description || param.name}
       {param.unit && (
         <span className="ml-1 font-normal text-[var(--text-tertiary)]">({param.unit})</span>
       )}
-    </label>
+    </>
   );
+  const className = 'mb-1.5 block text-sm font-medium text-[var(--text-primary)]';
+  return htmlFor
+    ? <label htmlFor={htmlFor} className={className}>{content}</label>
+    : <div className={className}>{content}</div>;
 }
 
 const INPUT_CLS = (error?: string) => `
@@ -86,15 +90,17 @@ const INPUT_CLS = (error?: string) => `
 `;
 
 function NumberField({
-  param, value, onChange, error, hideLabel,
+  param, value, onChange, error, hideLabel, inputId,
 }: {
-  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean;
+  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean; inputId: string;
 }) {
+  const errorId = `${inputId}-error`;
   return (
     <div>
-      {!hideLabel && <FieldLabel param={param} />}
+      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} />}
       <div className="relative">
         <input
+          id={inputId}
           type="number"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -102,6 +108,8 @@ function NumberField({
           max={param.max}
           step={param.step ?? 'any'}
           placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
           className={`${INPUT_CLS(error)} pr-12`}
         />
         {param.unit && (
@@ -111,7 +119,7 @@ function NumberField({
         )}
       </div>
       {error && (
-        <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
+        <p id={errorId} className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
           <AlertCircle size={12} />{error}
         </p>
       )}
@@ -120,22 +128,26 @@ function NumberField({
 }
 
 function TextField({
-  param, value, onChange, error, hideLabel,
+  param, value, onChange, error, hideLabel, inputId,
 }: {
-  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean;
+  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean; inputId: string;
 }) {
+  const errorId = `${inputId}-error`;
   return (
     <div>
-      {!hideLabel && <FieldLabel param={param} />}
+      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} />}
       <input
+        id={inputId}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
         className={INPUT_CLS(error)}
       />
       {error && (
-        <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
+        <p id={errorId} className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
           <AlertCircle size={12} />{error}
         </p>
       )}
@@ -144,21 +156,29 @@ function TextField({
 }
 
 function SelectField({
-  param, value, onChange, error, hideLabel,
+  param, value, onChange, error, hideLabel, inputId,
 }: {
-  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean;
+  param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean; inputId: string;
 }) {
+  const errorId = `${inputId}-error`;
   return (
     <div>
-      {!hideLabel && <FieldLabel param={param} />}
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={INPUT_CLS(error)}>
+      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} />}
+      <select
+        id={inputId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? errorId : undefined}
+        className={INPUT_CLS(error)}
+      >
         <option value="">선택하세요</option>
         {param.options?.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
       {error && (
-        <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
+        <p id={errorId} className="mt-1 flex items-center gap-1 text-xs text-[var(--color-error)]">
           <AlertCircle size={12} />{error}
         </p>
       )}
@@ -167,16 +187,18 @@ function SelectField({
 }
 
 function BooleanField({
-  param, value, onChange,
+  param, value, onChange, inputId,
 }: {
-  param: ExtendedParamDef; value: boolean; onChange: (val: boolean) => void;
+  param: ExtendedParamDef; value: boolean; onChange: (val: boolean) => void; inputId: string;
 }) {
   return (
     <div className="flex items-center gap-3">
       <button
+        id={inputId}
         type="button"
         role="switch"
         aria-checked={value}
+        aria-label={param.description || param.name}
         onClick={() => onChange(!value)}
         className={`relative h-6 w-11 rounded-full transition-colors ${value ? 'bg-[var(--color-primary)]' : 'bg-[var(--border-default)]'}`}
       >
@@ -191,26 +213,26 @@ function BooleanField({
 
 /** Render a single sub-field inside an array row (label hidden — column header carries it). */
 function RowField({
-  sub, value, onChange,
+  sub, value, onChange, inputId,
 }: {
-  sub: ExtendedParamDef; value: string | boolean; onChange: (v: string | boolean) => void;
+  sub: ExtendedParamDef; value: string | boolean; onChange: (v: string | boolean) => void; inputId: string;
 }) {
   if (sub.type === 'boolean') {
-    return <BooleanField param={sub} value={value as boolean} onChange={(v) => onChange(v)} />;
+    return <BooleanField param={sub} value={value as boolean} onChange={(v) => onChange(v)} inputId={inputId} />;
   }
   if (sub.type === 'string' && sub.options) {
-    return <SelectField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel />;
+    return <SelectField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel inputId={inputId} />;
   }
   if (sub.type === 'string') {
-    return <TextField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel />;
+    return <TextField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel inputId={inputId} />;
   }
-  return <NumberField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel />;
+  return <NumberField param={sub} value={value as string} onChange={(v) => onChange(v)} hideLabel inputId={inputId} />;
 }
 
 function ArrayField({
-  param, rows, onChange, error,
+  param, rows, onChange, error, inputId,
 }: {
-  param: ExtendedParamDef; rows: ArrayRow[]; onChange: (rows: ArrayRow[]) => void; error?: string;
+  param: ExtendedParamDef; rows: ArrayRow[]; onChange: (rows: ArrayRow[]) => void; error?: string; inputId: string;
 }) {
   const schema = param.itemSchema ?? [];
   const minItems = param.minItems ?? 1;
@@ -239,18 +261,22 @@ function ArrayField({
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {schema.map((sub) => (
-                <div key={sub.name}>
-                  <span className="mb-1 block text-xs text-[var(--text-tertiary)]">
-                    {sub.description || sub.name}{sub.unit ? ` (${sub.unit})` : ''}
-                  </span>
-                  <RowField
-                    sub={sub}
-                    value={row[sub.name] ?? (sub.type === 'boolean' ? false : '')}
-                    onChange={(v) => updateCell(i, sub.name, v)}
-                  />
-                </div>
-              ))}
+              {schema.map((sub) => {
+                const rowInputId = `${inputId}-${i}-${sub.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+                return (
+                  <div key={sub.name}>
+                    <label htmlFor={rowInputId} className="mb-1 block text-xs text-[var(--text-tertiary)]">
+                      {sub.description || sub.name}{sub.unit ? ` (${sub.unit})` : ''}
+                    </label>
+                    <RowField
+                      sub={sub}
+                      inputId={rowInputId}
+                      value={row[sub.name] ?? (sub.type === 'boolean' ? false : '')}
+                      onChange={(v) => updateCell(i, sub.name, v)}
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -341,6 +367,7 @@ export default function CalculatorForm({
   mode = 'full',
 }: CalculatorFormProps) {
   const extParams = params;
+  const formId = useId().replace(/:/g, '');
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // compact 모드: defaultValue 있는 필드 = 고급, 없는 필드 = 필수 (array는 항상 필수 표시)
@@ -439,6 +466,7 @@ export default function CalculatorForm({
 
   const renderField = (param: ExtendedParamDef) => {
     const fieldError = fieldErrors.find((e) => e.field === param.name)?.message;
+    const inputId = `${formId}-${param.name.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
 
     if (param.type === 'array') {
       return (
@@ -448,6 +476,7 @@ export default function CalculatorForm({
           rows={(Array.isArray(values[param.name]) ? values[param.name] : []) as ArrayRow[]}
           onChange={(r) => updateValue(param.name, r)}
           error={fieldError}
+          inputId={inputId}
         />
       );
     }
@@ -459,6 +488,7 @@ export default function CalculatorForm({
           param={param}
           value={values[param.name] as boolean}
           onChange={(v) => updateValue(param.name, v)}
+          inputId={inputId}
         />
       );
     }
@@ -471,6 +501,7 @@ export default function CalculatorForm({
           value={values[param.name] as string}
           onChange={(v) => updateValue(param.name, v)}
           error={fieldError}
+          inputId={inputId}
         />
       );
     }
@@ -483,6 +514,7 @@ export default function CalculatorForm({
           value={values[param.name] as string}
           onChange={(v) => updateValue(param.name, v)}
           error={fieldError}
+          inputId={inputId}
         />
       );
     }
@@ -494,6 +526,7 @@ export default function CalculatorForm({
         value={values[param.name] as string}
         onChange={(v) => updateValue(param.name, v)}
         error={fieldError}
+        inputId={inputId}
       />
     );
   };

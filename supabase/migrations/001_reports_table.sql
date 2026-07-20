@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS esva_reports (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   report_id     TEXT UNIQUE NOT NULL,       -- "RPT-XXXXXXXXX"
-  user_id       UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_id       TEXT NOT NULL,                  -- Firebase Auth uid
 
   -- 프로젝트 정보
   project_name  TEXT NOT NULL DEFAULT '미지정 프로젝트',
@@ -36,11 +36,11 @@ ALTER TABLE esva_reports ENABLE ROW LEVEL SECURITY;
 -- 정책: 본인 보고서만 조회/생성 가능
 CREATE POLICY "Users can view own reports"
   ON esva_reports FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (auth.uid()::text = user_id);
 
 CREATE POLICY "Users can insert own reports"
   ON esva_reports FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (auth.uid()::text = user_id);
 
 -- 서비스 롤은 모든 접근 가능
 CREATE POLICY "Service role full access"

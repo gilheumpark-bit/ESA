@@ -17,8 +17,13 @@ import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 import { STANDARD_REFS } from '@/data/standards/standard-refs';
 import { ELECTRICAL_TERMS } from '@/data/iec-60050/electrical-terms';
 
-// ── 실시간 카운터 훅 ──
-function useCountUp(target: number, duration = 1200) {
+// ── 등록 데이터 애니메이션 카운터 ──
+function CountUpStat({ target, label, suffix = '', duration = 1200 }: {
+  target: number;
+  label: string;
+  suffix?: string;
+  duration?: number;
+}) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -38,7 +43,12 @@ function useCountUp(target: number, duration = 1200) {
     observer.observe(el);
     return () => observer.disconnect();
   }, [target, duration]);
-  return { count, ref };
+  return (
+    <div ref={ref} className="text-center">
+      <span className="text-lg font-bold text-[var(--color-primary)]">{count}{suffix}</span>
+      <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">{label}</span>
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -93,10 +103,6 @@ export default function HomePage() {
   // 표준 참조 수 = STANDARD_REFS.length (data/standards/standard-refs.ts — /standards가 표시하는 목록),
   // 용어 수 = ELECTRICAL_TERMS.length (data/iec-60050/electrical-terms.ts — /glossary가 표시하는 목록).
   // 하드코딩 62/151은 데이터와 어긋난 채 드리프트해 제거됨 (BUG-005 해소).
-  const calcCounter = useCountUp(CALCULATOR_COUNT);
-  const standardsCounter = useCountUp(STANDARD_REFS.length);
-  const termCounter = useCountUp(ELECTRICAL_TERMS.length);
-
   return (
     <main className="min-h-screen bg-[var(--bg-primary)]" suppressHydrationWarning>
 
@@ -145,7 +151,7 @@ export default function HomePage() {
           <div className="animate-fade-in-up mt-3 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 py-1" style={{ animationDelay: '60ms' }}>
             <Activity size={12} className="text-emerald-500" />
             <span className="text-[11px] font-medium text-[var(--text-secondary)]">
-              KEC 2021 · NEC 2023 · IEC 60364 최신 반영
+              내장 판본: KEC 2021 · NEC 2023 · IEC 60364 파트별 스냅샷
             </span>
           </div>
 
@@ -154,7 +160,7 @@ export default function HomePage() {
           </h1>
 
           <p className="animate-fade-in-up mt-2 text-center text-[13px] leading-relaxed text-[var(--text-tertiary)]" style={{ animationDelay: '140ms' }}>
-            AI가 추정하지 않습니다. 모든 수치는 Tool이 계산하고, 기준서가 검증합니다.
+            계산은 수식 엔진으로 재현하고, 자동 판정이 불가능한 기준은 HOLD로 구분합니다.
           </p>
 
           {/* Search */}
@@ -209,24 +215,15 @@ export default function HomePage() {
       {/* ═══ Live Stats Bar — 전기 버티컬 시그널 ═══ */}
       <section className="border-b border-[var(--border-default)] bg-[var(--bg-secondary)]">
         <div className="mx-auto flex max-w-5xl items-center justify-center gap-8 px-4 py-3 sm:gap-16">
-          <div ref={calcCounter.ref} className="text-center">
-            <span className="text-lg font-bold text-[var(--color-primary)]">{calcCounter.count}+</span>
-            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">계산기</span>
-          </div>
+          <CountUpStat target={CALCULATOR_COUNT} suffix="+" label="계산기" />
           <div className="h-4 w-px bg-[var(--border-default)]" />
-          <div ref={standardsCounter.ref} className="text-center">
-            <span className="text-lg font-bold text-[var(--color-primary)]">{standardsCounter.count}</span>
-            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">표준 참조</span>
-          </div>
+          <CountUpStat target={STANDARD_REFS.length} label="표준 참조" />
           <div className="h-4 w-px bg-[var(--border-default)]" />
-          <div ref={termCounter.ref} className="text-center">
-            <span className="text-lg font-bold text-[var(--color-primary)]">{termCounter.count}</span>
-            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">전기 용어</span>
-          </div>
+          <CountUpStat target={ELECTRICAL_TERMS.length} label="전기 용어" />
           <div className="hidden h-4 w-px bg-[var(--border-default)] sm:block" />
           <div className="hidden text-center sm:block">
-            <span className="text-lg font-bold text-emerald-500">±0.01%</span>
-            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">정확도</span>
+            <span className="text-sm font-bold text-emerald-600">수식 기반</span>
+            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">계산 엔진</span>
           </div>
         </div>
       </section>
@@ -243,7 +240,7 @@ export default function HomePage() {
                 <Calculator size={22} className="text-white" />
               </div>
               <h3 className="text-base font-bold text-[var(--text-primary)]">전기 계산기</h3>
-              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">KEC/NEC/IEC 기준 {CALCULATOR_COUNT}개 검증 계산기</p>
+              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">수식 엔진 {CALCULATOR_COUNT}개 · 적용 기준과 한계 표시</p>
               <div className="mt-4 grid grid-cols-2 gap-1.5">
                 {['전압강하', '케이블 선정', '차단기 선정', '단락전류', '변압기 용량', '접지저항', '역률 보정', '조도 계산'].map(c => (
                   <span key={c} className="rounded-lg bg-[var(--bg-secondary)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] transition-colors group-hover:bg-blue-50 group-hover:text-blue-700 dark:group-hover:bg-blue-900/20 dark:group-hover:text-blue-300">
@@ -349,20 +346,20 @@ const PRO_TOOLS = [
 const PRINCIPLES = [
   {
     icon: Zap,
-    title: 'AI는 추정하지 않습니다',
-    desc: '모든 수치는 결정론적 엔진이 계산합니다. LLM은 변수 추출만 담당합니다.',
+    title: '계산은 수식 엔진 우선',
+    desc: '지원 계산기는 결정론적 엔진으로 실행합니다. AI 생성 설명은 별도 검증이 필요합니다.',
     cssClass: 'bento-icon-orange',
   },
   {
     icon: BookOpen,
-    title: '기준서가 근거입니다',
-    desc: '모든 판정은 KEC/NEC/IEC 조항에 의해 결정됩니다. 출처 없는 답변은 차단됩니다.',
+    title: '판정 근거를 드러냅니다',
+    desc: '지원 평가기는 적용 조항을 표시하고, 근거가 부족한 항목은 합격 대신 HOLD로 남깁니다.',
     cssClass: 'bento-icon-blue',
   },
   {
     icon: Activity,
-    title: '투명하게 검증합니다',
-    desc: '수식 전개 과정, 적용 조항, Receipt 해시가 모든 결과에 포함됩니다.',
+    title: '검증 범위를 구분합니다',
+    desc: '계산 영수증에는 수식·적용 기준·해시를 기록하고, AI 검토에는 합의와 제한을 함께 표시합니다.',
     cssClass: 'bento-icon-emerald',
   },
 ] as const;

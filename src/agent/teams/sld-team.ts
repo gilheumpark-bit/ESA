@@ -19,7 +19,7 @@ import type {
   ViolationEntry,
 } from './types';
 import { resolveSymbol } from '../vision/symbol-db';
-import { splitAndAnalyze, type VisionSplitResult } from '../vision/vision-splitter';
+import { mergeVisionSplitResults, splitAndAnalyze } from '../vision/vision-splitter';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
 
@@ -38,11 +38,14 @@ async function extractFromDrawing(
 ): Promise<{ components: ExtractedComponent[]; connections: ExtractedConnection[]; confidence: number }> {
   const { classification, fileBuffer, params } = input;
 
-  // DXF: 벡터 파싱 (결정론적, 100% 정확)
+  // DXF: 결정론적 벡터 파싱. 좌표를 직접 읽지만 블록 의미 인식은 불완전할 수 있다.
   if (classification === 'sld_dxf' && fileBuffer) {
     const text = new TextDecoder().decode(fileBuffer);
     const { parseDxfToSLD } = await import('@/engine/topology/dxf-parser');
-    const analysis = parseDxfToSLD(text, { unitScale: (params?.unitScale as number) ?? 0.001 });
+    const requestedScale = typeof params?.unitScale === 'number' && Number.isFinite(params.unitScale) && params.unitScale > 0
+      ? params.unitScale
+      : undefined;
+    const analysis = parseDxfToSLD(text, requestedScale ? { unitScale: requestedScale } : {});
     return {
       components: (analysis.components ?? []).map(c => ({
         id: c.id ?? `comp-${Math.random().toString(36).slice(2, 8)}`,
@@ -50,7 +53,7 @@ async function extractFromDrawing(
         label: c.label ?? c.type,
         rating: c.rating,
         position: c.position,
-        confidence: 1.0, // 벡터 파싱은 100%
+        confidence: analysis.confidence ?? 0,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
@@ -88,46 +91,30 @@ async function extractFromDrawing(
 
   // 이미지: VRAM 분할 병렬 비전
   if (classification === 'sld_image' && fileBuffer) {
+    const provider = input.vision?.provider
+      ?? (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? 'gemini'
+        : process.env.OPENAI_API_KEY ? 'openai'
+          : process.env.ANTHROPIC_API_KEY ? 'claude'
+            : 'gemini');
     const visionResult = await splitAndAnalyze(fileBuffer, {
       gridSize: 4,      // 4분할 (2×2)
       overlap: 0.1,     // 10% 오버랩
-      model: 'gemini',
+      model: provider,
+      modelName: input.vision?.model,
+      apiKey: input.vision?.apiKey,
     });
-    return mergeVisionResults(visionResult);
+    const merged = mergeVisionSplitResults(visionResult);
+    return {
+      ...merged,
+      components: merged.components.map(component => ({
+        ...component,
+        type: resolveSymbol(component.type),
+        confidence: component.confidence * merged.confidence,
+      })),
+    };
   }
 
   return { components: [], connections: [], confidence: 0 };
-}
-
-/** 비전 분할 결과를 단일 SLD로 병합 */
-function mergeVisionResults(
-  results: VisionSplitResult[],
-): { components: ExtractedComponent[]; connections: ExtractedConnection[]; confidence: number } {
-  const allComponents: ExtractedComponent[] = [];
-  const allConnections: ExtractedConnection[] = [];
-  const seenIds = new Set<string>();
-
-  for (const r of results) {
-    for (const c of r.components) {
-      // 중복 제거 (오버랩 영역에서 같은 컴포넌트)
-      const key = `${c.type}-${Math.round((c.position?.x ?? 0) / 10)}-${Math.round((c.position?.y ?? 0) / 10)}`;
-      if (!seenIds.has(key)) {
-        seenIds.add(key);
-        allComponents.push({
-          ...c,
-          type: resolveSymbol(c.type),
-          confidence: c.confidence * r.regionConfidence,
-        });
-      }
-    }
-    allConnections.push(...r.connections);
-  }
-
-  const avgConf = results.length > 0
-    ? results.reduce((sum, r) => sum + r.regionConfidence, 0) / results.length
-    : 0;
-
-  return { components: allComponents, connections: allConnections, confidence: avgConf };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

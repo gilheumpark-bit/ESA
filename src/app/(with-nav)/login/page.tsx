@@ -36,7 +36,7 @@ const BENEFITS = [
   {
     icon: Brain,
     text: 'BYOK AI 검색',
-    sub: '나의 API 키로 무제한 AI 검색',
+    sub: '내 공급자 키와 해당 공급자 한도로 사용',
   },
 ] as const;
 
@@ -70,8 +70,8 @@ function LoginInner() {
   // Show nothing while checking auth state (prevents flash)
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
-        <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" />
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]" role="status" aria-label="로그인 상태 확인 중">
+        <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" aria-hidden="true" />
       </div>
     );
   }
@@ -86,6 +86,7 @@ function LoginInner() {
         <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-8 shadow-sm">
           {/* Branding */}
           <div className="mb-8 text-center">
+            <h1 className="sr-only">ESVA 로그인</h1>
             <div className="mb-3">
               <ESVALogo size="lg" className="justify-center" />
             </div>
@@ -113,6 +114,7 @@ function LoginInner() {
 
           {/* Google sign-in button */}
           <button
+            type="button"
             onClick={handleGoogleSignIn}
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 text-sm font-medium text-[var(--text-primary)] shadow-sm transition-all hover:border-[var(--border-hover)] hover:shadow-md active:scale-[0.98]"
           >
@@ -148,6 +150,7 @@ function LoginInner() {
           <p className="mt-6 text-center text-xs text-[var(--text-tertiary)]">
             로그인 없이도 계산기를 사용할 수 있습니다.{' '}
             <button
+              type="button"
               onClick={() => router.replace(returnTo)}
               className="text-[var(--color-primary)] underline-offset-2 hover:underline"
             >
@@ -177,8 +180,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]">
-          <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" />
+        <div className="flex min-h-screen items-center justify-center bg-[var(--bg-primary)]" role="status" aria-label="로그인 화면 불러오는 중">
+          <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" aria-hidden="true" />
         </div>
       }
     >

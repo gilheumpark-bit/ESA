@@ -13,6 +13,8 @@
 
 import { NextRequest } from 'next/server';
 import { withApiHandler } from '@/lib/api/api-handler';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { validateOnpremiseTarget } from '@/lib/onpremise-policy';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
@@ -49,6 +51,11 @@ const CHAT_ENDPOINTS: Record<string, string> = {
 export const POST = withApiHandler(
   { rateLimit: 'default', checkOrigin: true },
   async (req: NextRequest, ctx) => {
+    const userId = await extractVerifiedUserId(req);
+    if (!userId) {
+      return ctx.error('ESA-1001', 'Authentication required', 401);
+    }
+
     const body = await req.json() as TestRequest;
     const { serverUrl, apiType, modelName, apiKey, timeout = 10 } = body;
 
@@ -56,31 +63,15 @@ export const POST = withApiHandler(
       return ctx.error('ESA-4001', 'serverUrl, apiType, modelName 필수', 400);
     }
 
-    // URL 형식 검증
-    let parsedUrl: URL;
-    try {
-      parsedUrl = new URL(serverUrl);
-    } catch {
-      return ctx.error('ESA-4002', '유효하지 않은 서버 URL 형식', 400);
-    }
-
-    // 보안: 외부 공개 IP는 차단 (프라이빗 IP·로컬호스트만 허용)
-    const hostname = parsedUrl.hostname;
-    const isPrivate =
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      /^10\./.test(hostname) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
-      /^192\.168\./.test(hostname) ||
-      hostname === '::1';
-
-    if (!isPrivate) {
+    const target = validateOnpremiseTarget(serverUrl);
+    if (!target.ok || !target.normalizedUrl) {
       return ctx.error(
         'ESA-4003',
-        '보안 정책: On-Premise 테스트는 프라이빗 IP(192.168.x.x, 10.x.x.x, localhost)만 허용됩니다.',
-        400,
+        target.reason ?? 'On-Premise target blocked',
+        403,
       );
     }
+    const targetBaseUrl = target.normalizedUrl;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -92,7 +83,7 @@ export const POST = withApiHandler(
     try {
       // ── 1단계: 헬스체크 (모델 목록 조회)
       const healthPath = HEALTH_ENDPOINTS[apiType] ?? '/v1/models';
-      const healthRes = await fetch(`${serverUrl.replace(/\/$/, '')}${healthPath}`, {
+      const healthRes = await fetch(`${targetBaseUrl}${healthPath}`, {
         method: 'GET',
         headers,
         signal: AbortSignal.timeout(timeout * 1000),
@@ -122,7 +113,7 @@ export const POST = withApiHandler(
             };
 
         const t1 = Date.now();
-        const chatRes = await fetch(`${serverUrl.replace(/\/$/, '')}${chatPath}`, {
+        const chatRes = await fetch(`${targetBaseUrl}${chatPath}`, {
           method: 'POST',
           headers,
           body: JSON.stringify(chatBody),

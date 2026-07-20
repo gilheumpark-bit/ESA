@@ -2,7 +2,7 @@
 // `eslint .`로 직접 실행한다. eslint-config-next는 flat config 배열을 export.
 import next from 'eslint-config-next';
 
-export default [
+const config = [
   {
     ignores: [
       '.next/**',
@@ -28,3 +28,5 @@ export default [
     },
   },
 ];
+
+export default config;

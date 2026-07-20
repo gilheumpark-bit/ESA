@@ -40,6 +40,8 @@ build/
 coverage/
 *.lcov
 .jest-cache/
+test-results/
+.codex-eslint.json
 
 # =============================================================================
 # IDE & Editor
@@ -68,6 +70,12 @@ yarn-error.log*
 .byok-keys/
 # 로컬 계산 캐시
 .calc-cache/
+# 에이전트 실행 원장·작업 패키지
+.superpowers/
+# 격리 기능 개발 작업공간
+.worktrees/
+# 로컬 분석·변환 중간 산출물
+tmp/
 # 로컬 IPFS 핀 목록
 .ipfs-pins/
 # Sentry sourcemaps

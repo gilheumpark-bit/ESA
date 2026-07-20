@@ -25,26 +25,23 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import Link from 'next/link';
-import { decryptKey } from '@/lib/ai-providers';
+import Image from 'next/image';
+import { loadStoredProviderKey } from '@/lib/byok-storage';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & State
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const BYOK_PREFIX = 'esa-byok-';
 const DEFAULT_VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;
 
 /** Read first available vision API key from BYOK localStorage */
 async function getFirstAvailableVisionKey(): Promise<{ provider: string; key: string } | null> {
   if (typeof window === 'undefined') return null;
   for (const provider of DEFAULT_VISION_PROVIDERS) {
-    const stored = localStorage.getItem(BYOK_PREFIX + provider);
-    if (stored) {
-      try {
-        const key = await decryptKey(stored);
-        if (key) return { provider, key };
-      } catch { /* skip */ }
-    }
+    try {
+      const key = await loadStoredProviderKey(provider);
+      if (key) return { provider, key };
+    } catch { /* try the next provider */ }
   }
   return null;
 }
@@ -141,9 +138,12 @@ function ImageUploader({
     <div className="space-y-4">
       {preview ? (
         <div className="relative">
-          <img
+          <Image
             src={preview}
             alt="명판 이미지"
+            width={1200}
+            height={800}
+            unoptimized
             className="w-full rounded-xl border border-[var(--border-default)] object-contain"
             style={{ maxHeight: 400 }}
           />

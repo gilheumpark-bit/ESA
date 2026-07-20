@@ -88,7 +88,7 @@ describe('린트 — 오류(로드 거부)', () => {
     expect(r.ruleSet?.standardLabel).toBe('사내규정'); // 기본값
   });
 
-  it.each([
+  it.each<[unknown, string]>([
     ['루트 비객체', 'json은 객체여야'],
     [null, '객체여야'],
     [[], '객체여야'],

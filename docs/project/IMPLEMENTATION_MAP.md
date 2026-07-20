@@ -1,0 +1,24 @@
+# ESA 구현 배선 지도
+
+`status`는 코드 존재 여부가 아니라 production entry에서 저장·재조회·실패 처리가 실제로 이어지는지를 나타낸다.
+
+| 기능 | production entry | caller | write | persistence | reload/read | route/UI | failure/recovery | tests | status |
+|---|---|---|---|---|---|---|---|---|---|
+| 단일 계산 | `POST /api/calculate` | 계산기 상세 폼 | 계산기 레지스트리 실행, 영수증 생성 | 인증 시 Supabase 계산 영수증 | `GET /api/calculate/[id]`, 영수증 화면 | `/calc`, `/receipt/[id]` | 입력 오류 400, 저장 실패는 운영에서 실패 | 계산기, 영수증 무결성, Supabase 계약 | wired |
+| 로컬 검색과 AI 채팅 | `POST /api/search`, `POST /api/chat` | 검색 화면, Studio | 로컬 인덱스 조회, 조건부 공급자 스트림 | 검색은 없음, 토큰 예산은 프로세스 상태 | 같은 요청 스트림과 결과 UI | `/search`, `/tools/studio` | 키·예산·출력 안전 필터, 로컬 폴백 | 검색, 채팅 요청, 출력 필터 계약 | wired |
+| 이미지 도면 분석 | `POST /api/sld`, `POST /api/team-review` | SLD 업로드와 Studio | Sharp 실제 크롭, VLM 분석, 전역 좌표 병합 | 팀 보고서 Supabase 저장 | `GET /api/reports/[id]` | `/tools/sld`, `/report/[id]` | 형식·크기·키 검증, 공급자 실패 502, 사람 검토 HOLD | Vision 크롭·병합, VLM 검증, 팀 경계 | wired |
+| DXF 도면 분석 | `POST /api/dxf`, `POST /api/team-review` | SLD 도구의 DXF 탭 | DXF 엔티티·블록·끝점 토폴로지 파싱 | 팀 보고서 Supabase 저장 | 보고서 조회와 해시 재검증 | `/tools/sld`, `/report/[id]` | 단위 미확정 시 물리 길이 HOLD, 파싱 오류 400 | DXF 적대 입력, 물리 근거, 팀 검토 | wired |
+| PDF 도면 분석 | `POST /api/pdf-drawing`, `POST /api/team-review` | SLD 도구의 PDF 탭 | 선택 페이지 벡터 선·문자 파싱 | 팀 보고서 Supabase 저장 | 보고서 조회와 해시 재검증 | `/tools/sld`, `/report/[id]` | 페이지·크기 검증, 래스터 전용 PDF 실패 | PDF fixture gate, 팀 검토 계약 | wired |
+| 3개 전문팀과 합의 | `POST /api/team-review` | SLD 도구, Studio | 계통도·평면도·기준서 결과 뒤 별도 합의 | 보고서와 SHA-256 해시 | 보고서 API와 화면 | `/tools/studio`, `/report/[id]` | 서로 다른 두 팀 미만 성공 시 합의 완료 금지 | 오케스트레이터, 합의 독립성, 보고서 무결성 | wired |
+| 기준서 탐색과 판정 | 기준서 레지스트리, `POST /api/search` | 기준서 화면, 기준서팀 | 스냅샷 조회와 전용 평가기 실행 | 저장소 정적 데이터 | 같은 화면의 조항·판정 결과 | `/standards`, `/search` | 임계값·판본 근거 부족 시 PASS 대신 HOLD | KEC, NEC, NER, ESA 라우팅과 영수증 판본 | wired |
+| 영수증과 보고서 | 영수증·보고서 조회 API | 계산 결과, 팀 검토 완료 | 입력·출력·근거·경고와 해시 저장 | Supabase 계산 영수증·보고서 | 소유권 또는 공개 범위 확인 뒤 read-back | `/receipt/[id]`, `/report/[id]` | 해시 불일치·DB 실패 fail-closed | 해시, 소유권, 공개 범위, 인쇄 XSS | wired |
+| 인증과 계정 티어 | Firebase Auth, `GET /api/account/tier` | 전역 AuthProvider, 로그인 | Firebase ID 토큰 검증 | Supabase users 티어 | 새 요청마다 서버 정본 티어 조회 | `/login`, `/settings`, 보호 화면 | 미구성 환경은 익명·free로 제한 | 인증 helper, 티어, 스키마 계약 | wired |
+| BYOK | 브라우저 보안 저장소, `POST /api/settings/byok-test` | BYOK 설정, AI 요청 | AES-GCM 암호문과 추출 불가능 CryptoKey | IndexedDB 키, localStorage 암호문 | 요청 직전 브라우저 복호화 | `/settings/byok` | same-origin, 고정 공급자 URL, 키 미저장 | 키 보안, 공급자 연결, Gemini 헤더 | wired |
+| 온프레미스 AI | `POST /api/settings/onpremise-test`, 검색·채팅 | 온프레미스 설정 | 허용된 origin만 서버 연결 | sessionStorage 암호화 설정 | 검색·채팅 요청 시 설정 조회 | `/settings/onpremise`, `/search` | SSRF 차단, 관리자 allowlist, timeout | URL 정책, 보안 저장, 연결 계약 | wired |
+| 프로젝트·공유·커뮤니티·현장 | 각 인증 Route Handler | 프로젝트, 커뮤니티, 현장 화면 | 서버 검증 UID 범위 insert·update | Supabase 테이블과 RLS 계약 | 목록·상세·공유 토큰 read-back | `/projects`, `/community`, `/field` | IDOR 차단, 원점·입력·저장 실패 처리 | 프로젝트 공유, 알림, 현장 저장 계약 | wired |
+| 결제·구독 | Checkout, Portal, Stripe webhook | 요금제와 계정 설정 | 서버 플랜 핸들, 서명 이벤트, 멱등 처리 | Stripe와 Supabase billing_events, users | account tier와 billing status | 설정 내 구독 관리 | 준비도 미충족 시 UI·API 비활성 | 결제 준비도, 웹훅, origin 계약 | partial |
+| 인앱 알림 | `/api/notifications` | 알림 벨, 설정 | 본인 UID 알림·읽음 상태 | Supabase notifications | 알림 목록 재조회 | 전역 헤더와 설정 | 운영 DB 실패 시 성공 위장 금지 | IDOR, 기본 수신동의, 저장 정책 | wired |
+| 이메일·푸시 발송 | 설정 선호도 | 알림 설정 | 발송자 없음 | 선호도만 저장 | 선호도 조회 | `/settings` | 기본 false, 전송 성공 표시 없음 | 기본값과 저장 계약 | dormant |
+| Weaviate 벡터 검색 | 검색 라이브러리 | 검색 API | v3 컬렉션 insert 계약 | 외부 Weaviate | hybrid 검색과 재연결 | `/search` | 미구성 시 로컬 검색 폴백 | Weaviate v3 mock 계약 | partial |
+| IPFS 타임스탬프 등록 | `POST /api/notarize` 호환 경로 | 영수증의 플래그 조건부 버튼 | 최소화 데이터 Pinata 고정, 서버 레지스트리 시각 | IPFS와 Supabase 메타데이터 | CID와 레지스트리 증거 조회 | `/receipt/[id]` 조건부 | 기본 OFF, PII 심층 제거, 실패 시 미등록 | 인증 계약, 입력 최소화 | dormant |
+| 수동 검토·배치 계산 API | `/api/review`, `/api/calculate/batch` | 일반 UI 호출처 없음 | 검증 파이프라인 또는 일괄 계산 | 요청별 조건부 | API 응답만 | UI 미노출 | 입력 계약과 제품 흐름 확정 전 비활성 취급 | Route 단위 테스트 | dormant |

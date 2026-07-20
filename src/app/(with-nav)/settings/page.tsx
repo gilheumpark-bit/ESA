@@ -20,6 +20,7 @@ import {
   type Country,
 } from '@/hooks/useSettings';
 import { LANG_LABELS, SUPPORTED_LANGS, type Lang } from '@/lib/i18n';
+import { Server } from 'lucide-react';
 
 // =============================================================================
 // PART 1 — Constants & Helpers
@@ -138,7 +139,7 @@ function BYOKSection() {
   return (
     <SectionCard title="API Keys (BYOK)">
       <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-        Bring Your Own Key -- ESVA never stores your keys on our servers.
+        Bring Your Own Key — encrypted in this browser; sent transiently through ESVA for provider calls and not persisted server-side.
       </p>
       <Link
         href="/settings/byok"
@@ -154,16 +155,27 @@ function BYOKSection() {
 function PlanSection({ tier }: { tier: UserTier }) {
   const badge = TIER_BADGES[tier];
   const [upgrading, setUpgrading] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [billingEnabled, setBillingEnabled] = useState<boolean | null>(null);
 
-  // /api/checkout은 POST 전용(GET 405) + Bearer 인증 + { priceId, returnUrl } 본문.
-  // 구현 전 이 버튼은 <a href="/api/checkout">라 405로 죽어 있었다.
-  const priceId = process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY ?? '';
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/billing/status', { cache: 'no-store' })
+      .then(async (response) => {
+        const body = await response.json() as { data?: { enabled?: boolean; plans?: string[] } };
+        if (active) {
+          setBillingEnabled(Boolean(response.ok && body.data?.enabled && body.data.plans?.includes('pro_monthly')));
+        }
+      })
+      .catch(() => { if (active) setBillingEnabled(false); });
+    return () => { active = false; };
+  }, []);
 
   const handleUpgrade = async () => {
     setUpgradeError(null);
-    if (!priceId) {
-      setUpgradeError('결제 상품이 아직 설정되지 않았습니다 (Stripe 미구성).');
+    if (!billingEnabled) {
+      setUpgradeError('결제 기능이 현재 비활성화되어 있습니다.');
       return;
     }
     setUpgrading(true);
@@ -180,7 +192,7 @@ function PlanSection({ tier }: { tier: UserTier }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ priceId, returnUrl: window.location.href }),
+        body: JSON.stringify({ plan: 'pro_monthly' }),
       });
       const json = await res.json().catch(() => null);
       if (res.status === 503) {
@@ -199,6 +211,33 @@ function PlanSection({ tier }: { tier: UserTier }) {
     }
   };
 
+  const handleManageSubscription = async () => {
+    setUpgradeError(null);
+    setManaging(true);
+    try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      if (!token) {
+        window.location.assign('/login');
+        return;
+      }
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.success || !body?.data?.url) {
+        setUpgradeError(body?.error?.message ?? `구독 관리 페이지 생성 실패 (${response.status})`);
+        return;
+      }
+      window.location.assign(body.data.url);
+    } catch {
+      setUpgradeError('네트워크 오류 — 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setManaging(false);
+    }
+  };
+
   return (
     <SectionCard title="Plan & Billing">
       <div className="flex items-center justify-between">
@@ -212,17 +251,35 @@ function PlanSection({ tier }: { tier: UserTier }) {
             {badge.label}
           </span>
         </div>
-        {tier !== 'enterprise' && (
+        {tier === 'free' && billingEnabled === true && (
           <button
             type="button"
             onClick={handleUpgrade}
-            disabled={upgrading}
+            disabled={upgrading || billingEnabled !== true}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {upgrading ? 'Redirecting…' : 'Upgrade'}
+            {upgrading ? '결제 페이지 여는 중…' : 'Pro 구독 시작'}
+          </button>
+        )}
+        {tier !== 'free' && tier !== 'enterprise' && billingEnabled === true && (
+          <button
+            type="button"
+            onClick={handleManageSubscription}
+            disabled={managing}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            {managing ? '구독 정보 여는 중…' : '구독 관리'}
           </button>
         )}
       </div>
+      {billingEnabled === null && (
+        <p className="mt-3 text-sm text-zinc-500" role="status">결제 기능 상태 확인 중…</p>
+      )}
+      {billingEnabled === false && (
+        <p className="mt-3 text-sm text-zinc-500">
+          결제 기능이 비활성화되어 있습니다. 현재 화면에서는 카드 정보나 결제 요청을 받지 않습니다.
+        </p>
+      )}
       {upgradeError && (
         <p className="mt-3 text-sm text-red-600 dark:text-red-400" role="alert">
           {upgradeError}
@@ -273,13 +330,14 @@ export default function SettingsPage() {
         <BYOKSection />
         <SectionCard title="On-Premise AI 서버">
           <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-            DGX Spark 등 자체 서버 연동 — 도면·현장 데이터 외부 미유출, API 비용 0원.
+            관리자가 허용한 자체 AI 서버에 연결합니다. 실제 데이터 경로와 운영 비용은 배포 환경 정책을 확인하세요.
           </p>
           <Link
             href="/settings/onpremise"
             className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
-            🖥 On-Premise 설정
+            <Server size={16} aria-hidden="true" />
+            On-Premise 설정
             <span aria-hidden="true">&rarr;</span>
           </Link>
         </SectionCard>

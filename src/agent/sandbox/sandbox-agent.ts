@@ -6,7 +6,7 @@
  * Direct sandbox-to-sandbox communication is FORBIDDEN.
  *
  * PART 1: SandboxAgent class
- * PART 2: Tool execution stub
+ * PART 2: Tool execution routing
  * PART 3: Factory
  */
 
@@ -74,9 +74,8 @@ export class SandboxAgent {
   }
 
   /**
-   * Core query processing pipeline.
-   * Subclasses or future implementations will override this
-   * with actual LLM calls and tool invocations.
+   * Core query processing pipeline. Tool outputs are synthesized without
+   * inventing an extra LLM answer when evidence is unavailable.
    */
   private async processQuery(
     query: ParsedQuery,
@@ -270,7 +269,7 @@ export class SandboxAgent {
   }
 }
 
-// ─── PART 2: Tool Execution Stub ────────────────────────────────
+// ─── PART 2: Tool Execution Routing ─────────────────────────────
 
 interface ToolResult {
   toolId: string;

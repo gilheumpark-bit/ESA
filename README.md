@@ -5,367 +5,129 @@
 <h1 align="center">ESVA — Electrical Search Vertical AI</h1>
 
 <p align="center">
-  <strong>엔지니어를 위한 검색 엔진</strong> — AI 기반 전기 엔지니어링 특화 검색·검증 플랫폼
+  전기 엔지니어가 계산 근거를 다시 확인할 수 있는 검색·계산·도면 검토 작업대
 </p>
 
 <p align="center">
   <a href="https://github.com/gilheumpark-bit/ESA/actions"><img alt="CI" src="https://github.com/gilheumpark-bit/ESA/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/gilheumpark-bit/ESA/blob/main/LICENSE"><img alt="License: CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg" /></a>
-  <img alt="Node" src="https://img.shields.io/badge/Node-20+-green.svg" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-blue.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/Tests-27_suites_/_441_pass-brightgreen.svg" />
+  <img alt="Node" src="https://img.shields.io/badge/Node-%3E%3D20.9-green.svg" />
   <img alt="Calculators" src="https://img.shields.io/badge/Calculators-57-orange.svg" />
-  <img alt="Standards" src="https://img.shields.io/badge/Standards-210_articles-blueviolet.svg" />
 </p>
 
-<p align="center">
-  <a href="#주요-기능">주요 기능</a> •
-  <a href="#아키텍처">아키텍처</a> •
-  <a href="#시작하기">시작하기</a> •
-  <a href="#기술-스택">기술 스택</a> •
-  <a href="#테스트">테스트</a> •
-  <a href="#api">API</a> •
-  <a href="#로드맵">로드맵</a> •
-  <a href="#기여">기여</a> •
-  <a href="#라이선스">라이선스</a>
-</p>
+## 현재 상태
 
----
+ESVA v0.2.0은 오픈 베타입니다. 계산 엔진과 로컬 기준서 탐색은 외부 AI 없이 사용할 수 있습니다. AI 검색, 계정 데이터, 결제, 벡터 검색처럼 외부 서비스에 의존하는 기능은 배포 환경의 키와 인프라가 있어야 작동합니다.
 
-## 개요
+ESVA는 설계 승인 도구나 법적 적합성 인증서가 아닙니다. 계산 결과와 기준서 인용은 입력값·판본·관할 조건을 확인한 뒤 기술사 또는 책임 엔지니어가 최종 검토해야 합니다.
 
-ESVA는 멀티 모델 LLM 검색과 결정론적 엔지니어링 계산기, 4팀 에이전트 검증, 투명한 영수증 시스템을 결합한 전문 전기 엔지니어링 플랫폼입니다. 면허 소지 전기 엔지니어·설계자·학생을 위해 설계되었습니다.
+## 무엇이 실제로 작동하나
 
-> **상태:** 오픈 베타 (v0.2.0) — BYOK(자체 API 키) 방식으로 무료 사용
+| 영역 | 상태 | 조건과 경계 |
+|---|---|---|
+| 엔지니어링 계산기 | 사용 가능 | 레지스트리에 등록된 57개 계산기. 각 계산기별 공식·입력 계약·기준값 테스트를 사용하며, 모든 계산기에 하나의 보편 정확도 수치를 주장하지 않습니다. |
+| 기준서 탐색·판정 | 사용 가능 / 일부 HOLD | 저장소의 특정 판본 스냅샷을 검색합니다. 공인 원문의 최신 개정을 자동 동기화하지 않습니다. 근거값이나 전용 평가기가 부족하면 PASS 대신 HOLD를 반환합니다. |
+| AI 검색·채팅 | 조건부 | 서버 공급자 키 또는 사용자의 BYOK 키가 필요합니다. 출력 필터가 근거 없는 수치·안전 단정 표현을 차단하거나 보류시킬 수 있습니다. |
+| 도면 분석 | 조건부 | DXF와 벡터 PDF는 결정론적 파서를 사용합니다. 스캔 PDF·복잡한 CAD·불완전 블록은 누락될 수 있습니다. 이미지 도면 분석에는 지원 AI 공급자 키가 필요합니다. |
+| 전문팀 검토 | 조건부 | 계통도·평면도·기준서 3개 전문 분석 단계 뒤 별도 합의 단계가 결과를 종합합니다. 서로 다른 전문팀 2개 이상이 성공하지 않으면 합의 완료로 표시하지 않습니다. |
+| 영수증·보고서 | 사용 가능 | 계산 입력·출력·공식·판본 메타데이터와 SHA-256 무결성 해시를 기록합니다. 공개 여부와 소유권을 분리해 검사합니다. |
+| 프로젝트·커뮤니티·히스토리 | 조건부 | Firebase 인증과 Supabase 스키마·서비스 역할 키가 필요합니다. 미설정 환경에서는 로그인·영구 저장 기능이 제한됩니다. |
+| 벡터 검색 | 조건부 | Weaviate가 없거나 연결되지 않으면 로컬 검색으로 폴백합니다. |
+| 결제·구독 | 배포 전 검증 필요 | Stripe 키·가격·서명 검증 웹훅·실제 테스트 모드 왕복이 모두 준비된 배포에서만 활성화해야 합니다. |
+| 알림 | 일부 | 인앱 알림은 지원합니다. 이메일·푸시 선택지는 발송 인프라가 연결되기 전에는 전달되지 않습니다. |
+| IPFS 타임스탬프 등록 | 기본 비활성 | 익명화·최소화된 영수증을 IPFS에 고정하고 서버 레지스트리에 시각을 기록하는 조건부 기능입니다. 블록체인 거래나 제3자 공증이 아니며, `RECEIPT_NOTARIZE`를 켜기 전 개인정보·삭제·Pinata 왕복 검증이 필요합니다. |
 
-### 핵심 가치
+## 핵심 흐름
 
-- **다중 기준서 검색** — KEC(109), NEC(41), IEC(25), JIS(19), NER(9), ESA(7) = 210개 조항, 조건 트리 DSL 기반
-- **57개 검증 계산기** — 전압강하·케이블 선정·아크플래시·단락전류·접지·태양광 등 (±0.01% 정확도)
-- **4팀 에이전트 시스템** — SLD/평면도/기준서/합의 팀 + 토론 프로토콜 + 8개 물리법칙 검증
-- **영수증 투명성** — 모든 AI 답변에 검증 가능한 영수증 동반 (SHA-256 해시·일시 기록·모델 추적)
-- **BYOK(자체 키)** — 사용자가 자신의 LLM API 키를 사용, ESVA는 키를 서버에 저장하지 않음
-
----
-
-## 주요 기능
-
-### AI 검색
-- 멀티 모델 LLM 지원: Google Gemini 2.5, OpenAI GPT-4.1, Anthropic Claude 4, Groq Llama 4, Mistral, Ollama
-- 7개 언어 키워드 추출 (KR/EN/JP/ZH/DE/FR/ES)
-- EngRank 스코어링 알고리즘 + 투명한 랭킹 근거
-- Weaviate 벡터 검색 + 로컬 폴백
-
-### 엔지니어링 계산기 (57개)
-
-| 분야 | 예시 |
-|------|------|
-| 전력 | 전압강하(1φ/3φ), 역률 보정, 수용률/부등률, 전력 손실 |
-| 보호 | 단락전류(IEC 60909), 아크플래시(IEEE 1584), 차단기 선정, 누전차단기, 계전기 |
-| 배선 | 케이블 선정(KEC/NEC/IEC), 전선관 충전율, 허용전류 보정, AWG 변환 |
-| 접지 | 접지저항(Dwight), 등전위 본딩, 피뢰 시스템 |
-| 태양광/ESS | 발전량, 배터리 용량, 계통연계, PCS 용량, DC 케이블 |
-| 변압기 | 용량, 손실, 효율, 임피던스, 돌입전류, 병렬운전 |
-| 조명 | 조도(KS C 7612), 에너지 절감, 비상발전기, UPS |
-| 전동기 | 용량, 기동전류, 효율(IE1-4), 제동저항, 인버터 |
-| 수변전 | CT/VT 선정, 피뢰기, MV 스위치기어 |
-
-모든 계산기: 순수 함수, 샌드박스 실행, 부작용 없음, 불확실성 범위 추적.
-
-### 기준서 준수 (210개 조항 · 194개 판정 가능)
-
-| 기준서 | 조항 | 범위 |
-|--------|------|------|
-| **KEC 2021** | 109 | 핵심 + 확장, 전용 + 범용 평가기 |
-| **NEC 2023** | 41 | KEC/IEC/JIS 등가 조항 전체 교차참조 |
-| **IEC 60364** | 25 | 6판 + 개정, 교차참조 |
-| **JIS C 0364** | 19 | A/B/C/D 접지, 내진, 의료, EV |
-| **NER (내선규정)** | 9 | 한국 내선 배선 규정 |
-| **ESA (전기사업법)** | 7 | 한국 전기사업법 |
-
-> **210개 정의**, **194개 판정 체인 등록** — NER/ESA(16개)는 검색되지만 아직 `evaluateStandard`에 배선되지 않아 판정 체인에서 HOLD를 반환합니다.
-
-- AND/OR 복합 조건 트리 DSL
-- 범용 평가기 + 전용 평가기(차단기 선정·허용전류·차단용량)
-- **자리표시자 안전 판정** — 임계값이 미기입 자리표시자(`value: 0`)인 조항은 조작된 pass/fail 대신 **HOLD**를 반환합니다. 임계값은 공인 표 또는 측정 입력에서만 오며, 절대 추측하지 않습니다.
-- 허용전류 표: KEC, NEC(Table 310.16), IEC 60364-5-52 — 각 결과에 `SourceTag`(출처 태그) 부착
-
-### 4팀 에이전트 아키텍처
-
-```
-Input → Orchestrator → ┬─ TEAM-SLD (계통도 분석)
-         (retry 2x)    ├─ TEAM-LAYOUT (평면도 분석)
-                        ├─ TEAM-STD (규정 질의)
-                        └─ TEAM-CONSENSUS (합의 + 보고서)
+```text
+질문/도면/계산 입력
+        │
+        ├─ 결정론적 계산 엔진 ── 입력 검증 ── 계산 영수증
+        │
+        ├─ 기준서 스냅샷 ────── 전용 평가기 또는 HOLD
+        │
+        └─ 3개 전문 분석 ────── 합의 단계 ── 검토 보고서
+                                      │
+                         경고·가정·근거·사람 검토 필요 표시
 ```
 
-- 8개 물리법칙 검증 (V=IR, P=VI, I²R, Z=√R²+X², VD%, Q=Ptanφ, S=P/cosφ, E=Pt)
-- 최대 3라운드 토론 + 2/3 합의 또는 보수적 채택
-- 합의 실패 시 사람(HITL) 에스컬레이션 — 리포트에 "사람 검토 필요"로 노출
-- 팀 디스패치 실패 시 지수 백오프 재시도
+합의 단계는 네 번째 독립 전문가가 아닙니다. 세 전문 분석 결과의 출처와 성공 여부를 확인한 뒤 충돌을 정리하는 별도 단계입니다.
 
-### 비전 파이프라인
-- 전기 도면용 DXF/PDF 벡터 파싱
-- VRAM 분할 병렬 비전 (N×N 그리드, PNG/JPEG 헤더 파싱)
-- 150+ 전기 심볼 DB (CAD 블록명 → 표준 타입)
-- VLM 통합: Gemini 2.5 Flash / GPT-4.1 Vision, 재시도 + 키 검증
+## BYOK 보안 경계
 
-### 보안 & 검증
-- 9개 가드레일 차단 규칙 + 11개 시스템 프롬프트 규칙
-- 17개 프롬프트 인젝션 탐지 패턴 (EN + KO)
-- 모든 사용자 대면 API 입력에 `sanitizeInput()`
-- BYOK 키 AES-GCM 암호화 (세션 범위)
-- 9개 프로파일 레이트 리밋 (슬라이딩 윈도우)
-- 안전 필수 계산 전반에 PE급 면책 고지
+브라우저에 저장한 공급자 키는 Web Crypto AES-GCM으로 암호화됩니다. 암호화 키는 IndexedDB의 추출 불가능한 `CryptoKey`로 보관하고, 원문 API 키를 `localStorage`에 저장하지 않습니다.
 
-### 전문가용 출력
-- ESVA Verified 배지 + IDE 스타일 빨강/노랑/초록 마킹
-- 엔지니어링 검토 보고서 (이슈 분석 → 적용 법규 → 기술 검증 → 결론 → 보류 RFI)
-- SHA-256 해시 영수증 + 선택적 IPFS 핀
-- Excel 내보내기 (ExcelJS, 서식 + 수식 포함 2시트)
+AI 요청 시에는 브라우저가 키를 복호화해 TLS 연결로 ESVA 서버에 전달하고, 서버가 선택한 공급자 호출에 일시 사용합니다. ESVA 애플리케이션은 이 원문 키를 데이터베이스나 서버 로그에 저장하지 않지만, “키가 서버를 전혀 통과하지 않는다”는 구조는 아닙니다. 공용 PC에서는 사용 후 키를 삭제하고 브라우저 프로필을 분리하십시오.
 
----
+## 로컬 실행
 
-## 아키텍처
-
-```
-┌──────────────────────────────────────────────────────┐
-│                    Next.js 16 App                    │
-│               (19 pages, 31 API routes)              │
-├──────────────────────────────────────────────────────┤
-│  Agent Layer                                         │
-│  ┌───────────┐  ┌───────────┐  ┌──────────────────┐ │
-│  │Orchestr.  │  │ Legacy    │  │ Vision Pipeline  │ │
-│  │(4-Team)   │  │(Main/     │  │ (DXF/PDF/VLM)    │ │
-│  │+ Retry    │  │Bridge/    │  │ + PNG/JPEG parse  │ │
-│  │SLD/LAY/   │  │Sandbox)   │  │ 150+ symbols     │ │
-│  │STD/CON    │  │17 sbox    │  │ Gemini/GPT-4V    │ │
-│  └───────────┘  └───────────┘  └──────────────────┘ │
-├──────────────────────────────────────────────────────┤
-│  Engine Layer                                        │
-│  ┌────────┐ ┌──────────┐ ┌────────┐ ┌────────────┐ │
-│  │Calc(57)│ │Std(210)  │ │Topology│ │Receipt     │ │
-│  │±0.01%  │ │KEC/NEC/  │ │BFS     │ │SHA-256     │ │
-│  │uncert. │ │IEC/JIS   │ │Graph   │ │IPFS        │ │
-│  │range   │ │AND/OR DSL│ │Cache   │ │            │ │
-│  └────────┘ └──────────┘ └────────┘ └────────────┘ │
-├──────────────────────────────────────────────────────┤
-│  Data Layer                                          │
-│  250+ IEC terms │ 200+ synonyms │ 170+ constants    │
-│  KEC/NEC/IEC    │ 56 material   │ 11 drawing        │
-│  ampacity tables│ prices        │ templates          │
-└──────────────────────────────────────────────────────┘
-```
-
-> 상세 시스템 설계는 [ARCHITECTURE.md](ARCHITECTURE.md) 참조.
-
----
-
-## 시작하기
-
-### 사전 요구사항
-
-- Node.js 20+ (`.nvmrc` 참조)
-- npm 10+
-
-### 설치
+요구 사항: Node.js 20.9 이상, npm, 선택적으로 Firebase·Supabase·AI 공급자 계정.
 
 ```bash
 git clone https://github.com/gilheumpark-bit/ESA.git
 cd ESA
-npm install
+npm ci
+cp .env.example .env.local
+npm run dev
 ```
 
-### 환경 변수
+Windows PowerShell에서는 다음을 사용합니다.
 
-`.env.local` 파일을 생성하세요:
-
-```env
-# Firebase 인증
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-
-# Stripe (선택)
-STRIPE_SECRET_KEY=
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
-
-# AI 제공자 (선택 — 사용자가 BYOK로 자체 키 제공 가능)
-GOOGLE_AI_API_KEY=
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-
-# Weaviate 벡터 DB (선택 — 로컬 폴백 있음)
-WEAVIATE_URL=
-WEAVIATE_API_KEY=
-
-# 서버 간 내부 호출 인증 시크릿 (선택 — 미설정 시 내부 우회 비활성)
-INTERNAL_API_SECRET=
+```powershell
+Copy-Item .env.example .env.local
+npm run dev
 ```
 
-> 모든 AI 제공자 키는 선택 사항입니다. ESVA는 BYOK로 동작하며, 사용자가 설정에서 자체 키를 등록할 수 있습니다.
+브라우저에서 `http://localhost:3000`을 엽니다. 외부 서비스 없이도 계산기와 로컬 데이터 기반 화면을 먼저 확인할 수 있습니다.
 
-### 개발
+## 환경 설정
+
+정본은 [.env.example](.env.example)입니다.
+
+| 목적 | 주요 환경 변수 |
+|---|---|
+| AI 공급자 | `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY` |
+| 인증 | `NEXT_PUBLIC_FIREBASE_*`, `FIREBASE_*` |
+| 영구 저장 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` |
+| 벡터 검색 | `WEAVIATE_URL`, `WEAVIATE_API_KEY`, `EMBEDDING_PROVIDER` |
+| 결제 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, 가격 ID |
+| 온프레미스 AI | `ONPREMISE_ALLOWED_ORIGINS` |
+| 운영 진단 | `HEALTHCHECK_TOKEN`, `INTERNAL_API_SECRET` |
+
+서비스 역할 키와 웹훅 시크릿은 `NEXT_PUBLIC_*` 이름으로 만들거나 클라이언트 번들에 넣으면 안 됩니다. `.env.local`은 Git에서 제외됩니다.
+
+## 검증 명령
 
 ```bash
-npm run dev          # 개발 서버 (Turbopack)
-npm run build        # 프로덕션 빌드
-npm run lint         # ESLint
-npm test             # 전체 테스트 (27 suites, 441 tests)
-npm run test:calc    # 계산기 정확도 테스트만
-npm run test:watch   # 워치 모드
+npm test -- --runInBand
+npm run lint -- --max-warnings=0
+npx tsc --noEmit
+npm run build
+npm run gate:pdf
 ```
 
----
+테스트 개수는 기능 변경에 따라 달라지므로 README에 고정 수치로 복제하지 않습니다. CI 결과와 현재 실행 로그를 근거로 판단하십시오.
 
-## 기술 스택
+## 주요 디렉터리
 
-| 계층 | 기술 |
-|------|------|
-| 프레임워크 | Next.js 16 (App Router, Turbopack) |
-| 언어 | TypeScript (strict 모드) |
-| 스타일 | Tailwind CSS 4 |
-| 인증 | Firebase Auth |
-| 데이터베이스 | Supabase (PostgreSQL + Edge Functions) |
-| 결제 | Stripe |
-| AI SDK | Vercel AI SDK (멀티 프로바이더) |
-| 상태 관리 | Zustand + React Query |
-| 벡터 DB | Weaviate (+ 로컬 폴백) |
-| 테스트 | Jest 30 + Playwright |
-| 배포 | Vercel |
-
-### 지원 AI 모델 (2026-Q2)
-
-| 제공자 | 모델 |
-|--------|------|
-| Google | Gemini 2.5 Pro, 2.5 Flash, 2.5 Flash Lite |
-| OpenAI | GPT-4.1, 4.1 Mini, 4.1 Nano, o4-mini |
-| Anthropic | Claude Opus 4, Sonnet 4, Haiku 4.5 |
-| Groq | Llama 4 Maverick/Scout, Llama 3.3 70B |
-| Mistral | Large, Small, Codestral |
-| Ollama | Llama 4, Gemma 3, Qwen 3, Mistral Small 3.1 |
-
----
-
-## 테스트
-
-27개 테스트 스위트 / 441개 테스트. 계산기 테스트는 기준값 대비 **±0.01% 정확도**를 강제하며, 파라미터 계약(param-contract) 스위트가 57개 계산기 전부를 실제 폼 제출 경로로 실행 검증합니다.
-
-| 분류 | 스위트 | 테스트 | 범위 |
-|------|--------|--------|------|
-| 계산기 | 9 | ~120 | 전압강하, 케이블, 단락전류, 변압기, 접지, 태양광, 전력, 아크플래시, 단위 변환 |
-| 기준서 | 4 | ~40 | KEC DSL 경계, NEC 조항, IEC 조항, 토론 프로토콜 |
-| LLM | 4 | ~50 | 의도 파서, 출력 필터, 판정기, 출처 추적 |
-| Lib/검색 | 4 | ~60 | 레이트 리밋, 보안 정책(16개 인젝션 테스트), API 헬퍼, 쿼리 파서 |
-| 에이전트 | 1 | ~10 | 오케스트레이터, 분류, 라우팅 |
-| E2E | 1 | 28 | 페이지, API, 반응형, 접근성 (Playwright) |
-
----
-
-## API
-
-### 자체 문서화
-
-```
-GET /api/openapi     # OpenAPI 3.1 스키마 (자동 생성)
-GET /api/health      # 의존성 헬스 대시보드
+```text
+src/app/                 페이지와 API 라우트
+src/engine/calculators/  결정론적 계산기
+src/engine/standards/    기준서 스냅샷과 평가기
+src/engine/topology/     DXF/PDF 토폴로지 파서
+src/agent/               전문 분석·토론·합의
+src/lib/                 인증, 저장, 검색, 내보내기, 보안 경계
+supabase/migrations/     배포용 데이터베이스 계약
+docs/                    사용자·검증·운영 문서
 ```
 
-### 응답 형태 (모든 라우트)
+## 알려진 배포 의존성
 
-```json
-{ "success": true, "data": { ... } }
-```
-```json
-{ "success": false, "error": { "code": "ESA-3001", "message": "..." } }
-```
-
-### 에러 코드 범위
-
-| 범위 | 분류 |
-|------|------|
-| ESA-1xxx | 인증/권한 |
-| ESA-2xxx | 요금제/한도 |
-| ESA-3xxx | 검색 |
-| ESA-4xxx | 계산 |
-| ESA-5xxx | 내보내기 |
-| ESA-6xxx | 외부 서비스 |
-| ESA-7xxx | 기준서 변환 |
-| ESA-9xxx | 시스템 |
-
-### 성능 헤더
-- 모든 응답에 `X-Response-Time`, `Server-Timing`
-
----
-
-## 로드맵
-
-| 단계 | 목표 | 상태 |
-|------|------|------|
-| v0.1.0 | 코어 플랫폼 (계산기 56, 조항 211, 4팀 에이전트) | ✅ 완료 |
-| v0.2.0 | 품질 업그레이드 (IEC 표, DSL AND/OR, 재시도, 접근성) | ✅ 완료 |
-| v0.3.0 | 파인튜닝 모델 (Qwen 3 32B + KEC LoRA) | 계획 |
-| v0.4.0 | 동적 시뮬레이션 (과도현상, 고조파) | 계획 |
-| v0.5.0 | 보호 협조 TCC 오버레이 | 계획 |
-| v1.0.0 | 정식 출시 + SaaS 과금 | 계획 |
-
----
-
-## 프로젝트 구조
-
-```
-src/
-├── app/                    # Next.js App Router (19 pages, 31 API routes)
-├── agent/                  # 4팀 에이전트 + 토론 + 비전 + 17 샌드박스
-├── engine/
-│   ├── calculators/        # 57개 순수함수 계산기
-│   ├── standards/          # KEC/NEC/IEC/JIS/NER/ESA 조건 트리 DSL (210개 조항)
-│   ├── constants/          # 170+ 전기 상수 + 계산 임계값
-│   ├── conversion/         # 미터↔야드파운드 어댑터 + 단위 변환
-│   ├── verification/       # 감사 엔진 + 품질 체크리스트 + 민감도
-│   ├── topology/           # BFS 그래프 + DXF/PDF 파서
-│   ├── receipt/            # 영수증 생성기 + SHA-256
-│   └── llm/                # 22개 LLM 도구 + 시스템 프롬프트
-├── data/                   # 250+ IEC 용어, 200+ 동의어, 허용전류 표, 단가
-├── components/             # React 컴포넌트 (30+)
-├── lib/                    # 보안, 레이트 리밋, 캐시, 임베딩, AI 프로바이더
-└── services/               # 서버측 AI 스트리밍 프로바이더
-```
-
----
-
-## 문서
-
-| 문서 | 설명 |
-|------|------|
-| [README.md](README.md) | 본 문서 — 개요 및 설정 |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 상세 시스템 아키텍처 |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | 개발 지침 및 컨벤션 |
-| [CHANGELOG.md](CHANGELOG.md) | 버전 이력 |
-| [EVALUATION_GUIDE.md](EVALUATION_GUIDE.md) | 외부 검토용 10개 항목 평가 루브릭 |
-| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | Contributor Covenant 2.1 |
-| [SECURITY.md](.github/SECURITY.md) | 취약점 신고 + 보안 조치 |
-| [LICENSE](LICENSE) | CC BY-NC 4.0 |
-
----
-
-## 기여
-
-개발 지침, 브랜치 전략, 코드 컨벤션, PR 절차는 [CONTRIBUTING.md](CONTRIBUTING.md)를 참조하세요.
-
----
+- 인메모리 레이트 리밋은 단일 프로세스 보호 장치입니다. 다중 인스턴스 운영에서는 신뢰 가능한 프록시 또는 공유 저장소 기반 제한이 추가로 필요합니다.
+- Supabase 마이그레이션 파일이 존재해도 대상 DB에 실제 적용됐다는 뜻은 아닙니다. 배포마다 마이그레이션 상태와 RLS를 확인해야 합니다.
+- Stripe 구독 권한은 브라우저 리다이렉트가 아니라 서명 검증 웹훅과 DB 상태를 정본으로 삼아야 합니다.
+- 규격 스냅샷의 `is_standard_current`는 공인 원문과 판본 확인일이 없으면 안전하게 `false`입니다.
 
 ## 라이선스
 
-본 프로젝트는 [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) 라이선스입니다 — 비상업적 사용만 허용됩니다. 상업적 이용은 별도 문의 바랍니다.
-
----
-
-<p align="center">
-  전기 엔지니어를 위해, 엔지니어가 만듭니다.<br/>
-  <strong>ESVA</strong> — 엔지니어를 위한 검색 엔진
-</p>
+[CC BY-NC 4.0](LICENSE). 상업적 사용에는 별도 허가가 필요합니다.

@@ -15,6 +15,23 @@ interface ExportOptions {
  
 type ReceiptData = Record<string, any>;
 
+/**
+ * Excel and other spreadsheet programs can execute text that starts like a
+ * formula, including after leading whitespace. Prefix untrusted strings with
+ * an apostrophe so exports remain data rather than executable formulas.
+ */
+function neutralizeSpreadsheetText(value: unknown): string | number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+
+  const text = String(value ?? '');
+  return /^[\t\r\n ]*[=+\-@]/.test(text) ? `'${text}` : text;
+}
+
+function csvCell(value: unknown): string {
+  const safeValue = neutralizeSpreadsheetText(value);
+  return `"${String(safeValue).replace(/"/g, '""')}"`;
+}
+
 // ---------------------------------------------------------------------------
 // PART 1 — Excel 생성
 // ---------------------------------------------------------------------------
@@ -52,15 +69,15 @@ export async function generateReceiptExcel(
   // 제목 행
   ws1.mergeCells('A1:D1');
   const titleCell = ws1.getCell('A1');
-  titleCell.value = `ESVA 계산서 — ${receipt.calcId || 'N/A'}`;
+  titleCell.value = `ESVA 계산서 — ${neutralizeSpreadsheetText(receipt.calcId || 'N/A')}`;
   titleCell.font = { bold: true, size: 14, color: { argb: 'FF1E40AF' } };
   titleCell.alignment = { horizontal: 'center' };
 
   // 기본 정보
   ws1.getCell('A2').value = '생성일시';
-  ws1.getCell('B2').value = receipt.calculatedAt || new Date().toISOString();
+  ws1.getCell('B2').value = neutralizeSpreadsheetText(receipt.calculatedAt || new Date().toISOString());
   ws1.getCell('C2').value = '기준서';
-  ws1.getCell('D2').value = receipt.appliedStandard || 'N/A';
+  ws1.getCell('D2').value = neutralizeSpreadsheetText(receipt.appliedStandard || 'N/A');
 
   // ── 입력값 테이블 ──
   let row = 4;
@@ -82,8 +99,8 @@ export async function generateReceiptExcel(
   const inputStartRow = row;
   for (const [key, value] of Object.entries(inputs)) {
     const r = ws1.getRow(row);
-    r.getCell(1).value = key;
-    r.getCell(2).value = typeof value === 'number' ? value : String(value ?? '');
+    r.getCell(1).value = neutralizeSpreadsheetText(key);
+    r.getCell(2).value = neutralizeSpreadsheetText(value);
     r.getCell(3).value = '';
     [1, 2, 3].forEach((c) => { r.getCell(c).border = BORDER_THIN; });
     row++;
@@ -109,11 +126,11 @@ export async function generateReceiptExcel(
   for (const s of steps) {
     const r = ws1.getRow(row);
     r.getCell(1).value = s.step;
-    r.getCell(2).value = s.title;
-    r.getCell(3).value = s.formula;
-    r.getCell(4).value = s.value;
-    r.getCell(5).value = s.unit;
-    r.getCell(6).value = s.standardRef || '';
+    r.getCell(2).value = neutralizeSpreadsheetText(s.title);
+    r.getCell(3).value = neutralizeSpreadsheetText(s.formula);
+    r.getCell(4).value = neutralizeSpreadsheetText(s.value);
+    r.getCell(5).value = neutralizeSpreadsheetText(s.unit);
+    r.getCell(6).value = neutralizeSpreadsheetText(s.standardRef || '');
     [1, 2, 3, 4, 5, 6].forEach((c) => { r.getCell(c).border = BORDER_THIN; });
     row++;
   }
@@ -130,10 +147,10 @@ export async function generateReceiptExcel(
     const lastStepRow = row - 2; // 마지막 step 행
     resultRow.getCell(2).value = { formula: `D${lastStepRow}` } as ExcelJS.CellFormulaValue;
   } else {
-    resultRow.getCell(2).value = result.value ?? 'N/A';
+    resultRow.getCell(2).value = neutralizeSpreadsheetText(result.value ?? 'N/A');
   }
-  resultRow.getCell(3).value = result.unit || '';
-  resultRow.getCell(4).value = result.judgment || '';
+  resultRow.getCell(3).value = neutralizeSpreadsheetText(result.unit || '');
+  resultRow.getCell(4).value = neutralizeSpreadsheetText(result.judgment || '');
   resultRow.getCell(1).border = BORDER_THIN;
   resultRow.getCell(2).border = BORDER_THIN;
   resultRow.getCell(2).font = { bold: true, size: 13, color: { argb: 'FF16A34A' } };
@@ -159,7 +176,7 @@ export async function generateReceiptExcel(
     ['단위계', receipt.unitSystem || 'SI'],
     ['난이도', receipt.difficultyLevel || 'N/A'],
     ['엔진 버전', receipt.engineVersion || 'N/A'],
-    ['기준서 현행', receipt.isStandardCurrent ? '예' : '아니오'],
+    ['기준서 현행 확인', receipt.isStandardCurrent ? '확인됨' : '미확인'],
     ['생성일시', receipt.calculatedAt || new Date().toISOString()],
     ['SHA-256 해시', receipt.receiptHash || 'N/A'],
   ];
@@ -176,7 +193,7 @@ export async function generateReceiptExcel(
   metaPairs.forEach(([key, value], i) => {
     const r = ws2.getRow(i + 2);
     r.getCell(1).value = key;
-    r.getCell(2).value = value;
+    r.getCell(2).value = neutralizeSpreadsheetText(value);
     [1, 2].forEach((c) => { r.getCell(c).border = BORDER_THIN; });
   });
 
@@ -185,7 +202,9 @@ export async function generateReceiptExcel(
   ws2.getCell(`A${disclaimerRow}`).value = '면책조항';
   ws2.getCell(`A${disclaimerRow}`).font = { bold: true };
   ws2.mergeCells(`A${disclaimerRow + 1}:B${disclaimerRow + 3}`);
-  ws2.getCell(`A${disclaimerRow + 1}`).value = receipt.disclaimerText || 'PE 검토 필요. 본 계산서는 참고용이며 안전 관련 최종 결정에 사용할 수 없습니다.';
+  ws2.getCell(`A${disclaimerRow + 1}`).value = neutralizeSpreadsheetText(
+    receipt.disclaimerText || 'PE 검토 필요. 본 계산서는 참고용이며 안전 관련 최종 결정에 사용할 수 없습니다.',
+  );
   ws2.getCell(`A${disclaimerRow + 1}`).alignment = { wrapText: true, vertical: 'top' };
 
   // 경고 및 권고
@@ -198,7 +217,7 @@ export async function generateReceiptExcel(
       ws2.getCell(`A${wRow}`).font = { bold: true, color: { argb: 'FFDC2626' } };
       wRow++;
       for (const w of warnings) {
-        ws2.getCell(`A${wRow}`).value = w;
+        ws2.getCell(`A${wRow}`).value = neutralizeSpreadsheetText(w);
         wRow++;
       }
     }
@@ -207,7 +226,7 @@ export async function generateReceiptExcel(
       ws2.getCell(`A${wRow}`).font = { bold: true, color: { argb: 'FFF59E0B' } };
       wRow++;
       for (const rec of recommendations) {
-        ws2.getCell(`A${wRow}`).value = rec;
+        ws2.getCell(`A${wRow}`).value = neutralizeSpreadsheetText(rec);
         wRow++;
       }
     }
@@ -236,28 +255,28 @@ export async function generateReceiptCSVBlob(
 }
 
 function receiptToCSV(receipt: ReceiptData): string {
-  const rows: string[] = ['구분,항목,값,단위'];
+  const rows: string[] = [['구분', '항목', '값', '단위'].map(csvCell).join(',')];
 
   // 입력값
   const inputs = receipt.inputs || {};
   for (const [key, value] of Object.entries(inputs)) {
-    rows.push(`"입력","${key}","${String(value ?? '').replace(/"/g, '""')}",""`);
+    rows.push(['입력', key, value, ''].map(csvCell).join(','));
   }
 
   // 계산 단계
   const steps = receipt.steps || [];
   for (const s of steps) {
-    rows.push(`"단계 ${s.step}","${s.title}","${s.value}","${s.unit}"`);
+    rows.push([`단계 ${s.step}`, s.title, s.value, s.unit].map(csvCell).join(','));
   }
 
   // 최종 결과
   const result = receipt.result || {};
-  rows.push(`"결과","최종값","${result.value ?? ''}","${result.unit ?? ''}"`);
+  rows.push(['결과', '최종값', result.value ?? '', result.unit ?? ''].map(csvCell).join(','));
 
   // 메타
-  rows.push(`"메타","기준서","${receipt.appliedStandard ?? ''}",""`);
-  rows.push(`"메타","SHA-256","${receipt.receiptHash ?? ''}",""`);
-  rows.push(`"메타","생성일","${receipt.calculatedAt ?? ''}",""`);
+  rows.push(['메타', '기준서', receipt.appliedStandard ?? '', ''].map(csvCell).join(','));
+  rows.push(['메타', 'SHA-256', receipt.receiptHash ?? '', ''].map(csvCell).join(','));
+  rows.push(['메타', '생성일', receipt.calculatedAt ?? '', ''].map(csvCell).join(','));
 
   return rows.join('\n');
 }

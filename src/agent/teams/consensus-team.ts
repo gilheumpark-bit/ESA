@@ -24,6 +24,7 @@ import {
   buildEscalation,
 } from '../debate/debate-protocol';
 import type { ConsensusConfig } from '../debate/types';
+import { hashCanonicalValue } from '@/engine/receipt/receipt-hash';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Result Merger
@@ -385,8 +386,13 @@ export async function executeConsensusTeam(
   const summary = buildSummary(merged, verdict, score);
 
   // Step 5: 보고서 조립
-  const reportId = `RPT-${Date.now().toString(36).toUpperCase()}`;
-  const report: ESVAVerifiedReport = {
+  const reportId = `RPT-${crypto.randomUUID().replaceAll('-', '').slice(0, 20).toUpperCase()}`;
+  const evidenceIds = [...new Set([
+    ...input.teamResults.map(result => `team:${result.teamId}`),
+    ...(merged.allCalculations ?? []).map(calculation => `calculation:${calculation.id}`),
+    ...merged.allViolations.map(violation => `violation:${violation.id}`),
+  ])];
+  const reportClaim: Omit<ESVAVerifiedReport, 'hash'> = {
     reportId,
     createdAt: new Date().toISOString(),
     version: 'ESVA Report v1.0',
@@ -402,8 +408,11 @@ export async function executeConsensusTeam(
     // 합의 실패 시 사람 검토 필요 신호를 리포트에 노출 (이전엔 debate 결과의
     // requiresHumanReview를 읽는 production 코드가 0이라 아무 데도 전달 안 됐음).
     requiresHumanReview: !!escalation,
-    receiptIds: [], // 영수증 ID는 export 시 생성
-    hash: '', // SHA-256은 최종 확정 시 계산
+    evidenceIds,
+  };
+  const report: ESVAVerifiedReport = {
+    ...reportClaim,
+    hash: await hashCanonicalValue(reportClaim),
   };
 
   const teamResult: TeamResult = {

@@ -5,6 +5,8 @@
  * Lazy cleanup every 5 minutes.
  */
 
+import { isIP } from 'node:net';
+
 // ─── PART 1: Types & Config ──────────────────────────────────
 
 export interface RateLimitResult {
@@ -46,6 +48,13 @@ interface BucketEntry {
  */
 const store = new Map<string, BucketEntry>();
 
+/**
+ * A hostile client can rotate spoofed/ephemeral addresses faster than lazy
+ * cleanup runs. Keep the process-local fallback bounded; production-wide
+ * enforcement still belongs at the trusted reverse proxy or a shared store.
+ */
+const MAX_BUCKETS = 10_000;
+
 let lastCleanup = Date.now();
 const CLEANUP_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
@@ -53,6 +62,20 @@ const CLEANUP_INTERVAL_MS = 5 * 60_000; // 5 minutes
 
 function getKey(ip: string, profile: string): string {
   return `${ip}:${profile}`;
+}
+
+function getBoundedKey(ip: string, profile: string): string {
+  const requestedKey = getKey(ip, profile);
+  if (store.has(requestedKey) || store.size < MAX_BUCKETS) return requestedKey;
+
+  const overflowKey = `__overflow__:${profile}`;
+  if (!store.has(overflowKey)) {
+    // Make one slot for the shared overflow bucket. Once present, any further
+    // unknown clients share its limit instead of growing memory without bound.
+    const oldestKey = store.keys().next().value as string | undefined;
+    if (oldestKey) store.delete(oldestKey);
+  }
+  return overflowKey;
 }
 
 function pruneExpired(entry: BucketEntry, windowMs: number, now: number): void {
@@ -97,7 +120,7 @@ export function checkRateLimit(
   lazyCleanup();
 
   const config = RATE_LIMIT_PROFILES[profile] ?? RATE_LIMIT_PROFILES.default;
-  const key = getKey(ip, profile);
+  const key = getBoundedKey(ip, profile);
   const now = Date.now();
 
   let entry = store.get(key);
@@ -158,11 +181,7 @@ export function getClientIp(headers: Headers): string {
 
 /** Basic IP validation (IPv4 or IPv6). */
 function isValidIp(ip: string): boolean {
-  // IPv4
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return true;
-  // IPv6 (simplified check)
-  if (ip.includes(':') && /^[0-9a-fA-F:]+$/.test(ip)) return true;
-  return false;
+  return isIP(ip) !== 0;
 }
 
 // ─── PART 5: Helpers ─────────────────────────────────────────

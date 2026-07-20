@@ -1,11 +1,11 @@
 /**
  * ESVA Team-Based Agent Types
  * ----------------------------
- * 4-Team architecture:
+ * Three specialist analyzers plus a separate consensus stage:
  *   TEAM-SLD     : 계통도팀 (Single-Line Diagram)
  *   TEAM-LAYOUT  : 평면도팀 (Floor Plan / Wiring Route)
  *   TEAM-STD     : 규정질의팀 (Standards & Regulations)
- *   TEAM-CONSENSUS: 합의+출력팀 (Consensus & Output)
+ *   TEAM-CONSENSUS: 합의+출력 단계 (Consensus & Output; not a fourth expert)
  *
  * PART 1: Team identity types
  * PART 2: Input/output contracts
@@ -62,6 +62,12 @@ export interface TeamInput {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
+  /** 이미지 도면에서만 사용. API 키는 현재 요청 메모리에만 머물고 결과·로그에 포함하지 않는다. */
+  vision?: {
+    provider: 'openai' | 'gemini' | 'claude';
+    apiKey?: string;
+    model?: string;
+  };
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 들어온다 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
 }
@@ -241,8 +247,9 @@ export interface ESVAVerifiedReport {
   /** 팀 간 합의 실패 등으로 사람(PE) 검토가 필요한지 — UI가 상시 노출해야 함 */
   requiresHumanReview?: boolean;
 
-  // 영수증 추적
-  receiptIds: string[];
+  // 보고서 안에서 실제 판정 근거로 사용된 팀/계산/위반 항목 식별자.
+  // 계산 영수증이 생성되지 않은 경로에서 가짜 receipt ID를 만들지 않는다.
+  evidenceIds: string[];
   hash: string;               // SHA-256 of entire report
 }
 

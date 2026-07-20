@@ -25,7 +25,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
     return NextResponse.json(
-      { error: 'CRON_SECRET not configured' },
+      { error: 'Scheduled crawl endpoint is unavailable' },
       { status: 503 },
     );
   }

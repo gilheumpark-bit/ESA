@@ -7,10 +7,10 @@
  * 응답: 200 (healthy/degraded) / 503 (critical 의존성 down)
  */
 
-import { NextResponse } from 'next/server';
+import { timingSafeEqual } from 'node:crypto';
+import { NextRequest, NextResponse } from 'next/server';
 import { getPublicRuntimeInfo } from '@/lib/esa-config';
 import { esaResponseHeaders } from '@/lib/esa-http';
-import { initWeaviateSchema } from '@/lib/weaviate-schema';
 import { getInspectionItemCount } from '@/data/inspection/inspection-checklist';
 import { getTCCDeviceCount } from '@/data/protection/tcc-data';
 import { getCertCount } from '@/data/certifications/certification-db';
@@ -46,7 +46,11 @@ async function checkWeaviate(): Promise<DepStatus> {
   if (!url) return { name: 'Weaviate', status: 'degraded', latencyMs: 0, detail: 'Local fallback active' };
   const start = Date.now();
   try {
-    const res = await fetch(`${url}/v1/.well-known/ready`, { signal: AbortSignal.timeout(3000) });
+    const apiKey = process.env.WEAVIATE_API_KEY;
+    const res = await fetch(`${url}/v1/.well-known/ready`, {
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined,
+      signal: AbortSignal.timeout(3000),
+    });
     return { name: 'Weaviate', status: res.ok ? 'healthy' : 'down', latencyMs: Date.now() - start };
   } catch {
     return { name: 'Weaviate', status: 'down', latencyMs: Date.now() - start };
@@ -68,12 +72,20 @@ function checkProviderKeys(): DepStatus[] {
   }));
 }
 
-export async function GET() {
-  const start = Date.now();
-  const runtimeInfo = getPublicRuntimeInfo();
+function canViewDetails(req: NextRequest): boolean {
+  const expected = process.env.HEALTHCHECK_TOKEN;
+  const authorization = req.headers.get('authorization');
+  if (!expected || !authorization?.startsWith('Bearer ')) return false;
 
-  // Weaviate 스키마 초기화 (있으면)
-  await initWeaviateSchema().catch(() => {});
+  const supplied = authorization.slice('Bearer '.length);
+  const expectedBuffer = Buffer.from(expected);
+  const suppliedBuffer = Buffer.from(supplied);
+  return expectedBuffer.length === suppliedBuffer.length
+    && timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
+
+export async function GET(req: NextRequest) {
+  const start = Date.now();
 
   const [supabase, weaviate] = await Promise.all([checkSupabase(), checkWeaviate()]);
   const providers = checkProviderKeys();
@@ -83,14 +95,10 @@ export async function GET() {
   const overallStatus = hasCriticalDown ? 'unhealthy'
     : allDeps.every(d => d.status === 'healthy') ? 'healthy'
     : 'degraded';
-
-  return NextResponse.json(
-    {
-      success: true,
-      data: {
-        status: overallStatus,
-        ...runtimeInfo,
-        timestamp: new Date().toISOString(),
+  const timestamp = new Date().toISOString();
+  const detailedData = canViewDetails(req)
+    ? {
+        ...getPublicRuntimeInfo(),
         uptime: Math.round(process.uptime()),
         totalLatencyMs: Date.now() - start,
         rateLimitStoreSize: getRateLimitStoreSize(),
@@ -100,6 +108,16 @@ export async function GET() {
           tccDevices: getTCCDeviceCount(),
           certifications: getCertCount().total,
         },
+      }
+    : {};
+
+  return NextResponse.json(
+    {
+      success: true,
+      data: {
+        status: overallStatus,
+        timestamp,
+        ...detailedData,
       },
     },
     {

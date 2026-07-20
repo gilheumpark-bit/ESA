@@ -1,17 +1,27 @@
-/** ESVA 리포트 PDF (HTML 인쇄용) 생성 */
+/** ESVA 팀 검토 보고서의 인쇄용 HTML 생성. */
 
- 
-type ReportData = Record<string, any>;
+import { escapeHtml } from '@/lib/security-hardening';
 
-export function generatePDFResponse(report: ReportData): string {
-  const title = String(report?.title || 'ESVA Report');
-  const id = String(report?.reportId || 'N/A');
+export function generatePDFResponse(report: unknown): string {
+  const record = report && typeof report === 'object'
+    ? report as Record<string, unknown>
+    : {};
+  const title = escapeHtml(String(record.title ?? record.projectName ?? 'ESA 검토 보고서'));
+  const id = escapeHtml(String(record.reportId ?? 'N/A'));
   const timestamp = new Date().toISOString().slice(0, 19);
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(record, null, 2) ?? '{}';
+  } catch {
+    serialized = '{"error":"보고서 내용을 직렬화할 수 없습니다."}';
+  }
+  const safeReport = escapeHtml(serialized);
 
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="utf-8"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"/>
   <title>${title} — ESVA</title>
   <style>
     body { font-family: 'Pretendard', sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; }
@@ -25,8 +35,8 @@ export function generatePDFResponse(report: ReportData): string {
 <body>
   <h1>${title}</h1>
   <div class="meta">Report ID: ${id} | Generated: ${timestamp}</div>
-  <div class="content"><pre>${JSON.stringify(report, null, 2)}</pre></div>
-  <div class="footer">ESVA — The Engineer's Search Engine | This report is for reference only. PE review required for safety-critical applications.</div>
+  <div class="content"><pre>${safeReport}</pre></div>
+  <div class="footer">ESA 검토 보고서 | 안전 중요 적용 전 책임 엔지니어와 현행 원문 검토가 필요합니다.</div>
 </body>
 </html>`;
 }

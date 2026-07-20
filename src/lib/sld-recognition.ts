@@ -119,6 +119,9 @@ Return ONLY valid JSON with this structure:
   "confidence": 0.0-1.0,
   "rawDescription": "brief text description of the SLD"
 }
+- Position x/y must be numeric values from 0 to 100 relative to the current image
+- Include length only when a numeric value and unit are explicitly printed on the drawing
+- Never infer a physical length, rating, voltage, or conductor size from pixel spacing
 Return ONLY valid JSON. No markdown, no explanation.`;
 
 /**
@@ -156,38 +159,120 @@ export async function analyzeSLD(
   };
 }
 
-function parseSLDResponse(text: string): SLDAnalysis {
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    return {
-      components: [],
-      connections: [],
-      suggestedCalculations: [],
-      confidence: 0.2,
-      rawDescription: text,
-    };
-  }
-
+export function parseSLDResponse(text: string): SLDAnalysis {
   try {
-    const data = JSON.parse(jsonMatch[0]);
+    const trimmed = text.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    const parsed: unknown = JSON.parse(fenced?.[1] ?? trimmed);
+    if (!parsed || typeof parsed !== 'object') throw new Error('SLD 응답은 객체여야 합니다.');
+    const data = parsed as Record<string, unknown>;
+    if (!Array.isArray(data.components) || !Array.isArray(data.connections)) {
+      throw new Error('SLD components/connections는 배열이어야 합니다.');
+    }
+
+    const ids = new Set<string>();
+    const components: SLDComponent[] = [];
+    for (const row of data.components.slice(0, 2_000)) {
+      if (!row || typeof row !== 'object') continue;
+      const component = row as Record<string, unknown>;
+      const id = boundedText(component.id, 128);
+      const type = boundedText(component.type, 64);
+      const position = component.position && typeof component.position === 'object'
+        ? component.position as Record<string, unknown>
+        : undefined;
+      const x = finiteNumber(position?.x);
+      const y = finiteNumber(position?.y);
+      if (!id || ids.has(id) || !type || !SLD_COMPONENT_TYPES.has(type as SLDComponentType) ||
+          x == null || y == null || x < 0 || x > 100 || y < 0 || y > 100) continue;
+      ids.add(id);
+      const properties = stringProperties(component.properties);
+      components.push({
+        id,
+        type: type as SLDComponentType,
+        position: { x, y },
+        ...optionalTextField('label', component.label),
+        ...optionalTextField('rating', component.rating),
+        ...optionalTextField('voltage', component.voltage),
+        ...optionalTextField('current', component.current),
+        ...(properties ? { properties } : {}),
+      });
+    }
+
+    const connectionIds = new Set<string>();
+    const connections: SLDConnection[] = [];
+    for (const row of data.connections.slice(0, 5_000)) {
+      if (!row || typeof row !== 'object') continue;
+      const connection = row as Record<string, unknown>;
+      const id = boundedText(connection.id, 128);
+      const from = boundedText(connection.from, 128);
+      const to = boundedText(connection.to, 128);
+      if (!id || connectionIds.has(id) || !from || !to || from === to || !ids.has(from) || !ids.has(to)) continue;
+      connectionIds.add(id);
+      const rawLength = boundedText(connection.length, 64);
+      const length = rawLength && /^\d+(?:\.\d+)?\s*(?:mm|cm|m|km|ft|in)$/i.test(rawLength)
+        ? rawLength
+        : undefined;
+      connections.push({
+        id,
+        from,
+        to,
+        ...optionalTextField('cableType', connection.cableType),
+        ...(length ? { length } : {}),
+        ...optionalTextField('conductorSize', connection.conductorSize),
+      });
+    }
+
+    const rawConfidence = finiteNumber(data.confidence) ?? 0.5;
     return {
-      components: (data.components ?? []) as SLDComponent[],
-      connections: (data.connections ?? []) as SLDConnection[],
+      components,
+      connections,
       suggestedCalculations: [],
-      systemVoltage: data.systemVoltage,
-      systemType: data.systemType,
-      confidence: data.confidence ?? 0.5,
-      rawDescription: data.rawDescription ?? '',
+      ...optionalTextField('systemVoltage', data.systemVoltage),
+      ...optionalTextField('systemType', data.systemType),
+      confidence: components.length > 0 ? Math.max(0, Math.min(1, rawConfidence)) : 0,
+      rawDescription: boundedText(data.rawDescription, 2_000) ?? '',
     };
   } catch {
     return {
       components: [],
       connections: [],
       suggestedCalculations: [],
-      confidence: 0.2,
-      rawDescription: text,
+      confidence: 0,
+      rawDescription: text.slice(0, 2_000),
     };
   }
+}
+
+const SLD_COMPONENT_TYPES = new Set<SLDComponentType>([
+  'transformer', 'breaker', 'cable', 'bus', 'generator', 'motor', 'capacitor',
+  'load', 'switch', 'relay', 'meter', 'panel', 'ups', 'mcc',
+]);
+
+function boundedText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : undefined;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function optionalTextField<K extends string>(key: K, value: unknown): Partial<Record<K, string>> {
+  const text = boundedText(value, 256);
+  return text ? { [key]: text } as Partial<Record<K, string>> : {};
+}
+
+function stringProperties(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .slice(0, 50)
+    .flatMap(([key, entryValue]) => {
+      const safeKey = boundedText(key, 64);
+      const safeValue = boundedText(entryValue, 256);
+      return safeKey && safeValue ? [[safeKey, safeValue] as const] : [];
+    });
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
@@ -432,6 +517,7 @@ async function callOpenAIVision(
   mimeType: string,
   options: SLDAnalysisOptions,
 ): Promise<string> {
+  const model = options.model || 'gpt-5.6-terra';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -439,7 +525,7 @@ async function callOpenAIVision(
       Authorization: `Bearer ${options.apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || 'gpt-5.5',
+      model,
       messages: [
         { role: 'system', content: SLD_SYSTEM_PROMPT },
         {
@@ -453,8 +539,8 @@ async function callOpenAIVision(
           ],
         },
       ],
-      max_tokens: 4000,
-      temperature: 0.1,
+      max_completion_tokens: 4000,
+      ...(model.startsWith('gpt-5') ? {} : { temperature: 0.1 }),
     }),
   });
 
@@ -516,11 +602,14 @@ async function callGeminiVision(
   options: SLDAnalysisOptions,
 ): Promise<string> {
   const model = options.model || 'gemini-3.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${options.apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': options.apiKey,
+    },
     body: JSON.stringify({
       contents: [
         {

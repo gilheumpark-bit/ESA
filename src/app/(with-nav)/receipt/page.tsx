@@ -99,9 +99,12 @@ export default function ReceiptListPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    setCalcs(loadRecentCalcs());
-    setLoaded(true);
     document.title = '계산 이력 | ESA';
+    const timer = window.setTimeout(() => {
+      setCalcs(loadRecentCalcs());
+      setLoaded(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (!loaded) {

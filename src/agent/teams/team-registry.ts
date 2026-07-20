@@ -1,7 +1,7 @@
 /**
  * ESVA Team Registry
  * ------------------
- * 4-Team 등록 및 라우팅. Orchestrator가 InputClassification 기반으로
+ * 3개 전문팀과 별도 합의 단계 등록·라우팅. Orchestrator가 InputClassification 기반으로
  * 적절한 팀에 업무를 배분한다.
  *
  * PART 1: Team configurations
@@ -124,9 +124,16 @@ export function classifyInput(
 ): InputClassification {
   const ext = fileName?.split('.').pop()?.toLowerCase();
   const q = (query ?? '').toLowerCase();
+  const hasSldIntent = SLD_KEYWORDS.some(k => q.includes(k));
+  const hasLayoutIntent = LAYOUT_KEYWORDS.some(k => q.includes(k));
 
   // 텍스트만 있으면 규정질의
   if (!mimeType && !fileName) return 'text_query';
+
+  // 한 입력이 계통도와 평면도 범위를 명시적으로 함께 요구할 때만 mixed.
+  // 이전에는 지원 파일 형식이 모두 앞 분기에서 반환되어 mixed가 사실상
+  // 도달 불가능했다.
+  if (query && hasSldIntent && hasLayoutIntent) return 'mixed';
 
   // DXF 파일
   if (ext === 'dxf' || mimeType === 'application/dxf') {
@@ -182,7 +189,7 @@ export function routeToTeams(classification: InputClassification): TeamRouting {
     case 'sld_pdf':
       return {
         primaryTeam: 'TEAM-SLD',
-        supportTeams: ['TEAM-STD', 'TEAM-CONSENSUS'],
+        supportTeams: ['TEAM-STD'],
         classification,
         requiresConsensus: true,
       };
@@ -192,7 +199,7 @@ export function routeToTeams(classification: InputClassification): TeamRouting {
     case 'layout_pdf':
       return {
         primaryTeam: 'TEAM-LAYOUT',
-        supportTeams: ['TEAM-STD', 'TEAM-CONSENSUS'],
+        supportTeams: ['TEAM-STD'],
         classification,
         requiresConsensus: true,
       };
@@ -200,7 +207,7 @@ export function routeToTeams(classification: InputClassification): TeamRouting {
     case 'text_query':
       return {
         primaryTeam: 'TEAM-STD',
-        supportTeams: ['TEAM-CONSENSUS'],
+        supportTeams: [],
         classification,
         requiresConsensus: false,
       };
@@ -208,7 +215,7 @@ export function routeToTeams(classification: InputClassification): TeamRouting {
     case 'mixed':
       return {
         primaryTeam: 'TEAM-STD',
-        supportTeams: ['TEAM-SLD', 'TEAM-LAYOUT', 'TEAM-CONSENSUS'],
+        supportTeams: ['TEAM-SLD', 'TEAM-LAYOUT'],
         classification,
         requiresConsensus: true,
       };
@@ -216,7 +223,7 @@ export function routeToTeams(classification: InputClassification): TeamRouting {
     default:
       return {
         primaryTeam: 'TEAM-STD',
-        supportTeams: ['TEAM-CONSENSUS'],
+        supportTeams: [],
         classification: 'text_query',
         requiresConsensus: false,
       };

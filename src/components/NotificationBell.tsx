@@ -56,15 +56,21 @@ const TYPE_COLORS: Record<string, string> = {
 
 function useNotifications() {
   const { user } = useAuth();
+  const userId = user?.uid;
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
-    if (!user?.uid) return;
+    if (!userId) return;
+    const { getIdToken } = await import('@/lib/firebase');
+    const token = await getIdToken();
+    if (!token) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/notifications?userId=${user.uid}&pageSize=10`);
+      const res = await fetch(`/api/notifications?userId=${encodeURIComponent(userId)}&pageSize=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications ?? []);
@@ -75,40 +81,52 @@ function useNotifications() {
     } finally {
       setLoading(false);
     }
-  }, [user?.uid]);
+  }, [userId]);
 
   const markAsRead = useCallback(async (id: string) => {
+    if (!userId) return;
     try {
-      await fetch('/api/notifications', {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      if (!token) return;
+      const response = await fetch('/api/notifications', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationId: id }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ notificationId: id, userId }),
       });
+      if (!response.ok) return;
       setNotifications(prev =>
         prev.map(n => (n.id === id ? { ...n, read: true } : n)),
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch { /* ignore */ }
-  }, []);
+  }, [userId]);
 
   const markAllAsRead = useCallback(async () => {
-    if (!user?.uid) return;
+    if (!userId) return;
     try {
-      await fetch('/api/notifications', {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken();
+      if (!token) return;
+      const response = await fetch('/api/notifications', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.uid, markAll: true }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ userId, markAll: true }),
       });
+      if (!response.ok) return;
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch { /* ignore */ }
-  }, [user?.uid]);
+  }, [userId]);
 
   useEffect(() => {
-    fetchNotifications();
+    const initial = window.setTimeout(() => { void fetchNotifications(); }, 0);
     // Poll every 60 seconds
     const interval = setInterval(fetchNotifications, 60_000);
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(initial);
+      clearInterval(interval);
+    };
   }, [fetchNotifications]);
 
   return { notifications, unreadCount, loading, markAsRead, markAllAsRead, refresh: fetchNotifications };
