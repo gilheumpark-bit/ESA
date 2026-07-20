@@ -101,7 +101,8 @@ function resolvesRecordSet(registry: Registry, ids: readonly string[], allowed: 
 }
 
 function hasDirectRecord(registry: Registry, category: EvidenceCategory, id: string): boolean {
-  return registry.records.has(key(category, id));
+  return registry.records.has(key(category, id))
+    && candidateKeys(registry, id, ['symbol', 'line', 'text', 'logic']).size === 1;
 }
 
 function buildRegistry(artifact: DrawingReviewArtifact, drawingHash: string): Registry | undefined {
@@ -122,7 +123,7 @@ function currentIssue(registry: Registry, issue: DrawingSynthesis['issues'][numb
     ...issue.evidence.stableIds,
     ...issue.evidence.originalEvidenceIds,
     ...issue.evidence.sourceIds,
-  ], ['symbol', 'line', 'text', 'logic']);
+  ], ['symbol', 'line', 'text']);
 }
 
 function currentConflict(registry: Registry, conflict: DrawingSynthesis['conflicts'][number]): boolean {
@@ -187,15 +188,25 @@ export function buildDrawingIntelligenceReport(input: {
     sourceIds: sorted(evidence.sourceIds),
     originalEvidenceIds: sorted(evidence.originalEvidenceIds),
   })));
-  const traceable = tracedClaims.length + recommendations.length + relations.length;
-  const traceableTotal = eligibleClaims.length + input.synthesis.recommendations.filter((item) => item.status === 'SUPPORTED').length + (graph?.edges.length ?? 0);
+  const traceable = tracedClaims.length
+    + recommendations.length
+    + relations.length
+    + issues.length
+    + conflicts.length
+    + calculations.length;
+  const traceableTotal = eligibleClaims.length
+    + input.synthesis.recommendations.filter((item) => item.status === 'SUPPORTED').length
+    + (graph?.edges.length ?? 0)
+    + input.synthesis.issues.length
+    + input.synthesis.conflicts.length
+    + input.synthesis.calculations.length;
   const traceability = traceableTotal === 0 ? 1 : traceable / traceableTotal;
   if (traceability < 1) holds.add('HOLD_UNRESOLVED_TRACEABILITY');
   const snapshot = input.drawingReview.snapshot;
   const report: DrawingIntelligenceReport = {
     schemaVersion: 2,
     drawingHash,
-    source: { assetKey: drawingHash, mimeType: snapshot.mimeType, width: snapshot.width, height: snapshot.height, page: snapshot.page },
+    source: { assetKey: snapshot.drawingHash, mimeType: snapshot.mimeType, width: snapshot.width, height: snapshot.height, page: snapshot.page },
     symbols: graph ? graph.symbols.map((item) => ({ id: item.id, type: item.typeCandidates[0] ?? 'unknown', label: item.rawLabel, bounds: clone(item.bounds), confidence: item.confidence, sourceIds: sorted(item.sourceIds), originalEvidenceIds: sorted(item.originalEvidenceIds) })) : [],
     lines: graph ? graph.lines.map((item) => ({ id: item.id, kind: item.lineKind, path: item.path.map(clone), pages: [...item.pages].sort((left, right) => left - right), confidence: item.confidence, sourceIds: sorted(item.sourceIds), originalEvidenceIds: sorted(item.originalEvidenceIds) })) : [],
     relations: relations.sort((left, right) => left.id.localeCompare(right.id)),

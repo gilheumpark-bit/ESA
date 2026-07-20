@@ -26,6 +26,8 @@ import {
 import type { ConsensusConfig } from '../debate/types';
 import type { DrawingSynthesis } from '../electrical/synthesis';
 import { hashCanonicalValue } from '@/engine/receipt/receipt-hash';
+import { buildDrawingIntelligenceReport } from '../report/drawing-intelligence-report';
+import { verifyCurrentGoldenGate } from '../report/golden-gate';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Result Merger
@@ -333,6 +335,35 @@ function drawingEvidenceIds(drawingSynthesis: DrawingSynthesis): string[] {
   ])].sort((left, right) => left.localeCompare(right));
 }
 
+async function buildDrawingExtension(input: ConsensusTeamInput) {
+  if (!input.drawingSynthesis) return undefined;
+  const reviews = input.teamResults
+    .filter((result) => result.teamId === 'TEAM-SLD')
+    .map((result) => result.drawingReview)
+    .filter((review): review is NonNullable<typeof review> => (
+      review !== undefined && review.snapshot.drawingHash === input.drawingSynthesis?.drawingHash
+    ));
+  if (reviews.length !== 1) {
+    throw new Error('DRAWING_REVIEW_ARTIFACT_REQUIRED');
+  }
+
+  const configuredPublicKey = process.env.SLD_GOLDEN_GATE_PUBLIC_KEY_PEM?.replaceAll('\\n', '\n');
+  const gate = await verifyCurrentGoldenGate({
+    publicKeyPem: configuredPublicKey,
+    ...(process.env.SLD_GOLDEN_MANIFEST_PATH
+      ? { manifestPath: process.env.SLD_GOLDEN_MANIFEST_PATH }
+      : {}),
+    ...(process.env.SLD_GOLDEN_RECEIPT_PATH
+      ? { receiptPath: process.env.SLD_GOLDEN_RECEIPT_PATH }
+      : {}),
+  });
+  return buildDrawingIntelligenceReport({
+    drawingReview: reviews[0],
+    synthesis: input.drawingSynthesis,
+    verified95: gate.verified95,
+  });
+}
+
 /**
  * 합의+출력팀 메인 실행.
  * 1. 다중팀 결과 병합
@@ -420,6 +451,7 @@ export async function executeConsensusTeam(
   const verdict = mergeDrawingVerdict(computeVerdict(merged), input.drawingSynthesis);
   const grade = computeGrade(score);
   const summary = buildSummary(merged, verdict, score, input.drawingSynthesis);
+  const drawingIntelligence = await buildDrawingExtension(input);
 
   // Step 5: 보고서 조립
   const reportId = `RPT-${crypto.randomUUID().replaceAll('-', '').slice(0, 20).toUpperCase()}`;
@@ -432,7 +464,7 @@ export async function executeConsensusTeam(
   const reportClaim: Omit<ESVAVerifiedReport, 'hash'> = {
     reportId,
     createdAt: new Date().toISOString(),
-    version: 'ESVA Report v1.0',
+    version: drawingIntelligence ? 'ESVA Report v2.0' : 'ESVA Report v1.0',
     projectName: input.projectName,
     projectType: input.projectType,
     verdict,
@@ -447,6 +479,7 @@ export async function executeConsensusTeam(
     requiresHumanReview: Boolean(escalation) || Boolean(input.drawingSynthesis?.requiresHumanReview),
     evidenceIds,
     ...(input.drawingSynthesis ? { drawingSynthesis: input.drawingSynthesis } : {}),
+    ...(drawingIntelligence ? { drawingIntelligence } : {}),
   };
   const report: ESVAVerifiedReport = {
     ...reportClaim,

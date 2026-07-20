@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import { canonicalize } from '@/engine/receipt/receipt-hash';
 import { executeConsensusTeam } from '../consensus-team';
 import type { DrawingSynthesis } from '../../electrical/synthesis';
+import type { DrawingReviewArtifact } from '../types';
 
 describe('consensus report integrity', () => {
   test('seals the complete report and records real in-report evidence IDs', async () => {
@@ -141,6 +142,75 @@ describe('consensus report integrity', () => {
       }],
       graphConflicts: [],
     };
+    const drawingReview: DrawingReviewArtifact = {
+      snapshot: {
+        drawingHash: 'drawing-hash-integrity',
+        mimeType: 'image/png',
+        page: 1,
+        width: 1600,
+        height: 900,
+        quality: {
+          width: 1600,
+          height: 900,
+          channels: 4,
+          contrast: 1,
+          edgeDensity: 1,
+          gradientVariance: 1,
+          lowContrast: false,
+          blurry: false,
+          recommendedScale: 1,
+          warnings: [],
+        },
+      },
+      envelopes: [{
+        role: 'logic',
+        drawingHash: 'drawing-hash-integrity',
+        provider: 'openai',
+        model: 'fixture',
+        promptVersion: 'fixture-v1',
+        outputHash: 'fixture-output',
+        durationMs: 1,
+        data: {
+          warnings: [],
+          confidence: 1,
+          logic: [{
+            id: 'logic-1',
+            sourceId: 'source:logic-1',
+            topic: 'DIRECTION',
+            subjectIds: ['symbol-1', 'symbol-2'],
+            statement: 'symbol-1 feeds symbol-2',
+            evidenceBounds: [{ page: 1, x: 0, y: 0, w: 10, h: 10 }],
+            confidence: 1,
+          }],
+        },
+      }],
+      graph: {
+        drawingHash: 'drawing-hash-integrity',
+        symbols: [
+          { id: 'symbol-1', originalEvidenceId: 'original:symbol-1', originalEvidenceIds: ['original:symbol-1'], sourceIds: ['source:symbol-1'], typeCandidates: ['VCB'], rawLabel: 'VCB-1', bounds: { page: 1, x: 100, y: 100, w: 50, h: 50 }, ports: [], confidence: 1 },
+          { id: 'symbol-2', originalEvidenceId: 'original:symbol-2', originalEvidenceIds: ['original:symbol-2'], sourceIds: ['source:symbol-2'], typeCandidates: ['TR'], rawLabel: 'TR-1', bounds: { page: 1, x: 700, y: 100, w: 50, h: 50 }, ports: [], confidence: 1 },
+        ],
+        lines: [{ id: 'line-1', originalEvidenceId: 'original:line-1', originalEvidenceIds: ['original:line-1'], sourceIds: ['source:line-1'], pages: [1], lineKind: 'power', path: [{ x: 150, y: 125 }, { x: 700, y: 125 }], start: { x: 150, y: 125 }, end: { x: 700, y: 125 }, junctions: [], crossovers: [], confidence: 1 }],
+        texts: [{ id: 'evidence:text-1', originalEvidenceId: 'original:text-1', originalEvidenceIds: ['original:text-1'], sourceIds: ['source:text-1'], raw: '220V', candidates: ['220V'], bounds: { page: 1, x: 200, y: 80, w: 80, h: 20 }, confidence: 1 }],
+        junctions: [],
+        crossovers: [],
+        edges: [{ id: 'edge-1', from: 'symbol-1', lineId: 'line-1', to: 'symbol-2', confidence: 1 }],
+        textLinks: [],
+        conflicts: [],
+      },
+      failures: [],
+      coverage: {
+        roles: {
+          symbols: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
+          connections: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
+          text: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
+          logic: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
+        },
+        plannedCalls: 4,
+        complete: true,
+        maxRegionCallsPerRole: 1,
+      },
+    };
 
     const { teamResult, report } = await executeConsensusTeam({
       sessionId: 'drawing-integrity-test',
@@ -148,10 +218,12 @@ describe('consensus report integrity', () => {
       projectType: 'SLD',
       drawingSynthesis,
       teamResults: [{
-        teamId: 'TEAM-STD',
+        teamId: 'TEAM-SLD',
         success: true,
         confidence: 0.9,
         durationMs: 1,
+        drawingReview,
+        drawingSynthesis,
         recommendations: [{
           id: 'rec-generic-1',
           category: 'cost',
@@ -167,6 +239,13 @@ describe('consensus report integrity', () => {
       verdict: 'CONDITIONAL',
       requiresHumanReview: true,
       drawingSynthesis,
+      drawingIntelligence: expect.objectContaining({
+        schemaVersion: 2,
+        drawingHash: 'drawing-hash-integrity',
+        source: { assetKey: 'drawing-hash-integrity', mimeType: 'image/png', width: 1600, height: 900, page: 1 },
+        verified95: false,
+        relations: [expect.objectContaining({ id: 'edge-1', from: 'symbol-1', line: 'line-1', to: 'symbol-2' })],
+      }),
       summary: {
         topRecommendations: [expect.objectContaining({
           id: 'rec-drawing-1',
@@ -191,5 +270,9 @@ describe('consensus report integrity', () => {
     if (!tampered.drawingSynthesis) throw new Error('tampered drawing synthesis fixture is missing');
     tampered.drawingSynthesis.claims[0].text = 'tampered';
     expect(createHash('sha256').update(canonicalize(tampered)).digest('hex')).not.toBe(hash);
+    const tamperedOverlay = structuredClone(claim);
+    if (!tamperedOverlay.drawingIntelligence) throw new Error('drawing intelligence fixture is missing');
+    tamperedOverlay.drawingIntelligence.symbols[0].label = 'tampered-overlay';
+    expect(createHash('sha256').update(canonicalize(tamperedOverlay)).digest('hex')).not.toBe(hash);
   });
 });

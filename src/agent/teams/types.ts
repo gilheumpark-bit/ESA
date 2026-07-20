@@ -281,6 +281,9 @@ export interface ESVAVerifiedReport {
 
   drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
 
+  /** Source-linked v2 SLD extension. Optional so stored v1 reports remain readable. */
+  drawingIntelligence?: import('../report/drawing-intelligence-report').DrawingIntelligenceReport;
+
   // 보고서 안에서 실제 판정 근거로 사용된 팀/계산/위반 항목 식별자.
   // 계산 영수증이 생성되지 않은 경로에서 가짜 receipt ID를 만들지 않는다.
   evidenceIds: string[];

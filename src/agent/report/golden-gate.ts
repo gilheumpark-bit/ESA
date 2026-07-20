@@ -1,14 +1,21 @@
 'use server';
 
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { verifyGoldenGateReceiptSignature } from './metrics';
 
 const EVALUATOR_VERSION = 'sld-golden-evaluator-v1';
 const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const METRIC_KEYS = ['symbolMacroF1', 'textFieldAccuracy', 'edgeF1', 'junctionAccuracy', 'criticalLogicRecall', 'unsupportedPassCount', 'claimTraceability'] as const;
+const RATIO_METRIC_KEYS = METRIC_KEYS.filter((key) => key !== 'unsupportedPassCount');
+const MAX_PREDICTION_BYTES = 16 * 1024 * 1024;
+const MAX_HASHED_FILES = 20_000;
+const MAX_HASHED_BYTES = 512 * 1024 * 1024;
+const MAX_DIRECTORY_ENTRIES = 50_000;
+const MAX_DIRECTORY_DEPTH = 32;
+const MAX_DATASET_PATH_LENGTH = 1_024;
 type GateReason = 'VERIFIED' | 'MISSING_INPUT' | 'RECEIPT_INVALID' | 'SIGNATURE_INVALID' | 'MANIFEST_MISMATCH' | 'DATASET_MISMATCH' | 'METRICS_INVALID' | 'STALE_RECEIPT' | 'NO_REAL_ADJUDICATED_DATASET';
 
 export interface GoldenGateVerification {
@@ -35,12 +42,85 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function validMetrics(value: unknown, thresholds: Record<string, unknown>): boolean {
   if (!isRecord(value)) return false;
+  if (Object.keys(value).sort().join('|') !== [...METRIC_KEYS].sort().join('|')) return false;
+  if (!RATIO_METRIC_KEYS.every((key) => (
+    typeof thresholds[key] === 'number'
+    && Number.isFinite(thresholds[key])
+    && (thresholds[key] as number) >= 0
+    && (thresholds[key] as number) <= 1
+  ))) return false;
+  if (
+    !Number.isSafeInteger(thresholds.unsupportedPassCount)
+    || (thresholds.unsupportedPassCount as number) < 0
+  ) return false;
   return METRIC_KEYS.every((key) => {
     const metric = value[key];
     const threshold = thresholds[key];
-    if (key === 'unsupportedPassCount') return typeof metric === 'number' && Number.isSafeInteger(metric) && typeof threshold === 'number' && metric <= threshold;
-    return typeof metric === 'number' && Number.isFinite(metric) && typeof threshold === 'number' && metric >= threshold;
+    if (key === 'unsupportedPassCount') {
+      return typeof metric === 'number'
+        && Number.isSafeInteger(metric)
+        && metric >= 0
+        && typeof threshold === 'number'
+        && metric <= threshold;
+    }
+    return typeof metric === 'number'
+      && Number.isFinite(metric)
+      && metric >= 0
+      && metric <= 1
+      && typeof threshold === 'number'
+      && metric >= threshold;
   });
+}
+
+async function safeExistingDatasetPath(root: string, candidate: string): Promise<string> {
+  if (candidate.length === 0 || candidate.length > MAX_DATASET_PATH_LENGTH) throw new Error('unsafe path');
+  const target = safePath(root, candidate, '');
+  const [realRoot, realTarget] = await Promise.all([realpath(root), realpath(target)]);
+  const fromRoot = relative(realRoot, realTarget);
+  if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) throw new Error('unsafe path');
+  return target;
+}
+
+async function readBoundedRegularFile(path: string, maximumBytes: number): Promise<Buffer> {
+  const info = await lstat(path);
+  if (info.isSymbolicLink() || !info.isFile() || info.size > maximumBytes) throw new Error('invalid file');
+  return readFile(path);
+}
+
+async function hashEvidencePath(target: string): Promise<string> {
+  const hash = createHash('sha256');
+  let files = 0;
+  let bytes = 0;
+  let entries = 0;
+  const targetInfo = await lstat(target);
+  if (targetInfo.isSymbolicLink()) throw new Error('invalid evidence');
+  const evidenceRoot = targetInfo.isDirectory() ? target : dirname(target);
+
+  async function visit(path: string, depth: number): Promise<void> {
+    if (depth > MAX_DIRECTORY_DEPTH) throw new Error('invalid evidence');
+    const info = await lstat(path);
+    if (info.isSymbolicLink()) throw new Error('invalid evidence');
+    if (info.isDirectory()) {
+      const children = (await readdir(path)).sort((left, right) => left.localeCompare(right, 'en'));
+      entries += children.length;
+      if (entries > MAX_DIRECTORY_ENTRIES) throw new Error('invalid evidence');
+      for (const child of children) await visit(resolve(path, child), depth + 1);
+      return;
+    }
+    if (!info.isFile()) throw new Error('invalid evidence');
+    files += 1;
+    bytes += info.size;
+    if (files > MAX_HASHED_FILES || bytes > MAX_HASHED_BYTES) throw new Error('invalid evidence');
+    const body = await readFile(path);
+    hash.update(relative(evidenceRoot, path).replaceAll('\\', '/'));
+    hash.update('\0');
+    hash.update(body);
+    hash.update('\0');
+  }
+
+  await visit(target, 0);
+  if (files === 0) throw new Error('invalid evidence');
+  return hash.digest('hex');
 }
 
 export async function verifyCurrentGoldenGate(options: {
@@ -81,6 +161,21 @@ export async function verifyCurrentGoldenGate(options: {
       const manifestDataset = expected.get(dataset.id);
       if (!manifestDataset || dataset.kind !== manifestDataset.kind || dataset.labels !== manifestDataset.labels || dataset.predictions !== manifestDataset.predictions || typeof dataset.labelsHash !== 'string' || !/^[a-f0-9]{64}$/.test(dataset.labelsHash) || typeof dataset.predictionsHash !== 'string' || !/^[a-f0-9]{64}$/.test(dataset.predictionsHash)) return fail('DATASET_MISMATCH');
       signedExpected.set(dataset.id, dataset);
+    }
+    if (signedExpected.size !== expected.size) return fail('DATASET_MISMATCH');
+    for (const [datasetId, dataset] of expected) {
+      const signedDataset = signedExpected.get(datasetId);
+      if (!signedDataset) return fail('DATASET_MISMATCH');
+      const labelsPath = await safeExistingDatasetPath(root, dataset.labels as string);
+      const predictionsPath = await safeExistingDatasetPath(root, dataset.predictions as string);
+      const [labelsHash, predictionsBuffer] = await Promise.all([
+        hashEvidencePath(labelsPath),
+        readBoundedRegularFile(predictionsPath, MAX_PREDICTION_BYTES),
+      ]);
+      const predictionsHash = createHash('sha256').update(predictionsBuffer).digest('hex');
+      if (signedDataset.labelsHash !== labelsHash || signedDataset.predictionsHash !== predictionsHash) {
+        return fail('DATASET_MISMATCH');
+      }
     }
     for (const dataset of receipt.datasetsEvaluated) {
       if (!isRecord(dataset) || typeof dataset.id !== 'string') return fail('DATASET_MISMATCH');

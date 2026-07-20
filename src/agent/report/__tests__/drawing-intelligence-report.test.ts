@@ -117,4 +117,83 @@ describe('drawing intelligence report v2', () => {
       'HOLD_UNRESOLVED_CALCULATION',
     ]));
   });
+
+  it('rejects logic-only invariant evidence and counts the dropped finding in traceability', () => {
+    const current = synthesis();
+    current.issues[0] = {
+      ...current.issues[0],
+      evidence: {
+        ...current.issues[0].evidence,
+        stableIds: ['LOGIC-1'],
+        originalEvidenceIds: ['LOGIC-1'],
+        sourceIds: ['source:logic-1'],
+      },
+    };
+
+    const report = buildDrawingIntelligenceReport({ drawingReview: artifact(), synthesis: current, verified95: true });
+
+    expect(report.issues).toEqual([]);
+    expect(report.traceability).toBeLessThan(1);
+    expect(report.holds).toEqual(expect.arrayContaining([
+      'HOLD_UNRESOLVED_ISSUE',
+      'HOLD_UNRESOLVED_TRACEABILITY',
+    ]));
+    expect(report.verified95).toBe(false);
+  });
+
+  it('drops a relation when the same alias names both a symbol and a line', () => {
+    const review = artifact();
+    review.graph!.lines[0] = { ...review.graph!.lines[0], id: 'TR-1' };
+    review.graph!.edges[0] = { ...review.graph!.edges[0], lineId: 'TR-1' };
+
+    const report = buildDrawingIntelligenceReport({ drawingReview: review, synthesis: synthesis(), verified95: true });
+
+    expect(report.relations).toEqual([]);
+    expect(report.traceability).toBeLessThan(1);
+    expect(report.holds).toEqual(expect.arrayContaining([
+      'HOLD_AMBIGUOUS_PROVENANCE',
+      'HOLD_UNRESOLVED_RELATION',
+    ]));
+  });
+
+  it('never combines a foreign snapshot page with the synthesis drawing key', () => {
+    const review = artifact();
+    review.snapshot.drawingHash = 'foreign-drawing';
+    review.snapshot.page = 99;
+
+    const report = buildDrawingIntelligenceReport({ drawingReview: review, synthesis: synthesis(), verified95: true });
+
+    expect(report.drawingHash).toBe(HASH);
+    expect(report.source).toMatchObject({ assetKey: 'foreign-drawing', page: 99 });
+    expect(report.source.assetKey).not.toBe(report.drawingHash);
+    expect(report.holds).toContain('HOLD_DRAWING_HASH_MISMATCH');
+    expect(report.verified95).toBe(false);
+  });
+
+  it('AUDIT_RECHECK keeps ambiguous claim and recommendation aliases unresolved', () => {
+    const review = artifact();
+    review.graph!.texts[0].sourceIds = ['shared'];
+    review.graph!.texts.push({
+      ...structuredClone(review.graph!.texts[0]), id: 'TEXT-2', sourceId: 'shared',
+      originalEvidenceId: 'original:text-2', originalEvidenceIds: ['original:text-2'], sourceIds: ['shared'],
+    });
+    const current = synthesis();
+    current.claims[0].evidenceIds = ['shared'];
+    current.recommendations[0].evidenceIds = ['shared'];
+
+    const report = buildDrawingIntelligenceReport({ drawingReview: review, synthesis: current, verified95: true });
+
+    expect(report.recommendations).toEqual([]);
+    expect(report.traceability).toBeLessThan(1);
+    expect(report.holds).toEqual(expect.arrayContaining([
+      'HOLD_AMBIGUOUS_PROVENANCE', 'HOLD_UNRESOLVED_CLAIM', 'HOLD_UNRESOLVED_RECOMMENDATION',
+    ]));
+  });
+
+  it('AUDIT_RECHECK deeply freezes nested report values', () => {
+    const report = buildDrawingIntelligenceReport({ drawingReview: artifact(), synthesis: synthesis(), verified95: false });
+
+    expect(Object.isFrozen(report.lines[0].path[0])).toBe(true);
+    expect(Object.isFrozen(report.issues[0].evidence.bounds[0])).toBe(true);
+  });
 });
