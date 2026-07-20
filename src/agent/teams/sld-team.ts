@@ -178,6 +178,12 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   });
   const selectedRoles = ['symbols', 'connections', 'text'] as const;
   const expectedRegionCount = precisionGridSize(prepared.snapshot.quality.recommendedScale);
+  const requiredSymbolVariantKind = prepared.snapshot.quality.recommendedScale === 4
+    ? 'upscale-4x'
+    : prepared.snapshot.quality.recommendedScale === 2
+      ? 'upscale-2x'
+      : 'original';
+  const hasRequiredSymbolVariant = prepared.variants.some((variant) => variant.kind === requiredSymbolVariantKind);
   const coverageRoles = {
     logic: { variantId: selectCouncilVariant('logic', prepared.variants, prepared.snapshot.quality.recommendedScale).id, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
     ...Object.fromEntries(selectedRoles.map((role) => {
@@ -187,7 +193,8 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     })),
   } as DrawingReviewArtifact['coverage']['roles'];
   const selectedVariantIds = new Set(selectedRoles.map((role) => coverageRoles[role].variantId));
-  const coverageComplete = selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
+  const coverageComplete = hasRequiredSymbolVariant
+    && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
     && prepared.regions.length === expectedRegionCount * selectedRoles.length
     && prepared.regions.every((region) => selectedVariantIds.has(region.variantId));
   const failures = council.failures.map((failure) => ({ ...failure, error: redactSecret(failure.error, resolved.key) }));
@@ -209,6 +216,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     ...missing.map((role) => hold(`필수 ${role} review 결과가 없습니다.`)),
     ...fatal.map((failure) => hold(`${failure.role} review 실패: ${failure.sourceId}`)),
     ...failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
+    ...(!hasRequiredSymbolVariant ? [hold(`symbols precision source ${requiredSymbolVariantKind}가 없습니다.`)] : []),
     ...(!coverageComplete ? selectedRoles.flatMap((role) => {
       const coverage = coverageRoles[role];
       return coverage.actualRegionCount === coverage.expectedRegionCount ? [] : [hold(`${role} precision coverage expected ${coverage.expectedRegionCount}, actual ${coverage.actualRegionCount}.`)];

@@ -66,6 +66,21 @@ function prepared(scale: 1 | 2 | 4 = 1) {
   return { snapshot: { ...snapshot, quality: { ...snapshot.quality, recommendedScale: scale } }, variants, regions };
 }
 
+function preparedWithoutRequiredUpscale(scale: 2 | 4) {
+  const value = prepared(scale);
+  const requiredKind = scale === 4 ? 'upscale-4x' : 'upscale-2x';
+  const requiredId = `variant:${requiredKind}`;
+  return {
+    ...value,
+    variants: value.variants.filter((variant) => variant.kind !== requiredKind),
+    regions: value.regions.map((region) => region.variantId === requiredId ? {
+      ...region,
+      id: region.id.replace(requiredId, 'variant:original'),
+      variantId: 'variant:original',
+    } : region),
+  };
+}
+
 function rasterInput(extra: Partial<TeamInput> = {}): TeamInput {
   return { sessionId: 'sld-independent-test', classification: 'sld_image', fileBuffer: new ArrayBuffer(8), fileName: 'fixture.png', mimeType: 'image/png', vision: { provider: 'openai', apiKey: ` ${KEY} ` }, ...extra };
 }
@@ -109,6 +124,32 @@ describe('SLD raster independent council integration', () => {
         logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
       },
     });
+  });
+
+  it.each([
+    [2, 'upscale-2x'],
+    [4, 'upscale-4x'],
+  ] as const)('holds scale %i when required %s evidence falls back to original', async (scale, requiredKind) => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => preparedWithoutRequiredUpscale(scale),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.drawingReview?.coverage).toMatchObject({
+      complete: false,
+      roles: { symbols: { variantId: 'variant:original' } },
+    });
+    expect(result.standards).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        standard: 'VISION-COUNCIL',
+        judgment: 'HOLD',
+        note: expect.stringContaining(requiredKind),
+      }),
+    ]));
   });
 
   it.each(['symbols', 'connections', 'text', 'logic'] as const)('fails closed and exposes HOLD when required %s review is absent', async (missing) => {
