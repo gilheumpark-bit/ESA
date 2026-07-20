@@ -100,8 +100,12 @@ const CURRENT_DRAWING_EVIDENCE = 'current drawing evidence';
 type Registry = {
   readonly records: Map<string, SynthesisEvidenceRecord>;
   readonly aliases: Map<string, Set<string>>;
+  readonly graphAliases: Map<string, Set<string>>;
+  readonly logicAliases: Map<string, Set<string>>;
   integrityGap: boolean;
 };
+
+type EvidenceNamespace = 'graph' | 'logic';
 
 function compareText(left: string, right: string): number {
   return left.localeCompare(right);
@@ -130,17 +134,17 @@ function recordKey(record: SynthesisEvidenceRecord): string {
   ].join('\u0001');
 }
 
-function addAliases(registry: Registry, key: string, aliases: readonly string[]): void {
+function addAliases(registry: Registry, target: Map<string, Set<string>>, key: string, aliases: readonly string[]): void {
   for (const alias of aliases) {
     if (alias.length === 0) continue;
-    const candidates = registry.aliases.get(alias) ?? new Set<string>();
+    const candidates = target.get(alias) ?? new Set<string>();
     candidates.add(key);
-    registry.aliases.set(alias, candidates);
+    target.set(alias, candidates);
     if (candidates.size > 1) registry.integrityGap = true;
   }
 }
 
-function addRecord(registry: Registry, record: SynthesisEvidenceRecord, aliases: readonly string[]): void {
+function addRecord(registry: Registry, record: SynthesisEvidenceRecord, aliases: readonly string[], namespace?: EvidenceNamespace): void {
   const stableRecord: SynthesisEvidenceRecord = {
     ...record,
     originalEvidenceIds: sortedUnique(record.originalEvidenceIds),
@@ -150,7 +154,9 @@ function addRecord(registry: Registry, record: SynthesisEvidenceRecord, aliases:
   };
   const key = recordKey(stableRecord);
   registry.records.set(key, stableRecord);
-  addAliases(registry, key, aliases);
+  addAliases(registry, registry.aliases, key, aliases);
+  if (namespace === 'graph') addAliases(registry, registry.graphAliases, key, aliases);
+  if (namespace === 'logic') addAliases(registry, registry.logicAliases, key, aliases);
 }
 
 function addSourceRecord(
@@ -160,6 +166,7 @@ function addSourceRecord(
   originalEvidenceIds: readonly string[],
   sourceIds: readonly string[],
   pages: readonly number[],
+  namespace?: EvidenceNamespace,
 ): void {
   if (id.length === 0 || originalEvidenceIds.length === 0 || sourceIds.length === 0 || pages.length === 0) {
     registry.integrityGap = true;
@@ -174,7 +181,7 @@ function addSourceRecord(
     pages: [...pages],
     parentEvidenceIds: [],
   };
-  addRecord(registry, record, [id, ...originalEvidenceIds, ...sourceIds]);
+  addRecord(registry, record, [id, ...originalEvidenceIds, ...sourceIds], namespace);
 }
 
 function rootGraphIsCurrent(input: DrawingSynthesisInput): input is DrawingSynthesisInput & { normalizedGraph: NormalizedElectricalGraph } {
@@ -190,19 +197,25 @@ function logicEnvelopeIsCurrent(input: DrawingSynthesisInput): input is DrawingS
 }
 
 function buildRegistry(input: DrawingSynthesisInput): Registry {
-  const registry: Registry = { records: new Map<string, SynthesisEvidenceRecord>(), aliases: new Map<string, Set<string>>(), integrityGap: false };
+  const registry: Registry = {
+    records: new Map<string, SynthesisEvidenceRecord>(),
+    aliases: new Map<string, Set<string>>(),
+    graphAliases: new Map<string, Set<string>>(),
+    logicAliases: new Map<string, Set<string>>(),
+    integrityGap: false,
+  };
   if (input.normalizedGraph !== undefined && !rootGraphIsCurrent(input)) registry.integrityGap = true;
   if (rootGraphIsCurrent(input)) {
     const graph = input.normalizedGraph.graph;
-    for (const symbol of graph.symbols) addSourceRecord(registry, input.drawingHash, symbol.id, symbol.originalEvidenceIds, symbol.sourceIds, [symbol.bounds.page]);
-    for (const line of graph.lines) addSourceRecord(registry, input.drawingHash, line.id, line.originalEvidenceIds, line.sourceIds, line.pages);
-    for (const text of graph.texts) addSourceRecord(registry, input.drawingHash, text.id, text.originalEvidenceIds, text.sourceIds, [text.bounds.page]);
+    for (const symbol of graph.symbols) addSourceRecord(registry, input.drawingHash, symbol.id, symbol.originalEvidenceIds, symbol.sourceIds, [symbol.bounds.page], 'graph');
+    for (const line of graph.lines) addSourceRecord(registry, input.drawingHash, line.id, line.originalEvidenceIds, line.sourceIds, line.pages, 'graph');
+    for (const text of graph.texts) addSourceRecord(registry, input.drawingHash, text.id, text.originalEvidenceIds, text.sourceIds, [text.bounds.page], 'graph');
     for (const spec of input.normalizedGraph.specs) {
       if (spec.drawingHash !== input.drawingHash) {
         registry.integrityGap = true;
         continue;
       }
-      addSourceRecord(registry, input.drawingHash, spec.evidenceId, spec.originalEvidenceIds, spec.sourceIds, [spec.bounds.page]);
+      addSourceRecord(registry, input.drawingHash, spec.evidenceId, spec.originalEvidenceIds, spec.sourceIds, [spec.bounds.page], 'graph');
     }
   }
   if (input.logicEnvelope !== undefined && !logicEnvelopeIsCurrent(input)) registry.integrityGap = true;
@@ -215,22 +228,23 @@ function buildRegistry(input: DrawingSynthesisInput): Registry {
         [evidence.id],
         evidence.sourceId === undefined ? [] : [evidence.sourceId],
         evidence.evidenceBounds.map((bound) => bound.page),
+        'logic',
       );
     }
   }
   return registry;
 }
 
-function resolveUnique(registry: Registry, id: string): SynthesisEvidenceRecord | undefined {
-  const candidates = registry.aliases.get(id);
+function resolveUnique(registry: Registry, aliases: ReadonlyMap<string, Set<string>>, id: string): SynthesisEvidenceRecord | undefined {
+  const candidates = aliases.get(id);
   if (candidates === undefined || candidates.size !== 1) return undefined;
   const key = [...candidates][0];
   return registry.records.get(key);
 }
 
-function resolveAll(registry: Registry, evidenceIds: readonly string[]): SynthesisEvidenceRecord[] | undefined {
+function resolveAll(registry: Registry, evidenceIds: readonly string[], aliases = registry.aliases): SynthesisEvidenceRecord[] | undefined {
   if (evidenceIds.length === 0) return undefined;
-  const resolved = evidenceIds.map((id) => resolveUnique(registry, id));
+  const resolved = evidenceIds.map((id) => resolveUnique(registry, aliases, id));
   return resolved.every((record): record is SynthesisEvidenceRecord => record !== undefined) ? resolved : undefined;
 }
 
@@ -271,12 +285,13 @@ function issueParents(registry: Registry, issue: ElectricalIssue, drawingHash: s
 }
 
 function conflictParents(registry: Registry, conflict: LogicConflict): SynthesisEvidenceRecord[] | undefined {
-  return resolveAll(registry, [
+  const graphParents = resolveAll(registry, [
     ...conflict.graphEvidenceIds,
     ...conflict.graphOriginalEvidenceIds,
     ...conflict.graphSourceIds,
-    ...conflict.logicEvidenceIds,
-  ]);
+  ], registry.graphAliases);
+  const logicParents = resolveAll(registry, conflict.logicEvidenceIds, registry.logicAliases);
+  return graphParents === undefined || logicParents === undefined ? undefined : [...graphParents, ...logicParents];
 }
 
 function sortById<T extends { id: string }>(values: readonly T[]): T[] {

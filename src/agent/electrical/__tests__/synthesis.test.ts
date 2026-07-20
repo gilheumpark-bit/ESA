@@ -352,6 +352,21 @@ describe('synthesizeDrawingReview', () => {
     expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 
+  it('rejects a conflict when graph and logic evidence namespaces are swapped', () => {
+    const swapped = conflict('CONTRADICTION', 'open');
+    swapped.id = 'conflict:swapped';
+    swapped.graphEvidenceIds = ['LOGIC-1'];
+    swapped.graphOriginalEvidenceIds = [];
+    swapped.graphSourceIds = [];
+    swapped.logicEvidenceIds = ['TR-1'];
+
+    const result = synthesizeDrawingReview(input({ logicConflicts: [swapped] }));
+
+    expect(result.conflicts).toEqual([]);
+    expect(result.evidenceRegistry.some((record) => record.id === swapped.id)).toBe(false);
+    expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
   it('is deterministic, does not mutate input, and excludes raw evidence payloads', () => {
     const source = input({
       claims: [
