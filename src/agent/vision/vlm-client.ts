@@ -45,8 +45,11 @@ export interface VLMAnalysisResult {
   retryCount?: number;
 }
 
+const ROLE_PROMPT_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
+export type VLMReviewRole = (typeof ROLE_PROMPT_ROLES)[number];
+
 export interface VLMRoleAnalysisResult {
-  role: keyof typeof ROLE_PROMPTS;
+  role: VLMReviewRole;
   data: RoleReviewData;
   rawText: string;
   model: string;
@@ -153,10 +156,8 @@ async function withRetry<T>(
       return { result, retryCount: attempt };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-
-      // 재시도 불가능한 에러 (401, 403) → 즉시 throw
       const errMsg = lastError.message;
-      if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('invalid_api_key')) {
+      if (!isRetryableProviderError(errMsg)) {
         throw lastError;
       }
 
@@ -170,6 +171,10 @@ async function withRetry<T>(
   }
 
   throw lastError ?? new Error('[VLM] Unknown error after retries');
+}
+
+function isRetryableProviderError(message: string): boolean {
+  return /(?:^|\D)429(?:\D|$)|(?:^|\D)5\d\d(?:\D|$)/.test(message);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -203,25 +208,59 @@ function responseByteLength(text: string): number {
   return new TextEncoder().encode(text).byteLength;
 }
 
-async function readResponseText(response: Response): Promise<string> {
+interface RequestScope {
+  signal: AbortSignal;
+  error(): Error;
+  close(): void;
+}
+
+function openRequestScope(options: VLMOptions): RequestScope {
+  if (options.signal?.aborted) {
+    throw new Error('[VLM] request aborted.');
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, validateTimeout(options.timeoutMs));
+  const forwardAbort = () => controller.abort();
+  options.signal?.addEventListener('abort', forwardAbort, { once: true });
+
+  return {
+    signal: controller.signal,
+    error: () => new Error(timedOut ? '[VLM] request timed out.' : '[VLM] request aborted.'),
+    close: () => {
+      clearTimeout(timeout);
+      options.signal?.removeEventListener('abort', forwardAbort);
+    },
+  };
+}
+
+async function readResponseText(response: Response, scope: RequestScope): Promise<string> {
   const declaredLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
     throw new Error('[VLM] provider response exceeds the allowed byte limit.');
   }
   if (!response.body) {
-    const text = await response.text();
-    if (responseByteLength(text) > MAX_RESPONSE_BYTES) {
-      throw new Error('[VLM] provider response exceeds the allowed byte limit.');
-    }
-    return text;
+    throw new Error('[VLM] provider response must include a readable bounded stream.');
   }
 
   const reader = response.body.getReader();
+  let rejectAbort: ((reason: Error) => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const abortReader = () => {
+    void reader.cancel().finally(() => rejectAbort?.(scope.error()));
+  };
+  scope.signal.addEventListener('abort', abortReader, { once: true });
+  if (scope.signal.aborted) abortReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await Promise.race([reader.read(), aborted]);
       if (done) break;
       total += value.byteLength;
       if (total > MAX_RESPONSE_BYTES) {
@@ -230,7 +269,11 @@ async function readResponseText(response: Response): Promise<string> {
       }
       chunks.push(value);
     }
+  } catch (error) {
+    if (scope.signal.aborted) throw scope.error();
+    throw error;
   } finally {
+    scope.signal.removeEventListener('abort', abortReader);
     reader.releaseLock();
   }
   const bytes = new Uint8Array(total);
@@ -246,25 +289,26 @@ async function readResponseText(response: Response): Promise<string> {
   return text;
 }
 
-async function fetchWithTimeout(url: string, init: RequestInit, options: VLMOptions): Promise<Response> {
-  const controller = new AbortController();
-  let timedOut = false;
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, validateTimeout(options.timeoutMs));
-  const forwardAbort = () => controller.abort();
-  options.signal?.addEventListener('abort', forwardAbort, { once: true });
-  if (options.signal?.aborted) controller.abort();
-
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  scope: RequestScope,
+  options: VLMOptions,
+): Promise<Response> {
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...init, signal: scope.signal });
   } catch (error) {
-    if (timedOut) throw new Error('[VLM] request timed out.');
-    throw new Error(options.signal?.aborted ? '[VLM] request aborted.' : sanitizeErrorText(error, options.apiKey));
+    if (scope.signal.aborted) throw scope.error();
+    throw new Error(sanitizeErrorText(error, options.apiKey));
+  }
+}
+
+async function withRequestScope<T>(options: VLMOptions, request: (scope: RequestScope) => Promise<T>): Promise<T> {
+  const scope = openRequestScope(options);
+  try {
+    return await request(scope);
   } finally {
-    clearTimeout(timeout);
-    options.signal?.removeEventListener('abort', forwardAbort);
+    scope.close();
   }
 }
 
@@ -292,27 +336,29 @@ async function requestGeminiJson(
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.gemini;
   const model = options.model ?? cfg.defaultModel;
-  const response = await fetchWithTimeout(`${cfg.endpoint}/${model}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.apiKey },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
-      generationConfig: {
-        temperature: options.temperature ?? cfg.defaultTemp,
-        maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
-        responseMimeType: 'application/json',
-      },
-    }),
-  }, options);
-  const raw = await readResponseText(response);
-  if (!response.ok) throw new Error(`Gemini Vision API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
-  const data = parseProviderPayload('Gemini', raw);
-  const candidate = Array.isArray(data.candidates) ? recordValue(data.candidates[0]) : undefined;
-  const content = candidate ? recordValue(candidate.content) : undefined;
-  const firstPart = content && Array.isArray(content.parts) ? recordValue(content.parts[0]) : undefined;
-  const rawText = firstPart?.text;
-  if (typeof rawText !== 'string') throw new Error('Gemini Vision API returned no text response.');
-  return { rawText, model };
+  return withRequestScope(options, async (scope) => {
+    const response = await fetchWithTimeout(`${cfg.endpoint}/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.apiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
+        generationConfig: {
+          temperature: options.temperature ?? cfg.defaultTemp,
+          maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }, scope, options);
+    const raw = await readResponseText(response, scope);
+    if (!response.ok) throw new Error(`Gemini Vision API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
+    const data = parseProviderPayload('Gemini', raw);
+    const candidate = Array.isArray(data.candidates) ? recordValue(data.candidates[0]) : undefined;
+    const content = candidate ? recordValue(candidate.content) : undefined;
+    const firstPart = content && Array.isArray(content.parts) ? recordValue(content.parts[0]) : undefined;
+    const rawText = firstPart?.text;
+    if (typeof rawText !== 'string') throw new Error('Gemini Vision API returned no text response.');
+    return { rawText, model };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -334,38 +380,39 @@ async function requestOpenAIJson(
     ? {}
     : { temperature: options.temperature ?? cfg.defaultTemp };
 
-  const response = await fetchWithTimeout(cfg.endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${options.apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: prompt },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' } },
-            { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
-          ],
-        },
-      ],
-      ...generationControls,
-      max_completion_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
-      response_format: { type: 'json_object' },
-    }),
-  }, options);
-
-  const raw = await readResponseText(response);
-  if (!response.ok) throw new Error(`OpenAI Vision API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
-  const data = parseProviderPayload('OpenAI', raw);
-  const choice = Array.isArray(data.choices) ? recordValue(data.choices[0]) : undefined;
-  const message = choice ? recordValue(choice.message) : undefined;
-  const rawText = message?.content;
-  if (typeof rawText !== 'string') throw new Error('OpenAI Vision API returned no text response.');
-  return { rawText, model };
+  return withRequestScope(options, async (scope) => {
+    const response = await fetchWithTimeout(cfg.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: prompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' } },
+              { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
+            ],
+          },
+        ],
+        ...generationControls,
+        max_completion_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
+        response_format: { type: 'json_object' },
+      }),
+    }, scope, options);
+    const raw = await readResponseText(response, scope);
+    if (!response.ok) throw new Error(`OpenAI Vision API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
+    const data = parseProviderPayload('OpenAI', raw);
+    const choice = Array.isArray(data.choices) ? recordValue(data.choices[0]) : undefined;
+    const message = choice ? recordValue(choice.message) : undefined;
+    const rawText = message?.content;
+    if (typeof rawText !== 'string') throw new Error('OpenAI Vision API returned no text response.');
+    return { rawText, model };
+  });
 }
 
 async function requestClaudeJson(
@@ -376,39 +423,43 @@ async function requestClaudeJson(
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.claude;
   const model = options.model ?? cfg.defaultModel;
-  const response = await fetchWithTimeout(cfg.endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': options.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
-      temperature: options.temperature ?? cfg.defaultTemp,
-      system: prompt,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
-          { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
-        ],
-      }],
-    }),
-  }, options);
-
-  const raw = await readResponseText(response);
-  if (!response.ok) throw new Error(`Anthropic API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
-  const data = parseProviderPayload('Anthropic', raw);
-  const rawText = Array.isArray(data.content)
-    ? data.content.reduce((text, part) => {
-      const item = recordValue(part);
-      return item?.type === 'text' && typeof item.text === 'string' ? text + item.text : text;
-    }, '')
-    : '';
-  if (!rawText) throw new Error('Anthropic API returned no text response.');
-  return { rawText, model };
+  const generationControls = model.startsWith('claude-sonnet-5')
+    ? {}
+    : { temperature: options.temperature ?? cfg.defaultTemp };
+  return withRequestScope(options, async (scope) => {
+    const response = await fetchWithTimeout(cfg.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': options.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
+        ...generationControls,
+        system: prompt,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+            { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
+          ],
+        }],
+      }),
+    }, scope, options);
+    const raw = await readResponseText(response, scope);
+    if (!response.ok) throw new Error(`Anthropic API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
+    const data = parseProviderPayload('Anthropic', raw);
+    const rawText = Array.isArray(data.content)
+      ? data.content.reduce((text, part) => {
+        const item = recordValue(part);
+        return item?.type === 'text' && typeof item.text === 'string' ? text + item.text : text;
+      }, '')
+      : '';
+    if (!rawText) throw new Error('Anthropic API returned no text response.');
+    return { rawText, model };
+  });
 }
 
 function extractJson(rawText: string): string {
@@ -425,12 +476,21 @@ function retryLimit(value: number | undefined): number {
   return limit;
 }
 
+function assertRolePromptRole(role: unknown): asserts role is VLMReviewRole {
+  if (!ROLE_PROMPT_ROLES.includes(role as VLMReviewRole)) {
+    throw new Error('[VLM] unsupported role prompt.');
+  }
+}
+
 async function callProviderForJson(
   imageBuffer: ArrayBuffer,
   mimeType: string,
   prompt: string,
   options: VLMOptions,
 ): Promise<RawVLMJsonResult> {
+  if (options.signal?.aborted) {
+    throw new Error('[VLM] request aborted.');
+  }
   validateApiKey(options.provider, options.apiKey);
   validateImageInput(imageBuffer, mimeType);
   const imageBase64 = arrayBufferToBase64(imageBuffer);
@@ -584,9 +644,10 @@ export async function analyzeDrawingWithVLM(
 export async function analyzeDrawingRole(
   imageBuffer: ArrayBuffer,
   mimeType: string,
-  role: keyof typeof ROLE_PROMPTS,
+  role: VLMReviewRole,
   options: VLMOptions,
 ): Promise<VLMRoleAnalysisResult> {
+  assertRolePromptRole(role);
   const started = Date.now();
   const response = await callProviderForJson(imageBuffer, mimeType, ROLE_PROMPTS[role], options);
   const parsed = JSON.parse(extractJson(response.rawText));
