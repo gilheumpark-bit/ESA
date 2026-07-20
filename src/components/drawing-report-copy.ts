@@ -28,6 +28,14 @@ const HOLD_EXPLANATIONS: Record<string, HoldExplanation> = {
     title: '제안 근거 미해소',
     detail: '개선 제안을 뒷받침하는 현재 도면 근거가 부족해 제안을 확정하지 않았습니다.',
   },
+  HOLD_UNRESOLVED_CLAIM: {
+    title: '종합 판단 근거 미해소',
+    detail: '종합 판단 문장을 현재 도면의 기기·선로·표기와 유일하게 연결하지 못했습니다.',
+  },
+  HOLD_UNRESOLVED_TRACEABILITY: {
+    title: '근거 연결률 미달',
+    detail: '보고서의 판단·문제·계산·제안 중 일부가 현재 도면 근거에 끝까지 연결되지 않았습니다.',
+  },
   HOLD_UNRESOLVED_RELATION: {
     title: '연결관계 미확인',
     detail: '기기와 선로의 시작·종료 지점을 하나의 관계로 확정하지 못했습니다.',
