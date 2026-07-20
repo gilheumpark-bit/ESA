@@ -40,7 +40,8 @@ export type ReadFailureCode =
   | 'BOUNDARY_CLIP'
   | 'EMPTY_REGION_RESULT'
   | 'ROLE_CALL_FAILED'
-  | 'PARTIAL_BUDGET_EXCEEDED';
+  | 'PARTIAL_BUDGET_EXCEEDED'
+  | 'CORRECTION_REANALYSIS_REQUIRED';
 
 export type Certainty = 'confirmed' | 'ambiguous' | 'unread';
 export type CountStatus = 'COMPLETE' | 'CONDITIONAL' | 'HOLD';
@@ -101,6 +102,8 @@ export interface LineNode {
   displayId: string;
   lineKind: 'power' | 'control' | 'ground' | 'bus' | 'unknown';
   path: Array<{ x: number; y: number }>;
+  junctions: Array<{ x: number; y: number }>;
+  crossovers: Array<{ x: number; y: number }>;
   certainty: Certainty;
   evidence: EvidenceRef[];
   holdCode?: ReadFailureCode;
@@ -221,8 +224,16 @@ export interface UserCorrection {
 export interface CoverageRegionRecord {
   regionId: string;
   pageIndex: number;
+  kind: 'full-page' | 'grid' | 'dense-split' | 'title-block' | 'legend' | 'h-strip' | 'v-strip';
+  bounds: EvidenceBounds;
   status: 'planned' | 'running' | 'complete' | 'failed' | 'skipped-empty';
-  roleCalls: Partial<Record<RoleId, string>>;
+  requiredRoles: RoleId[];
+  roleCalls: Partial<Record<RoleId, Array<{
+    callId: string;
+    success: boolean;
+    error?: string;
+  }>>>;
+  emptyEvidenceHash?: string;
 }
 
 export interface CoverageLedger {
@@ -260,6 +271,12 @@ export interface VerificationBlock {
     preprocessVersion: string;
     evaluatorVersion: string;
     metrics: Record<string, number>;
+    strata: Record<string, Record<string, number>>;
+    provider: string;
+    model: string;
+    runCount: number;
+    signatureAlgorithm: 'ed25519';
+    keyFingerprint: string;
     signedAt: string;
     signature: string;
   };
@@ -315,7 +332,7 @@ export interface DocumentReadReceipt {
 }
 
 export interface OcrReading {
-  variantId: 'original' | 'lanczos-4x' | 'text-high-contrast';
+  variantId: 'original' | 'upscale-4x' | 'text-high-contrast';
   text: string;
   confidence: number;
   callId: string;
@@ -333,6 +350,7 @@ export interface OcrCandidateSet {
   };
   status: OcrAdjudicationStatus;
   confirmedText?: string;
+  candidates?: string[];
 }
 
 export const ENGINE_VERSION = 'drawing-full-read-1.0.0';

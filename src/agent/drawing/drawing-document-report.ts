@@ -36,7 +36,10 @@ export function buildDocumentReadReceipt(input: {
     p.status === 'complete' || p.status === 'failed' || p.status === 'skipped-empty').length;
   const anyFailed = input.pages.some((p) => p.status === 'failed')
     || input.coverage.regionsFailed > 0;
-  const rolesOk = required.every((r) => input.coverage.rolesPresent.includes(r));
+  const allPagesIntentionallyEmpty = input.pages.length > 0
+    && input.pages.every((page) => page.status === 'skipped-empty');
+  const rolesOk = allPagesIntentionallyEmpty
+    || required.every((r) => input.coverage.rolesPresent.includes(r));
   const coverageOk = assertCoverageAllowsComplete(input.coverage);
 
   let status: DocumentReadStatus = 'COMPLETE';
@@ -75,6 +78,8 @@ export function buildDocumentReadReceipt(input: {
 
 export function buildDrawingDocumentV3(input: {
   documentHash: string;
+  /** Total pages in the source document, including pages outside a requested subset. */
+  documentPageCount: number;
   jobStatus: JobStatus;
   requestedPages: number[] | 'all';
   pages: PageAnalysisState[];
@@ -92,6 +97,8 @@ export function buildDrawingDocumentV3(input: {
   const holdReasons = collectHoldReasons(input.unresolvedItems, input.jobStatus);
   const receipt = buildDocumentReadReceipt({
     drawingHash: input.documentHash,
+    // Completeness is evaluated against the requested page set. The source's
+    // total page count remains separately visible on DrawingDocumentV3.
     pageCount: input.pages.length,
     pages: input.pages,
     coverage: input.coverageLedger,
@@ -129,7 +136,7 @@ export function buildDrawingDocumentV3(input: {
   return {
     schemaVersion: DRAWING_DOCUMENT_SCHEMA_VERSION,
     documentHash: input.documentHash,
-    pageCount: input.pages.length,
+    pageCount: input.documentPageCount,
     requestedPages: input.requestedPages,
     jobStatus: input.jobStatus,
     pages: input.pages,

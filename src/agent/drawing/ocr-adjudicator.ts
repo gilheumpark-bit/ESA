@@ -33,7 +33,13 @@ export function adjudicateOcr(input: AdjudicateInput): OcrCandidateSet {
   const standardTerms = (input.standardTerms ?? []).map(normalize);
   const conflictingTags = (input.conflictingTags ?? []).map(normalize);
 
-  const normalizedReadings = input.readings.map((r) => ({
+  const distinct = new Map<string, OcrReading>();
+  for (const reading of input.readings) {
+    const key = `${reading.variantId}:${reading.callId}`;
+    const previous = distinct.get(key);
+    if (!previous || reading.confidence > previous.confidence) distinct.set(key, reading);
+  }
+  const normalizedReadings = [...distinct.values()].map((r) => ({
     ...r,
     text: r.text.trim(),
     norm: normalize(r.text),
@@ -67,7 +73,15 @@ export function adjudicateOcr(input: AdjudicateInput): OcrCandidateSet {
   const [winnerNorm] = top;
   const winnerDisplay = normalizedReadings.find((r) => r.norm === winnerNorm)?.text ?? winnerNorm;
 
-  const sameCoordinate = input.readings.length >= 1;
+  const requiredVariants: OcrReading['variantId'][] = [
+    'original',
+    'upscale-4x',
+    'text-high-contrast',
+  ];
+  const variants = new Set(normalizedReadings.map((reading) => reading.variantId));
+  const calls = new Set(normalizedReadings.map((reading) => reading.callId));
+  const independentTripleRead = requiredVariants.every((variant) => variants.has(variant))
+    && calls.size >= requiredVariants.length;
   const strokeCompatible = readingsStrokeCompatible(normalizedReadings.map((r) => r.norm));
   const symbolOk = !adjacentSymbolTypes.some((t) => symbolConflicts(winnerNorm, t));
   const lexiconOk =
@@ -84,7 +98,7 @@ export function adjudicateOcr(input: AdjudicateInput): OcrCandidateSet {
     ? legendTerms.includes(winnerNorm) || standardTerms.includes(winnerNorm)
     : true;
 
-  if (sameCoordinate && majority && strokeCompatible && symbolOk && noTagDup && lexiconPass) {
+  if (independentTripleRead && majority && strokeCompatible && symbolOk && noTagDup && lexiconPass) {
     // Extra: adjacent voltage transformer context strengthens PT
     if (isConfusablePair(winnerNorm, candidates) && !contextSupports(winnerNorm, adjacentSymbolTypes, legendTerms)) {
       return baseSet(input, {
@@ -124,6 +138,7 @@ function baseSet(
     },
     status: partial.status,
     confirmedText: partial.confirmedText,
+    candidates: partial.candidates,
   };
 }
 

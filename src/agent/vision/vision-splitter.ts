@@ -98,13 +98,8 @@ function normalizedOverlap(value: number): number {
 }
 
 function planRegions(width: number, height: number, gridSize: number, overlap: number) {
-  return planAnalysisRegions({
-    pageIndex: 0,
-    width,
-    height,
-    gridSize,
-    overlap,
-  }).filter((r) => r.status !== 'skipped-empty').map((r) => r.bounds);
+  const normalized = gridSize <= 4 ? 4 : gridSize <= 9 ? 9 : 16;
+  return planAdaptiveBounds(width, height, normalized, overlap);
 }
 
 /** Normalize orientation and return actual PNG crops for each planned region. */

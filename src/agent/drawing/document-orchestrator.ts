@@ -1,42 +1,49 @@
 /**
- * Full-document analysis orchestrator (design §7 / §15).
- * Deterministic paths work without VLM; role calls optional with BYOK.
+ * DrawingDocument V3 full-document orchestrator.
+ *
+ * Source preparation and specialist review are delegated to the production
+ * PDF/image/DXF stack. This module owns page state, budgets, coverage receipts,
+ * deterministic reconciliation and the V3 report contract.
  */
 
-import { createHash } from 'node:crypto';
-import { planAnalysisRegions, markRegion } from '../vision/adaptive-regions';
-import { profileImageQuality } from '../vision/image-quality';
-import type { PrecisionRegion } from '../vision/evidence-types';
-import { buildCoverageLedger, attachRoleCall } from './coverage-ledger';
+import { executeSLDTeam, type SLDTeamDeps } from '@/agent/teams/sld-team';
+import type { TeamInput, TeamResult } from '@/agent/teams/types';
+import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
+import { resolveVlmModel } from '@/agent/vision/vlm-client';
+
+import {
+  buildCoverageLedger,
+  createCoverageRegions,
+  recordRoleCall,
+  type CoverageRegionPlan,
+} from './coverage-ledger';
+import { adaptDrawingCalculations } from './calculation-adapter';
 import { assignPhysicalEquipmentIds, buildEquipmentCounts } from './count-register';
 import { extractPageRefHits, reconcileCrossPage } from './cross-page-graph';
 import { buildDrawingDocumentV3 } from './drawing-document-report';
+import { applyConfiguredEvaluationSuiteBadge } from './drawing-evaluation-gate';
+import { prepareDrawingSource, type PreparedDrawingPage, type PreparedDrawingSource } from './drawing-source';
 import {
   assignDisplayIdsForTexts,
   buildPageRelations,
   deduplicateLines,
   deduplicateSymbols,
+  findUnboundLineItems,
   type RawLineHit,
   type RawSymbolHit,
 } from './evidence-deduplicator';
-import {
-  canReusePage,
-  createJob,
-  getJob,
-  updateJob,
-  type DrawingJobRecord,
-} from './drawing-job-store';
-import { classifyDocument, resolveRequestedPages, surveyPageKind } from './page-classifier';
+import { canReusePage, createJob, getJob, getOwnedJob, updateJob, type DrawingJobRecord } from './drawing-job-store';
+import { surveyPageKind } from './page-classifier';
 import { adjudicateOcr } from './ocr-adjudicator';
 import { buildRecommendations } from './recommendation-engine';
-import { runRoleCall } from './role-runner';
+import { extractRatedValues } from './rated-value-extractor';
+import { adaptTeamResult, type RawTextSeed } from './team-result-adapter';
 import type {
+  CoverageRegionRecord,
   DocumentBudget,
   DrawingDocumentV3,
   PageAnalysisState,
-  RatedValue,
   RoleId,
-  SymbolNode,
   TextNode,
   UnresolvedItem,
 } from './types-v3';
@@ -58,21 +65,20 @@ export interface OrchestrateInput {
     apiKey: string;
     model?: string;
   };
-  /** Injected detections for offline/tests (production uses parsers + roles) */
+  signal?: AbortSignal;
   seedDetections?: {
     symbols?: RawSymbolHit[];
     lines?: RawLineHit[];
-    texts?: Array<{
-      text: string;
-      candidates?: string[];
-      bounds: { x: number; y: number; w: number; h: number };
-      pageIndex: number;
-      readings?: Array<{ variantId: 'original' | 'lanczos-4x' | 'text-high-contrast'; text: string; confidence: number; callId: string }>;
-      adjacentSymbolTypes?: string[];
-      legendTerms?: string[];
-    }>;
+    texts?: RawTextSeed[];
   };
   jobId?: string;
+  ownerId?: string;
+}
+
+export interface DocumentAnalysisDependencies {
+  prepareSource?: typeof prepareDrawingSource;
+  executeTeam?: typeof executeSLDTeam;
+  teamDeps?: SLDTeamDeps;
 }
 
 const DEFAULT_BUDGET: DocumentBudget = {
@@ -82,629 +88,696 @@ const DEFAULT_BUDGET: DocumentBudget = {
   deadlineMs: 10 * 60_000,
 };
 
-export async function runDocumentAnalysis(input: OrchestrateInput): Promise<{
-  job: DrawingJobRecord;
-  document: DrawingDocumentV3;
-}> {
-  const budget: DocumentBudget = { ...DEFAULT_BUDGET, ...input.budget };
-  const inventory = classifyDocument({
+const ALL_ROLES: RoleId[] = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'];
+const REGION_ROLES: RoleId[] = ['symbols', 'connections', 'text'];
+
+function normalizeBudget(input: Partial<DocumentBudget> | undefined): DocumentBudget {
+  const budget = { ...DEFAULT_BUDGET, ...input };
+  const limits: Array<[keyof DocumentBudget, number, number]> = [
+    ['maxPages', 1, 500],
+    ['maxVlmCalls', 0, 10_000],
+    ['maxPixels', 1, 1_000_000_000],
+    ['deadlineMs', 1, 60 * 60_000],
+  ];
+  for (const [key, min, max] of limits) {
+    const value = budget[key];
+    if (!Number.isSafeInteger(value) || value < min || value > max) {
+      throw new Error(`DRAWING_BUDGET_INVALID:${key}`);
+    }
+  }
+  return budget;
+}
+
+function requestedPageIndexes(source: PreparedDrawingSource, requested: OrchestrateInput['requestedPages']): number[] {
+  const available = new Set(source.pages.map((page) => page.pageIndex));
+  if (requested === undefined || requested === 'all') return [...available].sort((a, b) => a - b);
+  return [...new Set(requested)].filter((page) => available.has(page)).sort((a, b) => a - b);
+}
+
+function gridSizeFor(page: PreparedDrawingPage): 4 | 9 | 16 {
+  if (page.quality.recommendedScale === 4) return 16;
+  if (page.quality.recommendedScale === 2) return 9;
+  return 4;
+}
+
+function pageDigestFingerprint(
+  source: PreparedDrawingSource,
+  page: PreparedDrawingPage,
+  input: OrchestrateInput,
+) {
+  const usesVision = Boolean(input.vision && page.imageBuffer
+    && source.formatClass !== 'dxf'
+    && (page.renderMode === 'raster' || page.renderMode === 'hybrid' || source.formatClass === 'raster-image'));
+  return {
+    documentHash: source.documentHash,
+    pageRenderHash: page.renderHash,
+    promptVersion: PROMPT_VERSION,
+    preprocessVersion: PREPROCESS_VERSION,
+    graphVersion: GRAPH_ASSEMBLY_VERSION,
+    provider: usesVision ? input.vision?.provider : undefined,
+    model: usesVision && input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined,
+  };
+}
+
+function rasterCoveragePlans(page: PreparedDrawingPage): CoverageRegionPlan[] {
+  const gridSize = gridSizeFor(page);
+  const plans: CoverageRegionPlan[] = [{
+    regionId: `p${page.pageIndex}-full`,
+    pageIndex: page.pageIndex,
+    kind: 'full-page',
+    bounds: { x: 0, y: 0, w: page.width, h: page.height },
+    requiredRoles: ALL_ROLES,
+  }];
+  const bounds = planAdaptiveBounds(page.width, page.height, gridSize, 0.18);
+  bounds.forEach((item, index) => plans.push({
+    regionId: `p${page.pageIndex}-r${index}`,
+    pageIndex: page.pageIndex,
+    kind: 'grid',
+    bounds: item,
+    requiredRoles: REGION_ROLES,
+  }));
+  return plans;
+}
+
+function vectorCoveragePlans(page: PreparedDrawingPage): CoverageRegionPlan[] {
+  return [{
+    regionId: `p${page.pageIndex}-vector-full`,
+    pageIndex: page.pageIndex,
+    kind: 'full-page',
+    bounds: { x: 0, y: 0, w: page.width, h: page.height },
+    requiredRoles: ALL_ROLES,
+  }];
+}
+
+function markAllFailed(
+  regions: CoverageRegionRecord[],
+  error: string,
+): CoverageRegionRecord[] {
+  let next = regions;
+  for (const region of regions) {
+    for (const role of region.requiredRoles) {
+      next = recordRoleCall(next, region.regionId, role, `${region.regionId}:${role}:failed`, false, error);
+    }
+  }
+  return next;
+}
+
+function markVectorComplete(
+  regions: CoverageRegionRecord[],
+  receipt: string,
+): CoverageRegionRecord[] {
+  let next = regions;
+  for (const region of regions) {
+    for (const role of region.requiredRoles) {
+      next = recordRoleCall(next, region.regionId, role, `${receipt}:${role}`, true);
+    }
+  }
+  return next;
+}
+
+function councilEnvelope(result: TeamResult, role: Exclude<RoleId, 'coverage-auditor'>) {
+  return result.drawingReview?.envelopes.find((envelope) => envelope.role === role);
+}
+
+function hasSourceFailure(result: TeamResult, role: RoleId, sourceId: string): boolean {
+  return (result.drawingReview?.failures ?? []).some((failure) =>
+    failure.role === role && failure.sourceId === sourceId);
+}
+
+function markCouncilCoverage(
+  regions: CoverageRegionRecord[],
+  page: PreparedDrawingPage,
+  result: TeamResult,
+): { regions: CoverageRegionRecord[]; roles: RoleId[]; unresolvedRescans: number } {
+  let next = regions;
+  const completedRoles: RoleId[] = [];
+  const review = result.drawingReview;
+  const fullId = `p${page.pageIndex}-full`;
+  for (const role of ['symbols', 'connections', 'text', 'logic'] as const) {
+    const envelope = councilEnvelope(result, role);
+    const sourceId = review?.coverage.roles[role]?.variantId ?? 'missing-source';
+    const success = Boolean(envelope) && !hasSourceFailure(result, role, sourceId);
+    next = recordRoleCall(
+      next,
+      fullId,
+      role,
+      envelope ? `${envelope.outputHash}:${sourceId}` : `${fullId}:${role}:missing`,
+      success,
+      success ? undefined : `${role} full-page review failed`,
+    );
+    if (success) completedRoles.push(role);
+  }
+
+  const bounds = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
+  for (let index = 0; index < bounds.length; index += 1) {
+    const regionId = `p${page.pageIndex}-r${index}`;
+    for (const role of ['symbols', 'connections', 'text'] as const) {
+      const envelope = councilEnvelope(result, role);
+      const variantId = review?.coverage.roles[role]?.variantId ?? 'missing-source';
+      const sourceId = `${variantId}:region:${index}`;
+      const planned = (review?.coverage.roles[role]?.actualRegionCount ?? 0) > index;
+      const success = Boolean(envelope) && planned && !hasSourceFailure(result, role, sourceId);
+      next = recordRoleCall(
+        next,
+        regionId,
+        role,
+        envelope ? `${envelope.outputHash}:${sourceId}` : `${regionId}:${role}:missing`,
+        success,
+        success ? undefined : `${role} precision review failed`,
+      );
+    }
+  }
+
+  const graphConflicts = review?.graph?.conflicts ?? [];
+  const coverageSuccess = Boolean(review?.coverage.complete)
+    && review?.failures.length === 0
+    && graphConflicts.every((conflict) => !/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/.test(conflict));
+  next = recordRoleCall(
+    next,
+    fullId,
+    'coverage-auditor',
+    `coverage:${review?.snapshot.drawingHash ?? page.renderHash}`,
+    coverageSuccess,
+    coverageSuccess ? undefined : 'coverage audit found unresolved regions or graph conflicts',
+  );
+  if (coverageSuccess) completedRoles.push('coverage-auditor');
+  const unresolvedRescans = coverageSuccess ? 0 : 1;
+  return { regions: next, roles: completedRoles, unresolvedRescans };
+}
+
+function addUnresolved(
+  target: UnresolvedItem[],
+  page: PreparedDrawingPage,
+  code: UnresolvedItem['code'],
+  note: string,
+  regionId?: string,
+): void {
+  target.push({
+    id: `${code}-${page.pageIndex}-${target.length + 1}`,
+    code,
+    pageIndex: page.pageIndex,
+    regionId,
+    bounds: { x: 0, y: 0, w: page.width, h: page.height },
+    note,
+  });
+}
+
+function teamInputForVector(
+  input: OrchestrateInput,
+  source: PreparedDrawingSource,
+  page: PreparedDrawingPage,
+): TeamInput {
+  const dxf = source.formatClass === 'dxf';
+  return {
+    sessionId: `drawing-vector-${source.documentHash.slice(0, 12)}-${page.pageIndex}`,
+    classification: dxf ? 'sld_dxf' : 'sld_pdf',
+    fileBuffer: input.bytes,
+    fileName: input.fileName,
+    mimeType: input.mimeType,
+    params: dxf ? {} : { pageNumber: page.pageIndex + 1 },
+    signal: input.signal,
+  };
+}
+
+function teamInputForRaster(
+  input: OrchestrateInput,
+  source: PreparedDrawingSource,
+  page: PreparedDrawingPage,
+): TeamInput {
+  return {
+    sessionId: `drawing-raster-${source.documentHash.slice(0, 12)}-${page.pageIndex}`,
+    classification: 'sld_image',
+    fileBuffer: page.imageBuffer,
+    fileName: `${input.fileName ?? 'drawing'}#page-${page.pageIndex + 1}.png`,
+    mimeType: 'image/png',
+    signal: input.signal,
+    vision: input.vision,
+  };
+}
+
+function mergeAdapted(
+  result: TeamResult,
+  page: PreparedDrawingPage,
+  source: PreparedDrawingSource,
+  symbolHits: RawSymbolHit[],
+  lineHits: RawLineHit[],
+  textSeeds: RawTextSeed[],
+): void {
+  const adapted = adaptTeamResult(result, {
+    pageIndex: page.pageIndex,
+    width: page.width,
+    height: page.height,
+    positionSpace: source.formatClass === 'dxf' ? 'source' : 'percent',
+  });
+  symbolHits.push(...adapted.symbols);
+  lineHits.push(...adapted.lines);
+  textSeeds.push(...adapted.texts);
+}
+
+function existingEvidenceSeeds(
+  document: DrawingDocumentV3 | undefined,
+  preservedPages: ReadonlySet<number>,
+): { symbols: RawSymbolHit[]; lines: RawLineHit[]; texts: TextNode[] } {
+  if (!document) return { symbols: [], lines: [], texts: [] };
+  const symbols = document.evidenceGraph.symbols.flatMap((node) => {
+    const evidence = node.evidence.filter((item) => preservedPages.has(item.pageIndex));
+    return evidence.map((item) => ({
+      localId: `${node.id}:${item.evidenceId}`,
+      type: node.confirmedType ?? node.typeCandidates[0] ?? 'other',
+      label: node.rawLabel,
+      bounds: item.bounds,
+      confidence: item.confidence,
+      pageIndex: item.pageIndex,
+      regionId: item.regionId ?? 'resume-preserved',
+      certainty: node.certainty,
+      sourceEvidenceIds: [item.evidenceId],
+    }));
+  });
+  const lines = document.evidenceGraph.lines.flatMap((node) => {
+    const evidence = node.evidence.filter((item) => preservedPages.has(item.pageIndex));
+    const first = evidence[0];
+    return first ? [{
+      localId: node.id,
+      lineKind: node.lineKind,
+      path: node.path.map((point) => ({ ...point })),
+      junctions: node.junctions.map((point) => ({ ...point })),
+      crossovers: node.crossovers.map((point) => ({ ...point })),
+      confidence: Math.max(...evidence.map((item) => item.confidence)),
+      pageIndex: first.pageIndex,
+      regionId: evidence.map((item) => item.regionId).filter(Boolean).join(',') || 'resume-preserved',
+      certainty: node.certainty,
+      sourceEvidenceIds: evidence.map((item) => item.evidenceId),
+    }] : [];
+  });
+  const texts = document.evidenceGraph.texts.filter((node) =>
+    node.evidence.some((item) => preservedPages.has(item.pageIndex)));
+  return { symbols, lines, texts };
+}
+
+export async function runDocumentAnalysis(
+  input: OrchestrateInput,
+  deps: DocumentAnalysisDependencies = {},
+): Promise<{ job: DrawingJobRecord; document: DrawingDocumentV3 }> {
+  const budget = normalizeBudget(input.budget);
+  const source = await (deps.prepareSource ?? prepareDrawingSource)({
     bytes: input.bytes,
     mimeType: input.mimeType,
     fileName: input.fileName,
-    requestedPages: input.requestedPages,
   });
-  const pages = resolveRequestedPages(inventory);
-  if (pages.length > budget.maxPages) {
-    pages.length = budget.maxPages;
+  const ownerId = input.ownerId ?? 'internal';
+  const previousJob = input.jobId ? getOwnedJob(input.jobId, ownerId) : undefined;
+  if (input.jobId && !previousJob) throw new Error('DRAWING_JOB_NOT_FOUND');
+  if (previousJob && previousJob.documentHash !== source.documentHash) {
+    throw new Error('DRAWING_JOB_SOURCE_MISMATCH');
   }
+  const requestedSpec = input.requestedPages ?? previousJob?.document?.requestedPages ?? 'all';
+  const requested = requestedPageIndexes(source, requestedSpec);
+  if (requested.length === 0) throw new Error('DRAWING_REQUESTED_PAGES_EMPTY');
 
-  let job = input.jobId ? getJob(input.jobId) : undefined;
-  if (!job) {
-    job = createJob({
-      documentHash: inventory.drawingHash,
+  const job = previousJob ?? createJob({
+      documentHash: source.documentHash,
+      ownerId,
       budget,
-      estimatedPages: pages.length,
+      estimatedPages: requested.length,
     });
+  if (previousJob) {
+    updateJob(job.jobId, { budget, cancelRequested: false, error: undefined, status: 'QUEUED' });
   }
+  updateJob(job.jobId, {
+    estimated: {
+      ...job.estimated,
+      pages: requested.length,
+      costRangeNote: `최대 ${budget.maxVlmCalls} VLM 호출 · ${requested.length} 페이지 · 예산 초과 시 PARTIAL`,
+    },
+  });
+  updateJob(job.jobId, { status: 'ENUMERATING' });
 
+  const previousPages = new Map(previousJob?.document?.pages.map((page) => [page.pageIndex, page]));
+  const pageStates: PageAnalysisState[] = requested.map((pageIndex) => {
+    const previous = previousPages.get(pageIndex);
+    const sourcePage = source.pages.find((page) => page.pageIndex === pageIndex);
+    const reusable = Boolean(previousJob && sourcePage && canReusePage(
+      previousJob,
+      pageIndex,
+      pageDigestFingerprint(source, sourcePage, input),
+    ));
+    return (previous?.status === 'complete' || previous?.status === 'skipped-empty') && reusable
+      ? { ...previous }
+      : { pageIndex, status: 'pending', drawingKind: 'unknown', vlmCalls: 0 };
+  });
+  const preservedPages = new Set(pageStates
+    .filter((page) => page.status === 'complete' || page.status === 'skipped-empty')
+    .map((page) => page.pageIndex));
+  const retryPages = new Set(requested.filter((pageIndex) => !preservedPages.has(pageIndex)));
+  const previousSeeds = existingEvidenceSeeds(previousJob?.document, preservedPages);
+  const symbolHits: RawSymbolHit[] = [...previousSeeds.symbols, ...(input.seedDetections?.symbols ?? [])];
+  const lineHits: RawLineHit[] = [...previousSeeds.lines, ...(input.seedDetections?.lines ?? [])];
+  const textSeeds: RawTextSeed[] = [...(input.seedDetections?.texts ?? [])];
+  const calculationHits: DrawingDocumentV3['calculations'] = (previousJob?.document?.calculations ?? [])
+    .filter((calculation) => {
+      const pageMatch = calculation.id.match(/^P(\d+)-/);
+      return pageMatch ? preservedPages.has(Number(pageMatch[1]) - 1) : retryPages.size === 0;
+    });
+  const unresolved: UnresolvedItem[] = (previousJob?.document?.unresolvedItems ?? [])
+    .filter((item) => !retryPages.has(item.pageIndex));
+  const rolesPresent = new Set<RoleId>(previousJob?.document?.coverageLedger.rolesPresent ?? []);
+  let regionRecords: CoverageRegionRecord[] = (previousJob?.document?.coverageLedger.regions ?? [])
+    .filter((region) => !retryPages.has(region.pageIndex));
+  let unresolvedRescans = 0;
+  let vlmCalls = 0;
+  let pixelsUsed = 0;
   const deadline = Date.now() + budget.deadlineMs;
-  job = updateJob(job.jobId, { status: 'ENUMERATING' })!;
+  const executeTeam = deps.executeTeam ?? executeSLDTeam;
+  const providersUsed = new Set<string>();
+  const modelsUsed = new Set<string>();
 
-  const pageStates: PageAnalysisState[] = pages.map((pageIndex) => ({
-    pageIndex,
-    status: 'pending',
-    drawingKind: inventory.pages.find((p) => p.pageIndex === pageIndex)?.drawingKind ?? 'unknown',
-    vlmCalls: 0,
-  }));
-
-  job = updateJob(job.jobId, { status: 'SURVEYING' })!;
-
-  // Survey kinds (light)
+  updateJob(job.jobId, { status: 'SURVEYING' });
   for (const state of pageStates) {
+    if (state.status === 'complete' || state.status === 'skipped-empty') continue;
+    const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
+    if (!page) {
+      state.status = 'failed';
+      state.error = 'PAGE_NOT_FOUND';
+      continue;
+    }
     state.status = 'surveying';
+    state.quality = page.quality;
     state.drawingKind = surveyPageKind({
-      textSample: input.fileName,
-      vectorOpCount: inventory.formatClass.includes('vector') || inventory.formatClass === 'dxf' ? 80 : 10,
+      textSample: page.textSample,
+      vectorOpCount: page.vectorOpCount,
+      rasterCoverage: page.rasterOpCount > 0 ? 1 : 0,
     });
     if (state.drawingKind === 'empty') state.status = 'skipped-empty';
   }
 
-  job = updateJob(job.jobId, { status: 'ANALYZING_PAGES' })!;
-
-  const allRegions: PrecisionRegion[] = [];
-  const symbolHits: RawSymbolHit[] = [...(input.seedDetections?.symbols ?? [])];
-  const lineHits: RawLineHit[] = [...(input.seedDetections?.lines ?? [])];
-  const textSeeds = [...(input.seedDetections?.texts ?? [])];
-  const unresolved: UnresolvedItem[] = [];
-  const rolesPresent = new Set<RoleId>();
-  let vlmCalls = job.vlmCallsUsed;
-  let unresolvedRescans = 0;
-
-  const pageWidth = 2000;
-  const pageHeight = 1400;
-
+  updateJob(job.jobId, { status: 'ANALYZING_PAGES' });
+  let attemptedPages = 0;
   for (const state of pageStates) {
-    if (Date.now() > deadline || vlmCalls >= budget.maxVlmCalls) {
-      unresolved.push({
-        id: `budget-${state.pageIndex}`,
-        code: 'PARTIAL_BUDGET_EXCEEDED',
-        pageIndex: state.pageIndex,
-        bounds: { x: 0, y: 0, w: pageWidth, h: pageHeight },
-        note: '문서 예산(시간 또는 VLM 호출)을 초과했습니다. 조용히 생략하지 않고 PARTIAL로 표시합니다.',
-      });
-      if (state.status === 'pending' || state.status === 'surveying') {
-        state.status = 'failed';
-        state.error = 'PARTIAL_BUDGET_EXCEEDED';
-      }
+    if (state.status === 'complete' || state.status === 'skipped-empty') continue;
+    const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex)!;
+    const rasterPlans = rasterCoveragePlans(page);
+    const vectorPlans = vectorCoveragePlans(page);
+
+    if (
+      attemptedPages >= budget.maxPages
+      || Date.now() >= deadline
+      || pixelsUsed + page.width * page.height > budget.maxPixels
+      || input.signal?.aborted
+      || getJob(job.jobId)?.cancelRequested
+    ) {
+      state.status = 'failed';
+      state.error = input.signal?.aborted || getJob(job.jobId)?.cancelRequested
+        ? 'CANCELLED'
+        : 'PARTIAL_BUDGET_EXCEEDED';
+      const planned = createCoverageRegions(page.imageBuffer ? rasterPlans : vectorPlans);
+      regionRecords.push(...markAllFailed(planned, state.error));
+      addUnresolved(unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지·시간·픽셀 예산 또는 취소 경계에서 분석을 중단했습니다.');
       continue;
     }
 
-    if (state.status === 'skipped-empty') continue;
-
-    const pageRenderHash = createHash('sha256')
-      .update(inventory.drawingHash)
-      .update(String(state.pageIndex))
-      .digest('hex');
-
-    if (canReusePage(job, state.pageIndex, {
-      documentHash: inventory.drawingHash,
-      pageRenderHash,
-      promptVersion: PROMPT_VERSION,
-      preprocessVersion: PREPROCESS_VERSION,
-      graphVersion: GRAPH_ASSEMBLY_VERSION,
-      model: input.vision?.model,
-      provider: input.vision?.provider,
-    })) {
-      state.status = 'complete';
-      continue;
-    }
-
+    attemptedPages += 1;
     state.status = 'analyzing';
-    state.quality = profileImageQuality({
-      width: pageWidth,
-      height: pageHeight,
-      channels: 3,
-    });
+    pixelsUsed += page.width * page.height;
+    let pageHasUsableResult = false;
+    let pageRegions = createCoverageRegions(page.imageBuffer ? rasterPlans : vectorPlans);
 
-    const isDrawingPage = state.drawingKind === 'sld'
-      || state.drawingKind === 'layout'
-      || state.drawingKind === 'sequence'
-      || state.drawingKind === 'mixed'
-      || state.drawingKind === 'unknown';
-
-    // Legend page: inventory only for symbol dictionary — skip full 4-role grid if no vision
-    if (state.drawingKind === 'legend' || state.drawingKind === 'title') {
-      state.status = 'complete';
-      job.pageDigests[state.pageIndex] = {
-        pageRenderHash,
-        promptVersion: PROMPT_VERSION,
-        preprocessVersion: PREPROCESS_VERSION,
-        graphVersion: GRAPH_ASSEMBLY_VERSION,
-        model: input.vision?.model,
-        provider: input.vision?.provider,
-        complete: true,
-      };
-      continue;
+    const shouldRunVector = source.formatClass === 'dxf'
+      || page.renderMode === 'vector'
+      || page.renderMode === 'hybrid';
+    if (shouldRunVector) {
+      const vectorResult = await executeTeam(teamInputForVector(input, source, page), deps.teamDeps);
+      for (const envelope of vectorResult.drawingReview?.envelopes ?? []) {
+        providersUsed.add(envelope.provider);
+        modelsUsed.add(envelope.model);
+      }
+      if (vectorResult.success && (vectorResult.components?.length ?? 0) > 0) {
+        mergeAdapted(vectorResult, page, source, symbolHits, lineHits, textSeeds);
+        pageHasUsableResult = true;
+        if (!input.vision || source.formatClass === 'dxf') {
+          pageRegions = markVectorComplete(createCoverageRegions(vectorPlans), `vector:${page.renderHash}`);
+          ALL_ROLES.forEach((role) => rolesPresent.add(role));
+        }
+      } else if (!input.vision || source.formatClass === 'dxf') {
+        addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서가 설비와 관계를 확정하지 못했습니다.');
+      }
     }
 
-    if (!isDrawingPage) {
-      state.status = 'complete';
-      continue;
-    }
-
-    const gridSize = state.quality.recommendedScale >= 4 ? 16
-      : state.quality.recommendedScale >= 2 ? 9 : 4;
-
-    let regions = planAnalysisRegions({
-      pageIndex: state.pageIndex,
-      width: pageWidth,
-      height: pageHeight,
-      gridSize,
-      overlap: 0.1,
-      addBusStrips: true,
-    });
-
-    // Vector / DXF deterministic path — no VLM required
-    if (inventory.formatClass === 'dxf' || inventory.formatClass === 'vector-pdf') {
-      try {
-        await extractVectorDetections(input, state.pageIndex, symbolHits, lineHits, textSeeds);
-        regions = regions.map((r) =>
-          r.status === 'planned' ? { ...r, status: 'complete' as const } : r);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        state.status = 'failed';
-        state.error = message;
-        unresolved.push({
-          id: `vec-fail-${state.pageIndex}`,
-          code: 'ROLE_CALL_FAILED',
-          pageIndex: state.pageIndex,
-          bounds: { x: 0, y: 0, w: pageWidth, h: pageHeight },
-          note: message,
-        });
-        regions = regions.map((r) =>
-          r.status === 'planned' ? { ...r, status: 'failed' as const } : r);
-      }
-    } else if (input.vision?.apiKey) {
-      // Role-separated VLM on a subset of regions (budget-aware)
-      const activeRegions = regions.filter((r) => r.status === 'planned').slice(0, 4);
-      for (const region of activeRegions) {
-        if (vlmCalls + 3 > budget.maxVlmCalls) break;
-        regions = markRegion(regions, region.regionId, 'running');
-        for (const role of ['symbols', 'connections', 'text'] as const) {
-          const call = await runRoleCall({
-            role,
-            pageIndex: state.pageIndex,
-            regionId: region.regionId,
-            imageBuffer: input.bytes,
-            mimeType: input.mimeType,
-            provider: input.vision.provider,
-            apiKey: input.vision.apiKey,
-            model: input.vision.model,
-          });
-          vlmCalls++;
-          state.vlmCalls++;
-          rolesPresent.add(role);
-          if (!call.success) {
-            unresolved.push({
-              id: call.callId,
-              code: 'ROLE_CALL_FAILED',
-              pageIndex: state.pageIndex,
-              regionId: region.regionId,
-              bounds: region.bounds,
-              note: call.error ?? 'role call failed',
-            });
-            regions = markRegion(regions, region.regionId, 'failed');
-          } else {
-            ingestRoleParsed(role, call.parsed, state.pageIndex, region, symbolHits, lineHits, textSeeds);
-            regions = markRegion(regions, region.regionId, 'complete');
-          }
-        }
-      }
-      // mark remaining planned as skipped if budget
-      regions = regions.map((r) =>
-        r.status === 'planned' ? { ...r, status: 'skipped-empty' as const } : r);
-
-      // coverage auditor once per page
-      if (vlmCalls < budget.maxVlmCalls) {
-        const audit = await runRoleCall({
-          role: 'coverage-auditor',
-          pageIndex: state.pageIndex,
-          regionId: 'full-page',
-          imageBuffer: input.bytes,
-          mimeType: input.mimeType,
-          provider: input.vision.provider,
-          apiKey: input.vision.apiKey,
-          model: input.vision.model,
-        });
-        vlmCalls++;
-        rolesPresent.add('coverage-auditor');
-        if (audit.success) {
-          const targets = (audit.parsed as { rescanTargets?: unknown[] })?.rescanTargets ?? [];
-          if (Array.isArray(targets) && targets.length > 0) {
-            unresolvedRescans += Math.min(2, targets.length);
-          }
-        }
-      }
-
-      // logic role with sealed summary
-      if (vlmCalls < budget.maxVlmCalls) {
-        const sealed = JSON.stringify({
-          symbolCount: symbolHits.filter((s) => s.pageIndex === state.pageIndex).length,
-          lineCount: lineHits.filter((l) => l.pageIndex === state.pageIndex).length,
-        });
-        const logic = await runRoleCall({
-          role: 'logic',
-          pageIndex: state.pageIndex,
-          regionId: 'full-page',
-          imageBuffer: input.bytes,
-          mimeType: input.mimeType,
-          provider: input.vision.provider,
-          apiKey: input.vision.apiKey,
-          model: input.vision.model,
-          sealedSummaryJson: sealed,
-        });
-        vlmCalls++;
-        rolesPresent.add('logic');
-        if (!logic.success) {
-          unresolved.push({
-            id: logic.callId,
-            code: 'ROLE_CALL_FAILED',
-            pageIndex: state.pageIndex,
-            regionId: 'full-page',
-            bounds: { x: 0, y: 0, w: pageWidth, h: pageHeight },
-            note: logic.error ?? 'logic failed',
-          });
-        }
-      }
-    } else {
-      // No vision key: complete regions only if seeds provided, else HOLD-ish partial
-      if (symbolHits.some((s) => s.pageIndex === state.pageIndex) || textSeeds.some((t) => t.pageIndex === state.pageIndex)) {
-        regions = regions.map((r) =>
-          r.status === 'planned' ? { ...r, status: 'complete' as const } : r);
-        // offline seed path still records role presence for pipeline completeness tests via synthetic marks
-        for (const role of ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as RoleId[]) {
-          rolesPresent.add(role);
-        }
+    const shouldRunRaster = Boolean(page.imageBuffer)
+      && source.formatClass !== 'dxf'
+      && (page.renderMode === 'raster' || page.renderMode === 'hybrid' || source.formatClass === 'raster-image');
+    if (shouldRunRaster && input.vision) {
+      // symbols + connections + logic + three independent full-page text
+      // reads, plus the three spatial-role precision grids.
+      const plannedCalls = 6 + gridSizeFor(page) * 3;
+      if (vlmCalls + plannedCalls > budget.maxVlmCalls) {
+        pageRegions = markAllFailed(createCoverageRegions(rasterPlans), 'PARTIAL_BUDGET_EXCEEDED');
+        addUnresolved(unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지 독립 심사 예상 호출 수가 문서 호출 예산을 초과합니다.');
       } else {
-        regions = regions.map((r) =>
-          r.status === 'planned' ? { ...r, status: 'failed' as const } : r);
-        unresolved.push({
-          id: `novision-${state.pageIndex}`,
-          code: 'ROLE_CALL_FAILED',
-          pageIndex: state.pageIndex,
-          bounds: { x: 0, y: 0, w: pageWidth, h: pageHeight },
-          note: 'Vision 키 없음 · 시드 검출 없음. 래스터 정밀 판독 불가.',
-          recommendedUpload: { note: 'BYOK Vision 키를 연결하거나 벡터 PDF/DXF를 사용하십시오.' },
-        });
-        state.status = 'failed';
-        state.error = 'VISION_KEY_REQUIRED';
+        pageRegions = createCoverageRegions(rasterPlans);
+        let rescanAttempt = 0;
+        while (rescanAttempt <= 2) {
+          const rasterResult = await executeTeam(teamInputForRaster(input, source, page), deps.teamDeps);
+          for (const envelope of rasterResult.drawingReview?.envelopes ?? []) {
+            providersUsed.add(envelope.provider);
+            modelsUsed.add(envelope.model);
+          }
+          const actualCalls = rasterResult.drawingReview?.coverage.plannedCalls ?? plannedCalls;
+          vlmCalls += actualCalls;
+          state.vlmCalls += actualCalls;
+          if (rasterResult.success && rasterResult.drawingReview) {
+            mergeAdapted(rasterResult, page, source, symbolHits, lineHits, textSeeds);
+            calculationHits.push(...adaptDrawingCalculations(rasterResult.drawingSynthesis).map((calculation) => ({
+              ...calculation,
+              id: `P${String(page.pageIndex + 1).padStart(2, '0')}-${calculation.id}`,
+            })));
+            pageHasUsableResult = true;
+            const coverage = markCouncilCoverage(pageRegions, page, rasterResult);
+            pageRegions = coverage.regions;
+            coverage.roles.forEach((role) => rolesPresent.add(role));
+          } else {
+            pageRegions = markAllFailed(pageRegions, rasterResult.error ?? 'ROLE_CALL_FAILED');
+          }
+
+          const gapsRemain = pageRegions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
+          if (!gapsRemain) break;
+          rescanAttempt += 1;
+          const canRetry = rescanAttempt <= 2
+            && vlmCalls + plannedCalls <= budget.maxVlmCalls
+            && Date.now() < deadline
+            && !input.signal?.aborted
+            && !getJob(job.jobId)?.cancelRequested;
+          if (!canRetry) break;
+        }
+        const gapsRemain = pageRegions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
+        if (gapsRemain) {
+          unresolvedRescans += 1;
+          addUnresolved(unresolved, page, 'HOLD_RESCAN_UNRESOLVED', '최대 2회 정밀 재스캔 후에도 공간 그래프 충돌 또는 구획 호출 실패가 남았습니다.');
+        }
       }
+    } else if (shouldRunRaster && !input.vision && !pageHasUsableResult) {
+      pageRegions = markAllFailed(createCoverageRegions(rasterPlans), 'VISION_KEY_REQUIRED');
+      addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '래스터 도면 정밀 판독에 사용할 Vision 키가 없습니다.');
     }
 
-    allRegions.push(...regions);
-    if (state.status !== 'failed') state.status = 'complete';
-    job.pageDigests[state.pageIndex] = {
-      pageRenderHash,
-      promptVersion: PROMPT_VERSION,
-      preprocessVersion: PREPROCESS_VERSION,
-      graphVersion: GRAPH_ASSEMBLY_VERSION,
-      model: input.vision?.model,
-      provider: input.vision?.provider,
-      complete: state.status === 'complete',
-    };
+    if (!shouldRunRaster && !shouldRunVector && !pageHasUsableResult) {
+      pageRegions = markAllFailed(pageRegions, 'UNSUPPORTED_PAGE_MODE');
+      addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '지원되는 페이지 판독 경로가 없습니다.');
+    }
+    regionRecords.push(...pageRegions);
+    const pageFailed = pageRegions.some((region) => region.status === 'failed' || region.status === 'planned' || region.status === 'running');
+    state.status = pageHasUsableResult && !pageFailed ? 'complete' : 'failed';
+    if (state.status === 'failed' && !state.error) state.error = 'PAGE_ANALYSIS_PARTIAL';
   }
 
-  job = updateJob(job.jobId, {
-    status: 'RESCANNING_GAPS',
-    vlmCallsUsed: vlmCalls,
-  })!;
-
-  // OCR adjudicate text seeds
-  const adjudicatedTexts: TextNode[] = [];
-  let tSeq = 0;
-  for (const seed of textSeeds) {
-    const readings = seed.readings ?? [
-      { variantId: 'original' as const, text: seed.text, confidence: 0.7, callId: 'seed-o' },
-      { variantId: 'lanczos-4x' as const, text: seed.candidates?.[0] ?? seed.text, confidence: 0.7, callId: 'seed-4' },
-      { variantId: 'text-high-contrast' as const, text: seed.candidates?.[1] ?? seed.text, confidence: 0.7, callId: 'seed-c' },
-    ];
-    const result = adjudicateOcr({
-      displayId: `P${String(seed.pageIndex + 1).padStart(2, '0')}-T${String(++tSeq).padStart(3, '0')}`,
-      pageIndex: seed.pageIndex,
-      bounds: seed.bounds,
-      readings,
-      adjacentSymbolTypes: seed.adjacentSymbolTypes,
-      legendTerms: seed.legendTerms,
-      standardTerms: ['PT', 'PPT', 'VCB', 'VGB', 'TR', 'ACB', 'MCCB'],
-    });
-    const certainty = result.status === 'CONFIRMED_BY_MAJORITY_AND_CONTEXT'
-      ? 'confirmed' as const
-      : result.status === 'UNREADABLE_TEXT'
-        ? 'unread' as const
-        : 'ambiguous' as const;
-    if (certainty !== 'confirmed') {
-      unresolved.push({
-        id: result.displayId,
-        code: result.status === 'UNREADABLE_TEXT' ? 'UNREADABLE_TEXT' : 'AMBIGUOUS_OCR',
-        displayId: result.displayId,
-        pageIndex: seed.pageIndex,
-        bounds: seed.bounds,
-        candidates: result.readings.map((r) => r.text),
-        userConfirmItems: [{
-          question: '표기 후보를 선택하십시오',
-          options: [...new Set(result.readings.map((r) => r.text))],
-        }],
-        note: `표기 후보: ${[...new Set(result.readings.map((r) => r.text))].join(' | ')}`,
-      });
-    }
-    adjudicatedTexts.push({
-      id: `txt-${seed.pageIndex}-${tSeq}`,
-      displayId: result.displayId,
-      rawText: seed.text,
-      confirmedText: result.confirmedText,
-      candidates: [...new Set(result.readings.map((r) => r.text))],
-      certainty,
-      evidence: [{
-        evidenceId: `txt-${seed.pageIndex}-${tSeq}-e`,
-        pageIndex: seed.pageIndex,
-        bounds: seed.bounds,
-        confidence: 0.7,
-      }],
-      holdCode: certainty === 'confirmed' ? undefined : 'AMBIGUOUS_OCR',
+  updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: vlmCalls });
+  const texts = [...previousSeeds.texts, ...adjudicateTextSeeds(textSeeds, unresolved)]
+    .sort((left, right) => (left.evidence[0]?.pageIndex ?? 0) - (right.evidence[0]?.pageIndex ?? 0)
+      || left.displayId.localeCompare(right.displayId));
+  for (const page of source.pages) {
+    const lowQuality = page.quality.recommendedScale === 4 || page.quality.blurry || page.quality.lowContrast;
+    const hasPageReadGap = unresolved.some((item) => item.pageIndex === page.pageIndex
+      && (item.code === 'AMBIGUOUS_OCR' || item.code === 'UNREADABLE_TEXT' || item.code === 'HOLD_RESCAN_UNRESOLVED'));
+    if (!lowQuality || !hasPageReadGap || unresolved.some((item) => item.pageIndex === page.pageIndex && item.code === 'LOW_RESOLUTION_HOLD')) continue;
+    unresolved.push({
+      id: `low-resolution-${page.pageIndex}`,
+      code: 'LOW_RESOLUTION_HOLD',
+      pageIndex: page.pageIndex,
+      bounds: { x: 0, y: 0, w: page.width, h: page.height },
+      recommendedUpload: {
+        minLongEdgePx: Math.max(2_400, Math.max(page.width, page.height) * 2),
+        minCharHeightPx: 12,
+        note: '긴 변 2400px 이상 또는 원본 벡터 PDF/DXF로 다시 올려주세요. 작은 문자는 높이 12px 이상이 필요합니다.',
+      },
+      note: `업스케일·대비 보정 뒤에도 판독 충돌이 남았습니다: ${page.quality.warnings.join(', ') || 'LOW_DETAIL'}`,
     });
   }
 
-  // If texts only from assignDisplay without adjudication
-  if (adjudicatedTexts.length === 0 && textSeeds.length === 0) {
-    /* empty */
-  }
-
-  job = updateJob(job.jobId, { status: 'RECONCILING_PAGES' })!;
-
+  updateJob(job.jobId, { status: 'RECONCILING_PAGES' });
   const symbols = deduplicateSymbols(symbolHits);
   const lines = deduplicateLines(lineHits);
-  const texts = adjudicatedTexts.length > 0
-    ? adjudicatedTexts
-    : assignDisplayIdsForTexts(textSeeds.map((t) => ({
-      text: t.text,
-      bounds: t.bounds,
-      pageIndex: t.pageIndex,
-      certainty: 'ambiguous' as const,
-      confidence: 0.5,
-      candidates: t.candidates,
-    })));
-
-  const relations = pages.flatMap((p) => buildPageRelations(symbols, lines, p));
+  const relations = requested.flatMap((pageIndex) => buildPageRelations(symbols, lines, pageIndex));
   const pageRefs = extractPageRefHits(texts);
-  const crossPage = reconcileCrossPage(symbols, texts, pageRefs);
+  const crossPageRelations = reconcileCrossPage(symbols, texts, pageRefs);
+  unresolved.push(...findUnboundLineItems(lines, relations));
+  for (const relation of crossPageRelations.filter((item) => item.status !== 'confirmed')) {
+    const evidence = relation.evidence[0];
+    unresolved.push({
+      id: `cross-page-${relation.id}`,
+      code: 'LINE_CONTINUITY_UNCERTAIN',
+      displayId: relation.displayId,
+      pageIndex: evidence?.pageIndex ?? relation.fromPage,
+      bounds: evidence?.bounds ?? { x: 0, y: 0, w: 1, h: 1 },
+      candidates: [relation.fromRef, relation.toRef],
+      userConfirmItems: [{ question: `${relation.displayId} 페이지 간 연결 대상을 확인하십시오.`, options: [relation.fromRef, relation.toRef] }],
+      note: `페이지 간 관계를 확정하지 못했습니다: ${relation.reason ?? relation.status}`,
+    });
+  }
   const equipmentLinks = assignPhysicalEquipmentIds(
     symbols,
-    crossPage.filter((c) => c.status === 'confirmed'),
+    crossPageRelations.filter((relation) => relation.status === 'confirmed'),
   );
-  // attach equipmentId on symbols
-  for (const s of symbols) {
-    const eid = equipmentLinks.get(s.id);
-    if (eid) s.equipmentId = eid;
-  }
+  for (const symbol of symbols) symbol.equipmentId = equipmentLinks.get(symbol.id);
 
-  let coverage = buildCoverageLedger(allRegions, [...rolesPresent], unresolvedRescans);
-  for (const role of rolesPresent) {
-    const regionId = allRegions[0]?.regionId;
-    if (regionId) coverage = attachRoleCall(coverage, regionId, role, `synthetic-${role}`);
-  }
-
-  // Offline seed: if we marked all five roles present for testing, ensure ledger reflects complete regions
-  if (rolesPresent.size >= 5 && coverage.plannedRegionCount === 0) {
-    coverage = {
-      plannedRegionCount: 1,
-      regionsComplete: 1,
-      regionsFailed: 0,
-      regionsSkippedEmpty: 0,
-      regions: [{
-        regionId: 'p0-synthetic',
-        pageIndex: 0,
-        status: 'complete',
-        roleCalls: {
-          symbols: 's',
-          connections: 'c',
-          text: 't',
-          logic: 'l',
-          'coverage-auditor': 'a',
-        },
-      }],
-      rolesPresent: [...rolesPresent],
-      unresolvedRescans: 0,
-      allPlannedFinished: true,
-    };
-  }
-
-  job = updateJob(job.jobId, { status: 'SYNTHESIZING' })!;
-
-  const equipmentCounts = buildEquipmentCounts(symbols, equipmentLinks, crossPage, unresolved);
+  const coverageLedger = buildCoverageLedger(regionRecords, [...rolesPresent], unresolvedRescans);
+  updateJob(job.jobId, { status: 'SYNTHESIZING' });
+  const equipmentCounts = buildEquipmentCounts(symbols, equipmentLinks, crossPageRelations, unresolved);
   const ratedValues = extractRatedValues(texts, symbols);
-  const calculations: DrawingDocumentV3['calculations'] = [];
+  const calculations = [...new Map(calculationHits.map((calculation) => [
+    calculation.receiptHash ?? calculation.id,
+    calculation,
+  ])).values()];
   const recommendations = buildRecommendations({
     symbols,
     relations,
     calculations,
     unresolved,
-    hasGroundPath: symbols.some((s) =>
-      /ground/i.test(s.confirmedType ?? s.typeCandidates[0] ?? '')),
+    hasGroundPath: lines.some((line) => line.lineKind === 'ground' && line.certainty === 'confirmed'),
+    coverageEvidenceIds: coverageLedger.regions.flatMap((region) =>
+      (region.roleCalls['coverage-auditor'] ?? []).filter((call) => call.success).map((call) => call.callId)),
   });
 
-  const anyPageFailed = pageStates.some((p) => p.status === 'failed');
-  const budgetExceeded = unresolved.some((u) => u.code === 'PARTIAL_BUDGET_EXCEEDED');
-  const jobStatus = anyPageFailed || budgetExceeded || unresolvedRescans > 0
-    ? 'PARTIAL'
-    : pageStates.every((p) => p.status === 'complete' || p.status === 'skipped-empty')
+  const completePages = pageStates.every((page) => page.status === 'complete' || page.status === 'skipped-empty');
+  const coverageComplete = coverageLedger.allPlannedFinished
+    && coverageLedger.regionsFailed === 0
+    && coverageLedger.unresolvedRescans === 0;
+  const cancelled = Boolean(input.signal?.aborted || getJob(job.jobId)?.cancelRequested);
+  const jobStatus: DrawingDocumentV3['jobStatus'] = cancelled
+    ? 'CANCELLED'
+    : completePages && coverageComplete
       ? 'COMPLETE'
       : 'PARTIAL';
-
-  const document = buildDrawingDocumentV3({
-    documentHash: inventory.drawingHash,
+  const builtDocument = buildDrawingDocumentV3({
+    documentHash: source.documentHash,
+    documentPageCount: source.pages.length,
     jobStatus,
-    requestedPages: inventory.requestedPagePolicy === 'all' ? 'all' : pages,
+    requestedPages: requestedSpec === 'all' ? 'all' : requested,
     pages: pageStates,
-    coverageLedger: coverage,
+    coverageLedger,
     evidenceGraph: { symbols, lines, texts, relations },
-    crossPageRelations: crossPage,
+    crossPageRelations,
     equipmentCounts,
     ratedValues,
     calculations,
     recommendations,
     unresolvedItems: unresolved,
+    userCorrections: previousJob?.document?.userCorrections,
+    verificationExtra: {
+      productionFingerprint: {
+        engineVersion: ENGINE_VERSION,
+        promptVersion: PROMPT_VERSION,
+        preprocessVersion: PREPROCESS_VERSION,
+        provider: input.vision ? ([...providersUsed].sort().join(',') || input.vision.provider) : undefined,
+        model: input.vision ? ([...modelsUsed].sort().join(',') || resolveVlmModel(input.vision.provider, input.vision.model)) : undefined,
+      },
+    },
   });
-
-  // Strip any accidental source payload (AC-14)
+  const document = await applyConfiguredEvaluationSuiteBadge(builtDocument);
   const safeDocument = JSON.parse(JSON.stringify(document)) as DrawingDocumentV3;
-
-  job = updateJob(job.jobId, {
+  const pageDigests = { ...(previousJob?.pageDigests ?? {}) };
+  for (const state of pageStates) {
+    const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
+    if (!page) continue;
+    const fingerprint = pageDigestFingerprint(source, page, input);
+    pageDigests[state.pageIndex] = {
+      pageRenderHash: fingerprint.pageRenderHash,
+      promptVersion: fingerprint.promptVersion,
+      preprocessVersion: fingerprint.preprocessVersion,
+      graphVersion: fingerprint.graphVersion,
+      provider: fingerprint.provider,
+      model: fingerprint.model,
+      complete: state.status === 'complete' || state.status === 'skipped-empty',
+    };
+  }
+  const finalJob = updateJob(job.jobId, {
     status: jobStatus,
     document: safeDocument,
-    vlmCallsUsed: vlmCalls,
+    vlmCallsUsed: (previousJob?.vlmCallsUsed ?? 0) + vlmCalls,
+    pageDigests,
   })!;
-
-  return { job: job!, document: safeDocument };
+  return { job: finalJob, document: safeDocument };
 }
 
-async function extractVectorDetections(
-  input: OrchestrateInput,
-  pageIndex: number,
-  symbols: RawSymbolHit[],
-  lines: RawLineHit[],
-  _texts: NonNullable<NonNullable<OrchestrateInput['seedDetections']>['texts']>,
-): Promise<void> {
-  const name = (input.fileName ?? '').toLowerCase();
-  if (name.endsWith('.dxf') || input.mimeType.includes('dxf')) {
-    const text = new TextDecoder().decode(input.bytes);
-    const { parseDxfToSLD } = await import('@/engine/topology/dxf-parser');
-    const analysis = parseDxfToSLD(text, {});
-    let i = 0;
-    for (const c of analysis.components ?? []) {
-      symbols.push({
-        localId: c.id ?? `dxf-${i}`,
-        type: c.type,
-        label: c.label,
-        bounds: {
-          x: c.position?.x ?? i * 10,
-          y: c.position?.y ?? 0,
-          w: 20,
-          h: 20,
-        },
-        confidence: analysis.confidence ?? 0.9,
-        pageIndex,
-        regionId: 'vector-full',
-        certainty: 'confirmed',
-      });
-      i++;
-    }
-    let j = 0;
-    for (const conn of analysis.connections ?? []) {
-      lines.push({
-        localId: `dxf-l-${j++}`,
-        lineKind: 'power',
-        path: [{ x: j * 10, y: 0 }, { x: j * 10 + 40, y: 0 }],
-        confidence: 0.85,
-        pageIndex,
-        regionId: 'vector-full',
-        certainty: 'confirmed',
-      });
-      void conn;
-    }
-    return;
-  }
-
-  if (input.mimeType.includes('pdf') || name.endsWith('.pdf')) {
-    const { parsePdfToSLD } = await import('@/engine/topology/pdf-vector-parser');
-    const analysis = await parsePdfToSLD(input.bytes, { pageNumber: pageIndex + 1 });
-    let i = 0;
-    for (const c of analysis.components ?? []) {
-      symbols.push({
-        localId: c.id ?? `pdf-${i}`,
-        type: c.type,
-        label: c.label,
-        bounds: { x: (c.position?.x ?? i * 10), y: (c.position?.y ?? 0), w: 20, h: 20 },
-        confidence: 0.85,
-        pageIndex,
-        regionId: 'vector-full',
-        certainty: 'confirmed',
-      });
-      i++;
-    }
-  }
-}
-
-function ingestRoleParsed(
-  role: RoleId,
-  parsed: unknown,
-  pageIndex: number,
-  region: PrecisionRegion,
-  symbols: RawSymbolHit[],
-  lines: RawLineHit[],
-  texts: NonNullable<NonNullable<OrchestrateInput['seedDetections']>['texts']>,
-): void {
-  if (!parsed || typeof parsed !== 'object') return;
-  const obj = parsed as Record<string, unknown>;
-  if (role === 'symbols' && Array.isArray(obj.components)) {
-    for (const c of obj.components as Array<Record<string, number | string>>) {
-      const x = Number(c.x ?? 0);
-      const y = Number(c.y ?? 0);
-      symbols.push({
-        localId: String(c.id ?? Math.random()),
-        type: String(c.type ?? 'other'),
-        label: c.label != null ? String(c.label) : undefined,
-        bounds: {
-          x: region.bounds.x + (x / 1000) * region.bounds.w,
-          y: region.bounds.y + (y / 1000) * region.bounds.h,
-          w: Number(c.w ?? 30),
-          h: Number(c.h ?? 30),
-        },
-        confidence: Number(c.confidence ?? 0.5),
-        pageIndex,
-        regionId: region.regionId,
+function adjudicateTextSeeds(textSeeds: RawTextSeed[], unresolved: UnresolvedItem[]): TextNode[] {
+  const ordered = [...textSeeds].sort((left, right) =>
+    left.pageIndex - right.pageIndex
+    || left.bounds.y - right.bounds.y
+    || left.bounds.x - right.bounds.x);
+  if (ordered.length === 0) return assignDisplayIdsForTexts([]);
+  const pageCounters = new Map<number, number>();
+  const output: TextNode[] = [];
+  for (const seed of ordered) {
+    const seq = (pageCounters.get(seed.pageIndex) ?? 0) + 1;
+    pageCounters.set(seed.pageIndex, seq);
+    const displayId = `P${String(seed.pageIndex + 1).padStart(2, '0')}-T${String(seq).padStart(3, '0')}`;
+    const result = adjudicateOcr({
+      displayId,
+      pageIndex: seed.pageIndex,
+      bounds: seed.bounds,
+      readings: seed.readings ?? [],
+      adjacentSymbolTypes: seed.adjacentSymbolTypes,
+      legendTerms: seed.legendTerms,
+      standardTerms: ['PT', 'PPT', 'VCB', 'VGB', 'TR', 'ACB', 'MCCB', 'CT', 'ATS', 'UPS'],
+    });
+    const directVectorText = seed.readings?.length === 0 && seed.candidates?.length === 1;
+    const certainty = directVectorText || result.status === 'CONFIRMED_BY_MAJORITY_AND_CONTEXT'
+      ? 'confirmed' as const
+      : result.status === 'UNREADABLE_TEXT'
+        ? 'unread' as const
+        : 'ambiguous' as const;
+    const candidates = result.candidates ?? seed.candidates ?? [...new Set((seed.readings ?? []).map((reading) => reading.text))];
+    const confirmedText = directVectorText ? seed.text : result.confirmedText;
+    if (certainty !== 'confirmed') {
+      unresolved.push({
+        id: `ocr-${seed.pageIndex}-${seq}`,
+        code: certainty === 'unread' ? 'UNREADABLE_TEXT' : 'AMBIGUOUS_OCR',
+        displayId,
+        pageIndex: seed.pageIndex,
+        bounds: seed.bounds,
+        candidates,
+        userConfirmItems: [{ question: '표기 후보를 선택하십시오.', options: candidates }],
+        note: candidates.length > 0 ? `표기 후보: ${candidates.join(' | ')}` : '문자를 판독하지 못했습니다.',
       });
     }
-  }
-  if (role === 'connections' && Array.isArray(obj.connections)) {
-    for (const c of obj.connections as Array<Record<string, unknown>>) {
-      const path = Array.isArray(c.path)
-        ? (c.path as Array<{ x: number; y: number }>).map((p) => ({
-          x: region.bounds.x + (p.x / 1000) * region.bounds.w,
-          y: region.bounds.y + (p.y / 1000) * region.bounds.h,
-        }))
-        : [
-          { x: region.bounds.x, y: region.bounds.y },
-          { x: region.bounds.x + region.bounds.w, y: region.bounds.y },
-        ];
-      lines.push({
-        localId: String(c.id ?? Math.random()),
-        lineKind: (c.lineKind as RawLineHit['lineKind']) ?? 'unknown',
-        path,
-        confidence: Number(c.confidence ?? 0.5),
-        pageIndex,
-        regionId: region.regionId,
-      });
-    }
-  }
-  if (role === 'text' && Array.isArray(obj.texts)) {
-    for (const t of obj.texts as Array<Record<string, unknown>>) {
-      const x = Number(t.x ?? 0);
-      const y = Number(t.y ?? 0);
-      texts.push({
-        text: String(t.text ?? ''),
-        candidates: Array.isArray(t.candidates) ? t.candidates.map(String) : undefined,
-        bounds: {
-          x: region.bounds.x + (x / 1000) * region.bounds.w,
-          y: region.bounds.y + (y / 1000) * region.bounds.h,
-          w: Number(t.w ?? 40),
-          h: Number(t.h ?? 16),
-        },
-        pageIndex,
-      });
-    }
-  }
-}
-
-function extractRatedValues(texts: TextNode[], symbols: SymbolNode[]): RatedValue[] {
-  const out: RatedValue[] = [];
-  let i = 0;
-  for (const t of texts) {
-    const raw = t.confirmedText ?? t.rawText;
-    const m = raw.match(/(\d+(?:\.\d+)?)\s*(kV|V|A|kA|kVA|kW|mm²|mm2)/i);
-    if (!m) continue;
-    out.push({
-      id: `rv-${++i}`,
-      displayId: t.displayId,
-      field: m[2].toLowerCase(),
-      raw,
-      normalized: { value: Number(m[1]), unit: m[2] },
-      certainty: t.certainty,
-      evidence: t.evidence,
-      equipmentId: symbols.find((s) =>
-        s.evidence[0]?.pageIndex === t.evidence[0]?.pageIndex)?.equipmentId,
+    const confidence = (seed.readings?.length ?? 0) > 0
+      ? Math.min(...(seed.readings ?? []).map((reading) => reading.confidence))
+      : directVectorText ? 0.95 : 0;
+    output.push({
+      id: `txt-${seed.pageIndex}-${seq}`,
+      displayId,
+      rawText: seed.text,
+      confirmedText,
+      candidates,
+      certainty,
+      evidence: (seed.sourceEvidenceIds?.length ? [...new Set(seed.sourceEvidenceIds)] : [`txt-${seed.pageIndex}-${seq}-e0`]).map((evidenceId) => ({
+        evidenceId,
+        pageIndex: seed.pageIndex,
+        bounds: seed.bounds,
+        confidence,
+      })),
+      holdCode: certainty === 'confirmed' ? undefined : certainty === 'unread' ? 'UNREADABLE_TEXT' : 'AMBIGUOUS_OCR',
     });
   }
-  return out;
+  return output;
 }
 
 export { ENGINE_VERSION };

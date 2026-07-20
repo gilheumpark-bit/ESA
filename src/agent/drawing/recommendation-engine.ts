@@ -17,13 +17,13 @@ export interface RecommendationInput {
   calculations: CalculationLink[];
   unresolved: UnresolvedItem[];
   hasGroundPath?: boolean;
+  coverageEvidenceIds?: string[];
 }
 
 export function buildRecommendations(input: RecommendationInput): RecommendationV3[] {
   const out: RecommendationV3[] = [];
   let seq = 0;
   const confirmed = input.symbols.filter((s) => s.certainty === 'confirmed');
-  const confIds = new Set(confirmed.map((s) => s.id));
 
   // Orphan devices
   const connected = new Set<string>();
@@ -100,14 +100,16 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
 
   // Ground
   if (input.hasGroundPath === false) {
+    const coverageEvidence = [...new Set(input.coverageEvidenceIds ?? [])];
+    const supported = coverageEvidence.length > 0;
     out.push(rec(++seq, {
       severity: 'critical',
       problem: '접지 경로가 확정 그래프에서 확인되지 않았습니다.',
       relatedDisplayIds: [],
-      evidenceIds: [],
-      status: confIds.size > 0 ? 'SUPPORTED' : 'HOLD',
+      evidenceIds: coverageEvidence,
+      status: supported ? 'SUPPORTED' : 'HOLD',
       recommendedAction: '접지 기호·접지선 표기를 확인하고 필요 시 재스캔하십시오.',
-      requiredInputs: confIds.size > 0 ? [] : ['접지 표기 근거'],
+      requiredInputs: supported ? [] : ['접지 표기 근거', '전체 구획 판독 완료 증거'],
       standardRefs: ['KEC 접지'],
       calcReceiptIds: [],
     }));
@@ -129,6 +131,21 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
         calcReceiptIds: [],
       }));
     }
+  }
+
+  for (const u of input.unresolved) {
+    if (u.code === 'UNREADABLE_TEXT' || u.code === 'UNREADABLE_SYMBOL' || u.code === 'LOW_RESOLUTION_HOLD') continue;
+    out.push(rec(++seq, {
+      severity: u.code === 'LINE_CONTINUITY_UNCERTAIN' || u.code === 'HOLD_RESCAN_UNRESOLVED' ? 'major' : 'minor',
+      problem: `미해결 항목 ${u.displayId ?? u.id}: ${u.code}.`,
+      relatedDisplayIds: u.displayId ? [u.displayId] : [],
+      evidenceIds: [],
+      status: 'HOLD',
+      recommendedAction: u.note,
+      requiredInputs: u.userConfirmItems?.map((item) => item.question) ?? ['원본 근거 재확인'],
+      standardRefs: [],
+      calcReceiptIds: [],
+    }));
   }
 
   // Calculations that are HOLD

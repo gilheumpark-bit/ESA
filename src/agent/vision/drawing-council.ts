@@ -10,7 +10,7 @@ const VARIANT_KINDS = ['original', 'upscale-2x', 'upscale-4x', 'text-high-contra
 const PROVIDERS = ['openai', 'gemini', 'claude'] as const;
 const PREPARED_SOURCE_MIME = 'image/png';
 const MAX_REGION_CALLS_PER_ROLE = 16;
-const MAX_TOTAL_SOURCE_CALLS = 52;
+const MAX_TOTAL_SOURCE_CALLS = 54;
 const DEFAULT_MAX_CONCURRENT_CALLS = 4;
 const MAX_CONCURRENT_CALLS = 8;
 const MAX_VARIANTS = 5;
@@ -203,7 +203,10 @@ function validateInput(input: DrawingCouncilInput): CouncilLimits {
   if (!Number.isSafeInteger(maxConcurrentCalls) || maxConcurrentCalls < 1 || maxConcurrentCalls > MAX_CONCURRENT_CALLS) {
     invalid(`maxConcurrentCalls must be an integer from 1 to ${MAX_CONCURRENT_CALLS}.`);
   }
-  if (4 + (3 * maxRegionCalls) > MAX_TOTAL_SOURCE_CALLS) {
+  const hasTripleTextSources = ['original', 'upscale-4x', 'text-high-contrast']
+    .every((kind) => input.variants.some((variant) => variant.kind === kind));
+  const textFullCallDelta = hasTripleTextSources ? 2 : 0;
+  if (4 + textFullCallDelta + (3 * maxRegionCalls) > MAX_TOTAL_SOURCE_CALLS) {
     invalid(`planned calls exceed the ${MAX_TOTAL_SOURCE_CALLS} source-call budget.`);
   }
 
@@ -259,21 +262,29 @@ export function selectCouncilVariant(role: VLMReviewRole, variants: readonly Ima
 
 function planSources(role: VLMReviewRole, input: DrawingCouncilInput, maxRegionCalls: number): ReviewSource[] {
   const variant = selectCouncilVariant(role, input.variants, input.snapshot.quality.recommendedScale);
-  const full: ReviewSource = {
-    id: variant.id,
-    namespace: 's0',
-    buffer: variant.buffer,
-    originalBounds: { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height },
-  };
-  if (role === 'logic' || maxRegionCalls === 0) return [full];
+  const textKinds = role === 'text'
+    && ['original', 'upscale-4x', 'text-high-contrast'].every((kind) =>
+      input.variants.some((candidate) => candidate.kind === kind))
+    ? ['original', 'upscale-4x', 'text-high-contrast'] as const
+    : [variant.kind] as const;
+  const fullSources: ReviewSource[] = textKinds.map((kind, index) => {
+    const sourceVariant = input.variants.find((candidate) => candidate.kind === kind) ?? variant;
+    return {
+      id: sourceVariant.id,
+      namespace: `s${index}`,
+      buffer: sourceVariant.buffer,
+      originalBounds: { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height },
+    };
+  });
+  if (role === 'logic' || maxRegionCalls === 0) return fullSources;
   const planned = input.regions
     .filter((region) => region.variantId === variant.id)
     .slice()
     .sort((left, right) => left.id.localeCompare(right.id))
     .slice(0, maxRegionCalls);
-  return [full, ...planned.map((region, index) => ({
+  return [...fullSources, ...planned.map((region, index) => ({
     id: region.id,
-    namespace: `s${index + 1}`,
+    namespace: `s${index + fullSources.length}`,
     buffer: region.buffer,
     originalBounds: { ...region.originalBounds },
   }))];

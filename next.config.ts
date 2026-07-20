@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   // pdfjs-dist는 번들 제외 필수 — Turbopack이 말아 넣으면 내부 fake-worker의
   // 동적 임포트(pdf.worker.mjs)가 청크 경로에서 끊겨 모든 PDF 파싱이 실패한다
   // (실도면 라이브 실측으로 발각). node_modules에서 직접 로드해야 워커가 산다.
-  serverExternalPackages: ['pdfjs-dist'],
+  serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
 
   experimental: {
     // proxy.ts 사용 시 요청 본문이 기본 10MB에서 절단된다(공식 문서 확인).

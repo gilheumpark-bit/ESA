@@ -104,7 +104,7 @@ describe('SLD raster independent council integration', () => {
     expect(result.success).toBe(true);
     expect(result.components).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'VCB-01', type: 'breaker_vcb' }), expect.objectContaining({ id: 'TR-01', type: 'transformer' })]));
     expect(result.connections).toEqual([expect.objectContaining({ from: 'VCB-01', to: 'TR-01' })]);
-    expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 16, complete: true, maxRegionCallsPerRole: 16 } });
+    expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 18, complete: true, maxRegionCallsPerRole: 16 } });
     expect(result.drawingSynthesis).toMatchObject({ drawingHash: DRAWING_HASH, verdict: 'CONDITIONAL', requiresHumanReview: true });
     expect(JSON.stringify(result)).not.toContain(KEY);
   });
@@ -226,9 +226,9 @@ describe('SLD raster independent council integration', () => {
   });
 
   it.each([
-    [1, 'variant:original', 4, 16],
-    [2, 'variant:upscale-2x', 9, 31],
-    [4, 'variant:upscale-4x', 16, 52],
+    [1, 'variant:original', 4, 18],
+    [2, 'variant:upscale-2x', 9, 33],
+    [4, 'variant:upscale-4x', 16, 54],
   ] as const)('plans scale %i with %s symbols and exact adaptive calls', async (scale, symbolVariant, regionCount, plannedCalls) => {
     const prepareRaster = jest.fn(async () => prepared(scale));
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
@@ -241,7 +241,7 @@ describe('SLD raster independent council integration', () => {
       roles: {
         symbols: { variantId: symbolVariant, expectedRegionCount: regionCount, actualRegionCount: regionCount, plannedCalls: regionCount + 1 },
         connections: { variantId: 'variant:line-enhanced', expectedRegionCount: regionCount, actualRegionCount: regionCount },
-        text: { variantId: 'variant:text-high-contrast', expectedRegionCount: regionCount, actualRegionCount: regionCount },
+        text: { variantId: 'variant:text-high-contrast', expectedRegionCount: regionCount, actualRegionCount: regionCount, plannedCalls: regionCount + 3 },
         logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
       },
     });
@@ -376,12 +376,12 @@ describe('SLD raster independent council integration', () => {
   });
 
   it('uses the PDF parser mock with a non-empty buffer and bypasses the council', async () => {
-    jest.mocked(parsePdfToSLD).mockResolvedValue({ components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR' }], connections: [], confidence: 1, suggestedCalculations: [], rawDescription: '' } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>);
+    jest.mocked(parsePdfToSLD).mockResolvedValue({ components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR', position: { x: 25, y: 75 } }], connections: [], confidence: 1, suggestedCalculations: [], rawDescription: '' } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>);
     const runCouncil = jest.fn();
     const result = await executeSLDTeam({ sessionId: 'pdf-mock', classification: 'sld_pdf', fileBuffer: new Uint8Array([37, 80, 68, 70]).buffer }, { runCouncil });
 
     expect(parsePdfToSLD).toHaveBeenCalled();
     expect(runCouncil).not.toHaveBeenCalled();
-    expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer' })]);
+    expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer', position: { x: 25, y: 75 } })]);
   });
 });

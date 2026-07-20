@@ -10,7 +10,8 @@ const config = [
       'coverage/**',
       'e2e/**',
       'public/**',
-      '.claude/**',   // 남은 git 워크트리(빌드 산출물 + src 복사본) — 린트 대상 아님
+      '.claude/**',
+      '.worktrees/**', // 격리 워크트리의 빌드 산출물·src 복사본은 이 트리의 린트 대상이 아님
       '**/*.d.ts',
     ],
   },

@@ -11,6 +11,8 @@ node_modules/
 # =============================================================================
 .next/
 out/
+# Generated from the pinned pdfjs-dist dependency by prepare:pdf-worker.
+public/vendor/pdf.worker.min.mjs
 
 # =============================================================================
 # Build & Output

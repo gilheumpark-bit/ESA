@@ -3,7 +3,7 @@
  */
 
 import type { EvidenceBounds } from '../vision/evidence-types';
-import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode } from './types-v3';
+import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, UnresolvedItem } from './types-v3';
 
 export interface RawSymbolHit {
   localId: string;
@@ -14,16 +14,34 @@ export interface RawSymbolHit {
   pageIndex: number;
   regionId: string;
   certainty?: Certainty;
+  sourceEvidenceIds?: string[];
 }
 
 export interface RawLineHit {
   localId: string;
   lineKind: LineNode['lineKind'];
   path: Array<{ x: number; y: number }>;
+  junctions?: Array<{ x: number; y: number }>;
+  crossovers?: Array<{ x: number; y: number }>;
   confidence: number;
   pageIndex: number;
   regionId: string;
   certainty?: Certainty;
+  sourceEvidenceIds?: string[];
+}
+
+function evidenceRefs(
+  hit: Pick<RawSymbolHit, 'sourceEvidenceIds' | 'pageIndex' | 'bounds' | 'regionId' | 'confidence'>,
+  fallbackId: string,
+) {
+  const ids = hit.sourceEvidenceIds?.length ? [...new Set(hit.sourceEvidenceIds)] : [fallbackId];
+  return ids.map((evidenceId) => ({
+    evidenceId,
+    pageIndex: hit.pageIndex,
+    bounds: hit.bounds,
+    regionId: hit.regionId,
+    confidence: hit.confidence,
+  }));
 }
 
 export function deduplicateSymbols(
@@ -31,9 +49,14 @@ export function deduplicateSymbols(
   tolerance = 24,
 ): SymbolNode[] {
   const kept: SymbolNode[] = [];
-  let seq = 0;
+  const pageSequences = new Map<number, number>();
+  const ordered = [...hits].sort((left, right) =>
+    left.pageIndex - right.pageIndex
+    || left.bounds.y - right.bounds.y
+    || left.bounds.x - right.bounds.x
+    || left.localId.localeCompare(right.localId));
 
-  for (const hit of hits) {
+  for (const hit of ordered) {
     const dup = kept.find((k) =>
       k.evidence[0]?.pageIndex === hit.pageIndex
       && typesCompatible(k.typeCandidates[0] ?? '', hit.type)
@@ -41,22 +64,25 @@ export function deduplicateSymbols(
       && labelsCompatible(k.rawLabel, hit.label));
 
     if (dup) {
-      if (hit.confidence > (dup.evidence[0]?.confidence ?? 0)) {
+      const previousMaxConfidence = Math.max(...dup.evidence.map((item) => item.confidence));
+      const incoming = evidenceRefs(hit, `${dup.id}-e${dup.evidence.length}`)
+        .filter((item) => !dup.evidence.some((existing) => existing.evidenceId === item.evidenceId));
+      dup.evidence.push(...incoming);
+      if (hit.confidence > previousMaxConfidence) {
         dup.typeCandidates = unique([hit.type, ...dup.typeCandidates]);
         dup.rawLabel = hit.label ?? dup.rawLabel;
-        dup.evidence = [{
-          evidenceId: `${dup.id}-e`,
-          pageIndex: hit.pageIndex,
-          bounds: hit.bounds,
-          regionId: hit.regionId,
-          confidence: hit.confidence,
-        }];
+        if (hit.certainty === 'confirmed' || hit.confidence >= 0.85) {
+          dup.confirmedType = hit.type;
+          dup.certainty = 'confirmed';
+        }
       }
       continue;
     }
 
     const page = hit.pageIndex + 1;
-    const displayId = `P${String(page).padStart(2, '0')}-S${String(++seq).padStart(3, '0')}`;
+    const seq = (pageSequences.get(hit.pageIndex) ?? 0) + 1;
+    pageSequences.set(hit.pageIndex, seq);
+    const displayId = `P${String(page).padStart(2, '0')}-S${String(seq).padStart(3, '0')}`;
     const id = `sym-${hit.pageIndex}-${seq}`;
     kept.push({
       id,
@@ -65,13 +91,7 @@ export function deduplicateSymbols(
       confirmedType: hit.certainty === 'confirmed' ? hit.type : undefined,
       rawLabel: hit.label,
       certainty: hit.certainty ?? (hit.confidence >= 0.85 ? 'confirmed' : 'ambiguous'),
-      evidence: [{
-        evidenceId: `${id}-e0`,
-        pageIndex: hit.pageIndex,
-        bounds: hit.bounds,
-        regionId: hit.regionId,
-        confidence: hit.confidence,
-      }],
+      evidence: evidenceRefs(hit, `${id}-e0`),
     });
   }
   return kept;
@@ -79,8 +99,13 @@ export function deduplicateSymbols(
 
 export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[] {
   const kept: LineNode[] = [];
-  let seq = 0;
-  for (const hit of hits) {
+  const pageSequences = new Map<number, number>();
+  const ordered = [...hits].sort((left, right) =>
+    left.pageIndex - right.pageIndex
+    || (left.path[0]?.y ?? 0) - (right.path[0]?.y ?? 0)
+    || (left.path[0]?.x ?? 0) - (right.path[0]?.x ?? 0)
+    || left.localId.localeCompare(right.localId));
+  for (const hit of ordered) {
     if (hit.path.length < 2) continue;
     const start = hit.path[0];
     const end = hit.path[hit.path.length - 1];
@@ -91,23 +116,28 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
       return (dist(ks, start) <= tolerance && dist(ke, end) <= tolerance)
         || (dist(ks, end) <= tolerance && dist(ke, start) <= tolerance);
     });
-    if (dup) continue;
+    if (dup) {
+      const incoming = evidenceRefs({ ...hit, bounds: pathBounds(hit.path) }, `${dup.id}-e${dup.evidence.length}`)
+        .filter((item) => !dup.evidence.some((existing) => existing.evidenceId === item.evidenceId));
+      dup.evidence.push(...incoming);
+      dup.junctions = mergePoints(dup.junctions, hit.junctions ?? [], tolerance);
+      dup.crossovers = mergePoints(dup.crossovers, hit.crossovers ?? [], tolerance);
+      continue;
+    }
     const page = hit.pageIndex + 1;
-    const displayId = `P${String(page).padStart(2, '0')}-L${String(++seq).padStart(3, '0')}`;
+    const seq = (pageSequences.get(hit.pageIndex) ?? 0) + 1;
+    pageSequences.set(hit.pageIndex, seq);
+    const displayId = `P${String(page).padStart(2, '0')}-L${String(seq).padStart(3, '0')}`;
     const id = `line-${hit.pageIndex}-${seq}`;
     kept.push({
       id,
       displayId,
       lineKind: hit.lineKind,
       path: hit.path,
+      junctions: [...(hit.junctions ?? [])],
+      crossovers: [...(hit.crossovers ?? [])],
       certainty: hit.certainty ?? (hit.confidence >= 0.8 ? 'confirmed' : 'ambiguous'),
-      evidence: [{
-        evidenceId: `${id}-e0`,
-        pageIndex: hit.pageIndex,
-        bounds: pathBounds(hit.path),
-        regionId: hit.regionId,
-        confidence: hit.confidence,
-      }],
+      evidence: evidenceRefs({ ...hit, bounds: pathBounds(hit.path) }, `${id}-e0`),
     });
   }
   return kept;
@@ -123,10 +153,17 @@ export function assignDisplayIdsForTexts(
     candidates?: string[];
   }>,
 ): TextNode[] {
-  return texts.map((t, i) => {
+  const pageSequences = new Map<number, number>();
+  return [...texts].sort((left, right) =>
+    left.pageIndex - right.pageIndex
+    || left.bounds.y - right.bounds.y
+    || left.bounds.x - right.bounds.x
+    || left.text.localeCompare(right.text)).map((t) => {
     const page = t.pageIndex + 1;
-    const displayId = `P${String(page).padStart(2, '0')}-T${String(i + 1).padStart(3, '0')}`;
-    const id = `txt-${t.pageIndex}-${i + 1}`;
+    const seq = (pageSequences.get(t.pageIndex) ?? 0) + 1;
+    pageSequences.set(t.pageIndex, seq);
+    const displayId = `P${String(page).padStart(2, '0')}-T${String(seq).padStart(3, '0')}`;
+    const id = `txt-${t.pageIndex}-${seq}`;
     return {
       id,
       displayId,
@@ -173,6 +210,26 @@ export function buildPageRelations(
     });
   }
   return relations;
+}
+
+export function findUnboundLineItems(
+  lines: LineNode[],
+  relations: RelationEdge[],
+): UnresolvedItem[] {
+  const bound = new Set(relations.map((relation) => relation.lineId).filter(Boolean));
+  return lines.filter((line) => line.certainty === 'confirmed' && !bound.has(line.id)).map((line) => {
+    const evidence = line.evidence[0];
+    return {
+      id: `unbound-${line.id}`,
+      code: 'LINE_CONTINUITY_UNCERTAIN' as const,
+      displayId: line.displayId,
+      pageIndex: evidence?.pageIndex ?? 0,
+      regionId: evidence?.regionId,
+      bounds: evidence?.bounds ?? pathBounds(line.path),
+      userConfirmItems: [{ question: `${line.displayId} 선로의 양쪽 연결 장치를 확인하십시오.` }],
+      note: '선로의 양쪽 종단 장치를 모두 확정하지 못해 관계 설명을 보류했습니다.',
+    };
+  });
 }
 
 function nearestSymbol(symbols: SymbolNode[], point: { x: number; y: number }, max = 80): SymbolNode | null {
@@ -222,4 +279,16 @@ function pathBounds(path: Array<{ x: number; y: number }>): EvidenceBounds {
 
 function unique(items: string[]): string[] {
   return [...new Set(items.filter(Boolean))];
+}
+
+function mergePoints(
+  current: Array<{ x: number; y: number }>,
+  incoming: Array<{ x: number; y: number }>,
+  tolerance: number,
+): Array<{ x: number; y: number }> {
+  const merged = current.map((point) => ({ ...point }));
+  for (const point of incoming) {
+    if (!merged.some((existing) => dist(existing, point) <= tolerance)) merged.push({ ...point });
+  }
+  return merged;
 }

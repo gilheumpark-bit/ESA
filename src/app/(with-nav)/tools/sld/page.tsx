@@ -26,13 +26,16 @@ import {
   Box,
   Link2,
   PlayCircle,
+  ChevronLeft,
+  ChevronRight,
+  Square,
 } from 'lucide-react';
 import Link from 'next/link';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import DrawingIntelligenceReport from '@/components/DrawingIntelligenceReport';
-import DrawingEvidenceOverlay from '@/components/DrawingEvidenceOverlay';
+import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
+import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -303,7 +306,11 @@ export default function SLDAnalysisPage() {
   const [v3JobId, setV3JobId] = useState<string | null>(null);
   const [v3Loading, setV3Loading] = useState(false);
   const [v3Error, setV3Error] = useState<string | null>(null);
+  const [v3ResumeAvailable, setV3ResumeAvailable] = useState(false);
   const [selectedDisplayId, setSelectedDisplayId] = useState<string | undefined>();
+  const [v3SourceFile, setV3SourceFile] = useState<File | null>(null);
+  const [v3PageIndex, setV3PageIndex] = useState(0);
+  const [v3Cancelling, setV3Cancelling] = useState(false);
   const fullDocInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageSelect = useCallback((file: File) => {
@@ -381,31 +388,58 @@ export default function SLDAnalysisPage() {
     setV3Doc(null);
     setV3JobId(null);
     setV3Error(null);
+    setV3ResumeAvailable(false);
     setSelectedDisplayId(undefined);
+    setV3SourceFile(null);
+    setV3PageIndex(0);
+    setV3Cancelling(false);
   }, [preview]);
 
   const handleFullDocumentAnalyze = useCallback(async (file: File) => {
     setV3Loading(true);
     setV3Error(null);
     setV3Doc(null);
+    setV3JobId(null);
+    setV3SourceFile(file);
+    setV3PageIndex(0);
+    setSelectedDisplayId(undefined);
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('pages', 'all');
-      if (file.type.startsWith('image/')) {
-        const visionKey = await getFirstAvailableVisionKey();
-        if (visionKey) {
-          formData.append('provider', visionKey.provider);
-          formData.append('apiKey', visionKey.key);
-        }
+      formData.append('leaseSource', '1');
+      formData.append('deferred', '1');
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const createResponse = await fetch('/api/drawing-jobs', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
+      const created = await createResponse.json();
+      if (!createResponse.ok || !created?.success) {
+        throw new Error(created?.error?.message ?? `전체 문서 작업 생성 실패 (${createResponse.status})`);
       }
-      const res = await fetch('/api/drawing-jobs', { method: 'POST', body: formData });
-      const json = await res.json();
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.error?.message ?? `전체 문서 분석 실패 (${res.status})`);
+      const jobId = String(created.data.jobId);
+      setV3JobId(jobId);
+
+      const runForm = new FormData();
+      const visionKey = await getFirstAvailableVisionKey();
+      if (visionKey) {
+        runForm.append('provider', visionKey.provider);
+        runForm.append('apiKey', visionKey.key);
       }
-      setV3JobId(json.data.jobId);
-      setV3Doc(json.data.document as DrawingDocumentV3);
+      const runResponse = await fetch(`/api/drawing-jobs/${jobId}/run`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: runForm,
+      });
+      const result = await runResponse.json();
+      if (!runResponse.ok || !result?.success) {
+        throw new Error(result?.error?.message ?? `전체 문서 분석 실패 (${runResponse.status})`);
+      }
+      setV3Doc(result.data.document as DrawingDocumentV3);
+      setV3ResumeAvailable(Boolean(result.data.resumeAvailable));
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
     } finally {
@@ -413,27 +447,97 @@ export default function SLDAnalysisPage() {
     }
   }, []);
 
+  const handleV3Cancel = useCallback(async () => {
+    if (!v3JobId || v3Cancelling) return;
+    setV3Cancelling(true);
+    setV3Error(null);
+    try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '취소 요청을 처리하지 못했습니다.');
+      setV3ResumeAvailable(false);
+      setV3Error('분석을 취소했습니다. 보안을 위해 서버의 임시 원본도 삭제했습니다.');
+    } catch (err) {
+      setV3Error(err instanceof Error ? err.message : '분석 취소 오류');
+    } finally {
+      setV3Cancelling(false);
+    }
+  }, [v3Cancelling, v3JobId]);
+
+  const handleV3Resume = useCallback(async () => {
+    if (!v3JobId) return;
+    setV3Loading(true);
+    setV3Error(null);
+    try {
+      const formData = new FormData();
+      const visionKey = await getFirstAvailableVisionKey();
+      if (visionKey) {
+        formData.append('provider', visionKey.provider);
+        formData.append('apiKey', visionKey.key);
+      }
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      const response = await fetch(`/api/drawing-jobs/${v3JobId}/resume`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
+      const json = await response.json();
+      if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '분석 재개에 실패했습니다.');
+      setV3Doc(json.data.document as DrawingDocumentV3);
+      setV3ResumeAvailable(Boolean(json.data.resumeAvailable));
+    } catch (err) {
+      setV3Error(err instanceof Error ? err.message : '전체 문서 분석 재개 오류');
+    } finally {
+      setV3Loading(false);
+    }
+  }, [v3JobId]);
+
   const handleV3Correct = useCallback(async (
     targetDisplayId: string,
     selectedValue: string,
     candidates: string[],
   ) => {
     if (!v3JobId) return;
+    const { getIdToken } = await import('@/lib/firebase');
+    const token = await getIdToken().catch(() => null);
     const res = await fetch(`/api/drawing-jobs/${v3JobId}/corrections`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({
         targetDisplayId,
         selectedValue,
-        originalCandidates: candidates,
-        correctedBy: 'user',
       }),
     });
     const json = await res.json();
     if (res.ok && json?.data?.document) {
       setV3Doc(json.data.document as DrawingDocumentV3);
+      setV3ResumeAvailable(Boolean(json.data.resumeAvailable));
+    } else {
+      setV3Error(json?.error?.message ?? '수정값을 반영하지 못했습니다.');
     }
   }, [v3JobId]);
+
+  const handleV3Select = useCallback((displayId: string) => {
+    setSelectedDisplayId(displayId);
+    if (!v3Doc) return;
+    const entity = [
+      ...v3Doc.evidenceGraph.symbols,
+      ...v3Doc.evidenceGraph.lines,
+      ...v3Doc.evidenceGraph.texts,
+      ...v3Doc.evidenceGraph.relations,
+    ].find((item) => item.displayId === displayId);
+    const pageIndex = entity?.evidence[0]?.pageIndex;
+    if (pageIndex !== undefined) setV3PageIndex(pageIndex);
+  }, [v3Doc]);
 
   const handleAnalyze = useCallback(async () => {
     if (!imageFile) return;
@@ -686,6 +790,27 @@ export default function SLDAnalysisPage() {
           >
             {v3Loading ? '전체 분석 중…' : 'PDF/DXF/이미지 전체 분석'}
           </button>
+          {v3ResumeAvailable && (
+            <button
+              type="button"
+              onClick={() => void handleV3Resume()}
+              disabled={v3Loading}
+              className="min-h-11 rounded-xl border border-[var(--color-primary)] px-4 text-xs font-semibold text-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              미완료 페이지만 이어서 분석
+            </button>
+          )}
+          {v3Loading && v3JobId && (
+            <button
+              type="button"
+              onClick={() => void handleV3Cancel()}
+              disabled={v3Cancelling}
+              className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--color-error)] px-4 text-xs font-semibold text-[var(--color-error)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Square size={13} aria-hidden="true" />
+              {v3Cancelling ? '취소 처리 중' : '분석 중단'}
+            </button>
+          )}
           <input
             ref={fullDocInputRef}
             type="file"
@@ -698,26 +823,49 @@ export default function SLDAnalysisPage() {
           />
         </div>
         {v3Error && (
-          <p className="mt-2 text-sm text-[var(--color-error)]">{v3Error}</p>
+          <p className="mt-2 text-sm text-[var(--color-error)]" role="alert">{v3Error}</p>
+        )}
+        {v3Loading && (
+          <div className="mt-3 flex min-h-11 items-center gap-2 border-y border-[var(--border-default)] py-2 text-sm text-[var(--text-secondary)]" role="status" aria-live="polite">
+            <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+            전체 조사 후 구획별 기호·선로·문자를 독립 판독하고 있습니다.
+          </div>
         )}
         {v3Doc && (
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div className="relative min-h-[280px] rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)]">
-              <DrawingEvidenceOverlay
+          <div className="mt-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-y border-[var(--border-default)] py-2">
+              <p className="text-xs text-[var(--text-secondary)]">
+                상태 <strong className="text-[var(--text-primary)]">{v3Doc.verification.documentStatus}</strong>
+                {' · '}완료 {v3Doc.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty').length}/{v3Doc.pages.length}페이지
+              </p>
+              <div className="flex items-center gap-1" aria-label="도면 페이지 이동">
+                <button type="button" aria-label="이전 페이지" disabled={v3Doc.pages.findIndex((page) => page.pageIndex === v3PageIndex) <= 0} onClick={() => {
+                  const position = v3Doc.pages.findIndex((page) => page.pageIndex === v3PageIndex);
+                  if (position > 0) setV3PageIndex(v3Doc.pages[position - 1].pageIndex);
+                }} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[var(--border-default)] disabled:opacity-40"><ChevronLeft size={16} aria-hidden="true" /></button>
+                <label htmlFor="v3-page" className="sr-only">표시할 페이지</label>
+                <select id="v3-page" value={v3PageIndex} onChange={(event) => setV3PageIndex(Number(event.target.value))} className="min-h-11 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm tabular-nums">
+                  {v3Doc.pages.map((page) => <option key={page.pageIndex} value={page.pageIndex}>{page.pageIndex + 1}페이지 · {page.status}</option>)}
+                </select>
+                <button type="button" aria-label="다음 페이지" disabled={v3Doc.pages.findIndex((page) => page.pageIndex === v3PageIndex) >= v3Doc.pages.length - 1} onClick={() => {
+                  const position = v3Doc.pages.findIndex((page) => page.pageIndex === v3PageIndex);
+                  if (position >= 0 && position < v3Doc.pages.length - 1) setV3PageIndex(v3Doc.pages[position + 1].pageIndex);
+                }} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[var(--border-default)] disabled:opacity-40"><ChevronRight size={16} aria-hidden="true" /></button>
+              </div>
+            </div>
+            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
+              {v3SourceFile ? (
+                <DrawingSourcePreview document={v3Doc} file={v3SourceFile} pageIndex={v3PageIndex} selectedDisplayId={selectedDisplayId} onSelectDisplayId={handleV3Select} />
+              ) : (
+                <div className="flex min-h-72 items-center justify-center rounded-[10px] border border-[var(--border-default)] text-sm text-[var(--text-secondary)]">원본 미리보기는 이 브라우저 세션에서만 표시됩니다.</div>
+              )}
+              <DrawingDocumentV3Report
                 document={v3Doc}
-                pageIndex={0}
-                width={640}
-                height={360}
                 selectedDisplayId={selectedDisplayId}
-                onSelectDisplayId={setSelectedDisplayId}
+                onSelectDisplayId={handleV3Select}
+                onCorrect={handleV3Correct}
               />
             </div>
-            <DrawingIntelligenceReport
-              document={v3Doc}
-              selectedDisplayId={selectedDisplayId}
-              onSelectDisplayId={setSelectedDisplayId}
-              onCorrect={handleV3Correct}
-            />
           </div>
         )}
       </section>

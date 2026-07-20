@@ -79,6 +79,10 @@ const VLM_CONFIG = {
   },
 } as const;
 
+export function resolveVlmModel(provider: VLMProvider, requested?: string): string {
+  return requested ?? VLM_CONFIG[provider].defaultModel;
+}
+
 const SLD_VISION_PROMPT = `You are an expert electrical engineer analyzing a single-line diagram (SLD) / schematic.
 
 Extract ALL electrical components and connections from this drawing section.
@@ -382,7 +386,7 @@ async function requestGeminiJson(
   options: VLMOptions,
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.gemini;
-  const model = options.model ?? cfg.defaultModel;
+  const model = resolveVlmModel('gemini', options.model);
   return withRequestScope(options, async (scope) => {
     const response = await fetchWithTimeout(`${cfg.endpoint}/${model}:generateContent`, {
       method: 'POST',
@@ -419,7 +423,7 @@ async function requestOpenAIJson(
   options: VLMOptions,
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.openai;
-  const model = options.model ?? cfg.defaultModel;
+  const model = resolveVlmModel('openai', options.model);
   // GPT-5 계열은 임의 temperature를 지원하지 않을 수 있다. 최신 Chat
   // Completions 규격의 max_completion_tokens를 사용하고, 구형 모델에만
   // 요청자가 지정한 temperature를 전달한다.
@@ -469,7 +473,7 @@ async function requestClaudeJson(
   options: VLMOptions,
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.claude;
-  const model = options.model ?? cfg.defaultModel;
+  const model = resolveVlmModel('claude', options.model);
   const generationControls = model.startsWith('claude-sonnet-5')
     ? {}
     : { temperature: options.temperature ?? cfg.defaultTemp };

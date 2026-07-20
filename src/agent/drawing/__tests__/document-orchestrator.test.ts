@@ -1,7 +1,16 @@
 import { runDocumentAnalysis } from '../document-orchestrator';
-import { _resetJobsForTests } from '../drawing-job-store';
+import { _resetJobsForTests, updateJob } from '../drawing-job-store';
 import { evaluatePredictionAgainstLabel } from '../sld-evaluator-v2';
 import { DRAWING_DOCUMENT_SCHEMA_VERSION } from '../types-v3';
+import type { PreparedDrawingPage, PreparedDrawingSource } from '../drawing-source';
+import sharp from 'sharp';
+
+async function makePng(width = 100, height = 80): Promise<ArrayBuffer> {
+  const png = await sharp({
+    create: { width, height, channels: 3, background: { r: 255, g: 255, b: 255 } },
+  }).png().toBuffer();
+  return Uint8Array.from(png).buffer;
+}
 
 describe('document-orchestrator + evaluator', () => {
   beforeEach(() => {
@@ -9,9 +18,8 @@ describe('document-orchestrator + evaluator', () => {
   });
 
   it('builds V3 document with separated counts and no source bytes', async () => {
-    const pngHeader = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
     const { document, job } = await runDocumentAnalysis({
-      bytes: pngHeader.buffer,
+      bytes: await makePng(),
       mimeType: 'image/png',
       fileName: 'test.png',
       seedDetections: {
@@ -53,7 +61,7 @@ describe('document-orchestrator + evaluator', () => {
           pageIndex: 0,
           readings: [
             { variantId: 'original', text: 'PT', confidence: 0.9, callId: '1' },
-            { variantId: 'lanczos-4x', text: 'PPT', confidence: 0.8, callId: '2' },
+            { variantId: 'upscale-4x', text: 'PPT', confidence: 0.8, callId: '2' },
             { variantId: 'text-high-contrast', text: 'PT', confidence: 0.9, callId: '3' },
           ],
           adjacentSymbolTypes: ['voltage_transformer'],
@@ -72,9 +80,8 @@ describe('document-orchestrator + evaluator', () => {
   });
 
   it('evaluator rejects injected metrics and computes from prediction', async () => {
-    const pngHeader = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0, 1, 2, 3, 4, 5]);
     const { document } = await runDocumentAnalysis({
-      bytes: pngHeader.buffer,
+      bytes: await makePng(),
       mimeType: 'image/png',
       seedDetections: {
         symbols: [{
@@ -107,17 +114,160 @@ describe('document-orchestrator + evaluator', () => {
       texts: [],
     });
     expect(typeof evalResult.metrics.symbolMacroF1).toBe('number');
-    expect(evalResult.receipt.signature).toBeTruthy();
+    expect(evalResult.receipt).toMatchObject({ signatureAlgorithm: 'none', signature: '' });
   });
 
   it('marks budget exceeded as PARTIAL not silent success', async () => {
     const { document } = await runDocumentAnalysis({
-      bytes: Uint8Array.from([1, 2, 3, 4]).buffer,
+      bytes: await makePng(10, 10),
       mimeType: 'image/png',
       budget: { maxVlmCalls: 0, maxPages: 1, deadlineMs: 1, maxPixels: 100 },
       seedDetections: { symbols: [] },
     });
     // without seeds and no vision, page fails → PARTIAL
     expect(document.jobStatus === 'PARTIAL' || document.verification.documentStatus === 'PARTIAL').toBe(true);
+  });
+
+  it('resumes the same owned job and calls only pages that did not complete', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
+    };
+    const pages: PreparedDrawingPage[] = [0, 1].map((pageIndex) => ({
+      pageIndex, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80,
+      renderScale: 1, renderMode: 'vector', textSample: `PAGE ${pageIndex + 1}`,
+      vectorOpCount: 1, rasterOpCount: 0, renderHash: `render-${pageIndex}`, quality,
+    }));
+    const source: PreparedDrawingSource = {
+      documentHash: 'd'.repeat(64), mimeType: 'application/pdf', formatClass: 'vector-pdf', pages,
+    };
+    const executeTeam = jest.fn(async (teamInput: { params?: Record<string, unknown> }) => {
+      const pageNumber = Number(teamInput.params?.pageNumber ?? 1);
+      return {
+        success: true,
+        components: [{ id: `VCB-${pageNumber}`, type: 'vcb', label: `VCB-${pageNumber}`, position: { x: 10, y: 10 }, confidence: 0.95 }],
+        connections: [],
+        confidence: 0.95,
+      };
+    });
+    const deps = { prepareSource: async () => source, executeTeam: executeTeam as never };
+
+    const first = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a',
+      budget: { maxPages: 1, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, deps);
+    expect(first.document.jobStatus).toBe('PARTIAL');
+    expect(executeTeam).toHaveBeenCalledTimes(1);
+
+    const resumed = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a', jobId: first.job.jobId,
+      budget: { maxPages: 2, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, deps);
+
+    expect(resumed.job.jobId).toBe(first.job.jobId);
+    expect(resumed.document.jobStatus).toBe('COMPLETE');
+    expect(resumed.document.pages.map((page) => page.status)).toEqual(['complete', 'complete']);
+    expect(resumed.document.evidenceGraph.symbols.map((symbol) => symbol.rawLabel)).toEqual(['VCB-1', 'VCB-2']);
+    expect(executeTeam).toHaveBeenCalledTimes(2);
+
+    updateJob(first.job.jobId, {
+      pageDigests: {
+        ...resumed.job.pageDigests,
+        0: { ...resumed.job.pageDigests[0], pageRenderHash: 'stale-render' },
+      },
+    });
+    await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a', jobId: first.job.jobId,
+      budget: { maxPages: 2, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, deps);
+    expect(executeTeam).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries failed precision coverage up to the gap-rescan limit', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.2,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: [],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'e'.repeat(64), mimeType: 'image/png', formatClass: 'raster-image',
+      pages: [{
+        pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80,
+        renderScale: 1, renderMode: 'raster', textSample: '', vectorOpCount: 0,
+        rasterOpCount: 1, renderHash: 'render-0', quality, imageBuffer: await makePng(),
+      }],
+    };
+    const review = (complete: boolean) => ({
+      snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
+      envelopes: ['symbols', 'connections', 'text', 'logic'].map((role) => ({
+        role, outputHash: `${role}-hash`, drawingHash: source.documentHash, provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
+        data: { warnings: [], confidence: 0.95 },
+      })),
+      failures: complete ? [] : [{ role: 'connections', sourceId: 'variant:line-enhanced:region:0', error: 'retry', fatal: false }],
+      coverage: {
+        roles: {
+          symbols: { variantId: 'variant:original', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+          connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+          text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 7 },
+          logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+        },
+        plannedCalls: 18, complete, maxRegionCallsPerRole: 16,
+      },
+      graph: {
+        drawingHash: source.documentHash,
+        symbols: [{ id: 'VCB-01', sourceIds: ['variant:original'], typeCandidates: ['VCB'], rawLabel: 'VCB-1', bounds: { x: 10, y: 10, w: 10, h: 10, page: 1 }, ports: [], confidence: 0.95 }],
+        lines: [], texts: [], edges: [], conflicts: [],
+      },
+    });
+    let attempt = 0;
+    const executeTeam = jest.fn(async () => ({
+      success: true, components: [], connections: [], confidence: 0.95,
+      drawingReview: review(++attempt > 1),
+      drawingSynthesis: {
+        calculations: [{
+          id: 'calc-1', calculatorId: 'breaker-sizing', scopeKey: 'VCB-01@p1', status: 'CALCULATED', judgment: 'HOLD',
+          missingInputs: [], ambiguousInputs: [], inputEvidence: [{ evidenceId: 'spec-1', originalEvidenceIds: ['txt-1'], sourceIds: ['variant:text'], adapterField: 'loadCurrent', normalizedField: 'current_A', value: 80, sourceUnit: 'A', targetUnit: 'A', bounds: { page: 1, x: 1, y: 1, w: 2, h: 2 }, confidence: 0.9, transform: 'identity' }],
+          optionalDefaultsUsed: [], internalMechanics: [], scopeIssues: [], calculatorResult: { value: 100, unit: 'A' },
+        }],
+      },
+    }));
+
+    const result = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-a',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 54, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam).toHaveBeenCalledTimes(2);
+    expect(result.document.coverageLedger.regionsFailed).toBe(0);
+    expect(result.document.coverageLedger.unresolvedRescans).toBe(0);
+    expect(result.document.jobStatus).toBe('COMPLETE');
+    expect(result.document.calculations).toEqual([expect.objectContaining({
+      id: 'P01-calc-1', calculatorId: 'breaker-sizing', value: 100, compliant: null,
+    })]);
+  });
+
+  it('returns concrete re-upload guidance when low-resolution OCR remains ambiguous', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 3, contrast: 0.05, edgeDensity: 0.01,
+      gradientVariance: 0.01, lowContrast: true, blurry: true,
+      recommendedScale: 4 as const, warnings: ['LOW_CONTRAST', 'BLURRY'],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'f'.repeat(64), mimeType: 'image/png', formatClass: 'raster-image',
+      pages: [{ pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80, renderScale: 1, renderMode: 'raster', textSample: '', vectorOpCount: 0, rasterOpCount: 1, renderHash: 'low-render', quality, imageBuffer: await makePng() }],
+    };
+    const result = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-low',
+      seedDetections: { texts: [{ text: '1OOA', pageIndex: 0, bounds: { x: 10, y: 10, w: 20, h: 8 }, readings: [
+        { variantId: 'original', text: '1OOA', confidence: 0.5, callId: 'a' },
+        { variantId: 'upscale-4x', text: '100A', confidence: 0.5, callId: 'b' },
+        { variantId: 'text-high-contrast', text: 'IOOA', confidence: 0.5, callId: 'c' },
+      ] }] },
+    }, { prepareSource: async () => source });
+    expect(result.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'LOW_RESOLUTION_HOLD', recommendedUpload: expect.objectContaining({ minLongEdgePx: 2400, minCharHeightPx: 12 }) }),
+    ]));
   });
 });

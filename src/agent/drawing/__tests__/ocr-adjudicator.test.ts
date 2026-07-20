@@ -8,7 +8,7 @@ describe('ocr-adjudicator', () => {
       bounds: { x: 10, y: 10, w: 40, h: 16 },
       readings: [
         { variantId: 'original', text: 'PT', confidence: 0.8, callId: 'a' },
-        { variantId: 'lanczos-4x', text: 'PPT', confidence: 0.8, callId: 'b' },
+        { variantId: 'upscale-4x', text: 'PPT', confidence: 0.8, callId: 'b' },
         { variantId: 'text-high-contrast', text: 'PT', confidence: 0.8, callId: 'c' },
       ],
       adjacentSymbolTypes: [],
@@ -26,7 +26,7 @@ describe('ocr-adjudicator', () => {
       bounds: { x: 10, y: 10, w: 40, h: 16 },
       readings: [
         { variantId: 'original', text: 'PT', confidence: 0.9, callId: 'a' },
-        { variantId: 'lanczos-4x', text: 'PPT', confidence: 0.7, callId: 'b' },
+        { variantId: 'upscale-4x', text: 'PPT', confidence: 0.7, callId: 'b' },
         { variantId: 'text-high-contrast', text: 'PT', confidence: 0.9, callId: 'c' },
       ],
       adjacentSymbolTypes: ['voltage_transformer'],
@@ -35,6 +35,24 @@ describe('ocr-adjudicator', () => {
     });
     expect(result.status).toBe('CONFIRMED_BY_MAJORITY_AND_CONTEXT');
     expect(result.confirmedText).toBe('PT');
+  });
+
+  it('does not treat repeated copies of one call as triple-read evidence', () => {
+    const result = adjudicateOcr({
+      displayId: 'P03-T017',
+      pageIndex: 2,
+      bounds: { x: 10, y: 10, w: 40, h: 16 },
+      readings: [
+        { variantId: 'original', text: 'PT', confidence: 0.9, callId: 'same-call' },
+        { variantId: 'original', text: 'PT', confidence: 0.9, callId: 'same-call' },
+        { variantId: 'original', text: 'PT', confidence: 0.9, callId: 'same-call' },
+      ],
+      adjacentSymbolTypes: ['voltage_transformer'],
+      legendTerms: ['PT'],
+      standardTerms: ['PT'],
+    });
+
+    expect(result.status).toBe('AMBIGUOUS');
   });
 
   it('returns UNREADABLE when all empty', () => {

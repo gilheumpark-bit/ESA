@@ -82,6 +82,26 @@ function resultFor(role: VLMReviewRole, sourceByteLength = 1): VLMRoleAnalysisRe
 }
 
 describe('sealed independent drawing council', () => {
+  it('triple-reads text with independent original, 4x, and high-contrast calls', async () => {
+    const inputVariants = [
+      ...variants(),
+      { id: 'variant:upscale-4x', kind: 'upscale-4x' as const, buffer: new ArrayBuffer(6), width: 400, height: 320, transform: { scaleX: 4, scaleY: 4, offsetX: 0, offsetY: 0 } },
+    ];
+    const textCalls: number[] = [];
+
+    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: inputVariants, regions: [], options }, async (buffer, _mime, role) => {
+      if (role === 'text') textCalls.push(buffer.byteLength);
+      return resultFor(role, buffer.byteLength);
+    });
+
+    expect(textCalls).toEqual([1, 6, 3]);
+    expect(result.envelopes.find((item) => item.role === 'text')?.data.texts?.map((item) => item.sourceId)).toEqual([
+      'variant:original',
+      'variant:upscale-4x',
+      'variant:text',
+    ]);
+  });
+
   it('starts four isolated roles concurrently with role-specific variants and keeps logic full-image only', async () => {
     const started: VLMReviewRole[] = [];
     let release: (() => void) | undefined;
@@ -116,7 +136,9 @@ describe('sealed independent drawing council', () => {
 
     expect(result.envelopes.find((item) => item.role === 'symbols')?.data.symbols?.[0]?.sourceId).toBe(symbolSourceId);
     expect(result.envelopes.find((item) => item.role === 'connections')?.data.lines?.[0]?.sourceId).toBe('variant:lines');
-    expect(result.envelopes.find((item) => item.role === 'text')?.data.texts?.[0]?.sourceId).toBe('variant:text');
+    expect(result.envelopes.find((item) => item.role === 'text')?.data.texts?.map((item) => item.sourceId)).toEqual([
+      'variant:original', 'variant:upscale-4x', 'variant:text',
+    ]);
     expect(result.envelopes.find((item) => item.role === 'logic')?.data.logic?.[0]?.sourceId).toBe('variant:original');
   });
 

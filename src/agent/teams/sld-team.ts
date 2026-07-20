@@ -58,8 +58,8 @@ async function extractFromDrawing(
       : undefined;
     const analysis = parseDxfToSLD(text, requestedScale ? { unitScale: requestedScale } : {});
     return {
-      components: (analysis.components ?? []).map(c => ({
-        id: c.id ?? `comp-${Math.random().toString(36).slice(2, 8)}`,
+      components: (analysis.components ?? []).map((c, index) => ({
+        id: c.id ?? `dxf-comp-${index + 1}`,
         type: c.type,
         label: c.label ?? c.type,
         rating: c.rating,
@@ -85,15 +85,18 @@ async function extractFromDrawing(
       { pageNumber: (params?.pageNumber as number) ?? 1 },
     );
     return {
-      components: (analysis.components ?? []).map(c => ({
-        id: c.id ?? `comp-${Math.random().toString(36).slice(2, 8)}`,
+      components: (analysis.components ?? []).map((c, index) => ({
+        id: c.id ?? `pdf-comp-${index + 1}`,
         type: c.type,
         label: c.label ?? c.type,
+        rating: c.rating,
+        position: c.position,
         confidence: 0.85,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
         to: conn.to,
+        cableType: conn.cableType,
         length: typeof conn.length === 'string' ? parseFloat(conn.length) || undefined : conn.length,
       })),
       confidence: analysis.confidence ?? 0.80,
@@ -253,16 +256,24 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
       ? 'upscale-2x'
       : 'original';
   const hasRequiredSymbolVariant = prepared.variants.some((variant) => variant.kind === requiredSymbolVariantKind);
+  const hasTripleTextVariants = ['original', 'upscale-4x', 'text-high-contrast']
+    .every((kind) => prepared.variants.some((variant) => variant.kind === kind));
   const coverageRoles = {
     logic: { variantId: selectCouncilVariant('logic', prepared.variants, prepared.snapshot.quality.recommendedScale).id, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
     ...Object.fromEntries(selectedRoles.map((role) => {
       const variantId = selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale).id;
       const actualRegionCount = prepared.regions.filter((region) => region.variantId === variantId).length;
-      return [role, { variantId, expectedRegionCount, actualRegionCount, plannedCalls: 1 + actualRegionCount }];
+      return [role, {
+        variantId,
+        expectedRegionCount,
+        actualRegionCount,
+        plannedCalls: 1 + actualRegionCount + (role === 'text' && hasTripleTextVariants ? 2 : 0),
+      }];
     })),
   } as DrawingReviewArtifact['coverage']['roles'];
   const selectedVariantIds = new Set(selectedRoles.map((role) => coverageRoles[role].variantId));
   const coverageComplete = hasRequiredSymbolVariant
+    && hasTripleTextVariants
     && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
     && prepared.regions.length === expectedRegionCount * selectedRoles.length
     && prepared.regions.every((region) => selectedVariantIds.has(region.variantId));
@@ -286,6 +297,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     ...fatal.map((failure) => hold(`${failure.role} review 실패: ${failure.sourceId}`)),
     ...failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
     ...(!hasRequiredSymbolVariant ? [hold(`symbols precision source ${requiredSymbolVariantKind}가 없습니다.`)] : []),
+    ...(!hasTripleTextVariants ? [hold('text triple-read sources original/upscale-4x/text-high-contrast가 모두 필요합니다.')] : []),
     ...(!coverageComplete ? selectedRoles.flatMap((role) => {
       const coverage = coverageRoles[role];
       return coverage.actualRegionCount === coverage.expectedRegionCount ? [] : [hold(`${role} precision coverage expected ${coverage.expectedRegionCount}, actual ${coverage.actualRegionCount}.`)];

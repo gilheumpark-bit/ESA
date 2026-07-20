@@ -58,4 +58,17 @@ describe('recommendation-engine', () => {
     });
     expect(recs.some((r) => r.problem.includes('보호기'))).toBe(true);
   });
+
+  it('uses coverage evidence for an absent-ground finding and keeps unresolved topology as HOLD', () => {
+    const recs = buildRecommendations({
+      symbols: [mk('P01-S001', 'load')], relations: [], calculations: [],
+      unresolved: [{ id: 'u1', code: 'LINE_CONTINUITY_UNCERTAIN', displayId: 'P01-L001', pageIndex: 0, bounds: { x: 0, y: 0, w: 20, h: 2 }, note: '종단 장치 미확정' }],
+      hasGroundPath: false,
+      coverageEvidenceIds: ['coverage-call-1'],
+    });
+    expect(recs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ problem: expect.stringContaining('접지 경로'), status: 'SUPPORTED', evidenceIds: expect.arrayContaining(['coverage-call-1']) }),
+      expect.objectContaining({ problem: expect.stringContaining('P01-L001'), status: 'HOLD' }),
+    ]));
+  });
 });
