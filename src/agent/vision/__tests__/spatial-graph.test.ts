@@ -1,29 +1,55 @@
 import { assembleSpatialGraph } from '../spatial-graph';
 import type { ReviewRole, RoleReviewData, RoleReviewEnvelope } from '../review-types';
+import { createHash } from 'node:crypto';
 
-const HASH = 'a'.repeat(64);
+function canonicalize(value: unknown): string {
+  if (value === undefined || value === null) return 'null';
+  if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : 'null';
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item)).join(',')}]`;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`;
+  }
+  return 'null';
+}
 
 function envelope(role: ReviewRole, data: Partial<RoleReviewData>, drawingHash = 'drawing-hash'): RoleReviewEnvelope {
-  return {
+  const seal: Omit<RoleReviewEnvelope, 'outputHash'> = {
     role,
     drawingHash,
     provider: 'openai',
     model: 'test',
     promptVersion: 'sld-role-v1',
-    outputHash: HASH,
     durationMs: 1,
     data: { warnings: [], confidence: 1, ...data },
   };
+  return { ...seal, outputHash: createHash('sha256').update(canonicalize(seal)).digest('hex') };
+}
+
+function reseal(envelopes: RoleReviewEnvelope[]): void {
+  for (const item of envelopes) {
+    const seal = {
+      role: item.role,
+      drawingHash: item.drawingHash,
+      provider: item.provider,
+      model: item.model,
+      promptVersion: item.promptVersion,
+      durationMs: item.durationMs,
+      data: item.data,
+    };
+    item.outputHash = createHash('sha256').update(canonicalize(seal)).digest('hex');
+  }
 }
 
 function fixture(options: { distant?: boolean; duplicate?: boolean; ambiguousType?: boolean; nullLabel?: boolean } = {}): RoleReviewEnvelope[] {
   const symbols = [
     {
-      id: 'sym-a', sourceId: 'full', typeCandidates: options.ambiguousType ? ['VCB', 'ACB'] : ['VCB'], rawLabel: options.nullLabel ? null : 'VCB',
+      id: 'sym-a', sourceId: 'variant:original', typeCandidates: options.ambiguousType ? ['VCB', 'ACB'] : ['VCB'], rawLabel: options.nullLabel ? null : 'VCB',
       bounds: { x: 0, y: 40, w: 20, h: 20, page: 1 }, ports: [{ x: 20, y: 50 }], confidence: 0.99,
     },
     {
-      id: 'sym-b', sourceId: 'full', typeCandidates: ['TR'], rawLabel: 'TR',
+      id: 'sym-b', sourceId: 'variant:original', typeCandidates: ['TR'], rawLabel: 'TR',
       bounds: { x: 80, y: 40, w: 20, h: 20, page: 1 }, ports: [{ x: 80, y: 50 }], confidence: 0.99,
     },
   ];
@@ -38,11 +64,11 @@ function fixture(options: { distant?: boolean; duplicate?: boolean; ambiguousTyp
   return [
     envelope('symbols', { symbols }),
     envelope('connections', { lines: [{
-      id: 'line-a', sourceId: 'full', lineKind: 'power', path: [start, end], start, end,
+      id: 'line-a', sourceId: 'variant:line-enhanced', lineKind: 'power', path: [start, end], start, end,
       junctions: [{ x: 50, y: 50 }], crossovers: [{ x: 50, y: 70 }], confidence: 0.98,
     }] }),
     envelope('text', { texts: [{
-      id: 'text-a', sourceId: 'full', raw: 'PT', candidates: ['PT', 'PPT'],
+      id: 'text-a', sourceId: 'variant:text-high-contrast', raw: 'PT', candidates: ['PT', 'PPT'],
       bounds: { x: 72, y: 60, w: 12, h: 8, page: 1 }, confidence: 0.9,
     }] }),
   ];
@@ -77,14 +103,15 @@ describe('source-linked spatial graph', () => {
     expect(breaker?.confidence).toBe(0.99);
   });
 
-  it('deduplicates reversed full and region lines while retaining provenance, junctions, and crossovers separately', () => {
+  it('deduplicates near forward/reverse full and region polylines while retaining provenance, junctions, and crossovers separately', () => {
     const input = fixture();
     const connections = input[1];
     connections.data.lines?.push({
       id: 'line-region', sourceId: 'region:1', lineKind: 'power',
-      path: [{ x: 80, y: 50 }, { x: 20, y: 50 }], start: { x: 80, y: 50 }, end: { x: 20, y: 50 },
-      junctions: [{ x: 50, y: 50 }], crossovers: [{ x: 50, y: 70 }], confidence: 0.7,
+      path: [{ x: 80, y: 51 }, { x: 50, y: 52 }, { x: 20, y: 50 }], start: { x: 80, y: 51 }, end: { x: 20, y: 50 },
+      junctions: [{ x: 51, y: 51 }], crossovers: [{ x: 51, y: 70 }], confidence: 0.7,
     });
+    reseal(input);
 
     const graph = assembleSpatialGraph(input, { snapTolerance: 24 });
 
@@ -92,6 +119,23 @@ describe('source-linked spatial graph', () => {
     expect(graph.lines[0].originalEvidenceIds).toEqual(['line-a', 'line-region']);
     expect(graph.junctions).toHaveLength(1);
     expect(graph.crossovers).toHaveLength(1);
+  });
+
+  it('does not merge a distinct parallel path while rejecting oversized nested point input before assembly', () => {
+    const parallel = fixture();
+    parallel[1].data.lines?.push({
+      id: 'line-parallel', sourceId: 'region:1', lineKind: 'power',
+      path: [{ x: 20, y: 56 }, { x: 80, y: 56 }], start: { x: 20, y: 56 }, end: { x: 80, y: 56 },
+      junctions: [], crossovers: [], confidence: 0.7,
+    });
+    reseal(parallel);
+    expect(assembleSpatialGraph(parallel).lines).toHaveLength(2);
+
+    const oversized = fixture();
+    const line = oversized[1].data.lines?.[0] as NonNullable<RoleReviewData['lines']>[number];
+    line.path = Array.from({ length: 10_001 }, (_, index) => ({ x: index, y: 50 }));
+    reseal(oversized);
+    expect(() => assembleSpatialGraph(oversized)).toThrow(/nested input budget/);
   });
 
   it('never invents an edge for distant, ambiguous, or same-device endpoints', () => {
@@ -104,6 +148,7 @@ describe('source-linked spatial graph', () => {
       id: 'sym-c', sourceId: 'full', typeCandidates: ['MTR'], rawLabel: 'MTR',
       bounds: { x: 18, y: 40, w: 20, h: 20, page: 1 }, ports: [{ x: 20, y: 50 }], confidence: 0.8,
     });
+    reseal(ambiguous);
     const graph = assembleSpatialGraph(ambiguous, { snapTolerance: 24 });
     expect(graph.edges).toEqual([]);
     expect(graph.conflicts).toContain('AMBIGUOUS_LINE_ENDPOINT:LINE-001');
@@ -113,25 +158,31 @@ describe('source-linked spatial graph', () => {
     line[0].path = [{ x: 20, y: 50 }, { x: 20, y: 50 }];
     line[0].start = { x: 20, y: 50 };
     line[0].end = { x: 20, y: 50 };
+    reseal(sameDevice);
     const selfGraph = assembleSpatialGraph(sameDevice, { snapTolerance: 24 });
     expect(selfGraph.edges).toEqual([]);
     expect(selfGraph.conflicts).toContain('SELF_LINE_ENDPOINT:LINE-001');
   });
 
-  it('does not bind a line to a symbol from another evidence source or page', () => {
+  it('binds role-specific prepared sources in the same drawing and page, but rejects unknown multi-page line frames', () => {
     const input = fixture();
-    const lines = input[1].data.lines as NonNullable<RoleReviewData['lines']>;
-    lines[0].sourceId = 'region:only';
     const graph = assembleSpatialGraph(input, { snapTolerance: 24 });
+    expect(graph.edges).toHaveLength(1);
 
-    expect(graph.edges).toEqual([]);
-    expect(graph.conflicts).toContain('UNBOUND_LINE_ENDPOINT:LINE-001');
+    const multiPage = fixture();
+    multiPage[0].data.symbols?.push({
+      id: 'sym-page-2', sourceId: 'variant:original', typeCandidates: ['MTR'], rawLabel: 'MTR',
+      bounds: { x: 0, y: 40, w: 20, h: 20, page: 2 }, ports: [{ x: 20, y: 50 }], confidence: 0.8,
+    });
+    reseal(multiPage);
+    expect(() => assembleSpatialGraph(multiPage, { snapTolerance: 24 })).toThrow(/line page/);
   });
 
   it('keeps text evidence and reports ambiguous text links instead of selecting a nearest symbol', () => {
     const input = fixture();
     const texts = input[2].data.texts as NonNullable<RoleReviewData['texts']>;
     texts[0].bounds = { x: 45, y: 45, w: 10, h: 10, page: 1 };
+    reseal(input);
     const graph = assembleSpatialGraph(input, { snapTolerance: 40 });
 
     expect(graph.texts).toHaveLength(1);
@@ -159,9 +210,39 @@ describe('source-linked spatial graph', () => {
     expect(() => assembleSpatialGraph([envelope('symbols', { texts: [] } as Partial<RoleReviewData>)] )).toThrow(/collection/);
     expect(() => assembleSpatialGraph([envelope('symbols', { symbols: [] }, 'other-hash'), valid[1], valid[2]])).toThrow(/drawingHash/);
     expect(() => assembleSpatialGraph(valid.map((item) => ({ ...item, outputHash: 'not-a-hash' })))).toThrow(/outputHash/);
+    for (const key of ['provider', 'model', 'promptVersion', 'durationMs', 'data'] as const) {
+      const tampered = structuredClone(valid);
+      if (key === 'durationMs') tampered[0][key] = 2;
+      else if (key === 'data') tampered[0].data.warnings.push('tampered');
+      else if (key === 'provider') tampered[0].provider = 'gemini';
+      else if (key === 'model') tampered[0].model = 'tampered';
+      else tampered[0].promptVersion = 'tampered';
+      expect(() => assembleSpatialGraph(tampered)).toThrow(/outputHash/);
+    }
     expect(() => assembleSpatialGraph(valid, { snapTolerance: Number.NaN })).toThrow(/snapTolerance/);
     expect(() => assembleSpatialGraph(valid, { snapTolerance: -1 })).toThrow(/snapTolerance/);
     expect(() => assembleSpatialGraph(valid, { dedupeIou: Infinity })).toThrow(/dedupeIou/);
     expect(() => assembleSpatialGraph([envelope('symbols', { symbols: new Array(2_001).fill({}) })])).toThrow(/budget/);
+  });
+
+  it('merges overlapping candidate sets and duplicate OCR text while preserving union provenance', () => {
+    const input = fixture();
+    input[0].data.symbols?.push({
+      id: 'sym-a-region', sourceId: 'region:1', typeCandidates: ['VCB', 'ACB'], rawLabel: null,
+      bounds: { x: 1, y: 41, w: 20, h: 20, page: 1 }, ports: [{ x: 21, y: 51 }], confidence: 0.8,
+    });
+    input[2].data.texts?.push({
+      id: 'text-a-region', sourceId: 'region:1', raw: 'PT', candidates: ['PPT', 'PT'],
+      bounds: { x: 73, y: 60, w: 12, h: 8, page: 1 }, confidence: 0.8,
+    });
+    reseal(input);
+    const graph = assembleSpatialGraph(input);
+
+    expect(graph.symbols.filter((item) => item.originalEvidenceIds.includes('sym-a'))).toHaveLength(1);
+    expect(graph.symbols.find((item) => item.originalEvidenceIds.includes('sym-a'))).toMatchObject({ typeCandidates: ['VCB', 'ACB'], originalEvidenceIds: ['sym-a', 'sym-a-region'] });
+    expect(graph.conflicts).toContain('AMBIGUOUS_SYMBOL_TYPE:sym-a');
+    expect(graph.texts).toHaveLength(1);
+    expect(graph.texts[0].originalEvidenceIds).toEqual(['text-a', 'text-a-region']);
+    expect(graph.texts[0].candidates).toEqual(['PT', 'PPT']);
   });
 });

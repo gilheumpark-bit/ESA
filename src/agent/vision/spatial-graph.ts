@@ -1,5 +1,6 @@
 import type { EvidenceBounds, Point } from './evidence-types';
 import type { LineEvidence, RoleReviewData, RoleReviewEnvelope, SymbolEvidence, TextEvidence } from './review-types';
+import { createHash } from 'node:crypto';
 
 const INPUT_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_INPUT_EVIDENCE = 2_000;
@@ -8,6 +9,10 @@ const MAX_ID_LENGTH = 240;
 const DEFAULT_SNAP_TOLERANCE = 24;
 const DEFAULT_DEDUPE_IOU = 0.5;
 const LINE_TOLERANCE = 1e-6;
+const GEOMETRY_TOLERANCE = 2;
+const MAX_NESTED_ITEMS = 10_000;
+const MAX_TOTAL_POINTS = 10_000;
+const MAX_TOTAL_STRINGS = 200_000;
 
 type InputRole = (typeof INPUT_ROLES)[number];
 
@@ -35,6 +40,7 @@ export interface SpatialText extends TextEvidence {
   id: string;
   originalEvidenceId: string;
   originalEvidenceIds: string[];
+  sourceIds: string[];
 }
 
 export interface SpatialJunction {
@@ -82,6 +88,16 @@ interface LineRecord {
   pages: number[];
 }
 
+interface TextRecord {
+  item: TextEvidence;
+  evidence: TextEvidence[];
+}
+
+interface InputBudget {
+  points: number;
+  strings: number;
+}
+
 function invalid(message: string): never {
   throw new Error(`Invalid spatial graph input: ${message}`);
 }
@@ -119,59 +135,78 @@ function assertArray(value: unknown, label: string): asserts value is unknown[] 
   if (!Array.isArray(value)) invalid(`${label} must be an array.`);
 }
 
+function consumeBudget(budget: InputBudget, points: number, strings: number): void {
+  budget.points += points;
+  budget.strings += strings;
+  if (budget.points > MAX_TOTAL_POINTS) invalid(`points exceed the ${MAX_TOTAL_POINTS} input budget.`);
+  if (budget.strings > MAX_TOTAL_STRINGS) invalid(`strings exceed the ${MAX_TOTAL_STRINGS} input budget.`);
+}
+
+function assertBoundedArray(value: unknown, label: string): asserts value is unknown[] {
+  assertArray(value, label);
+  if (value.length > MAX_NESTED_ITEMS) invalid(`${label} exceeds the nested input budget.`);
+}
+
 function assertConfidence(value: unknown, label: string): void {
   assertFinite(value, label);
   if (value < 0 || value > 1) invalid(`${label} must be from 0 to 1.`);
 }
 
-function assertSymbol(item: unknown): asserts item is SymbolEvidence {
+function assertSymbol(item: unknown, budget: InputBudget): asserts item is SymbolEvidence {
   if (!item || typeof item !== 'object') invalid('symbol must be an object.');
   const value = item as SymbolEvidence;
   assertEvidenceId(value.id, 'symbol.id');
-  assertArray(value.typeCandidates, 'symbol.typeCandidates');
+  if (value.sourceId !== undefined) assertEvidenceId(value.sourceId, 'symbol.sourceId');
+  assertBoundedArray(value.typeCandidates, 'symbol.typeCandidates');
   if (!value.typeCandidates.every((candidate) => typeof candidate === 'string' && candidate.length <= MAX_ID_LENGTH)) {
     invalid('symbol.typeCandidates must contain bounded strings.');
   }
   if (value.rawLabel !== null && (typeof value.rawLabel !== 'string' || value.rawLabel.length > 4_000)) invalid('symbol.rawLabel is invalid.');
   assertBounds(value.bounds, 'symbol.bounds');
-  assertArray(value.ports, 'symbol.ports');
+  assertBoundedArray(value.ports, 'symbol.ports');
   value.ports.forEach((point, index) => assertPoint(point, `symbol.ports[${index}]`));
   assertConfidence(value.confidence, 'symbol.confidence');
+  consumeBudget(budget, value.ports.length, value.id.length + (value.sourceId?.length ?? 0) + (value.rawLabel?.length ?? 0) + value.typeCandidates.reduce((sum, candidate) => sum + candidate.length, 0));
 }
 
-function assertLine(item: unknown): asserts item is LineEvidence {
+function assertLine(item: unknown, budget: InputBudget): asserts item is LineEvidence {
   if (!item || typeof item !== 'object') invalid('line must be an object.');
   const value = item as LineEvidence;
   assertEvidenceId(value.id, 'line.id');
+  if (value.sourceId !== undefined) assertEvidenceId(value.sourceId, 'line.sourceId');
   assertEvidenceId(value.lineKind, 'line.lineKind');
-  assertArray(value.path, 'line.path');
+  assertBoundedArray(value.path, 'line.path');
   if (value.path.length < 2) invalid('line.path must have at least two points.');
   value.path.forEach((point, index) => assertPoint(point, `line.path[${index}]`));
   assertPoint(value.start, 'line.start');
   assertPoint(value.end, 'line.end');
-  assertArray(value.junctions, 'line.junctions');
-  assertArray(value.crossovers, 'line.crossovers');
+  assertBoundedArray(value.junctions, 'line.junctions');
+  assertBoundedArray(value.crossovers, 'line.crossovers');
   value.junctions.forEach((point, index) => assertPoint(point, `line.junctions[${index}]`));
   value.crossovers.forEach((point, index) => assertPoint(point, `line.crossovers[${index}]`));
   assertConfidence(value.confidence, 'line.confidence');
+  consumeBudget(budget, value.path.length + value.junctions.length + value.crossovers.length + 2, value.id.length + (value.sourceId?.length ?? 0) + value.lineKind.length);
 }
 
-function assertText(item: unknown): asserts item is TextEvidence {
+function assertText(item: unknown, budget: InputBudget): asserts item is TextEvidence {
   if (!item || typeof item !== 'object') invalid('text must be an object.');
   const value = item as TextEvidence;
   assertEvidenceId(value.id, 'text.id');
+  if (value.sourceId !== undefined) assertEvidenceId(value.sourceId, 'text.sourceId');
   if (typeof value.raw !== 'string' || value.raw.length > 4_000) invalid('text.raw is invalid.');
-  assertArray(value.candidates, 'text.candidates');
+  assertBoundedArray(value.candidates, 'text.candidates');
   if (!value.candidates.every((candidate) => typeof candidate === 'string' && candidate.length <= 4_000)) invalid('text.candidates are invalid.');
   assertBounds(value.bounds, 'text.bounds');
   assertConfidence(value.confidence, 'text.confidence');
+  consumeBudget(budget, 0, value.id.length + (value.sourceId?.length ?? 0) + value.raw.length + value.candidates.reduce((sum, candidate) => sum + candidate.length, 0));
 }
 
-function assertEnvelopeData(role: InputRole, data: RoleReviewData): void {
+function assertEnvelopeData(role: InputRole, data: RoleReviewData, budget: InputBudget): void {
   if (!data || typeof data !== 'object' || !Array.isArray(data.warnings)) invalid('data must include warnings.');
   if (data.warnings.length > MAX_INPUT_EVIDENCE || !data.warnings.every((warning) => typeof warning === 'string' && warning.length <= 4_000)) {
     invalid('warnings exceed the bounded input contract.');
   }
+  consumeBudget(budget, 0, data.warnings.reduce((sum, warning) => sum + warning.length, 0));
   assertConfidence(data.confidence, 'data.confidence');
   const collection = role === 'symbols' ? data.symbols : role === 'connections' ? data.lines : data.texts;
   if (!Array.isArray(collection)) invalid(`${role} collection is required.`);
@@ -182,9 +217,34 @@ function assertEnvelopeData(role: InputRole, data: RoleReviewData): void {
     (role !== 'text' && data.texts !== undefined) ||
     data.logic !== undefined
   ) invalid(`${role} contains an unsupported collection.`);
-  if (role === 'symbols') data.symbols?.forEach(assertSymbol);
-  if (role === 'connections') data.lines?.forEach(assertLine);
-  if (role === 'text') data.texts?.forEach(assertText);
+  if (role === 'symbols') data.symbols?.forEach((item) => assertSymbol(item, budget));
+  if (role === 'connections') data.lines?.forEach((item) => assertLine(item, budget));
+  if (role === 'text') data.texts?.forEach((item) => assertText(item, budget));
+}
+
+function canonicalize(value: unknown): string {
+  if (value === undefined || value === null) return 'null';
+  if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : 'null';
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item)).join(',')}]`;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`;
+  }
+  return 'null';
+}
+
+function sealedOutputHash(envelope: RoleReviewEnvelope): string {
+  const seal = {
+    role: envelope.role,
+    drawingHash: envelope.drawingHash,
+    provider: envelope.provider,
+    model: envelope.model,
+    promptVersion: envelope.promptVersion,
+    durationMs: envelope.durationMs,
+    data: envelope.data,
+  };
+  return createHash('sha256').update(canonicalize(seal)).digest('hex');
 }
 
 function validateInput(envelopes: readonly RoleReviewEnvelope[], options: SpatialGraphOptions): { drawingHash: string; snapTolerance: number; dedupeIou: number } {
@@ -197,6 +257,7 @@ function validateInput(envelopes: readonly RoleReviewEnvelope[], options: Spatia
   const roles = new Set<string>();
   let drawingHash: string | undefined;
   let evidenceCount = 0;
+  const budget: InputBudget = { points: 0, strings: 0 };
   for (const envelope of envelopes) {
     if (!envelope || typeof envelope !== 'object') invalid('envelope must be an object.');
     if (!INPUT_ROLES.includes(envelope.role as InputRole)) invalid('envelope role is unsupported.');
@@ -205,8 +266,9 @@ function validateInput(envelopes: readonly RoleReviewEnvelope[], options: Spatia
     assertEvidenceId(envelope.drawingHash, 'drawingHash');
     if (drawingHash !== undefined && drawingHash !== envelope.drawingHash) invalid('drawingHash must match across envelopes.');
     drawingHash = envelope.drawingHash;
+    assertEnvelopeData(envelope.role, envelope.data, budget);
     if (typeof envelope.outputHash !== 'string' || !/^[a-f0-9]{64}$/.test(envelope.outputHash)) invalid('outputHash must be a SHA-256 hex string.');
-    assertEnvelopeData(envelope.role, envelope.data);
+    if (envelope.outputHash !== sealedOutputHash(envelope)) invalid('outputHash does not match the canonical sealed envelope.');
     evidenceCount += envelope.data.symbols?.length ?? 0;
     evidenceCount += envelope.data.lines?.length ?? 0;
     evidenceCount += envelope.data.texts?.length ?? 0;
@@ -216,8 +278,8 @@ function validateInput(envelopes: readonly RoleReviewEnvelope[], options: Spatia
   return { drawingHash: drawingHash as string, snapTolerance, dedupeIou };
 }
 
-function normalizedCandidateSet(symbol: SymbolEvidence): string {
-  return [...new Set(symbol.typeCandidates.map((item) => item.trim().toUpperCase()).filter(Boolean))].sort().join('|') || 'UNK';
+function normalizedCandidates(values: readonly string[]): string[] {
+  return [...new Set(values.map((item) => item.trim().toUpperCase()).filter(Boolean))].sort();
 }
 
 function displayType(symbol: SymbolEvidence): string {
@@ -229,6 +291,19 @@ function displayType(symbol: SymbolEvidence): string {
 
 function normalizedLabel(symbol: SymbolEvidence): string {
   return symbol.rawLabel?.trim().toUpperCase() ?? '';
+}
+
+function compatibleLabels(left: SymbolEvidence, right: SymbolEvidence): boolean {
+  return left.rawLabel === null || right.rawLabel === null || normalizedLabel(left) === normalizedLabel(right);
+}
+
+function overlapsCandidates(left: readonly SymbolEvidence[], right: SymbolEvidence): boolean {
+  const known = new Set(left.flatMap((item) => normalizedCandidates(item.typeCandidates)));
+  return normalizedCandidates(right.typeCandidates).some((candidate) => known.has(candidate));
+}
+
+function unionCandidates(evidence: readonly SymbolEvidence[]): string[] {
+  return [...new Set(evidence.flatMap((item) => item.typeCandidates))];
 }
 
 function compareSymbols(left: SymbolEvidence, right: SymbolEvidence): number {
@@ -255,13 +330,35 @@ function deduplicateSymbols(symbols: readonly SymbolEvidence[], threshold: numbe
   for (const candidate of prioritized) {
     const match = accepted.find((record) =>
       record.item.bounds.page === candidate.bounds.page
-      && normalizedCandidateSet(record.item) === normalizedCandidateSet(candidate)
-      && normalizedLabel(record.item) === normalizedLabel(candidate)
+      && compatibleLabels(record.item, candidate)
+      && overlapsCandidates(record.evidence, candidate)
       && iou(record.item.bounds, candidate.bounds) >= threshold);
     if (match) match.evidence.push(candidate);
     else accepted.push({ item: candidate, evidence: [candidate] });
   }
   return accepted.sort((left, right) => compareSymbols(left.item, right.item));
+}
+
+function normalizedTextCandidates(text: TextEvidence): string {
+  return normalizedCandidates(text.candidates).join('|');
+}
+
+function deduplicateTexts(texts: readonly TextEvidence[], threshold: number): TextRecord[] {
+  const ordered = [...texts].sort((left, right) => right.confidence - left.confidence
+    || left.bounds.page - right.bounds.page || left.bounds.y - right.bounds.y || left.bounds.x - right.bounds.x
+    || left.raw.localeCompare(right.raw) || left.id.localeCompare(right.id));
+  const accepted: TextRecord[] = [];
+  for (const candidate of ordered) {
+    const match = accepted.find((record) => record.item.bounds.page === candidate.bounds.page
+      && record.item.raw.trim().toUpperCase() === candidate.raw.trim().toUpperCase()
+      && normalizedTextCandidates(record.item) === normalizedTextCandidates(candidate)
+      && iou(record.item.bounds, candidate.bounds) >= threshold);
+    if (match) match.evidence.push(candidate);
+    else accepted.push({ item: candidate, evidence: [candidate] });
+  }
+  return accepted.sort((left, right) => left.item.bounds.page - right.item.bounds.page
+    || left.item.bounds.y - right.item.bounds.y || left.item.bounds.x - right.item.bounds.x
+    || left.item.raw.localeCompare(right.item.raw) || left.item.id.localeCompare(right.item.id));
 }
 
 function distance(left: Point, right: Point): number {
@@ -276,11 +373,40 @@ function samePoint(left: Point, right: Point, tolerance = LINE_TOLERANCE): boole
   return distance(left, right) <= tolerance;
 }
 
+function resamplePolyline(path: readonly Point[], count: number): Point[] {
+  const lengths = new Array<number>(path.length).fill(0);
+  for (let index = 1; index < path.length; index += 1) lengths[index] = lengths[index - 1] + distance(path[index - 1], path[index]);
+  const total = lengths[lengths.length - 1];
+  if (total === 0) return Array.from({ length: count }, () => ({ ...path[0] }));
+  const samples: Point[] = [];
+  let segment = 1;
+  for (let index = 0; index < count; index += 1) {
+    const target = total * index / (count - 1);
+    while (segment < lengths.length - 1 && lengths[segment] < target) segment += 1;
+    const previous = lengths[segment - 1];
+    const span = lengths[segment] - previous;
+    const ratio = span === 0 ? 0 : (target - previous) / span;
+    samples.push({
+      x: path[segment - 1].x + (path[segment].x - path[segment - 1].x) * ratio,
+      y: path[segment - 1].y + (path[segment].y - path[segment - 1].y) * ratio,
+    });
+  }
+  return samples;
+}
+
+function endpointMatch(left: LineEvidence, right: LineEvidence, reverse: boolean): boolean {
+  return samePoint(left.start, reverse ? right.end : right.start, GEOMETRY_TOLERANCE)
+    && samePoint(left.end, reverse ? right.start : right.end, GEOMETRY_TOLERANCE);
+}
+
 function sameLine(left: LineEvidence, right: LineEvidence): boolean {
-  if (left.lineKind !== right.lineKind || left.path.length !== right.path.length) return false;
-  const forward = left.path.every((point, index) => samePoint(point, right.path[index]));
-  const reverse = left.path.every((point, index) => samePoint(point, right.path[right.path.length - index - 1]));
-  return forward || reverse;
+  if (left.lineKind !== right.lineKind) return false;
+  const reverse = endpointMatch(left, right, true);
+  if (!reverse && !endpointMatch(left, right, false)) return false;
+  const sampleCount = Math.max(2, Math.min(128, Math.max(left.path.length, right.path.length)));
+  const leftSamples = resamplePolyline(left.path, sampleCount);
+  const rightSamples = resamplePolyline(reverse ? [...right.path].reverse() : right.path, sampleCount);
+  return leftSamples.every((point, index) => samePoint(point, rightSamples[index], GEOMETRY_TOLERANCE));
 }
 
 function sourcePages(symbols: readonly SymbolEvidence[]): Map<string, number[]> {
@@ -310,6 +436,7 @@ function deduplicateLines(
     const candidatePages = candidate.sourceId
       ? pagesBySource.get(candidate.sourceId) ?? (fallbackPages.length === 1 ? [...fallbackPages] : [])
       : fallbackPages.length === 1 ? [...fallbackPages] : [];
+    if (candidatePages.length !== 1) invalid('line page cannot be inferred safely from an ambiguous drawing frame.');
     const match = accepted.find((record) =>
       (record.pages.length === 0 || candidatePages.length === 0 || record.pages.join(',') === candidatePages.join(','))
       && sameLine(record.item, candidate));
@@ -344,10 +471,29 @@ function deduplicatePoints(
   prefix: string,
 ): SpatialJunction[] {
   const accepted: Array<{ page: number; point: Point; originalEvidenceIds: string[] }> = [];
+  const buckets = new Map<string, number[]>();
   for (const value of values.sort((left, right) => left.page - right.page || left.point.y - right.point.y || left.point.x - right.point.x)) {
-    const match = accepted.find((item) => item.page === value.page && samePoint(item.point, value.point));
+    const bucketX = Math.floor(value.point.x / GEOMETRY_TOLERANCE);
+    const bucketY = Math.floor(value.point.y / GEOMETRY_TOLERANCE);
+    let match: { page: number; point: Point; originalEvidenceIds: string[] } | undefined;
+    for (let x = bucketX - 1; x <= bucketX + 1 && !match; x += 1) {
+      for (let y = bucketY - 1; y <= bucketY + 1 && !match; y += 1) {
+        for (const index of buckets.get(`${value.page}:${x}:${y}`) ?? []) {
+          if (samePoint(accepted[index].point, value.point, GEOMETRY_TOLERANCE)) {
+            match = accepted[index];
+            break;
+          }
+        }
+      }
+    }
     if (match) match.originalEvidenceIds.push(...value.originalEvidenceIds);
-    else accepted.push({ page: value.page, point: { ...value.point }, originalEvidenceIds: [...value.originalEvidenceIds] });
+    else {
+      const index = accepted.push({ page: value.page, point: { ...value.point }, originalEvidenceIds: [...value.originalEvidenceIds] }) - 1;
+      const key = `${value.page}:${bucketX}:${bucketY}`;
+      const entries = buckets.get(key) ?? [];
+      entries.push(index);
+      buckets.set(key, entries);
+    }
   }
   return accepted.map((item, index) => ({
     id: `${prefix}-${String(index + 1).padStart(3, '0')}`,
@@ -357,14 +503,9 @@ function deduplicatePoints(
   }));
 }
 
-function sourceMatches(symbol: SpatialSymbol, line: SpatialLine): boolean {
-  return symbol.sourceIds.some((sourceId) => line.sourceIds.includes(sourceId));
-}
-
 function endpointCandidates(line: SpatialLine, point: Point, symbols: readonly SpatialSymbol[], tolerance: number): SpatialSymbol[] {
   return symbols.filter((symbol) =>
-    sourceMatches(symbol, line)
-    && line.pages.includes(symbol.bounds.page)
+    line.pages.includes(symbol.bounds.page)
     && Math.min(distance(center(symbol.bounds), point), ...symbol.ports.map((port) => distance(port, point))) <= tolerance)
     .sort((left, right) => left.id.localeCompare(right.id));
 }
@@ -373,7 +514,6 @@ function textCandidates(text: SpatialText, symbols: readonly SpatialSymbol[], to
   const textCenter = center(text.bounds);
   return symbols.filter((symbol) =>
     symbol.bounds.page === text.bounds.page
-    && symbol.sourceIds.includes(text.sourceId ?? '')
     && distance(center(symbol.bounds), textCenter) <= tolerance)
     .sort((left, right) => left.id.localeCompare(right.id));
 }
@@ -388,26 +528,22 @@ export function assembleSpatialGraph(
   const textEvidence = envelopes.flatMap((envelope) => envelope.data.texts ?? []);
   const conflicts: string[] = [];
 
-  for (const symbol of symbolEvidence) {
-    if (new Set(symbol.typeCandidates.map((item) => item.trim().toUpperCase()).filter(Boolean)).size > 1) {
-      conflicts.push(`AMBIGUOUS_SYMBOL_TYPE:${symbol.id}`);
-    }
-  }
-
   const symbolRecords = deduplicateSymbols(symbolEvidence, dedupeIou);
   const typeCounts = new Map<string, number>();
   const symbols: SpatialSymbol[] = symbolRecords.map((record) => {
-    const type = displayType(record.item);
+    const typeCandidates = unionCandidates(record.evidence);
+    const type = displayType({ ...record.item, typeCandidates });
     const count = (typeCounts.get(type) ?? 0) + 1;
     typeCounts.set(type, count);
     const originalEvidenceIds = stableIds(record.evidence.map((item) => item.id));
+    if (normalizedCandidates(typeCandidates).length > 1) conflicts.push(`AMBIGUOUS_SYMBOL_TYPE:${originalEvidenceIds[0]}`);
     return {
       ...record.item,
       id: `${type}-${String(count).padStart(2, '0')}`,
       originalEvidenceId: originalEvidenceIds[0],
       originalEvidenceIds,
       sourceIds: stableIds(record.evidence.map((item) => item.sourceId ?? '')),
-      typeCandidates: [...record.item.typeCandidates],
+      typeCandidates: [...typeCandidates],
       ports: record.item.ports.map((point) => ({ ...point })),
       bounds: { ...record.item.bounds },
     };
@@ -446,16 +582,21 @@ export function assembleSpatialGraph(
   const junctions = deduplicatePoints(junctionPoints, 'J');
   const crossovers = deduplicatePoints(crossoverPoints, 'X');
 
-  const texts: SpatialText[] = [...textEvidence]
-    .sort((left, right) => left.bounds.page - right.bounds.page || left.bounds.y - right.bounds.y || left.bounds.x - right.bounds.x || left.raw.localeCompare(right.raw) || left.id.localeCompare(right.id))
-    .map((item, index) => ({
-      ...item,
-      id: `TEXT-${String(index + 1).padStart(3, '0')}`,
-      originalEvidenceId: item.id,
-      originalEvidenceIds: [item.id],
-      candidates: [...item.candidates],
-      bounds: { ...item.bounds },
-    }));
+  const textRecords = deduplicateTexts(textEvidence, dedupeIou);
+  const texts: SpatialText[] = textRecords
+    .map((record, index) => {
+      const originalEvidenceIds = stableIds(record.evidence.map((item) => item.id));
+      const candidates = [...new Set(record.evidence.flatMap((item) => item.candidates))];
+      return {
+        ...record.item,
+        id: `TEXT-${String(index + 1).padStart(3, '0')}`,
+        originalEvidenceId: originalEvidenceIds[0],
+        originalEvidenceIds,
+        sourceIds: stableIds(record.evidence.map((item) => item.sourceId ?? '')),
+        candidates,
+        bounds: { ...record.item.bounds },
+      };
+    });
 
   const edges: SpatialEdge[] = [];
   for (const line of lines) {
