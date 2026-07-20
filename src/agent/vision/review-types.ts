@@ -6,6 +6,10 @@ const MAX_DETECTIONS = 10_000;
 const MAX_ID_LENGTH = 200;
 const MAX_TEXT_LENGTH = 4_000;
 const MAX_PATH_POINTS = 10_000;
+const MAX_PAYLOAD_NODES = 50_000;
+const MAX_PAYLOAD_ARRAY_ITEMS = 20_000;
+const MAX_PAYLOAD_STRING_CHARS = 200_000;
+const MAX_PAYLOAD_DEPTH = 32;
 
 const REVIEW_ROLES = [
   'overview',
@@ -32,7 +36,7 @@ export interface SymbolEvidence {
   id: string;
   sourceId?: string;
   typeCandidates: string[];
-  rawLabel: string;
+  rawLabel: string | null;
   bounds: ReviewBounds;
   ports: Point[];
   confidence: number;
@@ -121,20 +125,76 @@ function asRecord(role: ReviewRole, value: unknown, label: string): RawRecord {
   return value as RawRecord;
 }
 
+function assertAllowedKeys(
+  role: ReviewRole,
+  value: RawRecord,
+  label: string,
+  allowed: readonly string[],
+): void {
+  const allowedKeys = new Set(allowed);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+    invalid(role, `${label} contains an unsupported field.`);
+  }
+}
+
+function assertPayloadBudget(role: ReviewRole, value: unknown): void {
+  const seen = new WeakSet<object>();
+  const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+  let nodes = 0;
+  let arrayItems = 0;
+  let stringChars = 0;
+
+  while (stack.length > 0) {
+    const current = stack.pop() as { value: unknown; depth: number };
+    nodes += 1;
+    if (nodes > MAX_PAYLOAD_NODES) {
+      invalid(role, 'payload exceeds the cumulative node budget.');
+    }
+    if (current.depth > MAX_PAYLOAD_DEPTH) {
+      invalid(role, 'payload exceeds the maximum nesting depth.');
+    }
+    if (typeof current.value === 'string') {
+      stringChars += current.value.length;
+      if (stringChars > MAX_PAYLOAD_STRING_CHARS) {
+        invalid(role, 'payload exceeds the cumulative string budget.');
+      }
+      continue;
+    }
+    if (!current.value || typeof current.value !== 'object') {
+      continue;
+    }
+    if (seen.has(current.value)) {
+      invalid(role, 'payload contains a cycle or shared object reference.');
+    }
+    seen.add(current.value);
+
+    if (Array.isArray(current.value)) {
+      arrayItems += current.value.length;
+      if (arrayItems > MAX_PAYLOAD_ARRAY_ITEMS) {
+        invalid(role, 'payload exceeds the cumulative array-item budget.');
+      }
+      for (const item of current.value) {
+        stack.push({ value: item, depth: current.depth + 1 });
+      }
+      continue;
+    }
+
+    const prototype = Object.getPrototypeOf(current.value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      invalid(role, 'payload contains a non-plain object.');
+    }
+    for (const key of Object.keys(current.value)) {
+      stack.push({ value: (current.value as RawRecord)[key], depth: current.depth + 1 });
+    }
+  }
+}
+
 function boundedString(role: ReviewRole, value: unknown, label: string, maxLength = MAX_TEXT_LENGTH): string {
   if (typeof value !== 'string' || value.trim().length === 0 || value.length > maxLength) {
     return invalid(role, `${label} must be a non-empty bounded string.`);
   }
 
   return value;
-}
-
-function optionalId(role: ReviewRole, value: unknown, label: string): string | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return boundedString(role, value, label, MAX_ID_LENGTH);
 }
 
 function boundedStringArray(
@@ -152,6 +212,7 @@ function boundedStringArray(
 
 function parsePoint(role: ReviewRole, value: unknown, label: string): Point {
   const item = asRecord(role, value, label);
+  assertAllowedKeys(role, item, label, ['x', 'y']);
   const x = item.x;
   const y = item.y;
   if (
@@ -172,6 +233,7 @@ function parsePoint(role: ReviewRole, value: unknown, label: string): Point {
 
 function parseBounds(role: ReviewRole, value: unknown, label: string): ReviewBounds {
   const item = asRecord(role, value, label);
+  assertAllowedKeys(role, item, label, ['x', 'y', 'w', 'h', 'page']);
   const x = item.x;
   const y = item.y;
   const w = item.w;
@@ -233,24 +295,38 @@ function isLogicTopic(value: unknown): value is LogicEvidence['topic'] {
 
 function parseSymbol(role: ReviewRole, value: unknown): SymbolEvidence {
   const item = asRecord(role, value, 'symbol');
-  const sourceId = optionalId(role, item.sourceId, 'symbol.sourceId');
-  const symbol: SymbolEvidence = {
+  assertAllowedKeys(role, item, 'symbol', [
+    'id',
+    'typeCandidates',
+    'rawLabel',
+    'bounds',
+    'ports',
+    'confidence',
+  ]);
+  return {
     id: boundedString(role, item.id, 'symbol.id', MAX_ID_LENGTH),
-    typeCandidates: boundedStringArray(role, item.typeCandidates, 'symbol.typeCandidates', 1),
-    rawLabel: boundedString(role, item.rawLabel, 'symbol.rawLabel'),
+    typeCandidates: boundedStringArray(role, item.typeCandidates, 'symbol.typeCandidates', 0),
+    rawLabel: item.rawLabel === null
+      ? null
+      : boundedString(role, item.rawLabel, 'symbol.rawLabel'),
     bounds: parseBounds(role, item.bounds, 'symbol.bounds'),
     ports: parsePoints(role, item.ports, 'symbol.ports'),
     confidence: parseConfidence(role, item.confidence, 'symbol.confidence'),
   };
-  if (sourceId !== undefined) {
-    symbol.sourceId = sourceId;
-  }
-
-  return symbol;
 }
 
 function parseLine(role: ReviewRole, value: unknown): LineEvidence {
   const item = asRecord(role, value, 'line');
+  assertAllowedKeys(role, item, 'line', [
+    'id',
+    'lineKind',
+    'path',
+    'start',
+    'end',
+    'junctions',
+    'crossovers',
+    'confidence',
+  ]);
   const lineKind = item.lineKind;
   if (!isLineKind(lineKind)) {
     return invalid(role, 'line.lineKind is not supported.');
@@ -261,8 +337,7 @@ function parseLine(role: ReviewRole, value: unknown): LineEvidence {
   if (!samePoint(start, path[0]) || !samePoint(end, path[path.length - 1])) {
     return invalid(role, 'line.start and line.end must match the polyline endpoints.');
   }
-  const sourceId = optionalId(role, item.sourceId, 'line.sourceId');
-  const line: LineEvidence = {
+  return {
     id: boundedString(role, item.id, 'line.id', MAX_ID_LENGTH),
     lineKind,
     path,
@@ -272,28 +347,24 @@ function parseLine(role: ReviewRole, value: unknown): LineEvidence {
     crossovers: parsePoints(role, item.crossovers, 'line.crossovers'),
     confidence: parseConfidence(role, item.confidence, 'line.confidence'),
   };
-  if (sourceId !== undefined) {
-    line.sourceId = sourceId;
-  }
-
-  return line;
 }
 
 function parseText(role: ReviewRole, value: unknown): TextEvidence {
   const item = asRecord(role, value, 'text');
-  const sourceId = optionalId(role, item.sourceId, 'text.sourceId');
-  const text: TextEvidence = {
+  assertAllowedKeys(role, item, 'text', [
+    'id',
+    'raw',
+    'candidates',
+    'bounds',
+    'confidence',
+  ]);
+  return {
     id: boundedString(role, item.id, 'text.id', MAX_ID_LENGTH),
     raw: boundedString(role, item.raw, 'text.raw'),
     candidates: boundedStringArray(role, item.candidates, 'text.candidates', 1),
     bounds: parseBounds(role, item.bounds, 'text.bounds'),
     confidence: parseConfidence(role, item.confidence, 'text.confidence'),
   };
-  if (sourceId !== undefined) {
-    text.sourceId = sourceId;
-  }
-
-  return text;
 }
 
 function parseAttributes(role: ReviewRole, value: unknown): LogicEvidence['attributes'] {
@@ -302,10 +373,13 @@ function parseAttributes(role: ReviewRole, value: unknown): LogicEvidence['attri
   }
 
   const item = asRecord(role, value, 'logic.attributes');
-  const allowed = new Set(['fromId', 'toId', 'protectedById', 'voltageV', 'deviceType']);
-  if (Object.keys(item).some((key) => !allowed.has(key))) {
-    return invalid(role, 'logic.attributes contains an unsupported field.');
-  }
+  assertAllowedKeys(role, item, 'logic.attributes', [
+    'fromId',
+    'toId',
+    'protectedById',
+    'voltageV',
+    'deviceType',
+  ]);
 
   const attributes: NonNullable<LogicEvidence['attributes']> = {};
   if (item.fromId !== undefined) attributes.fromId = boundedString(role, item.fromId, 'logic.attributes.fromId', MAX_ID_LENGTH);
@@ -328,6 +402,15 @@ function parseAttributes(role: ReviewRole, value: unknown): LogicEvidence['attri
 
 function parseLogic(role: ReviewRole, value: unknown): LogicEvidence {
   const item = asRecord(role, value, 'logic');
+  assertAllowedKeys(role, item, 'logic', [
+    'id',
+    'topic',
+    'subjectIds',
+    'attributes',
+    'statement',
+    'evidenceBounds',
+    'confidence',
+  ]);
   const topic = item.topic;
   if (!isLogicTopic(topic)) {
     return invalid(role, 'logic.topic is not supported.');
@@ -335,8 +418,7 @@ function parseLogic(role: ReviewRole, value: unknown): LogicEvidence {
   if (!Array.isArray(item.evidenceBounds) || item.evidenceBounds.length === 0 || item.evidenceBounds.length > MAX_DETECTIONS) {
     return invalid(role, 'logic.evidenceBounds must be a non-empty bounded array.');
   }
-  const sourceId = optionalId(role, item.sourceId, 'logic.sourceId');
-  const logic: LogicEvidence = {
+  return {
     id: boundedString(role, item.id, 'logic.id', MAX_ID_LENGTH),
     topic,
     subjectIds: boundedStringArray(role, item.subjectIds, 'logic.subjectIds', 1),
@@ -345,11 +427,6 @@ function parseLogic(role: ReviewRole, value: unknown): LogicEvidence {
     evidenceBounds: item.evidenceBounds.map((bound, index) => parseBounds(role, bound, `logic.evidenceBounds[${index}]`)),
     confidence: parseConfidence(role, item.confidence, 'logic.confidence'),
   };
-  if (sourceId !== undefined) {
-    logic.sourceId = sourceId;
-  }
-
-  return logic;
 }
 
 function parseCollection<T>(
@@ -369,10 +446,26 @@ function parseCollection<T>(
   return value.map(parse);
 }
 
+function assertUniqueLocalIds(
+  role: ReviewRole,
+  collections: Array<ReadonlyArray<{ id: string }> | undefined>,
+): void {
+  const ids = new Set<string>();
+  for (const collection of collections) {
+    for (const item of collection ?? []) {
+      if (ids.has(item.id)) {
+        invalid(role, 'contains a duplicate local evidence id.');
+      }
+      ids.add(item.id);
+    }
+  }
+}
+
 export function parseRoleReviewData(role: ReviewRole, value: unknown): RoleReviewData {
   if (!REVIEW_ROLES.includes(role)) {
     return invalid(role, 'role is not supported.');
   }
+  assertPayloadBudget(role, value);
   const raw = asRecord(role, value, 'review');
   const allowedCollections = ROLE_COLLECTIONS[role];
   const allowedKeys = new Set<string>(['warnings', 'confidence', ...allowedCollections]);
@@ -390,6 +483,7 @@ export function parseRoleReviewData(role: ReviewRole, value: unknown): RoleRevie
   const lines = parseCollection(role, raw, 'lines', (item) => parseLine(role, item));
   const texts = parseCollection(role, raw, 'texts', (item) => parseText(role, item));
   const logic = parseCollection(role, raw, 'logic', (item) => parseLogic(role, item));
+  assertUniqueLocalIds(role, [symbols, lines, texts, logic]);
   const result: RoleReviewData = { warnings, confidence };
 
   if (allowedCollections.includes('symbols')) result.symbols = symbols ?? [];

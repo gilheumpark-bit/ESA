@@ -156,4 +156,189 @@ describe('role review contracts', () => {
       }),
     ).toThrow();
   });
+
+  it('rejects provider sourceIds and duplicate local ids across a role payload', () => {
+    const symbol = {
+      id: 'shared-id',
+      typeCandidates: ['BREAKER'],
+      rawLabel: 'CB-1',
+      bounds,
+      ports: [],
+      confidence: 0.8,
+    };
+    const line = {
+      id: 'line-1',
+      lineKind: 'power',
+      path: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+      start: { x: 0, y: 0 },
+      end: { x: 1, y: 1 },
+      junctions: [],
+      crossovers: [],
+      confidence: 0.8,
+    };
+    const text = {
+      id: 'text-1',
+      raw: 'CB-1',
+      candidates: ['CB-1'],
+      bounds,
+      confidence: 0.8,
+    };
+    const logic = {
+      id: 'logic-1',
+      topic: 'DEVICE_IDENTITY',
+      subjectIds: ['shared-id'],
+      statement: 'CB-1 is a breaker.',
+      evidenceBounds: [bounds],
+      confidence: 0.8,
+    };
+
+    expect(() =>
+      parseRoleReviewData('symbols', {
+        symbols: [{ ...symbol, sourceId: 'provider-owned' }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('connections', {
+        lines: [{ ...line, sourceId: 'provider-owned' }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('text', {
+        texts: [{ ...text, sourceId: 'provider-owned' }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('logic', {
+        logic: [{ ...logic, sourceId: 'provider-owned' }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('symbols', { symbols: [symbol, { ...symbol }] }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('synthesis', {
+        symbols: [symbol],
+        texts: [{ ...text, id: 'shared-id' }],
+      }),
+    ).toThrow();
+  });
+
+  it('represents an observed unlabeled symbol without inventing OCR or type data', () => {
+    const parsed = parseRoleReviewData('symbols', {
+      symbols: [
+        {
+          id: 'symbol-without-label',
+          rawLabel: null,
+          typeCandidates: [],
+          bounds,
+          ports: [],
+          confidence: 0.4,
+        },
+      ],
+    });
+
+    expect(parsed.symbols?.[0]).toEqual(
+      expect.objectContaining({ rawLabel: null, typeCandidates: [] }),
+    );
+  });
+
+  it('rejects unknown keys at every nested evidence boundary', () => {
+    const symbol = {
+      id: 'symbol-1',
+      typeCandidates: ['BREAKER'],
+      rawLabel: 'CB-1',
+      bounds,
+      ports: [point],
+      confidence: 0.8,
+    };
+    const line = {
+      id: 'line-1',
+      lineKind: 'power',
+      path: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
+      start: { x: 0, y: 0 },
+      end: { x: 1, y: 1 },
+      junctions: [],
+      crossovers: [],
+      confidence: 0.8,
+    };
+    const text = {
+      id: 'text-1',
+      raw: 'CB-1',
+      candidates: ['CB-1'],
+      bounds,
+      confidence: 0.8,
+    };
+    const logic = {
+      id: 'logic-1',
+      topic: 'DEVICE_IDENTITY',
+      subjectIds: ['symbol-1'],
+      statement: 'CB-1 is a breaker.',
+      evidenceBounds: [bounds],
+      confidence: 0.8,
+    };
+
+    expect(() =>
+      parseRoleReviewData('symbols', {
+        symbols: [{ ...symbol, injected: true }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('symbols', {
+        symbols: [{ ...symbol, bounds: { ...bounds, injected: true } }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('symbols', {
+        symbols: [{ ...symbol, ports: [{ ...point, injected: true }] }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('connections', {
+        lines: [{ ...line, injected: true }],
+      }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('text', { texts: [{ ...text, injected: true }] }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('logic', { logic: [{ ...logic, injected: true }] }),
+    ).toThrow();
+  });
+
+  it('rejects cyclic and cumulative-budget payloads before copying nested evidence', () => {
+    const createPoints = () =>
+      Array.from({ length: 10_000 }, (_, index) => ({ x: index % 1000, y: 1 }));
+    const path = createPoints();
+    const junctions = createPoints();
+    const crossovers = createPoints();
+    const oversizedLine = {
+      id: 'line-1',
+      lineKind: 'power',
+      path,
+      start: { ...path[0] },
+      end: { ...path[path.length - 1] },
+      junctions,
+      crossovers,
+      confidence: 0.8,
+    };
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    const deep: Record<string, unknown> = {};
+    let cursor = deep;
+    for (let index = 0; index < 40; index += 1) {
+      cursor.child = {};
+      cursor = cursor.child as Record<string, unknown>;
+    }
+
+    expect(() =>
+      parseRoleReviewData('connections', { lines: [oversizedLine] }),
+    ).toThrow();
+    expect(() =>
+      parseRoleReviewData('overview', {
+        warnings: Array.from({ length: 60 }, () => 'x'.repeat(4000)),
+      }),
+    ).toThrow();
+    expect(() => parseRoleReviewData('overview', cyclic)).toThrow();
+    expect(() => parseRoleReviewData('overview', deep)).toThrow();
+  });
 });
