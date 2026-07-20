@@ -1,9 +1,26 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const SCRIPT = resolve(process.cwd(), 'scripts/sld-golden-gate.mjs');
+const EVALUATOR_VERSION = 'sld-golden-evaluator-v1';
+const KEY_PAIR = generateKeyPairSync('ed25519');
+const PUBLIC_KEY_PEM = KEY_PAIR.publicKey.export({ type: 'spki', format: 'pem' });
+const PUBLIC_KEY_FINGERPRINT = createHash('sha256').update(PUBLIC_KEY_PEM).digest('hex');
+
+function canonicalize(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`;
+}
+
+function singleFileEvidenceHash(name: string, body: string): string {
+  return createHash('sha256').update(name).update('\0').update(body).update('\0').digest('hex');
+}
 
 function metrics(value = 1) {
   return {
@@ -17,21 +34,51 @@ function metrics(value = 1) {
   };
 }
 
-function setup(options: { prediction?: Record<string, unknown>; kind?: string; claimEligible?: boolean } = {}) {
+function setup(options: {
+  predictionMetrics?: Record<string, unknown>;
+  kind?: string;
+  claimEligible?: boolean;
+  unsigned?: boolean;
+  emptyLabels?: boolean;
+} = {}) {
   const root = mkdtempSync(join(tmpdir(), 'sld-golden-'));
   const receipt = join(root, 'receipt.json');
-  writeFileSync(join(root, 'labels.json'), '{"label":"fixture"}\n', 'utf8');
-  if (options.prediction) {
-    writeFileSync(join(root, 'predictions.json'), `${JSON.stringify(options.prediction)}\n`, 'utf8');
+  const labelsPath = options.emptyLabels ? 'labels' : 'labels.json';
+  const labelBody = '{"label":"fixture"}\n';
+  if (options.emptyLabels) mkdirSync(join(root, labelsPath));
+  else writeFileSync(join(root, labelsPath), labelBody, 'utf8');
+  const kind = options.kind ?? 'synthetic';
+  if (options.predictionMetrics) {
+    const claim = {
+      schemaVersion: 2,
+      datasetId: 'fixture',
+      datasetKind: kind,
+      manifestRevision: 'test-revision',
+      evaluatorVersion: EVALUATOR_VERSION,
+      labelsHash: options.emptyLabels
+        ? createHash('sha256').digest('hex')
+        : singleFileEvidenceHash(labelsPath, labelBody),
+      metrics: options.predictionMetrics,
+    };
+    const signature = sign(null, Buffer.from(canonicalize(claim)), KEY_PAIR.privateKey).toString('base64');
+    writeFileSync(join(root, 'predictions.json'), `${JSON.stringify({
+      ...claim,
+      ...(options.unsigned ? {} : { attestation: { algorithm: 'ed25519', signature } }),
+    })}\n`, 'utf8');
   }
+  writeFileSync(
+    join(root, 'public.pem'),
+    PUBLIC_KEY_PEM,
+    'utf8',
+  );
   writeFileSync(join(root, 'manifest.json'), `${JSON.stringify({
     schemaVersion: 1,
     revision: 'test-revision',
     claimEligible: options.claimEligible ?? false,
     datasets: [{
       id: 'fixture',
-      kind: options.kind ?? 'synthetic',
-      labels: 'labels.json',
+      kind,
+      labels: labelsPath,
       predictions: 'predictions.json',
     }],
     thresholds: {
@@ -53,6 +100,8 @@ function run(root: string, receipt: string, mode: 'receipt' | 'enforce') {
     `--mode=${mode}`,
     '--manifest=manifest.json',
     `--receipt=${receipt}`,
+    '--public-key=public.pem',
+    `--expected-key-sha256=${PUBLIC_KEY_FINGERPRINT}`,
   ], { cwd: root, encoding: 'utf8' });
 }
 
@@ -85,7 +134,7 @@ describe('SLD golden receipt and enforcement boundary', () => {
   });
 
   it('fails a present but degraded prediction in both receipt content and enforcement', () => {
-    const fixture = setup({ prediction: { schemaVersion: 1, metrics: metrics(0.5) } });
+    const fixture = setup({ predictionMetrics: metrics(0.5) });
     roots.push(fixture.root);
 
     const result = run(fixture.root, fixture.receipt, 'enforce');
@@ -101,7 +150,7 @@ describe('SLD golden receipt and enforcement boundary', () => {
   });
 
   it('never verifies a synthetic-only manifest even when all numeric thresholds pass', () => {
-    const fixture = setup({ prediction: { schemaVersion: 1, metrics: metrics() } });
+    const fixture = setup({ predictionMetrics: metrics() });
     roots.push(fixture.root);
 
     const result = run(fixture.root, fixture.receipt, 'enforce');
@@ -116,7 +165,7 @@ describe('SLD golden receipt and enforcement boundary', () => {
 
   it('verifies only a complete claim-eligible real-adjudicated dataset', () => {
     const fixture = setup({
-      prediction: { schemaVersion: 1, metrics: metrics() },
+      predictionMetrics: metrics(),
       kind: 'real-adjudicated',
       claimEligible: true,
     });
@@ -131,5 +180,42 @@ describe('SLD golden receipt and enforcement boundary', () => {
       verified95: true,
       failures: [],
     });
+  });
+
+  it('rejects a stale signed prediction after labels change', () => {
+    const fixture = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+    writeFileSync(join(fixture.root, 'labels.json'), '{"label":"changed"}\n', 'utf8');
+
+    const result = run(fixture.root, fixture.receipt, 'enforce');
+    expect(result.status).toBe(1);
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    expect(receipt.verified95).toBe(false);
+    expect(receipt.failures).toContain('PREDICTION_INVALID:fixture');
+  });
+
+  it('rejects empty adjudication evidence and unsigned self-reported metrics', () => {
+    const empty = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true, emptyLabels: true });
+    const unsigned = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true, unsigned: true });
+    roots.push(empty.root, unsigned.root);
+
+    expect(run(empty.root, empty.receipt, 'enforce').status).toBe(1);
+    expect(JSON.parse(readFileSync(empty.receipt, 'utf8')).failures).toContain('LABELS_EMPTY:fixture');
+    expect(run(unsigned.root, unsigned.receipt, 'enforce').status).toBe(1);
+    expect(JSON.parse(readFileSync(unsigned.receipt, 'utf8')).failures).toContain('PREDICTION_INVALID:fixture');
+  });
+
+  it('does not read dataset evidence outside the gate workspace', () => {
+    const fixture = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+    const manifest = JSON.parse(readFileSync(join(fixture.root, 'manifest.json'), 'utf8'));
+    manifest.datasets[0].labels = resolve(fixture.root, '..', 'outside-labels.json');
+    writeFileSync(join(fixture.root, 'manifest.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
+
+    const result = run(fixture.root, fixture.receipt, 'enforce');
+    expect(result.status).toBe(1);
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    expect(receipt.verified95).toBe(false);
+    expect(receipt.failures).toContain('LABELS_INVALID:fixture');
   });
 });
