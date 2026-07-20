@@ -76,4 +76,42 @@ describe('orchestrator consensus boundary', () => {
       vision: { provider: 'gemini', apiKey: requestScopedKey },
     }));
   });
+
+  test('does not dispatch or reach consensus when the request signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await runOrchestrator({ ...drawingRequest(), signal: controller.signal });
+
+    expect(mockSLD).not.toHaveBeenCalled();
+    expect(mockConsensus).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false, consensus: { executed: false } });
+  });
+
+  test('forwards the same live request signal to TEAM-SLD', async () => {
+    const controller = new AbortController();
+    await runOrchestrator({ ...drawingRequest(), signal: controller.signal });
+
+    expect(mockSLD).toHaveBeenCalledWith(expect.objectContaining({ signal: controller.signal }));
+  });
+
+  test('drops a consensus report if the request aborts while consensus is running', async () => {
+    const controller = new AbortController();
+    mockConsensus.mockImplementationOnce(async () => {
+      controller.abort();
+      return { teamResult: { teamId: 'TEAM-CONSENSUS', ...baseTeamResult }, report: { reportId: 'must-not-return' } as never };
+    });
+
+    const result = await runOrchestrator({ ...drawingRequest(), signal: controller.signal });
+
+    expect(result).toMatchObject({ success: false, consensus: { executed: false } });
+    expect(result.report).toBeUndefined();
+  });
+
+  test('does not retry an image TEAM-SLD rejection', async () => {
+    mockSLD.mockRejectedValue(new Error('source failure'));
+    const result = await runOrchestrator(drawingRequest());
+
+    expect(mockSLD).toHaveBeenCalledTimes(1);
+    expect(result.consensus.executed).toBe(false);
+  });
 });

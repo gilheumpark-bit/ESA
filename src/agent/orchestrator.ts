@@ -38,6 +38,8 @@ export interface OrchestratorRequest {
   vision?: TeamInput['vision'];
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
+  /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
+  signal?: AbortSignal;
 }
 
 export interface OrchestratorResponse {
@@ -72,7 +74,31 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     language: req.language,
     vision: req.vision,
     customRuleSet: req.customRuleSet,
+    signal: req.signal,
   };
+}
+
+function abortError(): Error {
+  return new Error('request aborted');
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw abortError();
+}
+
+function waitForBackoff(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, delayMs));
+  const activeSignal = signal;
+  if (activeSignal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, delayMs);
+    const onAbort = () => { clearTimeout(timer); done(abortError()); };
+    function done(error?: Error) {
+      activeSignal.removeEventListener('abort', onAbort);
+      if (error) reject(error); else resolve();
+    }
+    activeSignal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**
@@ -86,13 +112,17 @@ async function dispatchWithRetry(
 ): Promise<TeamResult> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    throwIfAborted(input.signal);
     try {
-      return await dispatchToTeam(teamId, input);
+      const result = await dispatchToTeam(teamId, input);
+      throwIfAborted(input.signal);
+      return result;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      if (input.signal?.aborted) throw abortError();
       if (attempt < maxRetries) {
         // 지수 백오프: 500ms, 1000ms
-        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+        await waitForBackoff(500 * Math.pow(2, attempt), input.signal);
       }
     }
   }
@@ -137,6 +167,7 @@ export async function runOrchestrator(
   const start = Date.now();
 
   try {
+    if (request.signal?.aborted) throw abortError();
     // Step 1: 입력 분류
     const classification = classifyInput(
       request.file?.mimeType,
@@ -153,7 +184,7 @@ export async function runOrchestrator(
     const allTeamIds = [routing.primaryTeam, ...routing.supportTeams];
 
     const teamPromises = allTeamIds.map(teamId =>
-      dispatchWithRetry(teamId, teamInput, 2).catch(err => ({
+      dispatchWithRetry(teamId, teamInput, routing.classification === 'sld_image' && teamId === 'TEAM-SLD' ? 0 : 2).catch(err => ({
         teamId: teamId as TeamResult['teamId'],
         success: false,
         confidence: 0,
@@ -163,6 +194,7 @@ export async function runOrchestrator(
     );
 
     const teamResults = await Promise.all(teamPromises);
+    if (request.signal?.aborted) throw abortError();
 
     // Step 4: 합의는 서로 다른 전문팀이 2개 이상 성공한 경우에만 실행한다.
     // 같은 TEAM-STD 구현을 두 번 호출해 독립 협의체처럼 세던 경로는 제거했다.
@@ -182,6 +214,7 @@ export async function runOrchestrator(
     };
 
     if (routing.requiresConsensus && participatingTeams.length >= 2) {
+      if (request.signal?.aborted) throw abortError();
       const { teamResult: consensusResult, report: verifiedReport } =
         await executeConsensusTeam({
           sessionId: request.sessionId,
@@ -189,6 +222,7 @@ export async function runOrchestrator(
           projectType: request.projectType ?? '전기 설비',
           teamResults,
         });
+      if (request.signal?.aborted) throw abortError();
 
       teamResults.push(consensusResult);
       report = verifiedReport;
@@ -216,7 +250,7 @@ export async function runOrchestrator(
         reason: '오케스트레이터 실행 전에 오류가 발생했습니다.',
       },
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: request.signal?.aborted ? '요청이 중단되었습니다.' : err instanceof Error ? err.message : String(err),
     };
   }
 }
