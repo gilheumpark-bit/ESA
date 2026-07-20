@@ -3,12 +3,15 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { verifyGoldenGateReceiptSignature } from '../metrics';
 
 const SCRIPT = resolve(process.cwd(), 'scripts/sld-golden-gate.mjs');
 const EVALUATOR_VERSION = 'sld-golden-evaluator-v1';
 const KEY_PAIR = generateKeyPairSync('ed25519');
 const PUBLIC_KEY_PEM = KEY_PAIR.publicKey.export({ type: 'spki', format: 'pem' });
-const PUBLIC_KEY_FINGERPRINT = createHash('sha256').update(PUBLIC_KEY_PEM).digest('hex');
+const PRIVATE_KEY_PEM = KEY_PAIR.privateKey.export({ type: 'pkcs8', format: 'pem' });
+const PUBLIC_KEY_DER = KEY_PAIR.publicKey.export({ type: 'spki', format: 'der' });
+const PUBLIC_KEY_FINGERPRINT = createHash('sha256').update(PUBLIC_KEY_DER).digest('hex');
 
 function canonicalize(value: unknown): string {
   if (value === null || value === undefined) return 'null';
@@ -48,30 +51,7 @@ function setup(options: {
   if (options.emptyLabels) mkdirSync(join(root, labelsPath));
   else writeFileSync(join(root, labelsPath), labelBody, 'utf8');
   const kind = options.kind ?? 'synthetic';
-  if (options.predictionMetrics) {
-    const claim = {
-      schemaVersion: 2,
-      datasetId: 'fixture',
-      datasetKind: kind,
-      manifestRevision: 'test-revision',
-      evaluatorVersion: EVALUATOR_VERSION,
-      labelsHash: options.emptyLabels
-        ? createHash('sha256').digest('hex')
-        : singleFileEvidenceHash(labelsPath, labelBody),
-      metrics: options.predictionMetrics,
-    };
-    const signature = sign(null, Buffer.from(canonicalize(claim)), KEY_PAIR.privateKey).toString('base64');
-    writeFileSync(join(root, 'predictions.json'), `${JSON.stringify({
-      ...claim,
-      ...(options.unsigned ? {} : { attestation: { algorithm: 'ed25519', signature } }),
-    })}\n`, 'utf8');
-  }
-  writeFileSync(
-    join(root, 'public.pem'),
-    PUBLIC_KEY_PEM,
-    'utf8',
-  );
-  writeFileSync(join(root, 'manifest.json'), `${JSON.stringify({
+  const manifest = {
     schemaVersion: 1,
     revision: 'test-revision',
     claimEligible: options.claimEligible ?? false,
@@ -90,19 +70,49 @@ function setup(options: {
       unsupportedPassCount: 0,
       claimTraceability: 1,
     },
-  })}\n`, 'utf8');
+  };
+  const manifestRaw = `${JSON.stringify(manifest)}\n`;
+  const manifestHash = createHash('sha256').update(manifestRaw).digest('hex');
+  writeFileSync(join(root, 'manifest.json'), manifestRaw, 'utf8');
+  if (options.predictionMetrics) {
+    const claim = {
+      schemaVersion: 2,
+      datasetId: 'fixture',
+      datasetKind: kind,
+      manifestRevision: 'test-revision',
+      manifestHash,
+      evaluatorVersion: EVALUATOR_VERSION,
+      labelsHash: options.emptyLabels
+        ? createHash('sha256').digest('hex')
+        : singleFileEvidenceHash(labelsPath, labelBody),
+      metrics: options.predictionMetrics,
+    };
+    const signature = sign(null, Buffer.from(canonicalize(claim)), KEY_PAIR.privateKey).toString('base64');
+    writeFileSync(join(root, 'predictions.json'), `${JSON.stringify({
+      ...claim,
+      ...(options.unsigned ? {} : { attestation: { algorithm: 'ed25519', signature } }),
+    })}\n`, 'utf8');
+  }
+  writeFileSync(
+    join(root, 'public.pem'),
+    PUBLIC_KEY_PEM,
+    'utf8',
+  );
+  writeFileSync(join(root, 'private.pem'), PRIVATE_KEY_PEM, 'utf8');
   return { root, receipt };
 }
 
-function run(root: string, receipt: string, mode: 'receipt' | 'enforce') {
-  return spawnSync(process.execPath, [
+function run(root: string, receipt: string, mode: 'receipt' | 'enforce', includeSigningKey = true) {
+  const arguments_ = [
     SCRIPT,
     `--mode=${mode}`,
     '--manifest=manifest.json',
     `--receipt=${receipt}`,
     '--public-key=public.pem',
     `--expected-key-sha256=${PUBLIC_KEY_FINGERPRINT}`,
-  ], { cwd: root, encoding: 'utf8' });
+  ];
+  if (includeSigningKey) arguments_.push('--receipt-signing-key=private.pem');
+  return spawnSync(process.execPath, arguments_, { cwd: root, encoding: 'utf8' });
 }
 
 describe('SLD golden receipt and enforcement boundary', () => {
@@ -179,13 +189,45 @@ describe('SLD golden receipt and enforcement boundary', () => {
       hasAdjudicatedRealData: true,
       verified95: true,
       failures: [],
+      receiptAttestation: expect.objectContaining({ algorithm: 'ed25519', keyFingerprint: PUBLIC_KEY_FINGERPRINT }),
     });
+    expect(verifyGoldenGateReceiptSignature(receipt, PUBLIC_KEY_PEM.toString())).toBe(true);
+    const tampered = structuredClone(receipt);
+    tampered.metrics.symbolMacroF1 = 0;
+    expect(verifyGoldenGateReceiptSignature(tampered, PUBLIC_KEY_PEM.toString())).toBe(false);
+  });
+
+  it('refuses a 95% claim when the independent receipt signing key is absent', () => {
+    const fixture = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+
+    const result = run(fixture.root, fixture.receipt, 'enforce', false);
+    expect(result.status).toBe(1);
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    expect(receipt.verified95).toBe(false);
+    expect(receipt.receiptAttestation).toBeUndefined();
+    expect(receipt.failures).toContain('RECEIPT_SIGNING_KEY_MISSING');
+    expect(verifyGoldenGateReceiptSignature(receipt, PUBLIC_KEY_PEM.toString())).toBe(false);
   });
 
   it('rejects a stale signed prediction after labels change', () => {
     const fixture = setup({ predictionMetrics: metrics(), kind: 'real-adjudicated', claimEligible: true });
     roots.push(fixture.root);
     writeFileSync(join(fixture.root, 'labels.json'), '{"label":"changed"}\n', 'utf8');
+
+    const result = run(fixture.root, fixture.receipt, 'enforce');
+    expect(result.status).toBe(1);
+    const receipt = JSON.parse(readFileSync(fixture.receipt, 'utf8'));
+    expect(receipt.verified95).toBe(false);
+    expect(receipt.failures).toContain('PREDICTION_INVALID:fixture');
+  });
+
+  it('rejects a signed prediction when manifest policy changes under the same revision', () => {
+    const fixture = setup({ predictionMetrics: metrics(0.5), kind: 'real-adjudicated', claimEligible: true });
+    roots.push(fixture.root);
+    const manifest = JSON.parse(readFileSync(join(fixture.root, 'manifest.json'), 'utf8'));
+    for (const key of Object.keys(manifest.thresholds)) manifest.thresholds[key] = key === 'unsupportedPassCount' ? 0 : 0.5;
+    writeFileSync(join(fixture.root, 'manifest.json'), `${JSON.stringify(manifest)}\n`, 'utf8');
 
     const result = run(fixture.root, fixture.receipt, 'enforce');
     expect(result.status).toBe(1);

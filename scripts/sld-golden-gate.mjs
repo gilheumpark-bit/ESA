@@ -1,8 +1,8 @@
-import { createHash, verify } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
-const GATE_IMPLEMENTATION_VERSION = 'sld-golden-gate-v3';
+const GATE_IMPLEMENTATION_VERSION = 'sld-golden-gate-v4';
 const EVALUATOR_VERSION = 'sld-golden-evaluator-v1';
 const LOWER_BOUND_KEYS = [
   'symbolMacroF1',
@@ -132,15 +132,16 @@ async function hashEvidencePath(target) {
   return { hash: hash.digest('hex'), fileCount: files, byteCount: bytes };
 }
 
-function validatePrediction(payload, dataset, manifestRevision, labelsHash, publicKey) {
+function validatePrediction(payload, dataset, manifestRevision, manifestHash, labelsHash, publicKey) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid prediction payload.');
-  const allowedKeys = ['attestation', 'datasetId', 'datasetKind', 'evaluatorVersion', 'labelsHash', 'manifestRevision', 'metrics', 'schemaVersion'];
+  const allowedKeys = ['attestation', 'datasetId', 'datasetKind', 'evaluatorVersion', 'labelsHash', 'manifestHash', 'manifestRevision', 'metrics', 'schemaVersion'];
   if (Object.keys(payload).sort().join('|') !== allowedKeys.sort().join('|')) throw new Error('Invalid prediction fields.');
   if (
     payload.schemaVersion !== 2
     || payload.datasetId !== dataset.id
     || payload.datasetKind !== dataset.kind
     || payload.manifestRevision !== manifestRevision
+    || payload.manifestHash !== manifestHash
     || payload.evaluatorVersion !== EVALUATOR_VERSION
     || payload.labelsHash !== labelsHash
   ) throw new Error('Prediction binding does not match current evidence.');
@@ -162,6 +163,7 @@ function validatePrediction(payload, dataset, manifestRevision, labelsHash, publ
     datasetId: dataset.id,
     datasetKind: dataset.kind,
     manifestRevision,
+    manifestHash,
     evaluatorVersion: EVALUATOR_VERSION,
     labelsHash,
     metrics,
@@ -185,6 +187,7 @@ const manifestBuffer = await readBounded(manifestPath, MAX_MANIFEST_BYTES);
 const manifestRaw = manifestBuffer.toString('utf8');
 const manifest = JSON.parse(manifestRaw);
 assertManifest(manifest);
+const manifestHash = createHash('sha256').update(manifestBuffer).digest('hex');
 
 const failures = [];
 let publicKey = null;
@@ -194,14 +197,41 @@ const expectedKeyFingerprint = arg('expected-key-sha256', process.env.SLD_GOLDEN
 if (publicKeyArgument && /^[a-f0-9]{64}$/.test(expectedKeyFingerprint)) {
   try {
     const publicKeyBody = await readBounded(resolve(root, publicKeyArgument), MAX_PUBLIC_KEY_BYTES);
-    attestationKeyFingerprint = createHash('sha256').update(publicKeyBody).digest('hex');
+    publicKey = createPublicKey(publicKeyBody);
+    attestationKeyFingerprint = createHash('sha256')
+      .update(publicKey.export({ type: 'spki', format: 'der' }))
+      .digest('hex');
     if (attestationKeyFingerprint !== expectedKeyFingerprint) throw new Error('Attestation key fingerprint mismatch.');
-    publicKey = publicKeyBody.toString('utf8');
   } catch {
+    publicKey = null;
     failures.push('ATTESTATION_KEY_INVALID');
   }
 } else {
   failures.push('ATTESTATION_KEY_MISSING');
+}
+
+let receiptSigningKey = null;
+let receiptSigningKeyFailure = 'RECEIPT_SIGNING_KEY_MISSING';
+const receiptSigningKeyArgument = arg(
+  'receipt-signing-key',
+  process.env.SLD_GOLDEN_RECEIPT_SIGNING_PRIVATE_KEY_PATH ?? '',
+);
+if (receiptSigningKeyArgument) {
+  try {
+    const privateKeyBody = await readBounded(resolve(root, receiptSigningKeyArgument), MAX_PUBLIC_KEY_BYTES);
+    const candidateSigningKey = createPrivateKey(privateKeyBody);
+    const signingPublicKey = createPublicKey(candidateSigningKey);
+    const signingKeyFingerprint = createHash('sha256')
+      .update(signingPublicKey.export({ type: 'spki', format: 'der' }))
+      .digest('hex');
+    if (!attestationKeyFingerprint || signingKeyFingerprint !== attestationKeyFingerprint) {
+      throw new Error('Receipt signing key does not match the pinned attestation key.');
+    }
+    receiptSigningKey = candidateSigningKey;
+    receiptSigningKeyFailure = null;
+  } catch {
+    receiptSigningKeyFailure = 'RECEIPT_SIGNING_KEY_INVALID';
+  }
 }
 
 const rows = [];
@@ -229,7 +259,14 @@ for (const dataset of [...manifest.datasets].sort((left, right) => left.id.local
       predictionsHash = createHash('sha256').update(predictionBuffer).digest('hex');
       if (!labelsResult) throw new Error('Current labels are unavailable.');
       const payload = JSON.parse(predictionBuffer.toString('utf8'));
-      prediction = validatePrediction(payload, dataset, manifest.revision, labelsResult.hash, publicKey);
+      prediction = validatePrediction(
+        payload,
+        dataset,
+        manifest.revision,
+        manifestHash,
+        labelsResult.hash,
+        publicKey,
+      );
     } catch (error) {
       failures.push(`${errorCode(error) === 'ENOENT' ? 'PREDICTION_MISSING' : 'PREDICTION_INVALID'}:${dataset.id}`);
     }
@@ -276,20 +313,24 @@ const thresholdsPassed = aggregate !== null && completeDatasetSet && metricFailu
 const hasAdjudicatedRealData = rows.some((row) => row.kind === 'real-adjudicated');
 if (manifest.claimEligible !== true) failures.push('MANIFEST_NOT_CLAIM_ELIGIBLE');
 if (!hasAdjudicatedRealData) failures.push('NO_REAL_ADJUDICATED_DATASET');
-const uniqueFailures = [...new Set(failures)];
-const verified95 = manifest.claimEligible === true
+const candidateVerified95 = manifest.claimEligible === true
   && hasAdjudicatedRealData
   && thresholdsPassed
   && rows.every((row) => row.attestationVerified)
+  && failures.length === 0;
+if (candidateVerified95 && !receiptSigningKey) failures.push(receiptSigningKeyFailure);
+const uniqueFailures = [...new Set(failures)];
+const verified95 = candidateVerified95
+  && receiptSigningKey !== null
   && uniqueFailures.length === 0;
 
-const receipt = {
-  schemaVersion: 3,
+const receiptClaim = {
+  schemaVersion: 4,
   gateImplementationVersion: GATE_IMPLEMENTATION_VERSION,
   evaluatorVersion: EVALUATOR_VERSION,
   attestationKeyFingerprint,
   manifestRevision: manifest.revision,
-  manifestHash: createHash('sha256').update(manifestBuffer).digest('hex'),
+  manifestHash,
   generatedAt: new Date().toISOString(),
   expectedDatasetIds: expectedDatasets.map((dataset) => dataset.id),
   expectedDatasets,
@@ -300,6 +341,16 @@ const receipt = {
   hasAdjudicatedRealData,
   verified95,
 };
+const receipt = verified95
+  ? {
+      ...receiptClaim,
+      receiptAttestation: {
+        algorithm: 'ed25519',
+        keyFingerprint: attestationKeyFingerprint,
+        signature: sign(null, Buffer.from(canonicalize(receiptClaim)), receiptSigningKey).toString('base64'),
+      },
+    }
+  : receiptClaim;
 await mkdir(dirname(receiptPath), { recursive: true });
 await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
 
