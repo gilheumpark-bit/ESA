@@ -6,6 +6,7 @@ import type { VoltageDropInput } from '@/engine/calculators/voltage-drop/voltage
 import type { BreakerSizingInput } from '@/engine/calculators/protection/breaker-sizing';
 import type { TransformerCapacityInput } from '@/engine/calculators/transformer/transformer-capacity';
 import type { CTSizingInput } from '@/engine/calculators/substation/ct-sizing';
+import { normalizeElectricalGraph } from './domain-normalizer';
 import type { NormalizedElectricalGraph, NormalizedSpec } from './domain-normalizer';
 
 type CalculatorId = 'voltage-drop' | 'breaker-sizing' | 'transformer-capacity' | 'ct-sizing';
@@ -49,16 +50,22 @@ export interface DrawingCalculationReceipt {
   readonly internalMechanics: readonly CalculationDefaultDisclosure[];
   readonly scopeIssues: readonly string[];
   readonly calculatorResult?: DetailedCalcResult;
-  readonly error?: { readonly code: 'CALCULATOR_UNAVAILABLE' | 'CALCULATOR_EXECUTION_FAILED'; readonly message: string };
+  readonly error?: { readonly code: 'CALCULATOR_UNAVAILABLE' | 'CALCULATOR_LOOKUP_FAILED' | 'CALCULATOR_EXECUTION_FAILED'; readonly message: string };
 }
 
 export interface DrawingCalculationRouterOptions {
   readonly getCalculator?: (id: string) => CalculatorRegistryEntry | undefined;
 }
 
-type Scope = { readonly ownerId: string; readonly page: number; readonly key: string; readonly specs: readonly NormalizedSpec[]; readonly issues: readonly string[]; readonly isResolvedOwnerContext: boolean };
+type TrustedSpecIndex = ReadonlyMap<string, readonly NormalizedSpec[]>;
+type Scope = { readonly ownerId: string; readonly page: number; readonly key: string; readonly specs: readonly NormalizedSpec[]; readonly issues: readonly string[]; readonly isResolvedOwnerContext: boolean; readonly trustedSpecs: TrustedSpecIndex; readonly contextAmbiguous?: boolean };
 type Binding = { readonly adapterField: string; readonly fields: readonly NormalizedSpec['field'][]; readonly unit: string; readonly targetUnit: string; readonly valid: (value: number | string) => boolean };
 type Resolved = { readonly evidence: CalculationInputEvidence; readonly value: number | string };
+type OptionalResolution =
+  | { readonly state: 'absent' }
+  | { readonly state: 'resolved'; readonly resolved: Resolved }
+  | { readonly state: 'invalid'; readonly issue: CalculationInputIssue }
+  | { readonly state: 'ambiguous'; readonly issue: CalculationInputIssue };
 
 function compareText(left: string, right: string): number {
   return left.localeCompare(right);
@@ -73,12 +80,50 @@ function hasLineageOverlap(left: NormalizedSpec, right: NormalizedSpec): boolean
     || left.sourceIds.some((id) => right.sourceIds.includes(id));
 }
 
-function validSpec(spec: NormalizedSpec, drawingHash: string, binding: Binding): boolean {
-  return spec.drawingHash === drawingHash
+function trustedSpecKey(spec: Pick<NormalizedSpec, 'evidenceId' | 'field' | 'ownerId' | 'bounds'>): string {
+  return JSON.stringify([spec.evidenceId, spec.field, spec.ownerId ?? null, spec.bounds.page]);
+}
+
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameSpec(left: NormalizedSpec, right: NormalizedSpec): boolean {
+  return left.drawingHash === right.drawingHash
+    && left.ownerId === right.ownerId
+    && left.field === right.field
+    && Object.is(left.value, right.value)
+    && left.unit === right.unit
+    && left.raw === right.raw
+    && left.evidenceId === right.evidenceId
+    && sameStrings(left.originalEvidenceIds, right.originalEvidenceIds)
+    && sameStrings(left.sourceIds, right.sourceIds)
+    && left.bounds.page === right.bounds.page
+    && left.bounds.x === right.bounds.x
+    && left.bounds.y === right.bounds.y
+    && left.bounds.w === right.bounds.w
+    && left.bounds.h === right.bounds.h
+    && left.confidence === right.confidence;
+}
+
+function trustedSpecIndex(graph: NormalizedElectricalGraph): TrustedSpecIndex {
+  const index = new Map<string, NormalizedSpec[]>();
+  if (graph.graph.drawingHash !== graph.drawingHash) return index;
+  try {
+    for (const spec of normalizeElectricalGraph(graph.graph).specs) {
+      const key = trustedSpecKey(spec);
+      index.set(key, [...(index.get(key) ?? []), spec]);
+    }
+  } catch {
+    return new Map();
+  }
+  return index;
+}
+
+function validSpec(spec: NormalizedSpec, graph: NormalizedElectricalGraph, binding: Binding, trustedSpecs: TrustedSpecIndex): boolean {
+  return spec.drawingHash === graph.drawingHash
     && spec.unit === binding.unit
-    && spec.evidenceId.length > 0
-    && spec.originalEvidenceIds.length > 0
-    && spec.sourceIds.length > 0
+    && (trustedSpecs.get(trustedSpecKey(spec)) ?? []).some((trusted) => sameSpec(spec, trusted))
     && Number.isInteger(spec.bounds.page)
     && spec.bounds.page > 0
     && [spec.bounds.x, spec.bounds.y, spec.bounds.w, spec.bounds.h, spec.confidence].every(Number.isFinite)
@@ -101,13 +146,13 @@ function evidenceFor(binding: Binding, spec: NormalizedSpec): CalculationInputEv
   };
 }
 
-function resolve(scope: Scope, drawingHash: string, binding: Binding): { readonly resolved?: Resolved; readonly missing?: CalculationInputIssue; readonly ambiguous?: CalculationInputIssue } {
+function resolve(scope: Scope, graph: NormalizedElectricalGraph, binding: Binding): { readonly resolved?: Resolved; readonly missing?: CalculationInputIssue; readonly ambiguous?: CalculationInputIssue } {
   for (const field of binding.fields) {
     const candidates = scope.specs
       .filter((spec) => spec.field === field)
       .sort((left, right) => compareText(left.evidenceId, right.evidenceId));
     if (candidates.length === 0) continue;
-    if (candidates.some((spec) => !validSpec(spec, drawingHash, binding))) return { missing: issue(binding) };
+    if (candidates.some((spec) => !validSpec(spec, graph, binding, scope.trustedSpecs))) return { missing: issue(binding) };
     const canonical = candidates[0];
     if (candidates.some((spec) => String(spec.value) !== String(canonical.value) || !hasLineageOverlap(spec, canonical))) return { ambiguous: issue(binding) };
     const merged: NormalizedSpec = {
@@ -120,10 +165,14 @@ function resolve(scope: Scope, drawingHash: string, binding: Binding): { readonl
   return { missing: issue(binding) };
 }
 
-function resolveOptional(scope: Scope, drawingHash: string, binding: Binding): Resolved | undefined {
-  if (!scope.isResolvedOwnerContext) return undefined;
-  const result = resolve(scope, drawingHash, binding);
-  return result.resolved;
+function resolveOptional(scope: Scope, graph: NormalizedElectricalGraph, binding: Binding): OptionalResolution {
+  const present = binding.fields.some((field) => scope.specs.some((spec) => spec.field === field));
+  if (!present) return { state: 'absent' };
+  if (!scope.isResolvedOwnerContext) return { state: 'invalid', issue: issue(binding) };
+  const result = resolve(scope, graph, binding);
+  if (result.resolved) return { state: 'resolved', resolved: result.resolved };
+  if (result.ambiguous) return { state: 'ambiguous', issue: result.ambiguous };
+  return { state: 'invalid', issue: result.missing ?? issue(binding) };
 }
 
 function numberValue(input: Resolved): number {
@@ -141,7 +190,7 @@ function makeScopeIssues(graph: NormalizedElectricalGraph): readonly string[] {
   ].sort(compareText);
 }
 
-function scopesFor(graph: NormalizedElectricalGraph): Scope[] {
+function scopesFor(graph: NormalizedElectricalGraph, trustedSpecs: TrustedSpecIndex): Scope[] {
   const groups = new Map<string, NormalizedSpec[]>();
   for (const spec of graph.specs) {
     if (!Number.isInteger(spec.bounds.page) || spec.bounds.page <= 0) continue;
@@ -163,9 +212,61 @@ function scopesFor(graph: NormalizedElectricalGraph): Scope[] {
         specs,
         issues: isResolvedOwnerContext ? issues : [...issues, `OWNER_CONTEXT_UNRESOLVED:${ownerId}@p${page}`].sort(compareText),
         isResolvedOwnerContext,
+        trustedSpecs,
       };
     })
     .sort((left, right) => compareText(left.key, right.key));
+}
+
+const VOLTAGE_DROP_LOCAL_FIELDS: readonly NormalizedSpec['field'][] = ['length_m', 'conductorSize_mm2', 'conductorMaterial', 'phase'];
+const VOLTAGE_DROP_PROVIDER_FIELDS: readonly NormalizedSpec['field'][] = ['voltage_V', 'current_A', 'loadCurrent_A', 'powerFactor'];
+
+function ownerTypes(graph: NormalizedElectricalGraph, ownerId: string): string {
+  const owner = graph.graph.symbols.find((symbol) => symbol.id === ownerId);
+  return owner ? [...owner.typeCandidates, owner.rawLabel ?? ''].join(' ').toUpperCase() : '';
+}
+
+function hasFields(scope: Scope, fields: readonly NormalizedSpec['field'][]): boolean {
+  return fields.every((field) => scope.specs.some((spec) => spec.field === field));
+}
+
+function hasCurrent(scope: Scope): boolean {
+  return scope.specs.some((spec) => spec.field === 'current_A' || spec.field === 'loadCurrent_A');
+}
+
+function hasCompleteVoltageDropEvidence(scope: Scope): boolean {
+  return hasFields(scope, [...VOLTAGE_DROP_LOCAL_FIELDS, 'voltage_V', 'powerFactor']) && hasCurrent(scope);
+}
+
+function voltageDropScope(graph: NormalizedElectricalGraph, scopes: readonly Scope[], scope: Scope): Scope {
+  if (hasCompleteVoltageDropEvidence(scope) || !/\b(CABLE|LINE)\b/.test(ownerTypes(graph, scope.ownerId))) return scope;
+  const connections = graph.graph.edges
+    .filter((edge) => edge.from === scope.ownerId || edge.to === scope.ownerId)
+    .map((edge) => {
+      const line = graph.graph.lines.find((candidate) => candidate.id === edge.lineId);
+      const otherOwnerId = edge.from === scope.ownerId ? edge.to : edge.from;
+      const otherOwner = graph.graph.symbols.find((symbol) => symbol.id === otherOwnerId);
+      const provider = scopes.find((candidate) => candidate.ownerId === otherOwnerId && candidate.page === scope.page);
+      if (!line?.pages.includes(scope.page) || otherOwner?.bounds.page !== scope.page || !provider?.isResolvedOwnerContext) return undefined;
+      if (!/\b(VCB|ACB|MCCB|ELB|CB|SWITCH)\b/.test(ownerTypes(graph, otherOwnerId))) return undefined;
+      if (!VOLTAGE_DROP_PROVIDER_FIELDS.some((field) => provider.specs.some((spec) => spec.field === field))) return undefined;
+      return { edge, provider };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== undefined)
+    .sort((left, right) => compareText(left.edge.id, right.edge.id));
+  if (connections.length === 0) return scope;
+  if (connections.length > 1) {
+    return {
+      ...scope,
+      contextAmbiguous: true,
+      issues: [...new Set([...scope.issues, `AMBIGUOUS_VOLTAGE_DROP_CONTEXT:${scope.key}`])].sort(compareText),
+    };
+  }
+  return {
+    ...scope,
+    specs: [...scope.specs, ...connections[0].provider.specs],
+    issues: [...new Set([...scope.issues, ...connections[0].provider.issues])].sort(compareText),
+  };
 }
 
 function positive(value: number | string): boolean {
@@ -204,15 +305,17 @@ const leadLength = (): Binding => ({ adapterField: 'leadLength', fields: ['leadL
 const leadSize = (): Binding => ({ adapterField: 'leadSize', fields: ['leadSize_mm2'], unit: 'mm2', targetUnit: 'mm2', valid: positive });
 const accuracyClass = (): Binding => ({ adapterField: 'accuracyClass', fields: ['ctAccuracyClass'], unit: 'text', targetUnit: 'class', valid: exactly(['0.2', '0.5', '1.0', '5P', '10P']) });
 
-function run<T>(graph: NormalizedElectricalGraph, scope: Scope, calculatorId: CalculatorId, bindings: readonly Binding[], build: (values: Map<string, Resolved>) => T, lookup: (id: string) => CalculatorRegistryEntry | undefined, optionalDefaultsUsed: readonly CalculationDefaultDisclosure[] = [], internalMechanics: readonly CalculationDefaultDisclosure[] = []): DrawingCalculationReceipt {
+function run<T>(graph: NormalizedElectricalGraph, scope: Scope, calculatorId: CalculatorId, bindings: readonly Binding[], build: (values: Map<string, Resolved>) => T, lookup: (id: string) => CalculatorRegistryEntry | undefined, optionalDefaultsUsed: readonly CalculationDefaultDisclosure[] = [], internalMechanics: readonly CalculationDefaultDisclosure[] = [], preflightMissing: readonly CalculationInputIssue[] = [], preflightAmbiguous: readonly CalculationInputIssue[] = []): DrawingCalculationReceipt {
   const values = new Map<string, Resolved>();
-  const missingInputs: CalculationInputIssue[] = [];
-  const ambiguousInputs: CalculationInputIssue[] = [];
-  if (!scope.isResolvedOwnerContext) {
+  const missingInputs: CalculationInputIssue[] = [...preflightMissing];
+  const ambiguousInputs: CalculationInputIssue[] = [...preflightAmbiguous];
+  if (scope.contextAmbiguous) {
+    ambiguousInputs.push(...bindings.map(issue));
+  } else if (!scope.isResolvedOwnerContext) {
     missingInputs.push(...bindings.map(issue));
   } else {
     for (const binding of bindings) {
-      const resolved = resolve(scope, graph.drawingHash, binding);
+      const resolved = resolve(scope, graph, binding);
       if (resolved.resolved) values.set(binding.adapterField, resolved.resolved);
       if (resolved.missing) missingInputs.push(resolved.missing);
       if (resolved.ambiguous) ambiguousInputs.push(resolved.ambiguous);
@@ -232,7 +335,12 @@ function run<T>(graph: NormalizedElectricalGraph, scope: Scope, calculatorId: Ca
     scopeIssues: scope.issues,
   };
   if (missingInputs.length > 0 || ambiguousInputs.length > 0) return { ...base, status: 'SKIPPED', calculatorResult: undefined };
-  const calculator = lookup(calculatorId);
+  let calculator: CalculatorRegistryEntry | undefined;
+  try {
+    calculator = lookup(calculatorId);
+  } catch {
+    return { ...base, status: 'ERROR', error: { code: 'CALCULATOR_LOOKUP_FAILED', message: 'Calculator lookup failed.' } };
+  }
   if (!calculator) return { ...base, status: 'ERROR', error: { code: 'CALCULATOR_UNAVAILABLE', message: 'Calculator is unavailable.' } };
   try {
     const result = calculator.calculator(build(values));
@@ -258,27 +366,33 @@ function routeVoltageDrop(graph: NormalizedElectricalGraph, scope: Scope, lookup
 }
 
 function routeBreakerSizing(graph: NormalizedElectricalGraph, scope: Scope, lookup: (id: string) => CalculatorRegistryEntry | undefined): DrawingCalculationReceipt {
-  const optional = resolveOptional(scope, graph.drawingHash, cableAmpacity());
+  const optionalResult = resolveOptional(scope, graph, cableAmpacity());
+  const optional = optionalResult.state === 'resolved' ? optionalResult.resolved : undefined;
+  const optionalMissing = optionalResult.state === 'invalid' ? [optionalResult.issue] : [];
+  const optionalAmbiguous = optionalResult.state === 'ambiguous' ? [optionalResult.issue] : [];
   const receipt = run(graph, scope, 'breaker-sizing', [loadCurrent(), faultCurrent(), voltage()], (values) => {
     const input: BreakerSizingInput = {
       loadCurrent: numberValue(values.get('loadCurrent')!), shortCircuitCurrent: numberValue(values.get('shortCircuitCurrent')!), voltage: numberValue(values.get('voltage')!),
       ...(optional ? { cableAmpacity: numberValue(optional) } : {}),
     };
     return input;
-  }, lookup);
+  }, lookup, [], [], optionalMissing, optionalAmbiguous);
   return optional ? { ...receipt, inputEvidence: [...receipt.inputEvidence, optional.evidence].sort((left, right) => compareText(left.adapterField, right.adapterField)) } : receipt;
 }
 
 function routeTransformerCapacity(graph: NormalizedElectricalGraph, scope: Scope, lookup: (id: string) => CalculatorRegistryEntry | undefined): DrawingCalculationReceipt {
-  const optional = resolveOptional(scope, graph.drawingHash, growthMargin());
-  const defaults = optional ? [] : [{ name: 'growthMargin', value: 0, meaning: 'calculator-internal default; not drawing evidence' }];
+  const optionalResult = resolveOptional(scope, graph, growthMargin());
+  const optional = optionalResult.state === 'resolved' ? optionalResult.resolved : undefined;
+  const defaults = optionalResult.state === 'absent' ? [{ name: 'growthMargin', value: 0, meaning: 'calculator-internal default; not drawing evidence' }] : [];
+  const optionalMissing = optionalResult.state === 'invalid' ? [optionalResult.issue] : [];
+  const optionalAmbiguous = optionalResult.state === 'ambiguous' ? [optionalResult.issue] : [];
   const receipt = run(graph, scope, 'transformer-capacity', [totalLoad(), powerFactor(), efficiency(), demandFactor()], (values) => {
     const input: TransformerCapacityInput = {
       totalLoad: numberValue(values.get('totalLoad')!), powerFactor: numberValue(values.get('powerFactor')!), efficiency: numberValue(values.get('efficiency')!), demandFactor: numberValue(values.get('demandFactor')!),
       ...(optional ? { growthMargin: numberValue(optional) } : {}),
     };
     return input;
-  }, lookup, defaults);
+  }, lookup, defaults, [], optionalMissing, optionalAmbiguous);
   return optional ? { ...receipt, inputEvidence: [...receipt.inputEvidence, optional.evidence].sort((left, right) => compareText(left.adapterField, right.adapterField)) } : receipt;
 }
 
@@ -297,8 +411,9 @@ function routeCTSizing(graph: NormalizedElectricalGraph, scope: Scope, lookup: (
 
 export function routeDrawingCalculations(graph: NormalizedElectricalGraph, options: DrawingCalculationRouterOptions = {}): readonly DrawingCalculationReceipt[] {
   const lookup = options.getCalculator ?? getCalculator;
-  const receipts = scopesFor(graph).flatMap((scope) => [
-    routeVoltageDrop(graph, scope, lookup),
+  const scopes = scopesFor(graph, trustedSpecIndex(graph));
+  const receipts = scopes.flatMap((scope) => [
+    routeVoltageDrop(graph, voltageDropScope(graph, scopes, scope), lookup),
     routeBreakerSizing(graph, scope, lookup),
     routeTransformerCapacity(graph, scope, lookup),
     routeCTSizing(graph, scope, lookup),
