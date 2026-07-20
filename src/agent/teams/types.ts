@@ -89,6 +89,26 @@ export interface ExtractedConnection {
   unit?: string;
 }
 
+export interface DrawingReviewArtifact {
+  snapshot: {
+    drawingHash: string;
+    mimeType: string;
+    page: number;
+    width: number;
+    height: number;
+    quality: import('../vision/evidence-types').ImageQualityProfile;
+  };
+  envelopes: import('../vision/review-types').RoleReviewEnvelope[];
+  graph?: import('../vision/spatial-graph').SpatialEvidenceGraph;
+  failures: import('../vision/drawing-council').RoleFailure[];
+  coverage: {
+    selectedVariantIds: string[];
+    fullVariantIds: string[];
+    regionCount: number;
+    maxRegionCallsPerRole: number;
+  };
+}
+
 export interface TeamResult {
   teamId: TeamId;
   success: boolean;
@@ -102,6 +122,7 @@ export interface TeamResult {
   durationMs: number;
   rawOutput?: string;
   error?: string;
+  drawingReview?: DrawingReviewArtifact;
 }
 
 export interface CalculationEntry {

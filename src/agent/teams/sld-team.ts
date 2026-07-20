@@ -17,9 +17,17 @@ import type {
   CalculationEntry,
   StandardEntry,
   ViolationEntry,
+  DrawingReviewArtifact,
 } from './types';
 import { resolveSymbol } from '../vision/symbol-db';
-import { mergeVisionSplitResults, splitAndAnalyze } from '../vision/vision-splitter';
+import { runDrawingCouncil } from '../vision/drawing-council';
+import { assembleSpatialGraph, type SpatialEvidenceGraph } from '../vision/spatial-graph';
+import { profileImage } from '../vision/image-quality';
+import { createImageVariants } from '../vision/image-variants';
+import { cropPrecisionRegions, planAdaptiveBounds } from '../vision/adaptive-regions';
+import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
+import type { RoleReviewEnvelope } from '../vision/review-types';
+import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
 
@@ -89,32 +97,122 @@ async function extractFromDrawing(
     };
   }
 
-  // 이미지: VRAM 분할 병렬 비전
-  if (classification === 'sld_image' && fileBuffer) {
-    const provider = input.vision?.provider
-      ?? (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? 'gemini'
-        : process.env.OPENAI_API_KEY ? 'openai'
-          : process.env.ANTHROPIC_API_KEY ? 'claude'
-            : 'gemini');
-    const visionResult = await splitAndAnalyze(fileBuffer, {
-      gridSize: 4,      // 4분할 (2×2)
-      overlap: 0.1,     // 10% 오버랩
-      model: provider,
-      modelName: input.vision?.model,
-      apiKey: input.vision?.apiKey,
-    });
-    const merged = mergeVisionSplitResults(visionResult);
-    return {
-      ...merged,
-      components: merged.components.map(component => ({
-        ...component,
-        type: resolveSymbol(component.type),
-        confidence: component.confidence * merged.confidence,
-      })),
-    };
-  }
-
   return { components: [], connections: [], confidence: 0 };
+}
+
+type PreparedRaster = { snapshot: DrawingSnapshot; variants: ImageVariant[]; regions: PrecisionRegion[] };
+
+export interface SLDTeamDeps {
+  prepareRaster?: (buffer: ArrayBuffer, mimeType: string) => Promise<PreparedRaster>;
+  resolveVisionKey?: (provider: NonNullable<TeamInput['vision']>['provider'], byok?: string) => ResolvedKey;
+  runCouncil?: typeof runDrawingCouncil;
+  assembleGraph?: typeof assembleSpatialGraph;
+}
+
+const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
+const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
+const MAX_REGION_CALLS_PER_ROLE = 16;
+
+async function preparePrecisionRegions(buffer: ArrayBuffer, mimeType: string): Promise<PreparedRaster> {
+  const quality = await profileImage(buffer);
+  const variants = await createImageVariants(buffer, quality);
+  const snapshot = createDrawingSnapshot(buffer, mimeType, quality);
+  const selected = variants.filter((variant) => variant.kind === 'original' || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast');
+  const groups = await Promise.all(selected.map((variant) => cropPrecisionRegions(
+    variant,
+    planAdaptiveBounds(variant.width, variant.height, 4, 0.1),
+  )));
+  return { snapshot, variants, regions: groups.flat() };
+}
+
+function safeSnapshot(snapshot: DrawingSnapshot): DrawingReviewArtifact['snapshot'] {
+  return {
+    drawingHash: snapshot.drawingHash,
+    mimeType: snapshot.mimeType,
+    page: snapshot.page,
+    width: snapshot.width,
+    height: snapshot.height,
+    quality: snapshot.quality,
+  };
+}
+
+function hold(note: string): StandardEntry {
+  return { standard: 'VISION-COUNCIL', clause: 'INDEPENDENT-REVIEW', title: '독립 도면 검토 보류', judgment: 'HOLD', note };
+}
+
+function graphLegacy(graph: SpatialEvidenceGraph, envelopeConfidence: number): { components: ExtractedComponent[]; connections: ExtractedConnection[]; confidence: number } {
+  const components = graph.symbols.map((symbol) => {
+    const candidates = [...new Set(symbol.typeCandidates.map((item) => item.trim()).filter(Boolean))];
+    return {
+      id: symbol.id,
+      type: candidates.length === 1 ? resolveSymbol(candidates[0]) : 'unknown',
+      label: symbol.rawLabel ?? (candidates.join(' | ') || '미확인 심볼'),
+      position: { x: symbol.bounds.x + symbol.bounds.w / 2, y: symbol.bounds.y + symbol.bounds.h / 2 },
+      confidence: Math.min(symbol.confidence, envelopeConfidence),
+    };
+  });
+  return {
+    components,
+    connections: graph.edges.map((edge) => ({ from: edge.from, to: edge.to })),
+    confidence: Math.min(envelopeConfidence, ...graph.symbols.map((symbol) => symbol.confidence), ...graph.edges.map((edge) => edge.confidence)),
+  };
+}
+
+async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps): Promise<{
+  artifact: DrawingReviewArtifact;
+  components: ExtractedComponent[];
+  connections: ExtractedConnection[];
+  confidence: number;
+  holds: StandardEntry[];
+  complete: boolean;
+}> {
+  if (!input.fileBuffer || !input.vision) throw new Error('이미지 독립 검토에는 파일과 Vision provider가 필요합니다.');
+  const prepared = await (deps.prepareRaster ?? preparePrecisionRegions)(input.fileBuffer, input.mimeType ?? 'image/png');
+  const resolved = (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
+  const council = await (deps.runCouncil ?? runDrawingCouncil)({
+    snapshot: prepared.snapshot,
+    variants: prepared.variants,
+    regions: prepared.regions,
+    maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+    options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model },
+  });
+  const artifact: DrawingReviewArtifact = {
+    snapshot: safeSnapshot(prepared.snapshot),
+    envelopes: council.envelopes,
+    failures: council.failures,
+    coverage: {
+      selectedVariantIds: prepared.variants.filter((variant) => variant.kind === 'original' || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast').map((variant) => variant.id).sort(),
+      fullVariantIds: prepared.variants.filter((variant) => variant.kind === 'original' || variant.kind === 'line-enhanced' || variant.kind === 'text-high-contrast').map((variant) => variant.id).sort(),
+      regionCount: prepared.regions.length,
+      maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+    },
+  };
+  const roleSet = new Set(council.envelopes.map((item) => item.role));
+  const missing = REQUIRED_COUNCIL_ROLES.filter((role) => !roleSet.has(role));
+  const fatal = council.failures.filter((failure) => failure.fatal);
+  const holds = [
+    ...missing.map((role) => hold(`필수 ${role} review 결과가 없습니다.`)),
+    ...fatal.map((failure) => hold(`${failure.role} review 실패: ${failure.sourceId}`)),
+    ...council.failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
+  ];
+  let graph: SpatialEvidenceGraph | undefined;
+  const graphEnvelopes = council.envelopes.filter((item): item is RoleReviewEnvelope => GRAPH_COUNCIL_ROLES.includes(item.role as (typeof GRAPH_COUNCIL_ROLES)[number]));
+  if (graphEnvelopes.length === GRAPH_COUNCIL_ROLES.length) {
+    try {
+      graph = (deps.assembleGraph ?? assembleSpatialGraph)(graphEnvelopes);
+      artifact.graph = graph;
+      for (const conflict of graph.conflicts) holds.push(hold(`graph conflict: ${conflict}`));
+    } catch {
+      holds.push(hold('sealed graph assembly를 완료하지 못했습니다.'));
+    }
+  }
+  if (!graph) holds.push(hold('symbols/connections/text graph가 불완전합니다.'));
+  if (graph && graph.symbols.length === 0) holds.push(hold('graph symbols가 비어 있습니다.'));
+  if (graph && graph.edges.length === 0) holds.push(hold('graph edges가 비어 있습니다.'));
+  const complete = missing.length === 0 && fatal.length === 0 && graph !== undefined && graph.symbols.length > 0 && graph.edges.length > 0;
+  const envelopeConfidence = council.envelopes.length === 0 ? 0 : Math.min(...council.envelopes.map((item) => item.data.confidence));
+  const legacy = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
+  return { artifact, ...legacy, holds, complete };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -386,12 +484,30 @@ async function runCustomRules(
  * 계통도팀 메인 실행 함수.
  * 도면 → 추출 → 토폴로지 → 계산 → 팀 결과
  */
-export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
+export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): Promise<TeamResult> {
   const start = Date.now();
 
   try {
     // Step 1: 도면에서 컴포넌트/연결 추출
-    const { components, connections, confidence } = await extractFromDrawing(input);
+    const rasterReview = input.classification === 'sld_image'
+      ? await reviewRasterDrawing(input, deps)
+      : undefined;
+    const extracted = rasterReview ?? await extractFromDrawing(input);
+    const { components, connections, confidence } = extracted;
+
+    if (rasterReview && !rasterReview.complete) {
+      return {
+        teamId: 'TEAM-SLD',
+        success: false,
+        components,
+        connections,
+        standards: rasterReview.holds,
+        confidence,
+        durationMs: Date.now() - start,
+        drawingReview: rasterReview.artifact,
+        error: '독립 도면 검토가 불완전하여 결과를 보류합니다.',
+      };
+    }
 
     if (components.length === 0) {
       return {
@@ -400,6 +516,7 @@ export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
         confidence: 0,
         durationMs: Date.now() - start,
         error: '도면에서 전기 설비 요소를 인식할 수 없습니다.',
+        ...(rasterReview ? { drawingReview: rasterReview.artifact, standards: rasterReview.holds } : {}),
       };
     }
 
@@ -416,6 +533,8 @@ export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
       standards.push(...custom.standards);
       violations.push(...custom.violations);
     }
+
+    if (rasterReview) standards.push(...rasterReview.holds);
 
     // 토폴로지 이상 → 경고 추가
     if (validation.issues && validation.issues.length > 0) {
@@ -440,14 +559,17 @@ export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
       violations,
       confidence,
       durationMs: Date.now() - start,
+      ...(rasterReview ? { drawingReview: rasterReview.artifact } : {}),
     };
   } catch (err) {
+    const secret = input.vision?.apiKey?.trim();
+    const message = err instanceof Error ? err.message : String(err);
     return {
       teamId: 'TEAM-SLD',
       success: false,
       confidence: 0,
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: secret ? message.split(secret).join('[REDACTED]') : message,
     };
   }
 }
