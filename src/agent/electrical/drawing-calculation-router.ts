@@ -8,7 +8,6 @@ import type { TransformerCapacityInput } from '@/engine/calculators/transformer/
 import type { CTSizingInput } from '@/engine/calculators/substation/ct-sizing';
 import type { NormalizedElectricalGraph, NormalizedSpec } from './domain-normalizer';
 
-type SourceField = NormalizedSpec['field'] | 'efficiency' | 'maxLoadCurrent_A' | 'leadLength_m' | 'leadSize_mm2' | 'ctAccuracyClass';
 type CalculatorId = 'voltage-drop' | 'breaker-sizing' | 'transformer-capacity' | 'ct-sizing';
 type CalculatorStatus = 'SKIPPED' | 'CALCULATED' | 'ERROR';
 
@@ -57,8 +56,8 @@ export interface DrawingCalculationRouterOptions {
   readonly getCalculator?: (id: string) => CalculatorRegistryEntry | undefined;
 }
 
-type Scope = { readonly ownerId: string; readonly page: number; readonly key: string; readonly specs: readonly NormalizedSpec[]; readonly issues: readonly string[] };
-type Binding = { readonly adapterField: string; readonly fields: readonly SourceField[]; readonly unit: string; readonly targetUnit: string; readonly valid: (value: number | string) => boolean };
+type Scope = { readonly ownerId: string; readonly page: number; readonly key: string; readonly specs: readonly NormalizedSpec[]; readonly issues: readonly string[]; readonly isResolvedOwnerContext: boolean };
+type Binding = { readonly adapterField: string; readonly fields: readonly NormalizedSpec['field'][]; readonly unit: string; readonly targetUnit: string; readonly valid: (value: number | string) => boolean };
 type Resolved = { readonly evidence: CalculationInputEvidence; readonly value: number | string };
 
 function compareText(left: string, right: string): number {
@@ -122,6 +121,7 @@ function resolve(scope: Scope, drawingHash: string, binding: Binding): { readonl
 }
 
 function resolveOptional(scope: Scope, drawingHash: string, binding: Binding): Resolved | undefined {
+  if (!scope.isResolvedOwnerContext) return undefined;
   const result = resolve(scope, drawingHash, binding);
   return result.resolved;
 }
@@ -144,13 +144,27 @@ function makeScopeIssues(graph: NormalizedElectricalGraph): readonly string[] {
 function scopesFor(graph: NormalizedElectricalGraph): Scope[] {
   const groups = new Map<string, NormalizedSpec[]>();
   for (const spec of graph.specs) {
-    if (!spec.ownerId || !Number.isInteger(spec.bounds.page) || spec.bounds.page <= 0) continue;
-    const key = `${spec.ownerId}@p${spec.bounds.page}`;
+    if (!Number.isInteger(spec.bounds.page) || spec.bounds.page <= 0) continue;
+    const ownerId = spec.ownerId ?? 'unresolved';
+    const key = `${ownerId}@p${spec.bounds.page}`;
     groups.set(key, [...(groups.get(key) ?? []), spec]);
   }
   const issues = makeScopeIssues(graph);
   return [...groups.entries()]
-    .map(([key, specs]) => ({ ownerId: specs[0].ownerId!, page: specs[0].bounds.page, key, specs, issues }))
+    .map(([key, specs]) => {
+      const ownerId = specs[0].ownerId ?? 'unresolved';
+      const page = specs[0].bounds.page;
+      const owner = graph.graph.symbols.find((symbol) => symbol.id === ownerId);
+      const isResolvedOwnerContext = owner !== undefined && owner.bounds.page === page;
+      return {
+        ownerId,
+        page,
+        key,
+        specs,
+        issues: isResolvedOwnerContext ? issues : [...issues, `OWNER_CONTEXT_UNRESOLVED:${ownerId}@p${page}`].sort(compareText),
+        isResolvedOwnerContext,
+      };
+    })
     .sort((left, right) => compareText(left.key, right.key));
 }
 
@@ -194,11 +208,15 @@ function run<T>(graph: NormalizedElectricalGraph, scope: Scope, calculatorId: Ca
   const values = new Map<string, Resolved>();
   const missingInputs: CalculationInputIssue[] = [];
   const ambiguousInputs: CalculationInputIssue[] = [];
-  for (const binding of bindings) {
-    const resolved = resolve(scope, graph.drawingHash, binding);
-    if (resolved.resolved) values.set(binding.adapterField, resolved.resolved);
-    if (resolved.missing) missingInputs.push(resolved.missing);
-    if (resolved.ambiguous) ambiguousInputs.push(resolved.ambiguous);
+  if (!scope.isResolvedOwnerContext) {
+    missingInputs.push(...bindings.map(issue));
+  } else {
+    for (const binding of bindings) {
+      const resolved = resolve(scope, graph.drawingHash, binding);
+      if (resolved.resolved) values.set(binding.adapterField, resolved.resolved);
+      if (resolved.missing) missingInputs.push(resolved.missing);
+      if (resolved.ambiguous) ambiguousInputs.push(resolved.ambiguous);
+    }
   }
   const inputEvidence = [...values.values()].map((item) => item.evidence).sort((left, right) => compareText(left.adapterField, right.adapterField));
   const base = {
