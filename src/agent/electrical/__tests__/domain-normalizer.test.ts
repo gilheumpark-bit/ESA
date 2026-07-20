@@ -209,4 +209,65 @@ describe('normalizeElectricalGraph', () => {
     const raw = Array.from({ length: 17 }, (_, index) => `${index + 1}V`).join(' ');
     expect(() => normalizeElectricalGraph(graph({ texts: [text('TEXT-050', raw, 0)] }))).toThrow('parsed field budget');
   });
+
+  it('preserves explicit calculator semantics and Korean conductor material aliases', () => {
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('VCB-LOAD', 'VCB', 0), symbol('CABLE-KR', 'CABLE', 200)],
+      texts: [text('TEXT-060', '부하전류 630A', 0), text('TEXT-061', 'CV 3C 35mm² 동', 200)],
+    }));
+
+    expect(specsFor(result, 'TEXT-060')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'loadCurrent_A', value: 630, unit: 'A', ownerId: 'VCB-LOAD' }),
+    ]));
+    expect(specsFor(result, 'TEXT-060').some((spec) => spec.field === 'current_A')).toBe(false);
+    expect(specsFor(result, 'TEXT-061')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'conductorMaterial', value: 'Cu', unit: 'material', ownerId: 'CABLE-KR' }),
+    ]));
+  });
+
+  it('keeps all explicit calculator labels distinct from generic electrical fields', () => {
+    const result = normalizeElectricalGraph(graph({
+      texts: [text('TEXT-062', '허용전류 300A 단락전류 25kA 총부하 120kW 역률 0.85 수용률 80% 안전율 1.25 부담 15VA', 0)],
+    }));
+
+    expect(specsFor(result, 'TEXT-062')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'cableAmpacity_A', value: 300, unit: 'A' }),
+      expect.objectContaining({ field: 'faultCurrent_kA', value: 25, unit: 'kA' }),
+      expect.objectContaining({ field: 'totalLoad_kW', value: 120, unit: 'kW' }),
+      expect.objectContaining({ field: 'powerFactor', value: 0.85, unit: 'factor' }),
+      expect.objectContaining({ field: 'demandFactor', value: 0.8, unit: 'factor' }),
+      expect.objectContaining({ field: 'safetyMargin', value: 1.25, unit: 'factor' }),
+      expect.objectContaining({ field: 'burden_VA', value: 15, unit: 'VA' }),
+    ]));
+  });
+
+  it('fails closed for empty provenance and malformed multi-separator values', () => {
+    const unprovenanced = text('TEXT-070', '380V', 0);
+    unprovenanced.originalEvidenceIds = [];
+    unprovenanced.sourceIds = [];
+    const result = normalizeElectricalGraph(graph({ texts: [unprovenanced, text('TEXT-071', '1.2.3V', 100)] }));
+
+    expect(specsFor(result, 'TEXT-070')).toEqual([]);
+    expect(specsFor(result, 'TEXT-071')).toEqual([]);
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'HOLD_MISSING_PROVENANCE', evidenceId: 'TEXT-070' }),
+      expect.objectContaining({ code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: 'TEXT-071', field: 'voltage_V' }),
+    ]));
+  });
+
+  it('does not merge matching source text when distinct owners are resolved', () => {
+    const left = text('TEXT-080', '22.9kV', 0);
+    const right = text('TEXT-081', '22.9kV', 200);
+    left.originalEvidenceIds = ['shared-ocr-source'];
+    right.originalEvidenceIds = ['shared-ocr-source'];
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('VCB-LEFT', 'VCB', 0), symbol('VCB-RIGHT', 'VCB', 200)],
+      texts: [left, right],
+    }));
+
+    expect(result.specs.filter((spec) => spec.field === 'voltage_V')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ evidenceId: 'TEXT-080', ownerId: 'VCB-LEFT' }),
+      expect.objectContaining({ evidenceId: 'TEXT-081', ownerId: 'VCB-RIGHT' }),
+    ]));
+  });
 });

@@ -3,6 +3,14 @@ import type { SpatialEvidenceGraph, SpatialSymbol, SpatialText } from '../vision
 export type ElectricalField =
   | 'voltage_V'
   | 'current_A'
+  | 'loadCurrent_A'
+  | 'cableAmpacity_A'
+  | 'faultCurrent_kA'
+  | 'totalLoad_kW'
+  | 'powerFactor'
+  | 'demandFactor'
+  | 'safetyMargin'
+  | 'burden_VA'
   | 'capacity_kVA'
   | 'breaking_kA'
   | 'ctRatio'
@@ -12,7 +20,7 @@ export type ElectricalField =
   | 'length_m'
   | 'phase';
 
-export type ElectricalUnit = 'V' | 'A' | 'kVA' | 'kA' | 'm' | 'mm2' | 'ratio' | 'text' | 'phase' | 'material';
+export type ElectricalUnit = 'V' | 'A' | 'kVA' | 'kA' | 'kW' | 'VA' | 'factor' | 'm' | 'mm2' | 'ratio' | 'text' | 'phase' | 'material';
 
 export interface NormalizedSpec {
   readonly drawingHash: string;
@@ -33,6 +41,7 @@ export type NormalizationWarningCode =
   | 'HOLD_AMBIGUOUS_TEXT_OWNER'
   | 'HOLD_AMBIGUOUS_FIELD_VALUE'
   | 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE'
+  | 'HOLD_MISSING_PROVENANCE'
   | 'DUPLICATE_OCR_SPEC'
   | 'GRAPH_CONFLICT';
 
@@ -71,6 +80,8 @@ type MutableSpec = {
   bounds: { x: number; y: number; w: number; h: number; page: number };
   confidence: number;
 };
+
+type ParseBudget = { count: number };
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -114,22 +125,32 @@ function parseNumber(token: string): number | undefined {
   let canonical: string;
   if (dots.length > 0 && commas.length > 0) {
     const decimalIndex = Math.max(dots[dots.length - 1], commas[commas.length - 1]);
-    canonical = unsigned
-      .split('')
-      .filter((character, index) => (character !== '.' && character !== ',') || index === decimalIndex)
-      .join('')
-      .replace(/[.,]/, '.');
+    const decimal = unsigned[decimalIndex];
+    const grouping = decimal === '.' ? ',' : '.';
+    const integer = unsigned.slice(0, decimalIndex);
+    const fraction = unsigned.slice(decimalIndex + 1);
+    if (!/^\d{1,3}(?:[.,]\d{3})+$/.test(integer) || !new RegExp(`\\${grouping}`).test(integer) || !/^\d{1,2}$/.test(fraction)) return undefined;
+    canonical = `${integer.split(grouping).join('')}.${fraction}`;
   } else if (commas.length > 0) {
-    const tail = unsigned.slice((commas[commas.length - 1] ?? -1) + 1);
-    canonical = tail.length <= 2
-      ? unsigned.replace(/,/g, (match, index) => index === (commas[commas.length - 1] ?? -1) ? '.' : '')
-      : unsigned.replace(/,/g, '');
+    if (commas.length === 1) {
+      const index = commas[0];
+      const tail = unsigned.slice(index + 1);
+      canonical = tail.length <= 2 ? `${unsigned.slice(0, index)}.${tail}` : /^\d{1,3},\d{3}$/.test(unsigned) ? unsigned.replace(',', '') : '';
+    } else {
+      canonical = /^\d{1,3}(?:,\d{3})+$/.test(unsigned) ? unsigned.replace(/,/g, '') : '';
+    }
   } else if (dots.length > 0) {
-    const tail = unsigned.slice((dots[dots.length - 1] ?? -1) + 1);
-    canonical = dots.length > 1 && tail.length === 3 ? unsigned.replace(/\./g, '') : unsigned.replace(/\.(?=.*\.)/g, '');
+    if (dots.length === 1) {
+      const index = dots[0];
+      const tail = unsigned.slice(index + 1);
+      canonical = tail.length <= 2 ? `${unsigned.slice(0, index)}.${tail}` : /^\d{1,3}\.\d{3}$/.test(unsigned) ? unsigned.replace('.', '') : '';
+    } else {
+      canonical = /^\d{1,3}(?:\.\d{3})+$/.test(unsigned) ? unsigned.replace(/\./g, '') : '';
+    }
   } else {
     canonical = unsigned;
   }
+  if (!canonical) return undefined;
   const parsed = Number(`${sign}${canonical}`);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
@@ -158,7 +179,7 @@ function candidateTypes(symbol: SpatialSymbol): string {
 
 function compatible(field: ElectricalField, symbol: SpatialSymbol): boolean {
   const types = candidateTypes(symbol);
-  if (field === 'capacity_kVA') return /\b(TR|TRANSFORMER)\b/.test(types);
+  if (field === 'capacity_kVA' || field === 'totalLoad_kW') return /\b(TR|TRANSFORMER)\b/.test(types);
   if (field === 'ctRatio') return /\bCT\b/.test(types);
   if (field === 'cableSpec' || field === 'length_m' || field === 'conductorSize_mm2' || field === 'conductorMaterial') return /\b(CABLE|LINE)\b/.test(types);
   if (field === 'phase') return false;
@@ -184,12 +205,18 @@ function ownerFor(spec: MutableSpec, graph: SpatialEvidenceGraph, warnings: Norm
   }
 }
 
-function readMatches(raw: string, pattern: RegExp, unitScale: Record<string, number>, text: SpatialText, field: ElectricalField, occupied: Array<{ start: number; end: number }>, warnings: NormalizationWarning[]): Array<{ value: number; start: number; end: number }> {
+function reserveParsedField(budget: ParseBudget): void {
+  if (budget.count >= MAX_FIELDS_PER_TEXT) throw new Error('parsed field budget exceeded');
+  budget.count += 1;
+}
+
+function readMatches(raw: string, pattern: RegExp, unitScale: Record<string, number>, text: SpatialText, field: ElectricalField, occupied: Array<{ start: number; end: number }>, warnings: NormalizationWarning[], budget: ParseBudget): Array<{ value: number; start: number; end: number }> {
   const matches: Array<{ value: number; start: number; end: number }> = [];
   for (const match of raw.matchAll(pattern)) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
     if (occupied.some((span) => start < span.end && end > span.start)) continue;
+    reserveParsedField(budget);
     const number = parseNumber(match[1]);
     const multiplier = unitScale[match[2].toLowerCase()];
     if (number === undefined || multiplier === undefined || number <= 0) {
@@ -199,6 +226,31 @@ function readMatches(raw: string, pattern: RegExp, unitScale: Record<string, num
     matches.push({ value: number * multiplier, start, end });
   }
   return matches;
+}
+
+function semanticCurrentField(raw: string): ElectricalField {
+  if (/(?:부하\s*전류|load\s*current)/i.test(raw)) return 'loadCurrent_A';
+  if (/(?:허용\s*전류|cable\s*ampacity|ampacity)/i.test(raw)) return 'cableAmpacity_A';
+  return 'current_A';
+}
+
+function semanticBreakingField(raw: string): ElectricalField {
+  return /(?:단락\s*전류|fault\s*current)/i.test(raw) ? 'faultCurrent_kA' : 'breaking_kA';
+}
+
+function readLabeledValues(raw: string, label: string, text: SpatialText, field: ElectricalField, warnings: NormalizationWarning[], budget: ParseBudget, percent = false): number[] {
+  const values: number[] = [];
+  const pattern = new RegExp(`(?:${label})\\s*(?<![\\d.,])(${NUMBER})(?![\\d.,])\\s*(%)?`, 'gi');
+  for (const match of raw.matchAll(pattern)) {
+    reserveParsedField(budget);
+    const number = parseNumber(match[1]);
+    if (number === undefined || number <= 0) {
+      addWarning(warnings, { code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: text.id, field, page: text.bounds.page });
+      continue;
+    }
+    values.push(percent && match[2] === '%' ? number / 100 : number);
+  }
+  return values;
 }
 
 function addUniqueNumeric(specs: MutableSpec[], warnings: NormalizationWarning[], text: SpatialText, field: ElectricalField, unit: ElectricalUnit, values: readonly number[]): void {
@@ -231,10 +283,12 @@ const DRAWING_HASH_PLACEHOLDER = '__drawing_hash__';
 function parseText(text: SpatialText, warnings: NormalizationWarning[]): MutableSpec[] {
   const raw = normalizeToken(text.raw);
   const specs: MutableSpec[] = [];
+  const budget: ParseBudget = { count: 0 };
   const occupied: Array<{ start: number; end: number }> = [];
-  const ct = new RegExp(`(?:\\bCT\\b|변류기)\\s*(${NUMBER})\\s*\\/\\s*(${NUMBER})(?:\\s*A)?`, 'gi');
+  const ct = new RegExp(`(?:\\bCT\\b|변류기)\\s*(?<![\\d.,])(${NUMBER})(?![\\d.,])\\s*\\/\\s*(?<![\\d.,])(${NUMBER})(?![\\d.,])(?:\\s*A)?`, 'gi');
   const ctValues: string[] = [];
   for (const match of raw.matchAll(ct)) {
+    reserveParsedField(budget);
     const first = parseNumber(match[1]);
     const second = parseNumber(match[2]);
     const start = match.index ?? 0;
@@ -248,30 +302,38 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
   if (new Set(ctValues).size > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'ctRatio', page: text.bounds.page });
   else if (ctValues.length === 1) addSpec(specs, text, 'ctRatio', ctValues[0], 'ratio');
 
-  const voltage = readMatches(raw, new RegExp(`(${NUMBER})\\s*(kV|V)(?![A-Za-z])`, 'gi'), { kv: 1000, v: 1 }, text, 'voltage_V', occupied, warnings);
-  const capacity = readMatches(raw, new RegExp(`(${NUMBER})\\s*(MVA|kVA)(?![A-Za-z])`, 'gi'), { mva: 1000, kva: 1 }, text, 'capacity_kVA', occupied, warnings);
-  const breaking = readMatches(raw, new RegExp(`(${NUMBER})\\s*(kA)(?![A-Za-z])`, 'gi'), { ka: 1 }, text, 'breaking_kA', occupied, warnings);
-  const current = readMatches(raw, new RegExp(`(${NUMBER})\\s*(A)(?![A-Za-z])`, 'gi'), { a: 1 }, text, 'current_A', occupied, warnings);
+  const bounded = `(?<![\\d.,])(${NUMBER})(?![\\d.,])`;
+  const voltage = readMatches(raw, new RegExp(`${bounded}\\s*(kV|V)(?![A-Za-z])`, 'gi'), { kv: 1000, v: 1 }, text, 'voltage_V', occupied, warnings, budget);
+  const capacity = readMatches(raw, new RegExp(`${bounded}\\s*(MVA|kVA)(?![A-Za-z])`, 'gi'), { mva: 1000, kva: 1 }, text, 'capacity_kVA', occupied, warnings, budget);
+  const breakingField = semanticBreakingField(raw);
+  const breaking = readMatches(raw, new RegExp(`${bounded}\\s*(kA)(?![A-Za-z])`, 'gi'), { ka: 1 }, text, breakingField, occupied, warnings, budget);
+  const currentField = semanticCurrentField(raw);
+  const current = readMatches(raw, new RegExp(`${bounded}\\s*(A)(?![A-Za-z])`, 'gi'), { a: 1 }, text, currentField, occupied, warnings, budget);
   addUniqueNumeric(specs, warnings, text, 'voltage_V', 'V', voltage.map((item) => item.value));
   addUniqueNumeric(specs, warnings, text, 'capacity_kVA', 'kVA', capacity.map((item) => item.value));
-  addUniqueNumeric(specs, warnings, text, 'breaking_kA', 'kA', breaking.map((item) => item.value));
-  addUniqueNumeric(specs, warnings, text, 'current_A', 'A', current.map((item) => item.value));
+  addUniqueNumeric(specs, warnings, text, breakingField, 'kA', breaking.map((item) => item.value));
+  addUniqueNumeric(specs, warnings, text, currentField, 'A', current.map((item) => item.value));
+
+  const totalLoad = readMatches(raw, new RegExp(`(?:총\\s*부하|total\\s*load)\\s*${bounded}\\s*(kW|W)(?![A-Za-z])`, 'gi'), { kw: 1, w: 0.001 }, text, 'totalLoad_kW', occupied, warnings, budget);
+  const burden = readMatches(raw, new RegExp(`(?:부담|burden)\\s*${bounded}\\s*(VA)(?![A-Za-z])`, 'gi'), { va: 1 }, text, 'burden_VA', occupied, warnings, budget);
+  addUniqueNumeric(specs, warnings, text, 'totalLoad_kW', 'kW', totalLoad.map((item) => item.value));
+  addUniqueNumeric(specs, warnings, text, 'burden_VA', 'VA', burden.map((item) => item.value));
+  addUniqueNumeric(specs, warnings, text, 'powerFactor', 'factor', readLabeledValues(raw, '역률|power\\s*factor|\\bpf\\b', text, 'powerFactor', warnings, budget));
+  addUniqueNumeric(specs, warnings, text, 'demandFactor', 'factor', readLabeledValues(raw, '수용률|demand\\s*factor', text, 'demandFactor', warnings, budget, true));
+  addUniqueNumeric(specs, warnings, text, 'safetyMargin', 'factor', readLabeledValues(raw, '안전율|safety\\s*margin', text, 'safetyMargin', warnings, budget));
 
   const cableContext = CABLE_FAMILY.test(raw);
-  if (cableContext) addSpec(specs, text, 'cableSpec', raw, 'text');
-  const sizes = readMatches(raw, new RegExp(`(${NUMBER})\\s*(mm2|sq)(?![A-Za-z])`, 'gi'), { mm2: 1, sq: 1 }, text, 'conductorSize_mm2', occupied, warnings);
+  if (cableContext) { reserveParsedField(budget); addSpec(specs, text, 'cableSpec', raw, 'text'); }
+  const sizes = readMatches(raw, new RegExp(`${bounded}\\s*(mm2|sq)(?![A-Za-z])`, 'gi'), { mm2: 1, sq: 1 }, text, 'conductorSize_mm2', occupied, warnings, budget);
   if (cableContext) addUniqueNumeric(specs, warnings, text, 'conductorSize_mm2', 'mm2', sizes.map((item) => item.value));
-  const materials = [...raw.matchAll(/\b(Cu|Copper|동|Al|Aluminium|알루미늄)\b/gi)].map((match) => /^(Cu|Copper|동)$/i.test(match[1]) ? 'Cu' : 'Al');
+  const materials = [...raw.matchAll(/\b(Cu|Copper|Al|Aluminium)\b|(동|알루미늄)/gi)].map((match) => { reserveParsedField(budget); return /^(Cu|Copper)$/i.test(match[1] ?? '') || match[2] === '동' ? 'Cu' : 'Al'; });
   if (cableContext && new Set(materials).size === 1) addSpec(specs, text, 'conductorMaterial', materials[0], 'material');
   if (cableContext && new Set(materials).size > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'conductorMaterial', page: text.bounds.page });
-  const lengths = readMatches(raw, new RegExp(`(${NUMBER})\\s*(미터|m)(?!m|m2|[A-Za-z])`, 'gi'), { '미터': 1, m: 1 }, text, 'length_m', occupied, warnings);
+  const lengths = readMatches(raw, new RegExp(`${bounded}\\s*(미터|m)(?!m|m2|[A-Za-z])`, 'gi'), { '미터': 1, m: 1 }, text, 'length_m', occupied, warnings, budget);
   addUniqueNumeric(specs, warnings, text, 'length_m', 'm', lengths.map((item) => item.value));
-  const phases = [...raw.matchAll(/(?:^|\s)(1|3)\s*(?:Ø|φ|상)/gi)].map((match) => Number(match[1]));
+  const phases = [...raw.matchAll(/(?:^|\s)(1|3)\s*(?:Ø|φ|상)/gi)].map((match) => { reserveParsedField(budget); return Number(match[1]); });
   addUniqueNumeric(specs, warnings, text, 'phase', 'phase', phases);
 
-  if (ctValues.length + voltage.length + capacity.length + breaking.length + current.length + sizes.length + lengths.length + phases.length + (cableContext ? 1 : 0) + materials.length > MAX_FIELDS_PER_TEXT) {
-    throw new Error('parsed field budget exceeded');
-  }
   return specs;
 }
 
@@ -282,6 +344,7 @@ function dedupe(specs: MutableSpec[], warnings: NormalizationWarning[]): Mutable
     const duplicate = output.find((existing) =>
       existing.bounds.page === spec.bounds.page
       && existing.field === spec.field
+      && existing.ownerId === spec.ownerId
       && existing.unit === spec.unit
       && String(existing.value) === String(spec.value)
       && normalizedText(existing.raw) === normalizedText(spec.raw)
@@ -328,7 +391,11 @@ export function normalizeElectricalGraph(graph: SpatialEvidenceGraph): Normalize
   const parsed = graph.texts
     .slice()
     .sort((left, right) => left.bounds.page - right.bounds.page || left.bounds.y - right.bounds.y || left.bounds.x - right.bounds.x || left.id.localeCompare(right.id))
-    .flatMap((item) => parseText(item, warnings));
+    .flatMap((item) => {
+      if (item.originalEvidenceIds.length > 0 && item.sourceIds.length > 0) return parseText(item, warnings);
+      addWarning(warnings, { code: 'HOLD_MISSING_PROVENANCE', evidenceId: item.id, page: item.bounds.page });
+      return [];
+    });
   for (const spec of parsed) {
     spec.drawingHash = graph.drawingHash;
     ownerFor(spec, graph, warnings);
