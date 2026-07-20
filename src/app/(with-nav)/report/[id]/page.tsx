@@ -271,7 +271,7 @@ export default function ReportPage() {
           </div>
 
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(520px,0.85fr)]">
-            <div className="xl:sticky xl:top-20">
+            <div className="min-w-0 xl:sticky xl:top-20">
               {sourceState === 'ready' && sourceUrl ? (
                 <DrawingEvidenceOverlay
                   src={sourceUrl}

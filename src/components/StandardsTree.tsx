@@ -8,7 +8,7 @@
  * PART 3: Main tree component with search
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -190,7 +190,7 @@ export default function StandardsTree({ refs, searchQuery = '', onSelectRef }: S
     <div className="overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)]">
       {groups.map((group) => (
         <TreeGroupNode
-          key={group.standard}
+          key={`${group.standard}:${hasSearch ? 'search' : 'browse'}`}
           group={group}
           searchQuery={searchQuery}
           defaultOpen={hasSearch}

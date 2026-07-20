@@ -1,6 +1,7 @@
 'use client';
 
 import { BadgeCheck, Calculator, Link2, ListChecks, ShieldAlert } from 'lucide-react';
+import { useMemo } from 'react';
 
 import type { DrawingIntelligenceReport as DrawingReport } from '@/agent/report/drawing-intelligence-report';
 import { buildEvidenceNumbers, describeEquipmentType } from '@/components/drawing-evidence-labels';
@@ -11,6 +12,8 @@ interface DrawingIntelligenceReportProps {
   activeIds?: readonly string[];
   onSelect?: (ids: string[]) => void;
 }
+
+type DrawingSymbol = DrawingReport['symbols'][number];
 
 const FIELD_LABELS: Record<string, string> = {
   voltage_V: '전압',
@@ -51,13 +54,24 @@ export function DrawingIntelligenceReport({
   activeIds = [],
   onSelect,
 }: DrawingIntelligenceReportProps) {
-  const active = new Set(activeIds);
-  const numbers = buildEvidenceNumbers(report.symbols, report.lines);
-  const symbolsById = new Map(report.symbols.map((item) => [item.id, item]));
-  const counts = [...report.symbols.reduce<Map<string, typeof report.symbols>>((map, item) => {
-    map.set(item.type, [...(map.get(item.type) ?? []), item]);
-    return map;
-  }, new Map())].sort(([left], [right]) => left.localeCompare(right));
+  const active = useMemo(() => new Set(activeIds), [activeIds]);
+  const numbers = useMemo(
+    () => buildEvidenceNumbers(report.symbols, report.lines),
+    [report.lines, report.symbols],
+  );
+  const symbolsById = useMemo(
+    () => new Map(report.symbols.map((item) => [item.id, item])),
+    [report.symbols],
+  );
+  const counts = useMemo(() => {
+    const groups = new Map<string, DrawingSymbol[]>();
+    for (const item of report.symbols) {
+      const group = groups.get(item.type);
+      if (group) group.push(item);
+      else groups.set(item.type, [item]);
+    }
+    return [...groups].sort(([left], [right]) => left.localeCompare(right));
+  }, [report.symbols]);
 
   const evidenceLabel = (id: string): string => (
     numbers.symbols[id] ?? numbers.lines[id] ?? id
@@ -69,7 +83,7 @@ export function DrawingIntelligenceReport({
   };
 
   return (
-    <div className="border border-[var(--border-default)] bg-[var(--bg-primary)]">
+    <div className="min-w-0 border border-[var(--border-default)] bg-[var(--bg-primary)]">
       <header className="border-b border-[var(--border-default)] bg-[var(--bg-secondary)] px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>

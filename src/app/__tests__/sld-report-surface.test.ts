@@ -39,4 +39,12 @@ describe('source-linked SLD report surface', () => {
     expect(page).toContain('DrawingEvidenceOverlay');
     expect(page).toContain('DrawingIntelligenceReport');
   });
+
+  it('contains wide evidence tables without widening the mobile page', () => {
+    const page = source('src/app/(with-nav)/report/[id]/page.tsx');
+    const report = source('src/components/DrawingIntelligenceReport.tsx');
+
+    expect(page).toContain('min-w-0 xl:sticky');
+    expect(report).toContain('min-w-0 border');
+  });
 });

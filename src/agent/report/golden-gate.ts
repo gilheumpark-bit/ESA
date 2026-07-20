@@ -26,7 +26,7 @@ export interface GoldenGateVerification {
 function safePath(root: string, candidate: string, fallback: string): string {
   const selected = candidate || fallback;
   if (isAbsolute(selected)) throw new Error('unsafe path');
-  const target = resolve(root, selected);
+  const target = resolve(/* turbopackIgnore: true */ root, selected);
   const fromRoot = relative(root, target);
   if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) throw new Error('unsafe path');
   return target;
@@ -84,7 +84,7 @@ async function safeExistingDatasetPath(root: string, candidate: string): Promise
 async function readBoundedRegularFile(path: string, maximumBytes: number): Promise<Buffer> {
   const info = await lstat(path);
   if (info.isSymbolicLink() || !info.isFile() || info.size > maximumBytes) throw new Error('invalid file');
-  return readFile(path);
+  return readFile(/* turbopackIgnore: true */ path);
 }
 
 async function hashEvidencePath(target: string): Promise<string> {
@@ -101,17 +101,20 @@ async function hashEvidencePath(target: string): Promise<string> {
     const info = await lstat(path);
     if (info.isSymbolicLink()) throw new Error('invalid evidence');
     if (info.isDirectory()) {
-      const children = (await readdir(path)).sort((left, right) => left.localeCompare(right, 'en'));
+      const children = (await readdir(/* turbopackIgnore: true */ path))
+        .sort((left, right) => left.localeCompare(right, 'en'));
       entries += children.length;
       if (entries > MAX_DIRECTORY_ENTRIES) throw new Error('invalid evidence');
-      for (const child of children) await visit(resolve(path, child), depth + 1);
+      for (const child of children) {
+        await visit(resolve(/* turbopackIgnore: true */ path, child), depth + 1);
+      }
       return;
     }
     if (!info.isFile()) throw new Error('invalid evidence');
     files += 1;
     bytes += info.size;
     if (files > MAX_HASHED_FILES || bytes > MAX_HASHED_BYTES) throw new Error('invalid evidence');
-    const body = await readFile(path);
+    const body = await readFile(/* turbopackIgnore: true */ path);
     hash.update(relative(evidenceRoot, path).replaceAll('\\', '/'));
     hash.update('\0');
     hash.update(body);
@@ -134,8 +137,14 @@ export async function verifyCurrentGoldenGate(options: {
   try {
     if (!options.publicKeyPem) return fail('MISSING_INPUT');
     const root = options.root ?? process.cwd();
-    const manifestRaw = await readFile(safePath(root, options.manifestPath ?? '', 'fixtures/drawings/golden/sld-golden-manifest.json'), 'utf8');
-    const receiptRaw = await readFile(safePath(root, options.receiptPath ?? '', 'test-results/sld-golden-gate.json'), 'utf8');
+    const manifestRaw = await readFile(
+      /* turbopackIgnore: true */ safePath(root, options.manifestPath ?? '', 'fixtures/drawings/golden/sld-golden-manifest.json'),
+      'utf8',
+    );
+    const receiptRaw = await readFile(
+      /* turbopackIgnore: true */ safePath(root, options.receiptPath ?? '', 'test-results/sld-golden-gate.json'),
+      'utf8',
+    );
     const manifest = JSON.parse(manifestRaw) as unknown;
     const receipt = JSON.parse(receiptRaw) as unknown;
     if (!isRecord(manifest) || !isRecord(receipt)) return fail('RECEIPT_INVALID');

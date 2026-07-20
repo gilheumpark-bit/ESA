@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useMemo } from 'react';
 
 import type { DrawingIntelligenceReport } from '@/agent/report/drawing-intelligence-report';
 import { buildEvidenceNumbers } from '@/components/drawing-evidence-labels';
@@ -31,12 +32,24 @@ export function DrawingEvidenceOverlay({
   activeIds = [],
   onSelect,
 }: DrawingEvidenceOverlayProps) {
-  const active = new Set(activeIds);
-  const numbers = buildEvidenceNumbers(report.symbols, report.lines);
+  const active = useMemo(() => new Set(activeIds), [activeIds]);
+  const numbers = useMemo(
+    () => buildEvidenceNumbers(report.symbols, report.lines),
+    [report.lines, report.symbols],
+  );
   const page = report.source.page;
-  const symbols = report.symbols.filter((item) => item.bounds.page === page);
-  const lines = report.lines.filter((item) => item.pages.includes(page) && item.path.length > 0);
-  const quantities = report.quantities.filter((item) => item.page === page);
+  const symbols = useMemo(
+    () => report.symbols.filter((item) => item.bounds.page === page),
+    [page, report.symbols],
+  );
+  const lines = useMemo(
+    () => report.lines.filter((item) => item.pages.includes(page) && item.path.length > 0),
+    [page, report.lines],
+  );
+  const quantities = useMemo(
+    () => report.quantities.filter((item) => item.page === page),
+    [page, report.quantities],
+  );
 
   return (
     <figure className="overflow-hidden border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-[var(--shadow-sm)]">
