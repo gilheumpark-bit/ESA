@@ -8,6 +8,9 @@ import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import type { TeamInput } from '../types';
 import type { DrawingSnapshot, ImageVariant, PrecisionRegion } from '../../vision/evidence-types';
 import type { RoleReviewData, RoleReviewEnvelope, ReviewRole } from '../../vision/review-types';
+import { normalizeElectricalGraph } from '../../electrical/domain-normalizer';
+import { synthesizeDrawingReview } from '../../electrical/synthesis';
+import type { ElectricalIssue } from '../../electrical/electrical-invariants';
 
 jest.mock('@/engine/topology/pdf-vector-parser', () => ({ parsePdfToSLD: jest.fn() }));
 
@@ -102,7 +105,97 @@ describe('SLD raster independent council integration', () => {
     expect(result.components).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'VCB-01', type: 'breaker_vcb' }), expect.objectContaining({ id: 'TR-01', type: 'transformer' })]));
     expect(result.connections).toEqual([expect.objectContaining({ from: 'VCB-01', to: 'TR-01' })]);
     expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 16, complete: true, maxRegionCallsPerRole: 16 } });
+    expect(result.drawingSynthesis).toMatchObject({ drawingHash: DRAWING_HASH, verdict: 'CONDITIONAL', requiresHumanReview: true });
     expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('runs the image analysis stages once in evidence order with the same normalized graph', async () => {
+    const callOrder: string[] = [];
+    let normalizedReference: ReturnType<typeof normalizeElectricalGraph> | undefined;
+    const normalizeGraph = jest.fn((value) => {
+      callOrder.push('normalize');
+      normalizedReference = normalizeElectricalGraph(value);
+      return normalizedReference;
+    });
+    const validateInvariants = jest.fn((value) => {
+      callOrder.push('invariants');
+      expect(value).toBe(normalizedReference);
+      return [];
+    });
+    const routeCalculations = jest.fn((value) => {
+      callOrder.push('calculator');
+      expect(value).toBe(normalizedReference);
+      return [];
+    });
+    const compareLogic = jest.fn((value, envelope) => {
+      callOrder.push('logic');
+      expect(value).toBe(normalizedReference);
+      expect(envelope.role).toBe('logic');
+      return [];
+    });
+    const synthesize = jest.fn((value) => {
+      callOrder.push('synthesis');
+      expect(value.normalizedGraph).toBe(normalizedReference);
+      return synthesizeDrawingReview(value);
+    });
+
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({ envelopes: envelopes(), failures: [] }),
+      normalizeGraph,
+      validateInvariants,
+      routeCalculations,
+      compareLogic,
+      synthesize,
+    });
+
+    expect(callOrder).toEqual(['normalize', 'invariants', 'calculator', 'logic', 'synthesis']);
+    expect(normalizeGraph).toHaveBeenCalledTimes(1);
+    expect(validateInvariants).toHaveBeenCalledTimes(1);
+    expect(routeCalculations).toHaveBeenCalledTimes(1);
+    expect(compareLogic).toHaveBeenCalledTimes(1);
+    expect(synthesize).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ success: true, drawingSynthesis: { drawingHash: DRAWING_HASH } });
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('stops calculator and logic stages when electrical invariants block the graph', async () => {
+    const blockingIssue: ElectricalIssue = {
+      id: 'issue:dangling-edge:test',
+      code: 'DANGLING_EDGE',
+      judgment: 'BLOCK',
+      severity: 'critical',
+      message: '연결 참조 대상이 없습니다.',
+      evidence: {
+        drawingHash: DRAWING_HASH,
+        stableIds: [],
+        originalEvidenceIds: [],
+        sourceIds: [],
+        pages: [],
+        bounds: [],
+      },
+      requiredInputs: ['repair graph structure'],
+    };
+    const routeCalculations = jest.fn(() => []);
+    const compareLogic = jest.fn(() => []);
+
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({ envelopes: envelopes(), failures: [] }),
+      validateInvariants: () => [blockingIssue],
+      routeCalculations,
+      compareLogic,
+    });
+
+    expect(routeCalculations).not.toHaveBeenCalled();
+    expect(compareLogic).not.toHaveBeenCalled();
+    expect(result.drawingSynthesis).toMatchObject({
+      verdict: 'CONDITIONAL',
+      requiresHumanReview: true,
+      stages: { calculator: 'NOT_RUN', logicResolver: 'NOT_RUN' },
+    });
   });
 
   it('stops before raster preparation and council dispatch when the request is aborted', async () => {
@@ -166,7 +259,7 @@ describe('SLD raster independent council integration', () => {
     });
 
     expect(runCouncil).toHaveBeenCalledTimes(1);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.drawingReview?.coverage).toMatchObject({
       complete: false,
       roles: { symbols: { variantId: 'variant:original' } },
@@ -178,15 +271,21 @@ describe('SLD raster independent council integration', () => {
         note: expect.stringContaining(requiredKind),
       }),
     ]));
+    expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 
   it.each(['symbols', 'connections', 'text', 'logic'] as const)('fails closed and exposes HOLD when required %s review is absent', async (missing) => {
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes().filter((item) => item.role !== missing), failures: [] }));
     const result = await executeSLDTeam(rasterInput(), { prepareRaster: async () => prepared(), resolveVisionKey: () => ({ key: KEY, source: 'user' }), runCouncil });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD', note: expect.stringContaining(missing) })]));
     expect(result.drawingReview?.envelopes).toHaveLength(3);
+    expect(result.drawingSynthesis).toMatchObject({
+      verdict: 'CONDITIONAL',
+      requiresHumanReview: true,
+      missingRoles: expect.arrayContaining([missing]),
+    });
   });
 
   it.each(['symbols', 'connections'] as const)('fails closed when the %s graph evidence is empty', async (role) => {
@@ -196,8 +295,9 @@ describe('SLD raster independent council integration', () => {
     });
     const result = await executeSLDTeam(rasterInput(), { prepareRaster: async () => prepared(), resolveVisionKey: () => ({ key: KEY, source: 'user' }), runCouncil: async () => ({ envelopes: incomplete, failures: [] }) });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD', note: expect.stringMatching(/graph(?:가 불완전| edges가 비어)/) })]));
+    expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 
   it('preserves nonfatal failures and graph conflicts as HOLD instead of silently returning a clean review', async () => {
@@ -215,9 +315,10 @@ describe('SLD raster independent council integration', () => {
       runCouncil: async () => ({ envelopes: faulty, failures: [{ role: 'symbols', sourceId: 'region:0', error: 'temporary source failure', fatal: false }] }),
     });
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD' })]));
     expect(result.drawingReview?.graph?.conflicts).toContain('UNBOUND_LINE_ENDPOINT:LINE-001');
+    expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 
   it('uses the selected provider env fallback only and redacts a key-resolution failure', async () => {

@@ -130,6 +130,7 @@ export interface TeamResult {
   rawOutput?: string;
   error?: string;
   drawingReview?: DrawingReviewArtifact;
+  drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
 }
 
 export interface CalculationEntry {
@@ -174,6 +175,9 @@ export interface RecommendationEntry {
   description: string;
   impact: 'high' | 'medium' | 'low';
   estimatedSaving?: string;
+  evidenceIds?: string[];
+  status?: 'SUPPORTED' | 'HOLD';
+  requiredInputs?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -274,6 +278,8 @@ export interface ESVAVerifiedReport {
 
   /** 팀 간 합의 실패 등으로 사람(PE) 검토가 필요한지 — UI가 상시 노출해야 함 */
   requiresHumanReview?: boolean;
+
+  drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
 
   // 보고서 안에서 실제 판정 근거로 사용된 팀/계산/위반 항목 식별자.
   // 계산 영수증이 생성되지 않은 경로에서 가짜 receipt ID를 만들지 않는다.

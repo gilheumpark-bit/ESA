@@ -22,9 +22,14 @@ import type {
 import { resolveSymbol } from '../vision/symbol-db';
 import { runDrawingCouncil, selectCouncilVariant } from '../vision/drawing-council';
 import { assembleSpatialGraph, type SpatialEvidenceGraph } from '../vision/spatial-graph';
+import { normalizeElectricalGraph } from '../electrical/domain-normalizer';
+import { validateElectricalInvariants, type ElectricalIssue } from '../electrical/electrical-invariants';
+import { routeDrawingCalculations, type DrawingCalculationReceipt } from '../electrical/drawing-calculation-router';
+import { compareLogicToGraph, type LogicConflict } from '../electrical/logic-conflicts';
+import { synthesizeDrawingReview, type DrawingSynthesis } from '../electrical/synthesis';
 import { preparePrecisionRegions as preparePlan1PrecisionRegions, precisionGridSize } from '../vision/vision-splitter';
 import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
-import type { RoleReviewEnvelope } from '../vision/review-types';
+import type { RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
 import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
@@ -105,6 +110,11 @@ export interface SLDTeamDeps {
   resolveVisionKey?: (provider: NonNullable<TeamInput['vision']>['provider'], byok?: string) => ResolvedKey;
   runCouncil?: typeof runDrawingCouncil;
   assembleGraph?: typeof assembleSpatialGraph;
+  normalizeGraph?: typeof normalizeElectricalGraph;
+  validateInvariants?: typeof validateElectricalInvariants;
+  routeCalculations?: typeof routeDrawingCalculations;
+  compareLogic?: typeof compareLogicToGraph;
+  synthesize?: typeof synthesizeDrawingReview;
 }
 
 const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
@@ -162,6 +172,54 @@ function graphLegacy(graph: SpatialEvidenceGraph, envelopeConfidence: number): {
 
 function redactSecret(value: string, secret: string | undefined): string {
   return secret ? value.split(secret).join('[REDACTED]') : value;
+}
+
+function synthesizeRasterReview(artifact: DrawingReviewArtifact, deps: SLDTeamDeps): DrawingSynthesis {
+  const drawingHash = artifact.snapshot.drawingHash;
+  const requiredRoleSet = new Set<ReviewRole>(REQUIRED_COUNCIL_ROLES);
+  const completedRoles = [...new Set(artifact.envelopes.map((envelope) => envelope.role))]
+    .filter((role) => requiredRoleSet.has(role));
+  const roleFailures = artifact.failures.map(({ role, sourceId, fatal }) => ({ role, sourceId, fatal }));
+  const base = {
+    drawingHash,
+    completedRoles,
+    coverageComplete: artifact.coverage.complete,
+    roleFailures,
+    claims: [],
+    recommendations: [],
+  };
+  const synthesize = deps.synthesize ?? synthesizeDrawingReview;
+  if (!artifact.graph) return synthesize(base);
+
+  let normalizedGraph: ReturnType<typeof normalizeElectricalGraph> | undefined;
+  let issues: ElectricalIssue[] | undefined;
+  let calculations: DrawingCalculationReceipt[] | undefined;
+  let logicConflicts: LogicConflict[] | undefined;
+  let logicEnvelope: RoleReviewEnvelope | undefined;
+  try {
+    normalizedGraph = (deps.normalizeGraph ?? normalizeElectricalGraph)(artifact.graph);
+    issues = (deps.validateInvariants ?? validateElectricalInvariants)(normalizedGraph);
+    if (!issues.some((issue) => issue.judgment === 'BLOCK')) {
+      calculations = [...(deps.routeCalculations ?? routeDrawingCalculations)(normalizedGraph)];
+      const logicEnvelopes = artifact.envelopes.filter(
+        (envelope) => envelope.role === 'logic' && envelope.drawingHash === drawingHash,
+      );
+      if (logicEnvelopes.length === 1) {
+        logicEnvelope = logicEnvelopes[0];
+        logicConflicts = (deps.compareLogic ?? compareLogicToGraph)(normalizedGraph, logicEnvelope);
+      }
+    }
+  } catch {
+    // Undefined downstream stages are preserved as NOT_RUN by the synthesis.
+  }
+  return synthesize({
+    ...base,
+    ...(logicEnvelope ? { logicEnvelope } : {}),
+    ...(normalizedGraph ? { normalizedGraph } : {}),
+    ...(issues ? { issues } : {}),
+    ...(calculations ? { calculations } : {}),
+    ...(logicConflicts ? { logicConflicts } : {}),
+  });
 }
 
 async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolvedKey: (key: string) => void): Promise<{
@@ -537,17 +595,18 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
     const extracted = rasterReview ?? await extractFromDrawing(input);
     const { components, connections, confidence } = extracted;
 
-    if (rasterReview && !rasterReview.complete) {
+    if (rasterReview) {
+      const drawingSynthesis = synthesizeRasterReview(rasterReview.artifact, deps);
       return {
         teamId: 'TEAM-SLD',
-        success: false,
+        success: true,
         components,
         connections,
         standards: rasterReview.holds,
         confidence,
         durationMs: Date.now() - start,
         drawingReview: rasterReview.artifact,
-        error: '독립 도면 검토가 불완전하여 결과를 보류합니다.',
+        drawingSynthesis,
       };
     }
 
@@ -558,7 +617,6 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
         confidence: 0,
         durationMs: Date.now() - start,
         error: '도면에서 전기 설비 요소를 인식할 수 없습니다.',
-        ...(rasterReview ? { drawingReview: rasterReview.artifact, standards: rasterReview.holds } : {}),
       };
     }
 
@@ -575,8 +633,6 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       standards.push(...custom.standards);
       violations.push(...custom.violations);
     }
-
-    if (rasterReview) standards.push(...rasterReview.holds);
 
     // 토폴로지 이상 → 경고 추가
     if (validation.issues && validation.issues.length > 0) {
@@ -601,7 +657,6 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       violations,
       confidence,
       durationMs: Date.now() - start,
-      ...(rasterReview ? { drawingReview: rasterReview.artifact } : {}),
     };
   } catch (err) {
     const message = input.signal?.aborted ? '요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.' : err instanceof Error ? err.message : String(err);
