@@ -84,6 +84,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
     });
   } catch (cause) {
     const reference = randomUUID();
+    updateOwnedJob(jobId, owner.ownerId, { status: 'PARTIAL', error: reference });
     console.error('[drawing-job-resume]', { reference, errorType: cause instanceof Error ? cause.name : 'UnknownError' });
     return NextResponse.json({ success: false, error: { message: '도면 분석을 재개하지 못했습니다.', reference } }, { status: 500 });
   }

@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
-import { claimOwnedJobRun, getOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { claimOwnedJobRun, getOwnedJob, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease } from '@/agent/drawing/source-lease-store';
 import { POST } from '../route';
 
@@ -35,6 +36,12 @@ function invalidProviderRequest(): NextRequest {
   });
 }
 
+function validRequest(): NextRequest {
+  return new NextRequest('http://localhost/api/drawing-jobs/job-a/resume', {
+    method: 'POST', headers: { origin: 'http://localhost' }, body: new FormData(),
+  });
+}
+
 describe('drawing job resume API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -49,5 +56,23 @@ describe('drawing job resume API', () => {
 
     expect(response.status).toBe(400);
     expect(claimOwnedJobRun).not.toHaveBeenCalled();
+  });
+
+  it('restores PARTIAL after a transient resume failure so the source can be retried', async () => {
+    const diagnostic = 'provider-secret-detail';
+    jest.mocked(runDocumentAnalysis).mockRejectedValue(new Error(diagnostic));
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const response = await POST(validRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+      expect(response.status).toBe(500);
+      expect(await response.text()).not.toContain(diagnostic);
+      expect(updateOwnedJob).toHaveBeenCalledWith('job-a', owner.ownerId, expect.objectContaining({
+        status: 'PARTIAL',
+        error: expect.any(String),
+      }));
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
