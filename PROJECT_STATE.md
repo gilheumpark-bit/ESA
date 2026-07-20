@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: codex/sld-v3-completion
-codeBaselineCommit: ebe3bb95a463ee5a9157e9c75ca50e14db76862f
-updatedAt: 2026-07-21T06:05:49.1223001+09:00
+codeBaselineCommit: 896ae31f5faf764aa3b44acfd8573c9d4a0cec77
+updatedAt: 2026-07-21T06:53:49.8775095+09:00
 trigger: architecture
 changedDomains: [agent, app]
 ---
@@ -46,6 +46,12 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - V3 평가기는 문자 공간, 관계·페이지 방향, 실제 3회 반복 영수증, 서명 지표 재계산을 검증하며 구형 manifest gate와 분리된다.
 - 다중 페이지 PDF 파서에 페이지별 소유 바이트를 전달해 첫 페이지 뒤 원본 버퍼가 분리되는 결함을 막고, 총 픽셀 예산을 요청 페이지 전체에 분배해 뒤 페이지 탈락을 막았다.
 - 반복 정격을 고유 기기 태그로 오인하던 교차 페이지 조합을 차단하고, 모호한 기호·선·문자·관계가 남으면 페이지 처리가 끝나도 판독 상태를 HOLD로 표시한다.
+- JSON 왕복 해시, `0.400kV`·`6.600kV` 전압 파싱과 800kV 계산 경계, 선분 기하 방향 오독, 다단 보호 경로를 반증 테스트로 수리했다. 방향·보호가 확정되지 않으면 FAIL 대신 HOLD로 남긴다.
+- 길이·케이블 규격·계통전압·전류·도체·상·역률이 모두 원본에 있을 때만 정본 전압강하 계산기를 호출하며, 누락 입력의 SKIPPED 영수증과 사유를 최종 합성까지 보존한다.
+- 실행 중 정정은 409로 차단하고 stale 파일락을 복구하며, VLM 예산을 재개 횟수 전체에 누적한다. 요청 연결이 끊겨도 작업을 자동 취소하거나 재개용 원본 임대를 즉시 소각하지 않는다.
+- 벡터 감사는 실제 검출·토폴로지 결과에 따라 역할별로 기록하고, 저장소 미구성 동기 API는 불투명 500 대신 503을 반환한다.
+- V3 화면의 작업·페이지·확신·제안 상태를 한국어화하고 수정 연타를 차단했다. SVG 오버레이는 의미 토큰과 키보드 초점 표식을 사용한다.
+- 체크인된 합성 DXF를 production 분석기→V3 평가기→예측·영수증 writer로 실행하는 `npm run test:sld-benchmark` 진입점과 브라우저 업로드→기기 5개·관계 4개 E2E를 연결했다.
 
 ## 부분 완료
 
@@ -53,6 +59,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 이메일·푸시 알림은 수신 설정과 인앱 저장만 있으며 실제 발송자는 연결하지 않았다.
 - 기준서 화면은 저장소 스냅샷을 탐색하지만 관할 기관 최신 원문을 자동 동기화하지 않는다.
 - 공유 인메모리 레이트 리밋은 단일 프로세스 보호만 제공한다. V3 작업 저장은 내구 볼륨으로 전환했지만 전역 레이트 리밋은 별도다.
+- 비로그인 팀 검토 보고서는 현재 브라우저 `sessionStorage`에서만 다시 열 수 있다. `/api/reports/[id]` reader는 있지만 이 경로의 서버 writer는 없으며 화면도 다른 세션 보관을 약속하지 않는다.
 
 ## 미검증
 
@@ -66,18 +73,19 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
-- 코드 기준선은 `ebe3bb9`다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 코드 기준선은 `896ae31`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
 - `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
-- `npm test -- --runInBand`: exit 0, 133개 스위트·1,091개 테스트 통과.
+- `npm test -- --runInBand`: exit 0, 136개 스위트·1,115개 테스트 통과.
 - `npm run build`: exit 0, Next.js 16.2.10 production build와 64개 route 항목 생성, Turbopack 경고 0건.
 - `npm run gate:pdf`: exit 0, 회로·표제란·격자·오탐·12MB·비PDF 거부 fixture 9/9 통과.
 - V3 전용: 21개 스위트·74개 테스트, topology 5개 스위트·77개 테스트, `gate:sld-v3-contract` 5/5 통과.
 - 브라우저 실증: 운영 저장소 미설정 503 fail-closed, 명시적 로컬 모드 합성 DXF COMPLETE(1페이지·구획 1/1·미확정 0), 새로고침 결과 복구, 데스크톱·390px 모바일 수평 넘침 0을 확인했다.
+- 브라우저 E2E: 체크인된 `L1-01-basic-radial.dxf` 업로드→`/api/dxf`→분석 결과→기기 5개·연결 4개 표시가 1/1 통과했다.
 - 공개 PDF 생산 API: 대산전기 11/11페이지·관계 244건(HOLD, 저신뢰 관계 명시), 한국기계연구원 18/18페이지·확정 관계 1,168건(COMPLETE), 두 파일 모두 실패·빈 페이지 오판정·가짜 페이지 간 관계 0.
 - 독립 코드·회귀·비밀자료 심사에서 최종 P0~P2와 회사 원본·키·대형 생성물 유입 0건을 확인했다.
 - `npm run gate:sld-golden`: exit 1, `verified95=false`; 실패 사유는 키·예측·실도면 데이터 부재와 claim 비활성이다.
@@ -93,6 +101,6 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계](docs/project/handoffs/2026-07-21-sld-v3-completion.md)
+- [최신 인수인계](docs/project/handoffs/2026-07-21-sld-v3-independent-review-repair.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
