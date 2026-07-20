@@ -3,6 +3,7 @@ import { executeSLDTeam } from '../teams/sld-team';
 import { executeStandardsTeam } from '../teams/standards-team';
 import { executeConsensusTeam } from '../teams/consensus-team';
 import type { DrawingSynthesis } from '../electrical/synthesis';
+import type { ESVAVerifiedReport, TeamResult } from '../teams/types';
 
 jest.mock('../teams/sld-team', () => ({ executeSLDTeam: jest.fn() }));
 jest.mock('../teams/layout-team', () => ({ executeLayoutTeam: jest.fn() }));
@@ -14,11 +15,9 @@ const mockStandards = jest.mocked(executeStandardsTeam);
 const mockConsensus = jest.mocked(executeConsensusTeam);
 const requestScopedKey = ['request', 'only', 'gemini', 'key', 'value'].join('-');
 
-const baseTeamResult = {
-  success: true,
-  confidence: 0.9,
-  durationMs: 1,
-};
+function teamResult(teamId: TeamResult['teamId'], overrides: Partial<TeamResult> = {}): TeamResult {
+  return { teamId, success: true, confidence: 0.9, durationMs: 1, ...overrides };
+}
 
 const completeDrawingSynthesis: DrawingSynthesis = {
   drawingHash: 'drawing-hash-boundary',
@@ -44,6 +43,39 @@ const completeDrawingSynthesis: DrawingSynthesis = {
   requiresHumanReview: false,
 };
 
+function reportFixture(drawingSynthesis?: DrawingSynthesis): ESVAVerifiedReport {
+  return {
+    reportId: 'RPT-TEST',
+    createdAt: '2026-07-20T00:00:00.000Z',
+    version: 'ESVA Report v1.0',
+    projectName: '합의 경계',
+    projectType: 'SLD',
+    verdict: drawingSynthesis?.verdict ?? 'CONDITIONAL',
+    grade: 'B',
+    compositeScore: 80,
+    teamResults: [],
+    debateResults: [],
+    markings: [],
+    summary: {
+      totalComponents: 0,
+      totalConnections: 0,
+      totalCalculations: 0,
+      passedChecks: 0,
+      failedChecks: 0,
+      warningChecks: 0,
+      criticalViolations: [],
+      topRecommendations: [],
+      appliedStandards: [],
+      textKo: '합의 경계 보고서',
+      textEn: 'Consensus boundary report',
+    },
+    requiresHumanReview: Boolean(drawingSynthesis?.requiresHumanReview),
+    evidenceIds: [],
+    hash: 'fixture-hash',
+    ...(drawingSynthesis ? { drawingSynthesis } : {}),
+  };
+}
+
 function drawingRequest() {
   return {
     sessionId: 'consensus-boundary',
@@ -58,11 +90,11 @@ function drawingRequest() {
 describe('orchestrator consensus boundary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSLD.mockResolvedValue({ teamId: 'TEAM-SLD', ...baseTeamResult });
-    mockStandards.mockResolvedValue({ teamId: 'TEAM-STD', ...baseTeamResult });
+    mockSLD.mockResolvedValue(teamResult('TEAM-SLD'));
+    mockStandards.mockResolvedValue(teamResult('TEAM-STD'));
     mockConsensus.mockResolvedValue({
-      teamResult: { teamId: 'TEAM-CONSENSUS', ...baseTeamResult },
-      report: { reportId: 'RPT-TEST' } as never,
+      teamResult: teamResult('TEAM-CONSENSUS'),
+      report: reportFixture(),
     });
   });
 
@@ -81,10 +113,10 @@ describe('orchestrator consensus boundary', () => {
   });
 
   test('does not count TEAM-STD as an independent image reviewer', async () => {
-    mockSLD.mockResolvedValue({ teamId: 'TEAM-SLD', ...baseTeamResult, drawingSynthesis: completeDrawingSynthesis });
+    mockSLD.mockResolvedValue(teamResult('TEAM-SLD', { drawingSynthesis: completeDrawingSynthesis }));
     mockConsensus.mockResolvedValue({
-      teamResult: { teamId: 'TEAM-CONSENSUS', ...baseTeamResult },
-      report: { reportId: 'RPT-TEST', drawingSynthesis: completeDrawingSynthesis } as never,
+      teamResult: teamResult('TEAM-CONSENSUS'),
+      report: reportFixture(completeDrawingSynthesis),
     });
 
     const result = await runOrchestrator(drawingRequest());
@@ -127,7 +159,7 @@ describe('orchestrator consensus boundary', () => {
     const controller = new AbortController();
     mockConsensus.mockImplementationOnce(async () => {
       controller.abort();
-      return { teamResult: { teamId: 'TEAM-CONSENSUS', ...baseTeamResult }, report: { reportId: 'must-not-return' } as never };
+      return { teamResult: teamResult('TEAM-CONSENSUS'), report: reportFixture() };
     });
 
     const result = await runOrchestrator({ ...drawingRequest(), signal: controller.signal });

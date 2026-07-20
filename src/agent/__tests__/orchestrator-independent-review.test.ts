@@ -1,11 +1,11 @@
-import { runOrchestrator } from '../orchestrator';
+import { runOrchestrator, type OrchestratorDeps, type OrchestratorRequest } from '../orchestrator';
 import type { DrawingSynthesis } from '../electrical/synthesis';
+import type { ConsensusTeamInput } from '../teams/consensus-team';
+import type { ESVAVerifiedReport, TeamResult } from '../teams/types';
 
-const baseTeamResult = {
-  success: true,
-  confidence: 0.9,
-  durationMs: 1,
-};
+function teamResult(teamId: TeamResult['teamId'], overrides: Partial<TeamResult> = {}): TeamResult {
+  return { teamId, success: true, confidence: 0.9, durationMs: 1, ...overrides };
+}
 
 function drawingSynthesis(overrides: Partial<DrawingSynthesis> = {}): DrawingSynthesis {
   const base: DrawingSynthesis = {
@@ -40,7 +40,7 @@ function drawingSynthesis(overrides: Partial<DrawingSynthesis> = {}): DrawingSyn
   };
 }
 
-function drawingRequest() {
+function drawingRequest(): OrchestratorRequest {
   return {
     sessionId: 'independent-review',
     file: {
@@ -51,21 +51,56 @@ function drawingRequest() {
   };
 }
 
+function reportFixture(drawingSynthesis?: DrawingSynthesis): ESVAVerifiedReport {
+  return {
+    reportId: 'RPT-IMAGE',
+    createdAt: '2026-07-20T00:00:00.000Z',
+    version: 'ESVA Report v1.0',
+    projectName: '독립 심사',
+    projectType: 'SLD',
+    verdict: drawingSynthesis?.verdict ?? 'CONDITIONAL',
+    grade: 'B',
+    compositeScore: 80,
+    teamResults: [],
+    debateResults: [],
+    markings: [],
+    summary: {
+      totalComponents: 0,
+      totalConnections: 0,
+      totalCalculations: 0,
+      passedChecks: 0,
+      failedChecks: 0,
+      warningChecks: 0,
+      criticalViolations: [],
+      topRecommendations: [],
+      appliedStandards: [],
+      textKo: '독립 심사 보고서',
+      textEn: 'Independent review report',
+    },
+    requiresHumanReview: Boolean(drawingSynthesis?.requiresHumanReview),
+    evidenceIds: [],
+    hash: 'fixture-hash',
+    ...(drawingSynthesis ? { drawingSynthesis } : {}),
+  };
+}
+
 function runWithDeps(
   synthesis: DrawingSynthesis | undefined,
-  consensus = jest.fn(async (input: { drawingSynthesis?: typeof synthesis }) => ({
-    teamResult: { teamId: 'TEAM-CONSENSUS', ...baseTeamResult },
-    report: { reportId: 'RPT-IMAGE', drawingSynthesis: input.drawingSynthesis } as never,
+  consensus = jest.fn(async (input: ConsensusTeamInput) => ({
+    teamResult: teamResult('TEAM-CONSENSUS'),
+    report: reportFixture(input.drawingSynthesis),
   })),
 ) {
+  const deps: OrchestratorDeps = {
+    executeSLD: async () => teamResult('TEAM-SLD', synthesis ? { drawingSynthesis: synthesis } : {}),
+    executeStandards: async () => teamResult('TEAM-STD'),
+    executeLayout: async () => teamResult('TEAM-LAYOUT'),
+    executeConsensus: consensus,
+  };
+
   return {
     consensus,
-    result: (runOrchestrator as unknown as (request: ReturnType<typeof drawingRequest>, deps: Record<string, unknown>) => ReturnType<typeof runOrchestrator>)(drawingRequest(), {
-      executeSLD: jest.fn().mockResolvedValue({ teamId: 'TEAM-SLD', ...baseTeamResult, ...(synthesis ? { drawingSynthesis: synthesis } : {}) }),
-      executeStandards: jest.fn().mockResolvedValue({ teamId: 'TEAM-STD', ...baseTeamResult }),
-      executeLayout: jest.fn(),
-      executeConsensus: consensus,
-    }),
+    result: runOrchestrator(drawingRequest(), deps),
   };
 }
 
@@ -82,8 +117,8 @@ describe('orchestrator independent SLD review', () => {
       reason: '원본 격리 심사 4개를 메인 종합 단계에서 대조했습니다.',
     }));
     expect(consensus).toHaveBeenCalledWith(expect.objectContaining({ drawingSynthesis: synthesis }));
-    expect((response as { drawingSynthesis?: unknown }).drawingSynthesis).toEqual(response.report?.drawingSynthesis);
-    expect((response as { drawingSynthesis?: unknown }).drawingSynthesis).toEqual(synthesis);
+    expect(response.drawingSynthesis).toEqual(response.report?.drawingSynthesis);
+    expect(response.drawingSynthesis).toEqual(synthesis);
   });
 
   test('does not create an image success or report from TEAM-STD when TEAM-SLD has no synthesis', async () => {
