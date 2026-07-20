@@ -144,9 +144,37 @@ function validateApiKey(provider: VLMProvider, apiKey: string): void {
  * 지수 백오프 재시도.
  * 429 (Rate Limit) / 5xx (Server Error) 에서만 재시도.
  */
+class ProviderHttpError extends Error {
+  constructor(
+    readonly provider: string,
+    readonly status: number,
+    message: string,
+  ) {
+    super(`${provider} Vision API error ${status}: ${message}`);
+    this.name = 'ProviderHttpError';
+  }
+}
+
+function retryDelay(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new Error('[VLM] request aborted.'));
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new Error('[VLM] request aborted.'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries: number = 2,
+  signal?: AbortSignal,
 ): Promise<{ result: T; retryCount: number }> {
   let lastError: Error | null = null;
 
@@ -156,8 +184,7 @@ async function withRetry<T>(
       return { result, retryCount: attempt };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-      const errMsg = lastError.message;
-      if (!isRetryableProviderError(errMsg)) {
+      if (!isRetryableProviderError(lastError)) {
         throw lastError;
       }
 
@@ -166,15 +193,16 @@ async function withRetry<T>(
 
       // 지수 백오프: 1s, 2s, 4s
       const delay = Math.pow(2, attempt) * 1000;
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await retryDelay(delay, signal);
     }
   }
 
   throw lastError ?? new Error('[VLM] Unknown error after retries');
 }
 
-function isRetryableProviderError(message: string): boolean {
-  return /(?:^|\D)429(?:\D|$)|(?:^|\D)5\d\d(?:\D|$)/.test(message);
+function isRetryableProviderError(error: Error): boolean {
+  return error instanceof ProviderHttpError
+    && (error.status === 429 || (error.status >= 500 && error.status <= 599));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -251,8 +279,16 @@ async function readResponseText(response: Response, scope: RequestScope): Promis
   const aborted = new Promise<never>((_resolve, reject) => {
     rejectAbort = reject;
   });
+  let abortHandled = false;
   const abortReader = () => {
-    void reader.cancel().finally(() => rejectAbort?.(scope.error()));
+    if (abortHandled) return;
+    abortHandled = true;
+    rejectAbort?.(scope.error());
+    try {
+      void Promise.resolve(reader.cancel()).catch(() => undefined);
+    } catch {
+      // Stream cancellation is best-effort; the abort branch has already settled.
+    }
   };
   scope.signal.addEventListener('abort', abortReader, { once: true });
   if (scope.signal.aborted) abortReader();
@@ -264,7 +300,11 @@ async function readResponseText(response: Response, scope: RequestScope): Promis
       if (done) break;
       total += value.byteLength;
       if (total > MAX_RESPONSE_BYTES) {
-        await reader.cancel();
+        try {
+          await reader.cancel();
+        } catch {
+          // The bounded-response error remains authoritative.
+        }
         throw new Error('[VLM] provider response exceeds the allowed byte limit.');
       }
       chunks.push(value);
@@ -274,7 +314,11 @@ async function readResponseText(response: Response, scope: RequestScope): Promis
     throw error;
   } finally {
     scope.signal.removeEventListener('abort', abortReader);
-    reader.releaseLock();
+    try {
+      reader.releaseLock();
+    } catch (releaseError) {
+      if (!scope.signal.aborted) throw releaseError;
+    }
   }
   const bytes = new Uint8Array(total);
   let offset = 0;
@@ -343,14 +387,14 @@ async function requestGeminiJson(
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
         generationConfig: {
-          temperature: options.temperature ?? cfg.defaultTemp,
+          ...(model === cfg.defaultModel ? {} : { temperature: options.temperature ?? cfg.defaultTemp }),
           maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
           responseMimeType: 'application/json',
         },
       }),
     }, scope, options);
     const raw = await readResponseText(response, scope);
-    if (!response.ok) throw new Error(`Gemini Vision API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
+    if (!response.ok) throw new ProviderHttpError('Gemini', response.status, sanitizeErrorText(raw, options.apiKey));
     const data = parseProviderPayload('Gemini', raw);
     const candidate = Array.isArray(data.candidates) ? recordValue(data.candidates[0]) : undefined;
     const content = candidate ? recordValue(candidate.content) : undefined;
@@ -405,7 +449,7 @@ async function requestOpenAIJson(
       }),
     }, scope, options);
     const raw = await readResponseText(response, scope);
-    if (!response.ok) throw new Error(`OpenAI Vision API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
+    if (!response.ok) throw new ProviderHttpError('OpenAI', response.status, sanitizeErrorText(raw, options.apiKey));
     const data = parseProviderPayload('OpenAI', raw);
     const choice = Array.isArray(data.choices) ? recordValue(data.choices[0]) : undefined;
     const message = choice ? recordValue(choice.message) : undefined;
@@ -449,7 +493,7 @@ async function requestClaudeJson(
       }),
     }, scope, options);
     const raw = await readResponseText(response, scope);
-    if (!response.ok) throw new Error(`Anthropic API error ${response.status}: ${sanitizeErrorText(raw, options.apiKey)}`);
+    if (!response.ok) throw new ProviderHttpError('Anthropic', response.status, sanitizeErrorText(raw, options.apiKey));
     const data = parseProviderPayload('Anthropic', raw);
     const rawText = Array.isArray(data.content)
       ? data.content.reduce((text, part) => {
@@ -506,7 +550,7 @@ async function callProviderForJson(
   };
 
   try {
-    const { result, retryCount } = await withRetry(request, retryLimit(options.maxRetries));
+    const { result, retryCount } = await withRetry(request, retryLimit(options.maxRetries), options.signal);
     return { ...result, retryCount };
   } catch (error) {
     throw new Error(sanitizeErrorText(error, options.apiKey));

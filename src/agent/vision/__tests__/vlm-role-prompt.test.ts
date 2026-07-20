@@ -82,7 +82,22 @@ describe('role-specific VLM prompts', () => {
     expect(ROLE_PROMPTS.connections).toContain('"junctions" and "crossovers" are required arrays');
     expect(ROLE_PROMPTS.text).toContain('"candidates" is a required non-empty array');
     expect(ROLE_PROMPTS.logic).toContain('one of DIRECTION, PROTECTION_CHAIN, VOLTAGE_DOMAIN, DEVICE_IDENTITY, MISSING_RELATION');
-    expect(ROLE_PROMPTS.logic).toContain('"subjectIds" and "evidenceBounds" are required non-empty arrays');
+    expect(ROLE_PROMPTS.logic).toContain('"subjectIds" is a required non-empty array');
+    expect(ROLE_PROMPTS.logic).toContain('"evidenceBounds" is a required non-empty array');
+  });
+
+  it('documents every required role-root item field and strict scalar type', () => {
+    expect(ROLE_PROMPTS.symbols).toContain('"symbols" is a required array and may be empty');
+    expect(ROLE_PROMPTS.symbols).toContain('"typeCandidates" is a required array of strings');
+    expect(ROLE_PROMPTS.symbols).toContain('"confidence" is a required finite number from 0 to 1');
+    expect(ROLE_PROMPTS.connections).toContain('"lines" is a required array and may be empty');
+    expect(ROLE_PROMPTS.connections).toContain('"lineKind" is a required enum');
+    expect(ROLE_PROMPTS.connections).toContain('"start" and "end" are required normalized points');
+    expect(ROLE_PROMPTS.text).toContain('"texts" is a required array and may be empty');
+    expect(ROLE_PROMPTS.text).toContain('"raw" is a required bounded non-empty string');
+    expect(ROLE_PROMPTS.logic).toContain('"logic" is a required array and may be empty');
+    expect(ROLE_PROMPTS.logic).toContain('"statement" is a required bounded non-empty string');
+    expect(ROLE_PROMPTS.logic).toContain('"attributes" is a required object');
   });
 
   it.each(['gemini', 'openai', 'claude'] as const)('sends the %s role prompt through the provider JSON transport', async (provider) => {
@@ -127,6 +142,25 @@ describe('role-specific VLM prompts', () => {
 
     const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(request.body as string).temperature).toBe(0.2);
+  });
+
+  it('omits temperature for the default Gemini 3.5 model but keeps it for legacy Gemini models', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(() => Promise.resolve(responseFor('gemini', JSON.stringify(textPayload))));
+
+    await analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('gemini'),
+      model: undefined,
+    });
+    await analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('gemini'),
+      model: 'gemini-2.5-flash',
+      temperature: 0.2,
+    });
+
+    const [, defaultRequest] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, legacyRequest] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(defaultRequest.body as string).generationConfig).not.toHaveProperty('temperature');
+    expect(JSON.parse(legacyRequest.body as string).generationConfig.temperature).toBe(0.2);
   });
 
   it('fails closed for invalid JSON and oversized role inputs', async () => {
@@ -216,6 +250,43 @@ describe('role-specific VLM prompts', () => {
     expect(fetchCalls).toBe(1);
   });
 
+  it.each([
+    ['pending cancel', () => new Promise<void>(() => {})],
+    ['rejected cancel', () => Promise.reject(new Error('cancel failed'))],
+    ['throwing cancel', () => { throw new Error('cancel failed'); }],
+  ])('ends a pending read immediately when the reader has a %s', async (_label, cancel) => {
+    jest.useFakeTimers();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: {
+          getReader: () => ({
+            read: () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => {}),
+            cancel,
+            releaseLock: () => { throw new Error('release failed'); },
+          }),
+        },
+      } as unknown as Response);
+
+      const pending = analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+        ...options('openai'),
+        timeoutMs: 1,
+      });
+      const rejection = expect(pending).rejects.toThrow(/timed out/);
+      await jest.advanceTimersByTimeAsync(1);
+      await rejection;
+      await Promise.resolve();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('does not fetch or back off when the external signal is already aborted', async () => {
     jest.useFakeTimers();
     const controller = new AbortController();
@@ -269,6 +340,50 @@ describe('role-specific VLM prompts', () => {
     })).rejects.toThrow(/400/);
     await jest.advanceTimersByTimeAsync(5_000);
     await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry a 400 response merely because its body contains a 500', async () => {
+    jest.useFakeTimers();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response('upstream detail says 500', { status: 400 }));
+    const rejection = expect(analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('openai'),
+      maxRetries: 1,
+    })).rejects.toThrow(/400/);
+    await jest.advanceTimersByTimeAsync(5_000);
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([429, 500])('retries bounded provider HTTP status %i', async (status) => {
+    jest.useFakeTimers();
+    const fetchMock = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('retryable', { status }))
+      .mockResolvedValueOnce(new Response('retryable', { status }));
+    const rejection = expect(analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('openai'),
+      maxRetries: 1,
+    })).rejects.toThrow(new RegExp(String(status)));
+    await jest.advanceTimersByTimeAsync(1_000);
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('aborts an HTTP retry backoff without issuing another fetch', async () => {
+    jest.useFakeTimers();
+    const controller = new AbortController();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response('retryable', { status: 500 }));
+    const pending = analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('openai'),
+      maxRetries: 1,
+      signal: controller.signal,
+    });
+    const rejection = expect(pending).rejects.toThrow(/aborted/);
+
+    await Promise.resolve();
+    controller.abort();
+    await rejection;
+    await jest.advanceTimersByTimeAsync(5_000);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
