@@ -3,6 +3,7 @@ import {
   toOriginalPoint,
   toVariantPoint,
 } from '../evidence-types';
+import { runInNewContext } from 'node:vm';
 
 describe('evidence types', () => {
   it('round-trips variant coordinates through the source transform', () => {
@@ -134,5 +135,54 @@ describe('evidence types', () => {
     expect(snapshot.quality.width).toBe(100);
     expect(snapshot.quality.warnings).toEqual(['initial warning']);
     expect(snapshot.quality.warnings).not.toBe(profile.warnings);
+  });
+
+  it('rejects finite inputs whose coordinate arithmetic overflows', () => {
+    expect(() =>
+      toVariantPoint(
+        { x: Number.MAX_VALUE, y: 1 },
+        { scaleX: 2, scaleY: 1, offsetX: 0, offsetY: 0 },
+      ),
+    ).toThrow();
+    expect(() =>
+      toOriginalPoint(
+        { x: -Number.MAX_VALUE, y: 1 },
+        { scaleX: 1, scaleY: 1, offsetX: Number.MAX_VALUE, offsetY: 0 },
+      ),
+    ).toThrow();
+    expect(() =>
+      toOriginalPoint(
+        { x: 1, y: 1 },
+        { scaleX: Number.MIN_VALUE, scaleY: 1, offsetX: 0, offsetY: 0 },
+      ),
+    ).toThrow();
+  });
+
+  it('hashes a non-empty ArrayBuffer created in another realm', () => {
+    const profile = {
+      width: 100,
+      height: 80,
+      channels: 3,
+      contrast: 0.5,
+      edgeDensity: 0.2,
+      gradientVariance: 10,
+      lowContrast: false,
+      blurry: false,
+      recommendedScale: 2 as const,
+      warnings: [],
+    };
+    const foreignBuffer = runInNewContext(
+      'Uint8Array.from([1, 2, 3]).buffer',
+    ) as ArrayBuffer;
+
+    expect(
+      createDrawingSnapshot(foreignBuffer, 'image/png', profile).drawingHash,
+    ).toBe(
+      createDrawingSnapshot(
+        Uint8Array.from([1, 2, 3]).buffer,
+        'image/png',
+        profile,
+      ).drawingHash,
+    );
   });
 });

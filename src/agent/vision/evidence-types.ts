@@ -92,16 +92,22 @@ export function createDrawingSnapshot(
 }
 
 function toByteView(buffer: ArrayBuffer | ArrayBufferView): Uint8Array {
-  if (buffer instanceof ArrayBuffer) {
-    return new Uint8Array(buffer);
+  if (ArrayBuffer.isView(buffer)) {
+    return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   }
 
-  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  return new Uint8Array(buffer);
 }
 
 function assertFinitePoint(point: Point): void {
   if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
     throw new Error('좌표는 유한한 수여야 합니다.');
+  }
+}
+
+function assertFiniteResult(point: Point): void {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new Error('좌표 변환 결과는 유한한 수여야 합니다.');
   }
 }
 
@@ -127,10 +133,13 @@ export function toOriginalPoint(
   assertFinitePoint(point);
   assertTransform(transform);
 
-  return {
+  const original = {
     x: (point.x - transform.offsetX) / transform.scaleX,
     y: (point.y - transform.offsetY) / transform.scaleY,
   };
+
+  assertFiniteResult(original);
+  return original;
 }
 
 export function toVariantPoint(
@@ -140,8 +149,11 @@ export function toVariantPoint(
   assertFinitePoint(point);
   assertTransform(transform);
 
-  return {
+  const variant = {
     x: point.x * transform.scaleX + transform.offsetX,
     y: point.y * transform.scaleY + transform.offsetY,
   };
+
+  assertFiniteResult(variant);
+  return variant;
 }
