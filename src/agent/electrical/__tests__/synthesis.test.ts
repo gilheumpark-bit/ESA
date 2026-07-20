@@ -393,6 +393,64 @@ describe('synthesizeDrawingReview', () => {
     }))).toThrow(UnsupportedSynthesisClaimError);
   });
 
+  it('rejects a receipt whose graph aliases resolve to different source records', () => {
+    const sourceReceipt = calculation();
+    const crossRecordReceipt: DrawingCalculationReceipt = {
+      ...sourceReceipt,
+      id: 'drawing-calc:cross-record',
+      inputEvidence: sourceReceipt.inputEvidence.map((evidence) => ({
+        ...evidence,
+        evidenceId: 'TEXT-1',
+        originalEvidenceIds: ['TR-1'],
+        sourceIds: ['TR-1'],
+      })),
+    };
+
+    const result = synthesizeDrawingReview(input({ calculations: [crossRecordReceipt] }));
+
+    expect(result.calculations).toEqual([]);
+    expect(result.evidenceRegistry.some((record) => record.id === crossRecordReceipt.id)).toBe(false);
+    expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
+  it('retains a receipt with separately coherent graph input lineages', () => {
+    const sourceReceipt = calculation();
+    const multiInputReceipt: DrawingCalculationReceipt = {
+      ...sourceReceipt,
+      id: 'drawing-calc:multi-input',
+      inputEvidence: [
+        ...sourceReceipt.inputEvidence,
+        {
+          ...sourceReceipt.inputEvidence[0],
+          adapterField: 'secondary',
+          evidenceId: 'TR-1',
+          originalEvidenceIds: ['orig:TR-1'],
+          sourceIds: ['source:TR-1'],
+        },
+      ],
+    };
+
+    const result = synthesizeDrawingReview(input({ calculations: [multiInputReceipt] }));
+
+    expect(result.calculations).toEqual([multiInputReceipt]);
+    expect(result.evidenceRegistry).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: multiInputReceipt.id, kind: 'derived' }),
+    ]));
+  });
+
+  it('rejects a FAIL issue whose graph aliases resolve to different source records', () => {
+    const crossRecordIssue = issue('FAIL');
+    crossRecordIssue.evidence.stableIds = ['TEXT-1'];
+    crossRecordIssue.evidence.originalEvidenceIds = ['TR-1'];
+    crossRecordIssue.evidence.sourceIds = ['TR-1'];
+
+    const result = synthesizeDrawingReview(input({ issues: [crossRecordIssue] }));
+
+    expect(result.issues).toEqual([]);
+    expect(result.evidenceRegistry.some((record) => record.id === crossRecordIssue.id)).toBe(false);
+    expect(result).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
   it('rejects a conflict when graph and logic namespaces share the same alias', () => {
     const collidingLogic = logicEnvelope();
     if (!collidingLogic.data.logic?.[0]) throw new Error('logic fixture is missing');

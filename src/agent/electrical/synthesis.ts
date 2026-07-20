@@ -242,20 +242,34 @@ function resolveUnique(registry: Registry, aliases: ReadonlyMap<string, Set<stri
   return registry.records.get(key);
 }
 
-function resolveAll(registry: Registry, evidenceIds: readonly string[], aliases = registry.aliases): SynthesisEvidenceRecord[] | undefined {
+function resolveAll(registry: Registry, evidenceIds: readonly string[], aliases: ReadonlyMap<string, Set<string>> = registry.aliases): SynthesisEvidenceRecord[] | undefined {
   if (evidenceIds.length === 0) return undefined;
   const resolved = evidenceIds.map((id) => resolveUnique(registry, aliases, id));
   return resolved.every((record): record is SynthesisEvidenceRecord => record !== undefined) ? resolved : undefined;
 }
 
+function resolveCurrentEvidence(
+  registry: Registry,
+  evidenceIds: readonly string[],
+  namespaceAliases: ReadonlyMap<string, Set<string>>,
+): SynthesisEvidenceRecord[] | undefined {
+  const namespaceRecords = resolveAll(registry, evidenceIds, namespaceAliases);
+  const globalRecords = resolveAll(registry, evidenceIds);
+  if (namespaceRecords === undefined || globalRecords === undefined) return undefined;
+  const parent = namespaceRecords[0];
+  return parent !== undefined
+    && namespaceRecords.every((record) => record === parent)
+    && globalRecords.every((record) => record === parent)
+    ? namespaceRecords
+    : undefined;
+}
+
 function resolveCurrentGraphEvidence(registry: Registry, evidenceIds: readonly string[]): SynthesisEvidenceRecord[] | undefined {
-  const graphRecords = resolveAll(registry, evidenceIds, registry.graphAliases);
-  return graphRecords === undefined || resolveAll(registry, evidenceIds) === undefined ? undefined : graphRecords;
+  return resolveCurrentEvidence(registry, evidenceIds, registry.graphAliases);
 }
 
 function resolveCurrentLogicEvidence(registry: Registry, evidenceIds: readonly string[]): SynthesisEvidenceRecord[] | undefined {
-  const logicRecords = resolveAll(registry, evidenceIds, registry.logicAliases);
-  return logicRecords === undefined || resolveAll(registry, evidenceIds) === undefined ? undefined : logicRecords;
+  return resolveCurrentEvidence(registry, evidenceIds, registry.logicAliases);
 }
 
 function addDerivedRecord(
@@ -277,12 +291,14 @@ function addDerivedRecord(
 
 function receiptParents(registry: Registry, receipt: DrawingCalculationReceipt): SynthesisEvidenceRecord[] | undefined {
   if (receipt.status !== 'CALCULATED' || receipt.inputEvidence.length === 0) return undefined;
-  const identifiers = receipt.inputEvidence.flatMap((evidence) => [
+  const parents = receipt.inputEvidence.map((evidence) => resolveCurrentGraphEvidence(registry, [
     evidence.evidenceId,
     ...evidence.originalEvidenceIds,
     ...evidence.sourceIds,
-  ]);
-  return resolveCurrentGraphEvidence(registry, identifiers);
+  ]));
+  return parents.every((records): records is SynthesisEvidenceRecord[] => records !== undefined)
+    ? parents.flat()
+    : undefined;
 }
 
 function issueParents(registry: Registry, issue: ElectricalIssue, drawingHash: string): SynthesisEvidenceRecord[] | undefined {
