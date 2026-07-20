@@ -18,25 +18,25 @@ export type ImageVariantKind =
   | 'line-enhanced';
 
 export interface DrawingSnapshot {
-  drawingHash: string;
-  mimeType: string;
-  page: number;
-  width: number;
-  height: number;
-  quality: ImageQualityProfile;
+  readonly drawingHash: string;
+  readonly mimeType: string;
+  readonly page: number;
+  readonly width: number;
+  readonly height: number;
+  readonly quality: ImageQualityProfile;
 }
 
 export interface ImageQualityProfile {
-  width: number;
-  height: number;
-  channels: number;
-  contrast: number;
-  edgeDensity: number;
-  gradientVariance: number;
-  lowContrast: boolean;
-  blurry: boolean;
-  recommendedScale: 1 | 2 | 4;
-  warnings: string[];
+  readonly width: number;
+  readonly height: number;
+  readonly channels: number;
+  readonly contrast: number;
+  readonly edgeDensity: number;
+  readonly gradientVariance: number;
+  readonly lowContrast: boolean;
+  readonly blurry: boolean;
+  readonly recommendedScale: 1 | 2 | 4;
+  readonly warnings: readonly string[];
 }
 
 export interface ImageVariant {
@@ -57,28 +57,64 @@ export interface PrecisionRegion {
 }
 
 export function createDrawingSnapshot(
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | ArrayBufferView,
   mimeType: string,
   quality: ImageQualityProfile,
   page = 1,
 ): DrawingSnapshot {
-  if (buffer.byteLength === 0) {
+  const bytes = toByteView(buffer);
+
+  if (bytes.byteLength === 0) {
     throw new Error('빈 도면 이미지는 분석할 수 없습니다.');
   }
 
-  return {
-    drawingHash: createHash('sha256')
-      .update(new Uint8Array(buffer))
-      .digest('hex'),
-    mimeType,
-    page,
+  const snapshotQuality: ImageQualityProfile = {
     width: quality.width,
     height: quality.height,
-    quality,
+    channels: quality.channels,
+    contrast: quality.contrast,
+    edgeDensity: quality.edgeDensity,
+    gradientVariance: quality.gradientVariance,
+    lowContrast: quality.lowContrast,
+    blurry: quality.blurry,
+    recommendedScale: quality.recommendedScale,
+    warnings: [...quality.warnings],
+  };
+
+  return {
+    drawingHash: createHash('sha256').update(bytes).digest('hex'),
+    mimeType,
+    page,
+    width: snapshotQuality.width,
+    height: snapshotQuality.height,
+    quality: snapshotQuality,
   };
 }
 
-function assertScale(transform: CoordinateTransform): void {
+function toByteView(buffer: ArrayBuffer | ArrayBufferView): Uint8Array {
+  if (buffer instanceof ArrayBuffer) {
+    return new Uint8Array(buffer);
+  }
+
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+}
+
+function assertFinitePoint(point: Point): void {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new Error('좌표는 유한한 수여야 합니다.');
+  }
+}
+
+function assertTransform(transform: CoordinateTransform): void {
+  if (
+    !Number.isFinite(transform.scaleX) ||
+    !Number.isFinite(transform.scaleY) ||
+    !Number.isFinite(transform.offsetX) ||
+    !Number.isFinite(transform.offsetY)
+  ) {
+    throw new Error('좌표 변환 값은 유한한 수여야 합니다.');
+  }
+
   if (!(transform.scaleX > 0) || !(transform.scaleY > 0)) {
     throw new Error('좌표 변환 배율은 0보다 커야 합니다.');
   }
@@ -88,7 +124,8 @@ export function toOriginalPoint(
   point: Point,
   transform: CoordinateTransform,
 ): Point {
-  assertScale(transform);
+  assertFinitePoint(point);
+  assertTransform(transform);
 
   return {
     x: (point.x - transform.offsetX) / transform.scaleX,
@@ -100,7 +137,8 @@ export function toVariantPoint(
   point: Point,
   transform: CoordinateTransform,
 ): Point {
-  assertScale(transform);
+  assertFinitePoint(point);
+  assertTransform(transform);
 
   return {
     x: point.x * transform.scaleX + transform.offsetX,
