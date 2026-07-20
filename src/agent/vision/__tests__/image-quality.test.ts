@@ -78,13 +78,25 @@ describe('image quality profiling', () => {
     const crisp = await sharp(crispPixels, { raw: { width, height, channels: 1 } }).png().toBuffer();
     const noisyCrisp = await sharp(noisyCrispPixels, { raw: { width, height, channels: 1 } }).png().toBuffer();
     const blurred = await sharp(crisp).blur(3).png().toBuffer();
+    const blurredPixels = await sharp(blurred).greyscale().raw().toBuffer();
+    const noisyBlurredPixels = Buffer.from(blurredPixels);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const index = y * width + x;
+        noisyBlurredPixels[index] = Math.max(0, noisyBlurredPixels[index] - ((x * 17 + y * 31) % 4));
+      }
+    }
+    const noisyBlurred = await sharp(noisyBlurredPixels, {
+      raw: { width, height, channels: 1 },
+    }).png().toBuffer();
     const lowContrast = await sharp(lowContrastTexture, { raw: { width, height, channels: 1 } }).png().toBuffer();
     const noiseOnly = await sharp(noiseOnlyPixels, { raw: { width, height, channels: 1 } }).png().toBuffer();
 
-    const [cleanProfile, noisyProfile, blurredProfile, lowContrastProfile, noiseProfile] = await Promise.all([
+    const [cleanProfile, noisyProfile, blurredProfile, noisyBlurredProfile, lowContrastProfile, noiseProfile] = await Promise.all([
       profileImage(toArrayBuffer(crisp)),
       profileImage(toArrayBuffer(noisyCrisp)),
       profileImage(toArrayBuffer(blurred)),
+      profileImage(toArrayBuffer(noisyBlurred)),
       profileImage(toArrayBuffer(lowContrast)),
       profileImage(toArrayBuffer(noiseOnly)),
     ]);
@@ -92,6 +104,7 @@ describe('image quality profiling', () => {
     expect(cleanProfile.blurry).toBe(false);
     expect(noisyProfile.blurry).toBe(false);
     expect(blurredProfile.blurry).toBe(true);
+    expect(noisyBlurredProfile.blurry).toBe(true);
     expect(lowContrastProfile).toMatchObject({ lowContrast: true, blurry: false, warnings: ['LOW_CONTRAST'] });
     expect(noiseProfile).toMatchObject({ lowContrast: true, blurry: false, warnings: ['LOW_CONTRAST'] });
   });

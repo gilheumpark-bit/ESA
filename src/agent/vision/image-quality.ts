@@ -7,6 +7,8 @@ const EDGE_THRESHOLD = 32;
 const FOCUSED_GRADIENT_THRESHOLD = 128;
 const MIN_FOCUSED_GRADIENT_RATIO = 0.05;
 const MAX_SPARSE_WEAK_GRADIENT_DENSITY = 0.05;
+const MIN_BLUR_SIGNAL_GRADIENT = 4;
+const NOISE_FLOOR_MARGIN = 4;
 
 type RunningStatistics = {
   count: number;
@@ -23,6 +25,24 @@ function addSample(statistics: RunningStatistics, value: number): void {
 
 function variance(statistics: RunningStatistics): number {
   return statistics.count === 0 ? 0 : statistics.sumOfSquares / statistics.count;
+}
+
+function countAtOrAbove(histogram: readonly number[], threshold: number): number {
+  return histogram.slice(Math.min(histogram.length, threshold)).reduce((total, count) => total + count, 0);
+}
+
+function percentileFromHistogram(histogram: readonly number[], count: number, percentile: number): number {
+  const target = Math.max(1, Math.ceil(count * percentile));
+  let accumulated = 0;
+
+  for (let value = 0; value < histogram.length; value += 1) {
+    accumulated += histogram[value];
+    if (accumulated >= target) {
+      return value;
+    }
+  }
+
+  return 0;
 }
 
 function orientedDimensions(
@@ -66,25 +86,15 @@ export async function profileImage(buffer: ArrayBuffer): Promise<ImageQualityPro
   }
 
   const gradients: RunningStatistics = { count: 0, mean: 0, sumOfSquares: 0 };
+  const gradientHistogram = Array.from({ length: 511 }, () => 0);
   let edgeCount = 0;
-  let nonZeroGradientCount = 0;
-  let meaningfulGradientCount = 0;
-  let focusedGradientCount = 0;
   for (let y = 1; y < info.height; y += 1) {
     for (let x = 1; x < info.width; x += 1) {
       const index = y * info.width + x;
       const gradient = Math.abs(data[index] - data[index - 1])
         + Math.abs(data[index] - data[index - info.width]);
       addSample(gradients, gradient);
-      if (gradient > 0) {
-        nonZeroGradientCount += 1;
-      }
-      if (gradient >= EDGE_THRESHOLD) {
-        meaningfulGradientCount += 1;
-      }
-      if (gradient >= FOCUSED_GRADIENT_THRESHOLD) {
-        focusedGradientCount += 1;
-      }
+      gradientHistogram[gradient] += 1;
       if (gradient >= EDGE_THRESHOLD) {
         edgeCount += 1;
       }
@@ -95,9 +105,16 @@ export async function profileImage(buffer: ArrayBuffer): Promise<ImageQualityPro
   const edgeDensity = edgeCount / Math.max(1, gradients.count);
   const gradientVariance = variance(gradients);
   const lowContrast = contrast < 0.08;
+  const noiseFloor = percentileFromHistogram(gradientHistogram, gradients.count, 0.9);
+  const blurSignalThreshold = Math.max(MIN_BLUR_SIGNAL_GRADIENT, noiseFloor + NOISE_FLOOR_MARGIN);
+  const meaningfulGradientCount = countAtOrAbove(gradientHistogram, blurSignalThreshold);
+  const focusedGradientCount = countAtOrAbove(
+    gradientHistogram,
+    Math.max(FOCUSED_GRADIENT_THRESHOLD, blurSignalThreshold),
+  );
   const focusedGradientRatio = focusedGradientCount / Math.max(1, meaningfulGradientCount);
   const hasFocusedEdges = meaningfulGradientCount > 0 && focusedGradientRatio >= MIN_FOCUSED_GRADIENT_RATIO;
-  const weakGradientDensity = nonZeroGradientCount / Math.max(1, gradients.count);
+  const weakGradientDensity = meaningfulGradientCount / Math.max(1, gradients.count);
   const blurry = !hasFocusedEdges
     && weakGradientDensity > 0
     && weakGradientDensity < MAX_SPARSE_WEAK_GRADIENT_DENSITY;
