@@ -116,14 +116,14 @@ npm run test:calc     # 계산기 정확도만
 - **Receipt 시스템**: SHA-256 해시, 타임스탬프, 모델 추적
 - **BYOK**: 사용자가 자기 LLM API 키를 등록하고 사용하는 흐름
 - **Vision Pipeline**: DXF/PDF 벡터 파싱 + 150+ 전기 심볼 인식
-- **Stub/미구현 여부**: YouTube 요약은 placeholder 수준 — 이 부분의 정직한 표시 여부
+- **SLD 실도면 정확도**: 실제 공급자 기반 정확도는 판정된 현장 도면 라벨로 측정하기 전까지 미검증으로 유지하고 수치를 주장하지 않는지
 
 검토 파일:
 - `src/engine/calculators/` — 전체 58개 계산기 파일
 - `src/engine/standards/kec/`, `nec/`, `iec/`, `jis/` — 기준서 DSL
 - `src/lib/export-excel.ts` — Excel 내보내기
 - `src/engine/receipt/` — Receipt 생성기
-- `src/lib/youtube-summary.ts` — YouTube (placeholder 확인)
+- `src/agent/vision/`, `src/agent/teams/sld-team.ts` — 판정된 현장 도면 라벨 기반 SLD 정확도 측정 경계
 
 ---
 
