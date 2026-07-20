@@ -320,6 +320,35 @@ describe('normalizeElectricalGraph', () => {
     ]));
   });
 
+  it('normalizes every source-backed transformer and CT calculator input without shadow fields', () => {
+    const transformerText = text('TEXT-100', '총부하 500kW 역률 0.9 효율 95% 수용률 80% 안전율 0.1', 0);
+    const ctText = text('TEXT-101', '최대부하전류 120A burden 15VA lead length 30m lead size 2.5mm2 accuracy class 5P', 200);
+    const phaseText = text('TEXT-102', '3상', 400);
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('TR-CALC', 'TR', 0), symbol('CT-CALC', 'CT', 200), symbol('VCB-PHASE', 'VCB', 400)],
+      texts: [transformerText, ctText, phaseText],
+      textLinks: [{ id: 'link-phase', textId: 'TEXT-102', symbolId: 'VCB-PHASE', confidence: 1 }],
+    }));
+
+    expect(specsFor(result, 'TEXT-100')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'totalLoad_kW', value: 500, unit: 'kW', ownerId: 'TR-CALC' }),
+      expect.objectContaining({ field: 'powerFactor', value: 0.9, unit: 'factor', ownerId: 'TR-CALC' }),
+      expect.objectContaining({ field: 'efficiency', value: 0.95, unit: 'factor', ownerId: 'TR-CALC' }),
+      expect.objectContaining({ field: 'demandFactor', value: 0.8, unit: 'factor', ownerId: 'TR-CALC' }),
+      expect.objectContaining({ field: 'safetyMargin', value: 0.1, unit: 'factor', ownerId: 'TR-CALC' }),
+    ]));
+    expect(specsFor(result, 'TEXT-101')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'maxLoadCurrent_A', value: 120, unit: 'A', ownerId: 'CT-CALC' }),
+      expect.objectContaining({ field: 'burden_VA', value: 15, unit: 'VA', ownerId: 'CT-CALC' }),
+      expect.objectContaining({ field: 'leadLength_m', value: 30, unit: 'm', ownerId: 'CT-CALC' }),
+      expect.objectContaining({ field: 'leadSize_mm2', value: 2.5, unit: 'mm2', ownerId: 'CT-CALC' }),
+      expect.objectContaining({ field: 'ctAccuracyClass', value: '5P', unit: 'text', ownerId: 'CT-CALC' }),
+    ]));
+    expect(specsFor(result, 'TEXT-102')).toEqual([
+      expect.objectContaining({ field: 'phase', value: 3, ownerId: 'VCB-PHASE' }),
+    ]);
+  });
+
   it('fails closed when aggregate parsed specs exceed the global budget', () => {
     const texts = Array.from({ length: 20_001 }, (_, index) => text(`TEXT-BUDGET-${index}`, '3상', index * 30));
     expect(() => normalizeElectricalGraph(graph({ texts }))).toThrow('normalization spec budget exceeded');

@@ -12,7 +12,12 @@ export type ElectricalField =
   | 'powerFactor'
   | 'demandFactor'
   | 'safetyMargin'
+  | 'efficiency'
   | 'burden_VA'
+  | 'maxLoadCurrent_A'
+  | 'leadLength_m'
+  | 'leadSize_mm2'
+  | 'ctAccuracyClass'
   | 'leadResistance_ohm'
   | 'capacity_kVA'
   | 'breaking_kA'
@@ -182,14 +187,27 @@ function candidateTypes(symbol: SpatialSymbol): string {
 
 function compatible(field: ElectricalField, symbol: SpatialSymbol): boolean {
   const types = candidateTypes(symbol);
-  if (field === 'capacity_kVA' || field === 'totalLoad_kW') return /\b(TR|TRANSFORMER)\b/.test(types);
-  if (field === 'ctRatio') return /\bCT\b/.test(types);
+  if (field === 'capacity_kVA' || field === 'totalLoad_kW' || field === 'efficiency' || field === 'demandFactor' || field === 'safetyMargin') return /\b(TR|TRANSFORMER)\b/.test(types);
+  if (field === 'ctRatio' || field === 'burden_VA' || field === 'maxLoadCurrent_A' || field === 'leadLength_m' || field === 'leadSize_mm2' || field === 'ctAccuracyClass') return /\bCT\b/.test(types);
   if (field === 'cableSpec' || field === 'length_m' || field === 'conductorSize_mm2' || field === 'conductorMaterial') return /\b(CABLE|LINE)\b/.test(types);
   if (field === 'phase') return false;
   return /\b(VCB|ACB|MCCB|ELB|CB|SWITCH|TR|TRANSFORMER)\b/.test(types);
 }
 
 function ownerFor(spec: MutableSpec, graph: SpatialEvidenceGraph, warnings: NormalizationWarning[]): void {
+  const linked = graph.textLinks
+    .filter((link) => link.textId === spec.evidenceId)
+    .map((link) => graph.symbols.find((symbol) => symbol.id === link.symbolId))
+    .filter((symbol): symbol is SpatialSymbol => Boolean(symbol && symbol.bounds.page === spec.bounds.page))
+    .filter((symbol) => spec.field === 'phase' || compatible(spec.field, symbol));
+  if (linked.length === 1) {
+    spec.ownerId = linked[0].id;
+    return;
+  }
+  if (linked.length > 1) {
+    addWarning(warnings, { code: 'HOLD_AMBIGUOUS_TEXT_OWNER', evidenceId: spec.evidenceId, field: spec.field, page: spec.bounds.page, detail: `AMBIGUOUS_TEXT_OWNER:${spec.evidenceId}` });
+    return;
+  }
   if (spec.field === 'phase') return;
   const centerX = spec.bounds.x + spec.bounds.w / 2;
   const centerY = spec.bounds.y + spec.bounds.h / 2;
@@ -253,7 +271,8 @@ function nearestLabelField(raw: string, valueStart: number, labels: readonly [Re
 }
 
 const CURRENT_LABELS: readonly [RegExp, ElectricalField][] = [
-  [/(?:부하\s*전류|load\s*current)/i, 'loadCurrent_A'],
+  [/(?:최대\s*부하\s*전류|max(?:imum)?\s*load\s*current)/i, 'maxLoadCurrent_A'],
+  [/(?:(?<!최대)(?<!최대\s)부하\s*전류|(?<!max\s)(?<!maximum\s)load\s*current)/i, 'loadCurrent_A'],
   [/(?:허용\s*전류|cable\s*ampacity|ampacity)/i, 'cableAmpacity_A'],
   [/(?:1차\s*전류|primary\s*current)/i, 'primaryCurrent_A'],
   [/(?:2차\s*전류|secondary\s*current)/i, 'secondaryCurrent_A'],
@@ -381,6 +400,18 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
   addUniqueNumeric(specs, warnings, text, 'powerFactor', 'factor', readLabeledValues(raw, '역률|power\\s*factor|\\bpf\\b', text, 'powerFactor', warnings, budget));
   addUniqueNumeric(specs, warnings, text, 'demandFactor', 'factor', readLabeledValues(raw, '수용률|demand\\s*factor', text, 'demandFactor', warnings, budget, true));
   addUniqueNumeric(specs, warnings, text, 'safetyMargin', 'factor', readLabeledValues(raw, '안전율|safety\\s*margin', text, 'safetyMargin', warnings, budget));
+  addUniqueNumeric(specs, warnings, text, 'efficiency', 'factor', readLabeledValues(raw, '효율|efficiency', text, 'efficiency', warnings, budget, true));
+
+  const leadLengths = readMatches(raw, new RegExp(`(?:lead\\s*length|리드\\s*길이)\\s*${bounded}\\s*(미터|m)(?!m|m2|[A-Za-z])`, 'gi'), { '미터': 1, m: 1 }, text, 'leadLength_m', occupied, warnings, budget);
+  const leadSizes = readMatches(raw, new RegExp(`(?:lead\\s*size|리드\\s*(?:굵기|단면적))\\s*${bounded}\\s*(mm2|sq)(?![A-Za-z])`, 'gi'), { mm2: 1, sq: 1 }, text, 'leadSize_mm2', occupied, warnings, budget);
+  occupied.push(...leadLengths.map(({ start, end }) => ({ start, end })), ...leadSizes.map(({ start, end }) => ({ start, end })));
+  addUniqueNumeric(specs, warnings, text, 'leadLength_m', 'm', leadLengths.map((item) => item.value));
+  addUniqueNumeric(specs, warnings, text, 'leadSize_mm2', 'mm2', leadSizes.map((item) => item.value));
+  const accuracyClasses = [...raw.matchAll(/(?:정확도\s*(?:등급)?|accuracy\s*class)\s*(0\.2|0\.5|1\.0|5P|10P)\b/gi)]
+    .map((match) => { reserveParsedField(budget); return match[1].toUpperCase(); });
+  const distinctAccuracy = [...new Set(accuracyClasses)];
+  if (distinctAccuracy.length === 1) addSpec(specs, text, 'ctAccuracyClass', distinctAccuracy[0], 'text');
+  if (distinctAccuracy.length > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'ctAccuracyClass', page: text.bounds.page });
 
   const cableContext = CABLE_FAMILY.test(raw);
   if (cableContext) { reserveParsedField(budget); addSpec(specs, text, 'cableSpec', raw, 'text'); }
