@@ -120,13 +120,22 @@ describe('sealed independent drawing council', () => {
     });
   });
 
-  it('uses a selected variant transform when mapping full-image normalized coordinates', async () => {
+  it('rejects a full variant transform that does not cover the complete snapshot before invoking', async () => {
     const transformedVariants = variants().map((variant) => variant.kind === 'text-high-contrast'
       ? { ...variant, width: 160, height: 80, transform: { scaleX: 2, scaleY: 2, offsetX: 0, offsetY: 0 } }
       : variant);
-    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: transformedVariants, regions: [], options }, async (buffer, _mime, role) => resultFor(role, buffer.byteLength));
+    const invoke = jest.fn(async (buffer: ArrayBuffer, _mime: string, role: VLMReviewRole) => resultFor(role, buffer.byteLength));
 
-    expect(result.envelopes.find((item) => item.role === 'text')?.data.texts?.[0].bounds).toEqual({ x: 0, y: 0, w: 80, h: 40, page: 3 });
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: transformedVariants, regions: [], options }, invoke)).rejects.toThrow();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('rejects region bounds that disagree with their variant transform before invoking', async () => {
+    const invoke = jest.fn(async (buffer: ArrayBuffer, _mime: string, role: VLMReviewRole) => resultFor(role, buffer.byteLength));
+    const mismatched = { ...regions()[0], variantBounds: { x: 0, y: 0, w: 50, h: 80 } };
+
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: [mismatched], options }, invoke)).rejects.toThrow();
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('rejects invalid sources and call budgets before invoking a provider', async () => {
@@ -164,15 +173,108 @@ describe('sealed independent drawing council', () => {
   });
 
   it('seals canonical output independently of input key order and freezes returned data', async () => {
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(100);
     const first = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: [], options }, async (_buffer, _mime, role) => resultFor(role));
     const second = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: [], options }, async (_buffer, _mime, role) => {
       const value = resultFor(role);
       return { ...value, data: { ...value.data, confidence: value.data.confidence, warnings: value.data.warnings } };
     });
+    clock.mockRestore();
 
     expect(first.envelopes.map((item) => item.outputHash)).toEqual(second.envelopes.map((item) => item.outputHash));
     expect(Object.isFrozen(first.envelopes[0])).toBe(true);
     expect(Object.isFrozen(first.envelopes[0].data)).toBe(true);
     expect(() => first.envelopes[0].data.warnings.push('mutate')).toThrow();
+  });
+
+  it('uses PNG MIME for prepared sources even when the uploaded snapshot was JPEG', async () => {
+    const jpegSnapshot = { ...snapshot(), mimeType: 'image/jpeg' };
+    const seenMime: string[] = [];
+    await runDrawingCouncil({ snapshot: jpegSnapshot, variants: variants(), regions: [], options }, async (buffer, mime, role) => {
+      seenMime.push(mime);
+      return resultFor(role, buffer.byteLength);
+    });
+
+    expect(seenMime).toEqual(['image/png', 'image/png', 'image/png', 'image/png']);
+  });
+
+  it('propagates external pre-abort and does not invoke queued work', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const invoke = jest.fn(async (buffer: ArrayBuffer, _mime: string, role: VLMReviewRole) => resultFor(role, buffer.byteLength));
+
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options: { ...options, signal: controller.signal } }, invoke)).rejects.toThrow('aborted');
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('propagates mid-flight abort and never starts queued source calls', async () => {
+    const controller = new AbortController();
+    const invoke = jest.fn((_buffer: ArrayBuffer, _mime: string, _role: VLMReviewRole, callOptions: VLMOptions) => new Promise<VLMRoleAnalysisResult>((_resolve, reject) => {
+      callOptions.signal?.addEventListener('abort', () => reject(new Error('provider observed abort')), { once: true });
+    }));
+    const manyRegions = Array.from({ length: 16 }, (_, index) => ({
+      ...regions()[0],
+      id: `region:${index}`,
+      buffer: new ArrayBuffer(index + 2),
+    }));
+    const pending = runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: manyRegions, options: { ...options, signal: controller.signal } }, invoke);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+
+    await expect(pending).rejects.toThrow('aborted');
+    expect(invoke.mock.calls.length).toBeLessThanOrEqual(4);
+  });
+
+  it('limits 52 calls globally and schedules every role full source before regions', async () => {
+    const manyRegions = Array.from({ length: 16 }, (_, index) => ({
+      ...regions()[0],
+      id: `region:${index}`,
+      buffer: new ArrayBuffer(index + 2),
+    }));
+    const started: string[] = [];
+    let active = 0;
+    let maximum = 0;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const invoke = jest.fn(async (buffer: ArrayBuffer, _mime: string, role: VLMReviewRole) => {
+      active += 1;
+      maximum = Math.max(maximum, active);
+      started.push(`${role}:${buffer.byteLength}`);
+      await gate;
+      active -= 1;
+      return resultFor(role, buffer.byteLength);
+    });
+    const pending = runDrawingCouncil({ snapshot: snapshot(), variants: [{ ...variants()[0] }], regions: manyRegions, options }, invoke);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(maximum).toBeLessThanOrEqual(4);
+    expect(started).toEqual(['symbols:1', 'connections:1', 'text:1', 'logic:1']);
+    release?.();
+    await pending;
+    expect(invoke).toHaveBeenCalledTimes(52);
+  });
+
+  it('rejects unsafe provider configuration, duplicate kinds, and input-count overflow before invoking', async () => {
+    const invoke = jest.fn(async (buffer: ArrayBuffer, _mime: string, role: VLMReviewRole) => resultFor(role, buffer.byteLength));
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: [], options: { ...options, provider: 'invalid' as never } }, invoke)).rejects.toThrow();
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: [], options: { ...options, apiKey: '   ' } }, invoke)).rejects.toThrow();
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: [...variants(), { ...variants()[1], id: 'variant:text:two' }], regions: [], options }, invoke)).rejects.toThrow();
+    await expect(runDrawingCouncil({ snapshot: snapshot(), variants: [variants()[0]], regions: Array.from({ length: 49 }, (_, index) => ({ ...regions()[0], id: `r:${index}` })), options }, invoke)).rejects.toThrow();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('contains aggregate budget overflow as an isolated fatal role failure', async () => {
+    const manyRegions = Array.from({ length: 16 }, (_, index) => ({
+      ...regions()[0],
+      id: `region:${index}`,
+      buffer: new ArrayBuffer(index + 2),
+    }));
+    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: [variants()[0]], regions: manyRegions, options }, async (buffer, _mime, role) => ({
+      ...resultFor(role, buffer.byteLength),
+      model: `${role}-${buffer.byteLength}-${'m'.repeat(180)}`,
+    }));
+
+    expect(result.envelopes.map((item) => item.role)).toEqual(['logic']);
+    expect(result.failures.filter((item) => item.fatal).map((item) => item.role)).toEqual(['symbols', 'connections', 'text']);
   });
 });

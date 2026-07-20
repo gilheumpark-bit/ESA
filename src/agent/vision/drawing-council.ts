@@ -3,13 +3,26 @@ import { createHash } from 'node:crypto';
 import { ROLE_PROMPT_VERSION } from './role-prompts';
 import { parseRoleReviewData, type RoleReviewData, type RoleReviewEnvelope } from './review-types';
 import { analyzeDrawingRole, type VLMOptions, type VLMReviewRole } from './vlm-client';
-import type { DrawingSnapshot, EvidenceBounds, ImageVariant, Point, PrecisionRegion } from './evidence-types';
+import { toOriginalPoint, type DrawingSnapshot, type EvidenceBounds, type ImageVariant, type Point, type PrecisionRegion } from './evidence-types';
 
 const ROLES: readonly VLMReviewRole[] = ['symbols', 'connections', 'text', 'logic'];
+const VARIANT_KINDS = ['original', 'upscale-2x', 'upscale-4x', 'text-high-contrast', 'line-enhanced'] as const;
+const PROVIDERS = ['openai', 'gemini', 'claude'] as const;
+const PREPARED_SOURCE_MIME = 'image/png';
 const MAX_REGION_CALLS_PER_ROLE = 16;
+const MAX_TOTAL_SOURCE_CALLS = 52;
+const DEFAULT_MAX_CONCURRENT_CALLS = 4;
+const MAX_CONCURRENT_CALLS = 8;
+const MAX_VARIANTS = 5;
+const MAX_REGIONS = 48;
+const MAX_PREPARED_SOURCE_BYTES = 20 * 1024 * 1024;
 const MAX_SOURCE_ID_LENGTH = 160;
 const MAX_MODEL_LENGTH = 200;
+const MAX_MODEL_AGGREGATE_LENGTH = 2_000;
+const MAX_COMBINED_EVIDENCE_PER_ROLE = 10_000;
+const MAX_COMBINED_WARNINGS_PER_ROLE = 2_000;
 const MAX_FAILURE_LENGTH = 300;
+const COORDINATE_EPSILON = 1e-6;
 
 type Invoke = typeof analyzeDrawingRole;
 
@@ -26,6 +39,7 @@ export interface DrawingCouncilInput {
   regions: readonly PrecisionRegion[];
   options: VLMOptions;
   maxRegionCallsPerRole?: number;
+  maxConcurrentCalls?: number;
 }
 
 interface ReviewSource {
@@ -35,15 +49,43 @@ interface ReviewSource {
   originalBounds: EvidenceBounds;
 }
 
+interface PlannedRole {
+  role: VLMReviewRole;
+  sources: readonly ReviewSource[];
+  started: number;
+}
+
 interface SuccessfulSource {
   source: ReviewSource;
   data: RoleReviewData;
   model: string;
 }
 
+interface SourceTask {
+  role: VLMReviewRole;
+  source: ReviewSource;
+  order: number;
+}
+
+interface SourceSuccess extends SuccessfulSource {
+  role: VLMReviewRole;
+}
+
+interface SourceFailure {
+  role: VLMReviewRole;
+  source: ReviewSource;
+  order: number;
+  error: unknown;
+}
+
 interface RoleOutcome {
   envelope?: RoleReviewEnvelope;
   failures: RoleFailure[];
+}
+
+interface CouncilLimits {
+  maxRegionCalls: number;
+  maxConcurrentCalls: number;
 }
 
 function invalid(message: string): never {
@@ -84,10 +126,18 @@ function assertFiniteBounds(bounds: EvidenceBounds, width: number, height: numbe
   }
 }
 
+function assertSameBounds(actual: EvidenceBounds, expected: EvidenceBounds, label: string): void {
+  const values: Array<keyof EvidenceBounds> = ['x', 'y', 'w', 'h'];
+  if (values.some((key) => Math.abs(actual[key] - expected[key]) > COORDINATE_EPSILON)) {
+    invalid(`${label} must match the variant transform within epsilon.`);
+  }
+}
+
 function assertVariant(variant: ImageVariant): void {
   assertBoundedString(variant.id, 'variant.id');
-  if (!variant.buffer || !(variant.buffer instanceof ArrayBuffer) || variant.buffer.byteLength === 0) {
-    invalid(`variant ${variant.id} must have a non-empty ArrayBuffer.`);
+  if (!VARIANT_KINDS.includes(variant.kind)) invalid(`variant ${variant.id} has an unsupported kind.`);
+  if (!variant.buffer || !(variant.buffer instanceof ArrayBuffer) || variant.buffer.byteLength === 0 || variant.buffer.byteLength > MAX_PREPARED_SOURCE_BYTES) {
+    invalid(`variant ${variant.id} must have a bounded non-empty ArrayBuffer.`);
   }
   if (!Number.isSafeInteger(variant.width) || !Number.isSafeInteger(variant.height) || variant.width < 1 || variant.height < 1) {
     invalid(`variant ${variant.id} dimensions must be positive safe integers.`);
@@ -106,50 +156,75 @@ function assertVariant(variant: ImageVariant): void {
 }
 
 function originalBoundsForVariant(variant: ImageVariant): EvidenceBounds {
-  const { scaleX, scaleY, offsetX, offsetY } = variant.transform;
-  const x = -offsetX / scaleX;
-  const y = -offsetY / scaleY;
-  const right = (variant.width - offsetX) / scaleX;
-  const bottom = (variant.height - offsetY) / scaleY;
-
-  return { x, y, w: right - x, h: bottom - y };
+  return originalBoundsForVariantBounds({ x: 0, y: 0, w: variant.width, h: variant.height }, variant);
 }
 
-function validateInput(input: DrawingCouncilInput): number {
+function originalBoundsForVariantBounds(bounds: EvidenceBounds, variant: ImageVariant): EvidenceBounds {
+  const origin = toOriginalPoint({ x: bounds.x, y: bounds.y }, variant.transform);
+  const end = toOriginalPoint({ x: bounds.x + bounds.w, y: bounds.y + bounds.h }, variant.transform);
+  return { x: origin.x, y: origin.y, w: end.x - origin.x, h: end.y - origin.y };
+}
+
+function assertOptions(options: VLMOptions): void {
+  if (!options || !PROVIDERS.includes(options.provider)) invalid('options.provider is unsupported.');
+  assertBoundedString(options.apiKey, 'options.apiKey', 4_096);
+  if (options.model !== undefined) assertBoundedString(options.model, 'options.model', MAX_MODEL_LENGTH);
+  if (options.maxRetries !== undefined && (!Number.isSafeInteger(options.maxRetries) || options.maxRetries < 0 || options.maxRetries > 5)) {
+    invalid('options.maxRetries must be an integer from 0 to 5.');
+  }
+  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 120_000)) {
+    invalid('options.timeoutMs must be a positive integer no greater than 120000.');
+  }
+  if (options.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > 32_768)) {
+    invalid('options.maxTokens must be an integer from 1 to 32768.');
+  }
+  if (options.temperature !== undefined && (!Number.isFinite(options.temperature) || options.temperature < 0 || options.temperature > 2)) {
+    invalid('options.temperature must be finite from 0 to 2.');
+  }
+  if (options.signal !== undefined && (typeof options.signal.addEventListener !== 'function' || typeof options.signal.aborted !== 'boolean')) {
+    invalid('options.signal must be an AbortSignal.');
+  }
+}
+
+function validateInput(input: DrawingCouncilInput): CouncilLimits {
   assertSnapshot(input.snapshot);
-  if (!Array.isArray(input.variants) || input.variants.length === 0) {
-    invalid('variants must be a non-empty array.');
+  if (!Array.isArray(input.variants) || input.variants.length === 0 || input.variants.length > MAX_VARIANTS) {
+    invalid(`variants must contain from 1 to ${MAX_VARIANTS} entries.`);
   }
-  if (!Array.isArray(input.regions)) {
-    invalid('regions must be an array.');
+  if (!Array.isArray(input.regions) || input.regions.length > MAX_REGIONS) {
+    invalid(`regions must contain at most ${MAX_REGIONS} entries.`);
   }
-  if (!input.options || typeof input.options.apiKey !== 'string') {
-    invalid('options.apiKey must be a string.');
-  }
+  assertOptions(input.options);
   const maxRegionCalls = input.maxRegionCallsPerRole ?? MAX_REGION_CALLS_PER_ROLE;
   if (!Number.isSafeInteger(maxRegionCalls) || maxRegionCalls < 0 || maxRegionCalls > MAX_REGION_CALLS_PER_ROLE) {
     invalid(`maxRegionCallsPerRole must be an integer from 0 to ${MAX_REGION_CALLS_PER_ROLE}.`);
   }
+  const maxConcurrentCalls = input.maxConcurrentCalls ?? DEFAULT_MAX_CONCURRENT_CALLS;
+  if (!Number.isSafeInteger(maxConcurrentCalls) || maxConcurrentCalls < 1 || maxConcurrentCalls > MAX_CONCURRENT_CALLS) {
+    invalid(`maxConcurrentCalls must be an integer from 1 to ${MAX_CONCURRENT_CALLS}.`);
+  }
+  if (4 + (3 * maxRegionCalls) > MAX_TOTAL_SOURCE_CALLS) {
+    invalid(`planned calls exceed the ${MAX_TOTAL_SOURCE_CALLS} source-call budget.`);
+  }
 
   const sourceIds = new Set<string>();
+  const kinds = new Set<string>();
   const variantsById = new Map<string, ImageVariant>();
   let originalCount = 0;
+  const snapshotFrame = { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height };
   for (const variant of input.variants) {
     assertVariant(variant);
-    assertFiniteBounds(
-      originalBoundsForVariant(variant),
-      input.snapshot.width,
-      input.snapshot.height,
-      `variant ${variant.id} transform`,
-    );
     if (sourceIds.has(variant.id)) invalid(`duplicate source id: ${variant.id}.`);
+    if (kinds.has(variant.kind)) invalid(`duplicate variant kind: ${variant.kind}.`);
+    const mappedFrame = originalBoundsForVariant(variant);
+    assertFiniteBounds(mappedFrame, input.snapshot.width, input.snapshot.height, `variant ${variant.id} transform`);
+    assertSameBounds(mappedFrame, snapshotFrame, `variant ${variant.id} transform`);
     sourceIds.add(variant.id);
+    kinds.add(variant.kind);
     variantsById.set(variant.id, variant);
     if (variant.kind === 'original') originalCount += 1;
   }
-  if (originalCount !== 1) {
-    invalid('variants must contain exactly one original image.');
-  }
+  if (originalCount !== 1) invalid('variants must contain exactly one original image.');
 
   for (const region of input.regions) {
     assertBoundedString(region.id, 'region.id');
@@ -158,14 +233,15 @@ function validateInput(input: DrawingCouncilInput): number {
     sourceIds.add(region.id);
     const variant = variantsById.get(region.variantId);
     if (!variant) invalid(`region ${region.id} references an unknown variant.`);
-    if (!(region.buffer instanceof ArrayBuffer) || region.buffer.byteLength === 0) {
-      invalid(`region ${region.id} must have a non-empty ArrayBuffer.`);
+    if (!(region.buffer instanceof ArrayBuffer) || region.buffer.byteLength === 0 || region.buffer.byteLength > MAX_PREPARED_SOURCE_BYTES) {
+      invalid(`region ${region.id} must have a bounded non-empty ArrayBuffer.`);
     }
     assertFiniteBounds(region.variantBounds, variant.width, variant.height, `region ${region.id}.variantBounds`);
     assertFiniteBounds(region.originalBounds, input.snapshot.width, input.snapshot.height, `region ${region.id}.originalBounds`);
+    assertSameBounds(originalBoundsForVariantBounds(region.variantBounds, variant), region.originalBounds, `region ${region.id}.originalBounds`);
   }
 
-  return maxRegionCalls;
+  return { maxRegionCalls, maxConcurrentCalls };
 }
 
 function pickVariant(role: VLMReviewRole, variants: readonly ImageVariant[]): ImageVariant {
@@ -176,39 +252,32 @@ function pickVariant(role: VLMReviewRole, variants: readonly ImageVariant[]): Im
   return original;
 }
 
-function planSources(
-  role: VLMReviewRole,
-  input: DrawingCouncilInput,
-  maxRegionCalls: number,
-): ReviewSource[] {
+function planSources(role: VLMReviewRole, input: DrawingCouncilInput, maxRegionCalls: number): ReviewSource[] {
   const variant = pickVariant(role, input.variants);
   const full: ReviewSource = {
     id: variant.id,
     namespace: 's0',
     buffer: variant.buffer,
-    originalBounds: originalBoundsForVariant(variant),
+    originalBounds: { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height },
   };
   if (role === 'logic' || maxRegionCalls === 0) return [full];
-
   const planned = input.regions
     .filter((region) => region.variantId === variant.id)
     .slice()
     .sort((left, right) => left.id.localeCompare(right.id))
     .slice(0, maxRegionCalls);
-  return [
-    full,
-    ...planned.map((region, index) => ({
-      id: region.id,
-      namespace: `s${index + 1}`,
-      buffer: region.buffer,
-      originalBounds: { ...region.originalBounds },
-    })),
-  ];
+  return [full, ...planned.map((region, index) => ({
+    id: region.id,
+    namespace: `s${index + 1}`,
+    buffer: region.buffer,
+    originalBounds: { ...region.originalBounds },
+  }))];
 }
 
 function sanitizeFailure(error: unknown, apiKey: string): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.split(apiKey).join('[REDACTED]').slice(0, MAX_FAILURE_LENGTH);
+  const redacted = apiKey.length === 0 ? message : message.split(apiKey).join('[REDACTED]');
+  return redacted.slice(0, MAX_FAILURE_LENGTH);
 }
 
 function assertModel(model: unknown): asserts model is string {
@@ -217,19 +286,36 @@ function assertModel(model: unknown): asserts model is string {
   }
 }
 
+function abortError(): Error {
+  return new Error('[VLM] request aborted.');
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw abortError();
+}
+
+function raceExternalAbort<T>(operation: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return operation;
+  throwIfAborted(signal);
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    operation.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 function mapPoint(point: Point, source: EvidenceBounds, snapshot: DrawingSnapshot): Point {
-  const mapped = {
-    x: source.x + (point.x / 1000) * source.w,
-    y: source.y + (point.y / 1000) * source.h,
-  };
-  if (
-    !Number.isFinite(mapped.x) ||
-    !Number.isFinite(mapped.y) ||
-    mapped.x < 0 ||
-    mapped.y < 0 ||
-    mapped.x > snapshot.width ||
-    mapped.y > snapshot.height
-  ) {
+  const mapped = { x: source.x + (point.x / 1000) * source.w, y: source.y + (point.y / 1000) * source.h };
+  if (!Number.isFinite(mapped.x) || !Number.isFinite(mapped.y) || mapped.x < 0 || mapped.y < 0 || mapped.x > snapshot.width || mapped.y > snapshot.height) {
     throw new Error('remapped point is outside the drawing snapshot.');
   }
   return mapped;
@@ -253,58 +339,30 @@ function remapRoleData(data: RoleReviewData, source: ReviewSource, snapshot: Dra
   return {
     warnings: [...data.warnings],
     confidence: data.confidence,
-    ...(data.symbols ? {
-      symbols: data.symbols.map((item) => ({
-        ...item,
-        id: namespaceId(source, item.id),
-        sourceId: source.id,
-        bounds: mapBounds(item.bounds, source.originalBounds, snapshot),
-        ports: item.ports.map((point) => mapPoint(point, source.originalBounds, snapshot)),
-      })),
-    } : {}),
-    ...(data.lines ? {
-      lines: data.lines.map((item) => ({
-        ...item,
-        id: namespaceId(source, item.id),
-        sourceId: source.id,
-        path: item.path.map((point) => mapPoint(point, source.originalBounds, snapshot)),
-        start: mapPoint(item.start, source.originalBounds, snapshot),
-        end: mapPoint(item.end, source.originalBounds, snapshot),
-        junctions: item.junctions.map((point) => mapPoint(point, source.originalBounds, snapshot)),
-        crossovers: item.crossovers.map((point) => mapPoint(point, source.originalBounds, snapshot)),
-      })),
-    } : {}),
-    ...(data.texts ? {
-      texts: data.texts.map((item) => ({
-        ...item,
-        id: namespaceId(source, item.id),
-        sourceId: source.id,
-        bounds: mapBounds(item.bounds, source.originalBounds, snapshot),
-      })),
-    } : {}),
-    ...(data.logic ? {
-      logic: data.logic.map((item) => ({
-        ...item,
-        id: namespaceId(source, item.id),
-        sourceId: source.id,
-        subjectIds: item.subjectIds.map((id) => namespaceId(source, id)),
-        attributes: item.attributes === undefined ? undefined : {
-          ...item.attributes,
-          ...(item.attributes.fromId === undefined ? {} : { fromId: namespaceId(source, item.attributes.fromId) }),
-          ...(item.attributes.toId === undefined ? {} : { toId: namespaceId(source, item.attributes.toId) }),
-          ...(item.attributes.protectedById === undefined || item.attributes.protectedById === null ? {} : { protectedById: namespaceId(source, item.attributes.protectedById) }),
-        },
-        evidenceBounds: item.evidenceBounds.map((bounds) => mapBounds(bounds, source.originalBounds, snapshot)),
-      })),
-    } : {}),
+    ...(data.symbols ? { symbols: data.symbols.map((item) => ({ ...item, id: namespaceId(source, item.id), sourceId: source.id, bounds: mapBounds(item.bounds, source.originalBounds, snapshot), ports: item.ports.map((point) => mapPoint(point, source.originalBounds, snapshot)) })) } : {}),
+    ...(data.lines ? { lines: data.lines.map((item) => ({ ...item, id: namespaceId(source, item.id), sourceId: source.id, path: item.path.map((point) => mapPoint(point, source.originalBounds, snapshot)), start: mapPoint(item.start, source.originalBounds, snapshot), end: mapPoint(item.end, source.originalBounds, snapshot), junctions: item.junctions.map((point) => mapPoint(point, source.originalBounds, snapshot)), crossovers: item.crossovers.map((point) => mapPoint(point, source.originalBounds, snapshot)) })) } : {}),
+    ...(data.texts ? { texts: data.texts.map((item) => ({ ...item, id: namespaceId(source, item.id), sourceId: source.id, bounds: mapBounds(item.bounds, source.originalBounds, snapshot) })) } : {}),
+    ...(data.logic ? { logic: data.logic.map((item) => ({
+      ...item,
+      id: namespaceId(source, item.id),
+      sourceId: source.id,
+      subjectIds: item.subjectIds.map((id) => namespaceId(source, id)),
+      attributes: item.attributes === undefined ? undefined : {
+        ...item.attributes,
+        ...(item.attributes.fromId === undefined ? {} : { fromId: namespaceId(source, item.attributes.fromId) }),
+        ...(item.attributes.toId === undefined ? {} : { toId: namespaceId(source, item.attributes.toId) }),
+        ...(item.attributes.protectedById === undefined || item.attributes.protectedById === null ? {} : { protectedById: namespaceId(source, item.attributes.protectedById) }),
+      },
+      evidenceBounds: item.evidenceBounds.map((bounds) => mapBounds(bounds, source.originalBounds, snapshot)),
+    })) } : {}),
   };
 }
 
 function combineRoleData(role: VLMReviewRole, data: readonly RoleReviewData[], failures: readonly RoleFailure[]): RoleReviewData {
-  const warnings = [
-    ...data.flatMap((item) => item.warnings),
-    ...failures.filter((failure) => !failure.fatal).map((failure) => `REGION_REVIEW_FAILED:${failure.sourceId}`),
-  ];
+  const warnings = [...data.flatMap((item) => item.warnings), ...failures.filter((failure) => !failure.fatal).map((failure) => `REGION_REVIEW_FAILED:${failure.sourceId}`)];
+  const evidenceCount = data.reduce((count, item) => count + (item.symbols?.length ?? 0) + (item.lines?.length ?? 0) + (item.texts?.length ?? 0) + (item.logic?.length ?? 0), 0);
+  if (evidenceCount > MAX_COMBINED_EVIDENCE_PER_ROLE) throw new Error(`combined evidence exceeds ${MAX_COMBINED_EVIDENCE_PER_ROLE}.`);
+  if (warnings.length > MAX_COMBINED_WARNINGS_PER_ROLE) throw new Error(`combined warnings exceed ${MAX_COMBINED_WARNINGS_PER_ROLE}.`);
   const confidence = data.reduce((sum, item) => sum + item.confidence, 0) / data.length;
   if (role === 'symbols') return { symbols: data.flatMap((item) => item.symbols ?? []), warnings, confidence };
   if (role === 'connections') return { lines: data.flatMap((item) => item.lines ?? []), warnings, confidence };
@@ -312,97 +370,107 @@ function combineRoleData(role: VLMReviewRole, data: readonly RoleReviewData[], f
   return { logic: data.flatMap((item) => item.logic ?? []), warnings, confidence };
 }
 
+function aggregateModel(successes: readonly SuccessfulSource[]): string {
+  const model = [...new Set(successes.map((item) => item.model))].sort().join(',');
+  if (model.length > MAX_MODEL_AGGREGATE_LENGTH) throw new Error(`combined model metadata exceeds ${MAX_MODEL_AGGREGATE_LENGTH}.`);
+  return model;
+}
+
 function canonicalize(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (value === undefined || value === null) return 'null';
+  if (typeof value === 'number') return Number.isFinite(value) ? JSON.stringify(value) : 'null';
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map((item) => canonicalize(item)).join(',')}]`;
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined).map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`).join(',')}}`;
+  }
+  return 'null';
 }
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
-    for (const key of Reflect.ownKeys(value)) {
-      deepFreeze((value as Record<PropertyKey, unknown>)[key]);
-    }
+    for (const key of Reflect.ownKeys(value)) deepFreeze((value as Record<PropertyKey, unknown>)[key]);
     Object.freeze(value);
   }
   return value;
 }
 
-function sealEnvelope(
-  role: VLMReviewRole,
-  snapshot: DrawingSnapshot,
-  options: VLMOptions,
-  model: string,
-  durationMs: number,
-  data: RoleReviewData,
-): RoleReviewEnvelope {
+function sealEnvelope(role: VLMReviewRole, snapshot: DrawingSnapshot, options: VLMOptions, model: string, durationMs: number, data: RoleReviewData): RoleReviewEnvelope {
   const frozenData = deepFreeze(data);
-  const seal = { role, drawingHash: snapshot.drawingHash, provider: options.provider, model, promptVersion: ROLE_PROMPT_VERSION, data: frozenData };
-  const envelope: RoleReviewEnvelope = {
-    role,
-    drawingHash: snapshot.drawingHash,
-    provider: options.provider,
-    model,
-    promptVersion: ROLE_PROMPT_VERSION,
-    outputHash: createHash('sha256').update(canonicalize(seal)).digest('hex'),
-    durationMs,
-    data: frozenData,
-  };
-  return deepFreeze(envelope);
+  // outputHash seals all immutable envelope metadata except the self-referential hash field.
+  const seal = { role, drawingHash: snapshot.drawingHash, provider: options.provider, model, promptVersion: ROLE_PROMPT_VERSION, durationMs, data: frozenData };
+  return deepFreeze({ ...seal, outputHash: createHash('sha256').update(canonicalize(seal)).digest('hex') });
 }
 
-async function executeRole(
-  role: VLMReviewRole,
-  input: DrawingCouncilInput,
-  maxRegionCalls: number,
-  invoke: Invoke,
-): Promise<RoleOutcome> {
-  const started = Date.now();
-  const sources = planSources(role, input, maxRegionCalls);
-  const settled = await Promise.allSettled(sources.map(async (source) => {
-    const result = await invoke(source.buffer, input.snapshot.mimeType, role, input.options);
-    if (result.role !== role) throw new Error(`review result role mismatch: expected ${role}.`);
-    assertModel(result.model);
-    return { source, data: parseRoleReviewData(role, result.data), model: result.model } satisfies SuccessfulSource;
-  }));
-  const successes: SuccessfulSource[] = [];
-  const failures: RoleFailure[] = [];
-  for (let index = 0; index < settled.length; index += 1) {
-    const item = settled[index];
-    if (item.status === 'fulfilled') {
-      successes.push(item.value);
-      continue;
+async function invokeSource(task: SourceTask, input: DrawingCouncilInput, invoke: Invoke): Promise<SourceSuccess> {
+  throwIfAborted(input.options.signal);
+  const result = await raceExternalAbort(Promise.resolve().then(() => invoke(task.source.buffer, PREPARED_SOURCE_MIME, task.role, input.options)), input.options.signal);
+  throwIfAborted(input.options.signal);
+  if (result.role !== task.role) throw new Error(`review result role mismatch: expected ${task.role}.`);
+  assertModel(result.model);
+  return { role: task.role, source: task.source, data: parseRoleReviewData(task.role, result.data), model: result.model };
+}
+
+async function runFairSourceTasks(plans: readonly PlannedRole[], input: DrawingCouncilInput, invoke: Invoke, limit: number): Promise<{ successes: SourceSuccess[]; failures: SourceFailure[] }> {
+  const tasks: SourceTask[] = [];
+  const longestPlan = Math.max(...plans.map((plan) => plan.sources.length));
+  for (let sourceIndex = 0; sourceIndex < longestPlan; sourceIndex += 1) {
+    for (const plan of plans) {
+      const source = plan.sources[sourceIndex];
+      if (source) tasks.push({ role: plan.role, source, order: tasks.length });
     }
-    failures.push({
-      role,
-      sourceId: sources[index].id,
-      error: sanitizeFailure(item.reason, input.options.apiKey),
-      fatal: false,
-    });
   }
-  if (successes.length === 0) {
+  const successes: SourceSuccess[] = [];
+  const failures: SourceFailure[] = [];
+  let nextTask = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      throwIfAborted(input.options.signal);
+      const index = nextTask;
+      nextTask += 1;
+      if (index >= tasks.length) return;
+      const task = tasks[index];
+      try {
+        successes.push(await invokeSource(task, input, invoke));
+      } catch (error) {
+        if (input.options.signal?.aborted) throw abortError();
+        failures.push({ role: task.role, source: task.source, order: task.order, error });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+  return { successes, failures };
+}
+
+function buildRoleOutcome(plan: PlannedRole, successes: readonly SourceSuccess[], sourceFailures: readonly SourceFailure[], input: DrawingCouncilInput): RoleOutcome {
+  const roleSuccesses = successes.filter((item) => item.role === plan.role).sort((left, right) => plan.sources.indexOf(left.source) - plan.sources.indexOf(right.source));
+  const failures = sourceFailures.filter((item) => item.role === plan.role).sort((left, right) => left.order - right.order).map((item) => ({ role: plan.role, sourceId: item.source.id, error: sanitizeFailure(item.error, input.options.apiKey), fatal: false }));
+  if (roleSuccesses.length === 0) {
     for (const failure of failures) failure.fatal = true;
-    failures.push({ role, sourceId: 'role', error: `${role} role produced no usable review.`, fatal: true });
+    failures.push({ role: plan.role, sourceId: 'role', error: `${plan.role} role produced no usable review.`, fatal: true });
     return { failures };
   }
-
-  const remapped = successes.map((item) => remapRoleData(item.data, item.source, input.snapshot));
-  const data = combineRoleData(role, remapped, failures);
-  const model = [...new Set(successes.map((item) => item.model))].sort().join(',');
-  return { envelope: sealEnvelope(role, input.snapshot, input.options, model, Date.now() - started, data), failures };
+  try {
+    const remapped = roleSuccesses.map((item) => remapRoleData(item.data, item.source, input.snapshot));
+    const data = combineRoleData(plan.role, remapped, failures);
+    const model = aggregateModel(roleSuccesses);
+    return { envelope: sealEnvelope(plan.role, input.snapshot, input.options, model, Math.max(0, Date.now() - plan.started), data), failures };
+  } catch (error) {
+    failures.push({ role: plan.role, sourceId: 'role', error: sanitizeFailure(error, input.options.apiKey), fatal: true });
+    return { failures };
+  }
 }
 
-export async function runDrawingCouncil(
-  input: DrawingCouncilInput,
-  invoke: Invoke = analyzeDrawingRole,
-): Promise<{ envelopes: RoleReviewEnvelope[]; failures: RoleFailure[] }> {
-  const maxRegionCalls = validateInput(input);
-  const outcomes = await Promise.all(ROLES.map((role) => executeRole(role, input, maxRegionCalls, invoke)));
-  const envelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
-  const failures = outcomes.flatMap((outcome) => outcome.failures);
+export async function runDrawingCouncil(input: DrawingCouncilInput, invoke: Invoke = analyzeDrawingRole): Promise<{ envelopes: RoleReviewEnvelope[]; failures: RoleFailure[] }> {
+  const limits = validateInput(input);
+  throwIfAborted(input.options.signal);
+  const plans = ROLES.map((role) => ({ role, sources: planSources(role, input, limits.maxRegionCalls), started: Date.now() }));
+  const settled = await runFairSourceTasks(plans, input, invoke, limits.maxConcurrentCalls);
+  throwIfAborted(input.options.signal);
+  const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
   return {
-    envelopes: deepFreeze(envelopes) as RoleReviewEnvelope[],
-    failures: deepFreeze(failures) as RoleFailure[],
+    envelopes: deepFreeze(outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : [])) as RoleReviewEnvelope[],
+    failures: deepFreeze(outcomes.flatMap((outcome) => outcome.failures)) as RoleFailure[],
   };
 }
