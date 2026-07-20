@@ -5,12 +5,15 @@ export type ElectricalField =
   | 'current_A'
   | 'loadCurrent_A'
   | 'cableAmpacity_A'
+  | 'primaryCurrent_A'
+  | 'secondaryCurrent_A'
   | 'faultCurrent_kA'
   | 'totalLoad_kW'
   | 'powerFactor'
   | 'demandFactor'
   | 'safetyMargin'
   | 'burden_VA'
+  | 'leadResistance_ohm'
   | 'capacity_kVA'
   | 'breaking_kA'
   | 'ctRatio'
@@ -20,7 +23,7 @@ export type ElectricalField =
   | 'length_m'
   | 'phase';
 
-export type ElectricalUnit = 'V' | 'A' | 'kVA' | 'kA' | 'kW' | 'VA' | 'factor' | 'm' | 'mm2' | 'ratio' | 'text' | 'phase' | 'material';
+export type ElectricalUnit = 'V' | 'A' | 'kVA' | 'kA' | 'kW' | 'VA' | 'ohm' | 'factor' | 'm' | 'mm2' | 'ratio' | 'text' | 'phase' | 'material';
 
 export interface NormalizedSpec {
   readonly drawingHash: string;
@@ -210,33 +213,50 @@ function reserveParsedField(budget: ParseBudget): void {
   budget.count += 1;
 }
 
-function readMatches(raw: string, pattern: RegExp, unitScale: Record<string, number>, text: SpatialText, field: ElectricalField, occupied: Array<{ start: number; end: number }>, warnings: NormalizationWarning[], budget: ParseBudget): Array<{ value: number; start: number; end: number }> {
-  const matches: Array<{ value: number; start: number; end: number }> = [];
+function readMatches(raw: string, pattern: RegExp, unitScale: Record<string, number>, text: SpatialText, field: ElectricalField | ((start: number) => ElectricalField), occupied: Array<{ start: number; end: number }>, warnings: NormalizationWarning[], budget: ParseBudget): Array<{ field: ElectricalField; value: number; start: number; end: number }> {
+  const matches: Array<{ field: ElectricalField; value: number; start: number; end: number }> = [];
   for (const match of raw.matchAll(pattern)) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
     if (occupied.some((span) => start < span.end && end > span.start)) continue;
     reserveParsedField(budget);
+    const matchedField = typeof field === 'function' ? field(start) : field;
     const number = parseNumber(match[1]);
     const multiplier = unitScale[match[2].toLowerCase()];
     if (number === undefined || multiplier === undefined || number <= 0) {
-      addWarning(warnings, { code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: text.id, field, page: text.bounds.page });
+      addWarning(warnings, { code: 'HOLD_UNSUPPORTED_OR_MALFORMED_VALUE', evidenceId: text.id, field: matchedField, page: text.bounds.page });
       continue;
     }
-    matches.push({ value: number * multiplier, start, end });
+    matches.push({ field: matchedField, value: number * multiplier, start, end });
   }
   return matches;
 }
 
-function semanticCurrentField(raw: string): ElectricalField {
-  if (/(?:부하\s*전류|load\s*current)/i.test(raw)) return 'loadCurrent_A';
-  if (/(?:허용\s*전류|cable\s*ampacity|ampacity)/i.test(raw)) return 'cableAmpacity_A';
-  return 'current_A';
+function nearestLabelField(raw: string, valueStart: number, labels: readonly [RegExp, ElectricalField][], fallback: ElectricalField): ElectricalField {
+  let nearest = -1;
+  let field = fallback;
+  for (const [label, candidate] of labels) {
+    const flags = label.flags.includes('g') ? label.flags : `${label.flags}g`;
+    const matcher = new RegExp(label.source, flags);
+    for (const match of raw.matchAll(matcher)) {
+      const start = match.index ?? -1;
+      if (start <= valueStart && start >= nearest) { nearest = start; field = candidate; }
+    }
+  }
+  return field;
 }
 
-function semanticBreakingField(raw: string): ElectricalField {
-  return /(?:단락\s*전류|fault\s*current)/i.test(raw) ? 'faultCurrent_kA' : 'breaking_kA';
-}
+const CURRENT_LABELS: readonly [RegExp, ElectricalField][] = [
+  [/(?:부하\s*전류|load\s*current)/i, 'loadCurrent_A'],
+  [/(?:허용\s*전류|cable\s*ampacity|ampacity)/i, 'cableAmpacity_A'],
+  [/(?:1차\s*전류|primary\s*current)/i, 'primaryCurrent_A'],
+  [/(?:2차\s*전류|secondary\s*current)/i, 'secondaryCurrent_A'],
+];
+
+const BREAKING_LABELS: readonly [RegExp, ElectricalField][] = [
+  [/(?:단락\s*전류|fault\s*current|short-circuit\s*current)/i, 'faultCurrent_kA'],
+  [/(?:정격\s*차단\s*전류|rated\s*breaking\s*current|breaking\s*current)/i, 'breaking_kA'],
+];
 
 function readLabeledValues(raw: string, label: string, text: SpatialText, field: ElectricalField, warnings: NormalizationWarning[], budget: ParseBudget, percent = false): number[] {
   const values: number[] = [];
@@ -260,6 +280,12 @@ function addUniqueNumeric(specs: MutableSpec[], warnings: NormalizationWarning[]
     return;
   }
   if (distinct.length === 1) addSpec(specs, text, field, distinct[0], unit);
+}
+
+function addGroupedMatches(specs: MutableSpec[], warnings: NormalizationWarning[], text: SpatialText, unit: ElectricalUnit, matches: readonly { field: ElectricalField; value: number }[]): void {
+  const valuesByField = new Map<ElectricalField, number[]>();
+  for (const match of matches) valuesByField.set(match.field, [...(valuesByField.get(match.field) ?? []), match.value]);
+  for (const [field, values] of valuesByField) addUniqueNumeric(specs, warnings, text, field, unit, values);
 }
 
 function addSpec(specs: MutableSpec[], text: SpatialText, field: ElectricalField, value: number | string, unit: ElectricalUnit): void {
@@ -305,14 +331,41 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
   const bounded = `(?<![\\d.,])(${NUMBER})(?![\\d.,])`;
   const voltage = readMatches(raw, new RegExp(`${bounded}\\s*(kV|V)(?![A-Za-z])`, 'gi'), { kv: 1000, v: 1 }, text, 'voltage_V', occupied, warnings, budget);
   const capacity = readMatches(raw, new RegExp(`${bounded}\\s*(MVA|kVA)(?![A-Za-z])`, 'gi'), { mva: 1000, kva: 1 }, text, 'capacity_kVA', occupied, warnings, budget);
-  const breakingField = semanticBreakingField(raw);
-  const breaking = readMatches(raw, new RegExp(`${bounded}\\s*(kA)(?![A-Za-z])`, 'gi'), { ka: 1 }, text, breakingField, occupied, warnings, budget);
-  const currentField = semanticCurrentField(raw);
-  const current = readMatches(raw, new RegExp(`${bounded}\\s*(A)(?![A-Za-z])`, 'gi'), { a: 1 }, text, currentField, occupied, warnings, budget);
+  const breaking = readMatches(
+    raw,
+    new RegExp(`${bounded}\\s*(kA)(?![A-Za-z])`, 'gi'),
+    { ka: 1 },
+    text,
+    (start) => nearestLabelField(raw, start, BREAKING_LABELS, 'breaking_kA'),
+    occupied,
+    warnings,
+    budget,
+  );
+  const current = readMatches(
+    raw,
+    new RegExp(`${bounded}\\s*(A)(?![A-Za-z])`, 'gi'),
+    { a: 1 },
+    text,
+    (start) => nearestLabelField(raw, start, CURRENT_LABELS, 'current_A'),
+    occupied,
+    warnings,
+    budget,
+  );
+  const leadResistance = readMatches(
+    raw,
+    new RegExp(`(?:lead\\s*resistance|리드\\s*저항)\\s*${bounded}\\s*(ohm|Ω)(?![A-Za-z])`, 'gi'),
+    { ohm: 1, ω: 1 },
+    text,
+    'leadResistance_ohm',
+    occupied,
+    warnings,
+    budget,
+  );
   addUniqueNumeric(specs, warnings, text, 'voltage_V', 'V', voltage.map((item) => item.value));
   addUniqueNumeric(specs, warnings, text, 'capacity_kVA', 'kVA', capacity.map((item) => item.value));
-  addUniqueNumeric(specs, warnings, text, breakingField, 'kA', breaking.map((item) => item.value));
-  addUniqueNumeric(specs, warnings, text, currentField, 'A', current.map((item) => item.value));
+  addGroupedMatches(specs, warnings, text, 'kA', breaking);
+  addGroupedMatches(specs, warnings, text, 'A', current);
+  addGroupedMatches(specs, warnings, text, 'ohm', leadResistance);
 
   const totalLoad = readMatches(raw, new RegExp(`(?:총\\s*부하|total\\s*load)\\s*${bounded}\\s*(kW|W)(?![A-Za-z])`, 'gi'), { kw: 1, w: 0.001 }, text, 'totalLoad_kW', occupied, warnings, budget);
   const burden = readMatches(raw, new RegExp(`(?:부담|burden)\\s*${bounded}\\s*(VA)(?![A-Za-z])`, 'gi'), { va: 1 }, text, 'burden_VA', occupied, warnings, budget);
@@ -388,14 +441,18 @@ function compareWarnings(left: NormalizationWarning, right: NormalizationWarning
 export function normalizeElectricalGraph(graph: SpatialEvidenceGraph): NormalizedElectricalGraph {
   const warnings: NormalizationWarning[] = [];
   for (const conflict of [...graph.conflicts].sort((a, b) => a.localeCompare(b))) addWarning(warnings, { code: 'GRAPH_CONFLICT', detail: conflict });
-  const parsed = graph.texts
+  const parsed: MutableSpec[] = [];
+  for (const item of graph.texts
     .slice()
-    .sort((left, right) => left.bounds.page - right.bounds.page || left.bounds.y - right.bounds.y || left.bounds.x - right.bounds.x || left.id.localeCompare(right.id))
-    .flatMap((item) => {
-      if (item.originalEvidenceIds.length > 0 && item.sourceIds.length > 0) return parseText(item, warnings);
+    .sort((left, right) => left.bounds.page - right.bounds.page || left.bounds.y - right.bounds.y || left.bounds.x - right.bounds.x || left.id.localeCompare(right.id))) {
+    if (item.originalEvidenceIds.length === 0 || item.sourceIds.length === 0) {
       addWarning(warnings, { code: 'HOLD_MISSING_PROVENANCE', evidenceId: item.id, page: item.bounds.page });
-      return [];
-    });
+      continue;
+    }
+    const itemSpecs = parseText(item, warnings);
+    if (parsed.length + itemSpecs.length > MAX_SPECS) throw new Error('normalization spec budget exceeded');
+    parsed.push(...itemSpecs);
+  }
   for (const spec of parsed) {
     spec.drawingHash = graph.drawingHash;
     ownerFor(spec, graph, warnings);

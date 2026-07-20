@@ -270,4 +270,40 @@ describe('normalizeElectricalGraph', () => {
       expect.objectContaining({ evidenceId: 'TEXT-081', ownerId: 'VCB-RIGHT' }),
     ]));
   });
+
+  it('binds each current token to its nearest explicit label and preserves scoped rating fields', () => {
+    const result = normalizeElectricalGraph(graph({
+      texts: [text('TEXT-090', '부하전류 630A 허용전류 300A 정격차단전류 12.5kA 단락전류 25kA 1차전류 100A 2차전류 5A lead resistance 0.8ohm', 0)],
+    }));
+
+    expect(specsFor(result, 'TEXT-090')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'loadCurrent_A', value: 630, unit: 'A' }),
+      expect.objectContaining({ field: 'cableAmpacity_A', value: 300, unit: 'A' }),
+      expect.objectContaining({ field: 'breaking_kA', value: 12.5, unit: 'kA' }),
+      expect.objectContaining({ field: 'faultCurrent_kA', value: 25, unit: 'kA' }),
+      expect.objectContaining({ field: 'primaryCurrent_A', value: 100, unit: 'A' }),
+      expect.objectContaining({ field: 'secondaryCurrent_A', value: 5, unit: 'A' }),
+      expect.objectContaining({
+        field: 'leadResistance_ohm',
+        value: 0.8,
+        unit: 'ohm',
+        raw: '부하전류 630A 허용전류 300A 정격차단전류 12.5kA 단락전류 25kA 1차전류 100A 2차전류 5A lead resistance 0.8ohm',
+        sourceIds: ['source:text:TEXT-090'],
+      }),
+    ]));
+  });
+
+  it('recognizes short-circuit current as a fault-current observation', () => {
+    const result = normalizeElectricalGraph(graph({ texts: [text('TEXT-091', 'short-circuit current 25kA', 0)] }));
+
+    expect(specsFor(result, 'TEXT-091')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'faultCurrent_kA', value: 25, unit: 'kA' }),
+    ]));
+    expect(specsFor(result, 'TEXT-091').some((spec) => spec.field === 'breaking_kA')).toBe(false);
+  });
+
+  it('fails closed when aggregate parsed specs exceed the global budget', () => {
+    const texts = Array.from({ length: 20_001 }, (_, index) => text(`TEXT-BUDGET-${index}`, '3상', index * 30));
+    expect(() => normalizeElectricalGraph(graph({ texts }))).toThrow('normalization spec budget exceeded');
+  });
 });
