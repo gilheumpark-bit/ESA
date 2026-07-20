@@ -203,6 +203,43 @@ describe('role-specific VLM prompts', () => {
     await expect(analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', options('openai'))).rejects.toThrow(/byte limit/);
   });
 
+  it.each([
+    ['pending cancel', () => new Promise<void>(() => {})],
+    ['rejected cancel', () => Promise.reject(new Error('cancel failed'))],
+    ['throwing cancel', () => { throw new Error('cancel failed'); }],
+  ])('immediately preserves the byte-limit error when oversized chunks have a %s', async (_label, cancel) => {
+    jest.useFakeTimers();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      jest.spyOn(global, 'fetch').mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: {
+          getReader: () => ({
+            read: () => Promise.resolve({ done: false, value: new Uint8Array(1024 * 1024 + 1) }),
+            cancel,
+            releaseLock: () => { throw new Error('release failed'); },
+          }),
+        },
+      } as unknown as Response);
+
+      const pending = analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', options('openai'));
+      const outcome = Promise.race([
+        pending.then(() => 'resolved', (error: Error) => error.message),
+        new Promise<string>((resolve) => setTimeout(() => resolve('still-pending'), 10)),
+      ]);
+      await jest.advanceTimersByTimeAsync(10);
+      await expect(outcome).resolves.toMatch(/byte limit/);
+      await Promise.resolve();
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('fails closed without calling text() when a response has no bounded stream', async () => {
     const text = jest.fn(async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(textPayload) } }] }));
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({

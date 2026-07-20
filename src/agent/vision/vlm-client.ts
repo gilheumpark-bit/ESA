@@ -236,6 +236,14 @@ function responseByteLength(text: string): number {
   return new TextEncoder().encode(text).byteLength;
 }
 
+function cancelReaderBestEffort(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  try {
+    void Promise.resolve(reader.cancel()).catch(() => undefined);
+  } catch {
+    // Stream cancellation must not delay or replace the authoritative caller error.
+  }
+}
+
 interface RequestScope {
   signal: AbortSignal;
   error(): Error;
@@ -284,32 +292,27 @@ async function readResponseText(response: Response, scope: RequestScope): Promis
     if (abortHandled) return;
     abortHandled = true;
     rejectAbort?.(scope.error());
-    try {
-      void Promise.resolve(reader.cancel()).catch(() => undefined);
-    } catch {
-      // Stream cancellation is best-effort; the abort branch has already settled.
-    }
+    cancelReaderBestEffort(reader);
   };
   scope.signal.addEventListener('abort', abortReader, { once: true });
   if (scope.signal.aborted) abortReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let preservingError = false;
   try {
     while (true) {
       const { done, value } = await Promise.race([reader.read(), aborted]);
       if (done) break;
       total += value.byteLength;
       if (total > MAX_RESPONSE_BYTES) {
-        try {
-          await reader.cancel();
-        } catch {
-          // The bounded-response error remains authoritative.
-        }
+        preservingError = true;
+        cancelReaderBestEffort(reader);
         throw new Error('[VLM] provider response exceeds the allowed byte limit.');
       }
       chunks.push(value);
     }
   } catch (error) {
+    preservingError = true;
     if (scope.signal.aborted) throw scope.error();
     throw error;
   } finally {
@@ -317,7 +320,7 @@ async function readResponseText(response: Response, scope: RequestScope): Promis
     try {
       reader.releaseLock();
     } catch (releaseError) {
-      if (!scope.signal.aborted) throw releaseError;
+      if (!preservingError) throw releaseError;
     }
   }
   const bytes = new Uint8Array(total);
