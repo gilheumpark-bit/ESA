@@ -4,6 +4,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   /** Required for Docker multi-stage build (see Dockerfile → .next/standalone). */
   output: 'standalone',
+  outputFileTracingRoot: process.cwd(),
+
+  // Worktrees contain both the parent and branch lockfiles. Pinning the root
+  // prevents Turbopack from treating the parent checkout as this app's root.
+  turbopack: {
+    root: process.cwd(),
+  },
 
   // pdfjs-dist는 번들 제외 필수 — Turbopack이 말아 넣으면 내부 fake-worker의
   // 동적 임포트(pdf.worker.mjs)가 청크 경로에서 끊겨 모든 PDF 파싱이 실패한다
@@ -50,7 +57,9 @@ const nextConfig: NextConfig = {
                 ? "script-src 'self' 'unsafe-inline'"
                 : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-              "img-src 'self' data: https:",
+              // Source-linked SLD reports render a hash-verified drawing from
+              // browser-local IndexedDB through an object URL.
+              "img-src 'self' data: blob: https:",
               "font-src 'self' https://cdn.jsdelivr.net",
               "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://*.firebaseio.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.stripe.com",
               "frame-src 'self' https://js.stripe.com",

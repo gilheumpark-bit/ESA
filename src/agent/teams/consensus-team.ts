@@ -24,7 +24,10 @@ import {
   buildEscalation,
 } from '../debate/debate-protocol';
 import type { ConsensusConfig } from '../debate/types';
+import type { DrawingSynthesis } from '../electrical/synthesis';
 import { hashCanonicalValue } from '@/engine/receipt/receipt-hash';
+import { buildDrawingIntelligenceReport } from '../report/drawing-intelligence-report';
+import { verifyCurrentGoldenGate } from '../report/golden-gate';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Result Merger
@@ -239,10 +242,24 @@ function computeScore(merged: MergedResults): number {
   return Math.max(0, Math.min(100, Math.round(passRate * 100 - criticalPenalty - majorPenalty)));
 }
 
+function drawingRecommendations(drawingSynthesis: DrawingSynthesis): RecommendationEntry[] {
+  return drawingSynthesis.recommendations.slice(0, 5).map((recommendation) => ({
+    id: recommendation.id,
+    category: recommendation.category,
+    title: recommendation.title,
+    description: recommendation.description,
+    impact: recommendation.impact,
+    evidenceIds: [...recommendation.evidenceIds],
+    status: recommendation.status,
+    requiredInputs: [...recommendation.requiredInputs],
+  }));
+}
+
 function buildSummary(
   merged: MergedResults,
   verdict: ReportVerdict,
   score: number,
+  drawingSynthesis?: DrawingSynthesis,
 ): ReportSummary {
   const passedChecks =
     (merged.allCalculations ?? []).filter(c => c.compliant === true).length +
@@ -281,7 +298,7 @@ function buildSummary(
     failedChecks,
     warningChecks: merged.allViolations.filter(v => v.severity === 'major').length,
     criticalViolations: merged.allViolations.filter(v => v.severity === 'critical'),
-    topRecommendations: merged.allRecommendations.slice(0, 5),
+    topRecommendations: drawingSynthesis ? drawingRecommendations(drawingSynthesis) : merged.allRecommendations.slice(0, 5),
     appliedStandards,
     textKo,
     textEn,
@@ -298,6 +315,53 @@ export interface ConsensusTeamInput {
   projectType: string;
   teamResults: TeamResult[];
   consensusConfig?: ConsensusConfig;
+  drawingSynthesis?: DrawingSynthesis;
+}
+
+function mergeDrawingVerdict(genericVerdict: ReportVerdict, drawingSynthesis: DrawingSynthesis | undefined): ReportVerdict {
+  if (genericVerdict === 'FAIL' || drawingSynthesis?.verdict === 'FAIL') return 'FAIL';
+  if (genericVerdict === 'CONDITIONAL' || drawingSynthesis?.verdict === 'CONDITIONAL') return 'CONDITIONAL';
+  return 'PASS';
+}
+
+function drawingEvidenceIds(drawingSynthesis: DrawingSynthesis): string[] {
+  return [...new Set([
+    ...drawingSynthesis.evidenceRegistry.map((evidence) => evidence.id),
+    ...drawingSynthesis.claims.flatMap((claim) => [claim.id, ...claim.evidenceIds]),
+    ...drawingSynthesis.recommendations.flatMap((recommendation) => recommendation.evidenceIds),
+    ...drawingSynthesis.calculations.flatMap((receipt) => [receipt.id, ...receipt.inputEvidence.map((evidence) => evidence.evidenceId)]),
+    ...drawingSynthesis.issues.map((issue) => issue.id),
+    ...drawingSynthesis.conflicts.map((conflict) => conflict.id),
+  ])].sort((left, right) => left.localeCompare(right));
+}
+
+async function buildDrawingExtension(input: ConsensusTeamInput) {
+  if (!input.drawingSynthesis) return undefined;
+  const reviews = input.teamResults
+    .filter((result) => result.teamId === 'TEAM-SLD')
+    .map((result) => result.drawingReview)
+    .filter((review): review is NonNullable<typeof review> => (
+      review !== undefined && review.snapshot.drawingHash === input.drawingSynthesis?.drawingHash
+    ));
+  if (reviews.length !== 1) {
+    throw new Error('DRAWING_REVIEW_ARTIFACT_REQUIRED');
+  }
+
+  const configuredPublicKey = process.env.SLD_GOLDEN_GATE_PUBLIC_KEY_PEM?.replaceAll('\\n', '\n');
+  const gate = await verifyCurrentGoldenGate({
+    publicKeyPem: configuredPublicKey,
+    ...(process.env.SLD_GOLDEN_MANIFEST_PATH
+      ? { manifestPath: process.env.SLD_GOLDEN_MANIFEST_PATH }
+      : {}),
+    ...(process.env.SLD_GOLDEN_RECEIPT_PATH
+      ? { receiptPath: process.env.SLD_GOLDEN_RECEIPT_PATH }
+      : {}),
+  });
+  return buildDrawingIntelligenceReport({
+    drawingReview: reviews[0],
+    synthesis: input.drawingSynthesis,
+    verified95: gate.verified95,
+  });
 }
 
 /**
@@ -320,48 +384,51 @@ export async function executeConsensusTeam(
   const escalation = buildEscalation(debateResults);
 
   // Step 2.5: 표준 도면 패턴 매칭 + 비용 산출
-  try {
-    const allComponentTypes = input.teamResults
-      .flatMap(tr => tr.components ?? [])
-      .map(c => c.type);
-    if (allComponentTypes.length > 0) {
-      const { matchStandardDrawing } = await import('@/data/standard-drawings/standard-drawing-db');
-      const patternMatch = matchStandardDrawing(allComponentTypes);
-      if (patternMatch.length > 0 && patternMatch[0].matchScore > 0.5) {
-        const best = patternMatch[0];
-        if (best.missingComponents.length > 0) {
-          for (const missing of best.missingComponents) {
-            merged.allViolations.push({
-              id: `vio-pattern-${missing}`,
-              severity: 'major',
-              title: `표준 도면 대비 누락: ${missing}`,
-              description: `${best.templateName} 기준 "${missing}" 필수 요소 미확인`,
-              suggestedFix: `${missing} 추가 설치 검토`,
-            });
+  // drawing synthesis는 current-drawing provenance가 없는 enrichment를 허용하지 않는다.
+  if (!input.drawingSynthesis) {
+    try {
+      const allComponentTypes = input.teamResults
+        .flatMap(tr => tr.components ?? [])
+        .map(c => c.type);
+      if (allComponentTypes.length > 0) {
+        const { matchStandardDrawing } = await import('@/data/standard-drawings/standard-drawing-db');
+        const patternMatch = matchStandardDrawing(allComponentTypes);
+        if (patternMatch.length > 0 && patternMatch[0].matchScore > 0.5) {
+          const best = patternMatch[0];
+          if (best.missingComponents.length > 0) {
+            for (const missing of best.missingComponents) {
+              merged.allViolations.push({
+                id: `vio-pattern-${missing}`,
+                severity: 'major',
+                title: `표준 도면 대비 누락: ${missing}`,
+                description: `${best.templateName} 기준 "${missing}" 필수 요소 미확인`,
+                suggestedFix: `${missing} 추가 설치 검토`,
+              });
+            }
           }
         }
-      }
 
-      // 비용 산출
-      const { getUnitPrice, estimateProjectCost } = await import('@/data/unit-prices/unit-price-db');
-      const costItems = allComponentTypes.map(type => ({
-        item: type,
-        price: getUnitPrice(type),
-        quantity: 1,
-      }));
-      const costEstimate = estimateProjectCost(costItems);
-      if (costEstimate.grandTotal > 0) {
-        merged.allRecommendations.push({
-          id: 'rec-cost',
-          category: 'cost',
-          title: '개산 견적',
-          description: `자재비 ${(costEstimate.materialTotal / 10000).toFixed(0)}만원 + 노무비 ${(costEstimate.laborTotal / 10000).toFixed(0)}만원 = 합계 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원 (부가세 별도)`,
-          impact: 'medium',
-          estimatedSaving: `총 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원`,
-        });
+        // 비용 산출
+        const { getUnitPrice, estimateProjectCost } = await import('@/data/unit-prices/unit-price-db');
+        const costItems = allComponentTypes.map(type => ({
+          item: type,
+          price: getUnitPrice(type),
+          quantity: 1,
+        }));
+        const costEstimate = estimateProjectCost(costItems);
+        if (costEstimate.grandTotal > 0) {
+          merged.allRecommendations.push({
+            id: 'rec-cost',
+            category: 'cost',
+            title: '개산 견적',
+            description: `자재비 ${(costEstimate.materialTotal / 10000).toFixed(0)}만원 + 노무비 ${(costEstimate.laborTotal / 10000).toFixed(0)}만원 = 합계 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원 (부가세 별도)`,
+            impact: 'medium',
+            estimatedSaving: `총 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원`,
+          });
+        }
       }
-    }
-  } catch { /* 패턴 매칭/견적 실패해도 보고서 생성은 계속 */ }
+    } catch { /* 패턴 매칭/견적 실패해도 보고서 생성은 계속 */ }
+  }
 
   // 에스컬레이션(팀 간 합의 실패) 위반은 반드시 점수·판정·마킹·요약 계산 "전에"
   // 반영해야 한다. 이전에는 report 조립 이후에 push되어, 합의 실패가 verdict/score/
@@ -381,9 +448,10 @@ export async function executeConsensusTeam(
 
   // Step 4: 점수 계산
   const score = computeScore(merged);
-  const verdict = computeVerdict(merged);
+  const verdict = mergeDrawingVerdict(computeVerdict(merged), input.drawingSynthesis);
   const grade = computeGrade(score);
-  const summary = buildSummary(merged, verdict, score);
+  const summary = buildSummary(merged, verdict, score, input.drawingSynthesis);
+  const drawingIntelligence = await buildDrawingExtension(input);
 
   // Step 5: 보고서 조립
   const reportId = `RPT-${crypto.randomUUID().replaceAll('-', '').slice(0, 20).toUpperCase()}`;
@@ -391,11 +459,12 @@ export async function executeConsensusTeam(
     ...input.teamResults.map(result => `team:${result.teamId}`),
     ...(merged.allCalculations ?? []).map(calculation => `calculation:${calculation.id}`),
     ...merged.allViolations.map(violation => `violation:${violation.id}`),
-  ])];
+    ...(input.drawingSynthesis ? drawingEvidenceIds(input.drawingSynthesis) : []),
+  ])].sort((left, right) => left.localeCompare(right));
   const reportClaim: Omit<ESVAVerifiedReport, 'hash'> = {
     reportId,
     createdAt: new Date().toISOString(),
-    version: 'ESVA Report v1.0',
+    version: drawingIntelligence ? 'ESVA Report v2.0' : 'ESVA Report v1.0',
     projectName: input.projectName,
     projectType: input.projectType,
     verdict,
@@ -407,8 +476,10 @@ export async function executeConsensusTeam(
     summary,
     // 합의 실패 시 사람 검토 필요 신호를 리포트에 노출 (이전엔 debate 결과의
     // requiresHumanReview를 읽는 production 코드가 0이라 아무 데도 전달 안 됐음).
-    requiresHumanReview: !!escalation,
+    requiresHumanReview: Boolean(escalation) || Boolean(input.drawingSynthesis?.requiresHumanReview),
     evidenceIds,
+    ...(input.drawingSynthesis ? { drawingSynthesis: input.drawingSynthesis } : {}),
+    ...(drawingIntelligence ? { drawingIntelligence } : {}),
   };
   const report: ESVAVerifiedReport = {
     ...reportClaim,
@@ -421,7 +492,7 @@ export async function executeConsensusTeam(
     calculations: merged.allCalculations,
     standards: merged.allStandards,
     violations: merged.allViolations,
-    recommendations: merged.allRecommendations,
+    recommendations: input.drawingSynthesis ? drawingRecommendations(input.drawingSynthesis) : merged.allRecommendations,
     confidence: score / 100,
     durationMs: Date.now() - start,
   };

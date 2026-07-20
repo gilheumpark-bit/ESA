@@ -62,6 +62,8 @@ export interface TeamInput {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
+  /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
+  signal?: AbortSignal;
   /** 이미지 도면에서만 사용. API 키는 현재 요청 메모리에만 머물고 결과·로그에 포함하지 않는다. */
   vision?: {
     provider: 'openai' | 'gemini' | 'claude';
@@ -89,6 +91,31 @@ export interface ExtractedConnection {
   unit?: string;
 }
 
+export interface DrawingReviewArtifact {
+  snapshot: {
+    drawingHash: string;
+    mimeType: string;
+    page: number;
+    width: number;
+    height: number;
+    quality: import('../vision/evidence-types').ImageQualityProfile;
+  };
+  envelopes: import('../vision/review-types').RoleReviewEnvelope[];
+  graph?: import('../vision/spatial-graph').SpatialEvidenceGraph;
+  failures: import('../vision/drawing-council').RoleFailure[];
+  coverage: {
+    roles: Record<'symbols' | 'connections' | 'text' | 'logic', {
+      variantId: string;
+      expectedRegionCount: number;
+      actualRegionCount: number;
+      plannedCalls: number;
+    }>;
+    plannedCalls: number;
+    complete: boolean;
+    maxRegionCallsPerRole: number;
+  };
+}
+
 export interface TeamResult {
   teamId: TeamId;
   success: boolean;
@@ -102,6 +129,8 @@ export interface TeamResult {
   durationMs: number;
   rawOutput?: string;
   error?: string;
+  drawingReview?: DrawingReviewArtifact;
+  drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
 }
 
 export interface CalculationEntry {
@@ -146,6 +175,9 @@ export interface RecommendationEntry {
   description: string;
   impact: 'high' | 'medium' | 'low';
   estimatedSaving?: string;
+  evidenceIds?: string[];
+  status?: 'SUPPORTED' | 'HOLD';
+  requiredInputs?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -246,6 +278,11 @@ export interface ESVAVerifiedReport {
 
   /** 팀 간 합의 실패 등으로 사람(PE) 검토가 필요한지 — UI가 상시 노출해야 함 */
   requiresHumanReview?: boolean;
+
+  drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
+
+  /** Source-linked v2 SLD extension. Optional so stored v1 reports remain readable. */
+  drawingIntelligence?: import('../report/drawing-intelligence-report').DrawingIntelligenceReport;
 
   // 보고서 안에서 실제 판정 근거로 사용된 팀/계산/위반 항목 식별자.
   // 계산 영수증이 생성되지 않은 경로에서 가짜 receipt ID를 만들지 않는다.

@@ -1,80 +1,203 @@
-/**
- * Non-generative image variants via sharp (Lanczos, contrast, sharpen).
- */
+import sharp from 'sharp';
+import type {
+  ImageQualityProfile,
+  ImageVariant,
+  ImageVariantKind,
+} from './evidence-types';
 
-import type { ImageVariant, ImageVariantKind } from './evidence-types';
-import { identityTransform, scaleTransform } from './evidence-types';
+const MAX_VARIANT_PIXELS = 64_000_000;
 
-const MAX_INPUT_PIXELS = 40_000_000;
+type VariantSpec = {
+  kind: ImageVariantKind;
+  scale: 1 | 2 | 4;
+};
 
-export async function buildImageVariants(
-  imageBuffer: ArrayBuffer,
-  kinds: ImageVariantKind[] = [
-    'original',
-    'lanczos-2x',
-    'lanczos-4x',
-    'text-high-contrast',
-    'line-sharpen',
-  ],
-): Promise<ImageVariant[]> {
-  if (imageBuffer.byteLength === 0) throw new Error('빈 도면 이미지는 변형할 수 없습니다.');
-  const sharp = (await import('sharp')).default;
-  const source = Buffer.from(imageBuffer);
-  const base = await sharp(source, { limitInputPixels: MAX_INPUT_PIXELS, animated: false })
+type RenderedImage = {
+  data: Buffer;
+  width: number;
+  height: number;
+};
+
+const VARIANT_SPECS: readonly VariantSpec[] = [
+  { kind: 'original', scale: 1 },
+  { kind: 'upscale-2x', scale: 2 },
+  { kind: 'upscale-4x', scale: 4 },
+  { kind: 'text-high-contrast', scale: 4 },
+  { kind: 'line-enhanced', scale: 2 },
+];
+
+function toArrayBuffer(buffer: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(buffer).buffer;
+}
+
+function dimensionsFromInfo(info: { width?: number; height?: number }): {
+  width: number;
+  height: number;
+} {
+  if (!info.width || !info.height) {
+    throw new Error('도면 이미지 치수를 확인할 수 없습니다.');
+  }
+
+  return { width: info.width, height: info.height };
+}
+
+function boundedDimensions(
+  sourceWidth: number,
+  sourceHeight: number,
+  requestedScale: number,
+): { width: number; height: number } {
+  const sourcePixels = sourceWidth * sourceHeight;
+  const scale = Math.min(
+    requestedScale,
+    Math.sqrt(MAX_VARIANT_PIXELS / sourcePixels),
+  );
+  let width = Math.max(1, Math.floor(sourceWidth * scale));
+  let height = Math.max(1, Math.floor(sourceHeight * scale));
+
+  if (width * height > MAX_VARIANT_PIXELS) {
+    const reduction = Math.sqrt(MAX_VARIANT_PIXELS / (width * height));
+    width = Math.max(1, Math.floor(width * reduction));
+    height = Math.max(1, Math.floor(height * reduction));
+  }
+
+  return { width, height };
+}
+
+function toVariant(
+  kind: ImageVariantKind,
+  rendered: RenderedImage,
+  sourceWidth: number,
+  sourceHeight: number,
+): ImageVariant {
+  return {
+    id: `variant:${kind}`,
+    kind,
+    buffer: toArrayBuffer(rendered.data),
+    width: rendered.width,
+    height: rendered.height,
+    transform: {
+      scaleX: rendered.width / sourceWidth,
+      scaleY: rendered.height / sourceHeight,
+      offsetX: 0,
+      offsetY: 0,
+    },
+  };
+}
+
+function assertProfile(
+  profile: ImageQualityProfile,
+  sourceWidth: number,
+  sourceHeight: number,
+): void {
+  if (profile.width !== sourceWidth || profile.height !== sourceHeight) {
+    throw new Error('품질 프로필 치수가 방향 정규화된 원본과 일치하지 않습니다.');
+  }
+  if (![1, 2, 4].includes(profile.recommendedScale)) {
+    throw new Error('품질 프로필 recommendedScale 값이 올바르지 않습니다.');
+  }
+  if (
+    !Number.isInteger(profile.width) ||
+    !Number.isInteger(profile.height) ||
+    !Number.isInteger(profile.channels) ||
+    profile.width <= 0 ||
+    profile.height <= 0 ||
+    profile.channels <= 0 ||
+    !Number.isFinite(profile.contrast) ||
+    !Number.isFinite(profile.edgeDensity) ||
+    !Number.isFinite(profile.gradientVariance) ||
+    profile.contrast < 0 ||
+    profile.contrast > 1 ||
+    profile.edgeDensity < 0 ||
+    profile.edgeDensity > 1 ||
+    profile.gradientVariance < 0 ||
+    typeof profile.lowContrast !== 'boolean' ||
+    typeof profile.blurry !== 'boolean' ||
+    !Array.isArray(profile.warnings) ||
+    !profile.warnings.every((warning) => typeof warning === 'string')
+  ) {
+    throw new Error('품질 프로필 구조가 올바르지 않습니다.');
+  }
+}
+
+async function normalizeSource(source: Buffer): Promise<RenderedImage> {
+  const { data, info } = await sharp(source, {
+    animated: false,
+    limitInputPixels: MAX_VARIANT_PIXELS,
+  })
     .rotate()
     .png()
     .toBuffer({ resolveWithObject: true });
+  const { width, height } = dimensionsFromInfo(info);
 
-  const width = base.info.width;
-  const height = base.info.height;
-  if (!width || !height) throw new Error('이미지 크기를 읽을 수 없습니다.');
-  if (width * height > MAX_INPUT_PIXELS) {
-    throw new Error('도면 이미지 해상도가 허용 범위를 초과합니다.');
-  }
-
-  const variants: ImageVariant[] = [];
-  for (const kind of kinds) {
-    variants.push(await makeVariant(sharp, base.data, width, height, kind));
-  }
-  return variants;
+  return { data, width, height };
 }
 
-async function makeVariant(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sharp: any,
-  data: Buffer,
-  width: number,
-  height: number,
-  kind: ImageVariantKind,
+async function renderVariant(
+  source: Buffer,
+  sourceWidth: number,
+  sourceHeight: number,
+  spec: VariantSpec,
 ): Promise<ImageVariant> {
-  let pipeline = sharp(data, { limitInputPixels: MAX_INPUT_PIXELS });
-  let transform = identityTransform();
-  let outW = width;
-  let outH = height;
+  const { width, height } = boundedDimensions(
+    sourceWidth,
+    sourceHeight,
+    spec.scale,
+  );
+  let pipeline = sharp(source, {
+    animated: false,
+    limitInputPixels: MAX_VARIANT_PIXELS,
+  });
 
-  if (kind === 'lanczos-2x') {
-    outW = width * 2;
-    outH = height * 2;
-    pipeline = pipeline.resize(outW, outH, { kernel: 'lanczos3' });
-    transform = scaleTransform(2);
-  } else if (kind === 'lanczos-4x') {
-    outW = width * 4;
-    outH = height * 4;
-    pipeline = pipeline.resize(outW, outH, { kernel: 'lanczos3' });
-    transform = scaleTransform(4);
-  } else if (kind === 'text-high-contrast') {
-    pipeline = pipeline.greyscale().normalize().linear(1.35, -20);
-  } else if (kind === 'line-sharpen') {
-    pipeline = pipeline.greyscale().sharpen({ sigma: 1.2 });
+  if (width !== sourceWidth || height !== sourceHeight) {
+    pipeline = pipeline.resize({
+      width,
+      height,
+      fit: 'fill',
+      kernel: sharp.kernel.lanczos3,
+    });
+  }
+  if (spec.kind === 'text-high-contrast') {
+    pipeline = pipeline.greyscale().normalise().sharpen().threshold(180);
+  }
+  if (spec.kind === 'line-enhanced') {
+    pipeline = pipeline.greyscale().normalise().sharpen({ sigma: 1 });
   }
 
-  const buf = await pipeline.png().toBuffer();
-  return {
-    variantId: kind,
-    kind,
-    buffer: Uint8Array.from(buf).buffer,
-    width: outW,
-    height: outH,
-    transform,
-  };
+  const { data, info } = await pipeline.png().toBuffer({ resolveWithObject: true });
+  const actualDimensions = dimensionsFromInfo(info);
+
+  return toVariant(
+    spec.kind,
+    { data, ...actualDimensions },
+    sourceWidth,
+    sourceHeight,
+  );
+}
+
+export async function createImageVariants(
+  buffer: ArrayBuffer,
+  profile: ImageQualityProfile,
+): Promise<ImageVariant[]> {
+  if (buffer.byteLength === 0) {
+    throw new Error('빈 도면 이미지는 분석할 수 없습니다.');
+  }
+
+  const normalized = await normalizeSource(Buffer.from(buffer));
+  assertProfile(profile, normalized.width, normalized.height);
+  const variants = [
+    toVariant('original', normalized, normalized.width, normalized.height),
+  ];
+
+  for (const spec of VARIANT_SPECS.slice(1)) {
+    variants.push(
+      await renderVariant(
+        normalized.data,
+        normalized.width,
+        normalized.height,
+        spec,
+      ),
+    );
+  }
+
+  return variants;
 }

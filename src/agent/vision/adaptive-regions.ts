@@ -1,122 +1,140 @@
-/**
- * Adaptive region planning with lifecycle — no VLM calls.
- */
+import sharp from 'sharp';
+import {
+  toOriginalPoint,
+  type EvidenceBounds,
+  type ImageVariant,
+  type PrecisionRegion,
+} from './evidence-types';
 
-import type { EvidenceBounds, PrecisionRegion, RegionKind, RegionLifecycle } from './evidence-types';
+const MAX_INPUT_PIXELS = 64_000_000;
 
-export interface PlanRegionsInput {
-  pageIndex: number;
-  width: number;
-  height: number;
-  /** 4 | 9 | 16 preferred; other positives normalized */
-  gridSize: number;
-  overlap: number;
-  denseClusters?: EvidenceBounds[];
-  titleBlock?: EvidenceBounds;
-  legendBlocks?: EvidenceBounds[];
-  emptyAreas?: EvidenceBounds[];
-  addBusStrips?: boolean;
+function assertDimensions(width: number, height: number): void {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1) {
+    throw new Error('도면 치수는 1 이상의 유한한 정수여야 합니다.');
+  }
 }
 
-export function normalizeGridSize(value: number): 4 | 9 | 16 {
-  if (value <= 4) return 4;
-  if (value <= 9) return 9;
-  return 16;
+function assertGridSize(gridSize: number): asserts gridSize is 4 | 9 | 16 {
+  if (gridSize !== 4 && gridSize !== 9 && gridSize !== 16) {
+    throw new Error('정밀 영역 gridSize는 4, 9, 16 중 하나여야 합니다.');
+  }
 }
 
-export function planAnalysisRegions(input: PlanRegionsInput): PrecisionRegion[] {
-  const gridSize = normalizeGridSize(input.gridSize);
-  const overlap = Math.min(0.25, Math.max(0, input.overlap));
-  const cols = gridSize === 4 ? 2 : gridSize === 9 ? 3 : 4;
-  const rows = cols;
-  const baseW = Math.ceil(input.width / cols);
-  const baseH = Math.ceil(input.height / rows);
-  const ovX = Math.ceil(baseW * overlap);
-  const ovY = Math.ceil(baseH * overlap);
+function assertOverlap(overlap: number): void {
+  if (!Number.isFinite(overlap) || overlap < 0 || overlap > 0.25) {
+    throw new Error('중첩 비율은 0~0.25의 유한한 수여야 합니다.');
+  }
+}
+
+function assertBounds(bounds: EvidenceBounds, width: number, height: number): void {
+  const values = [bounds.x, bounds.y, bounds.w, bounds.h];
+  if (!values.every(Number.isSafeInteger) || bounds.x < 0 || bounds.y < 0 || bounds.w < 1 || bounds.h < 1) {
+    throw new Error('정밀 영역 경계는 양의 정수 직사각형이어야 합니다.');
+  }
+  if (bounds.x + bounds.w > width || bounds.y + bounds.h > height) {
+    throw new Error('정밀 영역 경계가 variant 이미지 밖으로 나갔습니다.');
+  }
+}
+
+function toArrayBuffer(buffer: Uint8Array): ArrayBuffer {
+  return Uint8Array.from(buffer).buffer;
+}
+
+function partitionBoundaries(length: number, requestedCells: number): number[] {
+  const cells = Math.min(length, requestedCells);
+  return Array.from({ length: cells + 1 }, (_, index) => Math.floor((index * length) / cells));
+}
+
+export function planAdaptiveBounds(
+  width: number,
+  height: number,
+  gridSize: 4 | 9 | 16,
+  overlap: number,
+): EvidenceBounds[] {
+  assertDimensions(width, height);
+  assertGridSize(gridSize);
+  assertOverlap(overlap);
+
+  const side = Math.sqrt(gridSize);
+  const bounds: EvidenceBounds[] = [];
+  const horizontalBoundaries = partitionBoundaries(width, side);
+  const verticalBoundaries = partitionBoundaries(height, side);
+  const uniqueBounds = new Set<string>();
+  for (let row = 0; row < verticalBoundaries.length - 1; row += 1) {
+    const baseTop = verticalBoundaries[row];
+    const baseBottom = verticalBoundaries[row + 1];
+    const padY = Math.ceil((baseBottom - baseTop) * overlap);
+    for (let column = 0; column < horizontalBoundaries.length - 1; column += 1) {
+      const baseLeft = horizontalBoundaries[column];
+      const baseRight = horizontalBoundaries[column + 1];
+      const padX = Math.ceil((baseRight - baseLeft) * overlap);
+      const x = Math.max(0, baseLeft - padX);
+      const y = Math.max(0, baseTop - padY);
+      const right = Math.min(width, baseRight + padX);
+      const bottom = Math.min(height, baseBottom + padY);
+      const item = { x, y, w: right - x, h: bottom - y };
+      assertBounds(item, width, height);
+      const key = `${item.x}:${item.y}:${item.w}:${item.h}`;
+      if (!uniqueBounds.has(key)) {
+        uniqueBounds.add(key);
+        bounds.push(item);
+      }
+    }
+  }
+
+  return bounds;
+}
+
+export async function cropPrecisionRegions(
+  variant: ImageVariant,
+  bounds: readonly EvidenceBounds[],
+): Promise<PrecisionRegion[]> {
+  assertDimensions(variant.width, variant.height);
+  const source = Buffer.from(variant.buffer);
+  const metadata = await sharp(source, {
+    animated: false,
+    limitInputPixels: MAX_INPUT_PIXELS,
+  }).metadata();
+  const actualWidth = metadata.width;
+  const actualHeight = metadata.height;
+  if (actualWidth === undefined || actualHeight === undefined) {
+    throw new Error('정밀 crop 입력 이미지의 실제 치수를 읽을 수 없습니다.');
+  }
+  assertDimensions(actualWidth, actualHeight);
+  if (actualWidth !== variant.width || actualHeight !== variant.height) {
+    throw new Error('정밀 crop 입력 이미지 치수가 variant 계약과 일치하지 않습니다.');
+  }
+  if (actualWidth * actualHeight > MAX_INPUT_PIXELS) {
+    throw new Error('정밀 crop 입력이 허용 픽셀 수를 초과합니다.');
+  }
+  for (const item of bounds) {
+    assertBounds(item, variant.width, variant.height);
+  }
 
   const regions: PrecisionRegion[] = [];
-  let seq = 0;
-
-  const push = (kind: RegionKind, bounds: EvidenceBounds, status: RegionLifecycle = 'planned') => {
-    if (bounds.w < 1 || bounds.h < 1) return;
-    if (isFullyInsideEmpty(bounds, input.emptyAreas ?? [])) {
-      regions.push({
-        regionId: `p${input.pageIndex}-r${seq++}`,
-        pageIndex: input.pageIndex,
-        kind,
-        bounds,
-        status: 'skipped-empty',
-      });
-      return;
+  for (let index = 0; index < bounds.length; index += 1) {
+    const item = bounds[index];
+    const { data, info } = await sharp(source, {
+      animated: false,
+      limitInputPixels: MAX_INPUT_PIXELS,
+    })
+      .extract({ left: item.x, top: item.y, width: item.w, height: item.h })
+      .png()
+      .toBuffer({ resolveWithObject: true });
+    if (info.width !== item.w || info.height !== item.h || info.format !== 'png') {
+      throw new Error('정밀 crop 출력 치수가 요청 경계와 일치하지 않습니다.');
     }
+
+    const origin = toOriginalPoint({ x: item.x, y: item.y }, variant.transform);
+    const end = toOriginalPoint({ x: item.x + item.w, y: item.y + item.h }, variant.transform);
     regions.push({
-      regionId: `p${input.pageIndex}-r${seq++}`,
-      pageIndex: input.pageIndex,
-      kind,
-      bounds,
-      status,
+      id: `${variant.id}:region:${index}`,
+      variantId: variant.id,
+      variantBounds: { ...item },
+      originalBounds: { x: origin.x, y: origin.y, w: end.x - origin.x, h: end.y - origin.y },
+      buffer: toArrayBuffer(data),
     });
-  };
-
-  for (let row = 0; row < rows; row++) {
-    for (let col = 0; col < cols; col++) {
-      const baseX = col * baseW;
-      const baseY = row * baseH;
-      const x = Math.max(0, baseX - ovX);
-      const y = Math.max(0, baseY - ovY);
-      const right = Math.min(input.width, baseX + baseW + ovX);
-      const bottom = Math.min(input.height, baseY + baseH + ovY);
-      push('grid', { x, y, w: right - x, h: bottom - y });
-    }
-  }
-
-  for (const cluster of input.denseClusters ?? []) {
-    const half = {
-      x: cluster.x,
-      y: cluster.y,
-      w: Math.ceil(cluster.w / 2),
-      h: Math.ceil(cluster.h / 2),
-    };
-    push('dense-split', half);
-    push('dense-split', {
-      x: cluster.x + half.w,
-      y: cluster.y,
-      w: cluster.w - half.w,
-      h: half.h,
-    });
-  }
-
-  if (input.titleBlock) push('title-block', input.titleBlock);
-  for (const legend of input.legendBlocks ?? []) push('legend', legend);
-
-  if (input.addBusStrips) {
-    const stripH = Math.max(40, Math.round(input.height * 0.08));
-    const stripW = Math.max(40, Math.round(input.width * 0.08));
-    push('h-strip', { x: 0, y: Math.floor(input.height * 0.4), w: input.width, h: stripH });
-    push('v-strip', { x: Math.floor(input.width * 0.45), y: 0, w: stripW, h: input.height });
   }
 
   return regions;
-}
-
-export function regionCoverageComplete(regions: PrecisionRegion[]): boolean {
-  return regions.every((r) =>
-    r.status === 'complete' || r.status === 'failed' || r.status === 'skipped-empty');
-}
-
-export function markRegion(
-  regions: PrecisionRegion[],
-  regionId: string,
-  status: RegionLifecycle,
-): PrecisionRegion[] {
-  return regions.map((r) => (r.regionId === regionId ? { ...r, status } : r));
-}
-
-function isFullyInsideEmpty(bounds: EvidenceBounds, empties: EvidenceBounds[]): boolean {
-  if (empties.length === 0) return false;
-  return empties.some((e) =>
-    bounds.x >= e.x
-    && bounds.y >= e.y
-    && bounds.x + bounds.w <= e.x + e.w
-    && bounds.y + bounds.h <= e.y + e.h);
 }

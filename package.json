@@ -16,8 +16,9 @@
     "test:drawings": "jest --testPathPatterns=topology",
     "report:drawings": "jest --testPathPatterns=drawing-baseline --silent=false",
     "gate:pdf": "node scripts/pdf-fixture-gate.mjs",
-    "gate:sld-golden": "node scripts/sld-golden-gate.mjs",
-    "test:drawing-v3": "jest --runInBand --testPathPatterns=\"drawing|evidence-types|ocr-adjudicator|count-register|cross-page|recommendation-engine|document-orchestrator\""
+    "generate:sld-golden-receipt": "node scripts/sld-golden-gate.mjs --mode=receipt",
+    "gate:sld-golden": "node scripts/sld-golden-gate.mjs --mode=enforce",
+    "test:sld-golden": "npm run gate:sld-golden"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.3.0",

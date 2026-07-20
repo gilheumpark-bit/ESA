@@ -351,6 +351,15 @@ export default function SLDAnalysisPage() {
       if (!full?.reportId) {
         throw new Error('리포트가 생성되지 않았습니다 (팀 실행 실패 — 도면 인식 결과를 확인하세요).');
       }
+      const drawingHash = full.drawingIntelligence?.drawingHash
+        ?? full.drawingSynthesis?.drawingHash
+        ?? full.teamResults?.find((result: { drawingReview?: { snapshot?: { drawingHash?: string } } }) => (
+          result.drawingReview?.snapshot?.drawingHash
+        ))?.drawingReview?.snapshot?.drawingHash;
+      if (typeof drawingHash === 'string') {
+        const { storeDrawingAsset } = await import('@/lib/drawing-asset-store');
+        await storeDrawingAsset(drawingFile, drawingHash, drawingFile.name);
+      }
       sessionStorage.setItem(`esva-report-${full.reportId}`, JSON.stringify(full));
       router.push(`/report/${full.reportId}`);
     } catch (err) {

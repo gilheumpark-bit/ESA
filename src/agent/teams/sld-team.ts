@@ -17,9 +17,20 @@ import type {
   CalculationEntry,
   StandardEntry,
   ViolationEntry,
+  DrawingReviewArtifact,
 } from './types';
 import { resolveSymbol } from '../vision/symbol-db';
-import { mergeVisionSplitResults, splitAndAnalyze } from '../vision/vision-splitter';
+import { runDrawingCouncil, selectCouncilVariant } from '../vision/drawing-council';
+import { assembleSpatialGraph, type SpatialEvidenceGraph } from '../vision/spatial-graph';
+import { normalizeElectricalGraph } from '../electrical/domain-normalizer';
+import { validateElectricalInvariants, type ElectricalIssue } from '../electrical/electrical-invariants';
+import { routeDrawingCalculations, type DrawingCalculationReceipt } from '../electrical/drawing-calculation-router';
+import { compareLogicToGraph, type LogicConflict } from '../electrical/logic-conflicts';
+import { synthesizeDrawingReview, type DrawingSynthesis } from '../electrical/synthesis';
+import { preparePrecisionRegions as preparePlan1PrecisionRegions, precisionGridSize } from '../vision/vision-splitter';
+import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
+import type { RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
+import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { RESISTIVITY, PHYSICS } from '@/engine/constants/electrical';
 
@@ -89,32 +100,218 @@ async function extractFromDrawing(
     };
   }
 
-  // 이미지: VRAM 분할 병렬 비전
-  if (classification === 'sld_image' && fileBuffer) {
-    const provider = input.vision?.provider
-      ?? (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? 'gemini'
-        : process.env.OPENAI_API_KEY ? 'openai'
-          : process.env.ANTHROPIC_API_KEY ? 'claude'
-            : 'gemini');
-    const visionResult = await splitAndAnalyze(fileBuffer, {
-      gridSize: 4,      // 4분할 (2×2)
-      overlap: 0.1,     // 10% 오버랩
-      model: provider,
-      modelName: input.vision?.model,
-      apiKey: input.vision?.apiKey,
-    });
-    const merged = mergeVisionSplitResults(visionResult);
-    return {
-      ...merged,
-      components: merged.components.map(component => ({
-        ...component,
-        type: resolveSymbol(component.type),
-        confidence: component.confidence * merged.confidence,
-      })),
-    };
-  }
-
   return { components: [], connections: [], confidence: 0 };
+}
+
+type PreparedRaster = { snapshot: DrawingSnapshot; variants: ImageVariant[]; regions: PrecisionRegion[] };
+
+export interface SLDTeamDeps {
+  prepareRaster?: (buffer: ArrayBuffer, mimeType: string) => Promise<PreparedRaster>;
+  resolveVisionKey?: (provider: NonNullable<TeamInput['vision']>['provider'], byok?: string) => ResolvedKey;
+  runCouncil?: typeof runDrawingCouncil;
+  assembleGraph?: typeof assembleSpatialGraph;
+  normalizeGraph?: typeof normalizeElectricalGraph;
+  validateInvariants?: typeof validateElectricalInvariants;
+  routeCalculations?: typeof routeDrawingCalculations;
+  compareLogic?: typeof compareLogicToGraph;
+  synthesize?: typeof synthesizeDrawingReview;
+}
+
+const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
+const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
+const MAX_REGION_CALLS_PER_ROLE = 16;
+const COUNCIL_MAX_CONCURRENT_CALLS = 4;
+const COUNCIL_SOURCE_TIMEOUT_MS = 15_000;
+const COUNCIL_SOURCE_MAX_RETRIES = 0;
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new Error('request aborted');
+}
+
+async function preparePrecisionRegions(buffer: ArrayBuffer, mimeType: string): Promise<PreparedRaster> {
+  const prepared = await preparePlan1PrecisionRegions(buffer);
+  return {
+    snapshot: createDrawingSnapshot(buffer, mimeType, prepared.profile),
+    variants: prepared.variants,
+    regions: prepared.regions,
+  };
+}
+
+function safeSnapshot(snapshot: DrawingSnapshot): DrawingReviewArtifact['snapshot'] {
+  return {
+    drawingHash: snapshot.drawingHash,
+    mimeType: snapshot.mimeType,
+    page: snapshot.page,
+    width: snapshot.width,
+    height: snapshot.height,
+    quality: snapshot.quality,
+  };
+}
+
+function hold(note: string): StandardEntry {
+  return { standard: 'VISION-COUNCIL', clause: 'INDEPENDENT-REVIEW', title: '독립 도면 검토 보류', judgment: 'HOLD', note };
+}
+
+function graphLegacy(graph: SpatialEvidenceGraph, envelopeConfidence: number): { components: ExtractedComponent[]; connections: ExtractedConnection[]; confidence: number } {
+  const components = graph.symbols.map((symbol) => {
+    const candidates = [...new Set(symbol.typeCandidates.map((item) => item.trim()).filter(Boolean))];
+    return {
+      id: symbol.id,
+      type: candidates.length === 1 ? resolveSymbol(candidates[0]) : 'unknown',
+      label: symbol.rawLabel ?? (candidates.join(' | ') || '미확인 심볼'),
+      position: { x: symbol.bounds.x + symbol.bounds.w / 2, y: symbol.bounds.y + symbol.bounds.h / 2 },
+      confidence: Math.min(symbol.confidence, envelopeConfidence),
+    };
+  });
+  return {
+    components,
+    connections: graph.edges.map((edge) => ({ from: edge.from, to: edge.to })),
+    confidence: Math.min(envelopeConfidence, ...graph.symbols.map((symbol) => symbol.confidence), ...graph.edges.map((edge) => edge.confidence)),
+  };
+}
+
+function redactSecret(value: string, secret: string | undefined): string {
+  return secret ? value.split(secret).join('[REDACTED]') : value;
+}
+
+function synthesizeRasterReview(artifact: DrawingReviewArtifact, deps: SLDTeamDeps): DrawingSynthesis {
+  const drawingHash = artifact.snapshot.drawingHash;
+  const requiredRoleSet = new Set<ReviewRole>(REQUIRED_COUNCIL_ROLES);
+  const completedRoles = [...new Set(artifact.envelopes.map((envelope) => envelope.role))]
+    .filter((role) => requiredRoleSet.has(role));
+  const roleFailures = artifact.failures.map(({ role, sourceId, fatal }) => ({ role, sourceId, fatal }));
+  const base = {
+    drawingHash,
+    completedRoles,
+    coverageComplete: artifact.coverage.complete,
+    roleFailures,
+    claims: [],
+    recommendations: [],
+  };
+  const synthesize = deps.synthesize ?? synthesizeDrawingReview;
+  if (!artifact.graph) return synthesize(base);
+
+  let normalizedGraph: ReturnType<typeof normalizeElectricalGraph> | undefined;
+  let issues: ElectricalIssue[] | undefined;
+  let calculations: DrawingCalculationReceipt[] | undefined;
+  let logicConflicts: LogicConflict[] | undefined;
+  let logicEnvelope: RoleReviewEnvelope | undefined;
+  try {
+    normalizedGraph = (deps.normalizeGraph ?? normalizeElectricalGraph)(artifact.graph);
+    issues = (deps.validateInvariants ?? validateElectricalInvariants)(normalizedGraph);
+    if (!issues.some((issue) => issue.judgment === 'BLOCK')) {
+      calculations = [...(deps.routeCalculations ?? routeDrawingCalculations)(normalizedGraph)];
+      const logicEnvelopes = artifact.envelopes.filter(
+        (envelope) => envelope.role === 'logic' && envelope.drawingHash === drawingHash,
+      );
+      if (logicEnvelopes.length === 1) {
+        logicEnvelope = logicEnvelopes[0];
+        logicConflicts = (deps.compareLogic ?? compareLogicToGraph)(normalizedGraph, logicEnvelope);
+      }
+    }
+  } catch {
+    // Undefined downstream stages are preserved as NOT_RUN by the synthesis.
+  }
+  return synthesize({
+    ...base,
+    ...(logicEnvelope ? { logicEnvelope } : {}),
+    ...(normalizedGraph ? { normalizedGraph } : {}),
+    ...(issues ? { issues } : {}),
+    ...(calculations ? { calculations } : {}),
+    ...(logicConflicts ? { logicConflicts } : {}),
+  });
+}
+
+async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolvedKey: (key: string) => void): Promise<{
+  artifact: DrawingReviewArtifact;
+  components: ExtractedComponent[];
+  connections: ExtractedConnection[];
+  confidence: number;
+  holds: StandardEntry[];
+  complete: boolean;
+}> {
+  if (!input.fileBuffer || !input.vision) throw new Error('이미지 독립 검토에는 파일과 Vision provider가 필요합니다.');
+  throwIfAborted(input.signal);
+  const prepared = await (deps.prepareRaster ?? preparePrecisionRegions)(input.fileBuffer, input.mimeType ?? 'image/png');
+  throwIfAborted(input.signal);
+  const resolved = (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
+  onResolvedKey(resolved.key);
+  const council = await (deps.runCouncil ?? runDrawingCouncil)({
+    snapshot: prepared.snapshot,
+    variants: prepared.variants,
+    regions: prepared.regions,
+    maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+    maxConcurrentCalls: COUNCIL_MAX_CONCURRENT_CALLS,
+    options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model, signal: input.signal, timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS, maxRetries: COUNCIL_SOURCE_MAX_RETRIES },
+  });
+  throwIfAborted(input.signal);
+  const selectedRoles = ['symbols', 'connections', 'text'] as const;
+  const expectedRegionCount = precisionGridSize(prepared.snapshot.quality.recommendedScale);
+  const requiredSymbolVariantKind = prepared.snapshot.quality.recommendedScale === 4
+    ? 'upscale-4x'
+    : prepared.snapshot.quality.recommendedScale === 2
+      ? 'upscale-2x'
+      : 'original';
+  const hasRequiredSymbolVariant = prepared.variants.some((variant) => variant.kind === requiredSymbolVariantKind);
+  const coverageRoles = {
+    logic: { variantId: selectCouncilVariant('logic', prepared.variants, prepared.snapshot.quality.recommendedScale).id, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+    ...Object.fromEntries(selectedRoles.map((role) => {
+      const variantId = selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale).id;
+      const actualRegionCount = prepared.regions.filter((region) => region.variantId === variantId).length;
+      return [role, { variantId, expectedRegionCount, actualRegionCount, plannedCalls: 1 + actualRegionCount }];
+    })),
+  } as DrawingReviewArtifact['coverage']['roles'];
+  const selectedVariantIds = new Set(selectedRoles.map((role) => coverageRoles[role].variantId));
+  const coverageComplete = hasRequiredSymbolVariant
+    && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
+    && prepared.regions.length === expectedRegionCount * selectedRoles.length
+    && prepared.regions.every((region) => selectedVariantIds.has(region.variantId));
+  const failures = council.failures.map((failure) => ({ ...failure, error: redactSecret(failure.error, resolved.key) }));
+  const artifact: DrawingReviewArtifact = {
+    snapshot: safeSnapshot(prepared.snapshot),
+    envelopes: council.envelopes,
+    failures,
+    coverage: {
+      roles: coverageRoles,
+      plannedCalls: Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
+      complete: coverageComplete,
+      maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+    },
+  };
+  const roleSet = new Set(council.envelopes.map((item) => item.role));
+  const missing = REQUIRED_COUNCIL_ROLES.filter((role) => !roleSet.has(role));
+  const fatal = failures.filter((failure) => failure.fatal);
+  const holds = [
+    ...missing.map((role) => hold(`필수 ${role} review 결과가 없습니다.`)),
+    ...fatal.map((failure) => hold(`${failure.role} review 실패: ${failure.sourceId}`)),
+    ...failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
+    ...(!hasRequiredSymbolVariant ? [hold(`symbols precision source ${requiredSymbolVariantKind}가 없습니다.`)] : []),
+    ...(!coverageComplete ? selectedRoles.flatMap((role) => {
+      const coverage = coverageRoles[role];
+      return coverage.actualRegionCount === coverage.expectedRegionCount ? [] : [hold(`${role} precision coverage expected ${coverage.expectedRegionCount}, actual ${coverage.actualRegionCount}.`)];
+    }) : []),
+    ...(!coverageComplete && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
+      ? [hold('precision coverage에 선택되지 않은 variant 또는 초과 region이 포함되었습니다.')]
+      : []),
+  ];
+  let graph: SpatialEvidenceGraph | undefined;
+  const graphEnvelopes = council.envelopes.filter((item): item is RoleReviewEnvelope => GRAPH_COUNCIL_ROLES.includes(item.role as (typeof GRAPH_COUNCIL_ROLES)[number]));
+  if (graphEnvelopes.length === GRAPH_COUNCIL_ROLES.length) {
+    try {
+      graph = (deps.assembleGraph ?? assembleSpatialGraph)(graphEnvelopes);
+      artifact.graph = graph;
+      for (const conflict of graph.conflicts) holds.push(hold(`graph conflict: ${conflict}`));
+    } catch {
+      holds.push(hold('sealed graph assembly를 완료하지 못했습니다.'));
+    }
+  }
+  if (!graph) holds.push(hold('symbols/connections/text graph가 불완전합니다.'));
+  if (graph && graph.symbols.length === 0) holds.push(hold('graph symbols가 비어 있습니다.'));
+  if (graph && graph.edges.length === 0) holds.push(hold('graph edges가 비어 있습니다.'));
+  const complete = coverageComplete && missing.length === 0 && fatal.length === 0 && graph !== undefined && graph.symbols.length > 0 && graph.edges.length > 0;
+  const envelopeConfidence = council.envelopes.length === 0 ? 0 : Math.min(...council.envelopes.map((item) => item.data.confidence));
+  const legacy = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
+  return { artifact, ...legacy, holds, complete };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -386,12 +583,32 @@ async function runCustomRules(
  * 계통도팀 메인 실행 함수.
  * 도면 → 추출 → 토폴로지 → 계산 → 팀 결과
  */
-export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
+export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): Promise<TeamResult> {
   const start = Date.now();
+  let transientVisionKey = input.vision?.apiKey?.trim();
 
   try {
     // Step 1: 도면에서 컴포넌트/연결 추출
-    const { components, connections, confidence } = await extractFromDrawing(input);
+    const rasterReview = input.classification === 'sld_image'
+      ? await reviewRasterDrawing(input, deps, (key) => { transientVisionKey = key; })
+      : undefined;
+    const extracted = rasterReview ?? await extractFromDrawing(input);
+    const { components, connections, confidence } = extracted;
+
+    if (rasterReview) {
+      const drawingSynthesis = synthesizeRasterReview(rasterReview.artifact, deps);
+      return {
+        teamId: 'TEAM-SLD',
+        success: true,
+        components,
+        connections,
+        standards: rasterReview.holds,
+        confidence,
+        durationMs: Date.now() - start,
+        drawingReview: rasterReview.artifact,
+        drawingSynthesis,
+      };
+    }
 
     if (components.length === 0) {
       return {
@@ -442,12 +659,13 @@ export async function executeSLDTeam(input: TeamInput): Promise<TeamResult> {
       durationMs: Date.now() - start,
     };
   } catch (err) {
+    const message = input.signal?.aborted ? '요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.' : err instanceof Error ? err.message : String(err);
     return {
       teamId: 'TEAM-SLD',
       success: false,
       confidence: 0,
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: redactSecret(message, transientVisionKey),
     };
   }
 }

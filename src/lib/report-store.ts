@@ -38,7 +38,6 @@ export async function saveReport(
       log.warn('Secure report persistence unavailable or report integrity invalid');
       return false;
     }
-
     const res = await fetch(`${config.url}/rest/v1/esva_reports`, {
       method: 'POST',
       headers: {

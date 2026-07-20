@@ -38,6 +38,8 @@ export interface OrchestratorRequest {
   vision?: TeamInput['vision'];
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
+  /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
+  signal?: AbortSignal;
 }
 
 export interface OrchestratorResponse {
@@ -51,8 +53,16 @@ export interface OrchestratorResponse {
     reason?: string;
   };
   report?: ESVAVerifiedReport;
+  drawingSynthesis?: import('./electrical/synthesis').DrawingSynthesis;
   durationMs: number;
   error?: string;
+}
+
+export interface OrchestratorDeps {
+  executeSLD?: typeof executeSLDTeam;
+  executeLayout?: typeof executeLayoutTeam;
+  executeStandards?: typeof executeStandardsTeam;
+  executeConsensus?: typeof executeConsensusTeam;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -72,7 +82,31 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     language: req.language,
     vision: req.vision,
     customRuleSet: req.customRuleSet,
+    signal: req.signal,
   };
+}
+
+function abortError(): Error {
+  return new Error('request aborted');
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw abortError();
+}
+
+function waitForBackoff(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, delayMs));
+  const activeSignal = signal;
+  if (activeSignal.aborted) return Promise.reject(abortError());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, delayMs);
+    const onAbort = () => { clearTimeout(timer); done(abortError()); };
+    function done(error?: Error) {
+      activeSignal.removeEventListener('abort', onAbort);
+      if (error) reject(error); else resolve();
+    }
+    activeSignal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**
@@ -82,31 +116,36 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
 async function dispatchWithRetry(
   teamId: string,
   input: TeamInput,
+  deps: OrchestratorDeps,
   maxRetries: number = 2,
 ): Promise<TeamResult> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    throwIfAborted(input.signal);
     try {
-      return await dispatchToTeam(teamId, input);
+      const result = await dispatchToTeam(teamId, input, deps);
+      throwIfAborted(input.signal);
+      return result;
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
+      if (input.signal?.aborted) throw abortError();
       if (attempt < maxRetries) {
         // 지수 백오프: 500ms, 1000ms
-        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+        await waitForBackoff(500 * Math.pow(2, attempt), input.signal);
       }
     }
   }
   throw lastError ?? new Error(`[Orchestrator] ${teamId} dispatch failed after ${maxRetries} retries`);
 }
 
-async function dispatchToTeam(teamId: string, input: TeamInput): Promise<TeamResult> {
+async function dispatchToTeam(teamId: string, input: TeamInput, deps: OrchestratorDeps): Promise<TeamResult> {
   switch (teamId) {
     case 'TEAM-SLD':
-      return executeSLDTeam(input);
+      return (deps.executeSLD ?? executeSLDTeam)(input);
     case 'TEAM-LAYOUT':
-      return executeLayoutTeam(input);
+      return (deps.executeLayout ?? executeLayoutTeam)(input);
     case 'TEAM-STD':
-      return executeStandardsTeam(input);
+      return (deps.executeStandards ?? executeStandardsTeam)(input);
     default:
       return {
         teamId: teamId as TeamResult['teamId'],
@@ -133,10 +172,12 @@ async function dispatchToTeam(teamId: string, input: TeamInput): Promise<TeamRes
  */
 export async function runOrchestrator(
   request: OrchestratorRequest,
+  deps: OrchestratorDeps = {},
 ): Promise<OrchestratorResponse> {
   const start = Date.now();
 
   try {
+    if (request.signal?.aborted) throw abortError();
     // Step 1: 입력 분류
     const classification = classifyInput(
       request.file?.mimeType,
@@ -153,7 +194,7 @@ export async function runOrchestrator(
     const allTeamIds = [routing.primaryTeam, ...routing.supportTeams];
 
     const teamPromises = allTeamIds.map(teamId =>
-      dispatchWithRetry(teamId, teamInput, 2).catch(err => ({
+      dispatchWithRetry(teamId, teamInput, deps, routing.classification === 'sld_image' && teamId === 'TEAM-SLD' ? 0 : 2).catch(err => ({
         teamId: teamId as TeamResult['teamId'],
         success: false,
         confidence: 0,
@@ -163,6 +204,55 @@ export async function runOrchestrator(
     );
 
     const teamResults = await Promise.all(teamPromises);
+    if (request.signal?.aborted) throw abortError();
+
+    if (routing.classification === 'sld_image') {
+      const drawingSynthesis = teamResults.find((result) => result.teamId === 'TEAM-SLD')?.drawingSynthesis;
+      const consensus = {
+        requested: routing.requiresConsensus,
+        executed: false,
+        participatingTeams: drawingSynthesis ? ['TEAM-SLD'] as TeamResult['teamId'][] : [],
+        reason: '원본 격리 심사 결과가 없어 사람 검토가 필요합니다.',
+      };
+      let report: ESVAVerifiedReport | undefined;
+
+      if (drawingSynthesis) {
+        const missingRoles = [...drawingSynthesis.missingRoles].sort((left, right) => left.localeCompare(right));
+        if (missingRoles.length > 0) {
+          consensus.reason = `원본 격리 심사 필수 역할 누락: ${missingRoles.join(', ')}. 사람 검토가 필요합니다.`;
+        } else if (!drawingSynthesis.reviewIntegrity.coverageComplete
+          || drawingSynthesis.reviewIntegrity.roleFailures.length > 0
+          || drawingSynthesis.stages.normalizer !== 'COMPLETE') {
+          consensus.reason = '원본 격리 심사 무결성이 불완전하여 사람 검토가 필요합니다.';
+        } else {
+          consensus.executed = true;
+          consensus.reason = '원본 격리 심사 4개를 메인 종합 단계에서 대조했습니다.';
+        }
+
+        if (request.signal?.aborted) throw abortError();
+        const { teamResult: consensusResult, report: verifiedReport } = await (deps.executeConsensus ?? executeConsensusTeam)({
+          sessionId: request.sessionId,
+          projectName: request.projectName ?? '미지정 프로젝트',
+          projectType: request.projectType ?? '전기 설비',
+          teamResults,
+          drawingSynthesis,
+        });
+        if (request.signal?.aborted) throw abortError();
+
+        teamResults.push(consensusResult);
+        report = verifiedReport;
+      }
+
+      return {
+        success: Boolean(drawingSynthesis),
+        routing,
+        teamResults,
+        consensus,
+        report,
+        drawingSynthesis,
+        durationMs: Date.now() - start,
+      };
+    }
 
     // Step 4: 합의는 서로 다른 전문팀이 2개 이상 성공한 경우에만 실행한다.
     // 같은 TEAM-STD 구현을 두 번 호출해 독립 협의체처럼 세던 경로는 제거했다.
@@ -182,13 +272,15 @@ export async function runOrchestrator(
     };
 
     if (routing.requiresConsensus && participatingTeams.length >= 2) {
+      if (request.signal?.aborted) throw abortError();
       const { teamResult: consensusResult, report: verifiedReport } =
-        await executeConsensusTeam({
+        await (deps.executeConsensus ?? executeConsensusTeam)({
           sessionId: request.sessionId,
           projectName: request.projectName ?? '미지정 프로젝트',
           projectType: request.projectType ?? '전기 설비',
           teamResults,
         });
+      if (request.signal?.aborted) throw abortError();
 
       teamResults.push(consensusResult);
       report = verifiedReport;
@@ -216,7 +308,7 @@ export async function runOrchestrator(
         reason: '오케스트레이터 실행 전에 오류가 발생했습니다.',
       },
       durationMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err),
+      error: request.signal?.aborted ? '요청이 중단되었습니다.' : err instanceof Error ? err.message : String(err),
     };
   }
 }

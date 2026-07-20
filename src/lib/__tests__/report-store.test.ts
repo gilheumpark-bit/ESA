@@ -89,4 +89,5 @@ describe('report store ownership and integrity', () => {
     await expect(saveReport(await makeReport(), 'firebase-user-a')).resolves.toBe(false);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
 });

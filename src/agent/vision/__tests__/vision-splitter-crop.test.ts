@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import {
   cropImageIntoRegions,
   mergeVisionSplitResults,
+  preparePrecisionRegions,
   type VisionSplitResult,
 } from '../vision-splitter';
 
@@ -90,5 +91,26 @@ describe('vision image splitting', () => {
       expect(ids.has(connection.from)).toBe(true);
       expect(ids.has(connection.to)).toBe(true);
     }
+  });
+
+  it('prepares selected precision variants without sending them to a VLM', async () => {
+    const png = await sharp({
+      create: { width: 100, height: 80, channels: 3, background: '#888888' },
+    }).png().toBuffer();
+
+    const prepared = await preparePrecisionRegions(Uint8Array.from(png).buffer);
+
+    expect(prepared.profile.recommendedScale).toBe(4);
+    expect(prepared.variants.map((variant) => variant.kind)).toEqual([
+      'original',
+      'upscale-2x',
+      'upscale-4x',
+      'text-high-contrast',
+      'line-enhanced',
+    ]);
+    expect(prepared.regions).toHaveLength(48);
+    expect(new Set(prepared.regions.map((region) => region.variantId))).toEqual(
+      new Set(['variant:upscale-4x', 'variant:text-high-contrast', 'variant:line-enhanced']),
+    );
   });
 });

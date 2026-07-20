@@ -12,7 +12,6 @@ import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
-import { saveReport } from '@/lib/report-store';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
 const RULES_MAX_BYTES = 1024 * 1024;
@@ -20,7 +19,22 @@ const DRAWING_MAX_BYTES = 20 * 1024 * 1024;
 const VISION_KEY_MAX_CHARS = 4096;
 const VISION_MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
 const VISION_PROVIDERS = new Set(['openai', 'gemini', 'claude'] as const);
+const TEAM_REVIEW_SOFT_DEADLINE_MS = 270_000;
 type VisionProvider = 'openai' | 'gemini' | 'claude';
+
+export function createRequestSignal(requestSignal: AbortSignal) {
+  const controller = new AbortController();
+  let timedOut = false;
+  const abortFromRequest = () => controller.abort();
+  if (requestSignal.aborted) controller.abort();
+  requestSignal.addEventListener('abort', abortFromRequest, { once: true });
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, TEAM_REVIEW_SOFT_DEADLINE_MS);
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    dispose: () => { clearTimeout(timer); requestSignal.removeEventListener('abort', abortFromRequest); },
+  };
+}
 
 function drawingKind(file: File): 'image' | 'pdf' | 'dxf' | null {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -38,12 +52,14 @@ function hasServerVisionKey(provider: VisionProvider): boolean {
 }
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export const POST = withApiHandler(
   { rateLimit: 'sld', checkOrigin: true },
   async (req: NextRequest, ctx) => {
     const perf = startPerf('team-review');
+    const requestScope = createRequestSignal(req.signal);
+    try {
     const userId = await extractVerifiedUserId(req);
     const suppliedAuth = req.headers.has('authorization');
     if (suppliedAuth && !userId) {
@@ -186,18 +202,24 @@ export const POST = withApiHandler(
       language: (params.language as string) ?? 'ko',
       vision,
       customRuleSet,
+      signal: requestScope.signal,
     });
 
     perf.checkpoint('orchestrate');
 
+    if (requestScope.timedOut()) {
+      return ctx.error('ESVA-4504', '팀 리뷰 처리 시간이 초과되었습니다.', 504);
+    }
+    if (requestScope.signal.aborted) {
+      return ctx.error('ESVA-4504', '요청이 중단되었습니다.', 499);
+    }
     if (!result.success) {
       return ctx.error('ESVA-4500', result.error ?? '팀 리뷰 실행 실패', 500);
     }
 
-    const persistence = {
-      attempted: Boolean(result.report && userId),
-      saved: result.report && userId ? await saveReport(result.report, userId) : false,
-    };
+    // 결과 전달이 완료된 뒤의 별도 명시 저장만 영속화할 수 있다. 이 request는
+    // disconnect 시 remote write를 남기지 않도록 session-only report를 반환한다.
+    const persistence = { attempted: false, saved: false };
 
     const durationMs = perf.end({ teamCount: result.teamResults.length });
 
@@ -210,6 +232,7 @@ export const POST = withApiHandler(
       teamCount: result.teamResults.length,
       consensus: result.consensus,
       persistence,
+      persisted: false,
       teamSummary: result.teamResults.map(tr => ({
         teamId: tr.teamId,
         success: tr.success,
@@ -257,5 +280,8 @@ export const POST = withApiHandler(
         : null,
       durationMs,
     }, perfHeaders(durationMs));
+    } finally {
+      requestScope.dispose();
+    }
   },
 );

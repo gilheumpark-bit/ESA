@@ -16,6 +16,10 @@ import { CalcResultDashboard } from '@/components/CalcResultGauge';
 import type { ESVAVerifiedReport } from '@/agent/teams/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { verifyReportIntegrity } from '@/lib/report-integrity';
+import { DrawingEvidenceOverlay } from '@/components/DrawingEvidenceOverlay';
+import { DrawingIntelligenceReport } from '@/components/DrawingIntelligenceReport';
+
+type SourceState = 'idle' | 'loading' | 'ready' | 'missing' | 'unsupported' | 'invalid';
 
 export default function ReportPage() {
   const params = useParams();
@@ -24,6 +28,9 @@ export default function ReportPage() {
   const [report, setReport] = useState<ESVAVerifiedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceState, setSourceState] = useState<SourceState>('idle');
+  const [activeEvidenceIds, setActiveEvidenceIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -84,6 +91,59 @@ export default function ReportPage() {
     void loadReport();
     return () => { cancelled = true; };
   }, [authLoading, reportId, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const intelligence = report?.drawingIntelligence;
+
+    async function loadSource() {
+      // Defer state synchronization so the effect body itself only coordinates
+      // the external IndexedDB/object-URL lifecycle.
+      await Promise.resolve();
+      if (cancelled) return;
+      setSourceUrl(null);
+      setActiveEvidenceIds([]);
+      if (!intelligence) {
+        setSourceState('idle');
+        return;
+      }
+      if (
+        intelligence.source.assetKey !== intelligence.drawingHash
+        || intelligence.drawingHash !== report?.drawingSynthesis?.drawingHash
+      ) {
+        setSourceState('invalid');
+        return;
+      }
+      if (!intelligence.source.mimeType.startsWith('image/')) {
+        setSourceState('unsupported');
+        return;
+      }
+
+      setSourceState('loading');
+      try {
+        const { loadDrawingAsset } = await import('@/lib/drawing-asset-store');
+        const asset = await loadDrawingAsset(intelligence.source.assetKey);
+        if (cancelled) return;
+        if (!asset || asset.mimeType !== intelligence.source.mimeType) {
+          setSourceState('missing');
+          return;
+        }
+        objectUrl = URL.createObjectURL(asset.blob);
+        setSourceUrl(objectUrl);
+        setSourceState('ready');
+      } catch {
+        if (!cancelled) setSourceState('missing');
+      }
+    }
+
+    void loadSource();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [report]);
 
   async function handleExport(format: 'pdf' | 'excel') {
     if (!report) return;
@@ -188,8 +248,76 @@ export default function ReportPage() {
     );
   }
 
+  const drawingIntelligence = report.drawingIntelligence;
+  const selectEvidence = (ids: string[]) => {
+    const next = [...new Set(ids)];
+    setActiveEvidenceIds((current) => (
+      current.length === next.length && current.every((id, index) => id === next[index]) ? [] : next
+    ));
+  };
+
   return (
     <div className="px-4 py-8">
+      {drawingIntelligence && (
+        <section aria-labelledby="drawing-intelligence-heading" className="mx-auto mb-10 max-w-[92rem]">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-[var(--border-default)] pb-4">
+            <div>
+              <p className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[var(--color-accent)]">SOURCE-LINKED REVIEW</p>
+              <h1 id="drawing-intelligence-heading" className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">도면 전체 판독 및 관계 검증</h1>
+            </div>
+            <p className="font-mono text-[10px] text-[var(--text-tertiary)]">
+              SHA-256 {drawingIntelligence.drawingHash.slice(0, 12)}…
+            </p>
+          </div>
+
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(520px,0.85fr)]">
+            <div className="min-w-0 xl:sticky xl:top-20">
+              {sourceState === 'ready' && sourceUrl ? (
+                <DrawingEvidenceOverlay
+                  src={sourceUrl}
+                  report={drawingIntelligence}
+                  activeIds={activeEvidenceIds}
+                  onSelect={(id) => selectEvidence([id])}
+                />
+              ) : sourceState === 'loading' ? (
+                <div className="flex min-h-80 items-center justify-center border border-[var(--border-default)] bg-[var(--bg-secondary)]">
+                  <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                    <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                    해시가 일치하는 원본 도면을 불러오는 중…
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-amber-300 bg-amber-50 px-5 py-5 dark:border-amber-900 dark:bg-amber-950/20">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={20} className="mt-0.5 shrink-0 text-[var(--color-warning)]" aria-hidden="true" />
+                    <div>
+                      <h2 className="font-semibold text-[var(--text-primary)]">원본 위치 오버레이 HOLD</h2>
+                      <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                        {sourceState === 'unsupported'
+                          ? '이 파일 형식은 브라우저 이미지 오버레이를 지원하지 않습니다. 아래 판독표와 근거 ID는 계속 확인할 수 있습니다.'
+                          : sourceState === 'invalid'
+                            ? '보고서와 원본 도면의 해시가 일치하지 않아 위치 오버레이를 차단했습니다.'
+                            : '원본 도면은 보안을 위해 업로드한 브라우저에만 보관됩니다. 다른 기기·브라우저에서는 아래 판독표만 표시됩니다.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <dl className="grid grid-cols-2 gap-px border-x border-b border-[var(--border-default)] bg-[var(--border-default)] text-xs">
+                <div className="bg-[var(--bg-primary)] px-3 py-2.5"><dt className="text-[var(--text-tertiary)]">원본 크기</dt><dd className="mt-0.5 font-mono font-semibold">{drawingIntelligence.source.width} × {drawingIntelligence.source.height}</dd></div>
+                <div className="bg-[var(--bg-primary)] px-3 py-2.5"><dt className="text-[var(--text-tertiary)]">분석 페이지</dt><dd className="mt-0.5 font-mono font-semibold">{drawingIntelligence.source.page}</dd></div>
+              </dl>
+            </div>
+
+            <DrawingIntelligenceReport
+              report={drawingIntelligence}
+              activeIds={activeEvidenceIds}
+              onSelect={selectEvidence}
+            />
+          </div>
+        </section>
+      )}
+
       {gaugeResults.length > 0 && (
         <div className="mx-auto mb-6 max-w-4xl">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
@@ -199,7 +327,9 @@ export default function ReportPage() {
         </div>
       )}
 
-      <VerificationReport report={report} onExport={handleExport} />
+      <div className="mx-auto max-w-5xl">
+        <VerificationReport report={report} onExport={handleExport} />
+      </div>
     </div>
   );
 }

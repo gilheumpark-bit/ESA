@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { saveReport } from '@/lib/report-store';
-import { POST } from '../route';
+import { POST, createRequestSignal, maxDuration } from '../route';
 
 jest.mock('@/agent/orchestrator', () => ({ runOrchestrator: jest.fn() }));
 jest.mock('@/lib/auth-helpers', () => ({ extractVerifiedUserId: jest.fn() }));
@@ -47,7 +47,79 @@ describe('POST /api/team-review report persistence', () => {
     });
   });
 
-  test('persists an authenticated report and discloses the persistence result', async () => {
+  test('declares the 300 second runtime budget', () => {
+    expect(maxDuration).toBe(300);
+  });
+
+  test('immediately propagates an already-aborted request signal', () => {
+    const controller = new AbortController();
+    controller.abort();
+    const scope = createRequestSignal(controller.signal);
+
+    expect(scope.signal.aborted).toBe(true);
+    scope.dispose();
+  });
+
+  test('returns the fixed 504 without persistence when the 270 second request deadline aborts', async () => {
+    jest.useFakeTimers();
+    const secret = 'server-key-must-not-appear';
+    mockRunOrchestrator.mockImplementationOnce(({ signal }) => new Promise((resolve) => {
+      signal?.addEventListener('abort', () => resolve({
+        success: false,
+        routing: { primaryTeam: 'TEAM-SLD', supportTeams: [], classification: 'sld_image', requiresConsensus: false },
+        consensus: { requested: false, executed: false, participatingTeams: [] },
+        teamResults: [],
+        durationMs: 0,
+        error: secret,
+      }), { once: true });
+    }));
+    const req = new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000', 'X-Forwarded-For': '198.51.100.79' },
+      body: JSON.stringify({ query: 'deadline' }),
+    });
+    const responsePromise = POST(req);
+    await jest.advanceTimersByTimeAsync(270_000);
+    const response = await responsePromise;
+    const body = await response.json();
+    jest.useRealTimers();
+
+    expect(response.status).toBe(504);
+    expect(mockSaveReport).not.toHaveBeenCalled();
+    expect(JSON.stringify(body)).not.toContain(secret);
+  });
+
+  test('does not persist a report after the client disconnects', async () => {
+    const controller = new AbortController();
+    let started: (() => void) | undefined;
+    const startedPromise = new Promise<void>((resolve) => { started = resolve; });
+    mockRunOrchestrator.mockImplementationOnce(({ signal }) => new Promise((resolve) => {
+      started?.();
+      signal?.addEventListener('abort', () => resolve({
+        success: true,
+        routing: { primaryTeam: 'TEAM-SLD', supportTeams: [], classification: 'sld_image', requiresConsensus: false },
+        consensus: { requested: false, executed: false, participatingTeams: [] },
+        teamResults: [],
+        report: report as never,
+        durationMs: 0,
+      }), { once: true });
+    }));
+    const req = new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Origin: 'http://localhost:3000', 'X-Forwarded-For': '198.51.100.80' },
+      body: JSON.stringify({ query: 'disconnect' }),
+    });
+    const responsePromise = POST(req);
+    await startedPromise;
+    controller.abort();
+    const response = await responsePromise;
+
+    expect(response.status).toBe(499);
+    expect(mockSaveReport).not.toHaveBeenCalled();
+  });
+
+  test('delivers an authenticated report as session-only data without invoking persistence', async () => {
     const req = new NextRequest('http://localhost:3000/api/team-review', {
       method: 'POST',
       headers: {
@@ -63,8 +135,10 @@ describe('POST /api/team-review report persistence', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mockSaveReport).toHaveBeenCalledWith(report, 'firebase-user-a');
-    expect(body.data.persistence).toEqual({ attempted: true, saved: true });
+    expect(mockSaveReport).not.toHaveBeenCalled();
+    expect(body.data.persistence).toEqual({ attempted: false, saved: false });
+    expect(body.data.persisted).toBe(false);
+    expect(body.data.reportFull).toEqual(report);
   });
 
   test('forwards an image BYOK key only through the in-memory team input', async () => {
