@@ -90,35 +90,69 @@ function saveSettings(settings: ESASettings): void {
   }
 }
 
+/**
+ * Read the persisted country without subscribing — for non-hook call sites
+ * (e.g. useCalculator forwarding countryCode to /api/calculate). Bug M2.
+ */
+export function readStoredCountry(): Country {
+  return loadSettings().country;
+}
+
+// ---------------------------------------------------------------------------
+// Same-page cross-instance sync (bug M1)
+// ---------------------------------------------------------------------------
+// 이 훅은 여러 곳(헤더·설정 드로어 등)에서 동시에 마운트된다. 예전 구현은
+// 변경 시 인스턴스별 state 전체 객체를 통째로 저장해, 낡은 인스턴스가 다른
+// 인스턴스의 변경(테마↔언어)을 덮어써 상호 원복시켰다. 이제는 ① 필드 단위
+// read-merge-write 로 저장해 clobber 를 없애고 ② 모듈 레벨 구독으로 모든
+// 인스턴스를 동기화한다. storage 이벤트는 다른 탭 동기화를 담당한다.
+type SettingsListener = (s: ESASettings) => void;
+const settingsListeners = new Set<SettingsListener>();
+
+function applySettingsChange(patch: Partial<ESASettings>): void {
+  // 항상 저장소에서 최신값을 다시 읽어 병합한다 — 낡은 인메모리 state 로
+  // 다른 필드를 덮어쓰지 않는다.
+  const next: ESASettings = { ...loadSettings(), ...patch };
+  saveSettings(next);
+  settingsListeners.forEach((listener) => listener(next));
+}
+
 export function useSettings(): UseSettingsReturn {
   const [settings, setSettings] = useState<ESASettings>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
 
-  // Load from localStorage on mount
+  // Load on mount + subscribe to same-page and cross-tab updates
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setSettings(loadSettings());
       setLoaded(true);
     });
-    return () => cancelAnimationFrame(frame);
+
+    const listener: SettingsListener = (s) => setSettings(s);
+    settingsListeners.add(listener);
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) setSettings(loadSettings());
+    };
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      settingsListeners.delete(listener);
+      window.removeEventListener('storage', onStorage);
+    };
   }, []);
 
-  // Auto-save on change (skip initial mount)
-  useEffect(() => {
-    if (!loaded) return;
-    saveSettings(settings);
-  }, [settings, loaded]);
-
   const setLanguage = useCallback((language: Lang) => {
-    setSettings(prev => ({ ...prev, language }));
+    applySettingsChange({ language });
   }, []);
 
   const setCountry = useCallback((country: Country) => {
-    setSettings(prev => ({ ...prev, country }));
+    applySettingsChange({ country });
   }, []);
 
   const setTheme = useCallback((theme: Theme) => {
-    setSettings(prev => ({ ...prev, theme }));
+    applySettingsChange({ theme });
   }, []);
 
   return {

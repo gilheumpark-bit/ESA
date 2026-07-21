@@ -270,10 +270,18 @@ export default function ComparePage() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error ?? `Calculation failed (${res.status})`);
+          // Server error shape is { success:false, error:{ code, message } };
+          // pull the message string so we never render "[object Object]".
+          const errMsg = typeof body.error === 'string'
+            ? body.error
+            : body.error?.message ?? `Calculation failed (${res.status})`;
+          throw new Error(errMsg);
         }
 
-        const data = await res.json();
+        const body = await res.json();
+        // Success shape is { success, data:{ result, receipt, relatedCalculators } };
+        // unwrap data (mirrors useCalculator) so result/receipt are never undefined.
+        const data = body.data ?? body;
 
         setScenarios((prev) =>
           prev.map((s, i) =>

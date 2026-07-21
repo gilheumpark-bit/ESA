@@ -49,7 +49,13 @@ function LoginInner() {
   const searchParams = useSearchParams();
   const { user, loading, error, signIn } = useAuth();
 
-  const returnTo = searchParams.get('from') ?? '/';
+  // 오픈 리다이렉트 방지 (bug L6): 같은 출처 상대경로만 허용한다.
+  // "//evil.com", "/\\evil.com", "https://…" 같은 외부 목적지는 홈으로 폴백.
+  const rawFrom = searchParams.get('from');
+  const returnTo =
+    rawFrom && rawFrom.startsWith('/') && !rawFrom.startsWith('//') && !rawFrom.startsWith('/\\')
+      ? rawFrom
+      : '/';
 
   // Redirect if already logged in
   useEffect(() => {

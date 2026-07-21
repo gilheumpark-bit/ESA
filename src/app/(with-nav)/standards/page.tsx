@@ -474,7 +474,16 @@ function StandardConvertWidget() {
           <select
             aria-label="변환할 원본 표준"
             value={fromStandard}
-            onChange={(e) => setFromStandard(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setFromStandard(next);
+              // 원본이 대상과 같아지면 대상 state 도 갱신한다. 안 그러면 대상
+              // select 옵션에서 next 가 제거돼 표시값↔state 가 어긋나 from==to
+              // 요청이 나간다 (bug M6).
+              if (next === toStandard) {
+                setToStandard(CONVERT_STANDARDS.find((s) => s !== next) ?? toStandard);
+              }
+            }}
             className="h-9 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
           >
             {CONVERT_STANDARDS.map((s) => <option key={s} value={s}>{s}</option>)}
