@@ -26,6 +26,8 @@ interface PdfTextItem {
   width: number;
   height: number;
   fontHeight: number;
+  /** 텍스트 회전각(도·90° 양자화) — 도면 전체 회전 감지용(3차 실증: 90° 회전 영문 SLD) */
+  angle?: number;
 }
 
 interface PdfLineSegment {
@@ -64,7 +66,9 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   { pattern: /\b(BUS|BUSBAR|모선)\b/i, type: 'bus' },
   { pattern: /\b(CAP|CAPACITOR|콘덴서)\b/i, type: 'capacitor' },
   { pattern: /\b(SW|DS|SWITCH|개폐기)\b/i, type: 'switch' },
-  { pattern: /\b(CT|PT|METER|계기)\b/i, type: 'meter' },
+  // DWHM/WHM(전력량계) 추가(2026-07-21 3차 실증): EE-038 분전반 4면의 DWHM 계량
+  // 4대가 키워드 부재로 전량 미검출된 공백 수리.
+  { pattern: /\b(CT|PT|METER|DWHM|WHM|계기)\b/i, type: 'meter' },
   { pattern: /\b(UPS)\b/i, type: 'ups' },
   { pattern: /\b(OCR|OVR|RELAY|계전기)\b/i, type: 'relay' },
 ];
@@ -96,6 +100,23 @@ function detectComponentTypeEx(text: string): TypeDetection {
 function detectComponentType(text: string): SLDComponentType {
   return detectComponentTypeEx(text).type;
 }
+
+// 주석 문장 게이트(2026-07-21 3차 실증): 영문 노트 "If you do not have VCB but
+// you have LBS…"가 breaker/panel로 승격됐다(RSC 실도면 라이브 실측). 설비 라벨은
+// 짧은 코드(MCCB ABSc 3P 250/100A)지 문장이 아니다 — 단어가 많고(5+) 기능어
+// (관사·조동사·접속사) 또는 한국어 지시 어미가 있으면 장치가 아니라 주석이다.
+// 두 증거를 모두 요구해 "DIESEL GENERATOR (Standby)"류 정상 라벨을 보존한다.
+const PROSE_FUNCTION_WORDS = /\b(if|you|do|does|not|but|have|has|the|an?|shall|should|will|must|for|with|are|is|to|of|in)\b/i;
+const KOREAN_PROSE_MARKERS = /(하여|하십시오|할 것|해야|합니다|바랍니다|참조)/;
+function isProseText(text: string): boolean {
+  if (text.trim().split(/\s+/).length < 5) return false;
+  return PROSE_FUNCTION_WORDS.test(text) || KOREAN_PROSE_MARKERS.test(text);
+}
+
+// 표 문서 표제(2026-07-21 3차 실증): 실물 케이블 스케줄(EE-007)은 표 블록마다
+// 표제를 반복한다(실측 7회). 셀마다 장치 라벨이 있어 snapped>junctioned 방어
+// (R7)를 실물 대형 표가 뚫으므로, 표제 토큰의 반복을 문서 유형 증거로 쓴다.
+const SCHEDULE_TITLE = /(CABLE|PANEL|LOAD)\s*(SCHEDULE|TABLE)|일람표|부하집계표/i;
 
 // =========================================================================
 // PART 3 — 유클리디안 거리
@@ -156,13 +177,18 @@ export async function parsePdfToSLD(
       'str' in item && typeof (item as { str?: unknown }).str === 'string')
     .map((item) => {
       const tx = item.transform;
+      // 회전각(90° 양자화): CAD가 가로 도면을 세로 페이지에 회전 배치하면 모든
+      // 텍스트 transform에 회전이 실린다(3차 실증: RSC SLD 결속률 70%→20% 급락).
+      const rawAngle = Math.atan2(tx[1], tx[0]) * (180 / Math.PI);
+      const angle = ((Math.round(rawAngle / 90) * 90) % 360 + 360) % 360;
       return {
         text: item.str,
         x: tx[4],
         y: viewport.height - tx[5], // PDF Y축 반전
-        width: tx[0] * item.str.length * 0.6,
+        width: Math.abs(tx[0]) * item.str.length * 0.6,
         height: Math.abs(tx[3]),
         fontHeight: Math.abs(tx[3]),
+        angle,
       };
     })
     .filter(t => t.text.trim().length > 0);
@@ -256,6 +282,49 @@ export async function parsePdfToSLD(
     }
   }
 
+  // 도면 회전 정규화(2026-07-21 3차 실증): CAD가 가로 도면을 세로 페이지에 90°
+  // 회전 플롯하면 결속 기하(부하명=앵커 아래 dy 3~9·근접 30pt)가 전부 어긋나
+  // 스펙 결속률이 70%→20%로 무너졌다(RSC SLD 라이브 실측). 텍스트 과반이 같은
+  // 90° 배수 각이면 도면 전체가 회전된 것 — 좌표계를 되돌려 하류(근접 매핑·
+  // 행 결속·스냅)가 수평 전제 그대로 성립하게 한다. 상수 임계 없이 과반 비교만.
+  let pageW = viewport.width;
+  let pageH = viewport.height;
+  {
+    const angleCounts = new Map<number, number>();
+    for (const t of texts) angleCounts.set(t.angle ?? 0, (angleCounts.get(t.angle ?? 0) ?? 0) + 1);
+    let domAngle = 0;
+    let domCount = 0;
+    for (const [a, n] of angleCounts) if (n > domCount) { domAngle = a; domCount = n; }
+    if (domAngle !== 0 && domCount * 2 > texts.length) {
+      const W = viewport.width;
+      const H = viewport.height;
+      // 매핑은 flipped(screen) 공간 기준 — 실좌표 A/B로 검증한 대응(RSC p4:
+      // raw 270° 우세 129/165에서 (y, W−x)만이 "스펙이 라벨 아래 dy+12"의
+      // 실기하를 복원 — 반대 배정은 dy−12로 상하 반전):
+      //   raw 270°(RSC 실측 케이스) → (x,y)→(y, W−x), 페이지 (H,W)
+      //   raw 90°                  → (x,y)→(H−y, x), 페이지 (H,W)
+      //   raw 180°                 → (x,y)→(W−x, H−y), 페이지 동일
+      const map =
+        domAngle === 270 ? (x: number, y: number) => ({ x: y, y: W - x })
+        : domAngle === 90 ? (x: number, y: number) => ({ x: H - y, y: x })
+        : (x: number, y: number) => ({ x: W - x, y: H - y });
+      if (domAngle !== 180) { pageW = H; pageH = W; }
+      for (const t of texts) {
+        const p = map(t.x, t.y);
+        t.x = p.x;
+        t.y = p.y;
+      }
+      for (const seg of lines) {
+        const p1 = map(seg.x1, seg.y1);
+        const p2 = map(seg.x2, seg.y2);
+        seg.x1 = p1.x; seg.y1 = p1.y;
+        seg.x2 = p2.x; seg.y2 = p2.y;
+        seg.pageWidth = pageW;
+        seg.pageHeight = pageH;
+      }
+    }
+  }
+
   // SLD 변환
   const components: SLDComponent[] = [];
   const connections: SLDConnection[] = [];
@@ -290,7 +359,8 @@ export async function parsePdfToSLD(
     const type = detection.type;
     const specProbe = parseSpecText(t.text);
     const hasSpecEvidence = Boolean(specProbe.voltage || specProbe.current || specProbe.power);
-    const promote = type !== 'load' && (!detection.weak || hasSpecEvidence);
+    // 주석 문장은 키워드를 품어도 장치가 아니다(isProseText — RSC 노트 환각 수리).
+    const promote = type !== 'load' && (!detection.weak || hasSpecEvidence) && !isProseText(t.text);
     if (promote) {
       const spec = specProbe;
       rawAnchors.push({ id: `comp_${compIdx + 1}`, x: t.x, y: t.y });
@@ -298,7 +368,7 @@ export async function parsePdfToSLD(
         id: `comp_${++compIdx}`,
         type,
         label: t.text.slice(0, 50),
-        position: { x: Math.round(t.x / viewport.width * 100), y: Math.round(t.y / viewport.height * 100) },
+        position: { x: Math.round(t.x / pageW * 100), y: Math.round(t.y / pageH * 100) },
         voltage: spec.voltage ? `${spec.voltage}V` : undefined,
         current: spec.current ? `${spec.current}A` : undefined,
         rating: spec.power
@@ -326,17 +396,22 @@ export async function parsePdfToSLD(
     }
   }
 
-  // 선분 → 연결 (일정 길이 이상)
-  const ptToMeter = 0.000352778; // 1pt = 0.352778mm
+  // 선분 → 연결 (일정 길이 이상 — 임계는 종이 pt 공간의 기하 노이즈 필터일 뿐)
+  //
+  // length는 넣지 않는다(2026-07-21 3차 실증 수리): 도면 종이 좌표에는 축척이
+  // 없어(실측 표제란 SCALE=NONE) pt→m 환산(구판 ptToMeter)은 실거리가 아니라
+  // 발명이다 — calcChain cable-sizing/voltage-drop이 가공 길이 0.09~0.37m로
+  // 오염되던 실측. VLM 경로 계약("Never infer a physical length from pixel
+  // spacing")과 같은 도메인 규칙: 길이는 도면에 인쇄된 값이 있을 때만 존재한다.
+  const MIN_CONN_SEGMENT_PT = 28.35; // 구판 1cm 필터와 동일 기하량(0.01m×2834.65pt/m)
   for (const seg of lines) {
-    const lengthM = lineLength(seg) * ptToMeter;
-    if (lengthM < 0.01) continue; // 1cm 미만 무시
+    if (lineLength(seg) < MIN_CONN_SEGMENT_PT) continue;
 
     connections.push({
       id: `conn_${++connIdx}`,
       from: formatEndpointId({ x: seg.x1, y: seg.y1 }),
       to: formatEndpointId({ x: seg.x2, y: seg.y2 }),
-      length: `${Math.round(lengthM * 100) / 100}m`,
+      length: undefined,
       conductorSize: undefined,
       cableType: undefined,
     });
@@ -375,8 +450,8 @@ export async function parsePdfToSLD(
       type: 'bus',
       label: '접점 (junction)',
       position: {
-        x: Math.round((j.x / viewport.width) * 100),
-        y: Math.round((j.y / viewport.height) * 100),
+        x: Math.round((j.x / pageW) * 100),
+        y: Math.round((j.y / pageH) * 100),
       },
       properties: { synthetic: 'junction' },
     });
@@ -395,16 +470,25 @@ export async function parsePdfToSLD(
   // junctioned 68로 결선 행세 — 실제 분전반 도면은 525 vs 47로 역전).
   // 상수 임계 발명 없이 두 증거량의 비교만 쓴다.
   const anchored = snap.stats.snapped > snap.stats.junctioned;
+  // 표 문서 강등(2026-07-21 3차 실증): 실물 케이블 스케줄(EE-007)은 셀마다 장치
+  // 라벨이 있어 끝점이 앵커에 붙으므로 anchored 방어를 뚫고 conf 0.85 회로
+  // 165장치를 발명했다. 도면 관례상 표 문서는 블록마다 표제를 반복하므로
+  // (실측 EE-007 "CABLE SCHEDULE" 7회), 표제 토큰 반복(≥2)을 문서 유형 증거로
+  // 강등한다. 표제 1회짜리 혼합 시트(결선도+부분 표)는 유지 — 선언된 잔여.
+  const scheduleTitleCount = texts.filter((t) => SCHEDULE_TITLE.test(t.text)).length;
+  const tableDocument = scheduleTitleCount >= 2;
   const structureNote =
     lines.length === 0 ? ' — 기하(선분) 0: 스캔/이미지 도면 추정, 결선 해석 불가'
     : snap.connections.length === 0 ? ' — 선분은 있으나 결속 0: 배치만 참고'
     : !anchored ? ' — 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고'
+    : tableDocument ? ` — 표 문서 판정(표제 ${scheduleTitleCount}회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고`
     : '';
   const confidence =
     components.length === 0 && texts.length === 0 && lines.length === 0 ? 0
     : lines.length === 0 ? 0.3
     : snap.connections.length === 0 ? 0.55
     : !anchored ? 0.55
+    : tableDocument ? 0.55
     : 0.85;
 
   return {
@@ -413,8 +497,8 @@ export async function parsePdfToSLD(
     sourceTexts: texts.map((item) => ({
       text: item.text,
       position: {
-        x: Math.max(0, Math.min(100, (item.x / Math.max(1, viewport.width)) * 100)),
-        y: Math.max(0, Math.min(100, (item.y / Math.max(1, viewport.height)) * 100)),
+        x: Math.max(0, Math.min(100, (item.x / Math.max(1, pageW)) * 100)),
+        y: Math.max(0, Math.min(100, (item.y / Math.max(1, pageH)) * 100)),
       },
       confidence: 0.99,
     })),

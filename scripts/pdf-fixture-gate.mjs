@@ -178,5 +178,77 @@ await sleep(800);
     r.status === 400, `status ${r.status} body ${JSON.stringify(r.json)?.slice(0, 120)}`);
 }
 
+// ── 2026-07-21 3차 실증(실도면 티어) 회귀 잠금 R9~R12 ─────────────────────────
+// R9 — 실물 케이블 스케줄 표: 표제 반복(≥2) + 장치가 앵커에 붙는 격자에서
+// conf 0.55 강등(EE-007이 conf 0.85 회로 165장치로 발명되던 결함).
+// 표제 2회 + (circuit 픽스처와 동일하게) 끝점이 텍스트 앵커에 스냅되는 세로
+// 괘선 — 실물 표(EE-007)처럼 anchored=true인데도 표제 증거로 강등돼야 한다.
+// (수평 격자만 그리면 anchored=false가 되어 구방어(R7)가 먼저 발화 — 이 케이스가
+// 잠그는 건 "anchored를 뚫는 표"다.)
+const tableDoc =
+  text(100, 760, 'CABLE SCHEDULE (B1F)') + text(300, 760, 'CABLE SCHEDULE (1F)') +
+  text(100, 700, 'MCCB 3P 100/75') + text(100, 500, 'MCCB 3P 50/30') +
+  text(300, 700, 'MCCB 3P 125/100') + text(300, 500, 'ELB 2P 30/20') +
+  stroke(103, 698, 103, 505) + stroke(303, 698, 303, 505);
+await sleep(800);
+{
+  const r = await post('table-doc.pdf', buildPdf(tableDoc));
+  check('R9 표 문서(표제≥2): conf 0.55 강등 + 사유 명시',
+    r.status === 200 && r.json?.parserInfo?.confidence === 0.55
+      && String(r.json?.data?.rawDescription ?? '').includes('표 문서'),
+    `status ${r.status} conf ${r.json?.parserInfo?.confidence} desc ${String(r.json?.data?.rawDescription ?? '').slice(-80)}`);
+}
+
+// R10 — 주석 문장 게이트: 키워드를 품은 영문 노트가 장치로 승격되지 않는다
+// (RSC 실도면에서 "If you do not have VCB but you…"가 breaker로 환각).
+const proseNote =
+  text(100, 700, 'If you do not have VCB but you') + text(100, 680, 'have LBS in HT panel') +
+  text(100, 500, 'VCB 630A') + stroke(103, 698, 103, 505);
+await sleep(800);
+{
+  const r = await post('prose-note.pdf', buildPdf(proseNote));
+  const breakers = (r.json?.data?.components ?? []).filter(x => x.type === 'breaker');
+  const panels = (r.json?.data?.components ?? []).filter(x => x.type === 'panel');
+  check('R10 주석 문장≠장치 · 실라벨 VCB 630A=차단기 1건',
+    r.status === 200 && breakers.length === 1 && breakers[0].label === 'VCB 630A' && panels.length === 0,
+    `status ${r.status} breakers ${JSON.stringify(breakers.map(b => b.label))} panels ${panels.length}`);
+}
+
+// R11 — 좌표 유래 가공 길이 금지: 종이 좌표(축척 없음)에서 length를 발명해
+// calcChain cable-sizing이 0.09~0.37m로 오염되던 결함. 인쇄된 길이가 없으면
+// 연결 length는 없고 길이 의존 계산도 없다.
+await sleep(800);
+{
+  const r = await post('no-length.pdf', buildPdf(circuit));
+  const conns = r.json?.data?.connections ?? [];
+  const calcSteps = r.json?.calcChain ?? [];
+  const fabricated = conns.filter(c => c.length != null);
+  const lengthCalcs = calcSteps.filter(s => JSON.stringify(s.inputs ?? {}).includes('length'));
+  check('R11 가공 길이 0 + 길이 의존 계산 0',
+    r.status === 200 && conns.length >= 1 && fabricated.length === 0 && lengthCalcs.length === 0,
+    `status ${r.status} conns ${conns.length} fabricated ${fabricated.length} lengthCalcs ${lengthCalcs.length}`);
+}
+
+// R12 — 90° 회전 플롯 정규화: CAD가 가로 도면을 세로 페이지에 회전 배치하면
+// 결속 기하가 전부 어긋나던 결함(RSC 실측 결속 70%→20%). 회전 텍스트(Tm 행렬)
+// 과반이면 좌표계를 되돌려 세로 결속(스펙이 라벨 아래)이 성립해야 한다.
+// 좌표는 페이지 박스(595×842) 안에 두어야 한다 — 박스 밖 텍스트는 pdfjs가
+// 컬링해 픽스처 자체가 사문이 된다(1차 작성 x=700이 그랬다·실측 "2 text items").
+const rotText = (x, y, s) => `BT /F1 10 Tf 0 1 -1 0 ${x} ${y} Tm (${s}) Tj ET\n`;
+const rotated =
+  rotText(100, 700, 'TR 1000KVA') + rotText(100, 500, 'MCCB 100A') +
+  rotText(130, 500, 'SPARE') +
+  stroke(103, 698, 103, 505) + stroke(107, 698, 107, 505);
+await sleep(800);
+{
+  const r = await post('rotated.pdf', buildPdf(rotated));
+  const comps = r.json?.data?.components ?? [];
+  const tr = comps.find(x => x.type === 'transformer');
+  const brk = comps.find(x => x.type === 'breaker');
+  check('R12 회전 도면: TR/MCCB 검출 + 결선≥1 유지',
+    r.status === 200 && Boolean(tr) && Boolean(brk) && (r.json?.data?.connections?.length ?? 0) >= 1,
+    `status ${r.status} types ${JSON.stringify(comps.map(c => c.type))} conn ${r.json?.data?.connections?.length}`);
+}
+
 console.log(failures.length === 0 ? `\nGATE PASS (${totalChecks}/${totalChecks})` : `\nGATE FAIL — ${failures.length}/${totalChecks}건: ${failures.join(', ')}`);
 process.exit(failures.length === 0 ? 0 : 1);

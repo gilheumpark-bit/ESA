@@ -1,0 +1,3993 @@
+{
+  "status": 200,
+  "json": {
+    "success": true,
+    "data": {
+      "components": [
+        {
+          "id": "comp_1",
+          "type": "breaker",
+          "label": "MCCB 3P-60/60",
+          "position": {
+            "x": 13,
+            "y": 42
+          },
+          "current": "60A",
+          "rating": "60AF/60AT",
+          "properties": {
+            "poles": "3P",
+            "load": "FAN"
+          }
+        },
+        {
+          "id": "comp_2",
+          "type": "breaker",
+          "label": "MCCB 3P-100/75",
+          "position": {
+            "x": 13,
+            "y": 20
+          },
+          "current": "75A",
+          "rating": "100AF/75AT",
+          "properties": {
+            "poles": "3P",
+            "load": "분전반"
+          }
+        },
+        {
+          "id": "comp_3",
+          "type": "breaker",
+          "label": "MCCB 3P-50/30",
+          "position": {
+            "x": 24,
+            "y": 24
+          },
+          "current": "30A",
+          "rating": "50AF/30AT",
+          "properties": {
+            "poles": "3P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_4",
+          "type": "breaker",
+          "label": "MCCB 3P-100/60",
+          "position": {
+            "x": 12,
+            "y": 24
+          },
+          "current": "60A",
+          "rating": "100AF/60AT",
+          "properties": {
+            "poles": "3P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_5",
+          "type": "breaker",
+          "label": "MCCB 3P-50/30",
+          "position": {
+            "x": 24,
+            "y": 25
+          },
+          "current": "30A",
+          "rating": "50AF/30AT",
+          "properties": {
+            "poles": "3P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_6",
+          "type": "breaker",
+          "label": "ELB 2P-50/30",
+          "position": {
+            "x": 24,
+            "y": 46
+          },
+          "current": "30A",
+          "rating": "50AF/30AT",
+          "properties": {
+            "poles": "2P",
+            "load": "FAN",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_7",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 12,
+            "y": 46
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_8",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 12,
+            "y": 48
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_9",
+          "type": "breaker",
+          "label": "MCCB 3P-100/75",
+          "position": {
+            "x": 35,
+            "y": 42
+          },
+          "current": "75A",
+          "rating": "100AF/75AT",
+          "properties": {
+            "poles": "3P",
+            "load": "P-B-D"
+          }
+        },
+        {
+          "id": "comp_10",
+          "type": "breaker",
+          "label": "MCCB 3P-100/100",
+          "position": {
+            "x": 35,
+            "y": 20
+          },
+          "current": "100A",
+          "rating": "100AF/100AT",
+          "properties": {
+            "poles": "3P",
+            "load": "P-B-D"
+          }
+        },
+        {
+          "id": "comp_11",
+          "type": "breaker",
+          "label": "MCCB 3P-50/50",
+          "position": {
+            "x": 47,
+            "y": 24
+          },
+          "current": "50A",
+          "rating": "50AF/50AT",
+          "properties": {
+            "poles": "3P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_12",
+          "type": "breaker",
+          "label": "MCCB 3P-50/50",
+          "position": {
+            "x": 34,
+            "y": 24
+          },
+          "current": "50A",
+          "rating": "50AF/50AT",
+          "properties": {
+            "poles": "3P",
+            "load": "냉난방기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_13",
+          "type": "breaker",
+          "label": "MCCB 3P-50/40",
+          "position": {
+            "x": 47,
+            "y": 25
+          },
+          "current": "40A",
+          "rating": "50AF/40AT",
+          "properties": {
+            "poles": "3P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_14",
+          "type": "breaker",
+          "label": "MCCB 3P-50/40",
+          "position": {
+            "x": 34,
+            "y": 25
+          },
+          "current": "40A",
+          "rating": "50AF/40AT",
+          "properties": {
+            "poles": "3P",
+            "load": "컨트롤 판넬",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_15",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 27
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "실험실 전등",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_16",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 27
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "무향실 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_17",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 28
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "무향실 실험중 전등",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_18",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 28
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "잔향실 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_19",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 30
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_20",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 30
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "복도 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_21",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 32
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_22",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 32
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "복도 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_23",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 46
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_24",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 46
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_25",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 48
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "106 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_26",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 48
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "잔향실 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_27",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 49
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_28",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 49
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "무향실 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_29",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 51
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_30",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 51
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "잔향실 전기",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_31",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 47,
+            "y": 53
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_32",
+          "type": "breaker",
+          "label": "ELB 2P-30/20",
+          "position": {
+            "x": 34,
+            "y": 53
+          },
+          "current": "20A",
+          "rating": "30AF/20AT",
+          "properties": {
+            "poles": "2P",
+            "load": "기존",
+            "tag": "기존"
+          }
+        },
+        {
+          "id": "comp_33",
+          "type": "breaker",
+          "label": "MCCB 3P-100/75",
+          "position": {
+            "x": 35,
+            "y": 62
+          },
+          "current": "75A",
+          "rating": "100AF/75AT",
+          "properties": {
+            "poles": "3P",
+            "load": "P-B-D"
+          }
+        },
+        {
+          "id": "comp_34",
+          "type": "breaker",
+          "label": "MCCB 3P-100/60",
+          "position": {
+            "x": 58,
+            "y": 21
+          },
+          "current": "60A",
+          "rating": "100AF/60AT",
+          "properties": {
+            "poles": "3P",
+            "load": "CP-1"
+          }
+        },
+        {
+          "id": "comp_35",
+          "type": "breaker",
+          "label": "1층 MCCB",
+          "position": {
+            "x": 58,
+            "y": 20
+          }
+        },
+        {
+          "id": "comp_36",
+          "type": "switch",
+          "label": "ON - SW",
+          "position": {
+            "x": 61,
+            "y": 24
+          },
+          "properties": {
+            "load": "M.G"
+          }
+        },
+        {
+          "id": "comp_37",
+          "type": "switch",
+          "label": "0FF - SW",
+          "position": {
+            "x": 60,
+            "y": 24
+          },
+          "properties": {
+            "load": "3P 50A"
+          }
+        },
+        {
+          "id": "junction_103.08_571.88",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 9,
+            "y": 68
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_359.88_571.88",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 30,
+            "y": 68
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_103.08_99.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 9,
+            "y": 12
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_359.88_99.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 30,
+            "y": 12
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_224.04_171.44",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 19,
+            "y": 20
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_224.04_314.96",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 19,
+            "y": 37
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_224.04_552.68",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 19,
+            "y": 66
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_214.2_388.4",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 18,
+            "y": 46
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_627.84_571.88",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 53,
+            "y": 68
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_627.84_99.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 53,
+            "y": 12
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_492_171.44",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 41,
+            "y": 20
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_492_314.96",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 41,
+            "y": 37
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_492_480.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 41,
+            "y": 57
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_482.16_239.6",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 40,
+            "y": 28
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_482.16_388.4",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 40,
+            "y": 46
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_599.28_508.04",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 50,
+            "y": 60
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_48.12_805.16",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 4,
+            "y": 96
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_48.12_37.16",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 4,
+            "y": 4
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_1138.08_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 96,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_1053_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 88,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_967.92_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 81,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_797.88_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 67,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_627.84_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 53,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_365.64_787.52",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 31,
+            "y": 94
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_435.12_778.64",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 37,
+            "y": 92
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_532.32_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 45,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_219.12_769.76",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 18,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_1138.08_37.16",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 96,
+            "y": 4
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_219.12_688.4",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 18,
+            "y": 82
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_100.08_688.4",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 8,
+            "y": 82
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_101.64_763.4",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 9,
+            "y": 91
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_639_251.24",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 54,
+            "y": 30
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_895.8_251.24",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 75,
+            "y": 30
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_895.8_99.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 75,
+            "y": 12
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_867.24_181.88",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 73,
+            "y": 22
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_801.12_168.32",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 67,
+            "y": 20
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_711.72_723.56",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 60,
+            "y": 86
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "conn_1",
+          "from": "junction_103.08_571.88",
+          "to": "junction_359.88_571.88"
+        },
+        {
+          "id": "conn_2",
+          "from": "junction_103.08_571.88",
+          "to": "junction_103.08_99.2"
+        },
+        {
+          "id": "conn_3",
+          "from": "junction_103.08_99.2",
+          "to": "junction_359.88_99.2"
+        },
+        {
+          "id": "conn_4",
+          "from": "junction_359.88_99.2",
+          "to": "junction_359.88_571.88"
+        },
+        {
+          "id": "conn_5",
+          "from": "junction_359.88_571.88",
+          "to": "junction_103.08_571.88"
+        },
+        {
+          "id": "conn_6",
+          "from": "junction_359.88_99.2",
+          "to": "comp_2"
+        },
+        {
+          "id": "conn_7",
+          "from": "junction_224.04_171.44",
+          "to": "junction_224.04_314.96"
+        },
+        {
+          "id": "conn_8",
+          "from": "comp_3",
+          "to": "junction_224.04_314.96"
+        },
+        {
+          "id": "conn_9",
+          "from": "comp_3",
+          "to": "junction_224.04_314.96"
+        },
+        {
+          "id": "conn_10",
+          "from": "junction_224.04_314.96",
+          "to": "junction_224.04_552.68"
+        },
+        {
+          "id": "conn_11",
+          "from": "comp_6",
+          "to": "junction_224.04_552.68"
+        },
+        {
+          "id": "conn_12",
+          "from": "comp_6",
+          "to": "junction_224.04_552.68"
+        },
+        {
+          "id": "conn_33",
+          "from": "junction_224.04_171.44",
+          "to": "comp_3"
+        },
+        {
+          "id": "conn_34",
+          "from": "junction_224.04_171.44",
+          "to": "comp_3"
+        },
+        {
+          "id": "conn_35",
+          "from": "junction_224.04_171.44",
+          "to": "comp_3"
+        },
+        {
+          "id": "conn_37",
+          "from": "comp_2",
+          "to": "comp_4"
+        },
+        {
+          "id": "conn_45",
+          "from": "junction_214.2_388.4",
+          "to": "comp_6"
+        },
+        {
+          "id": "conn_46",
+          "from": "junction_214.2_388.4",
+          "to": "comp_6"
+        },
+        {
+          "id": "conn_51",
+          "from": "comp_1",
+          "to": "comp_7"
+        },
+        {
+          "id": "conn_56",
+          "from": "junction_359.88_571.88",
+          "to": "junction_627.84_571.88"
+        },
+        {
+          "id": "conn_57",
+          "from": "junction_359.88_571.88",
+          "to": "junction_359.88_99.2"
+        },
+        {
+          "id": "conn_58",
+          "from": "junction_359.88_99.2",
+          "to": "junction_627.84_99.2"
+        },
+        {
+          "id": "conn_59",
+          "from": "junction_627.84_99.2",
+          "to": "junction_627.84_571.88"
+        },
+        {
+          "id": "conn_60",
+          "from": "junction_627.84_571.88",
+          "to": "junction_359.88_571.88"
+        },
+        {
+          "id": "conn_61",
+          "from": "junction_627.84_99.2",
+          "to": "comp_10"
+        },
+        {
+          "id": "conn_62",
+          "from": "junction_492_171.44",
+          "to": "junction_492_314.96"
+        },
+        {
+          "id": "conn_63",
+          "from": "comp_11",
+          "to": "junction_492_314.96"
+        },
+        {
+          "id": "conn_64",
+          "from": "comp_11",
+          "to": "junction_492_314.96"
+        },
+        {
+          "id": "conn_65",
+          "from": "junction_492_314.96",
+          "to": "junction_492_480.2"
+        },
+        {
+          "id": "conn_66",
+          "from": "comp_23",
+          "to": "junction_492_480.2"
+        },
+        {
+          "id": "conn_67",
+          "from": "comp_23",
+          "to": "comp_31"
+        },
+        {
+          "id": "conn_88",
+          "from": "junction_492_171.44",
+          "to": "comp_11"
+        },
+        {
+          "id": "conn_89",
+          "from": "junction_492_171.44",
+          "to": "comp_11"
+        },
+        {
+          "id": "conn_90",
+          "from": "junction_492_171.44",
+          "to": "comp_11"
+        },
+        {
+          "id": "conn_92",
+          "from": "comp_10",
+          "to": "comp_12"
+        },
+        {
+          "id": "conn_97",
+          "from": "junction_492_171.44",
+          "to": "comp_13"
+        },
+        {
+          "id": "conn_98",
+          "from": "junction_492_171.44",
+          "to": "comp_13"
+        },
+        {
+          "id": "conn_99",
+          "from": "junction_492_171.44",
+          "to": "comp_13"
+        },
+        {
+          "id": "conn_100",
+          "from": "comp_14",
+          "to": "comp_16"
+        },
+        {
+          "id": "conn_102",
+          "from": "comp_15",
+          "to": "comp_13"
+        },
+        {
+          "id": "conn_104",
+          "from": "comp_15",
+          "to": "comp_13"
+        },
+        {
+          "id": "conn_105",
+          "from": "comp_14",
+          "to": "comp_16"
+        },
+        {
+          "id": "conn_106",
+          "from": "junction_492_171.44",
+          "to": "comp_13"
+        },
+        {
+          "id": "conn_107",
+          "from": "junction_492_171.44",
+          "to": "comp_15"
+        },
+        {
+          "id": "conn_109",
+          "from": "comp_13",
+          "to": "comp_15"
+        },
+        {
+          "id": "conn_112",
+          "from": "comp_16",
+          "to": "comp_14"
+        },
+        {
+          "id": "conn_114",
+          "from": "junction_482.16_239.6",
+          "to": "comp_17"
+        },
+        {
+          "id": "conn_115",
+          "from": "junction_482.16_239.6",
+          "to": "comp_17"
+        },
+        {
+          "id": "conn_122",
+          "from": "junction_492_314.96",
+          "to": "comp_19"
+        },
+        {
+          "id": "conn_123",
+          "from": "junction_492_314.96",
+          "to": "comp_19"
+        },
+        {
+          "id": "conn_130",
+          "from": "junction_492_314.96",
+          "to": "comp_21"
+        },
+        {
+          "id": "conn_131",
+          "from": "junction_492_314.96",
+          "to": "comp_21"
+        },
+        {
+          "id": "conn_138",
+          "from": "junction_482.16_388.4",
+          "to": "comp_23"
+        },
+        {
+          "id": "conn_139",
+          "from": "junction_482.16_388.4",
+          "to": "comp_23"
+        },
+        {
+          "id": "conn_144",
+          "from": "comp_9",
+          "to": "comp_24"
+        },
+        {
+          "id": "conn_146",
+          "from": "junction_482.16_388.4",
+          "to": "comp_25"
+        },
+        {
+          "id": "conn_147",
+          "from": "junction_482.16_388.4",
+          "to": "comp_25"
+        },
+        {
+          "id": "conn_154",
+          "from": "junction_492_480.2",
+          "to": "comp_27"
+        },
+        {
+          "id": "conn_155",
+          "from": "junction_492_480.2",
+          "to": "comp_27"
+        },
+        {
+          "id": "conn_162",
+          "from": "junction_492_480.2",
+          "to": "comp_29"
+        },
+        {
+          "id": "conn_163",
+          "from": "junction_492_480.2",
+          "to": "comp_29"
+        },
+        {
+          "id": "conn_170",
+          "from": "junction_492_480.2",
+          "to": "comp_31"
+        },
+        {
+          "id": "conn_171",
+          "from": "junction_492_480.2",
+          "to": "comp_31"
+        },
+        {
+          "id": "conn_183",
+          "from": "junction_627.84_571.88",
+          "to": "junction_492_480.2"
+        },
+        {
+          "id": "conn_184",
+          "from": "junction_492_480.2",
+          "to": "junction_627.84_571.88"
+        },
+        {
+          "id": "conn_185",
+          "from": "junction_627.84_571.88",
+          "to": "junction_492_480.2"
+        },
+        {
+          "id": "conn_186",
+          "from": "junction_492_480.2",
+          "to": "junction_599.28_508.04"
+        },
+        {
+          "id": "conn_187",
+          "from": "junction_627.84_571.88",
+          "to": "junction_492_480.2"
+        },
+        {
+          "id": "conn_188",
+          "from": "junction_48.12_805.16",
+          "to": "junction_48.12_37.16"
+        },
+        {
+          "id": "conn_189",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_194",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_967.92_769.76"
+        },
+        {
+          "id": "conn_195",
+          "from": "junction_627.84_769.76",
+          "to": "junction_365.64_787.52"
+        },
+        {
+          "id": "conn_196",
+          "from": "junction_435.12_778.64",
+          "to": "junction_627.84_769.76"
+        },
+        {
+          "id": "conn_197",
+          "from": "junction_627.84_769.76",
+          "to": "junction_435.12_778.64"
+        },
+        {
+          "id": "conn_200",
+          "from": "junction_48.12_37.16",
+          "to": "junction_1138.08_37.16"
+        },
+        {
+          "id": "conn_201",
+          "from": "junction_1138.08_37.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_202",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_205",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_206",
+          "from": "junction_48.12_805.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_207",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_208",
+          "from": "junction_48.12_805.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_209",
+          "from": "junction_48.12_805.16",
+          "to": "junction_48.12_37.16"
+        },
+        {
+          "id": "conn_210",
+          "from": "junction_48.12_37.16",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_211",
+          "from": "junction_48.12_805.16",
+          "to": "junction_48.12_37.16"
+        },
+        {
+          "id": "conn_212",
+          "from": "junction_48.12_37.16",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_213",
+          "from": "junction_48.12_37.16",
+          "to": "junction_1138.08_37.16"
+        },
+        {
+          "id": "conn_214",
+          "from": "junction_1138.08_37.16",
+          "to": "junction_48.12_37.16"
+        },
+        {
+          "id": "conn_215",
+          "from": "junction_48.12_37.16",
+          "to": "junction_1138.08_37.16"
+        },
+        {
+          "id": "conn_216",
+          "from": "junction_1138.08_37.16",
+          "to": "junction_48.12_37.16"
+        },
+        {
+          "id": "conn_217",
+          "from": "junction_1138.08_37.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_218",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_1138.08_37.16"
+        },
+        {
+          "id": "conn_219",
+          "from": "junction_1138.08_37.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_220",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_1138.08_37.16"
+        },
+        {
+          "id": "conn_221",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_222",
+          "from": "junction_48.12_805.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_223",
+          "from": "junction_1138.08_769.76",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_224",
+          "from": "junction_48.12_805.16",
+          "to": "junction_1138.08_769.76"
+        },
+        {
+          "id": "conn_225",
+          "from": "junction_219.12_688.4",
+          "to": "junction_100.08_688.4"
+        },
+        {
+          "id": "conn_226",
+          "from": "junction_100.08_688.4",
+          "to": "junction_48.12_805.16"
+        },
+        {
+          "id": "conn_227",
+          "from": "junction_48.12_805.16",
+          "to": "junction_219.12_769.76"
+        },
+        {
+          "id": "conn_228",
+          "from": "junction_219.12_769.76",
+          "to": "junction_219.12_688.4"
+        },
+        {
+          "id": "conn_229",
+          "from": "junction_219.12_688.4",
+          "to": "junction_100.08_688.4"
+        },
+        {
+          "id": "conn_230",
+          "from": "junction_100.08_688.4",
+          "to": "junction_101.64_763.4"
+        },
+        {
+          "id": "conn_231",
+          "from": "junction_101.64_763.4",
+          "to": "junction_219.12_769.76"
+        },
+        {
+          "id": "conn_232",
+          "from": "junction_219.12_769.76",
+          "to": "junction_219.12_688.4"
+        },
+        {
+          "id": "conn_233",
+          "from": "junction_639_251.24",
+          "to": "junction_895.8_251.24"
+        },
+        {
+          "id": "conn_234",
+          "from": "junction_639_251.24",
+          "to": "junction_627.84_99.2"
+        },
+        {
+          "id": "conn_235",
+          "from": "junction_627.84_99.2",
+          "to": "junction_895.8_99.2"
+        },
+        {
+          "id": "conn_236",
+          "from": "junction_895.8_99.2",
+          "to": "junction_895.8_251.24"
+        },
+        {
+          "id": "conn_237",
+          "from": "junction_895.8_251.24",
+          "to": "junction_639_251.24"
+        },
+        {
+          "id": "conn_238",
+          "from": "junction_895.8_99.2",
+          "to": "junction_627.84_99.2"
+        },
+        {
+          "id": "conn_239",
+          "from": "comp_36",
+          "to": "comp_34"
+        },
+        {
+          "id": "conn_240",
+          "from": "comp_34",
+          "to": "comp_36"
+        },
+        {
+          "id": "conn_241",
+          "from": "comp_36",
+          "to": "comp_34"
+        },
+        {
+          "id": "conn_242",
+          "from": "comp_34",
+          "to": "comp_35"
+        },
+        {
+          "id": "conn_243",
+          "from": "comp_36",
+          "to": "comp_34"
+        },
+        {
+          "id": "conn_245",
+          "from": "junction_801.12_168.32",
+          "to": "junction_867.24_181.88"
+        },
+        {
+          "id": "conn_247",
+          "from": "junction_801.12_168.32",
+          "to": "junction_867.24_181.88"
+        },
+        {
+          "id": "conn_248",
+          "from": "junction_867.24_181.88",
+          "to": "junction_801.12_168.32"
+        },
+        {
+          "id": "conn_249",
+          "from": "junction_532.32_769.76",
+          "to": "junction_711.72_723.56"
+        }
+      ],
+      "sourceTexts": [
+        {
+          "text": "NOTE",
+          "position": {
+            "x": 8.836272040302266,
+            "y": 68.58907363420428
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "지하1층",
+          "position": {
+            "x": 11.052896725440805,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 10.780856423173804,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "판넬위치",
+          "position": {
+            "x": 8.866498740554157,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "노출/ALL STEEL",
+          "position": {
+            "x": 11.244332493702771,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 10.972292191435768,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "형태/재질",
+          "position": {
+            "x": 8.866498740554157,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "W : 550 H : 900 D : 200",
+          "position": {
+            "x": 10.277078085642316,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 10.055415617128464,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "크 기",
+          "position": {
+            "x": 8.866498740554157,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S",
+          "position": {
+            "x": 19.33501259445844,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R",
+          "position": {
+            "x": 18.690176322418136,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 19.969773299748113,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GT",
+          "position": {
+            "x": 19.133501259445843,
+            "y": 66.53681710213777
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FAN",
+          "position": {
+            "x": 14.095717884130982,
+            "y": 42.87885985748219
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-60/60",
+          "position": {
+            "x": 12.886649874055415,
+            "y": 42.10926365795725
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MAIN",
+          "position": {
+            "x": 11.153652392947103,
+            "y": 42.52256532066509
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PNL",
+          "position": {
+            "x": 28.604534005037785,
+            "y": 15.629453681710217
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "7",
+          "position": {
+            "x": 28.886649874055415,
+            "y": 16.52731591448932
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "지하변전실 LV2",
+          "position": {
+            "x": 13.037783375314863,
+            "y": 41.32541567695963
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FROM",
+          "position": {
+            "x": 11.133501259445843,
+            "y": 41.28266033254157
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "54C (FCV 1-16°/3C,E-16°)",
+          "position": {
+            "x": 23.062972292191436,
+            "y": 42.8646080760095
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CABLE SIZE",
+          "position": {
+            "x": 23.949622166246854,
+            "y": 42.10926365795725
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GT",
+          "position": {
+            "x": 19.153652392947105,
+            "y": 38.30403800475059
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "분전반",
+          "position": {
+            "x": 13.934508816120909,
+            "y": 20.40380047505939
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-100/75",
+          "position": {
+            "x": 12.775818639798489,
+            "y": 19.619952494061764
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MAIN",
+          "position": {
+            "x": 11.153652392947103,
+            "y": 20.033254156769605
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "지하 변전실 LV1",
+          "position": {
+            "x": 12.967254408060452,
+            "y": 18.836104513064136
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FROM",
+          "position": {
+            "x": 11.133501259445843,
+            "y": 18.79334916864608
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S",
+          "position": {
+            "x": 19.33501259445844,
+            "y": 40.44180522565321
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R",
+          "position": {
+            "x": 18.690176322418136,
+            "y": 40.44180522565321
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 19.969773299748113,
+            "y": 40.44180522565321
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "54C (FCV 1-25°/3C,E-16°)",
+          "position": {
+            "x": 23.062972292191436,
+            "y": 20.37529691211402
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CABLE SIZE",
+          "position": {
+            "x": 23.949622166246854,
+            "y": 19.619952494061764
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3Φ 3W 220V",
+          "position": {
+            "x": 24.62468513853904,
+            "y": 18.821852731591452
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사용전압",
+          "position": {
+            "x": 22.287153652392945,
+            "y": 18.821852731591452
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3φ 3W 220V",
+          "position": {
+            "x": 24.65491183879093,
+            "y": 41.26840855106889
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사용전압",
+          "position": {
+            "x": 22.287153652392945,
+            "y": 41.31116389548694
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 25.269521410579344,
+            "y": 24.380047505938236
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-50/30",
+          "position": {
+            "x": 24.100755667506295,
+            "y": 23.61045130641331
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 22.448362720403022,
+            "y": 24.023752969121137
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 15.65743073047859,
+            "y": 24.023752969121137
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-100/60",
+          "position": {
+            "x": 11.63727959697733,
+            "y": 23.61045130641331
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 12.957178841309824,
+            "y": 24.380047505938236
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 25.269521410579344,
+            "y": 25.990498812351547
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-50/30",
+          "position": {
+            "x": 24.100755667506295,
+            "y": 25.220902612826606
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 22.448362720403022,
+            "y": 25.634204275534444
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FAN",
+          "position": {
+            "x": 25.309823677581868,
+            "y": 46.86935866983373
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-50/30",
+          "position": {
+            "x": 24.31234256926952,
+            "y": 46.09976247030879
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 22.448362720403022,
+            "y": 46.51306413301663
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 11.95969773299748,
+            "y": 46.09976247030879
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 12.957178841309824,
+            "y": 46.86935866983373
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 15.65743073047859,
+            "y": 46.51306413301663
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 11.95969773299748,
+            "y": 47.71021377672209
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 12.957178841309824,
+            "y": 48.479809976247026
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 15.65743073047859,
+            "y": 48.12351543942992
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "NOTE",
+          "position": {
+            "x": 31.33501259445844,
+            "y": 68.58907363420428
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "지하1층",
+          "position": {
+            "x": 33.551637279596974,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 33.27959697732998,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "판넬위치",
+          "position": {
+            "x": 31.365239294710328,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "매입/ALL STEEL",
+          "position": {
+            "x": 33.74307304785894,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 33.47103274559194,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "형태/재질",
+          "position": {
+            "x": 31.365239294710328,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "W : 600 H : 1300",
+          "position": {
+            "x": 32.785894206549116,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 32.55415617128463,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "크 기",
+          "position": {
+            "x": 31.365239294710328,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S",
+          "position": {
+            "x": 41.83375314861461,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R",
+          "position": {
+            "x": 41.188916876574304,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 42.46851385390428,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GT",
+          "position": {
+            "x": 41.63224181360201,
+            "y": 57.9144893111639
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "P-B-D",
+          "position": {
+            "x": 36.40302267002519,
+            "y": 42.87885985748219
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-100/75",
+          "position": {
+            "x": 35.27455919395466,
+            "y": 42.10926365795725
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MAIN",
+          "position": {
+            "x": 33.65239294710328,
+            "y": 42.52256532066509
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PNL",
+          "position": {
+            "x": 51.103274559193956,
+            "y": 15.629453681710217
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "8",
+          "position": {
+            "x": 51.385390428211586,
+            "y": 16.54156769596199
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "P-B-C",
+          "position": {
+            "x": 36.272040302267,
+            "y": 41.31116389548694
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FROM",
+          "position": {
+            "x": 33.632241813602015,
+            "y": 41.28266033254157
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "54C (FCV 1-25°/3C,E-16°)",
+          "position": {
+            "x": 45.56171284634761,
+            "y": 42.8646080760095
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CABLE SIZE",
+          "position": {
+            "x": 46.44836272040302,
+            "y": 42.10926365795725
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GT",
+          "position": {
+            "x": 41.65239294710327,
+            "y": 38.30403800475059
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "P-B-D",
+          "position": {
+            "x": 36.40302267002519,
+            "y": 20.389548693586708
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-100/100",
+          "position": {
+            "x": 35.16372795969773,
+            "y": 19.619952494061764
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MAIN",
+          "position": {
+            "x": 33.65239294710328,
+            "y": 20.033254156769605
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "P-B-C",
+          "position": {
+            "x": 36.272040302267,
+            "y": 18.821852731591452
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FROM",
+          "position": {
+            "x": 33.632241813602015,
+            "y": 18.79334916864608
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S",
+          "position": {
+            "x": 41.83375314861461,
+            "y": 40.44180522565321
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R",
+          "position": {
+            "x": 41.188916876574304,
+            "y": 40.44180522565321
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 42.46851385390428,
+            "y": 40.44180522565321
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "54C (FCV 1-35°/3C,E-16°)",
+          "position": {
+            "x": 45.56171284634761,
+            "y": 20.37529691211402
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CABLE SIZE",
+          "position": {
+            "x": 46.44836272040302,
+            "y": 19.619952494061764
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3Φ 3W 220V",
+          "position": {
+            "x": 47.123425692695214,
+            "y": 18.821852731591452
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사용전압",
+          "position": {
+            "x": 44.785894206549116,
+            "y": 18.821852731591452
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3Φ 3W 220V",
+          "position": {
+            "x": 47.123425692695214,
+            "y": 41.31116389548694
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사용전압",
+          "position": {
+            "x": 44.785894206549116,
+            "y": 41.31116389548694
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.768261964735515,
+            "y": 24.380047505938236
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-50/50",
+          "position": {
+            "x": 46.59949622166247,
+            "y": 23.61045130641331
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 24.023752969121137
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 24.023752969121137
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-50/50",
+          "position": {
+            "x": 34.24685138539043,
+            "y": 23.61045130641331
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "냉난방기",
+          "position": {
+            "x": 35.14357682619648,
+            "y": 24.380047505938236
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.768261964735515,
+            "y": 25.990498812351547
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-50/40",
+          "position": {
+            "x": 46.59949622166247,
+            "y": 25.220902612826606
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 25.634204275534444
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 25.634204275534444
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-50/40",
+          "position": {
+            "x": 34.24685138539043,
+            "y": 25.220902612826606
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "컨트롤 판넬",
+          "position": {
+            "x": 34.942065491183875,
+            "y": 25.990498812351547
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "실험실 전등",
+          "position": {
+            "x": 47.28463476070529,
+            "y": 27.58669833729216
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 26.831353919239913
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 27.230403800475056
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 26.831353919239913
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "무향실 전기",
+          "position": {
+            "x": 34.942065491183875,
+            "y": 27.600950118764843
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 27.230403800475056
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "무향실 실험중 전등",
+          "position": {
+            "x": 46.77078085642317,
+            "y": 29.197149643705465
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 28.427553444180525
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 28.840855106888363
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 28.427553444180525
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "잔향실 전기",
+          "position": {
+            "x": 34.942065491183875,
+            "y": 29.211401425178153
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 28.840855106888363
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.7984886649874,
+            "y": 30.80760095011876
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 30.03800475059383
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 30.45130641330166
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 30.03800475059383
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "복도 전기",
+          "position": {
+            "x": 35.09319899244333,
+            "y": 30.80760095011876
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 30.45130641330166
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.7984886649874,
+            "y": 32.41805225653207
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 31.64845605700713
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 32.06175771971497
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 31.64845605700713
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "복도 전기",
+          "position": {
+            "x": 35.09319899244333,
+            "y": 32.41805225653207
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 32.06175771971497
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.7984886649874,
+            "y": 46.86935866983373
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 46.09976247030879
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 46.51306413301663
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 46.09976247030879
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 35.45591939546599,
+            "y": 46.86935866983373
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 46.51306413301663
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "106 전기",
+          "position": {
+            "x": 47.48614609571788,
+            "y": 48.479809976247026
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 47.71021377672209
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 48.12351543942992
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 47.71021377672209
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "잔향실 전기",
+          "position": {
+            "x": 34.942065491183875,
+            "y": 48.479809976247026
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 48.12351543942992
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.7984886649874,
+            "y": 50.09026128266033
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 49.320665083135395
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 49.71971496437055
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 49.320665083135395
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "무향실 전기",
+          "position": {
+            "x": 34.942065491183875,
+            "y": 50.09026128266033
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 49.71971496437055
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.7984886649874,
+            "y": 51.68646080760095
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 50.91686460807602
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 51.33016627078385
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 50.91686460807602
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "잔향실 전기",
+          "position": {
+            "x": 34.942065491183875,
+            "y": 51.68646080760095
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 51.33016627078385
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 47.7984886649874,
+            "y": 53.29691211401425
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 46.81108312342569,
+            "y": 52.527315914489314
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 44.94710327455918,
+            "y": 52.940617577197145
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ELB 2P-30/20",
+          "position": {
+            "x": 34.458438287153655,
+            "y": 52.527315914489314
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 35.45591939546599,
+            "y": 53.29691211401425
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 38.15617128463476,
+            "y": 52.940617577197145
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "P-B-D",
+          "position": {
+            "x": 36.40302267002519,
+            "y": 62.50356294536816
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-100/75",
+          "position": {
+            "x": 35.27455919395466,
+            "y": 61.733966745843226
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MAIN",
+          "position": {
+            "x": 33.65239294710328,
+            "y": 62.1330166270784
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "P-P-1",
+          "position": {
+            "x": 36.31234256926952,
+            "y": 60.93586698337291
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FROM",
+          "position": {
+            "x": 33.632241813602015,
+            "y": 60.907363420427565
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "54C (FCV 1-25°/3C,E-16°)",
+          "position": {
+            "x": 45.56171284634761,
+            "y": 62.4893111638955
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CABLE SIZE",
+          "position": {
+            "x": 46.44836272040302,
+            "y": 61.733966745843226
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S",
+          "position": {
+            "x": 41.83375314861461,
+            "y": 60.05225653206651
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R",
+          "position": {
+            "x": 41.188916876574304,
+            "y": 60.05225653206651
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 42.46851385390428,
+            "y": 60.05225653206651
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3Φ 3W 440V",
+          "position": {
+            "x": 47.123425692695214,
+            "y": 60.93586698337291
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사용전압",
+          "position": {
+            "x": 44.785894206549116,
+            "y": 60.93586698337291
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GT",
+          "position": {
+            "x": 41.65239294710327,
+            "y": 65.25415676959621
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사",
+          "position": {
+            "x": 53.00755667506297,
+            "y": 92.57482185273159
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "업",
+          "position": {
+            "x": 53.95575362130835,
+            "y": 92.57482185273159
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "명",
+          "position": {
+            "x": 54.90395056755373,
+            "y": 92.57482185273159
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PROJECT TITLE",
+          "position": {
+            "x": 53.00755667506297,
+            "y": 92.07600950118766
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "도",
+          "position": {
+            "x": 67.35516372795969,
+            "y": 92.54631828978623
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "면",
+          "position": {
+            "x": 68.34213102800581,
+            "y": 92.54631828978623
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "명",
+          "position": {
+            "x": 69.32909832805191,
+            "y": 92.54631828978623
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "DRAWING TITLE",
+          "position": {
+            "x": 67.35516372795969,
+            "y": 92.07600950118766
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "일",
+          "position": {
+            "x": 81.41057934508815,
+            "y": 92.36104513064134
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "자",
+          "position": {
+            "x": 82.2772680122796,
+            "y": 92.36104513064134
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "D A T E",
+          "position": {
+            "x": 81.44080604534004,
+            "y": 91.89073634204276
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "축",
+          "position": {
+            "x": 81.40050377833752,
+            "y": 94.3705463182898
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "척",
+          "position": {
+            "x": 82.27401676574307,
+            "y": 94.3705463182898
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S C A L E",
+          "position": {
+            "x": 81.40050377833752,
+            "y": 93.90023752969121
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "DRAWING",
+          "position": {
+            "x": 88.60453400503778,
+            "y": 93.98574821852732
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "NO.",
+          "position": {
+            "x": 89.87479399557917,
+            "y": 93.98574821852732
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "도",
+          "position": {
+            "x": 88.60453400503778,
+            "y": 94.45605700712589
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "면",
+          "position": {
+            "x": 89.06103220698863,
+            "y": 94.45605700712589
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "번",
+          "position": {
+            "x": 89.51753040893948,
+            "y": 94.45605700712589
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "호",
+          "position": {
+            "x": 89.97402861089034,
+            "y": 94.45605700712589
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SHEET",
+          "position": {
+            "x": 88.60453400503778,
+            "y": 91.87648456057008
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "NO.",
+          "position": {
+            "x": 89.80130139444287,
+            "y": 91.87648456057008
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "일",
+          "position": {
+            "x": 88.60453400503778,
+            "y": 92.34679334916865
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "련",
+          "position": {
+            "x": 89.05676585050635,
+            "y": 92.34679334916865
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "번",
+          "position": {
+            "x": 89.50899769597488,
+            "y": 92.34679334916865
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "호",
+          "position": {
+            "x": 89.96122954144344,
+            "y": 92.34679334916865
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "수",
+          "position": {
+            "x": 44.82619647355164,
+            "y": 92.3895486935867
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "정",
+          "position": {
+            "x": 46.32429531669279,
+            "y": 92.3895486935867
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R E V I S I O N",
+          "position": {
+            "x": 44.82619647355164,
+            "y": 91.91923990498813
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "주",
+          "position": {
+            "x": 36.76574307304786,
+            "y": 92.33254156769597
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기",
+          "position": {
+            "x": 38.107663506547844,
+            "y": 92.33254156769597
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "N",
+          "position": {
+            "x": 36.76574307304786,
+            "y": 91.86223277909738
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "O",
+          "position": {
+            "x": 37.25743900170523,
+            "y": 91.86223277909738
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 37.7588177032132,
+            "y": 91.86223277909738
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "E",
+          "position": {
+            "x": 38.21107404489373,
+            "y": 91.86223277909738
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "설",
+          "position": {
+            "x": 30.982367758186395,
+            "y": 92.3895486935867
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "계",
+          "position": {
+            "x": 32.441042833152295,
+            "y": 92.3895486935867
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "DESICNED BY",
+          "position": {
+            "x": 30.982367758186395,
+            "y": 91.91923990498813
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "승",
+          "position": {
+            "x": 30.982367758186395,
+            "y": 94.49881235154393
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "인",
+          "position": {
+            "x": 32.441042833152295,
+            "y": 94.49881235154393
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "APPROVED BY",
+          "position": {
+            "x": 30.982367758186395,
+            "y": 94.02850356294537
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "한국기계연구원",
+          "position": {
+            "x": 8.926952141057933,
+            "y": 94.04275534441805
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "건축사사무소",
+          "position": {
+            "x": 24.24181360201511,
+            "y": 94.14251781472683
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "토토",
+          "position": {
+            "x": 28.14105793450881,
+            "y": 94.39904988123516
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "연구2동(열유체연구동) 환경개선공사",
+          "position": {
+            "x": 53.2896725440806,
+            "y": 94.31353919239905
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "2021. 04.",
+          "position": {
+            "x": 84.63476070528966,
+            "y": 92.85985748218528
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "전기설계업(전문설계1종)충남(설계)제 2-1-54 호",
+          "position": {
+            "x": 8.856423173803526,
+            "y": 85.47743467933492
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "대",
+          "position": {
+            "x": 8.856423173803526,
+            "y": 88.89786223277909
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "표 :",
+          "position": {
+            "x": 12.56141981709363,
+            "y": 88.89786223277909
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "진 흥 이 엔 지",
+          "position": {
+            "x": 10.952141057934508,
+            "y": 83.46793349168645
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "건축전기설비기술사 :",
+          "position": {
+            "x": 8.856423173803526,
+            "y": 89.99524940617577
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "박",
+          "position": {
+            "x": 13.440806045340048,
+            "y": 90.10926365795726
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "란",
+          "position": {
+            "x": 14.747821299748113,
+            "y": 90.10926365795726
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "신",
+          "position": {
+            "x": 16.054836554156175,
+            "y": 90.10926365795726
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "임",
+          "position": {
+            "x": 13.440806045340048,
+            "y": 89.01187648456057
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "중",
+          "position": {
+            "x": 14.747821299748113,
+            "y": 89.01187648456057
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "훈",
+          "position": {
+            "x": 16.054836554156175,
+            "y": 89.01187648456057
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "J",
+          "position": {
+            "x": 11.022670025188917,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "I",
+          "position": {
+            "x": 11.569816949622167,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "N",
+          "position": {
+            "x": 12.070682649244336,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "H",
+          "position": {
+            "x": 12.826095085327463,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "U",
+          "position": {
+            "x": 13.560938088161217,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "N",
+          "position": {
+            "x": 14.284467902707815,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "G",
+          "position": {
+            "x": 15.03988033879094,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "E",
+          "position": {
+            "x": 16.124917942695227,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "N",
+          "position": {
+            "x": 16.752799892632257,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "G",
+          "position": {
+            "x": 17.50821232871538,
+            "y": 84.40855106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "(인)",
+          "position": {
+            "x": 17.198992443324936,
+            "y": 88.94061757719714
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "(인)",
+          "position": {
+            "x": 17.198992443324936,
+            "y": 90.05225653206651
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "전기감리업(종합 감리업)충남(감리)제 1-67호",
+          "position": {
+            "x": 8.846347607052897,
+            "y": 86.2897862232779
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "충청남도 천안시 동남구 충절로 393, 202호(삼룡동)",
+          "position": {
+            "x": 8.846347607052897,
+            "y": 87.11638954869359
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TEL : 041)553-4557 ,",
+          "position": {
+            "x": 8.846347607052897,
+            "y": 87.94299287410927
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FAX : 041)553-5005",
+          "position": {
+            "x": 13.640626203715378,
+            "y": 87.94299287410927
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "NOTE",
+          "position": {
+            "x": 53.833753148614605,
+            "y": 30.5083135391924
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "지하1층",
+          "position": {
+            "x": 56.05037783375314,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 55.778337531486144,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "판넬위치",
+          "position": {
+            "x": 53.86397984886649,
+            "y": 12.465558194774351
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "매입/ALL STEEL",
+          "position": {
+            "x": 56.241813602015114,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 55.96977329974811,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "형태/재질",
+          "position": {
+            "x": 53.86397984886649,
+            "y": 13.178147268408555
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "W : 400 H : 200 D : 150",
+          "position": {
+            "x": 55.28463476070529,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": ":",
+          "position": {
+            "x": 55.0528967254408,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "크 기",
+          "position": {
+            "x": 53.86397984886649,
+            "y": 13.961995249406185
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CP",
+          "position": {
+            "x": 73.71284634760706,
+            "y": 15.629453681710217
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1",
+          "position": {
+            "x": 73.88413098236775,
+            "y": 16.54156769596199
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "S",
+          "position": {
+            "x": 64.33249370277078,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "R",
+          "position": {
+            "x": 63.697732997481104,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "T",
+          "position": {
+            "x": 64.96725440806046,
+            "y": 17.95249406175773
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CP-1",
+          "position": {
+            "x": 59.00251889168766,
+            "y": 21.35866983372922
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB 3P-100/60",
+          "position": {
+            "x": 57.77329974811083,
+            "y": 20.589073634204276
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MAIN",
+          "position": {
+            "x": 56.151133501259444,
+            "y": 21.002375296912117
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1층 MCCB",
+          "position": {
+            "x": 58.458438287153655,
+            "y": 19.790973871733968
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FROM",
+          "position": {
+            "x": 56.130982367758186,
+            "y": 19.762470308788597
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "기존",
+          "position": {
+            "x": 69.7329974811083,
+            "y": 21.35866983372922
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CABLE SIZE",
+          "position": {
+            "x": 68.9471032745592,
+            "y": 20.589073634204276
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3Φ 3W 220V",
+          "position": {
+            "x": 69.62216624685138,
+            "y": 19.790973871733968
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "사용전압",
+          "position": {
+            "x": 67.28463476070529,
+            "y": 19.790973871733968
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GT",
+          "position": {
+            "x": 64.15113350125944,
+            "y": 26.93111638954869
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "M.G",
+          "position": {
+            "x": 66.21662468513854,
+            "y": 23.96674584323041
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ON - SW",
+          "position": {
+            "x": 60.544080604534,
+            "y": 23.553444180522572
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "0FF - SW",
+          "position": {
+            "x": 60.40302267002519,
+            "y": 24.280285035629458
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3P 50A",
+          "position": {
+            "x": 66.19647355163728,
+            "y": 24.67933491686462
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "[속판,커버 철거]",
+          "position": {
+            "x": 72.816120906801,
+            "y": 17.382422802850357
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "[속판,커버 철거]",
+          "position": {
+            "x": 50.31738035264483,
+            "y": 17.382422802850357
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "분전반결선도 2 - 변경전",
+          "position": {
+            "x": 71.17380352644835,
+            "y": 94.28503562945369
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "EE",
+          "position": {
+            "x": 43.99999999999999,
+            "y": 86.91686460807601
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1",
+          "position": {
+            "x": 44.23173803526448,
+            "y": 85.67695961995248
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "축척 : A1:NONE A3:NONE",
+          "position": {
+            "x": 56.17128463476071,
+            "y": 86.9311163895487
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "분전반결선도 2 - 변경전",
+          "position": {
+            "x": 46.277078085642316,
+            "y": 85.5914489311164
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "EE-012",
+          "position": {
+            "x": 91.94962216624685,
+            "y": 94.812351543943
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "[철거]",
+          "position": {
+            "x": 28.503778337531482,
+            "y": 17.48218527315915
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "NONE",
+          "position": {
+            "x": 85.12846347607052,
+            "y": 94.79809976247031
+          },
+          "confidence": 0.99
+        }
+      ],
+      "suggestedCalculations": [],
+      "confidence": 0.85,
+      "rawDescription": "PDF vector parsed (page 14): 74 components, 120 connections (snapped 308, junctions 37, dropped 129), 285 text items, 498 line segments"
+    },
+    "calcChain": [],
+    "topology": {
+      "nodeCount": 74,
+      "edgeCount": 120,
+      "connectedComponents": 24,
+      "isolatedNodes": 13,
+      "valid": false,
+      "issues": [
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_5",
+          "message": "노드 \"comp_5\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_8",
+          "message": "노드 \"comp_8\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_18",
+          "message": "노드 \"comp_18\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_20",
+          "message": "노드 \"comp_20\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_22",
+          "message": "노드 \"comp_22\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_26",
+          "message": "노드 \"comp_26\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_28",
+          "message": "노드 \"comp_28\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_30",
+          "message": "노드 \"comp_30\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_32",
+          "message": "노드 \"comp_32\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_33",
+          "message": "노드 \"comp_33\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_37",
+          "message": "노드 \"comp_37\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "junction_1053_769.76",
+          "message": "노드 \"junction_1053_769.76\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "junction_797.88_769.76",
+          "message": "노드 \"junction_797.88_769.76\"가 어떤 간선에도 연결되지 않았습니다."
+        }
+      ]
+    },
+    "parserInfo": {
+      "method": "pdf-vector",
+      "confidence": 0.85,
+      "description": "PDF vector parsed (page 14): 74 components, 120 connections (snapped 308, junctions 37, dropped 129), 285 text items, 498 line segments",
+      "durationMs": 82
+    }
+  }
+}
