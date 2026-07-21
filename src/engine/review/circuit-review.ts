@@ -105,14 +105,15 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   // 케이블 스펙은 연결(conductorSize·cableType)에 결속돼 있다 — 차단기에 붙은
   // 연결 중 스펙 있는 것만 판정. 공사방법은 도면에 안 적히는 관례라 관로(conduit)
   // 가정 — verdict에 명시(사내규정 온보딩 시 교체 지점).
-  const connsByComp = new Map<string, Array<{ sq: number; cableType?: string }>>();
+  const connsByComp = new Map<string, Array<{ sq: number; cableType?: string; parallel: number }>>();
   for (const conn of analysis.connections) {
     const sq = parseSq(conn.conductorSize);
     if (sq == null) continue;
+    const parallel = conn.parallelCount && conn.parallelCount >= 2 ? conn.parallelCount : 1;
     for (const end of [conn.from, conn.to]) {
       if (!end.startsWith('comp_')) continue;
       const arr = connsByComp.get(end) ?? [];
-      arr.push({ sq, cableType: conn.cableType });
+      arr.push({ sq, cableType: conn.cableType, parallel });
       connsByComp.set(end, arr);
     }
   }
@@ -141,12 +142,17 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       continue;
     }
     const insulation = INSULATION_BY_CABLE[(worst.cableType ?? 'CV').toUpperCase()] ?? 'XLPE';
+    // 병렬 다조는 허용전류가 조수배다(버그 사냥 F5): "150sq x 2"를 단조로 보면
+    // 옳은 도면을 과전류 FAIL로 오판한다. IEC/KEC 병렬 접속은 집합보정이 별도로
+    // 붙지만(보수측), 무발명 원칙상 여기선 조수 선형배까지만 반영하고 verdict에
+    // 병렬 전제를 명시한다.
+    const parallel = worst.parallel;
     let ampacity: number;
     let sourceKey: string;
     try {
       const r = getAmpacity({ size: worst.sq, conductor: 'Cu', insulation, installation: 'conduit' });
-      ampacity = r.corrected;
-      sourceKey = `KEC Cu_${insulation}_conduit ${worst.sq}sq`;
+      ampacity = r.corrected * parallel;
+      sourceKey = `KEC Cu_${insulation}_conduit ${worst.sq}sq${parallel > 1 ? ` ×${parallel}조` : ''}`;
     } catch {
       findings.push({
         rule: 'CABLE-AMPACITY',
@@ -210,7 +216,12 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   let bareTransformers = 0;
   for (const tr of transformers) {
     const spec = deriveSpec(tr);
-    const hasKva = spec.power !== undefined && /VA$/i.test(spec.powerUnit ?? '');
+    // 단위별 kVA 환산(버그 사냥 F8 수리): 구 `/VA$/`는 bare "VA"·"kVAR"도 통과시켜
+    // "500VA"를 500kVA(1000배)로, 무효전력 kVAR를 유효용량으로 취급했다. 용량 단위는
+    // kVA/MVA만 인정하고 각 배수로 환산한다(VA→계량 오류·kVAR→무효는 정격 아님).
+    const unitU = (spec.powerUnit ?? '').toUpperCase();
+    const kvaScale = unitU === 'KVA' ? 1 : unitU === 'MVA' ? 1000 : null;
+    const hasKva = spec.power !== undefined && kvaScale !== null;
     const labelAll = [tr.label, tr.rating, tr.properties?.load].filter(Boolean).join(' ');
     const v2parsed = secondaryVoltage(labelAll);
     const secM = v2parsed !== null;
@@ -239,7 +250,7 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       });
       continue;
     }
-    const kva = (spec.power as number) * ((spec.powerUnit ?? '').toUpperCase() === 'MVA' ? 1000 : 1);
+    const kva = (spec.power as number) * (kvaScale as number);
     const v2 = v2parsed as number;
     const i2 = phase3 ? (kva * 1000) / (Math.sqrt(3) * v2) : (kva * 1000) / v2;
     const formula = phase3 ? 'I₂ = kVA×1000/(√3×V₂)' : 'I₂ = kVA×1000/V₂ (단상)';

@@ -442,6 +442,7 @@ export async function parsePdfToSLD(
     if (closestConn) {
       if (spec.conductorSize) closestConn.conductorSize = `${spec.conductorSize}sq`;
       if (spec.cableType) closestConn.cableType = spec.cableType;
+      if (spec.parallelCount) closestConn.parallelCount = spec.parallelCount;
     }
   }
 

@@ -93,6 +93,17 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('UNKNOWN');
   });
 
+  it('병렬 2조는 허용전류가 2배 — 단조로 보면 나던 false-FAIL 방지 (F5)', () => {
+    const amp1 = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    // 단조로는 초과(FAIL)지만 2조면 통과인 트립
+    const trip = Math.floor(amp1 * 1.4);
+    const conn: SLDConnection = { id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '25sq', cableType: 'FR-CV', parallelCount: 2 };
+    const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(['PASS', 'WARN']).toContain(f?.severity);
+    expect(f?.limit?.source).toContain('2조');
+  });
+
   it('복수 케이블 결속 시 가장 가는 것이 병목', () => {
     const amp4 = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
     const overFor4 = Math.ceil(amp4) + 5;
@@ -158,6 +169,15 @@ describe('TR-MAIN-CURRENT — 정격 2차전류 (독립 손계산 known-answer)'
       { id: 'comp_1', type: 'transformer', label: 'TR', rating: '1000kVA', position: pos },
     ]));
     expect(r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT')?.severity).toBe('UNKNOWN');
+  });
+
+  it('bare "500VA"를 500kVA(1000배)로 취급하지 않는다 (F8)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'TR 1φ 500VA 220V', rating: '', position: pos },
+    ]));
+    // VA는 용량 단위로 인정 안 함 → 계산 보류(UNKNOWN), 2273A 같은 발명 없음
+    const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
+    expect(f?.severity).not.toBe('INFO');
   });
 
   it('수치 없는 bare TR 심볼은 항목별 UNKNOWN 대신 DATA-GAP에 압축된다(신호 희석 방지)', () => {

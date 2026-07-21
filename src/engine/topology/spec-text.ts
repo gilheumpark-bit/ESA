@@ -18,6 +18,8 @@ export interface ParsedSpec {
   frameA?: number;
   /** 차단기 트립 전류(AT) — "3P-50/20"의 20. 존재 시 정격전류의 정본 */
   tripA?: number;
+  /** 병렬 다조 수 — "150sq x 2"·"2조" 등. 허용전류는 조수배(버그 사냥 F5) */
+  parallelCount?: number;
 }
 
 export function parseSpecText(text: string): ParsedSpec {
@@ -26,6 +28,15 @@ export function parseSpecText(text: string): ParsedSpec {
   // 케이블 종류: CV, XLPE, HIV, FR-CV 등
   const cableMatch = text.match(/\b(FR-CV|CV|XLPE|HIV|TFR-CV|HFIX|IV|VV)\b/i);
   if (cableMatch) spec.cableType = cableMatch[1].toUpperCase();
+
+  // 병렬 다조: "150sq x 2"·"150sq×2"·"2조"·"P2" — 허용전류가 조수배가 되므로
+  // 무시하면 옳은 도면을 과전류로 오판(버그 사냥 F5). 단면적 뒤 배수 또는 "N조".
+  // "N조"는 조명/조립 등과 구분 위해 조 뒤 한글 배제(\b는 한글에 안 걸림).
+  const parMatch = text.match(/(?:sq|mm2|㎟)\s*[x×*]\s*(\d)/i) || text.match(/(\d)\s*조(?![가-힣])/);
+  if (parMatch) {
+    const n = parseInt(parMatch[1], 10);
+    if (n >= 2 && n <= 9) spec.parallelCount = n;
+  }
 
   // 도체 단면적: 16sq, 25mm2, 4C 16sq 등
   const sizeMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:sq|mm2|㎟)/i);

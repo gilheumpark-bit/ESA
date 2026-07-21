@@ -162,19 +162,23 @@ export function checkRateLimit(
  * Checks standard proxy headers, falls back to '127.0.0.1'.
  */
 export function getClientIp(headers: Headers): string {
-  // Vercel / Cloudflare / standard proxies
-  const forwarded = headers.get('x-forwarded-for');
-  if (forwarded) {
-    // x-forwarded-for can be comma-separated; take the first (client IP)
-    const first = forwarded.split(',')[0].trim();
-    if (first && isValidIp(first)) return first;
-  }
-
+  // 버그 사냥 수리: x-forwarded-for **최좌측**은 클라이언트가 주입 가능한 값이다.
+  // Vercel은 실제 IP를 XFF에 append하므로 헤더가 "<위조값>, <실IP>"가 되고 최좌측을
+  // 신뢰하면 공격자가 매 요청 IP를 회전시켜 레이트리밋을 우회한다. 신뢰 프록시가
+  // 세팅하는(클라이언트가 못 덮는) 플랫폼 헤더를 **먼저** 신뢰하고, XFF는 최후 수단·
+  // **최우측**(서버에 가장 가까운 = 신뢰 프록시가 붙인 값)을 쓴다.
   const realIp = headers.get('x-real-ip');
-  if (realIp && isValidIp(realIp)) return realIp;
+  if (realIp && isValidIp(realIp.trim())) return realIp.trim();
 
   const cfIp = headers.get('cf-connecting-ip');
-  if (cfIp && isValidIp(cfIp)) return cfIp;
+  if (cfIp && isValidIp(cfIp.trim())) return cfIp.trim();
+
+  const forwarded = headers.get('x-forwarded-for');
+  if (forwarded) {
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean);
+    const rightmost = parts[parts.length - 1];
+    if (rightmost && isValidIp(rightmost)) return rightmost;
+  }
 
   return '127.0.0.1';
 }

@@ -174,25 +174,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Count each calculation against the rate limit
-    for (let i = 0; i < body.calculations.length; i++) {
-      const rl = checkRateLimit(ip, 'calculate');
-      if (!rl.allowed) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'ESVA-4002',
-              message: `Rate limit exceeded at calculation ${i + 1} of ${body.calculations.length}`,
-              retryAfter: rl.retryAfter,
-            },
-          },
-          {
-            status: 429,
-            headers: { 'Retry-After': String(rl.retryAfter ?? 60) },
-          },
-        );
-      }
+    // 배치 1건 = 레이트리밋 1건(버그 사냥 수리): 구판은 항목마다 토큰을 소진해
+    // 80건 배치가 61번째에서 429를 내며 **0건 실행**하고, 그 한 요청이 분당 예산
+    // 60을 통째로 태워 이후 개별 /api/calculate까지 차단했다. 배치 크기는 이미
+    // MAX_BATCH_SIZE로 유계이므로 요청 단위로 한 번만 계수한다.
+    const rl = checkRateLimit(ip, 'calculate');
+    if (!rl.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: 'ESVA-4002', message: 'Rate limit exceeded', retryAfter: rl.retryAfter },
+        },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } },
+      );
     }
 
     // Execute all calculations in parallel

@@ -47,6 +47,8 @@ export interface SLDConnection {
   cableType?: string;
   length?: string;
   conductorSize?: string;
+  /** 병렬 다조 수(예: 2 = "150sq x 2") — 허용전류 판정 시 조수배(버그 사냥 F5) */
+  parallelCount?: number;
 }
 
 export interface CalcSuggestion {

@@ -293,6 +293,11 @@ export function parseDxfToSLD(
       // ── INSERT (블록 참조) → 심볼 컴포넌트 ──
       case 'INSERT': {
         if (!entity.position || !entity.name) break;
+        // 레이어 필터(버그 사냥 F6 수리): CIRCLE/LINE/POLYLINE 분기는 isIgnoredLayer로
+        // 표제란·도곽·치수 레이어를 거르는데 INSERT만 누락돼, 표제란 블록(INSERT
+        // 관례)이 컴포넌트로 승격되고 미식별 블록명은 resolveBlockType 기본 'load'가
+        // 되어 phantom load→부하계산 오염이었다. 동일 필터를 적용한다.
+        if (isIgnoredLayer(entity.layer)) break;
         const type = resolveBlockType(entity.name);
         components.push({
           id: `comp_${++compIdx}`,

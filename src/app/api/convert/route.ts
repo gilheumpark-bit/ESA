@@ -94,11 +94,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build options
+    // Build options — 유한 숫자만 수용(버그 사냥 수리): 문자열·NaN·Infinity가
+    // 그대로 convert()에 흘러가면 NaN 결과를 success:true로 반환했다.
     const opts: ConvertOptions = {};
-    if (body.options?.powerFactor !== undefined) opts.powerFactor = body.options.powerFactor;
-    if (body.options?.baseVoltageKv !== undefined) opts.baseVoltageKv = body.options.baseVoltageKv;
-    if (body.options?.baseMva !== undefined) opts.baseMva = body.options.baseMva;
+    const finiteOpt = (v: unknown): number | undefined =>
+      typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+    const pf = finiteOpt(body.options?.powerFactor);
+    const bv = finiteOpt(body.options?.baseVoltageKv);
+    const bm = finiteOpt(body.options?.baseMva);
+    if (body.options?.powerFactor !== undefined && pf === undefined) {
+      return NextResponse.json({ success: false, error: { code: 'ESVA-4003', message: 'powerFactor must be a finite number.' } }, { status: 400 });
+    }
+    if (body.options?.baseVoltageKv !== undefined && bv === undefined) {
+      return NextResponse.json({ success: false, error: { code: 'ESVA-4003', message: 'baseVoltageKv must be a finite number.' } }, { status: 400 });
+    }
+    if (body.options?.baseMva !== undefined && bm === undefined) {
+      return NextResponse.json({ success: false, error: { code: 'ESVA-4003', message: 'baseMva must be a finite number.' } }, { status: 400 });
+    }
+    if (pf !== undefined) opts.powerFactor = pf;
+    if (bv !== undefined) opts.baseVoltageKv = bv;
+    if (bm !== undefined) opts.baseMva = bm;
 
     // Execute conversion
     const result = convert(body.value, body.fromUnit as UnitType, body.toUnit as UnitType, opts);
