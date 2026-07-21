@@ -24,25 +24,20 @@ export const ENGINE_VERSION = '0.1.0';
 // ---------------------------------------------------------------------------
 
 /**
- * Known standard editions with their validity cutoff dates.
- * A standard is considered "current" if today < cutoff.
- * If the standard is not listed, it is assumed current.
+ * Editions may only be labelled current after the embedded rule snapshot has
+ * been checked against an authoritative publication and the verification date
+ * is recorded in the receipt. The present datasets are historical snapshots,
+ * so the allow-list intentionally starts empty instead of guessing validity.
  */
-const STANDARD_CUTOFFS: Record<string, string> = {
-  'KEC 2021': '2027-01-01',
-  'KEC 2016': '2022-01-01',
-  'NEC 2023': '2029-01-01',
-  'NEC 2020': '2026-01-01',
-  'IEC 60364:2005': '2024-01-01',
-  'IEC 60364:2017': '2028-01-01',
-  'JIS C 0364:2019': '2028-01-01',
-  'GB 50054-2011': '2026-01-01',
-};
+const VERIFIED_CURRENT_EDITIONS = new Set<string>();
 
-function checkStandardCurrent(standardVersion: string): boolean {
-  const cutoff = STANDARD_CUTOFFS[standardVersion];
-  if (!cutoff) return true; // unknown edition assumed current
-  return new Date().toISOString() < cutoff;
+function checkStandardCurrent(
+  standardVersion: string,
+  standardVerifiedAt?: string,
+): boolean {
+  if (!VERIFIED_CURRENT_EDITIONS.has(standardVersion) || !standardVerifiedAt) return false;
+  const verifiedAt = Date.parse(standardVerifiedAt);
+  return Number.isFinite(verifiedAt) && verifiedAt <= Date.now();
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +111,10 @@ export interface GenerateReceiptOpts {
 export async function generateReceipt(opts: GenerateReceiptOpts): Promise<Receipt> {
   const lang = opts.lang ?? 'ko';
   const calculatedAt = new Date().toISOString();
-  const isStandardCurrent = checkStandardCurrent(opts.standardVersion);
+  const isStandardCurrent = checkStandardCurrent(
+    opts.standardVersion,
+    opts.standardVerifiedAt,
+  );
 
   const receiptHash = await hashReceipt({
     calcId: opts.calcId,

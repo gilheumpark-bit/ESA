@@ -58,6 +58,35 @@ function lookupEfficiency(ieClass: IEClass, ratedPower: number): number {
   return table[String(closest)];
 }
 
+/**
+ * Partial-load efficiency — fixed-loss / variable-loss model.
+ *
+ *   P_out(k) = k·P_r
+ *   losses(k) = P_fix + P_var·k²      (iron/windage fixed; copper ∝ k²)
+ *   η(k) = k·P_r / (k·P_r + P_fix + P_var·k²)
+ *
+ * At rated load the total loss is L_r = P_r·(1−η_r)/η_r, split by FIXED_LOSS_SHARE
+ * (IEC 60034-31: induction motors run roughly 40% fixed / 60% load-dependent loss).
+ * This reproduces the real shape — efficiency peaks near 70–100% load and falls off
+ * at light load — and returns exactly η_r at k=1.
+ *
+ * The previous model, `η_r·k / (k + ((1−η_r)/η_r)·k²)`, collapsed to **η_r² at k=1**
+ * (IE3 11 kW: 92.1% → 84.8%) and made efficiency *decrease* as load increased —
+ * physically inverted. Must be applied consistently to every IE class compared.
+ */
+const FIXED_LOSS_SHARE = 0.4;
+
+function partialLoadEfficiency(etaRated: number, loadRatio: number): number {
+  if (loadRatio <= 0) return 0;
+  // Per-unit of rated output power: total rated loss.
+  const ratedLoss = (1 - etaRated) / etaRated;
+  const fixedLoss = ratedLoss * FIXED_LOSS_SHARE;
+  const variableLoss = ratedLoss * (1 - FIXED_LOSS_SHARE);
+  const output = loadRatio;
+  const losses = fixedLoss + variableLoss * loadRatio * loadRatio;
+  return output / (output + losses);
+}
+
 // ── Calculator ──────────────────────────────────────────────────────────────
 
 export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedCalcResult {
@@ -85,10 +114,9 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
   });
 
   // Step 2: Adjust for partial load (simplified parabolic model)
-  // eta(load) = eta_rated * loadRatio / (loadRatio + (1-eta_rated)/eta_rated * loadRatio^2 + constant losses)
+  // eta(load) = eta_rated * loadRatio / (loadRatio + (1-eta_rated)/eta_rated * loadRatio^2)
   // Simplified: at partial load, efficiency dips slightly
-  const etaPartial = etaRated * loadRatio / (loadRatio + ((1 - etaRated) / etaRated) * loadRatio * loadRatio);
-  const etaActual = Math.min(etaPartial, etaRated);
+  const etaActual = partialLoadEfficiency(etaRated, loadRatio);
   steps.push({
     step: 2,
     title: '부분부하 효율 보정 (Partial load efficiency)',
@@ -119,8 +147,9 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
     unit: 'KRW/yr',
   });
 
-  // Step 5: Savings vs IE1
-  const etaIE1 = lookupEfficiency('IE1', ratedPower);
+  // Step 5: Savings vs IE1 — compare at the SAME (partial) load basis as etaActual,
+  // otherwise a partial-load IEx vs rated-load IE1 comparison inverts the sign.
+  const etaIE1 = partialLoadEfficiency(lookupEfficiency('IE1', ratedPower), loadRatio);
   const PinIE1 = Pout / etaIE1;
   const costIE1 = PinIE1 * annualHours * rate;
   const savings = costIE1 - annualCost;

@@ -3,8 +3,8 @@
 /**
  * ESVA Verification Report Page
  * -----------------------------
- * /report/[id] — 사용자에게 보이는 검증 보고서 페이지.
- * 보고서 ID로 조회하거나, 세션 스토리지에서 로드.
+ * /report/[id] — 세션에 저장된 실검증 보고서만 표시.
+ * 데모 폴백 제거: 없으면 404 상태 (거짓 점수 노출 금지).
  */
 
 import { useEffect, useState } from 'react';
@@ -13,76 +13,203 @@ import { Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import VerificationReport from '@/components/VerificationReport';
 import { CalcResultDashboard } from '@/components/CalcResultGauge';
-import DrawingOverlay from '@/components/DrawingOverlay';
 import type { ESVAVerifiedReport } from '@/agent/teams/types';
+import { useAuth } from '@/contexts/AuthContext';
+import { verifyReportIntegrity } from '@/lib/report-integrity';
+import { DrawingEvidenceOverlay } from '@/components/DrawingEvidenceOverlay';
+import { DrawingIntelligenceReport } from '@/components/DrawingIntelligenceReport';
+
+type SourceState = 'idle' | 'loading' | 'ready' | 'missing' | 'unsupported' | 'invalid';
 
 export default function ReportPage() {
   const params = useParams();
   const reportId = params.id as string;
+  const { user, loading: authLoading } = useAuth();
   const [report, setReport] = useState<ESVAVerifiedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDemo, setIsDemo] = useState(false);
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceState, setSourceState] = useState<SourceState>('idle');
+  const [activeEvidenceIds, setActiveEvidenceIds] = useState<string[]>([]);
 
   useEffect(() => {
-    loadReport();
-  }, [reportId]);
+    if (authLoading) return;
+    let cancelled = false;
 
-  async function loadReport() {
-    setLoading(true);
-    setError(null);
+    async function loadReport() {
+      setLoading(true);
+      setError(null);
+      setReport(null);
 
-    try {
-      // 1차: 세션 스토리지에서 로드 (방금 생성된 보고서)
-      const cached = sessionStorage.getItem(`esva-report-${reportId}`);
-      if (cached) {
-        setReport(JSON.parse(cached));
-        setIsDemo(false);
-        setLoading(false);
+      try {
+        // 1) 방금 생성한 세션 캐시도 해시를 재계산한 뒤 표시한다.
+        const storageKey = `esva-report-${reportId}`;
+        const cached = sessionStorage.getItem(storageKey);
+        if (cached) {
+          const parsed = JSON.parse(cached) as ESVAVerifiedReport;
+          if (await verifyReportIntegrity(parsed)) {
+            if (!cancelled) setReport(parsed);
+            return;
+          }
+          sessionStorage.removeItem(storageKey);
+        }
+
+        // 2) 로그인 사용자는 소유자 필터가 적용된 영속 API에서 다시 읽는다.
+        if (user) {
+          const { getIdToken } = await import('@/lib/firebase');
+          const token = await getIdToken();
+          if (token) {
+            const response = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+              cache: 'no-store',
+            });
+            if (response.ok) {
+              const body = await response.json() as { data?: ESVAVerifiedReport };
+              if (body.data && await verifyReportIntegrity(body.data)) {
+                sessionStorage.setItem(storageKey, JSON.stringify(body.data));
+                if (!cancelled) setReport(body.data);
+                return;
+              }
+            }
+          }
+        }
+
+        if (!cancelled) {
+          setError(user
+            ? '소유한 보고서를 찾을 수 없거나 무결성 검증에 실패했습니다.'
+            : '이 세션에서 생성한 보고서를 찾을 수 없습니다. 현재 보고서는 브라우저 세션이 끝나면 다시 열 수 없습니다.');
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '보고서를 불러올 수 없습니다.');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadReport();
+    return () => { cancelled = true; };
+  }, [authLoading, reportId, user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    const intelligence = report?.drawingIntelligence;
+
+    async function loadSource() {
+      // Defer state synchronization so the effect body itself only coordinates
+      // the external IndexedDB/object-URL lifecycle.
+      await Promise.resolve();
+      if (cancelled) return;
+      setSourceUrl(null);
+      setActiveEvidenceIds([]);
+      if (!intelligence) {
+        setSourceState('idle');
+        return;
+      }
+      if (
+        intelligence.source.assetKey !== intelligence.drawingHash
+        || intelligence.drawingHash !== report?.drawingSynthesis?.drawingHash
+      ) {
+        setSourceState('invalid');
+        return;
+      }
+      if (!intelligence.source.mimeType.startsWith('image/')) {
+        setSourceState('unsupported');
         return;
       }
 
-      // 2차: API에서 로드 (향후 Supabase 연동)
-      // const res = await fetch(`/api/report/${reportId}`);
-      // if (res.ok) { const data = await res.json(); setReport(data); }
-
-      // 실제 보고서가 없으면 데모 데이터를 보여주되, 반드시 데모임을 표시한다.
-      // (이전에는 배지 없이 82점·B+ 등급을 실제 결과처럼 노출했다.)
-      setReport(generateDemoReport(reportId));
-      setIsDemo(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '보고서를 불러올 수 없습니다.');
-    } finally {
-      setLoading(false);
+      setSourceState('loading');
+      try {
+        const { loadDrawingAsset } = await import('@/lib/drawing-asset-store');
+        const asset = await loadDrawingAsset(intelligence.source.assetKey);
+        if (cancelled) return;
+        if (!asset || asset.mimeType !== intelligence.source.mimeType) {
+          setSourceState('missing');
+          return;
+        }
+        objectUrl = URL.createObjectURL(asset.blob);
+        setSourceUrl(objectUrl);
+        setSourceState('ready');
+      } catch {
+        if (!cancelled) setSourceState('missing');
+      }
     }
-  }
 
-  function handleExport(format: 'pdf' | 'excel') {
+    void loadSource();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [report]);
+
+  async function handleExport(format: 'pdf' | 'excel') {
     if (!report) return;
     if (format === 'pdf') {
-      // report-pdf HTML 생성 → 새 창에서 인쇄
-      import('@/lib/report-pdf').then(({ generatePDFResponse }) => {
-        const html = generatePDFResponse(report);
-        const w = window.open('', '_blank');
-        if (w) { w.document.write(html); w.document.close(); }
+      const { generatePDFResponse } = await import('@/lib/report-pdf');
+      const html = generatePDFResponse(report);
+      const w = window.open('', '_blank');
+      if (w) {
+        w.opener = null;
+        w.document.write(html);
+        w.document.close();
+      }
+      return;
+    }
+
+    // Excel: POST /api/export (GET은 405)
+    try {
+      const res = await fetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          format: 'excel',
+          receipt: {
+            id: report.reportId,
+            calculatorId: 'team-review',
+            inputs: { reportId: report.reportId },
+            outputs: {
+              verdict: report.verdict,
+              grade: report.grade,
+              score: report.compositeScore,
+              summary: report.summary,
+            },
+            createdAt: report.createdAt,
+          },
+        }),
       });
-    } else {
-      window.open(`/api/export?reportId=${report.reportId}&format=${format}`, '_blank');
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(
+          (errBody as { error?: string }).error ?? `Export failed (${res.status})`,
+        );
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `esva-report-${report.reportId}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Excel 내보내기 실패');
     }
   }
 
-  // 계산 결과 → 게이지 데이터 변환
-  const gaugeResults = report?.teamResults
-    .flatMap(tr => tr.calculations ?? [])
-    .filter(c => c.standardRef)
-    .map(c => ({
-      value: c.value,
-      unit: c.unit,
-      limit: c.unit === '%' ? 3.0 : c.unit === 'A' ? c.value * 1.25 : c.value,
-      label: c.label,
-      standardRef: c.standardRef,
-      direction: (c.unit === '%' ? 'below' : 'above') as 'below' | 'above',
-    })) ?? [];
+  const gaugeResults =
+    report?.teamResults
+      .flatMap((tr) => tr.calculations ?? [])
+      .filter((c) => c.standardRef && Number.isFinite(c.value))
+      .map((c) => ({
+        value: c.value,
+        unit: c.unit,
+        limit: c.unit === '%' ? 3.0 : c.unit === 'A' ? c.value * 1.25 : c.value,
+        label: c.label,
+        standardRef: c.standardRef,
+        direction: (c.unit === '%' ? 'below' : 'above') as 'below' | 'above',
+      })) ?? [];
 
   if (loading) {
     return (
@@ -94,168 +221,115 @@ export default function ReportPage() {
 
   if (error || !report) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
         <AlertTriangle size={48} className="text-amber-500" />
-        <p className="text-lg font-medium text-[var(--text-primary)]">
+        <p className="max-w-md text-lg font-medium text-[var(--text-primary)]">
           {error ?? '보고서를 찾을 수 없습니다.'}
         </p>
-        <Link
-          href="/tools/sld"
-          className="flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
-        >
-          <ArrowLeft size={16} />
-          SLD 분석으로 돌아가기
-        </Link>
+        <p className="max-w-md text-sm text-[var(--text-secondary)]">
+          데모 점수는 더 이상 표시하지 않습니다. 실제 검증 파이프라인을 실행한 뒤에만 보고서를 볼 수 있습니다.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <Link
+            href="/tools/sld"
+            className="flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
+          >
+            <ArrowLeft size={16} />
+            SLD 분석
+          </Link>
+          <Link
+            href="/calc"
+            className="text-sm text-[var(--color-primary)] hover:underline"
+          >
+            계산기
+          </Link>
+        </div>
       </div>
     );
   }
 
+  const drawingIntelligence = report.drawingIntelligence;
+  const selectEvidence = (ids: string[]) => {
+    const next = [...new Set(ids)];
+    setActiveEvidenceIds((current) => (
+      current.length === next.length && current.every((id, index) => id === next[index]) ? [] : next
+    ));
+  };
+
   return (
     <div className="px-4 py-8">
-      {/* 데모 데이터 경고 — 실제 검증 결과로 오인 방지 */}
-      {isDemo && (
-        <div
-          role="status"
-          className="mx-auto mb-6 flex max-w-4xl items-start gap-3 rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-200"
-        >
-          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
-          <div>
-            <strong>데모 보고서입니다.</strong> 아래 점수·등급·판정은 예시 데이터이며 실제 검증 결과가 아닙니다.
-            실제 보고서는 SLD 분석 등에서 검증을 실행하면 생성됩니다.
+      {drawingIntelligence && (
+        <section aria-labelledby="drawing-intelligence-heading" className="mx-auto mb-10 max-w-[92rem]">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-[var(--border-default)] pb-4">
+            <div>
+              <p className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[var(--color-accent)]">SOURCE-LINKED REVIEW</p>
+              <h1 id="drawing-intelligence-heading" className="mt-1 text-2xl font-semibold text-[var(--text-primary)]">도면 전체 판독 및 관계 검증</h1>
+            </div>
+            <p className="font-mono text-[10px] text-[var(--text-tertiary)]">
+              SHA-256 {drawingIntelligence.drawingHash.slice(0, 12)}…
+            </p>
           </div>
-        </div>
+
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(520px,0.85fr)]">
+            <div className="min-w-0 xl:sticky xl:top-20">
+              {sourceState === 'ready' && sourceUrl ? (
+                <DrawingEvidenceOverlay
+                  src={sourceUrl}
+                  report={drawingIntelligence}
+                  activeIds={activeEvidenceIds}
+                  onSelect={(id) => selectEvidence([id])}
+                />
+              ) : sourceState === 'loading' ? (
+                <div className="flex min-h-80 items-center justify-center border border-[var(--border-default)] bg-[var(--bg-secondary)]">
+                  <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+                    <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+                    해시가 일치하는 원본 도면을 불러오는 중…
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-amber-300 bg-amber-50 px-5 py-5 dark:border-amber-900 dark:bg-amber-950/20">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={20} className="mt-0.5 shrink-0 text-[var(--color-warning)]" aria-hidden="true" />
+                    <div>
+                      <h2 className="font-semibold text-[var(--text-primary)]">원본 위치 오버레이 HOLD</h2>
+                      <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                        {sourceState === 'unsupported'
+                          ? '이 파일 형식은 브라우저 이미지 오버레이를 지원하지 않습니다. 아래 판독표와 근거 ID는 계속 확인할 수 있습니다.'
+                          : sourceState === 'invalid'
+                            ? '보고서와 원본 도면의 해시가 일치하지 않아 위치 오버레이를 차단했습니다.'
+                            : '원본 도면은 보안을 위해 업로드한 브라우저에만 보관됩니다. 다른 기기·브라우저에서는 아래 판독표만 표시됩니다.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <dl className="grid grid-cols-2 gap-px border-x border-b border-[var(--border-default)] bg-[var(--border-default)] text-xs">
+                <div className="bg-[var(--bg-primary)] px-3 py-2.5"><dt className="text-[var(--text-tertiary)]">원본 크기</dt><dd className="mt-0.5 font-mono font-semibold">{drawingIntelligence.source.width} × {drawingIntelligence.source.height}</dd></div>
+                <div className="bg-[var(--bg-primary)] px-3 py-2.5"><dt className="text-[var(--text-tertiary)]">분석 페이지</dt><dd className="mt-0.5 font-mono font-semibold">{drawingIntelligence.source.page}</dd></div>
+              </dl>
+            </div>
+
+            <DrawingIntelligenceReport
+              report={drawingIntelligence}
+              activeIds={activeEvidenceIds}
+              onSelect={selectEvidence}
+            />
+          </div>
+        </section>
       )}
 
-      {/* 게이지 대시보드 */}
       {gaugeResults.length > 0 && (
         <div className="mx-auto mb-6 max-w-4xl">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">계산 결과 시각화</h2>
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+            계산 결과 시각화
+          </h2>
           <CalcResultDashboard results={gaugeResults} />
         </div>
       )}
 
-      {/* 도면 오버레이 */}
-      {report.markings.length > 0 && (
-        <div className="mx-auto mb-6 max-w-4xl">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">도면 검증 마킹</h2>
-          <DrawingOverlay markings={report.markings} width={800} height={400} />
-        </div>
-      )}
-
-      {/* 상세 보고서 */}
-      <VerificationReport report={report} onExport={handleExport} />
+      <div className="mx-auto max-w-5xl">
+        <VerificationReport report={report} onExport={handleExport} />
+      </div>
     </div>
   );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Demo Report Generator
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function generateDemoReport(reportId: string): ESVAVerifiedReport {
-  return {
-    reportId,
-    createdAt: new Date().toISOString(),
-    version: 'ESVA Report v1.0',
-    projectName: '샘플 수변전 설비',
-    projectType: '22.9kV 수전 설비',
-    verdict: 'CONDITIONAL',
-    grade: 'B+',
-    compositeScore: 82,
-    teamResults: [
-      {
-        teamId: 'TEAM-SLD',
-        success: true,
-        components: [
-          { id: 'c1', type: 'transformer', label: 'TR-001 500kVA', confidence: 0.95 },
-          { id: 'c2', type: 'breaker_vcb', label: 'VCB-001', confidence: 0.92 },
-          { id: 'c3', type: 'breaker_acb', label: 'ACB-001 800A', confidence: 0.90 },
-        ],
-        calculations: [
-          { id: 'calc-1', calculatorId: 'voltage-drop', label: 'TR → SWGR 전압강하', value: 1.8, unit: '%', compliant: true, standardRef: 'KEC 232.52' },
-          { id: 'calc-2', calculatorId: 'voltage-drop', label: 'SWGR → MCC 전압강하', value: 3.5, unit: '%', compliant: false, standardRef: 'KEC 232.52' },
-        ],
-        standards: [
-          { standard: 'KEC', clause: '232.52', title: '전압강하', judgment: 'FAIL', note: '3.5% > 3%' },
-          { standard: 'KEC', clause: '212.3', title: '차단기 선정', judgment: 'PASS' },
-        ],
-        violations: [
-          {
-            id: 'v1', severity: 'critical', title: '전압강하 기준 초과',
-            description: 'SWGR → MCC 구간 3.5% > 허용 3%',
-            location: 'SWGR-001 → MCC-001',
-            standardRef: 'KEC 232.52',
-            suggestedFix: '케이블 35sq → 50sq 증가 검토',
-          },
-        ],
-        confidence: 0.90,
-        durationMs: 1250,
-      },
-      {
-        teamId: 'TEAM-STD',
-        success: true,
-        calculations: [
-          { id: 'calc-3', calculatorId: 'breaker-sizing', label: 'ACB 정격', value: 800, unit: 'A', compliant: true, standardRef: 'KEC 212.3' },
-        ],
-        standards: [
-          { standard: 'KEC', clause: '311.1', title: '수전 설비', judgment: 'PASS' },
-          { standard: 'KEC', clause: '142.5', title: '접지', judgment: 'PASS' },
-        ],
-        violations: [],
-        confidence: 0.95,
-        durationMs: 320,
-      },
-    ],
-    debateResults: [
-      {
-        topic: 'SWGR → MCC 전압강하 판정',
-        rounds: [{
-          roundNumber: 1,
-          topic: 'SWGR → MCC 전압강하',
-          arguments: [
-            { teamId: 'TEAM-SLD', topic: '전압강하', position: '3.5%', evidence: ['VD = 1.732 × 400 × 50 × 0.018/35 / 380 × 100'], verdict: 'disagree', confidence: 0.90 },
-            { teamId: 'TEAM-STD', topic: '전압강하', position: 'KEC 232.52 분기 3% 초과', evidence: ['KEC 232.52: 분기회로 ≤ 3%'], verdict: 'disagree', confidence: 0.95 },
-          ],
-          consensus: true,
-          consensusPosition: '부적합 — 케이블 증가 필요',
-        }],
-        finalConsensus: true,
-        finalPosition: '부적합 — 35sq → 50sq 증가 시 2.4%로 적합',
-        totalRounds: 1,
-        maxRoundsReached: false,
-        participatingTeams: ['TEAM-SLD', 'TEAM-STD'],
-      },
-    ],
-    markings: [
-      { id: 'm1', severity: 'success', location: 'TR → SWGR', message: 'TR → SWGR 전압강하: 적합', calculatedValue: '1.8%', limitValue: '3%', standardRef: 'KEC 232.52' },
-      { id: 'm2', severity: 'error', location: 'SWGR → MCC', message: 'SWGR → MCC 전압강하: 기준 초과', detail: '3.5% > 허용 3%', calculatedValue: '3.5%', limitValue: '3%', standardRef: 'KEC 232.52', suggestedFix: '케이블 35sq → 50sq 증가' },
-      { id: 'm3', severity: 'success', location: 'ACB-001', message: 'ACB 800A 차단기: 적합', calculatedValue: '800A', standardRef: 'KEC 212.3' },
-      { id: 'm4', severity: 'success', location: '접지 시스템', message: '접지: 적합', standardRef: 'KEC 142.5' },
-      { id: 'm5', severity: 'warning', location: 'SPD', message: '서지보호기 미확인', detail: '수전설비에 SPD 설치 권장', standardRef: 'KEC 534.1', suggestedFix: 'SPD Type 1+2 설치 검토' },
-    ],
-    summary: {
-      totalComponents: 8,
-      totalConnections: 7,
-      totalCalculations: 3,
-      passedChecks: 4,
-      failedChecks: 1,
-      warningChecks: 1,
-      criticalViolations: [{
-        id: 'v1', severity: 'critical', title: '전압강하 기준 초과',
-        description: 'SWGR → MCC 구간 3.5% > 허용 3%',
-        location: 'SWGR-001 → MCC-001', standardRef: 'KEC 232.52',
-        suggestedFix: '케이블 35sq → 50sq 증가 검토',
-      }],
-      topRecommendations: [{
-        id: 'rec1', category: 'safety', title: 'SPD 설치 권장',
-        description: '수전설비 22.9kV에 SPD Type 1+2 설치로 뇌서지 보호 강화',
-        impact: 'high',
-      }],
-      appliedStandards: ['KEC 2021'],
-      textKo: '전체 5개 검증 항목 중 4개 적합, 1개 부적합. 종합 82점 (B+등급). SWGR→MCC 구간 전압강하 초과 수정 필요.',
-      textEn: '4 of 5 checks passed. Score: 82 (Grade B+). SWGR→MCC voltage drop exceeds limit.',
-    },
-    receiptIds: [],
-    hash: '',
-  };
 }

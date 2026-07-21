@@ -163,7 +163,7 @@ export default function VerificationReport({ report, onExport }: Props) {
         onToggle={() => toggle('markings')}
       >
         <div className="space-y-2">
-          {markings
+          {[...markings]
             .sort((a, b) => {
               const order: MarkingSeverity[] = ['error', 'warning', 'info', 'success'];
               return order.indexOf(a.severity) - order.indexOf(b.severity);
@@ -209,6 +209,7 @@ export default function VerificationReport({ report, onExport }: Props) {
       {/* ═══ PART 6: Action Bar ═══ */}
       <div className="flex justify-center gap-3 pb-8">
         <button
+          type="button"
           onClick={() => onExport?.('pdf')}
           className="flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
         >
@@ -216,6 +217,7 @@ export default function VerificationReport({ report, onExport }: Props) {
           PDF 다운로드
         </button>
         <button
+          type="button"
           onClick={() => onExport?.('excel')}
           className="flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-6 py-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
@@ -271,6 +273,8 @@ function CollapsibleSection({
   return (
     <div className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] overflow-hidden">
       <button
+        type="button"
+        aria-expanded={expanded}
         onClick={onToggle}
         className="flex w-full items-center gap-3 px-6 py-4 text-left transition-colors hover:bg-[var(--bg-secondary)]"
       >
@@ -362,12 +366,15 @@ function TeamResultCard({ result }: { result: TeamResult }) {
         <div className="mt-3 space-y-1">
           {result.calculations.slice(0, 5).map(calc => (
             <div key={calc.id} className="flex items-center gap-2 text-xs">
-              {calc.compliant
+              {calc.compliant === true
                 ? <CheckCircle2 size={12} className="text-green-500" />
-                : <XCircle size={12} className="text-red-500" />}
+                : calc.compliant === null
+                  ? <AlertTriangle size={12} className="text-amber-500" />
+                  : <XCircle size={12} className="text-red-500" />}
               <span className="text-[var(--text-secondary)]">{calc.label}:</span>
               <span className="font-mono font-medium text-[var(--text-primary)]">
-                {calc.value} {calc.unit}
+                {Number.isFinite(calc.value) ? `${calc.value} ${calc.unit}` : `— ${calc.unit}`}
+                {calc.compliant === null ? ' (HOLD)' : ''}
               </span>
               {calc.standardRef && (
                 <span className="text-[var(--text-tertiary)]">({calc.standardRef})</span>

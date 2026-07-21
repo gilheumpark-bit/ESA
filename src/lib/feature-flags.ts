@@ -10,26 +10,10 @@
 // ============================================================
 
 export interface FeatureFlags {
-  /** 도면 파싱 (SLD / DXF) — Phase 2 */
+  /** 도면 파싱 (SLD / DXF / PDF) */
   DRAWING_PARSER: boolean;
-  /** BYOK 멀티키 관리 UI */
-  BYOK_MULTI_KEY: boolean;
-  /** 엑셀 내보내기 */
-  EXCEL_EXPORT: boolean;
-  /** AI 검색 (법규 RAG) */
-  AI_SEARCH: boolean;
-  /** 커뮤니티 게시판 */
-  COMMUNITY: boolean;
-  /** 오프라인 계산 캐싱 */
-  OFFLINE_CACHE: boolean;
-  /** 프로젝트 관리 */
-  PROJECTS: boolean;
-  /** Receipt IPFS 공증 */
+  /** IPFS 타임스탬프 등록. 기존 환경 변수 호환을 위해 플래그 이름은 유지한다. */
   RECEIPT_NOTARIZE: boolean;
-  /** 현장 모드 (모바일 최적화) */
-  FIELD_MODE: boolean;
-  /** AI 응답 브라우저 캐시 (토큰 비용 절감) */
-  AI_RESPONSE_CACHE: boolean;
 }
 
 // ============================================================
@@ -37,16 +21,10 @@ export interface FeatureFlags {
 // ============================================================
 
 const FLAGS: FeatureFlags = {
-  DRAWING_PARSER: false,
-  BYOK_MULTI_KEY: true,
-  EXCEL_EXPORT: true,
-  AI_SEARCH: true,
-  COMMUNITY: true,
-  OFFLINE_CACHE: true,
-  PROJECTS: true,
+  // 2026-07-20 ON: DXF/PDF 벡터 파서 실구현 + 끝점 결속(endpoint-snap) 수리 +
+  // 미검증 판정 honest-HOLD 배선 완료로 기본 활성. (이전: Phase 2 예정으로 OFF)
+  DRAWING_PARSER: true,
   RECEIPT_NOTARIZE: false,
-  FIELD_MODE: true,
-  AI_RESPONSE_CACHE: true,
 };
 
 // ============================================================
@@ -79,13 +57,4 @@ export function isFeatureEnabledServer(flag: keyof FeatureFlags): boolean {
   if (envVal === 'true') return true;
   if (envVal === 'false') return false;
   return FLAGS[flag];
-}
-
-/** 모든 플래그 현재값 조회 */
-export function getAllFlags(): FeatureFlags {
-  const result = { ...FLAGS };
-  for (const key of Object.keys(result) as (keyof FeatureFlags)[]) {
-    result[key] = isFeatureEnabled(key);
-  }
-  return result;
 }

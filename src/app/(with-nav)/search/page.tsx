@@ -27,14 +27,15 @@ import {
   X,
   Send,
   ArrowRightLeft,
-  MonitorPlay,
   Loader2,
 } from 'lucide-react';
 import SearchBar from '@/components/SearchBar';
 import KnowledgePanel from '@/components/KnowledgePanel';
 import InlineCalcResult from '@/components/InlineCalcResult';
 import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
+import { decodeOnPremiseConfig } from '@/lib/onpremise-storage';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
+import { authenticatedFetch } from '@/lib/client-auth';
 import type {
   SearchResult,
   RankedResult,
@@ -170,10 +171,6 @@ function DocumentResultItem({ ranked }: { ranked: RankedResult }) {
         )}
       </div>
 
-      {/* YouTube summary button */}
-      {doc.url && isYouTubeUrl(doc.url) && (
-        <YouTubeSummaryCard url={doc.url} />
-      )}
     </article>
   );
 }
@@ -271,30 +268,31 @@ function UnitConversionCard({ query }: { query: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!match) return;
-    const [, valueStr, fromUnit, toUnit] = match;
-    const value = parseFloat(valueStr);
-    if (!isFinite(value)) return;
-
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    fetch('/api/convert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value, fromUnit, toUnit }),
-    })
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return;
-        if (json.success) setResult(json.data);
-        else setError(json.error?.message ?? 'Conversion failed');
+    const timer = window.setTimeout(() => {
+      const currentMatch = query.match(UNIT_CONVERT_REGEX);
+      if (!currentMatch) return;
+      const [, valueStr, fromUnit, toUnit] = currentMatch;
+      const value = parseFloat(valueStr);
+      if (!Number.isFinite(value)) return;
+      setLoading(true);
+      setError(null);
+      fetch('/api/convert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value, fromUnit, toUnit }),
       })
-      .catch(() => { if (!cancelled) setError('Network error'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+        .then((res) => res.json())
+        .then((json) => {
+          if (cancelled) return;
+          if (json.success) setResult(json.data);
+          else setError(json.error?.message ?? 'Conversion failed');
+        })
+        .catch(() => { if (!cancelled) setError('Network error'); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }, 0);
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [query]);
 
   if (!match) return null;
@@ -345,13 +343,35 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
     setStreaming(true);
 
     try {
-      const res = await fetch('/api/chat', {
+      // On-Premise 모드(설정에서 활성 시): 브라우저 결합 암호문을
+      // 요청 직전에만 복호화하고 사설 LLM 경로로 라우팅한다.
+      let providerBody: Record<string, unknown> = {
+        provider: 'openai',
+        model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-5.6-luna',
+      };
+      try {
+        const raw = sessionStorage.getItem('esva-onpremise');
+        if (raw) {
+          const onprem = await decodeOnPremiseConfig(raw);
+          if (onprem.enabled && onprem.serverUrl && onprem.modelName) {
+            providerBody = {
+              provider: 'onpremise',
+              model: onprem.modelName,
+              onpremise: { serverUrl: onprem.serverUrl, apiType: onprem.apiType ?? 'ollama', apiKey: onprem.apiKey || undefined },
+            };
+          }
+        }
+      } catch {
+        throw new Error('On-Premise 설정을 안전하게 읽지 못했습니다. 설정 페이지에서 다시 저장하세요.');
+      }
+
+      const chatFetch = providerBody.provider === 'onpremise' ? authenticatedFetch : fetch;
+      const res = await chatFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: allMessages,
-          provider: 'openai',
-          model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-4.1-mini',
+          ...providerBody,
           systemPrompt: `You are an electrical engineering assistant for ESVA (전기 검색 AI). Answer in Korean. Be concise. Reference KEC/NEC/IEC standards when relevant. Current query context: "${query}"`,
           temperature: 0.7,
           maxTokens: 1024,
@@ -396,6 +416,18 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
                 return updated;
               });
             }
+            // 서버 output-filter: 무근거 수치 차단 시 필터 본문으로 교체
+            if (parsed.filter && parsed.filter.passed === false && parsed.filter.filteredText) {
+              const notice = parsed.filter.notice
+                ? `\n\n[주의] ${parsed.filter.notice}`
+                : '';
+              assistantText = `${parsed.filter.filteredText}${notice}`;
+              setMessages((prev) => {
+                const updated = [...prev];
+                updated[updated.length - 1] = { role: 'assistant', content: assistantText };
+                return updated;
+              });
+            }
           } catch { /* skip malformed */ }
         }
       }
@@ -415,27 +447,34 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
   }, [messages]);
 
   // Auto-send initial query
+  const initialSentRef = useRef(false);
   useEffect(() => {
-    if (query.trim() && messages.length === 0) {
-      sendMessage(query);
-    }
-  }, []);
+    if (!query.trim() || initialSentRef.current) return;
+    initialSentRef.current = true;
+    const timer = window.setTimeout(() => { void sendMessage(query); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [query, sendMessage]);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex w-96 flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-2xl">
+    <div
+      className="fixed bottom-4 left-4 right-4 z-50 flex w-auto flex-col rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-2xl sm:left-auto sm:w-96"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="search-ai-chat-title"
+    >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--border-default)] px-4 py-3">
         <div className="flex items-center gap-2">
           <Bot size={18} className="text-[var(--color-primary)]" />
-          <span className="text-sm font-semibold text-[var(--text-primary)]">AI에게 물어보기</span>
+          <span id="search-ai-chat-title" className="text-sm font-semibold text-[var(--text-primary)]">AI에게 물어보기</span>
         </div>
-        <button onClick={onClose} className="rounded p-1 hover:bg-[var(--bg-tertiary)]">
+        <button type="button" onClick={onClose} aria-label="AI 질문 창 닫기" className="rounded p-1 hover:bg-[var(--bg-tertiary)]">
           <X size={16} className="text-[var(--text-tertiary)]" />
         </button>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ maxHeight: 320 }}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ maxHeight: 320 }} aria-live="polite">
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
@@ -453,6 +492,8 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
       <div className="border-t border-[var(--border-default)] px-3 py-2">
         <div className="flex items-center gap-2">
           <input
+            id="search-ai-chat-input"
+            aria-label="AI 추가 질문"
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -462,8 +503,10 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
             className="flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] disabled:opacity-50"
           />
           <button
+            type="button"
             onClick={() => sendMessage(input)}
             disabled={streaming || !input.trim()}
+            aria-label="AI 질문 보내기"
             className="rounded-lg bg-[var(--color-primary)] p-2 text-white disabled:opacity-40"
           >
             <Send size={14} />
@@ -472,85 +515,6 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
       </div>
     </div>
   );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 5.7 — YouTube Summary Button (calls /api/youtube)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function YouTubeSummaryCard({ url }: { url: string }) {
-  const [summary, setSummary] = useState<{ title?: string; keyPoints?: string[]; relatedClauses?: string[] } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
-
-  const handleFetch = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/youtube', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      });
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      setSummary(json);
-      setExpanded(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'YouTube 요약 실패');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!expanded) {
-    return (
-      <button
-        onClick={handleFetch}
-        disabled={loading}
-        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
-      >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <MonitorPlay size={12} />}
-        YouTube 요약
-      </button>
-    );
-  }
-
-  return (
-    <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm dark:border-red-800 dark:bg-red-900/20">
-      <div className="flex items-center gap-2 mb-2">
-        <MonitorPlay size={14} className="text-red-600" />
-        <span className="font-semibold text-red-800 dark:text-red-300">YouTube 요약</span>
-      </div>
-      {error ? (
-        <p className="text-xs text-[var(--color-error)]">{error}</p>
-      ) : summary ? (
-        <div className="space-y-2">
-          {summary.title && <p className="font-medium text-red-900 dark:text-red-200">{summary.title}</p>}
-          {summary.keyPoints && summary.keyPoints.length > 0 && (
-            <ul className="list-disc pl-4 space-y-1 text-xs text-red-800 dark:text-red-300">
-              {summary.keyPoints.map((point, i) => <li key={i}>{point}</li>)}
-            </ul>
-          )}
-          {summary.relatedClauses && summary.relatedClauses.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1">
-              {summary.relatedClauses.map((clause) => (
-                <span key={clause} className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700 dark:bg-red-800 dark:text-red-300">
-                  {clause}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** Check if a URL looks like a YouTube link */
-function isYouTubeUrl(url: string): boolean {
-  return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/shorts\/)/.test(url);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -596,14 +560,9 @@ function SearchPageInner() {
   const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
-    if (!query.trim()) {
-      setResult(null);
-      return;
-    }
+    if (!query.trim()) return;
 
     let cancelled = false;
-    setIsLoading(true);
-    setSearchError(null);
 
     async function doSearch() {
       try {
@@ -639,8 +598,12 @@ function SearchPageInner() {
       }
     }
 
-    doSearch();
-    return () => { cancelled = true; };
+    const timer = window.setTimeout(() => {
+      setIsLoading(true);
+      setSearchError(null);
+      void doSearch();
+    }, 0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [query]);
 
   return (
@@ -666,6 +629,7 @@ function SearchPageInner() {
 
       {/* Content */}
       <main className="mx-auto max-w-7xl px-4 py-6">
+        <h1 className="sr-only">전기공학 검색 결과</h1>
         {isLoading ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <ResultSkeleton />

@@ -10,7 +10,7 @@ User Request
      ▼
 ┌─────────────────────────────────────────────────┐
 │  APP LAYER (Next.js 16)                         │
-│  19 pages + 31 API routes + withApiHandler()    │
+│  33 pages + 44 API routes + withApiHandler()    │
 │  Rate limiting · CORS · Input sanitization      │
 └──────────────────┬──────────────────────────────┘
                    │
@@ -123,7 +123,7 @@ Multiple teams analyze the same input independently. Results compared for disagr
 
 | Path | Purpose | Key Files |
 |------|---------|-----------|
-| `src/app/` | Next.js pages + API routes | 19 pages, 31 routes |
+| `src/app/` | Next.js pages + API routes | 33 pages, 44 routes |
 | `src/agent/orchestrator.ts` | 4-team dispatch + retry | `dispatchWithRetry()` |
 | `src/agent/teams/` | SLD, Layout, Standards, Consensus | 4 team executors |
 | `src/agent/debate/` | Physics validation + consensus | 8 laws, 3 rounds |

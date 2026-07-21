@@ -10,6 +10,7 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { FolderPlus, Loader2 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/client-auth';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Form State & Submission
@@ -34,7 +35,7 @@ export default function NewProjectPage() {
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/projects', {
+      const res = await authenticatedFetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description }),

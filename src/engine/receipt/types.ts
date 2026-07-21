@@ -67,7 +67,7 @@ export interface Receipt {
   standardVerifiedAt?: string;
   /** ESVA engine semver */
   engineVersion: string;
-  /** Whether the applied standard edition is still current */
+  /** True only when the applied edition was authoritatively verified current */
   isStandardCurrent: boolean;
 
   /** SHA-256 hex digest of canonical(inputs + result) */

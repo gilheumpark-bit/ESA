@@ -70,16 +70,18 @@ interface UserRow {
 interface UsageStat {
   label: string;
   value: string;
-  delta: string;
+  /** 증감 표시 — 실측 집계가 없는 database 모드에서는 생략됨 */
+  delta?: string;
 }
 
 interface AdminData {
-  tenant: TenantInfo;
+  /** database 모드에서는 테넌트 테이블 미구축으로 null */
+  tenant: TenantInfo | null;
   users: UserRow[];
   auditLog: AuditRow[];
   auditTotalPages: number;
   usage: UsageStat[];
-  counts: { userCount: number; calculationCount: number };
+  counts: { userCount: number | null; calculationCount: number | null };
 }
 
 type AdminTab = 'tenant' | 'sso' | 'users' | 'audit' | 'usage';
@@ -100,7 +102,7 @@ const ACTION_LABELS: Record<string, string> = {
   'auth.logout': '로그아웃',
   'project.create': '프로젝트 생성',
   'project.share': '프로젝트 공유',
-  'notarize': '공증',
+  'notarize': 'IPFS 타임스탬프',
   'settings.change': '설정 변경',
   'ocr.recognize': 'OCR 인식',
   'sld.analyze': 'SLD 분석',
@@ -162,7 +164,22 @@ function DashboardSkeleton() {
 // PART 3 — Section Components
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function TenantSection({ tenant }: { tenant: TenantInfo }) {
+function TenantNotConfigured() {
+  return (
+    <div className="rounded-xl border border-dashed border-[var(--border-default)] p-8 text-center">
+      <Building2 size={32} className="mx-auto text-[var(--text-tertiary)]" />
+      <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">
+        테넌트 구성이 아직 없습니다
+      </p>
+      <p className="mt-1 text-xs text-[var(--text-secondary)]">
+        플랜·SSO 등 테넌트 설정은 엔터프라이즈 온보딩 시 ESVA 관리팀이 구성합니다.
+      </p>
+    </div>
+  );
+}
+
+function TenantSection({ tenant }: { tenant: TenantInfo | null }) {
+  if (!tenant) return <TenantNotConfigured />;
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -189,7 +206,8 @@ function TenantSection({ tenant }: { tenant: TenantInfo }) {
   );
 }
 
-function SSOSection({ tenant }: { tenant: TenantInfo }) {
+function SSOSection({ tenant }: { tenant: TenantInfo | null }) {
+  if (!tenant) return <TenantNotConfigured />;
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--border-default)] p-4">
@@ -213,13 +231,12 @@ function SSOSection({ tenant }: { tenant: TenantInfo }) {
       </div>
 
       <div className="rounded-xl border border-[var(--border-default)] p-4">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">SSO 설정 가이드</h3>
-        <ol className="space-y-2 text-sm text-[var(--text-secondary)]">
-          <li>1. IdP (Okta, Azure AD, Google Workspace 등)에서 SAML/OIDC 앱 생성</li>
-          <li>2. Callback URL: <code className="rounded bg-[var(--bg-secondary)] px-1 text-xs">https://esva.engineer/api/auth/sso/callback</code></li>
-          <li>3. 메타데이터 또는 인증서를 ESVA 관리팀에 전달</li>
-          <li>4. 테스트 로그인 수행 후 전사 배포</li>
-        </ol>
+        <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">SSO 배포 상태</h3>
+        <p className="text-sm text-[var(--text-secondary)]">
+          이 저장소에는 범용 SAML/OIDC 콜백 라우트가 포함되어 있지 않습니다. 위 값은
+          테넌트 구성 인벤토리이며, 로그인 기능으로 활성화하려면 배포별 IdP 연동과 실제
+          콜백 왕복 검증이 먼저 필요합니다.
+        </p>
       </div>
     </div>
   );
@@ -268,7 +285,7 @@ function UsageSection({ stats }: { stats: UsageStat[] }) {
         >
           <p className="text-xs font-medium text-[var(--text-tertiary)]">{stat.label}</p>
           <p className="mt-1 text-2xl font-bold text-[var(--text-primary)]">{stat.value}</p>
-          <p className="mt-0.5 text-xs text-green-600">{stat.delta}</p>
+          {stat.delta && <p className="mt-0.5 text-xs text-green-600">{stat.delta}</p>}
         </div>
       ))}
     </div>
@@ -443,40 +460,52 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function AdminDashboard() {
-  const { user, tier } = useAuth();
+  const { tier } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('tenant');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<AdminData | null>(null);
-  const [dataSource, setDataSource] = useState<'database' | 'mock'>('mock');
+  const [dataSource, setDataSource] = useState<'database' | 'unavailable'>('unavailable');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Fetch admin data from API on mount
   useEffect(() => {
     let cancelled = false;
 
     async function fetchAdmin() {
+      if (tier !== 'enterprise') {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       setLoading(true);
+      setLoadError(null);
       try {
-        const res = await fetch('/api/admin');
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        // API는 Firebase JWT를 요구한다 — 대시보드 페이지와 동일한 토큰 패턴
+        const { getIdToken } = await import('@/lib/firebase');
+        const token = await getIdToken();
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/admin', { headers });
+        if (!res.ok) {
+          const failure = await res.json().catch(() => null) as { error?: string } | null;
+          throw new Error(failure?.error ?? `관리자 데이터 요청 실패 (${res.status})`);
+        }
         const json = await res.json();
 
         if (!cancelled && json.ok) {
-          // Overlay user-specific tenant info
           const adminData = json.data as AdminData;
-          if (user?.displayName) {
-            adminData.tenant.name = `${user.displayName}의 조직`;
-          }
-          if (user?.email) {
-            adminData.tenant.domain = user.email.split('@')[1] ?? adminData.tenant.domain;
-          }
           setData(adminData);
-          setDataSource(json.source ?? 'mock');
+          const source = json.source === 'database' ? 'database' : 'unavailable';
+          setDataSource(source);
+          if (source === 'unavailable') {
+            setLoadError('관리 데이터 저장소가 연결되지 않았습니다. 임의의 데모 값은 표시하지 않습니다.');
+          }
         }
-      } catch {
-        // Graceful degradation — fall back to inline mock
+      } catch (error) {
         if (!cancelled) {
-          setData(getFallbackData(user));
-          setDataSource('mock');
+          setData(null);
+          setDataSource('unavailable');
+          setLoadError(error instanceof Error ? error.message : '관리자 데이터를 불러오지 못했습니다.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -485,10 +514,10 @@ export default function AdminDashboard() {
 
     fetchAdmin();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [tier]);
 
   // Gate: enterprise only
-  if (tier !== 'enterprise' && tier !== 'pro') {
+  if (tier !== 'enterprise') {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <AlertCircle size={48} className="mx-auto text-[var(--text-tertiary)]" />
@@ -516,10 +545,10 @@ export default function AdminDashboard() {
           )}
         </div>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          {data?.tenant.name ?? 'ESVA Enterprise'} - Enterprise 관리
-          {dataSource === 'mock' && !loading && (
+          {data?.tenant?.name ?? 'ESVA'} - Enterprise 관리
+          {dataSource === 'unavailable' && !loading && (
             <span className="ml-2 rounded bg-yellow-100 px-1.5 py-0.5 text-xs text-yellow-700">
-              데모 데이터
+              저장소 미연결
             </span>
           )}
         </p>
@@ -527,6 +556,12 @@ export default function AdminDashboard() {
 
       {/* Loading state */}
       {loading && <DashboardSkeleton />}
+
+      {!loading && loadError && (
+        <div role="alert" className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          {loadError}
+        </div>
+      )}
 
       {/* Loaded state */}
       {!loading && data && (
@@ -564,42 +599,4 @@ export default function AdminDashboard() {
       )}
     </div>
   );
-}
-
-// ─── Inline fallback when API is unreachable ─────────────────
-
-function getFallbackData(user: { displayName?: string | null; email?: string | null } | null): AdminData {
-  return {
-    tenant: {
-      id: 'tenant_001',
-      name: user?.displayName ? `${user.displayName}의 조직` : 'ESVA Enterprise',
-      domain: user?.email?.split('@')[1] ?? 'company.com',
-      plan: 'Enterprise',
-      maxUsers: 50,
-      currentUsers: 23,
-      features: ['sso', 'audit_log', 'api_access', 'custom_llm', 'dedicated_support', 'custom_calculators'],
-      ssoType: 'oidc',
-      ssoIssuer: 'https://login.microsoftonline.com/tenant-id',
-    },
-    users: [
-      { id: '1', name: '김철수', email: 'chulsoo@company.com', role: 'admin', lastLogin: '2026-04-05' },
-      { id: '2', name: '이영희', email: 'younghee@company.com', role: 'user', lastLogin: '2026-04-04' },
-      { id: '3', name: '박지성', email: 'jisung@company.com', role: 'user', lastLogin: '2026-04-03' },
-    ],
-    auditLog: [
-      { id: '1', userId: 'user1', action: 'calc.execute', resource: 'voltage-drop', createdAt: '2026-04-05T10:30:00Z', ip: '192.168.1.100' },
-      { id: '2', userId: 'user2', action: 'search.query', resource: 'KEC 전압강하', createdAt: '2026-04-05T10:15:00Z', ip: '192.168.1.101' },
-      { id: '3', userId: 'user1', action: 'auth.login', resource: 'sso', createdAt: '2026-04-05T09:00:00Z', ip: '192.168.1.100' },
-      { id: '4', userId: 'user3', action: 'calc.export', resource: 'cable-sizing', createdAt: '2026-04-04T17:45:00Z', ip: '192.168.1.102' },
-      { id: '5', userId: 'user2', action: 'project.create', resource: '신축공사 프로젝트', createdAt: '2026-04-04T14:20:00Z', ip: '192.168.1.101' },
-    ],
-    auditTotalPages: 3,
-    usage: [
-      { label: '이번 달 계산 횟수', value: '2,847', delta: '+12%' },
-      { label: '활성 사용자', value: '23', delta: '+3' },
-      { label: 'API 호출', value: '15,392', delta: '+8%' },
-      { label: '저장 용량', value: '4.2 GB', delta: '+0.3 GB' },
-    ],
-    counts: { userCount: 23, calculationCount: 2847 },
-  };
 }

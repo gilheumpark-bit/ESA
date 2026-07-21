@@ -4,10 +4,12 @@
  * Subscription checkout sessions with open-redirect prevention.
  */
 
+import { resolveBillingPlan, type BillingPlanKey } from '@/lib/billing';
+
 // ─── PART 1: Types ────────────────────────────────────────────
 
 export interface CheckoutSessionRequest {
-  priceId: string;
+  plan: BillingPlanKey;
   clientId: string;
   returnUrl: string;
 }
@@ -31,7 +33,7 @@ export function getStripeConfig(): ESAStripeConfig {
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
 
   if (!publishableKey) {
-    console.warn('[ESVA Stripe] Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY');
+    console.warn('[ESVA Stripe] 결제 클라이언트 구성이 없습니다.');
   }
 
   return {
@@ -42,14 +44,6 @@ export function getStripeConfig(): ESAStripeConfig {
 
 // ─── PART 3: Open-Redirect Prevention ─────────────────────────
 
-/** Allowed return URL host patterns */
-const ALLOWED_HOSTS = [
-  /^localhost(:\d+)?$/,
-  /^.*\.vercel\.app$/,
-  /^esva\.engineer$/,
-  /^.*\.esva\.engineer$/,
-];
-
 /**
  * Sanitize the return URL to prevent open-redirect attacks.
  *
@@ -58,42 +52,17 @@ const ALLOWED_HOSTS = [
  * @returns Sanitized URL safe for Stripe redirect
  */
 export function sanitizeStripeReturnBase(base: string, hostOrigin: string): string {
-  // Strip any protocol/host from base, keep only path
-  let sanitized = base;
-
   try {
-    const parsed = new URL(base, 'https://placeholder.invalid');
-
-    // If the base includes a host, validate it
-    if (base.startsWith('http://') || base.startsWith('https://') || base.startsWith('//')) {
-      if (!isAllowedHost(parsed.hostname)) {
-        // Fall back to origin + path only
-        sanitized = hostOrigin + parsed.pathname;
-      } else {
-        sanitized = base;
-      }
-    } else {
-      // Relative path: prepend the host origin
-      sanitized = hostOrigin + (base.startsWith('/') ? base : `/${base}`);
+    const serving = new URL(hostOrigin);
+    if (!['http:', 'https:'].includes(serving.protocol)) throw new Error('invalid protocol');
+    const requested = new URL(base, serving.origin);
+    if (requested.origin !== serving.origin || requested.username || requested.password) {
+      return `${serving.origin}/settings`;
     }
+    return `${serving.origin}${requested.pathname.startsWith('/') ? requested.pathname : '/settings'}`;
   } catch {
-    // If URL parsing fails, use a safe default
-    sanitized = hostOrigin + '/';
+    return 'https://esva.engineer/settings';
   }
-
-  // Prevent protocol-relative URLs (//evil.com)
-  if (sanitized.startsWith('//')) {
-    sanitized = hostOrigin + '/';
-  }
-
-  // Remove any embedded credentials or fragments that could be abused
-  sanitized = sanitized.replace(/@/g, '').replace(/#/g, '');
-
-  return sanitized;
-}
-
-function isAllowedHost(hostname: string): boolean {
-  return ALLOWED_HOSTS.some(pattern => pattern.test(hostname));
 }
 
 // ─── PART 4: Checkout Session (Server-Side) ───────────────────
@@ -108,33 +77,25 @@ function isAllowedHost(hostname: string): boolean {
  * @returns Session ID and checkout URL
  */
 export async function getStripeSession(
-  priceId: string,
+  planKey: BillingPlanKey,
   clientId: string,
   returnUrl: string,
 ): Promise<CheckoutSessionResponse> {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error('[ESVA] Stripe not configured. Set STRIPE_SECRET_KEY.');
-  }
-
-  // Dynamic import to avoid bundling stripe in client
-  const Stripe = (await import('stripe')).default;
-  const stripe = new Stripe(secretKey, {
-    apiVersion: '2025-03-31.basil' as NonNullable<ConstructorParameters<typeof Stripe>[1]>['apiVersion'],
-    typescript: true,
-  });
+  const stripe = await createStripeClient();
+  const plan = resolveBillingPlan(planKey);
 
   // Validate the return URL
   const origin = extractOrigin(returnUrl);
-  const safeSuccessUrl = sanitizeStripeReturnBase(returnUrl, origin) + '?session_id={CHECKOUT_SESSION_ID}';
-  const safeCancelUrl = sanitizeStripeReturnBase(returnUrl, origin);
+  const safeBase = sanitizeStripeReturnBase(returnUrl, origin);
+  const safeSuccessUrl = `${safeBase}?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
+  const safeCancelUrl = `${safeBase}?checkout=cancelled`;
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     payment_method_types: ['card'],
     line_items: [
       {
-        price: priceId,
+        price: plan.priceId,
         quantity: 1,
       },
     ],
@@ -143,11 +104,13 @@ export async function getStripeSession(
     cancel_url: safeCancelUrl,
     metadata: {
       esa_user_id: clientId,
+      esa_plan: plan.key,
       source: 'esa-web',
     },
     subscription_data: {
       metadata: {
         esa_user_id: clientId,
+        esa_plan: plan.key,
       },
     },
   });
@@ -172,16 +135,7 @@ export async function createPortalSession(
   customerId: string,
   returnUrl: string,
 ): Promise<{ url: string }> {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error('[ESVA] Stripe not configured. Set STRIPE_SECRET_KEY.');
-  }
-
-  const Stripe = (await import('stripe')).default;
-  const stripe = new Stripe(secretKey, {
-    apiVersion: '2025-03-31.basil' as NonNullable<ConstructorParameters<typeof Stripe>[1]>['apiVersion'],
-    typescript: true,
-  });
+  const stripe = await createStripeClient();
 
   const origin = extractOrigin(returnUrl);
   const safeReturnUrl = sanitizeStripeReturnBase(returnUrl, origin);
@@ -204,7 +158,7 @@ export async function getStripeJs() {
   const config = getStripeConfig();
 
   if (!config.publishableKey) {
-    throw new Error('[ESVA] Stripe publishable key not configured');
+    throw new Error('결제 서비스를 사용할 수 없습니다.');
   }
 
   return loadStripe(config.publishableKey);
@@ -221,10 +175,12 @@ function extractOrigin(url: string): string {
   }
 }
 
-/** Stripe Price IDs for ESVA plans */
-export const ESVA_PRICE_IDS = {
-  pro_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY ?? '',
-  pro_yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_YEARLY ?? '',
-  team_monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_TEAM_MONTHLY ?? '',
-  team_yearly: process.env.NEXT_PUBLIC_STRIPE_PRICE_TEAM_YEARLY ?? '',
-} as const;
+/** Server-only Stripe client. Billing code must never expose secret price IDs to the browser. */
+export async function createStripeClient() {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error('[ESVA] Stripe not configured. Set STRIPE_SECRET_KEY.');
+  }
+  const Stripe = (await import('stripe')).default;
+  return new Stripe(secretKey, { typescript: true });
+}

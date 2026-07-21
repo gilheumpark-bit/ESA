@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Community GET]', message);
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-7050', message } },
+      { success: false, error: { code: 'ESVA-7050', message: '질문 목록을 불러오지 못했습니다.' } },
       { status: 500 },
     );
   }
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Community POST]', message);
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-7055', message } },
+      { success: false, error: { code: 'ESVA-7055', message: '질문을 등록하지 못했습니다.' } },
       { status: 500 },
     );
   }

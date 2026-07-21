@@ -110,16 +110,43 @@ function loadCachedReceipts(): Receipt[] {
 }
 
 /** Supabase에서 영구 저장된 이력 로드 (로그인 유저) */
-async function loadSupabaseReceipts(userId: string): Promise<Receipt[]> {
+async function loadSupabaseReceipts(): Promise<Receipt[]> {
   try {
-    const { listUserCalculations } = await import('@/lib/supabase');
-    const result = await listUserCalculations(userId, { pageSize: 100 });
-    return result.data.map(r => ({
+    const { getIdToken } = await import('@/lib/firebase');
+    const token = await getIdToken();
+    if (!token) return [];
+    const response = await fetch('/api/calculate?page=1&pageSize=100', {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+    if (!response.ok) return [];
+    const body = await response.json() as {
+      data?: { data?: Array<Record<string, unknown>> };
+    };
+    const rows = body.data?.data ?? [];
+    return rows.map(r => ({
       id: r.id ?? '',
       calcId: r.calculator_id,
+      userId: r.user_id,
+      countryCode: r.country_code ?? 'KR',
+      appliedStandard: r.applied_standard ?? 'KEC',
+      unitSystem: r.unit_system ?? 'SI',
+      difficultyLevel: r.difficulty_level ?? 'basic',
       inputs: r.inputs as Record<string, unknown>,
       result: r.outputs as Receipt['result'],
-      calculatedAt: r.created_at ?? new Date().toISOString(),
+      steps: r.steps ?? [],
+      formulaUsed: r.formula_used ?? '',
+      standardsUsed: r.standards_used ?? [],
+      warnings: r.warnings ?? [],
+      recommendations: r.recommendations ?? [],
+      disclaimerText: r.disclaimer_text ?? '',
+      disclaimerVersion: r.disclaimer_version ?? '',
+      calculatedAt: r.calculated_at ?? r.created_at ?? new Date().toISOString(),
+      standardVersion: r.standard_version ?? r.standard_ref ?? '',
+      engineVersion: r.engine_version ?? '',
+      isStandardCurrent: r.is_standard_current ?? false,
+      receiptHash: r.receipt_hash ?? '',
+      isPublic: r.is_public ?? false,
     })) as Receipt[];
   } catch {
     return [];
@@ -179,7 +206,7 @@ export default function HistoryPage() {
         const { getCurrentUser } = await import('@/lib/firebase');
         const user = await getCurrentUser();
         if (user) {
-          const supaReceipts = await loadSupabaseReceipts(user.uid);
+          const supaReceipts = await loadSupabaseReceipts();
           if (supaReceipts.length > 0) {
             const supaEntries = supaReceipts.map(receiptToEntry);
             // 병합 + 중복 제거 (id 기준)
@@ -257,6 +284,7 @@ export default function HistoryPage() {
           <div className="relative min-w-[240px] flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
+              aria-label="계산 기록 검색"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -267,6 +295,7 @@ export default function HistoryPage() {
 
           {/* Category filter */}
           <select
+            aria-label="계산기 카테고리"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
@@ -278,6 +307,7 @@ export default function HistoryPage() {
 
           {/* Judgment filter */}
           <select
+            aria-label="판정 결과"
             value={judgmentFilter}
             onChange={(e) => setJudgmentFilter(e.target.value as '' | 'pass' | 'fail')}
             className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
@@ -289,6 +319,7 @@ export default function HistoryPage() {
 
           {/* Date range */}
           <input
+            aria-label="조회 시작일"
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
@@ -296,6 +327,7 @@ export default function HistoryPage() {
           />
           <span className="text-sm text-[var(--text-tertiary)]">~</span>
           <input
+            aria-label="조회 종료일"
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}

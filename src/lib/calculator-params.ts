@@ -147,6 +147,7 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     ] },
     { name: 'combinedMaxDemand', type: 'number', unit: 'kW', description: '합성 최대수요', min: 0.01, defaultValue: 120 },
     { name: 'totalInstalled', type: 'number', unit: 'kW', description: '총 설비용량', min: 0.01, defaultValue: 200 },
+    { name: 'averageDemand', type: 'number', unit: 'kW', description: '평균 수요전력 (선택 — 부하율 산출용)', min: 0.01, required: false },
   ],
   'max-demand': [
     { name: 'loads', type: 'array', unit: '', description: '부하 목록', minItems: 1, itemSchema: [
@@ -246,7 +247,10 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
   'impedance-voltage': [
     { name: 'ratedCapacity', type: 'number', unit: 'kVA', description: '정격 용량', min: 1, defaultValue: 500 },
     { name: 'ratedVoltage', type: 'number', unit: 'V', description: '정격 전압 (선간)', min: 1, defaultValue: 380 },
-    { name: 'shortCircuitCurrent', type: 'number', unit: 'A', description: '단락 전류', min: 0.1, defaultValue: 100 },
+    // %Z = (In/Isc)×100. 500kVA/380V의 정격전류는 759.7A이고 실제 단락전류는
+    // 수천~수만 A다. 기본값 100A는 정격보다 작아 %Z가 759.67%로 나온다(물리 불가).
+    // 통상 %Z 5%에 해당하는 Isc = 759.7/0.05 ≈ 15,000A를 기본값으로 둔다.
+    { name: 'shortCircuitCurrent', type: 'number', unit: 'A', description: '단락 전류 (정격전류보다 훨씬 커야 함)', min: 0.1, defaultValue: 15000 },
   ],
   'inrush-current': [
     { name: 'ratedCapacity', type: 'number', unit: 'kVA', description: '정격 용량', min: 1, defaultValue: 500 },
@@ -305,7 +309,6 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     ], defaultValue: 'Cu' },
   ],
   'equipotential-bonding': [
-    { name: 'largestPhase', type: 'number', unit: 'mm²', description: '최대 상도체 단면적', min: 0.5, defaultValue: 35 },
     { name: 'largestPE', type: 'number', unit: 'mm²', description: '최대 보호도체(PE) 단면적', min: 0.5, defaultValue: 16 },
   ],
   'lightning-protection': [
@@ -407,7 +410,8 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
       { value: 'N', label: 'N (단일)' },
       { value: 'N+1', label: 'N+1 (예비 1)' },
     ], defaultValue: 'N' },
-    { name: 'systemVoltage', type: 'number', unit: 'V', description: '계통 전압 (선택)', min: 1, defaultValue: 22900 },
+    { name: 'systemVoltage', type: 'number', unit: 'V', description: '수전(고압) 전압', min: 1, defaultValue: 22900 },
+    { name: 'secondaryVoltage', type: 'number', unit: 'V', description: '2차(저압) 모선 전압', min: 1, defaultValue: 380 },
   ],
   'ct-sizing': [
     { name: 'maxLoadCurrent', type: 'number', unit: 'A', description: '최대 부하 전류', min: 0.1, defaultValue: 200 },
@@ -550,16 +554,16 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
   ],
   'token-cost': [
     { name: 'model', type: 'string', unit: '', description: 'AI 모델', options: [
-      { value: 'gpt-4.1', label: 'GPT-4.1' },
-      { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-      { value: 'gpt-4.1-nano', label: 'GPT-4.1 Nano' },
-      { value: 'o4-mini', label: 'o4-mini' },
-      { value: 'claude-opus-4', label: 'Claude Opus 4' },
-      { value: 'claude-sonnet-4', label: 'Claude Sonnet 4' },
-      { value: 'claude-haiku-4.5', label: 'Claude Haiku 4.5' },
-      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    ], defaultValue: 'gpt-4.1-mini' },
+      { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+      { value: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+      { value: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
+      { value: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
+      { value: 'claude-sonnet-5', label: 'Claude Sonnet 5' },
+      { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
+      { value: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro (Preview)' },
+      { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
+      { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
+    ], defaultValue: 'gpt-5.6-luna' },
     { name: 'inputTokens', type: 'number', unit: 'tokens', description: '요청당 입력 토큰 수', min: 0, defaultValue: 1000 },
     { name: 'outputTokens', type: 'number', unit: 'tokens', description: '요청당 출력 토큰 수', min: 0, defaultValue: 500 },
     { name: 'requestCount', type: 'number', unit: '회/일', description: '일일 요청 수', min: 1, defaultValue: 1000, step: 1 },

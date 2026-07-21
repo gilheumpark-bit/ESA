@@ -18,9 +18,7 @@ import type { CalcResult } from '@engine/standards/types';
  * Arrays preserve order; primitives pass through unchanged.
  */
 export function canonicalize(value: unknown): string {
-  if (value === null || value === undefined) {
-    return JSON.stringify(value);
-  }
+  if (value === null || value === undefined) return 'null';
 
   if (Array.isArray(value)) {
     const items = value.map((v) => canonicalize(v));
@@ -29,7 +27,9 @@ export function canonicalize(value: unknown): string {
 
   if (typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    const sortedKeys = Object.keys(obj).sort();
+    // Match JSON.stringify semantics at transport boundaries: object fields
+    // whose value is undefined do not survive the HTTP/sessionStorage roundtrip.
+    const sortedKeys = Object.keys(obj).filter((key) => obj[key] !== undefined).sort();
     const pairs = sortedKeys.map((k) => `${JSON.stringify(k)}:${canonicalize(obj[k])}`);
     return `{${pairs.join(',')}}`;
   }
@@ -74,6 +74,11 @@ async function sha256Hex(data: string): Promise<string> {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/** Hash any canonical JSON-compatible value with deterministic key ordering. */
+export async function hashCanonicalValue(value: unknown): Promise<string> {
+  return sha256Hex(canonicalize(value));
 }
 
 // ---------------------------------------------------------------------------

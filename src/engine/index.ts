@@ -10,9 +10,9 @@ export * from './constants/physical';
 // Layer 0: Source-Judgment-Confidence types
 export * from './sjc/types';
 
-// Layer 0.5: Source tracker & Judge engine (SJC enforcement)
-export * from './sjc/source-tracker';
-export * from './sjc/judge';
+// (제거) sjc/judge·source-tracker — 외부 참조 0의 사문 게이트였음.
+// LLM 무근거 숫자 차단은 output-filter가 /api/chat 실경로에서 수행하고(A4),
+// 계산기는 sjc/types의 createSource/createJudgment를 직접 사용한다.
 
 // Layer 1: Standards types (CalcNode, CalcGraph, CalcResult, etc.)
 export * from './standards/types';
@@ -36,7 +36,6 @@ export * from './receipt';
 // Layer 6: LLM Control Layer ("LLM은 계산하지 않는다")
 export type { ESATool, IntentResult, FilterResult, BlockedItem } from './llm/types';
 export { ESVA_TOOLS, getToolByName, getToolsByCategory, toVercelToolsSchema } from './llm/tools';
-export { getESASystemPrompt } from './llm/system-prompt';
 export { filterLLMOutput, isClean } from './llm/output-filter';
 export { parseIntent } from './llm/intent-parser';
 

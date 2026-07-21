@@ -24,6 +24,10 @@ import {
   buildEscalation,
 } from '../debate/debate-protocol';
 import type { ConsensusConfig } from '../debate/types';
+import type { DrawingSynthesis } from '../electrical/synthesis';
+import { hashCanonicalValue } from '@/engine/receipt/receipt-hash';
+import { buildDrawingIntelligenceReport } from '../report/drawing-intelligence-report';
+import { verifyCurrentGoldenGate } from '../report/golden-gate';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Result Merger
@@ -38,6 +42,14 @@ interface MergedResults {
   connectionCount: number;
 }
 
+/** 판정 심각도 순위 — 같은 조항 키 병합 시 최악값 보존용 */
+const JUDGMENT_RANK: Record<'PASS' | 'HOLD' | 'FAIL' | 'BLOCK', number> = {
+  PASS: 0,
+  HOLD: 1,
+  FAIL: 2,
+  BLOCK: 3,
+};
+
 function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
   const allCalculations: NonNullable<TeamResult['calculations']> = [];
   const allStandards: NonNullable<TeamResult['standards']> = [];
@@ -46,9 +58,9 @@ function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
   let componentCount = 0;
   let connectionCount = 0;
 
-  // 중복 제거 Set
+  // 중복 제거 — standards는 키→인덱스 맵(최악 판정 교체를 위해)
   const seenCalcIds = new Set<string>();
-  const seenStdKeys = new Set<string>();
+  const seenStdKeys = new Map<string, number>();
 
   for (const tr of teamResults) {
     componentCount += tr.components?.length ?? 0;
@@ -65,10 +77,21 @@ function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
 
     if (tr.standards) {
       for (const std of tr.standards) {
+        // 같은 조항 키의 중복은 제거하되 **최악 판정을 보존**한다.
+        //
+        // 종전에는 먼저 온 행이 무조건 이겨서, 같은 조항이 인스턴스마다 다른
+        // 판정을 낼 때(변압기 2대 중 1대만 위반 등) 뒤에 온 FAIL이 병합표에서
+        // 사라지고 hasFail 판정까지 놓쳤다 — 독립 심사가 실행 재현으로 발각.
+        // KEC 232.52(결선마다 같은 clause) 등 기존 행도 같은 결함이었다.
+        // 병합표는 "조항별 최악 상태" 요약이고, 인스턴스 전량은 각 팀 결과에
+        // 원본대로 남는다.
         const key = `${std.standard}-${std.clause}`;
-        if (!seenStdKeys.has(key)) {
-          seenStdKeys.add(key);
+        const existingIdx = seenStdKeys.get(key);
+        if (existingIdx === undefined) {
+          seenStdKeys.set(key, allStandards.length);
           allStandards.push(std);
+        } else if (JUDGMENT_RANK[std.judgment] > JUDGMENT_RANK[allStandards[existingIdx].judgment]) {
+          allStandards[existingIdx] = std;
         }
       }
     }
@@ -112,9 +135,9 @@ function generateMarkings(
     });
   }
 
-  // 계산 결과 비적합 → 빨강
+  // 계산 결과 비적합 → 빨강 (null=HOLD는 제외)
   for (const calc of merged.allCalculations ?? []) {
-    if (!calc.compliant) {
+    if (calc.compliant === false) {
       markings.push({
         id: `mark-${markIdx++}`,
         severity: 'error',
@@ -123,6 +146,16 @@ function generateMarkings(
         detail: `계산값 ${calc.value} ${calc.unit}`,
         standardRef: calc.standardRef,
         calculatedValue: `${calc.value} ${calc.unit}`,
+      });
+    } else if (calc.compliant === null) {
+      markings.push({
+        id: `mark-${markIdx++}`,
+        severity: 'warning',
+        location: calc.label,
+        message: `${calc.label}: 판정 보류(HOLD)`,
+        detail: calc.note ?? `계산값 ${calc.value} ${calc.unit} — 미검증`,
+        standardRef: calc.standardRef,
+        calculatedValue: Number.isFinite(calc.value) ? `${calc.value} ${calc.unit}` : undefined,
       });
     }
   }
@@ -143,7 +176,7 @@ function generateMarkings(
 
   // 적합 항목 → 초록
   for (const calc of merged.allCalculations ?? []) {
-    if (calc.compliant) {
+    if (calc.compliant === true) {
       markings.push({
         id: `mark-${markIdx++}`,
         severity: 'success',
@@ -175,21 +208,30 @@ function computeGrade(score: number): VerifiedGrade {
 function computeVerdict(merged: MergedResults): ReportVerdict {
   const hasCritical = merged.allViolations.some(v => v.severity === 'critical');
   const hasFail = (merged.allStandards ?? []).some(s => s.judgment === 'FAIL' || s.judgment === 'BLOCK');
+  const hasCalcFail = (merged.allCalculations ?? []).some(c => c.compliant === false);
+  const hasHold =
+    (merged.allCalculations ?? []).some(c => c.compliant === null) ||
+    (merged.allStandards ?? []).some(s => s.judgment === 'HOLD');
 
-  if (hasCritical || hasFail) return 'FAIL';
-  if (merged.allViolations.length > 0) return 'CONDITIONAL';
+  if (hasCritical || hasFail || hasCalcFail) return 'FAIL';
+  if (merged.allViolations.length > 0 || hasHold) return 'CONDITIONAL';
   return 'PASS';
 }
 
 function computeScore(merged: MergedResults): number {
-  const totalChecks =
-    (merged.allCalculations?.length ?? 0) + (merged.allStandards?.length ?? 0);
-  if (totalChecks === 0) return 50;
+  const calcs = merged.allCalculations ?? [];
+  const stds = merged.allStandards ?? [];
+  // HOLD/미검증은 분모에서 제외 — 빈 데이터 고득점 방지
+  const scoredCalcs = calcs.filter(c => c.compliant !== null);
+  const scoredStds = stds.filter(s => s.judgment !== 'HOLD');
+  const totalChecks = scoredCalcs.length + scoredStds.length;
+  if (totalChecks === 0) {
+    // 전부 HOLD면 점수 0 — "검증됨" 오인 차단
+    return calcs.length + stds.length > 0 ? 0 : 50;
+  }
 
-  const passedCalcs = (merged.allCalculations ?? []).filter(c => c.compliant).length;
-  const passedStds = (merged.allStandards ?? []).filter(s =>
-    s.judgment === 'PASS' || s.judgment === 'HOLD'
-  ).length;
+  const passedCalcs = scoredCalcs.filter(c => c.compliant === true).length;
+  const passedStds = scoredStds.filter(s => s.judgment === 'PASS').length;
 
   const passRate = (passedCalcs + passedStds) / totalChecks;
 
@@ -200,29 +242,53 @@ function computeScore(merged: MergedResults): number {
   return Math.max(0, Math.min(100, Math.round(passRate * 100 - criticalPenalty - majorPenalty)));
 }
 
+function drawingRecommendations(drawingSynthesis: DrawingSynthesis): RecommendationEntry[] {
+  return drawingSynthesis.recommendations.slice(0, 5).map((recommendation) => ({
+    id: recommendation.id,
+    category: recommendation.category,
+    title: recommendation.title,
+    description: recommendation.description,
+    impact: recommendation.impact,
+    evidenceIds: [...recommendation.evidenceIds],
+    status: recommendation.status,
+    requiredInputs: [...recommendation.requiredInputs],
+  }));
+}
+
 function buildSummary(
   merged: MergedResults,
   verdict: ReportVerdict,
   score: number,
+  drawingSynthesis?: DrawingSynthesis,
 ): ReportSummary {
   const passedChecks =
-    (merged.allCalculations ?? []).filter(c => c.compliant).length +
+    (merged.allCalculations ?? []).filter(c => c.compliant === true).length +
     (merged.allStandards ?? []).filter(s => s.judgment === 'PASS').length;
   const failedChecks =
-    (merged.allCalculations ?? []).filter(c => !c.compliant).length +
+    (merged.allCalculations ?? []).filter(c => c.compliant === false).length +
     (merged.allStandards ?? []).filter(s => s.judgment === 'FAIL' || s.judgment === 'BLOCK').length;
+  const holdChecks =
+    (merged.allCalculations ?? []).filter(c => c.compliant === null).length +
+    (merged.allStandards ?? []).filter(s => s.judgment === 'HOLD').length;
 
   const appliedStandards = [...new Set(
     (merged.allStandards ?? []).map(s => `${s.standard}`)
   )];
 
-  const textKo = verdict === 'PASS'
-    ? `전체 ${passedChecks + failedChecks}개 검증 항목 중 ${passedChecks}개 적합. 종합 ${score}점 (${computeGrade(score)}등급).`
-    : `전체 ${passedChecks + failedChecks}개 검증 항목 중 ${failedChecks}개 부적합 발견. 종합 ${score}점. 수정 후 재검토 필요.`;
+  const totalJudged = passedChecks + failedChecks + holdChecks;
+  const textKo =
+    verdict === 'PASS'
+      ? `전체 ${totalJudged}개 항목 중 ${passedChecks}개 적합. 종합 ${score}점 (${computeGrade(score)}등급).`
+      : verdict === 'CONDITIONAL'
+        ? `전체 ${totalJudged}개 항목 중 적합 ${passedChecks}·부적합 ${failedChecks}·보류(HOLD) ${holdChecks}. 종합 ${score}점. 추가 입력·수동 검증 필요.`
+        : `전체 ${totalJudged}개 항목 중 ${failedChecks}개 부적합 발견(HOLD ${holdChecks}). 종합 ${score}점. 수정 후 재검토 필요.`;
 
-  const textEn = verdict === 'PASS'
-    ? `${passedChecks} of ${passedChecks + failedChecks} checks passed. Score: ${score} (Grade ${computeGrade(score)}).`
-    : `${failedChecks} of ${passedChecks + failedChecks} checks failed. Score: ${score}. Revision required.`;
+  const textEn =
+    verdict === 'PASS'
+      ? `${passedChecks} of ${totalJudged} checks passed. Score: ${score} (Grade ${computeGrade(score)}).`
+      : verdict === 'CONDITIONAL'
+        ? `${passedChecks} pass / ${failedChecks} fail / ${holdChecks} hold of ${totalJudged}. Score: ${score}. Further verification required.`
+        : `${failedChecks} of ${totalJudged} checks failed (${holdChecks} hold). Score: ${score}. Revision required.`;
 
   return {
     totalComponents: merged.componentCount,
@@ -232,7 +298,7 @@ function buildSummary(
     failedChecks,
     warningChecks: merged.allViolations.filter(v => v.severity === 'major').length,
     criticalViolations: merged.allViolations.filter(v => v.severity === 'critical'),
-    topRecommendations: merged.allRecommendations.slice(0, 5),
+    topRecommendations: drawingSynthesis ? drawingRecommendations(drawingSynthesis) : merged.allRecommendations.slice(0, 5),
     appliedStandards,
     textKo,
     textEn,
@@ -249,6 +315,53 @@ export interface ConsensusTeamInput {
   projectType: string;
   teamResults: TeamResult[];
   consensusConfig?: ConsensusConfig;
+  drawingSynthesis?: DrawingSynthesis;
+}
+
+function mergeDrawingVerdict(genericVerdict: ReportVerdict, drawingSynthesis: DrawingSynthesis | undefined): ReportVerdict {
+  if (genericVerdict === 'FAIL' || drawingSynthesis?.verdict === 'FAIL') return 'FAIL';
+  if (genericVerdict === 'CONDITIONAL' || drawingSynthesis?.verdict === 'CONDITIONAL') return 'CONDITIONAL';
+  return 'PASS';
+}
+
+function drawingEvidenceIds(drawingSynthesis: DrawingSynthesis): string[] {
+  return [...new Set([
+    ...drawingSynthesis.evidenceRegistry.map((evidence) => evidence.id),
+    ...drawingSynthesis.claims.flatMap((claim) => [claim.id, ...claim.evidenceIds]),
+    ...drawingSynthesis.recommendations.flatMap((recommendation) => recommendation.evidenceIds),
+    ...drawingSynthesis.calculations.flatMap((receipt) => [receipt.id, ...receipt.inputEvidence.map((evidence) => evidence.evidenceId)]),
+    ...drawingSynthesis.issues.map((issue) => issue.id),
+    ...drawingSynthesis.conflicts.map((conflict) => conflict.id),
+  ])].sort((left, right) => left.localeCompare(right));
+}
+
+async function buildDrawingExtension(input: ConsensusTeamInput) {
+  if (!input.drawingSynthesis) return undefined;
+  const reviews = input.teamResults
+    .filter((result) => result.teamId === 'TEAM-SLD')
+    .map((result) => result.drawingReview)
+    .filter((review): review is NonNullable<typeof review> => (
+      review !== undefined && review.snapshot.drawingHash === input.drawingSynthesis?.drawingHash
+    ));
+  if (reviews.length !== 1) {
+    throw new Error('DRAWING_REVIEW_ARTIFACT_REQUIRED');
+  }
+
+  const configuredPublicKey = process.env.SLD_GOLDEN_GATE_PUBLIC_KEY_PEM?.replaceAll('\\n', '\n');
+  const gate = await verifyCurrentGoldenGate({
+    publicKeyPem: configuredPublicKey,
+    ...(process.env.SLD_GOLDEN_MANIFEST_PATH
+      ? { manifestPath: process.env.SLD_GOLDEN_MANIFEST_PATH }
+      : {}),
+    ...(process.env.SLD_GOLDEN_RECEIPT_PATH
+      ? { receiptPath: process.env.SLD_GOLDEN_RECEIPT_PATH }
+      : {}),
+  });
+  return buildDrawingIntelligenceReport({
+    drawingReview: reviews[0],
+    synthesis: input.drawingSynthesis,
+    verified95: gate.verified95,
+  });
 }
 
 /**
@@ -271,48 +384,51 @@ export async function executeConsensusTeam(
   const escalation = buildEscalation(debateResults);
 
   // Step 2.5: 표준 도면 패턴 매칭 + 비용 산출
-  try {
-    const allComponentTypes = input.teamResults
-      .flatMap(tr => tr.components ?? [])
-      .map(c => c.type);
-    if (allComponentTypes.length > 0) {
-      const { matchStandardDrawing } = await import('@/data/standard-drawings/standard-drawing-db');
-      const patternMatch = matchStandardDrawing(allComponentTypes);
-      if (patternMatch.length > 0 && patternMatch[0].matchScore > 0.5) {
-        const best = patternMatch[0];
-        if (best.missingComponents.length > 0) {
-          for (const missing of best.missingComponents) {
-            merged.allViolations.push({
-              id: `vio-pattern-${missing}`,
-              severity: 'major',
-              title: `표준 도면 대비 누락: ${missing}`,
-              description: `${best.templateName} 기준 "${missing}" 필수 요소 미확인`,
-              suggestedFix: `${missing} 추가 설치 검토`,
-            });
+  // drawing synthesis는 current-drawing provenance가 없는 enrichment를 허용하지 않는다.
+  if (!input.drawingSynthesis) {
+    try {
+      const allComponentTypes = input.teamResults
+        .flatMap(tr => tr.components ?? [])
+        .map(c => c.type);
+      if (allComponentTypes.length > 0) {
+        const { matchStandardDrawing } = await import('@/data/standard-drawings/standard-drawing-db');
+        const patternMatch = matchStandardDrawing(allComponentTypes);
+        if (patternMatch.length > 0 && patternMatch[0].matchScore > 0.5) {
+          const best = patternMatch[0];
+          if (best.missingComponents.length > 0) {
+            for (const missing of best.missingComponents) {
+              merged.allViolations.push({
+                id: `vio-pattern-${missing}`,
+                severity: 'major',
+                title: `표준 도면 대비 누락: ${missing}`,
+                description: `${best.templateName} 기준 "${missing}" 필수 요소 미확인`,
+                suggestedFix: `${missing} 추가 설치 검토`,
+              });
+            }
           }
         }
-      }
 
-      // 비용 산출
-      const { getUnitPrice, estimateProjectCost } = await import('@/data/unit-prices/unit-price-db');
-      const costItems = allComponentTypes.map(type => ({
-        item: type,
-        price: getUnitPrice(type),
-        quantity: 1,
-      }));
-      const costEstimate = estimateProjectCost(costItems);
-      if (costEstimate.grandTotal > 0) {
-        merged.allRecommendations.push({
-          id: 'rec-cost',
-          category: 'cost',
-          title: '개산 견적',
-          description: `자재비 ${(costEstimate.materialTotal / 10000).toFixed(0)}만원 + 노무비 ${(costEstimate.laborTotal / 10000).toFixed(0)}만원 = 합계 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원 (부가세 별도)`,
-          impact: 'medium',
-          estimatedSaving: `총 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원`,
-        });
+        // 비용 산출
+        const { getUnitPrice, estimateProjectCost } = await import('@/data/unit-prices/unit-price-db');
+        const costItems = allComponentTypes.map(type => ({
+          item: type,
+          price: getUnitPrice(type),
+          quantity: 1,
+        }));
+        const costEstimate = estimateProjectCost(costItems);
+        if (costEstimate.grandTotal > 0) {
+          merged.allRecommendations.push({
+            id: 'rec-cost',
+            category: 'cost',
+            title: '개산 견적',
+            description: `자재비 ${(costEstimate.materialTotal / 10000).toFixed(0)}만원 + 노무비 ${(costEstimate.laborTotal / 10000).toFixed(0)}만원 = 합계 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원 (부가세 별도)`,
+            impact: 'medium',
+            estimatedSaving: `총 ${(costEstimate.grandTotal / 10000).toFixed(0)}만원`,
+          });
+        }
       }
-    }
-  } catch { /* 패턴 매칭/견적 실패해도 보고서 생성은 계속 */ }
+    } catch { /* 패턴 매칭/견적 실패해도 보고서 생성은 계속 */ }
+  }
 
   // 에스컬레이션(팀 간 합의 실패) 위반은 반드시 점수·판정·마킹·요약 계산 "전에"
   // 반영해야 한다. 이전에는 report 조립 이후에 push되어, 합의 실패가 verdict/score/
@@ -332,16 +448,23 @@ export async function executeConsensusTeam(
 
   // Step 4: 점수 계산
   const score = computeScore(merged);
-  const verdict = computeVerdict(merged);
+  const verdict = mergeDrawingVerdict(computeVerdict(merged), input.drawingSynthesis);
   const grade = computeGrade(score);
-  const summary = buildSummary(merged, verdict, score);
+  const summary = buildSummary(merged, verdict, score, input.drawingSynthesis);
+  const drawingIntelligence = await buildDrawingExtension(input);
 
   // Step 5: 보고서 조립
-  const reportId = `RPT-${Date.now().toString(36).toUpperCase()}`;
-  const report: ESVAVerifiedReport = {
+  const reportId = `RPT-${crypto.randomUUID().replaceAll('-', '').slice(0, 20).toUpperCase()}`;
+  const evidenceIds = [...new Set([
+    ...input.teamResults.map(result => `team:${result.teamId}`),
+    ...(merged.allCalculations ?? []).map(calculation => `calculation:${calculation.id}`),
+    ...merged.allViolations.map(violation => `violation:${violation.id}`),
+    ...(input.drawingSynthesis ? drawingEvidenceIds(input.drawingSynthesis) : []),
+  ])].sort((left, right) => left.localeCompare(right));
+  const reportClaim: Omit<ESVAVerifiedReport, 'hash'> = {
     reportId,
     createdAt: new Date().toISOString(),
-    version: 'ESVA Report v1.0',
+    version: drawingIntelligence ? 'ESVA Report v2.0' : 'ESVA Report v1.0',
     projectName: input.projectName,
     projectType: input.projectType,
     verdict,
@@ -353,9 +476,14 @@ export async function executeConsensusTeam(
     summary,
     // 합의 실패 시 사람 검토 필요 신호를 리포트에 노출 (이전엔 debate 결과의
     // requiresHumanReview를 읽는 production 코드가 0이라 아무 데도 전달 안 됐음).
-    requiresHumanReview: !!escalation,
-    receiptIds: [], // 영수증 ID는 export 시 생성
-    hash: '', // SHA-256은 최종 확정 시 계산
+    requiresHumanReview: Boolean(escalation) || Boolean(input.drawingSynthesis?.requiresHumanReview),
+    evidenceIds,
+    ...(input.drawingSynthesis ? { drawingSynthesis: input.drawingSynthesis } : {}),
+    ...(drawingIntelligence ? { drawingIntelligence } : {}),
+  };
+  const report: ESVAVerifiedReport = {
+    ...reportClaim,
+    hash: await hashCanonicalValue(reportClaim),
   };
 
   const teamResult: TeamResult = {
@@ -364,7 +492,7 @@ export async function executeConsensusTeam(
     calculations: merged.allCalculations,
     standards: merged.allStandards,
     violations: merged.allViolations,
-    recommendations: merged.allRecommendations,
+    recommendations: input.drawingSynthesis ? drawingRecommendations(input.drawingSynthesis) : merged.allRecommendations,
     confidence: score / 100,
     durationMs: Date.now() - start,
   };

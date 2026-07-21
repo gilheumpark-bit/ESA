@@ -47,6 +47,16 @@ const MAX_BUFFER = 50;
 
 let sessionId = '';
 
+function analyticsDisabled(): boolean {
+  if (typeof window === 'undefined') return true;
+  if (navigator.doNotTrack === '1') return true;
+  try {
+    return localStorage.getItem('esva-analytics-opt-out') === 'true';
+  } catch {
+    return false;
+  }
+}
+
 function getSessionId(): string {
   if (sessionId) return sessionId;
   if (typeof window !== 'undefined') {
@@ -73,7 +83,7 @@ export function trackEvent(
     variant?: string;
   },
 ): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || analyticsDisabled()) return;
 
   const event: AnalyticsEvent = {
     category,
@@ -96,6 +106,10 @@ export function trackEvent(
 
 /** 버퍼 플러시 — sendBeacon으로 비동기 전송 */
 function flushEvents(): void {
+  if (analyticsDisabled()) {
+    EVENT_BUFFER.length = 0;
+    return;
+  }
   if (EVENT_BUFFER.length === 0) return;
 
   const events = EVENT_BUFFER.splice(0, MAX_BUFFER);

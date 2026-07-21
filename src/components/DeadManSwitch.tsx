@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { DeadManStage } from '@/engine/safety/types';
 import type { DeadManConfig } from '@/lib/safety-scheduler';
+import { CheckCircle2, Play, RotateCcw, Siren } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
@@ -28,10 +29,10 @@ interface DeadManSwitchProps {
 
 const STAGE_STYLES: Record<DeadManStage, { bg: string; border: string; badge: string; label: string }> = {
   idle:    { bg: 'bg-[var(--color-surface)]', border: 'border-[var(--color-border)]',    badge: 'bg-gray-400',                    label: '대기 중' },
-  active:  { bg: 'bg-green-950/30',           border: 'border-green-600',                badge: 'bg-green-500',                   label: '모니터링 중' },
+  active:  { bg: 'bg-green-950/30',           border: 'border-green-600',                badge: 'bg-green-500',                   label: '체크 타이머 작동' },
   warn1:   { bg: 'bg-yellow-950/30',          border: 'border-yellow-500',               badge: 'bg-yellow-400 animate-pulse',    label: '1차 경고' },
   warn2:   { bg: 'bg-orange-950/30',          border: 'border-orange-500',               badge: 'bg-orange-500 animate-pulse',    label: '2차 경고' },
-  sos:     { bg: 'bg-red-950/40',             border: 'border-red-500',                  badge: 'bg-red-600 animate-ping',        label: '🚨 SOS 발동' },
+  sos:     { bg: 'bg-red-950/40',             border: 'border-red-500',                  badge: 'bg-red-600 animate-ping',        label: 'SOS 표시' },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -90,7 +91,7 @@ function useDeadManTimer(
   config: DeadManConfig,
   isRunning: boolean,
   onSos?: (ts: number) => void,
-): [TimerState, () => void] {
+): [TimerState, () => void, () => void] {
   const [state, setState] = useState<TimerState>({
     stage: 'idle',
     elapsedMs: 0,
@@ -114,11 +115,17 @@ function useDeadManTimer(
     });
   }, [config.intervalMs]);
 
+  const reset = useCallback(() => {
+    setState({
+      stage: 'idle',
+      elapsedMs: 0,
+      nextDeadlineMs: config.intervalMs,
+      progress: 0,
+    });
+  }, [config.intervalMs]);
+
   useEffect(() => {
-    if (!isRunning) {
-      setState(prev => ({ ...prev, stage: 'idle', elapsedMs: 0, progress: 0 }));
-      return;
-    }
+    if (!isRunning) return;
 
     startRef.current = Date.now();
     lastAckRef.current = Date.now();
@@ -153,7 +160,7 @@ function useDeadManTimer(
     };
   }, [isRunning, config, onSos]);
 
-  return [state, acknowledge];
+  return [state, acknowledge, reset];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -170,7 +177,7 @@ function formatCountdown(ms: number): string {
 
 export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }: DeadManSwitchProps) {
   const [isRunning, setIsRunning] = useState(false);
-  const [{ stage, nextDeadlineMs, progress }, acknowledge] = useDeadManTimer(config, isRunning, onSos);
+  const [{ stage, nextDeadlineMs, progress }, acknowledge, reset] = useDeadManTimer(config, isRunning, onSos);
 
   const styles = STAGE_STYLES[stage];
   const intervalMin = Math.round(config.intervalMs / 60000);
@@ -180,6 +187,7 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
   };
 
   const handleStop = () => {
+    reset();
     setIsRunning(false);
   };
 
@@ -190,7 +198,7 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
         <div className="flex items-center gap-2">
           <div className={`w-3 h-3 rounded-full ${styles.badge}`} />
           <span className="font-semibold text-[var(--color-text-primary)]">
-            데드맨 스위치
+            데드맨 체크 타이머
           </span>
         </div>
         <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]">
@@ -205,6 +213,9 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
           미응답 {intervalMin * 2}분 시 이 화면에 응급 경보 표시 (외부 자동 신고 없음 — 별도 연락 수단 필수)
         </span>
       </p>
+      <p className="mb-4 text-xs text-[var(--color-text-secondary)]">
+        입력된 감시인 {supervisorCount}명 — 실제 배치·연락 가능 상태는 현장에서 직접 확인해야 합니다.
+      </p>
 
       {/* 상태 메시지 (경고 단계) */}
       {stage === 'warn1' && (
@@ -218,8 +229,9 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
         </div>
       )}
       {stage === 'sos' && (
-        <div className="mb-4 p-3 rounded-lg bg-red-900/50 border border-red-500 text-red-200 text-sm font-semibold">
-          🚨 {config.messages.sos}
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-500 bg-red-900/50 p-3 text-sm font-semibold text-red-200">
+          <Siren size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>{config.messages.sos}</span>
         </div>
       )}
 
@@ -249,27 +261,31 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
       <div className="flex gap-3">
         {!isRunning ? (
           <button
+            type="button"
             onClick={handleStart}
-            className="flex-1 py-3 rounded-xl font-semibold text-sm bg-green-600 hover:bg-green-500 active:scale-95 text-white transition-all"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-600 py-3 text-sm font-semibold text-white transition-all hover:bg-green-500 active:scale-95"
           >
-            ▶ 모니터링 시작
+            <Play size={16} aria-hidden="true" /> 체크 타이머 시작
           </button>
         ) : stage === 'sos' ? (
           <button
-            onClick={() => { acknowledge(); handleStop(); handleStart(); }}
-            className="flex-1 py-3 rounded-xl font-bold text-sm bg-red-600 hover:bg-red-500 active:scale-95 text-white transition-all animate-pulse"
+            type="button"
+            onClick={acknowledge}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-bold text-white transition-all hover:bg-red-500 active:scale-95 animate-pulse"
           >
-            🆘 SOS 취소 & 재시작
+            <RotateCcw size={16} aria-hidden="true" /> SOS 표시 확인 후 타이머 재시작
           </button>
         ) : (
           <>
             <button
+              type="button"
               onClick={acknowledge}
-              className="flex-1 py-3 rounded-xl font-bold text-sm bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:scale-95 text-white transition-all"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] py-3 text-sm font-bold text-white transition-all hover:bg-[var(--color-primary-hover)] active:scale-95"
             >
-              ✅ 생존 신고
+              <CheckCircle2 size={16} aria-hidden="true" /> 생존 확인
             </button>
             <button
+              type="button"
               onClick={handleStop}
               className="px-4 py-3 rounded-xl text-sm border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] transition-all"
             >
@@ -281,7 +297,7 @@ export function DeadManSwitch({ config, supervisorCount, onSos, className = '' }
 
       {/* 법적 면책 */}
       <p className="mt-3 text-[10px] text-[var(--color-text-muted)] leading-relaxed">
-        본 기능은 보조 안전 수단입니다. 법적 의무 감시인 배치(산안법 제623조)를 대체하지 않습니다.
+        본 기능은 보조 수단입니다. 밀폐공간 작업에는 「산업안전보건기준에 관한 규칙」 제623조의 감시인 배치·연락설비 의무가 적용되며, 이 기능으로 대체할 수 없습니다.
       </p>
     </div>
   );

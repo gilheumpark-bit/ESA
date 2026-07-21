@@ -38,7 +38,7 @@ export interface AccessResult {
  * OPEN_BETA: when true, all users get Pro-tier access.
  * Toggle this off when ESVA launches paid plans.
  */
-export const OPEN_BETA = true;
+export const OPEN_BETA = process.env.OPEN_BETA === 'true';
 
 // ─── PART 3: Tier Definitions ─────────────────────────────────
 

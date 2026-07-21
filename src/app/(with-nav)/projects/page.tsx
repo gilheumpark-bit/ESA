@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { authenticatedFetch } from '@/lib/client-auth';
 import {
   FolderOpen,
   Plus,
@@ -163,7 +164,7 @@ export default function ProjectsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/projects?filter=${filter}`);
+      const res = await authenticatedFetch(`/api/projects?filter=${filter}`);
       if (!res.ok) throw new Error('프로젝트 목록을 불러올 수 없습니다.');
       const data = await res.json();
       setProjects(data.projects ?? []);
@@ -175,7 +176,8 @@ export default function ProjectsPage() {
   }, [filter]);
 
   useEffect(() => {
-    fetchProjects();
+    const timer = window.setTimeout(() => { void fetchProjects(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [fetchProjects]);
 
   return (

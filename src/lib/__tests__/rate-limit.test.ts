@@ -120,6 +120,14 @@ describe('Rate Limiter - Store', () => {
     resetRateLimits();
     expect(getRateLimitStoreSize()).toBe(0);
   });
+
+  test('bounds the bucket store under a unique-client flood', () => {
+    for (let i = 0; i < 10_500; i++) {
+      checkRateLimit(`2001:db8::${i.toString(16)}`, 'default');
+    }
+
+    expect(getRateLimitStoreSize()).toBeLessThanOrEqual(10_000);
+  });
 });
 
 // -- IP Extraction Tests -----------------------------------------------------
@@ -145,6 +153,12 @@ describe('getClientIp', () => {
 
   test('Falls back to 127.0.0.1 when no headers present', () => {
     const headers = new Headers();
+    expect(getClientIp(headers)).toBe('127.0.0.1');
+  });
+
+  test('Rejects an out-of-range IPv4 address that only looks syntactically valid', () => {
+    const headers = new Headers();
+    headers.set('x-forwarded-for', '999.999.999.999');
     expect(getClientIp(headers)).toBe('127.0.0.1');
   });
 

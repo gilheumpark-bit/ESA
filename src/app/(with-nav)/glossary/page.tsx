@@ -101,6 +101,7 @@ export default function GlossaryPage() {
           <div className="relative min-w-[240px] flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
+              aria-label="용어 검색"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -111,6 +112,7 @@ export default function GlossaryPage() {
 
           {/* Category filter */}
           <select
+            aria-label="용어 카테고리"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as '' | ElectricalTermCategory)}
             className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
@@ -131,10 +133,12 @@ export default function GlossaryPage() {
           </button>
 
           {/* View toggle */}
-          <div className="flex overflow-hidden rounded-lg border border-[var(--border-default)]">
+          <div className="flex overflow-hidden rounded-lg border border-[var(--border-default)]" role="group" aria-label="보기 방식">
             <button
               type="button"
               onClick={() => setViewMode('grid')}
+              aria-label="격자 보기"
+              aria-pressed={viewMode === 'grid'}
               className={`flex h-10 items-center px-3 text-sm transition-colors ${
                 viewMode === 'grid'
                   ? 'bg-[var(--color-primary)] text-white'
@@ -146,6 +150,8 @@ export default function GlossaryPage() {
             <button
               type="button"
               onClick={() => setViewMode('list')}
+              aria-label="목록 보기"
+              aria-pressed={viewMode === 'list'}
               className={`flex h-10 items-center px-3 text-sm transition-colors ${
                 viewMode === 'list'
                   ? 'bg-[var(--color-primary)] text-white'

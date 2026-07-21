@@ -33,7 +33,7 @@ describe('NEC 2023 Articles', () => {
   test('NEC-240.6 has standard ampere ratings', () => {
     const article = getNECArticleFull('NEC-240.6');
     expect(article).not.toBeNull();
-    expect(article!.conditions[0].note).toContain('15,20,25,30') || expect(article!.conditions[0].note).toContain('표준 정격');
+    expect(article!.conditions[0].note).toMatch(/15,20,25,30|표준 정격/);
   });
 
   test('NEC-250.122 has EGC sizing', () => {

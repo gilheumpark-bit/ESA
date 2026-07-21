@@ -1,11 +1,11 @@
 /**
  * ESVA Team-Based Agent Types
  * ----------------------------
- * 4-Team architecture:
+ * Three specialist analyzers plus a separate consensus stage:
  *   TEAM-SLD     : 계통도팀 (Single-Line Diagram)
  *   TEAM-LAYOUT  : 평면도팀 (Floor Plan / Wiring Route)
  *   TEAM-STD     : 규정질의팀 (Standards & Regulations)
- *   TEAM-CONSENSUS: 합의+출력팀 (Consensus & Output)
+ *   TEAM-CONSENSUS: 합의+출력 단계 (Consensus & Output; not a fourth expert)
  *
  * PART 1: Team identity types
  * PART 2: Input/output contracts
@@ -62,6 +62,16 @@ export interface TeamInput {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
+  /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
+  signal?: AbortSignal;
+  /** 이미지 도면에서만 사용. API 키는 현재 요청 메모리에만 머물고 결과·로그에 포함하지 않는다. */
+  vision?: {
+    provider: 'openai' | 'gemini' | 'claude';
+    apiKey?: string;
+    model?: string;
+  };
+  /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 들어온다 (engine/standards/custom-rules) */
+  customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
 }
 
 export interface ExtractedComponent {
@@ -81,6 +91,31 @@ export interface ExtractedConnection {
   unit?: string;
 }
 
+export interface DrawingReviewArtifact {
+  snapshot: {
+    drawingHash: string;
+    mimeType: string;
+    page: number;
+    width: number;
+    height: number;
+    quality: import('../vision/evidence-types').ImageQualityProfile;
+  };
+  envelopes: import('../vision/review-types').RoleReviewEnvelope[];
+  graph?: import('../vision/spatial-graph').SpatialEvidenceGraph;
+  failures: import('../vision/drawing-council').RoleFailure[];
+  coverage: {
+    roles: Record<'symbols' | 'connections' | 'text' | 'logic', {
+      variantId: string;
+      expectedRegionCount: number;
+      actualRegionCount: number;
+      plannedCalls: number;
+    }>;
+    plannedCalls: number;
+    complete: boolean;
+    maxRegionCallsPerRole: number;
+  };
+}
+
 export interface TeamResult {
   teamId: TeamId;
   success: boolean;
@@ -94,6 +129,19 @@ export interface TeamResult {
   durationMs: number;
   rawOutput?: string;
   error?: string;
+  drawingReview?: DrawingReviewArtifact;
+  drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
+  vectorTexts?: Array<{ text: string; position: { x: number; y: number }; confidence: number }>;
+  /**
+   * 벡터 입력은 결과 배열의 존재만으로 역할 완료를 주장하지 않는다.
+   * 파서와 토폴로지 검증을 실제로 통과한 역할만 문서 coverage에 승계한다.
+   */
+  vectorAudit?: {
+    parser: 'dxf' | 'pdf';
+    pageNumber: number;
+    complete: boolean;
+    roles: Array<'symbols' | 'connections' | 'text' | 'logic' | 'coverage-auditor'>;
+  };
 }
 
 export interface CalculationEntry {
@@ -103,7 +151,13 @@ export interface CalculationEntry {
   value: number;
   unit: string;
   formula?: string;
-  compliant: boolean;
+  /**
+   * true = 검증 통과, false = 검증 실패, null = 미검증(HOLD).
+   * 가정값·도면 표기 전사만 있는 경우 반드시 null — 거짓 적합 금지.
+   */
+  compliant: boolean | null;
+  /** HOLD/추정 사유 (UI·리포트 노출) */
+  note?: string;
   standardRef?: string;
 }
 
@@ -132,6 +186,9 @@ export interface RecommendationEntry {
   description: string;
   impact: 'high' | 'medium' | 'low';
   estimatedSaving?: string;
+  evidenceIds?: string[];
+  status?: 'SUPPORTED' | 'HOLD';
+  requiredInputs?: string[];
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -233,8 +290,14 @@ export interface ESVAVerifiedReport {
   /** 팀 간 합의 실패 등으로 사람(PE) 검토가 필요한지 — UI가 상시 노출해야 함 */
   requiresHumanReview?: boolean;
 
-  // 영수증 추적
-  receiptIds: string[];
+  drawingSynthesis?: import('../electrical/synthesis').DrawingSynthesis;
+
+  /** Source-linked v2 SLD extension. Optional so stored v1 reports remain readable. */
+  drawingIntelligence?: import('../report/drawing-intelligence-report').DrawingIntelligenceReport;
+
+  // 보고서 안에서 실제 판정 근거로 사용된 팀/계산/위반 항목 식별자.
+  // 계산 영수증이 생성되지 않은 경로에서 가짜 receipt ID를 만들지 않는다.
+  evidenceIds: string[];
   hash: string;               // SHA-256 of entire report
 }
 

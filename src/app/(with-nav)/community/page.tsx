@@ -52,31 +52,32 @@ function useQuestions(opts: {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      const params = new URLSearchParams();
+      params.set('sort', opts.sort);
+      params.set('page', String(opts.page));
+      if (opts.tags.length > 0) params.set('tags', opts.tags.join(','));
+      if (opts.search) params.set('search', opts.search);
 
-    const params = new URLSearchParams();
-    params.set('sort', opts.sort);
-    params.set('page', String(opts.page));
-    if (opts.tags.length > 0) params.set('tags', opts.tags.join(','));
-    if (opts.search) params.set('search', opts.search);
+      fetch(`/api/community?${params.toString()}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (cancelled) return;
+          if (json.success) {
+            setQuestions(json.data.data ?? []);
+            setTotalPages(json.data.totalPages ?? 1);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setQuestions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 0);
 
-    fetch(`/api/community?${params.toString()}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (cancelled) return;
-        if (json.success) {
-          setQuestions(json.data.data ?? []);
-          setTotalPages(json.data.totalPages ?? 1);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setQuestions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [opts.sort, opts.tags, opts.search, opts.page]);
 
   return { questions, totalPages, loading };

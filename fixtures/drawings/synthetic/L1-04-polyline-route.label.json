@@ -1,0 +1,52 @@
+{
+  "id": "L1-04-polyline-route",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "초",
+  "fileDifficulty": [
+    "clean-dxf",
+    "polyline"
+  ],
+  "description": "결선을 LWPOLYLINE 꺾은선으로 작도 — 실제 배선 경로 표현 방식.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 3,
+    "edgeCount": 2,
+    "nodes": [
+      {
+        "name": "MCCB-1",
+        "type": "breaker",
+        "x": 100,
+        "y": 500
+      },
+      {
+        "name": "PANEL-A",
+        "type": "panel",
+        "x": 300,
+        "y": 350
+      },
+      {
+        "name": "PANEL-B",
+        "type": "panel",
+        "x": 300,
+        "y": 250
+      }
+    ],
+    "edges": [
+      {
+        "from": "MCCB-1",
+        "to": "PANEL-A"
+      },
+      {
+        "from": "MCCB-1",
+        "to": "PANEL-B"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

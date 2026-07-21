@@ -8,25 +8,27 @@
  */
 
 import { useEffect, useCallback } from 'react';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import { useSettings, type Theme } from '@/hooks/useSettings';
 import { applyThemeToDocument } from '@/lib/theme-dom';
 
 const THEME_CYCLE: Theme[] = ['light', 'dark', 'system'];
 
-const THEME_ICONS: Record<Theme, string> = {
-  light: '\u2600\uFE0F',
-  dark: '\uD83C\uDF19',
-  system: '\uD83D\uDCBB',
+const THEME_ICONS: Record<Theme, typeof Sun> = {
+  light: Sun,
+  dark: Moon,
+  system: Monitor,
 };
 
 const THEME_LABELS: Record<Theme, string> = {
-  light: 'Light',
-  dark: 'Dark',
-  system: 'System',
+  light: '밝게',
+  dark: '어둡게',
+  system: '시스템',
 };
 
 export default function ThemeToggle() {
   const { theme, setTheme, loaded } = useSettings();
+  const ThemeIcon = THEME_ICONS[theme];
 
   useEffect(() => {
     if (!loaded) return;
@@ -53,10 +55,10 @@ export default function ThemeToggle() {
       type="button"
       onClick={cycleTheme}
       className="flex h-11 min-h-[44px] items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--text-primary)] sm:h-8 sm:min-h-0 sm:px-2"
-      aria-label={`Theme: ${THEME_LABELS[theme]}`}
-      title={`Theme: ${THEME_LABELS[theme]}`}
+      aria-label={`테마: ${THEME_LABELS[theme]}`}
+      title={`테마: ${THEME_LABELS[theme]}`}
     >
-      <span className="text-sm">{THEME_ICONS[theme]}</span>
+      <ThemeIcon size={14} aria-hidden />
       <span className="hidden sm:inline">{THEME_LABELS[theme]}</span>
     </button>
   );

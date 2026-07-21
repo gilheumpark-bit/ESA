@@ -153,7 +153,7 @@ async function callGemini(texts: string[], apiKey: string): Promise<number[][]> 
   // Google embedding API processes one text at a time via embedContent
   // Use batchEmbedContents for efficiency
   const batchEndpoint =
-    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${apiKey}`;
+    'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents';
 
   const requests = texts.map((text) => ({
     model: 'models/text-embedding-004',
@@ -162,7 +162,10 @@ async function callGemini(texts: string[], apiKey: string): Promise<number[][]> 
 
   const response = await fetch(batchEndpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify({ requests }),
   });
 

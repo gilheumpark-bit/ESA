@@ -1,14 +1,19 @@
 /**
  * ESVA Enterprise Audit Logging
  * ------------------------------
- * Immutable audit trail for enterprise compliance.
- * Writes to Supabase audit_log table; gracefully degrades if not configured.
+ * Append-only audit trail for enterprise compliance.
+ * Production writes require Supabase. Process-memory storage is explicit and
+ * limited to development/test environments.
  *
  * PART 1: Types
  * PART 2: Write operations
  * PART 3: Query operations
  * PART 4: CSV export
  */
+
+import { randomUUID } from 'crypto';
+import { getSupabaseAdmin } from '@/lib/supabase';
+import { allowEphemeralStorage } from '@/lib/storage-policy';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -67,24 +72,24 @@ export interface AuditQueryResult {
 const AUDIT_TABLE = 'audit_log';
 
 /**
- * In-memory fallback when Supabase is not configured.
- * Limited to last 10,000 entries per tenant.
+ * Development/test-only ephemeral store, limited to 10,000 entries per tenant.
+ * Production must never present this process-local data as a durable audit log.
  */
 const memoryStore = new Map<string, AuditEntry[]>();
 const MAX_MEMORY_ENTRIES = 10_000;
 
+function requireEphemeralStorage(operation: string): void {
+  if (!allowEphemeralStorage()) {
+    throw new Error(`감사로그 ${operation} 저장소를 사용할 수 없습니다.`);
+  }
+}
+
 function getSupabaseClientSafe() {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return null;
-
-    // Dynamic import to avoid hard dependency
-     
-    const { createClient } = require('@supabase/supabase-js');
-    return createClient(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    return getSupabaseAdmin();
   } catch {
     return null;
   }
@@ -92,7 +97,8 @@ function getSupabaseClientSafe() {
 
 /**
  * Write an audit log entry.
- * Tries Supabase first, falls back to in-memory storage.
+ * Uses durable Supabase storage in production. Ephemeral storage is available
+ * only when explicitly allowed for development/test.
  */
 export async function logAudit(
   entry: Omit<AuditEntry, 'id' | 'createdAt'>,
@@ -120,14 +126,14 @@ export async function logAudit(
         created_at: fullEntry.createdAt,
       });
 
-      if (!error) return;
-      console.warn('[ESA-Audit] Supabase write failed, using in-memory fallback:', error.message);
-    } catch (_err) {
-      console.warn('[ESA-Audit] Supabase unavailable, using in-memory fallback');
+      if (error) throw error;
+      return;
+    } catch {
+      requireEphemeralStorage('기록');
     }
   }
 
-  // Fallback: in-memory
+  requireEphemeralStorage('기록');
   const tenantEntries = memoryStore.get(entry.tenantId) ?? [];
   tenantEntries.push(fullEntry);
 
@@ -174,23 +180,22 @@ export async function getAuditLog(
 
       const { data, count, error } = await query;
 
-      if (!error && data) {
-        const entries = data.map(mapDbToEntry);
-        const total = count ?? 0;
-        return {
-          entries,
-          total,
-          page,
-          pageSize,
-          totalPages: Math.ceil(total / pageSize),
-        };
-      }
+      if (error) throw error;
+      const entries = (data ?? []).map(mapDbToEntry);
+      const total = count ?? 0;
+      return {
+        entries,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      };
     } catch {
-      // Fall through to in-memory
+      requireEphemeralStorage('조회');
     }
   }
 
-  // Fallback: in-memory query
+  requireEphemeralStorage('조회');
   let entries = memoryStore.get(tenantId) ?? [];
 
   // Apply filters
@@ -258,7 +263,7 @@ export async function exportAuditLog(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function generateId(): string {
-  return `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return randomUUID();
 }
 
 function mapDbToEntry(row: Record<string, unknown>): AuditEntry {

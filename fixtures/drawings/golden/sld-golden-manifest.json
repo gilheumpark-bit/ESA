@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "revision": "sld-golden-v1",
+  "claimEligible": false,
+  "datasets": [
+    {
+      "id": "synthetic-degraded",
+      "kind": "synthetic",
+      "labels": "fixtures/drawings/synthetic",
+      "predictions": "test-results/sld-synthetic-predictions.json"
+    }
+  ],
+  "thresholds": {
+    "symbolMacroF1": 0.95,
+    "textFieldAccuracy": 0.95,
+    "edgeF1": 0.95,
+    "junctionAccuracy": 0.98,
+    "criticalLogicRecall": 0.95,
+    "unsupportedPassCount": 0,
+    "claimTraceability": 1
+  }
+}

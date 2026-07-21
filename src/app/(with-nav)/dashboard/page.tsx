@@ -6,8 +6,7 @@
  * a. 내 계산 통계: 이번 달 계산 횟수 + top5 bar chart
  * b. 최근 계산: 최근 10개 영수증
  * c. 규격 업데이트: 최근 개정된 규격 알림
- * d. 글로벌 규격 비교: 국가별 비교 radar chart
- * e. 뉴스 브리핑: 카테고리별 TOP 3
+ * d. 글로벌 규격 비교: 국가별 비교 radar chart (프리셋 기준값)
  *
  * PART 1: Data hooks
  * PART 2: Dashboard sections
@@ -21,10 +20,8 @@ import {
   Clock,
   FileText,
   Globe,
-  Newspaper,
   ArrowRight,
   TrendingUp,
-  ExternalLink,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type { CalcUsageData } from '@/components/charts/CalcUsageChart';
@@ -36,7 +33,7 @@ const GlobalCompareChart = dynamic(() => import('@/components/charts/GlobalCompa
 import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 1 — Data Hooks (Mock data for MVP, production → Supabase)
+// PART 1 — Data Hooks
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface RecentCalc {
@@ -55,26 +52,26 @@ interface StandardUpdate {
   link?: string;
 }
 
-interface NewsItem {
-  id: string;
-  title: string;
-  category: string;
-  link: string;
-  date: string;
-}
-
-function useDashboardData() {
+function useDashboardData(authenticated: boolean, authLoading: boolean) {
   const [calcUsage, setCalcUsage] = useState<CalcUsageData[]>([]);
   const [totalCalcs, setTotalCalcs] = useState(0);
   const [recentCalcs, setRecentCalcs] = useState<RecentCalc[]>([]);
   const [standardUpdates, setStandardUpdates] = useState<StandardUpdate[]>([]);
-  const [news, _setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     let cancelled = false;
 
     async function fetchDashboard() {
+      if (!authenticated) {
+        setError('로그인이 필요합니다.');
+        setLoading(false);
+        return;
+      }
+
       try {
         // Get auth token for API call
         const { getIdToken } = await import('@/lib/firebase');
@@ -85,7 +82,9 @@ function useDashboardData() {
         }
 
         const res = await fetch('/api/dashboard', { headers });
-        if (!res.ok) throw new Error(`Dashboard API returned ${res.status}`);
+        if (!res.ok) {
+          throw new Error(res.status === 401 ? '로그인이 필요합니다.' : '대시보드 데이터를 불러올 수 없습니다.');
+        }
 
         const json = await res.json();
         if (cancelled) return;
@@ -98,13 +97,9 @@ function useDashboardData() {
           setStandardUpdates(d.standardUpdates ?? []);
         }
       } catch (err) {
-        console.warn('[ESVA Dashboard] Fetch failed, using empty state:', err);
-        // On error: leave empty arrays (graceful degradation)
+        console.warn('[ESVA Dashboard] Fetch failed:', err);
         if (!cancelled) {
-          setCalcUsage([]);
-          setTotalCalcs(0);
-          setRecentCalcs([]);
-          setStandardUpdates([]);
+          setError(err instanceof Error ? err.message : '대시보드 데이터를 불러올 수 없습니다.');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -113,9 +108,9 @@ function useDashboardData() {
 
     fetchDashboard();
     return () => { cancelled = true; };
-  }, []);
+  }, [authenticated, authLoading]);
 
-  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, news, loading };
+  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -136,7 +131,13 @@ function CalcStatsSection({ data, total }: { data: CalcUsageData[]; total: numbe
           <span className="text-xs text-[var(--text-tertiary)]">이번 달</span>
         </div>
       </div>
-      <CalcUsageChart data={data} height={250} />
+      {data.length > 0 ? (
+        <CalcUsageChart data={data} height={250} />
+      ) : (
+        <p className="flex h-[250px] items-center justify-center text-sm text-[var(--text-tertiary)]">
+          최근 30일 계산 기록이 없습니다.
+        </p>
+      )}
     </div>
   );
 }
@@ -157,6 +158,7 @@ function RecentCalcsSection({ calcs }: { calcs: RecentCalc[] }) {
         </Link>
       </div>
       <div className="space-y-2">
+        {calcs.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-tertiary)]">최근 계산이 없습니다.</p>}
         {calcs.map(calc => (
           <Link
             key={calc.id}
@@ -190,6 +192,7 @@ function StandardUpdatesSection({ updates }: { updates: StandardUpdate[] }) {
         <h2 className="text-base font-semibold text-[var(--text-primary)]">규격 업데이트</h2>
       </div>
       <div className="space-y-3">
+        {updates.length === 0 && <p className="py-8 text-center text-sm text-[var(--text-tertiary)]">도착한 규격 업데이트 알림이 없습니다.</p>}
         {updates.map(update => (
           <div
             key={update.id}
@@ -225,6 +228,9 @@ function GlobalCompareSection() {
         <div className="flex items-center gap-2">
           <Globe size={18} className="text-[var(--color-primary)]" />
           <h2 className="text-base font-semibold text-[var(--text-primary)]">글로벌 규격 비교</h2>
+          <span className="rounded bg-[var(--bg-secondary)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
+            프리셋 예시
+          </span>
         </div>
         <select
           value={selectedPreset}
@@ -241,46 +247,6 @@ function GlobalCompareSection() {
         countries={countries}
         height={300}
       />
-    </div>
-  );
-}
-
-function NewsBriefingSection({ news }: { news: NewsItem[] }) {
-  // Group by category, take top 3
-  const categories = [...new Set(news.map(n => n.category))];
-
-  return (
-    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <Newspaper size={18} className="text-[var(--color-primary)]" />
-        <h2 className="text-base font-semibold text-[var(--text-primary)]">뉴스 브리핑</h2>
-      </div>
-      <div className="space-y-4">
-        {categories.slice(0, 3).map(category => {
-          const items = news.filter(n => n.category === category).slice(0, 3);
-          return (
-            <div key={category}>
-              <h3 className="mb-2 text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-                {category}
-              </h3>
-              <div className="space-y-1.5">
-                {items.map(item => (
-                  <a
-                    key={item.id}
-                    href={item.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    <span className="flex-1 truncate">{item.title}</span>
-                    <ExternalLink size={12} className="shrink-0 opacity-50" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -306,13 +272,25 @@ function formatDate(dateStr: string): string {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function DashboardPage() {
-  const { user } = useAuth();
-  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, news, loading } = useDashboardData();
+  const { user, loading: authLoading } = useAuth();
+  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error } = useDashboardData(Boolean(user), authLoading);
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" />
+      <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="대시보드 불러오는 중">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-primary)] border-t-transparent" aria-hidden="true" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-20 text-center">
+        <h1 className="text-xl font-semibold text-[var(--text-primary)]">대시보드를 열 수 없습니다</h1>
+        <p className="mt-2 text-sm text-[var(--color-error)]" role="alert">{error}</p>
+        <Link href={user ? '/dashboard' : '/login'} className="mt-5 inline-flex text-sm text-[var(--color-primary)] hover:underline">
+          {user ? '다시 시도' : '로그인하기'}
+        </Link>
       </div>
     );
   }
@@ -342,11 +320,6 @@ export default function DashboardPage() {
 
         {/* c. 규격 업데이트 */}
         <StandardUpdatesSection updates={standardUpdates} />
-
-        {/* e. 뉴스 브리핑 (full width) */}
-        <div className="lg:col-span-2">
-          <NewsBriefingSection news={news} />
-        </div>
       </div>
     </div>
   );

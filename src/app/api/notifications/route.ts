@@ -86,8 +86,8 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch notifications';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ESVA Notifications GET]', err);
+    return NextResponse.json({ error: '알림을 불러오지 못했습니다.' }, { status: 500 });
   }
 }
 
@@ -104,10 +104,12 @@ export async function POST(req: NextRequest) {
     const internalSecret = process.env.INTERNAL_API_SECRET;
     const isInternal = !!internalSecret &&
       req.headers.get('x-internal-secret') === internalSecret;
+    let authenticatedUid: string | null = null;
 
     if (!isInternal) {
       const auth = await authenticateRequest(req);
       if (auth instanceof NextResponse) return auth;
+      authenticatedUid = auth.uid;
     }
 
     const body = await req.json() as {
@@ -119,10 +121,16 @@ export async function POST(req: NextRequest) {
       metadata?: Record<string, unknown>;
     };
 
-    const { userId, type, title, message, link } = body;
+    const { userId, type, title, message, link, metadata } = body;
 
     if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
       return NextResponse.json({ error: 'userId 필수' }, { status: 400 });
+    }
+    if (authenticatedUid && userId !== authenticatedUid) {
+      return NextResponse.json(
+        { error: 'Forbidden: cannot create a notification for another user' },
+        { status: 403 },
+      );
     }
     if (!title || typeof title !== 'string' || title.trim().length === 0) {
       return NextResponse.json({ error: 'title 필수' }, { status: 400 });
@@ -140,12 +148,13 @@ export async function POST(req: NextRequest) {
       title,
       body: message ?? '',
       link: link ?? undefined,
+      metadata: metadata ?? {},
     });
 
     return NextResponse.json({ success: true, notification });
   } catch (err) {
-    const message = err instanceof Error ? err.message : '알림 생성 실패';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ESVA Notifications POST]', err);
+    return NextResponse.json({ error: '알림을 생성하지 못했습니다.' }, { status: 500 });
   }
 }
 
@@ -190,7 +199,10 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (notificationId && typeof notificationId === 'string') {
-      await markRead(notificationId);
+      const updated = await markRead(notificationId, userId);
+      if (!updated) {
+        return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+      }
       return NextResponse.json({ success: true, message: 'Notification marked as read' });
     }
 
@@ -199,7 +211,7 @@ export async function PATCH(req: NextRequest) {
       { status: 400 },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to update notification';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ESVA Notifications PATCH]', err);
+    return NextResponse.json({ error: '알림 상태를 변경하지 못했습니다.' }, { status: 500 });
   }
 }

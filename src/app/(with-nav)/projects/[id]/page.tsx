@@ -13,6 +13,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { authenticatedFetch } from '@/lib/client-auth';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft,
   Users,
@@ -83,7 +85,7 @@ function MemberList({
   members: MemberInfo[];
   isOwner: boolean;
   onInvite: () => void;
-  onRemove: (userId: string) => void;
+  onRemove: (member: MemberInfo) => void;
 }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5">
@@ -121,13 +123,14 @@ function MemberList({
                   <p className={`text-xs flex items-center gap-1 ${config.color}`}>
                     <RoleIcon className="h-3 w-3" />
                     {config.label}
+                    {!member.joinedAt && ' · 초대 대기'}
                   </p>
                 </div>
               </div>
 
               {isOwner && member.role !== 'owner' && (
                 <button
-                  onClick={() => onRemove(member.userId)}
+                  onClick={() => onRemove(member)}
                   className="rounded p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
                   title="멤버 제거"
                 >
@@ -236,11 +239,13 @@ function ShareDialog({
   const [expireHours, setExpireHours] = useState<number>(72);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
+      const res = await authenticatedFetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -250,9 +255,10 @@ function ShareDialog({
         }),
       });
       const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error ?? '공유 링크 생성에 실패했습니다.');
       setShareUrl(data.url);
-    } catch {
-      // Error handling
+    } catch (generateError) {
+      setError(generateError instanceof Error ? generateError.message : '공유 링크 생성에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -307,6 +313,8 @@ function ShareDialog({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="비밀번호 미입력 시 공개 링크"
+                  minLength={8}
+                  maxLength={128}
                   className="w-full rounded-lg border border-gray-300 pl-10 pr-3 py-2 text-sm"
                 />
               </div>
@@ -319,6 +327,7 @@ function ShareDialog({
             >
               {loading ? '생성 중...' : '공유 링크 생성'}
             </button>
+            {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
           </div>
         ) : (
           <div className="space-y-3">
@@ -354,6 +363,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { user } = useAuth();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -366,7 +376,7 @@ export default function ProjectDetailPage() {
   const fetchProject = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}`);
+      const res = await authenticatedFetch(`/api/projects/${projectId}`);
       if (!res.ok) throw new Error('프로젝트를 불러올 수 없습니다.');
       const data = await res.json();
       setProject(data);
@@ -378,13 +388,14 @@ export default function ProjectDetailPage() {
   }, [projectId]);
 
   useEffect(() => {
-    fetchProject();
+    const timer = window.setTimeout(() => { void fetchProject(); }, 0);
+    return () => window.clearTimeout(timer);
   }, [fetchProject]);
 
   const handleInvite = async () => {
     if (!inviteEmail) return;
     try {
-      await fetch(`/api/projects/${projectId}`, {
+      const response = await authenticatedFetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -393,6 +404,7 @@ export default function ProjectDetailPage() {
           role: inviteRole,
         }),
       });
+      if (!response.ok) throw new Error('초대 전송에 실패했습니다.');
       setShowInvite(false);
       setInviteEmail('');
       fetchProject();
@@ -401,18 +413,20 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleRemoveMember = async (userId: string) => {
+  const handleRemoveMember = async (member: MemberInfo) => {
     if (!confirm('이 멤버를 제거하시겠습니까?')) return;
     try {
-      await fetch(`/api/projects/${projectId}`, {
+      const response = await authenticatedFetch(`/api/projects/${projectId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'removeMember',
-          userId,
+          userId: member.userId || undefined,
+          email: member.userId ? undefined : member.email,
         }),
       });
-      fetchProject();
+      if (!response.ok) throw new Error('멤버 삭제에 실패했습니다.');
+      await fetchProject();
     } catch {
       // Error handling
     }
@@ -421,15 +435,15 @@ export default function ProjectDetailPage() {
   const handleDelete = async () => {
     if (!confirm('프로젝트를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
     try {
-      await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      const response = await authenticatedFetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error('프로젝트 삭제에 실패했습니다.');
       router.push('/projects');
     } catch {
       // Error handling
     }
   };
 
-  // Determine user role (simplified — in production, derive from auth context)
-  const userRole = project?.members?.[0]?.role ?? 'viewer';
+  const userRole = project?.members?.find((member) => member.userId === user?.uid)?.role ?? 'viewer';
   const isOwner = userRole === 'owner';
   const canEdit = userRole === 'owner' || userRole === 'editor';
 
@@ -479,13 +493,15 @@ export default function ProjectDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowShare(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <Share2 className="h-4 w-4" />
-              공유
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setShowShare(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Share2 className="h-4 w-4" />
+                공유
+              </button>
+            )}
 
             {isOwner && (
               <button
@@ -577,6 +593,9 @@ export default function ProjectDetailPage() {
               >
                 초대하기
               </button>
+              <p className="text-xs leading-relaxed text-gray-500">
+                별도 이메일은 발송되지 않습니다. 초대받은 주소가 검증된 계정으로 로그인하면 프로젝트에 자동 참여됩니다.
+              </p>
             </div>
           </div>
         </div>

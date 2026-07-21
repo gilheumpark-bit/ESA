@@ -46,7 +46,7 @@ function getProjectId(request: NextRequest): string {
 
 export async function GET(request: NextRequest) {
   try {
-    // Rate limit (R4 stub repair).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
 
@@ -93,8 +93,8 @@ export async function GET(request: NextRequest) {
       calculations: calculationDetails.filter(Boolean),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[ESVA Project GET]', err);
+    return NextResponse.json({ error: '프로젝트를 불러오지 못했습니다.' }, { status: 500 });
   }
 }
 
@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    // Rate limit (R4 stub repair).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
 
@@ -121,19 +121,22 @@ export async function PATCH(request: NextRequest) {
     switch (action) {
       case 'inviteMember': {
         const { email, role } = body;
-        if (!email) {
-          return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+        if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return NextResponse.json({ error: 'Valid email is required' }, { status: 400 });
+        }
+        if (role !== undefined && role !== 'editor' && role !== 'viewer') {
+          return NextResponse.json({ error: 'Role must be editor or viewer' }, { status: 400 });
         }
         const member = await inviteMember(projectId, userId, email, role ?? 'viewer');
         return NextResponse.json({ member });
       }
 
       case 'removeMember': {
-        const { userId: targetUserId } = body;
-        if (!targetUserId) {
-          return NextResponse.json({ error: 'Target userId is required' }, { status: 400 });
+        const { userId: targetUserId, email: targetEmail } = body;
+        if ((!targetUserId || typeof targetUserId !== 'string') && (!targetEmail || typeof targetEmail !== 'string')) {
+          return NextResponse.json({ error: 'Target member identity is required' }, { status: 400 });
         }
-        await removeMember(projectId, userId, targetUserId);
+        await removeMember(projectId, userId, { userId: targetUserId, email: targetEmail });
         return NextResponse.json({ success: true });
       }
 
@@ -148,6 +151,12 @@ export async function PATCH(request: NextRequest) {
 
       case 'generateShareLink': {
         const { expireHours, password } = body;
+        if (!Number.isInteger(expireHours) || expireHours < 1 || expireHours > 720) {
+          return NextResponse.json({ error: 'expireHours must be an integer from 1 to 720' }, { status: 400 });
+        }
+        if (password !== undefined && (typeof password !== 'string' || password.length < 8 || password.length > 128)) {
+          return NextResponse.json({ error: 'Share password must be 8 to 128 characters' }, { status: 400 });
+        }
         const link = await generateShareLink(projectId, userId, expireHours, password);
         return NextResponse.json(link);
       }
@@ -170,7 +179,11 @@ export async function PATCH(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     const status = message.includes('Insufficient permissions') ? 403 : 500;
-    return NextResponse.json({ error: message }, { status });
+    console.error('[ESVA Project PATCH]', err);
+    return NextResponse.json(
+      { error: status === 403 ? '프로젝트를 변경할 권한이 없습니다.' : '프로젝트를 변경하지 못했습니다.' },
+      { status },
+    );
   }
 }
 
@@ -180,7 +193,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Rate limit (R4 stub repair).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
 
@@ -196,6 +209,10 @@ export async function DELETE(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     const status = message.includes('not a member') || message.includes('Insufficient') ? 403 : 500;
-    return NextResponse.json({ error: message }, { status });
+    console.error('[ESVA Project DELETE]', err);
+    return NextResponse.json(
+      { error: status === 403 ? '프로젝트를 삭제할 권한이 없습니다.' : '프로젝트를 삭제하지 못했습니다.' },
+      { status },
+    );
   }
 }

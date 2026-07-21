@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Receipt Viewer Page — Shareable receipt at /receipt/[id]
+ * Receipt Viewer Page — owner receipt at /receipt/[id]
  *
  * PART 1: Skeleton and error states
  * PART 2: Receipt header with share/print
@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import ReceiptCard from '@/components/ReceiptCard';
 import type { Receipt } from '@/engine/receipt/types';
+import { authenticatedFetch, optionalAuthenticatedFetch } from '@/lib/client-auth';
+import { isFeatureEnabled } from '@/lib/feature-flags';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Skeleton & Error States
@@ -109,7 +111,7 @@ function ReceiptHeader({
           className="flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
           <Share2 size={14} />
-          공유
+          내 링크 복사
         </button>
         <button
           type="button"
@@ -120,11 +122,11 @@ function ReceiptHeader({
           인쇄
         </button>
         <Link
-          href={`/calc/${receipt.calcId}`}
+          href="/calc"
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white hover:bg-[var(--color-primary-hover)]"
         >
           <ExternalLink size={14} />
-          계산기 열기
+          계산기 목록
         </Link>
       </div>
     </div>
@@ -183,7 +185,7 @@ function IntegrityPanel({ receipt }: { receipt: Receipt }) {
           <div className="rounded-lg bg-[var(--bg-secondary)] p-2.5">
             <span className="block text-[var(--text-tertiary)]">기준 상태</span>
             <span className={receipt.isStandardCurrent ? 'text-emerald-600' : 'text-amber-600'}>
-              {receipt.isStandardCurrent ? '현행 기준' : '구판 기준'}
+              {receipt.isStandardCurrent ? '현행 확인됨' : '현행 미확인'}
             </span>
           </div>
           <div className="rounded-lg bg-[var(--bg-secondary)] p-2.5">
@@ -206,20 +208,20 @@ function IntegrityPanel({ receipt }: { receipt: Receipt }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 3.5 — Notarize Button (calls /api/notarize)
+// PART 3.5 — Optional IPFS timestamp registration (calls /api/notarize)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function NotarizeButton({ receiptId }: { receiptId: string }) {
+function TimestampRegistrationButton({ receiptId }: { receiptId: string }) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ ipfsCid: string; verifyUrl: string; alreadyNotarized?: boolean } | null>(null);
+  const [result, setResult] = useState<{ ipfsCid: string; verifyUrl: string; alreadyRegistered?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleNotarize = useCallback(async () => {
+  const handleTimestampRegistration = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const res = await fetch('/api/notarize', {
+      const res = await authenticatedFetch('/api/notarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ receiptId }),
@@ -228,12 +230,12 @@ function NotarizeButton({ receiptId }: { receiptId: string }) {
       const json = await res.json();
 
       if (!json.success) {
-        const errMsg = json.error?.message ?? '공증 실패';
+        const errMsg = json.error?.message ?? '타임스탬프 등록 실패';
         const code = json.error?.code;
         if (code === 'ESVA-1001') {
           setError('로그인이 필요합니다.');
         } else if (code === 'ESVA-2001') {
-          setError('공증 기능은 Pro 플랜 이상에서 이용 가능합니다.');
+          setError('IPFS 타임스탬프 등록은 Pro 플랜 이상에서 이용 가능합니다.');
         } else {
           setError(errMsg);
         }
@@ -253,7 +255,7 @@ function NotarizeButton({ receiptId }: { receiptId: string }) {
       <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-5 no-print dark:border-emerald-800 dark:bg-emerald-900/20">
         <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
           <ShieldCheck size={18} />
-          {result.alreadyNotarized ? '이미 공증됨' : '공증 완료'}
+          {result.alreadyRegistered ? '이미 등록됨' : '타임스탬프 등록 완료'}
         </h3>
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
@@ -275,7 +277,8 @@ function NotarizeButton({ receiptId }: { receiptId: string }) {
   return (
     <div className="mt-6 no-print">
       <button
-        onClick={handleNotarize}
+        type="button"
+        onClick={handleTimestampRegistration}
         disabled={loading}
         className="flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-5 py-3 text-sm font-medium text-[var(--text-primary)] shadow-sm transition-all hover:border-emerald-400 hover:shadow-md disabled:opacity-50"
       >
@@ -284,13 +287,14 @@ function NotarizeButton({ receiptId }: { receiptId: string }) {
         ) : (
           <Stamp size={18} className="text-emerald-600" />
         )}
-        공증 (IPFS + 타임스탬프)
+        IPFS 타임스탬프 등록
       </button>
       {error && (
         <p className="mt-2 text-xs text-[var(--color-error)]">{error}</p>
       )}
       <p className="mt-2 text-[10px] text-[var(--text-tertiary)]">
-        계산 결과를 익명화하여 IPFS에 고정하고 타임스탬프 증명을 생성합니다. Pro 플랜 이상 필요.
+        계산 결과를 익명화해 IPFS에 고정하고 ESA 서버 레지스트리에 시각을 기록합니다.
+        블록체인 거래·제3자 공증·법적 서명을 의미하지 않습니다. Pro 플랜 이상 필요.
       </p>
     </div>
   );
@@ -316,7 +320,7 @@ export default function ReceiptPage({
 
     async function loadReceipt() {
       try {
-        const res = await fetch(`/api/receipt/${id}`);
+        const res = await optionalAuthenticatedFetch(`/api/receipt/${id}`);
         if (!res.ok) {
           if (res.status === 404) throw new Error('영수증을 찾을 수 없습니다');
           throw new Error(`불러오기 실패 (${res.status})`);
@@ -341,14 +345,10 @@ export default function ReceiptPage({
   const handleShare = useCallback(async () => {
     const url = window.location.href;
     try {
-      if (navigator.share) {
-        await navigator.share({ title: 'ESVA 계산 영수증', url });
-      } else {
-        await navigator.clipboard.writeText(url);
-        alert('링크가 복사되었습니다');
-      }
+      await navigator.clipboard.writeText(url);
+      alert('본인 계정에서 다시 열 수 있는 링크가 복사되었습니다. 다른 사용자에게는 공개되지 않습니다.');
     } catch {
-      prompt('공유 링크:', url);
+      prompt('본인용 영수증 링크:', url);
     }
   }, []);
 
@@ -373,7 +373,7 @@ export default function ReceiptPage({
 
         <IntegrityPanel receipt={receipt} />
 
-        <NotarizeButton receiptId={id} />
+        {isFeatureEnabled('RECEIPT_NOTARIZE') && <TimestampRegistrationButton receiptId={id} />}
       </main>
     </div>
   );

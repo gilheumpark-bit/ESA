@@ -1,0 +1,571 @@
+{
+  "id": "L3-04-dense-mcc",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "고",
+  "fileDifficulty": [
+    "large-scale"
+  ],
+  "description": "MCC 6면 × 전동기 8대 밀집 배치. 노드 밀도가 높아 끝점 접합 오탐이 나기 쉽다.",
+  "labelMode": "sampled",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 55,
+    "edgeCount": 54,
+    "nodes": [
+      {
+        "name": "BUSBAR-MAIN",
+        "type": "bus",
+        "x": 900,
+        "y": 1100
+      },
+      {
+        "name": "MCC-P1",
+        "type": "panel",
+        "x": 200,
+        "y": 950
+      },
+      {
+        "name": "MTR-P1M1",
+        "type": "motor",
+        "x": 95,
+        "y": 820
+      },
+      {
+        "name": "MTR-P1M2",
+        "type": "motor",
+        "x": 165,
+        "y": 820
+      },
+      {
+        "name": "MTR-P1M3",
+        "type": "motor",
+        "x": 235,
+        "y": 820
+      },
+      {
+        "name": "MTR-P1M4",
+        "type": "motor",
+        "x": 305,
+        "y": 820
+      },
+      {
+        "name": "MTR-P1M5",
+        "type": "motor",
+        "x": 95,
+        "y": 730
+      },
+      {
+        "name": "MTR-P1M6",
+        "type": "motor",
+        "x": 165,
+        "y": 730
+      },
+      {
+        "name": "MTR-P1M7",
+        "type": "motor",
+        "x": 235,
+        "y": 730
+      },
+      {
+        "name": "MTR-P1M8",
+        "type": "motor",
+        "x": 305,
+        "y": 730
+      },
+      {
+        "name": "MCC-P2",
+        "type": "panel",
+        "x": 480,
+        "y": 950
+      },
+      {
+        "name": "MTR-P2M1",
+        "type": "motor",
+        "x": 375,
+        "y": 820
+      },
+      {
+        "name": "MTR-P2M2",
+        "type": "motor",
+        "x": 445,
+        "y": 820
+      },
+      {
+        "name": "MTR-P2M3",
+        "type": "motor",
+        "x": 515,
+        "y": 820
+      },
+      {
+        "name": "MTR-P2M4",
+        "type": "motor",
+        "x": 585,
+        "y": 820
+      },
+      {
+        "name": "MTR-P2M5",
+        "type": "motor",
+        "x": 375,
+        "y": 730
+      },
+      {
+        "name": "MTR-P2M6",
+        "type": "motor",
+        "x": 445,
+        "y": 730
+      },
+      {
+        "name": "MTR-P2M7",
+        "type": "motor",
+        "x": 515,
+        "y": 730
+      },
+      {
+        "name": "MTR-P2M8",
+        "type": "motor",
+        "x": 585,
+        "y": 730
+      },
+      {
+        "name": "MCC-P3",
+        "type": "panel",
+        "x": 760,
+        "y": 950
+      },
+      {
+        "name": "MTR-P3M1",
+        "type": "motor",
+        "x": 655,
+        "y": 820
+      },
+      {
+        "name": "MTR-P3M2",
+        "type": "motor",
+        "x": 725,
+        "y": 820
+      },
+      {
+        "name": "MTR-P3M3",
+        "type": "motor",
+        "x": 795,
+        "y": 820
+      },
+      {
+        "name": "MTR-P3M4",
+        "type": "motor",
+        "x": 865,
+        "y": 820
+      },
+      {
+        "name": "MTR-P3M5",
+        "type": "motor",
+        "x": 655,
+        "y": 730
+      },
+      {
+        "name": "MTR-P3M6",
+        "type": "motor",
+        "x": 725,
+        "y": 730
+      },
+      {
+        "name": "MTR-P3M7",
+        "type": "motor",
+        "x": 795,
+        "y": 730
+      },
+      {
+        "name": "MTR-P3M8",
+        "type": "motor",
+        "x": 865,
+        "y": 730
+      },
+      {
+        "name": "MCC-P4",
+        "type": "panel",
+        "x": 1040,
+        "y": 950
+      },
+      {
+        "name": "MTR-P4M1",
+        "type": "motor",
+        "x": 935,
+        "y": 820
+      },
+      {
+        "name": "MTR-P4M2",
+        "type": "motor",
+        "x": 1005,
+        "y": 820
+      },
+      {
+        "name": "MTR-P4M3",
+        "type": "motor",
+        "x": 1075,
+        "y": 820
+      },
+      {
+        "name": "MTR-P4M4",
+        "type": "motor",
+        "x": 1145,
+        "y": 820
+      },
+      {
+        "name": "MTR-P4M5",
+        "type": "motor",
+        "x": 935,
+        "y": 730
+      },
+      {
+        "name": "MTR-P4M6",
+        "type": "motor",
+        "x": 1005,
+        "y": 730
+      },
+      {
+        "name": "MTR-P4M7",
+        "type": "motor",
+        "x": 1075,
+        "y": 730
+      },
+      {
+        "name": "MTR-P4M8",
+        "type": "motor",
+        "x": 1145,
+        "y": 730
+      },
+      {
+        "name": "MCC-P5",
+        "type": "panel",
+        "x": 1320,
+        "y": 950
+      },
+      {
+        "name": "MTR-P5M1",
+        "type": "motor",
+        "x": 1215,
+        "y": 820
+      },
+      {
+        "name": "MTR-P5M2",
+        "type": "motor",
+        "x": 1285,
+        "y": 820
+      },
+      {
+        "name": "MTR-P5M3",
+        "type": "motor",
+        "x": 1355,
+        "y": 820
+      },
+      {
+        "name": "MTR-P5M4",
+        "type": "motor",
+        "x": 1425,
+        "y": 820
+      },
+      {
+        "name": "MTR-P5M5",
+        "type": "motor",
+        "x": 1215,
+        "y": 730
+      },
+      {
+        "name": "MTR-P5M6",
+        "type": "motor",
+        "x": 1285,
+        "y": 730
+      },
+      {
+        "name": "MTR-P5M7",
+        "type": "motor",
+        "x": 1355,
+        "y": 730
+      },
+      {
+        "name": "MTR-P5M8",
+        "type": "motor",
+        "x": 1425,
+        "y": 730
+      },
+      {
+        "name": "MCC-P6",
+        "type": "panel",
+        "x": 1600,
+        "y": 950
+      },
+      {
+        "name": "MTR-P6M1",
+        "type": "motor",
+        "x": 1495,
+        "y": 820
+      },
+      {
+        "name": "MTR-P6M2",
+        "type": "motor",
+        "x": 1565,
+        "y": 820
+      },
+      {
+        "name": "MTR-P6M3",
+        "type": "motor",
+        "x": 1635,
+        "y": 820
+      },
+      {
+        "name": "MTR-P6M4",
+        "type": "motor",
+        "x": 1705,
+        "y": 820
+      },
+      {
+        "name": "MTR-P6M5",
+        "type": "motor",
+        "x": 1495,
+        "y": 730
+      },
+      {
+        "name": "MTR-P6M6",
+        "type": "motor",
+        "x": 1565,
+        "y": 730
+      },
+      {
+        "name": "MTR-P6M7",
+        "type": "motor",
+        "x": 1635,
+        "y": 730
+      },
+      {
+        "name": "MTR-P6M8",
+        "type": "motor",
+        "x": 1705,
+        "y": 730
+      }
+    ],
+    "edges": [
+      {
+        "from": "BUSBAR-MAIN",
+        "to": "MCC-P1"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M1"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M2"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M3"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M4"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M5"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M6"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M7"
+      },
+      {
+        "from": "MCC-P1",
+        "to": "MTR-P1M8"
+      },
+      {
+        "from": "BUSBAR-MAIN",
+        "to": "MCC-P2"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M1"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M2"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M3"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M4"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M5"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M6"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M7"
+      },
+      {
+        "from": "MCC-P2",
+        "to": "MTR-P2M8"
+      },
+      {
+        "from": "BUSBAR-MAIN",
+        "to": "MCC-P3"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M1"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M2"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M3"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M4"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M5"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M6"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M7"
+      },
+      {
+        "from": "MCC-P3",
+        "to": "MTR-P3M8"
+      },
+      {
+        "from": "BUSBAR-MAIN",
+        "to": "MCC-P4"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M1"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M2"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M3"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M4"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M5"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M6"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M7"
+      },
+      {
+        "from": "MCC-P4",
+        "to": "MTR-P4M8"
+      },
+      {
+        "from": "BUSBAR-MAIN",
+        "to": "MCC-P5"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M1"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M2"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M3"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M4"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M5"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M6"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M7"
+      },
+      {
+        "from": "MCC-P5",
+        "to": "MTR-P5M8"
+      },
+      {
+        "from": "BUSBAR-MAIN",
+        "to": "MCC-P6"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M1"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M2"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M3"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M4"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M5"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M6"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M7"
+      },
+      {
+        "from": "MCC-P6",
+        "to": "MTR-P6M8"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

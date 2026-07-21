@@ -12,6 +12,7 @@ services:
       - NODE_ENV=production
       - REDIS_URL=redis://redis:6379
       - WEAVIATE_URL=http://weaviate:8080
+      - DRAWING_JOB_STORE_DIR=/var/lib/esa/drawing-jobs
     env_file:
       - .env
     depends_on:
@@ -21,6 +22,8 @@ services:
         condition: service_started
     networks:
       - esa-network
+    volumes:
+      - drawing-job-data:/var/lib/esa/drawing-jobs
     restart: unless-stopped
 
   # ─── Weaviate Vector Database ───────────────────────────────────
@@ -60,3 +63,4 @@ networks:
 volumes:
   weaviate-data:
   redis-data:
+  drawing-job-data:

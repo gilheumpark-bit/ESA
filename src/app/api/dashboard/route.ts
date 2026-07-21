@@ -58,8 +58,7 @@ export async function GET(request: NextRequest) {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
 
-    // 4개 쿼리 병렬 실행 (순차→병렬: ~4x 속도 향상)
-    const [recentResult, monthResult, countResult, notifResult] = await Promise.all([
+    const [recentResult, monthResult, notifResult] = await Promise.all([
       supabase.from('calculation_receipts')
         .select('id, calculator_id, calculator_name, created_at, inputs, outputs')
         .eq('user_id', userId)
@@ -69,11 +68,9 @@ export async function GET(request: NextRequest) {
         .select('calculator_id, calculator_name')
         .eq('user_id', userId)
         .gte('created_at', thirtyDaysAgoISO),
-      supabase.from('calculation_receipts')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId),
       supabase.from('notifications')
         .select('id, title, body, created_at, metadata')
+        .eq('user_id', userId)
         .eq('type', 'standard_update')
         .order('created_at', { ascending: false })
         .limit(10),
@@ -81,11 +78,14 @@ export async function GET(request: NextRequest) {
 
     const { data: recentRows, error: recentErr } = recentResult;
     const { data: monthRows, error: monthErr } = monthResult;
-    const { count: totalCount, error: countErr } = countResult;
-    const { data: notifRows, error: _notifErr } = notifResult;
+    const { data: notifRows, error: notifErr } = notifResult;
 
-    if (recentErr || monthErr || countErr) {
-      console.warn('[ESVA Dashboard] Supabase query error:', recentErr ?? monthErr ?? countErr);
+    if (recentErr || monthErr) {
+      console.warn('[ESVA Dashboard] Required query failed:', recentErr ?? monthErr);
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-4503', message: 'Dashboard data is temporarily unavailable' } },
+        { status: 503 },
+      );
     }
 
     // Aggregate calc count by category (last 30 days, top 5)
@@ -141,28 +141,26 @@ export async function GET(request: NextRequest) {
 
     const response: DashboardResponse = {
       calcUsage,
-      totalCalcs: totalCount ?? 0,
+      totalCalcs: monthRows?.length ?? 0,
       recentCalcs,
       standardUpdates,
     };
 
     return NextResponse.json(
-      { success: true, data: response },
+      {
+        success: true,
+        data: response,
+        warnings: notifErr ? ['standard_updates_unavailable'] : [],
+      },
       { status: 200, headers: { 'Cache-Control': 'private, max-age=30' } },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Dashboard]', message);
 
-    // Return empty data instead of error so dashboard still renders
-    return NextResponse.json({
-      success: true,
-      data: {
-        calcUsage: [],
-        totalCalcs: 0,
-        recentCalcs: [],
-        standardUpdates: [],
-      },
-    });
+    return NextResponse.json(
+      { success: false, error: { code: 'ESVA-4503', message: 'Dashboard data is temporarily unavailable' } },
+      { status: 503 },
+    );
   }
 }

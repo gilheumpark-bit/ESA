@@ -1,76 +1,29 @@
 /**
- * Vision Splitter — VRAM 분할 병렬 비전
- * --------------------------------------
- * 도면을 N×N 그리드로 분할하여 병렬 OCR/심볼 인식.
- * "스파크의 VRAM을 활용해 도면을 4~8분할하여 초광속으로 훑는다"
- *
- * PART 1: Image grid splitter
- * PART 2: Parallel analysis
- * PART 3: Result merger
+ * Vision Splitter
+ * ---------------
+ * Raster drawings are normalized, physically cropped into overlapping regions,
+ * analyzed with a configured Vision LLM, then merged back into global image
+ * coordinates. API keys stay in the in-memory request contract only.
  */
 
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
-
-// ── Image dimension parsing from raw bytes ──
-
-/** PNG 헤더에서 너비 추출 (IHDR chunk, offset 16-19) */
-function parseImageWidth(buf: ArrayBuffer): number | null {
-  const view = new DataView(buf);
-  if (buf.byteLength < 24) return null;
-  // PNG magic: 0x89 0x50 0x4E 0x47
-  if (view.getUint8(0) === 0x89 && view.getUint8(1) === 0x50) {
-    return view.getUint32(16, false); // big-endian
-  }
-  // JPEG: parse SOF0 marker for dimensions
-  if (view.getUint8(0) === 0xFF && view.getUint8(1) === 0xD8) {
-    return parseJpegDimension(buf, 'width');
-  }
-  return null;
-}
-
-function parseImageHeight(buf: ArrayBuffer): number | null {
-  const view = new DataView(buf);
-  if (buf.byteLength < 24) return null;
-  if (view.getUint8(0) === 0x89 && view.getUint8(1) === 0x50) {
-    return view.getUint32(20, false);
-  }
-  if (view.getUint8(0) === 0xFF && view.getUint8(1) === 0xD8) {
-    return parseJpegDimension(buf, 'height');
-  }
-  return null;
-}
-
-/** JPEG SOF0 marker 파싱 (0xFFC0) */
-function parseJpegDimension(buf: ArrayBuffer, dim: 'width' | 'height'): number | null {
-  const view = new DataView(buf);
-  let offset = 2;
-  while (offset < buf.byteLength - 8) {
-    if (view.getUint8(offset) !== 0xFF) { offset++; continue; }
-    const marker = view.getUint8(offset + 1);
-    if (marker === 0xC0 || marker === 0xC2) {
-      // SOF0/SOF2: height at +5, width at +7
-      return dim === 'height' ? view.getUint16(offset + 5, false) : view.getUint16(offset + 7, false);
-    }
-    const len = view.getUint16(offset + 2, false);
-    offset += 2 + len;
-  }
-  return null;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 1 — Image Grid Splitter
-// ═══════════════════════════════════════════════════════════════════════════════
+import { cropPrecisionRegions, planAdaptiveBounds } from './adaptive-regions';
+import { profileImage } from './image-quality';
+import { createImageVariants } from './image-variants';
 
 export interface SplitOptions {
-  gridSize: number;     // 4 = 2×2, 8 = 2×4, 16 = 4×4
-  overlap: number;      // 오버랩 비율 (0.1 = 10%)
-  model: 'gemini' | 'openai' | 'local';
-  /** 이미지 너비 (px) — 미지정 시 MIME 헤더에서 추출 시도 */
-  imageWidth?: number;
-  /** 이미지 높이 (px) */
-  imageHeight?: number;
-  /** 중복제거 위치 허용오차 (px, 기본 10) */
+  gridSize: number;
+  overlap: number;
+  model: 'gemini' | 'openai' | 'claude';
+  modelName?: string;
+  apiKey?: string;
+  maxConcurrency?: number;
   deduplicateTolerance?: number;
+  /**
+   * Enables the explicit adaptive preparation path. It defaults to true there;
+   * splitAndAnalyze intentionally keeps its legacy original-crop VLM path.
+   */
+  precision?: boolean;
 }
 
 export interface VisionSplitResult {
@@ -82,147 +35,278 @@ export interface VisionSplitResult {
   regionConfidence: number;
 }
 
-interface ImageRegion {
+export interface CroppedImageRegion {
   index: number;
   buffer: ArrayBuffer;
   bounds: { x: number; y: number; w: number; h: number };
 }
 
+export interface MergedVisionResult {
+  components: ExtractedComponent[];
+  connections: ExtractedConnection[];
+  confidence: number;
+}
+
+const MAX_INPUT_PIXELS = 40_000_000;
+
+export function precisionGridSize(recommendedScale: 1 | 2 | 4): 4 | 9 | 16 {
+  if (recommendedScale === 4) return 16;
+  if (recommendedScale === 2) return 9;
+  return 4;
+}
+
 /**
- * 이미지를 N등분하여 영역별 분석 → 병합.
- * 실제 VLM 호출 대신 구조화된 분석 결과 반환.
+ * Prepare physical crops for later role selection without calling any Vision LLM.
+ * Set precision to false to retain only original-variant, 4-region preparation.
  */
+export async function preparePrecisionRegions(
+  imageBuffer: ArrayBuffer,
+  options: Pick<SplitOptions, 'precision'> = {},
+) {
+  const profile = await profileImage(imageBuffer);
+  const variants = await createImageVariants(imageBuffer, profile);
+  const precision = options.precision ?? true;
+  const selected = precision
+    ? variants.filter((variant) =>
+      variant.kind === (profile.recommendedScale === 4 ? 'upscale-4x' : profile.recommendedScale === 2 ? 'upscale-2x' : 'original')
+      || variant.kind === 'text-high-contrast'
+      || variant.kind === 'line-enhanced')
+    : variants.filter((variant) => variant.kind === 'original');
+  const gridSize = precision ? precisionGridSize(profile.recommendedScale) : 4;
+  const regions = [];
+
+  for (const variant of selected) {
+    const bounds = planAdaptiveBounds(variant.width, variant.height, gridSize, 0.18);
+    regions.push(...await cropPrecisionRegions(variant, bounds));
+  }
+
+  return { profile, variants, regions };
+}
+
+function normalizedGridSize(value: number): number {
+  if (!Number.isInteger(value) || value < 1 || value > 16) {
+    throw new Error('Vision gridSize는 1~16의 정수여야 합니다.');
+  }
+  return value;
+}
+
+function normalizedOverlap(value: number): number {
+  if (!Number.isFinite(value) || value < 0 || value > 0.25) {
+    throw new Error('Vision overlap은 0~0.25 범위여야 합니다.');
+  }
+  return value;
+}
+
+function planRegions(width: number, height: number, gridSize: number, overlap: number) {
+  const normalized = gridSize <= 4 ? 4 : gridSize <= 9 ? 9 : 16;
+  return planAdaptiveBounds(width, height, normalized, overlap);
+}
+
+/** Normalize orientation and return actual PNG crops for each planned region. */
+export async function cropImageIntoRegions(
+  imageBuffer: ArrayBuffer,
+  options: Pick<SplitOptions, 'gridSize' | 'overlap' | 'model'>,
+): Promise<CroppedImageRegion[]> {
+  if (imageBuffer.byteLength === 0) throw new Error('빈 도면 이미지는 분석할 수 없습니다.');
+  const gridSize = normalizedGridSize(options.gridSize);
+  const overlap = normalizedOverlap(options.overlap);
+  const sharp = (await import('sharp')).default;
+  const source = Buffer.from(imageBuffer);
+  const normalized = await sharp(source, { limitInputPixels: MAX_INPUT_PIXELS, animated: false })
+    .rotate()
+    .png()
+    .toBuffer({ resolveWithObject: true });
+  const width = normalized.info.width;
+  const height = normalized.info.height;
+  if (!width || !height || width * height > MAX_INPUT_PIXELS) {
+    throw new Error('도면 이미지 해상도가 허용 범위를 초과합니다.');
+  }
+
+  const bounds = planRegions(width, height, gridSize, overlap);
+  return Promise.all(bounds.map(async (region, index) => {
+    const cropped = await sharp(normalized.data, { limitInputPixels: MAX_INPUT_PIXELS })
+      .extract({ left: region.x, top: region.y, width: region.w, height: region.h })
+      .png()
+      .toBuffer();
+    return {
+      index,
+      buffer: Uint8Array.from(cropped).buffer,
+      bounds: region,
+    };
+  }));
+}
+
+function providerKey(options: SplitOptions): string {
+  const explicit = options.apiKey?.trim();
+  if (explicit) return explicit;
+  if (options.model === 'gemini') return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
+  if (options.model === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
+  if (options.model === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
+  return '';
+}
+
+function localToGlobal(
+  position: ExtractedComponent['position'],
+  bounds: CroppedImageRegion['bounds'],
+): ExtractedComponent['position'] {
+  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return undefined;
+  if (position.x < 0 || position.x > 1000 || position.y < 0 || position.y > 1000) return undefined;
+  return {
+    x: bounds.x + (position.x / 1000) * bounds.w,
+    y: bounds.y + (position.y / 1000) * bounds.h,
+  };
+}
+
+function namespaceRegionResult(
+  region: CroppedImageRegion,
+  result: Awaited<ReturnType<typeof import('./vlm-client')['analyzeDrawingWithVLM']>>,
+): VisionSplitResult {
+  const idMap = new Map<string, string>();
+  const components = result.components.map((component, index) => {
+    const localId = component.id || `component-${index}`;
+    const id = `r${region.index}:${localId.replace(/[^a-zA-Z0-9_.:-]/g, '-')}`;
+    idMap.set(localId, id);
+    return {
+      ...component,
+      id,
+      position: localToGlobal(component.position, region.bounds),
+    };
+  });
+  const connections = result.connections.map((connection) => ({
+    ...connection,
+    from: idMap.get(connection.from) ?? `r${region.index}:${connection.from}`,
+    to: idMap.get(connection.to) ?? `r${region.index}:${connection.to}`,
+  }));
+
+  return {
+    regionIndex: region.index,
+    regionBounds: region.bounds,
+    components,
+    connections,
+    texts: [],
+    regionConfidence: result.confidence,
+  };
+}
+
+async function analyzeRegion(
+  region: CroppedImageRegion,
+  options: SplitOptions,
+  apiKey: string,
+): Promise<VisionSplitResult> {
+  const { analyzeDrawingWithVLM } = await import('./vlm-client');
+  const result = await analyzeDrawingWithVLM(region.buffer, 'image/png', {
+    provider: options.model === 'openai' ? 'openai' : options.model === 'claude' ? 'claude' : 'gemini',
+    apiKey,
+    model: options.modelName,
+  });
+  return namespaceRegionResult(region, result);
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await worker(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => run()));
+  return results;
+}
+
+/** Physically crop, analyze, and return region-scoped results. */
 export async function splitAndAnalyze(
   imageBuffer: ArrayBuffer,
   options: SplitOptions,
 ): Promise<VisionSplitResult[]> {
-  const { gridSize, overlap } = options;
-
-  // 그리드 계산
-  const cols = gridSize <= 4 ? 2 : Math.min(4, Math.ceil(Math.sqrt(gridSize)));
-  const rows = Math.ceil(gridSize / cols);
-
-  // 이미지 크기: 옵션 → PNG/JPEG 헤더 파싱 → 폴백
-  const imgWidth = options.imageWidth ?? parseImageWidth(imageBuffer) ?? 4000;
-  const imgHeight = options.imageHeight ?? parseImageHeight(imageBuffer) ?? 3000;
-
-  const regionWidth = Math.ceil(imgWidth / cols);
-  const regionHeight = Math.ceil(imgHeight / rows);
-  const overlapPx = Math.ceil(Math.max(regionWidth, regionHeight) * overlap);
-
-  // 영역 생성
-  const regions: ImageRegion[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = Math.max(0, c * regionWidth - overlapPx);
-      const y = Math.max(0, r * regionHeight - overlapPx);
-      const w = Math.min(regionWidth + 2 * overlapPx, imgWidth - x);
-      const h = Math.min(regionHeight + 2 * overlapPx, imgHeight - y);
-
-      regions.push({
-        index: r * cols + c,
-        buffer: imageBuffer, // 실제: crop된 버퍼
-        bounds: { x, y, w, h },
-      });
-    }
+  const apiKey = providerKey(options);
+  if (!apiKey) {
+    throw new Error('이미지 도면 분석에는 Vision BYOK 키 또는 서버 Vision 키가 필요합니다.');
   }
-
-  // 병렬 분석 (Promise.all)
-  const results = await Promise.all(
-    regions.map(region => analyzeRegion(region, options))
-  );
-
-  return results;
+  const regions = await cropImageIntoRegions(imageBuffer, options);
+  const concurrency = Math.max(1, Math.min(4, options.maxConcurrency ?? 2));
+  return mapWithConcurrency(regions, concurrency, (region) => analyzeRegion(region, options, apiKey));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 2 — Parallel Analysis
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * 개별 영역 분석.
- * BYOK API 키가 있으면 실제 VLM 호출, 없으면 빈 결과 반환.
- */
-async function analyzeRegion(
-  region: ImageRegion,
-  options: SplitOptions,
-): Promise<VisionSplitResult> {
-  // BYOK API 키 확인 — 없으면 빈 결과 (DXF/PDF 벡터 파서 사용 권장)
-  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY
-    ?? process.env.OPENAI_API_KEY;
-
-  if (apiKey && region.buffer.byteLength > 0) {
-    try {
-      const { analyzeDrawingWithVLM } = await import('./vlm-client');
-      const provider = options.model === 'openai' ? 'openai' : 'gemini';
-      const result = await analyzeDrawingWithVLM(region.buffer, 'image/png', {
-        provider,
-        apiKey,
-      });
-
-      return {
-        regionIndex: region.index,
-        regionBounds: region.bounds,
-        components: result.components,
-        connections: result.connections,
-        texts: [],
-        regionConfidence: result.confidence,
-      };
-    } catch (err) {
-      console.warn(`[ESVA] VLM region ${region.index} failed:`, err);
-      // 폴백: 빈 결과
-    }
-  }
-
-  // API 키 없거나 VLM 실패 시 빈 결과 반환
-  return {
-    regionIndex: region.index,
-    regionBounds: region.bounds,
-    components: [],
-    connections: [],
-    texts: [],
-    regionConfidence: 0,
-  };
+function labelsCompatible(a: ExtractedComponent, b: ExtractedComponent): boolean {
+  const left = a.label.trim().toLowerCase();
+  const right = b.label.trim().toLowerCase();
+  return !left || !right || left === right;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 3 — Result Merger
-// ═══════════════════════════════════════════════════════════════════════════════
+function isDuplicate(
+  a: ExtractedComponent,
+  b: ExtractedComponent,
+  tolerance: number,
+): boolean {
+  if (a.type !== b.type || !a.position || !b.position || !labelsCompatible(a, b)) return false;
+  return Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y) <= tolerance;
+}
 
-/**
- * 오버랩 영역 중복 제거.
- * 같은 위치(±10px)에 같은 타입 → 하나로 병합.
- */
-export function deduplicateComponents(
-  allComponents: ExtractedComponent[],
-  positionTolerance: number = 10,
-): ExtractedComponent[] {
-  const merged: ExtractedComponent[] = [];
-  const used = new Set<number>();
+/** Merge overlap duplicates, preserve canonical IDs, and remove dangling edges. */
+export function mergeVisionSplitResults(
+  results: VisionSplitResult[],
+  positionTolerance = 20,
+): MergedVisionResult {
+  const components: ExtractedComponent[] = [];
+  const aliases = new Map<string, string>();
 
-  for (let i = 0; i < allComponents.length; i++) {
-    if (used.has(i)) continue;
-    const a = allComponents[i];
-    let best = a;
-
-    for (let j = i + 1; j < allComponents.length; j++) {
-      if (used.has(j)) continue;
-      const b = allComponents[j];
-
-      if (a.type === b.type && a.position && b.position) {
-        const dx = Math.abs(a.position.x - b.position.x);
-        const dy = Math.abs(a.position.y - b.position.y);
-        if (dx <= positionTolerance && dy <= positionTolerance) {
-          // confidence 높은 쪽 채택
-          if (b.confidence > best.confidence) best = b;
-          used.add(j);
-        }
+  for (const result of results) {
+    for (const candidate of result.components) {
+      const duplicateIndex = components.findIndex((existing) =>
+        isDuplicate(existing, candidate, positionTolerance));
+      if (duplicateIndex === -1) {
+        components.push(candidate);
+        aliases.set(candidate.id, candidate.id);
+        continue;
+      }
+      const existing = components[duplicateIndex];
+      aliases.set(candidate.id, existing.id);
+      if (candidate.confidence > existing.confidence) {
+        components[duplicateIndex] = { ...candidate, id: existing.id };
       }
     }
-
-    merged.push(best);
-    used.add(i);
   }
 
-  return merged;
+  const validIds = new Set(components.map((component) => component.id));
+  const seenEdges = new Set<string>();
+  const connections: ExtractedConnection[] = [];
+  for (const result of results) {
+    for (const connection of result.connections) {
+      const from = aliases.get(connection.from) ?? connection.from;
+      const to = aliases.get(connection.to) ?? connection.to;
+      if (!validIds.has(from) || !validIds.has(to) || from === to) continue;
+      const key = `${from}\u0000${to}\u0000${connection.cableType ?? ''}`;
+      if (seenEdges.has(key)) continue;
+      seenEdges.add(key);
+      connections.push({ ...connection, from, to });
+    }
+  }
+
+  const confidence = results.length > 0
+    ? results.reduce((sum, result) => sum + result.regionConfidence, 0) / results.length
+    : 0;
+  return { components, connections, confidence };
+}
+
+/** Backward-compatible component-only helper. */
+export function deduplicateComponents(
+  allComponents: ExtractedComponent[],
+  positionTolerance = 10,
+): ExtractedComponent[] {
+  return mergeVisionSplitResults([
+    {
+      regionIndex: 0,
+      regionBounds: { x: 0, y: 0, w: 0, h: 0 },
+      components: allComponents,
+      connections: [],
+      texts: [],
+      regionConfidence: 0,
+    },
+  ], positionTolerance).components;
 }

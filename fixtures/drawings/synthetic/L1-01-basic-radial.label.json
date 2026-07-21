@@ -1,0 +1,71 @@
+{
+  "id": "L1-01-basic-radial",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "초",
+  "fileDifficulty": [
+    "clean-dxf"
+  ],
+  "description": "단상 분전반 방사형 — INSERT 심볼 + LINE 결선만. 파서 최소 기대선.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 5,
+    "edgeCount": 4,
+    "nodes": [
+      {
+        "name": "MCCB-MAIN",
+        "type": "breaker",
+        "x": 100,
+        "y": 500
+      },
+      {
+        "name": "DB-1",
+        "type": "panel",
+        "x": 100,
+        "y": 400
+      },
+      {
+        "name": "LOAD-A",
+        "type": "load",
+        "x": 40,
+        "y": 300
+      },
+      {
+        "name": "LOAD-B",
+        "type": "load",
+        "x": 100,
+        "y": 300
+      },
+      {
+        "name": "LOAD-C",
+        "type": "load",
+        "x": 160,
+        "y": 300
+      }
+    ],
+    "edges": [
+      {
+        "from": "MCCB-MAIN",
+        "to": "DB-1"
+      },
+      {
+        "from": "DB-1",
+        "to": "LOAD-A"
+      },
+      {
+        "from": "DB-1",
+        "to": "LOAD-B"
+      },
+      {
+        "from": "DB-1",
+        "to": "LOAD-C"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

@@ -17,6 +17,10 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { resolveProviderKey, validateLocalProviderUrl, getLocalProviderUrl } from '@/lib/server-ai';
 import { checkPromptInjectionSafety } from '@/lib/safety-policies';
 import { PROVIDERS, type ChatMessage } from '@/lib/ai-providers';
+import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { validateOnpremiseTarget } from '@/lib/onpremise-policy';
+import { filterLLMOutput } from '@/engine/llm/output-filter';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 // ─── PART 1: Types & Constants ──────────────────────────────────
 
@@ -28,6 +32,12 @@ interface ChatRequestBody {
   systemPrompt?: string;
   temperature?: number;
   maxTokens?: number;
+  /** provider==='onpremise'일 때: settings/onpremise 저장 설정(사설 IP만 허용) */
+  onpremise?: {
+    serverUrl: string;
+    apiType: 'ollama' | 'vllm' | 'localai' | 'openai-compat';
+    apiKey?: string;
+  };
 }
 
 /** Daily token budget per IP: 500K tokens */
@@ -36,23 +46,6 @@ const DAILY_TOKEN_BUDGET = 500_000;
 /** In-memory daily token usage tracker — 최대 10,000 엔트리 */
 const MAX_TOKEN_ENTRIES = 10_000;
 const tokenUsage = new Map<string, { tokens: number; resetAt: number }>();
-
-const ALLOWED_ORIGINS = new Set([
-  'https://esva.engineer',
-  'https://www.esva.engineer',
-]);
-
-// Permissive in dev (any localhost port), strict in prod — BUG-016.
-const LOCALHOST_RE = /^http:\/\/localhost:\d+$/;
-const VERCEL_PREVIEW_RE = /^https:\/\/.*\.vercel\.app$/;
-
-function isOriginAllowed(origin: string | null): boolean {
-  if (!origin) return false;
-  if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (VERCEL_PREVIEW_RE.test(origin)) return true;
-  if (process.env.NODE_ENV !== 'production' && LOCALHOST_RE.test(origin)) return true;
-  return false;
-}
 
 // ─── PART 2: Token Budget Check ─────────────────────────────────
 
@@ -109,6 +102,7 @@ async function buildStreamingResponse(
   apiKey: string,
   temperature: number,
   maxTokens: number,
+  onpremBaseUrl?: string,
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
 
@@ -124,6 +118,15 @@ async function buildStreamingResponse(
 
   let sdkProvider;
   switch (provider) {
+    case 'onpremise': {
+      // 사설 LLM 서버(ollama/vllm/localai/openai-compat) — 전부 OpenAI 호환
+      // /v1 엔드포인트를 노출한다(onpremise-test의 chat 경로와 동일 규약).
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const base = (onpremBaseUrl ?? '').replace(/\/+$/, '');
+      const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
+      sdkProvider = createOpenAI({ apiKey, baseURL });
+      break;
+    }
     case 'openai': {
       const { createOpenAI } = await import('@ai-sdk/openai');
       sdkProvider = createOpenAI({ apiKey });
@@ -166,17 +169,50 @@ async function buildStreamingResponse(
 
   return new ReadableStream({
     async start(controller) {
+      let fullText = '';
       try {
         for await (const part of result.textStream) {
-          const chunk = encoder.encode(`data: ${JSON.stringify({ text: part })}\n\n`);
-          controller.enqueue(chunk);
+          fullText += part;
         }
+
+        // No model token crosses the API boundary before the complete answer is
+        // filtered. This trades token-by-token display for a fail-closed output
+        // contract: clients can never briefly render a blocked value.
+        const filtered = filterLLMOutput(fullText, []);
+        const safeText = filtered.filtered;
+        for (let offset = 0; offset < safeText.length; offset += 512) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ text: safeText.slice(offset, offset + 512) })}\n\n`,
+            ),
+          );
+        }
+
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              filter: filtered.passed
+                ? { passed: true }
+                : {
+                    passed: false,
+                    blockedCount: filtered.blocked.length,
+                    filteredText: safeText,
+                    notice:
+                      '출력 필터: 출처 없는 수치·확률적 표현이 차단되었습니다. 계산기·기준서 도구 경로를 사용하세요.',
+                  },
+            })}\n\n`,
+          ),
+        );
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Stream error';
+        console.error('[ESVA /api/chat] Stream error:', err);
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: errorMsg })}\n\n`),
+          encoder.encode(`data: ${JSON.stringify({
+            error: 'AI 응답 생성에 실패했습니다. 공급자 설정과 키를 확인해 주세요.',
+            code: 'ESVA-3998',
+          })}\n\n`),
         );
         controller.close();
       }
@@ -190,7 +226,13 @@ export async function POST(request: NextRequest) {
   try {
     // CSRF origin check
     const origin = request.headers.get('origin');
-    if (!isOriginAllowed(origin)) {
+    if (!isRequestOriginAllowed(
+      origin,
+      request.url,
+      undefined,
+      request.headers.get('host'),
+      request.headers.get('x-forwarded-proto'),
+    )) {
       return jsonWithEsa(
         { success: false, error: { code: 'ESVA-3001', message: 'Invalid origin' } },
         { status: 403 },
@@ -241,13 +283,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate provider
-    const providerConfig = PROVIDERS[body.provider];
-    if (!providerConfig) {
-      return jsonWithEsa(
-        { success: false, error: { code: 'ESVA-3013', message: `Unknown provider: ${body.provider}` } },
-        { status: 400 },
-      );
+    // Validate provider — 'onpremise'는 클라우드 레지스트리(PROVIDERS) 밖의
+    // 사용자 사설 서버 경로다(settings/onpremise 저장 설정 소비 — D2 배선).
+    const isOnpremise = body.provider === 'onpremise';
+    let onpremiseBaseUrl: string | undefined;
+    if (isOnpremise) {
+      const userId = await extractVerifiedUserId(request);
+      if (!userId) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-1001', message: 'Authentication required for On-Premise AI' } },
+          { status: 401 },
+        );
+      }
+      const serverUrl = body.onpremise?.serverUrl;
+      if (!serverUrl) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-3016', message: 'onpremise.serverUrl 누락 — 설정 페이지에서 저장 후 사용' } },
+          { status: 400 },
+        );
+      }
+      const target = validateOnpremiseTarget(serverUrl);
+      if (!target.ok || !target.normalizedUrl) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-3015', message: `SSRF blocked: ${target.reason}` } },
+          { status: 403 },
+        );
+      }
+      onpremiseBaseUrl = target.normalizedUrl;
+    } else {
+      const providerConfig = PROVIDERS[body.provider];
+      if (!providerConfig) {
+        return jsonWithEsa(
+          { success: false, error: { code: 'ESVA-3013', message: `Unknown provider: ${body.provider}` } },
+          { status: 400 },
+        );
+      }
     }
 
     const lastUser = [...body.messages].reverse().find((m) => m.role === 'user');
@@ -279,10 +349,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Resolve API key: BYOK -> env -> error
+    // Resolve API key: BYOK -> env -> error. On-premise providers use their
+    // configured server credential; the SDK adapter still requires a non-empty value.
     let resolvedKey: string;
     try {
-      const resolved = resolveProviderKey(body.provider, body.apiKey);
+      const resolved = isOnpremise
+        ? { key: body.onpremise?.apiKey || 'onpremise-local' }
+        : resolveProviderKey(body.provider, body.apiKey);
       resolvedKey = resolved.key;
     } catch (keyErr) {
       return jsonWithEsa(
@@ -321,6 +394,7 @@ export async function POST(request: NextRequest) {
       resolvedKey,
       temperature,
       maxTokens,
+      onpremiseBaseUrl,
     );
 
     return new Response(stream, {

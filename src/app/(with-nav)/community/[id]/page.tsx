@@ -7,6 +7,7 @@ import {
   ChevronUp, ChevronDown, Award, Check, Tag,
   MessageSquare, ArrowLeft, Calculator,
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/client-auth';
 
 /**
  * ESVA Community — Question Detail Page
@@ -77,7 +78,10 @@ function useQuestionDetail(id: string) {
     }
   }, [id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchData(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchData]);
 
   return { question, answers, loading, error, refetch: fetchData };
 }
@@ -103,7 +107,7 @@ function VoteButtons({
   const handleVote = async (direction: 'up' | 'down') => {
     setVoting(true);
     try {
-      const res = await fetch(`/api/community/${questionId}/vote`, {
+      const res = await authenticatedFetch(`/api/community/${questionId}/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ direction, targetType, targetId }),
@@ -112,8 +116,8 @@ function VoteButtons({
       const json = await res.json();
       if (json.success && typeof json.data?.votes === 'number') {
         setLocalVotes(json.data.votes);
+        onVoted();
       }
-      onVoted();
     } catch {
       // Network error — ignore, vote not counted
     } finally {
@@ -242,7 +246,7 @@ function AnswerForm({
     setError(null);
 
     try {
-      const res = await fetch(`/api/community/${questionId}`, {
+      const res = await authenticatedFetch(`/api/community/${questionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ body: body.trim() }),

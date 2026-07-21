@@ -17,6 +17,8 @@ import {
   X,
   ArrowRightLeft,
   Loader2,
+  Lightbulb,
+  TriangleAlert,
 } from 'lucide-react';
 import { STANDARD_REFS, type StandardRef } from '@/data/standards/standard-refs';
 import { KEC_ARTICLES } from '@/engine/standards/kec';
@@ -146,6 +148,7 @@ function DetailPanel({
         <button
           type="button"
           onClick={onClose}
+          aria-label="표준 상세 닫기"
           className="rounded-lg p-1 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-tertiary)]"
         >
           <X size={18} />
@@ -241,8 +244,9 @@ function DetailPanel({
                   내선규정 {art.edition}
                 </p>
                 {/* 핵심 요약 */}
-                <p className="mt-2 rounded bg-[var(--color-primary)]/8 px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)]">
-                  💡 {art.summary}
+                <p className="mt-2 flex items-start gap-1.5 rounded bg-[var(--color-primary)]/8 px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)]">
+                  <Lightbulb size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>{art.summary}</span>
                 </p>
                 {/* 조문 본문 */}
                 <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--text-secondary)] font-sans">
@@ -293,8 +297,9 @@ function DetailPanel({
                   전기사업법 {art.edition}
                 </p>
                 {/* 핵심 요약 */}
-                <p className="mt-2 rounded bg-[var(--color-primary)]/8 px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)]">
-                  💡 {art.summary}
+                <p className="mt-2 flex items-start gap-1.5 rounded bg-[var(--color-primary)]/8 px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)]">
+                  <Lightbulb size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                  <span>{art.summary}</span>
                 </p>
                 {/* 조문 본문 */}
                 <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-[var(--text-secondary)] font-sans">
@@ -302,8 +307,9 @@ function DetailPanel({
                 </pre>
                 {/* 위반 제재 */}
                 {art.penalty && (
-                  <div className="mt-2 rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-                    ⚠️ {art.penalty}
+                  <div className="mt-2 flex items-start gap-1.5 rounded border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+                    <TriangleAlert size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span>{art.penalty}</span>
                   </div>
                 )}
                 {/* 교차 참조 */}
@@ -466,6 +472,7 @@ function StandardConvertWidget() {
         {/* From */}
         <div className="flex gap-2">
           <select
+            aria-label="변환할 원본 표준"
             value={fromStandard}
             onChange={(e) => setFromStandard(e.target.value)}
             className="h-9 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
@@ -473,6 +480,7 @@ function StandardConvertWidget() {
             {CONVERT_STANDARDS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
           <input
+            aria-label="원본 조항 번호"
             type="text"
             value={fromClause}
             onChange={(e) => setFromClause(e.target.value)}
@@ -486,6 +494,7 @@ function StandardConvertWidget() {
         <div className="flex items-center gap-2">
           <ArrowRightLeft size={14} className="shrink-0 text-[var(--text-tertiary)]" />
           <select
+            aria-label="변환 대상 표준"
             value={toStandard}
             onChange={(e) => setToStandard(e.target.value)}
             className="h-9 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
@@ -579,11 +588,15 @@ export default function StandardsPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
+        <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+          이 화면은 저장소에 명시된 판본 스냅샷을 탐색합니다. 2026년 KEC 개정, NEC 2026 및 IEC 60364 파트별 최신 개정이 자동 반영되는 서비스가 아니므로 설계·시공 전 공인 원문을 확인하세요.
+        </div>
         {/* Filters */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <div className="relative min-w-[280px] flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
+              aria-label="표준 조항 검색"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -593,6 +606,7 @@ export default function StandardsPage() {
           </div>
 
           <select
+            aria-label="국가 및 표준 체계"
             value={countryFilter}
             onChange={(e) => setCountryFilter(e.target.value)}
             className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
@@ -603,6 +617,7 @@ export default function StandardsPage() {
           </select>
 
           <select
+            aria-label="라이선스 유형"
             value={licenseFilter}
             onChange={(e) => setLicenseFilter(e.target.value)}
             className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"

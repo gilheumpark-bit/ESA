@@ -2,7 +2,7 @@
 // `eslint .`로 직접 실행한다. eslint-config-next는 flat config 배열을 export.
 import next from 'eslint-config-next';
 
-export default [
+const config = [
   {
     ignores: [
       '.next/**',
@@ -10,7 +10,8 @@ export default [
       'coverage/**',
       'e2e/**',
       'public/**',
-      '.claude/**',   // 남은 git 워크트리(빌드 산출물 + src 복사본) — 린트 대상 아님
+      '.claude/**',
+      '.worktrees/**', // 격리 워크트리의 빌드 산출물·src 복사본은 이 트리의 린트 대상이 아님
       '**/*.d.ts',
     ],
   },
@@ -28,3 +29,5 @@ export default [
     },
   },
 ];
+
+export default config;

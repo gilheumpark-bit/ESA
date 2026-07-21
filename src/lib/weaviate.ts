@@ -11,6 +11,14 @@
  * PART 5: Collection management
  */
 
+import type {
+  Collection,
+  FilterValue,
+  WeaviateClass,
+  WeaviateClient,
+  WeaviateField,
+} from 'weaviate-client';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -39,7 +47,7 @@ export interface WeaviateProperty {
 /** Weaviate object to upsert */
 export interface WeaviateObject {
   id?: string;
-  properties: Record<string, unknown>;
+  properties: Record<string, WeaviateField>;
   vector?: number[];
 }
 
@@ -60,91 +68,41 @@ interface CollectionResult {
   error?: string;
 }
 
-/** Weaviate client interface (subset we actually use) */
-interface WeaviateClientLike {
-  schema: {
-    classCreator: () => { withClass: (cls: unknown) => { do: () => Promise<void> } };
-    classGetter: () => { withClassName: (name: string) => { do: () => Promise<unknown> } };
-    exists: (name: string) => Promise<boolean>;
-  };
-  data: {
-    creator: () => {
-      withClassName: (name: string) => {
-        withProperties: (props: Record<string, unknown>) => {
-          withId: (id: string) => { do: () => Promise<{ id: string }> };
-          do: () => Promise<{ id: string }>;
-        };
-      };
-    };
-    merger: () => {
-      withClassName: (name: string) => {
-        withId: (id: string) => {
-          withProperties: (props: Record<string, unknown>) => { do: () => Promise<void> };
-        };
-      };
-    };
-  };
-  graphql: {
-    get: () => {
-      withClassName: (name: string) => {
-        withFields: (fields: string) => {
-          withHybrid: (opts: { query: string; alpha: number }) => {
-            withLimit: (limit: number) => {
-              withWhere: (where: unknown) => { do: () => Promise<unknown> };
-              do: () => Promise<unknown>;
-            };
-          };
-        };
-      };
-    };
-  };
-  batch: {
-    objectsBatcher: () => {
-      withObjects: (...objs: unknown[]) => {
-        do: () => Promise<unknown[]>;
-      };
-    };
-  };
-  misc: {
-    readyChecker: () => { do: () => Promise<boolean> };
-  };
-}
-
 const WEAVIATE_DEFAULTS = {
   url: 'http://localhost:8080',
-  scheme: 'http',
+  grpcPort: 50051,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — Singleton Client
 // ═══════════════════════════════════════════════════════════════════════════════
 
-let _client: WeaviateClientLike | null = null;
-let _connectionFailed = false;
+let _client: WeaviateClient | null = null;
+let _nextConnectionAttemptAt = 0;
+
+function parsePort(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : fallback;
+}
 
 /**
  * Get or create a Weaviate client singleton.
  * Gracefully returns null if connection fails.
  */
-export async function getWeaviateClient(): Promise<WeaviateClientLike | null> {
+export async function getWeaviateClient(): Promise<WeaviateClient | null> {
   if (_client) return _client;
-  if (_connectionFailed) return null;
+  if (Date.now() < _nextConnectionAttemptAt) return null;
 
   const url = process.env.WEAVIATE_URL ?? WEAVIATE_DEFAULTS.url;
   const apiKey = process.env.WEAVIATE_API_KEY;
-  const scheme = process.env.WEAVIATE_SCHEME ?? WEAVIATE_DEFAULTS.scheme;
 
   try {
-    // Dynamic import to avoid bundling weaviate-ts-client when not used
-    const weaviate = await import('weaviate-ts-client');
-
-    const clientConfig: Record<string, unknown> = {
-      scheme,
-      host: url.replace(/^https?:\/\//, ''),
-    };
-
-    if (apiKey) {
-      clientConfig.apiKey = new weaviate.ApiKey(apiKey);
+    // Dynamic import keeps the database client out of routes that do not use RAG.
+    const weaviate = await import('weaviate-client');
+    const endpoint = new URL(url);
+    const httpSecure = endpoint.protocol === 'https:';
+    if (!httpSecure && endpoint.protocol !== 'http:') {
+      throw new Error('WEAVIATE_URL must use http or https');
     }
 
     // Pass OpenAI key for text2vec-openai if available
@@ -155,33 +113,47 @@ export async function getWeaviateClient(): Promise<WeaviateClientLike | null> {
     if (process.env.COHERE_API_KEY) {
       headers['X-Cohere-Api-Key'] = process.env.COHERE_API_KEY;
     }
-    if (Object.keys(headers).length > 0) {
-      clientConfig.headers = headers;
-    }
-
-    const client = weaviate.default.client(clientConfig as any) as unknown as WeaviateClientLike;
+    const defaultHttpPort = httpSecure ? 443 : 8080;
+    const defaultGrpcPort = httpSecure ? 443 : WEAVIATE_DEFAULTS.grpcPort;
+    const client = await weaviate.default.connectToCustom({
+      httpHost: endpoint.hostname,
+      httpPath: endpoint.pathname === '/' ? undefined : endpoint.pathname,
+      httpPort: parsePort(endpoint.port, defaultHttpPort),
+      httpSecure,
+      grpcHost: process.env.WEAVIATE_GRPC_HOST || endpoint.hostname,
+      grpcPort: parsePort(process.env.WEAVIATE_GRPC_PORT, defaultGrpcPort),
+      grpcSecure: process.env.WEAVIATE_GRPC_SECURE
+        ? process.env.WEAVIATE_GRPC_SECURE === 'true'
+        : httpSecure,
+      authCredentials: apiKey ? new weaviate.ApiKey(apiKey) : undefined,
+      headers,
+      timeout: { init: 5, query: 15, insert: 60 },
+    });
 
     // Verify connection
-    const ready = await client.misc.readyChecker().do();
+    const ready = await client.isReady();
     if (!ready) {
       console.warn('[ESA/Weaviate] Server not ready at', url);
-      _connectionFailed = true;
+      await client.close().catch(() => undefined);
+      _nextConnectionAttemptAt = Date.now() + 30_000;
       return null;
     }
 
     _client = client;
+    _nextConnectionAttemptAt = 0;
     return _client;
   } catch (err) {
     console.warn('[ESA/Weaviate] Connection failed:', (err as Error).message);
-    _connectionFailed = true;
+    _nextConnectionAttemptAt = Date.now() + 30_000;
     return null;
   }
 }
 
 /** Reset client singleton (for testing or reconnection) */
 export function resetWeaviateClient(): void {
+  if (_client) void _client.close().catch(() => undefined);
   _client = null;
-  _connectionFailed = false;
+  _nextConnectionAttemptAt = 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -338,7 +310,7 @@ export async function ensureCollection(
   }
 
   try {
-    const exists = await client.schema.exists(name);
+    const exists = await client.collections.exists(name);
     if (exists) return { success: true };
 
     const classDef = buildClassDefinition(name, vectorizer ?? getDefaultVectorizer());
@@ -351,7 +323,7 @@ export async function ensureCollection(
       }));
     }
 
-    await client.schema.classCreator().withClass(classDef).do();
+    await client.collections.createFromJson(classDef as WeaviateClass);
     console.log(`[ESA/Weaviate] Created collection: ${name}`);
     return { success: true };
   } catch (err) {
@@ -391,33 +363,25 @@ export async function upsertObject(
   if (!client) return null;
 
   try {
+    const collection = client.collections.use(collectionName);
+
     if (obj.id) {
-      // Try merge (update)
-      try {
-        await client.data
-          .merger()
-          .withClassName(collectionName)
-          .withId(obj.id)
-          .withProperties(obj.properties)
-          .do();
+      if (await collection.data.exists(obj.id)) {
+        await collection.data.update({
+          id: obj.id,
+          properties: obj.properties,
+          ...(obj.vector ? { vectors: obj.vector } : {}),
+        });
         return { id: obj.id };
-      } catch {
-        // Object doesn't exist yet, fall through to create
       }
     }
 
-    const creator = client.data
-      .creator()
-      .withClassName(collectionName)
-      .withProperties(obj.properties);
-
-    if (obj.id) {
-      const result = await creator.withId(obj.id).do();
-      return { id: result.id };
-    }
-
-    const result = await creator.do();
-    return { id: result.id };
+    const id = await collection.data.insert({
+      properties: obj.properties,
+      ...(obj.id ? { id: obj.id } : {}),
+      ...(obj.vector ? { vectors: obj.vector } : {}),
+    });
+    return { id };
   } catch (err) {
     console.error(`[ESA/Weaviate] Upsert failed for ${collectionName}:`, (err as Error).message);
     return null;
@@ -439,27 +403,20 @@ export async function batchUpsert(
 
   // Process in batches of 100
   const BATCH_SIZE = 100;
+  const collection = client.collections.use(collectionName);
   for (let i = 0; i < objects.length; i += BATCH_SIZE) {
     const batch = objects.slice(i, i + BATCH_SIZE);
     try {
       const batchObjects = batch.map((obj) => ({
-        class: collectionName,
         properties: obj.properties,
         ...(obj.id ? { id: obj.id } : {}),
-        ...(obj.vector ? { vector: obj.vector } : {}),
+        ...(obj.vector ? { vectors: obj.vector } : {}),
       }));
 
-      const batcher = client.batch.objectsBatcher();
-      const results = await batcher.withObjects(...batchObjects).do();
-
-      for (const result of results) {
-        const r = result as { result?: { errors?: { error?: unknown[] } } };
-        if (r.result?.errors?.error?.length) {
-          failed++;
-        } else {
-          succeeded++;
-        }
-      }
+      const result = await collection.data.insertMany(batchObjects);
+      const batchFailed = Object.keys(result.errors).length;
+      failed += batchFailed;
+      succeeded += batch.length - batchFailed;
     } catch (err) {
       console.error(`[ESA/Weaviate] Batch upsert error:`, (err as Error).message);
       failed += batch.length;
@@ -469,8 +426,50 @@ export async function batchUpsert(
   return { succeeded, failed };
 }
 
+type V3Collection = Collection<undefined, string, undefined>;
+type FilterCombiners = {
+  and: (...filters: FilterValue[]) => FilterValue;
+  or: (...filters: FilterValue[]) => FilterValue;
+};
+
+function convertWhereFilter(
+  collection: V3Collection,
+  where: Record<string, unknown>,
+  combiners: FilterCombiners,
+): FilterValue | undefined {
+  const operator = typeof where.operator === 'string' ? where.operator : 'Equal';
+
+  if ((operator === 'And' || operator === 'Or') && Array.isArray(where.operands)) {
+    const children = where.operands
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      .map((item) => convertWhereFilter(collection, item, combiners))
+      .filter((item): item is FilterValue => Boolean(item));
+    if (children.length === 0) return undefined;
+    return operator === 'And' ? combiners.and(...children) : combiners.or(...children);
+  }
+
+  if (operator !== 'Equal' || !Array.isArray(where.path) || where.path.length !== 1) {
+    return undefined;
+  }
+
+  const property = where.path[0];
+  const allowedProperties = new Set(ESVA_DOCUMENT_PROPERTIES.map((item) => item.name));
+  if (typeof property !== 'string' || !allowedProperties.has(property)) return undefined;
+
+  const valueKey = ['valueText', 'valueString', 'valueInt', 'valueNumber', 'valueBoolean', 'valueDate']
+    .find((key) => Object.hasOwn(where, key));
+  if (!valueKey) return undefined;
+
+  const value = where[valueKey];
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+    return undefined;
+  }
+
+  return collection.filter.byProperty(property).equal(value);
+}
+
 /**
- * Execute a GraphQL hybrid search against a collection.
+ * Execute a v3 hybrid search against a collection.
  */
 export async function hybridSearch(
   collectionName: string,
@@ -485,8 +484,8 @@ export async function hybridSearch(
   const client = await getWeaviateClient();
   if (!client) return [];
 
-  const alpha = opts.alpha ?? 0.7;
-  const limit = opts.limit ?? 10;
+  const alpha = Math.min(1, Math.max(0, opts.alpha ?? 0.7));
+  const limit = Math.min(100, Math.max(1, Math.trunc(opts.limit ?? 10)));
   const fields = opts.fields ?? [
     'title', 'content', 'summary', 'standard', 'clause',
     'country', 'genre', 'source_url', 'license_type',
@@ -495,25 +494,31 @@ export async function hybridSearch(
   ];
 
   try {
-    let builder = client.graphql
-      .get()
-      .withClassName(collectionName)
-      .withFields(fields.join(' '))
-      .withHybrid({ query, alpha })
-      .withLimit(limit);
+    const collection = client.collections.use(collectionName);
+    const { Filters } = await import('weaviate-client');
+    const filters = opts.where
+      ? convertWhereFilter(collection, opts.where, Filters)
+      : undefined;
+    const allowedProperties = new Set(ESVA_DOCUMENT_PROPERTIES.map((item) => item.name));
+    const returnProperties = fields.filter((field) => allowedProperties.has(field));
 
-    let result: unknown;
-    if (opts.where) {
-      result = await builder.withWhere(opts.where).do();
-    } else {
-      result = await builder.do();
-    }
+    const result = await collection.query.hybrid(query, {
+      alpha,
+      limit,
+      filters,
+      returnProperties,
+      returnMetadata: ['score', 'distance', 'certainty'],
+    });
 
-    const data = result as {
-      data?: { Get?: Record<string, WeaviateSearchHit[]> };
-    };
-
-    return data?.data?.Get?.[collectionName] ?? [];
+    return result.objects.map((object) => ({
+      ...(object.properties as Record<string, unknown>),
+      _additional: {
+        id: object.uuid,
+        score: object.metadata?.score ?? 0,
+        distance: object.metadata?.distance,
+        certainty: object.metadata?.certainty,
+      },
+    }));
   } catch (err) {
     console.warn(`[ESA/Weaviate] Hybrid search failed on ${collectionName}:`, (err as Error).message);
     return [];

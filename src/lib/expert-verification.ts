@@ -9,7 +9,7 @@
  * PART 4: Admin verification actions
  */
 
-import { getSupabaseClient, getSupabaseAdmin } from '@/lib/supabase';
+import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
 
 // ─── PART 1: Types ────────────────────────────────────────────
 
@@ -75,7 +75,8 @@ export async function requestVerification(
   if (!evidence.certNumber) throw new Error('[ESA-7011] Certification number is required');
   if (!evidence.imageUrl) throw new Error('[ESA-7012] Evidence image URL is required');
 
-  const client = getSupabaseClient();
+  await ensureUserProfile(userId);
+  const client = getSupabaseAdmin();
 
   // Check for existing pending request
   const { data: existing } = await client
@@ -115,7 +116,7 @@ export async function requestVerification(
 export async function getUserVerifications(
   userId: string,
 ): Promise<VerificationRequest[]> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(VERIFICATION_TABLE)
@@ -137,7 +138,7 @@ export async function getUserVerifications(
  * Returns null if user has no verified certification.
  */
 export async function getExpertBadge(userId: string): Promise<ExpertBadge | null> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   // Check for any verified certification
   const { data } = await client

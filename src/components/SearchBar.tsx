@@ -13,6 +13,7 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useId,
   type KeyboardEvent,
   type ChangeEvent,
 } from 'react';
@@ -116,6 +117,7 @@ export default function SearchBar({
   size = 'md',
 }: SearchBarProps) {
   const router = useRouter();
+  const listboxId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -266,6 +268,8 @@ export default function SearchBar({
           ref={inputRef}
           type="text"
           role="combobox"
+          aria-label={placeholder}
+          aria-controls={listboxId}
           aria-expanded={isOpen && suggestions.length > 0}
           aria-haspopup="listbox"
           aria-autocomplete="list"
@@ -302,6 +306,7 @@ export default function SearchBar({
       {/* Suggestions dropdown */}
       {isOpen && suggestions.length > 0 && !searchError && (
         <div
+          id={listboxId}
           role="listbox"
           className="absolute left-0 right-0 top-full z-[var(--z-dropdown)] mt-1 overflow-hidden rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] py-1 shadow-lg"
         >

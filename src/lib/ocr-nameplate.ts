@@ -240,7 +240,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
 
 /**
  * Vision LLM을 사용한 명판 OCR
- * Supports: OpenAI (GPT-4V), Anthropic (Claude Vision), Google (Gemini Vision)
+ * Supports: OpenAI Vision, Anthropic Claude Vision, Google Gemini Vision
  */
 export async function recognizeNameplate(
   imageData: string | Blob,
@@ -266,7 +266,7 @@ export async function recognizeNameplate(
   }
 
   // Parse LLM response
-  const parsed = parseVisionResponse(responseText);
+  const parsed = parseNameplateVisionResponse(responseText);
 
   // Fallback: merge regex extraction with LLM results
   const regexParams = parseElectricalParams(parsed.rawText || responseText);
@@ -288,7 +288,9 @@ export async function recognizeNameplate(
     protection: parsed.protection ?? regexParams.protection,
     rawText: parsed.rawText || responseText,
     confidence: parsed.confidence ?? 0.5,
-    language: parsed.language ?? detectLanguage(parsed.rawText || responseText),
+    language: parsed.language && parsed.language !== 'unknown'
+      ? parsed.language
+      : detectLanguage(parsed.rawText || responseText),
   };
 }
 
@@ -297,6 +299,7 @@ async function callOpenAIVision(
   mimeType: string,
   options: NameplateOCROptions,
 ): Promise<string> {
+  const model = options.model || 'gpt-5.6-terra';
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -304,7 +307,7 @@ async function callOpenAIVision(
       Authorization: `Bearer ${options.apiKey}`,
     },
     body: JSON.stringify({
-      model: options.model || 'gpt-4.1',
+      model,
       messages: [
         { role: 'system', content: NAMEPLATE_SYSTEM_PROMPT },
         {
@@ -318,8 +321,8 @@ async function callOpenAIVision(
           ],
         },
       ],
-      max_tokens: 2000,
-      temperature: 0.1,
+      max_completion_tokens: 2000,
+      ...(model.startsWith('gpt-5') ? {} : { temperature: 0.1 }),
     }),
   });
 
@@ -345,7 +348,7 @@ async function callClaudeVision(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: options.model || 'claude-sonnet-4-20250514',
+      model: options.model || 'claude-sonnet-5',
       max_tokens: 2000,
       system: NAMEPLATE_SYSTEM_PROMPT,
       messages: [
@@ -380,12 +383,15 @@ async function callGeminiVision(
   mimeType: string,
   options: NameplateOCROptions,
 ): Promise<string> {
-  const model = options.model || 'gemini-2.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${options.apiKey}`;
+  const model = options.model || 'gemini-3.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': options.apiKey,
+    },
     body: JSON.stringify({
       contents: [
         {
@@ -498,15 +504,52 @@ function detectMimeType(base64OrDataUrl: string): string {
   return 'image/jpeg'; // default
 }
 
-function parseVisionResponse(text: string): Partial<NameplateData> {
-  // Try to extract JSON from response (LLM might wrap in markdown)
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { rawText: text, confidence: 0.3 };
+export function parseNameplateVisionResponse(text: string): Partial<NameplateData> {
+  const failClosed = (): Partial<NameplateData> => ({
+    rawText: text.slice(0, 20_000),
+    confidence: 0,
+    language: 'unknown',
+  });
 
   try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    return parsed as Partial<NameplateData>;
+    const trimmed = text.trim();
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    const parsed: unknown = JSON.parse(fenced?.[1] ?? trimmed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return failClosed();
+    const row = parsed as Record<string, unknown>;
+    const result: Partial<NameplateData> = {};
+    const textFields: Array<keyof Pick<NameplateData,
+      'manufacturer' | 'model' | 'voltage' | 'current' | 'power' | 'frequency' |
+      'serialNumber' | 'rating' | 'efficiency' | 'powerFactor' | 'rpm' |
+      'insulation' | 'protection'>> = [
+        'manufacturer', 'model', 'voltage', 'current', 'power', 'frequency',
+        'serialNumber', 'rating', 'efficiency', 'powerFactor', 'rpm',
+        'insulation', 'protection',
+      ];
+    for (const field of textFields) {
+      const value = boundedVisionText(row[field], 512);
+      if (value) result[field] = value;
+    }
+
+    const rawText = boundedVisionText(row.rawText, 20_000);
+    if (rawText) result.rawText = rawText;
+    if (row.phase === '1' || row.phase === '3') result.phase = row.phase;
+    if (row.language === 'ko' || row.language === 'en' || row.language === 'ja' || row.language === 'zh') {
+      result.language = row.language;
+    } else {
+      result.language = 'unknown';
+    }
+    result.confidence = typeof row.confidence === 'number' && Number.isFinite(row.confidence)
+      ? Math.max(0, Math.min(1, row.confidence))
+      : 0;
+    return result;
   } catch {
-    return { rawText: text, confidence: 0.3 };
+    return failClosed();
   }
+}
+
+function boundedVisionText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized && normalized.length <= maxLength ? normalized : undefined;
 }

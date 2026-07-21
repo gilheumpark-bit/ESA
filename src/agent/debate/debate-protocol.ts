@@ -94,6 +94,34 @@ export interface DisagreementItem {
   average: number;
 }
 
+function relativeDifferencePercent(a: number, b: number): number {
+  const baseline = (Math.abs(a) + Math.abs(b)) / 2;
+  if (baseline === 0) return a === b ? 0 : Number.POSITIVE_INFINITY;
+  return Math.abs(a - b) / baseline * 100;
+}
+
+function largestAgreementCluster(
+  entries: DisagreementItem['entries'],
+  validTeams: Set<TeamId>,
+  tolerancePercent: number,
+): Set<TeamId> {
+  let best = new Set<TeamId>();
+
+  for (const seed of entries) {
+    if (!validTeams.has(seed.teamId)) continue;
+    const cluster = entries.filter(candidate =>
+      validTeams.has(candidate.teamId) &&
+      candidate.unit === seed.unit &&
+      relativeDifferencePercent(candidate.value, seed.value) <= tolerancePercent
+    );
+    if (cluster.length > best.size) {
+      best = new Set(cluster.map(entry => entry.teamId));
+    }
+  }
+
+  return best;
+}
+
 /**
  * 토론 라운드 실행.
  * 각 팀이 불일치 항목에 대해 근거를 제시하고 합의를 시도한다.
@@ -106,6 +134,7 @@ export function executeDebateRound(
   config: ConsensusConfig = DEFAULT_CONSENSUS,
 ): DebateRound {
   const arguments_: DebateArgument[] = [];
+  const validTeams = new Set<TeamId>();
 
   for (const entry of disagreement.entries) {
     const teamResult = teamResults.find(tr => tr.teamId === entry.teamId);
@@ -140,13 +169,24 @@ export function executeDebateRound(
       topic,
       position: `${entry.value} ${entry.unit}`,
       evidence,
-      verdict: physicsCheck.valid && kecRef ? 'agree' : 'disagree',
+      verdict: 'disagree',
       confidence: physicsCheck.valid ? teamResult.confidence : teamResult.confidence * 0.5,
     };
+    if (physicsCheck.valid && kecRef) validTeams.add(entry.teamId);
     arguments_.push(arg);
   }
 
-  // 합의 판정: requiredAgreement 비율 이상이 agree면 합의
+  // 근거가 유효한 값 중 수치 허용오차 안에 모인 최대 군집만 찬성으로 본다.
+  // 서로 다른 유효 계산값을 모두 찬성으로 세면 거짓 합의가 된다.
+  const agreementCluster = largestAgreementCluster(
+    disagreement.entries,
+    validTeams,
+    config.tolerancePercent,
+  );
+  for (const argument of arguments_) {
+    argument.verdict = agreementCluster.has(argument.teamId) ? 'agree' : 'disagree';
+  }
+
   const agreeCount = arguments_.filter(a => a.verdict === 'agree').length;
   const totalCount = arguments_.length;
   const consensus = totalCount > 0 && (agreeCount / totalCount) >= config.requiredAgreement;

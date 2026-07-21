@@ -32,7 +32,7 @@ function isAdminAuth(request: Request): boolean {
 // ---------------------------------------------------------------------------
 
 export async function GET(request: Request): Promise<NextResponse> {
-  // Rate limit (R4 stub repair: applyRateLimit was imported but never invoked).
+  // Per-route abuse limit.
   const blocked = applyRateLimit(request, 'default');
   if (blocked) {
     return NextResponse.json(
@@ -72,8 +72,9 @@ export async function GET(request: Request): Promise<NextResponse> {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error('[ESVA Benchmark]', message);
     return NextResponse.json(
-      { error: `Benchmark failed: ${message}` },
+      { error: 'Benchmark failed' },
       { status: 500 },
     );
   }

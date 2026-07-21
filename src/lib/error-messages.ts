@@ -22,7 +22,7 @@ const ERROR_MESSAGES: Record<string, { ko: string; action?: string }> = {
   'ESVA-3001': { ko: '접근이 차단되었습니다.' },
   'ESVA-3002': { ko: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
   'ESVA-3010': { ko: '검색어를 입력해주세요.' },
-  'ESVA-3014': { ko: '일일 토큰 한도 초과. 자체 API 키를 등록하면 무제한 사용 가능합니다.', action: '설정 → BYOK에서 API 키를 등록하세요.' },
+  'ESVA-3014': { ko: '일일 토큰 한도에 도달했습니다. 자체 API 키를 등록해 공급자 한도 내에서 계속 사용할 수 있습니다.', action: '설정 → BYOK에서 API 키와 공급자 쿼터를 확인하세요.' },
 
   // Calculation (4xxx)
   'ESVA-4001': { ko: '필수 입력값이 누락되었습니다.', action: '빨간색 표시된 필드를 확인해주세요.' },

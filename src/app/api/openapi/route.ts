@@ -1,10 +1,12 @@
 /**
  * GET /api/openapi — ESVA OpenAPI 3.1 Schema
  * --------------------------------------------
- * Self-documenting API specification.
+ * Public core API specification. Internal/conditional routes are documented in
+ * docs/API_REFERENCE.md and intentionally excluded from this stable contract.
  */
 
 import { NextResponse } from 'next/server';
+import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,8 +14,8 @@ const OPENAPI_SPEC = {
   openapi: '3.1.0',
   info: {
     title: 'ESVA API',
-    description: 'Electrical Search Vertical AI — 전기 설계 검색·계산·검증 API',
-    version: '1.0.0',
+    description: 'Electrical Search Vertical AI — 공개 핵심 검색·계산·검증 API',
+    version: '0.2.0',
     contact: { name: 'ESVA Team', url: 'https://esva.engineer' },
   },
   servers: [
@@ -23,8 +25,9 @@ const OPENAPI_SPEC = {
   paths: {
     '/health': {
       get: {
-        summary: '의존성 헬스체크',
+        summary: '시스템 상태 확인',
         tags: ['System'],
+        description: '공개 호출은 상태와 시각만 반환합니다. Bearer HEALTHCHECK_TOKEN을 보내면 운영 의존성 상세를 반환합니다.',
         responses: { 200: { description: 'System healthy or degraded' }, 503: { description: 'Critical dependency down' } },
       },
     },
@@ -62,7 +65,7 @@ const OPENAPI_SPEC = {
           content: { 'application/json': { schema: { type: 'object', required: ['messages', 'provider', 'model'], properties: {
             messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } },
             provider: { type: 'string', enum: ['gemini', 'openai', 'claude', 'groq', 'mistral'] },
-            model: { type: 'string', example: 'gpt-4.1-mini' },
+            model: { type: 'string', example: 'gpt-5.6-luna' },
           } } } },
         },
         responses: { 200: { description: 'SSE 스트림' } },
@@ -70,7 +73,7 @@ const OPENAPI_SPEC = {
     },
     '/team-review': {
       post: {
-        summary: '4-Team 설계 리뷰',
+        summary: '3개 전문팀 검토 + 합의 보고서',
         tags: ['Review'],
         requestBody: {
           content: {
@@ -86,7 +89,7 @@ const OPENAPI_SPEC = {
             } } },
           },
         },
-        responses: { 200: { description: 'ESVA Verified 보고서' } },
+        responses: { 200: { description: '전문팀 검토·합의 보고서' } },
       },
     },
     '/sld': {
@@ -101,10 +104,10 @@ const OPENAPI_SPEC = {
   },
   tags: [
     { name: 'System', description: '시스템 상태 및 헬스체크' },
-    { name: 'Calculator', description: '52개 전기 계산기' },
+    { name: 'Calculator', description: `${CALCULATOR_COUNT}개 전기 계산기` },
     { name: 'Search', description: 'AI 법규/기준서 검색' },
     { name: 'AI', description: 'LLM 채팅 (BYOK)' },
-    { name: 'Review', description: '4-Team 설계 검증' },
+    { name: 'Review', description: 'SLD·평면도·기준서 전문팀 검토와 별도 합의 단계' },
     { name: 'Drawing', description: '도면 분석 (SLD/DXF/PDF)' },
     { name: 'Export', description: '결과 내보내기' },
   ],

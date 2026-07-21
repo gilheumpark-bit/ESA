@@ -118,10 +118,11 @@ async function executeSingle(
       };
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[ESVA Batch] Calculator ${calc.calculatorId} failed:`, message);
     return {
       index,
       success: false,
-      error: { code: 'ESVA-4999', message },
+      error: { code: 'ESVA-4999', message: '계산을 완료하지 못했습니다.' },
     };
   }
 }
@@ -209,7 +210,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: {
           code: 'ESVA-4999',
-          message: outcome.reason instanceof Error ? outcome.reason.message : 'Unexpected error',
+          message: '계산 작업이 예기치 않게 종료되었습니다.',
         },
       };
     });

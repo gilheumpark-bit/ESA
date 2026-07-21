@@ -4,7 +4,12 @@
  * Formulae:
  *   Total demand:      Stotal = SUM(Pi / pfi x DFi) x (1 + growth)  [kVA]
  *   Transformer size:  select from standard ratings >= Stotal
- *   Bus rating:        Ibus = Stotal x 1000 / (sqrt(3) x V)         [A]
+ *   LV bus rating:     Ibus = Stotal x 1000 / (sqrt(3) x V_LV)      [A]  (2차/저압측)
+ *   Incoming current:  Iin  = Stotal x 1000 / (sqrt(3) x V_HV)      [A]  (수전/고압측)
+ *
+ * 수전반 차단기는 수전(고압) 전압 기준 전류로 선정하고, 모선 정격은 2차(저압)
+ * 전압 기준으로 산정한다. 두 전압을 분리 입력한다(systemVoltage=수전 HV,
+ * secondaryVoltage=저압 모선).
  *
  * Standards: KEC 300 (Substation Design), IEC 60076
  */
@@ -38,8 +43,10 @@ export interface SubstationCapacityInput {
   futureGrowth: number;
   /** Redundancy scheme: 'N' or 'N+1' */
   redundancy: 'N' | 'N+1';
-  /** System voltage in Volts (default 22900 for high-voltage side) */
+  /** Incoming (high-voltage) system voltage in Volts (default 22900) */
   systemVoltage?: number;
+  /** Secondary (low-voltage) bus voltage in Volts (default 380) */
+  secondaryVoltage?: number;
 }
 
 // ── Standard transformer sizes (kVA) ───────────────────────────────────────
@@ -83,7 +90,10 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
   }
 
   const { loads, futureGrowth, redundancy } = input;
-  const _V = input.systemVoltage ?? 22900;
+  const systemVoltage = input.systemVoltage ?? 22900;   // 수전(HV)
+  const secondaryVoltage = input.secondaryVoltage ?? 380; // 모선(LV)
+  assertPositive(systemVoltage, 'systemVoltage');
+  assertPositive(secondaryVoltage, 'secondaryVoltage');
   const sqrt3 = Math.sqrt(3);
 
   // PART 2 -- Derivation
@@ -127,23 +137,32 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
     unit: `kVA x ${trCount}`,
   });
 
-  // Step 4: Bus rating (low-voltage side at 380V)
-  const lvVoltage = 380;
-  const Ibus = (totalWithGrowth * 1000) / (sqrt3 * lvVoltage);
+  // Step 4: LV bus rating (2차/저압 모선 — secondaryVoltage 기준)
+  const Ibus = (totalWithGrowth * 1000) / (sqrt3 * secondaryVoltage);
   steps.push({
     step: 4,
-    title: '모선 정격전류 (Bus rating at 380V)',
+    title: `모선 정격전류 (LV bus at ${secondaryVoltage}V)`,
     formula: 'I_{bus} = \\frac{S_{design} \\times 1000}{\\sqrt{3} \\times V_{LV}}',
     value: round(Ibus, 1),
     unit: 'A',
   });
 
-  // Step 5: Incoming switchgear rating
-  const switchgearRating = selectSwitchgear(Ibus);
+  // Step 5: Incoming (HV) current — 수전/고압측 (systemVoltage 기준)
+  const Iincoming = (totalWithGrowth * 1000) / (sqrt3 * systemVoltage);
   steps.push({
     step: 5,
+    title: `수전 정격전류 (Incoming at ${systemVoltage}V)`,
+    formula: 'I_{in} = \\frac{S_{design} \\times 1000}{\\sqrt{3} \\times V_{HV}}',
+    value: round(Iincoming, 1),
+    unit: 'A',
+  });
+
+  // Step 6: Incoming switchgear rating — 수전(고압) 전류 기준으로 선정
+  const switchgearRating = selectSwitchgear(Iincoming);
+  steps.push({
+    step: 6,
     title: '수전반 차단기 선정 (Incoming switchgear)',
-    formula: `I_{CB} \\geq I_{bus} \\times 1.1 = ${round(Ibus * 1.1, 1)}`,
+    formula: `I_{CB} \\geq I_{in} \\times 1.1 = ${round(Iincoming * 1.1, 1)}`,
     value: switchgearRating,
     unit: 'A',
   });
@@ -167,6 +186,7 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
       totalDemand:      { value: round(totalWithGrowth, 2), unit: 'kVA' },
       transformerSize:  { value: trSize,                    unit: 'kVA' },
       busRating:        { value: round(Ibus, 1),            unit: 'A' },
+      incomingCurrent:  { value: round(Iincoming, 1),       unit: 'A' },
       switchgearRating: { value: switchgearRating,          unit: 'A' },
     },
   };

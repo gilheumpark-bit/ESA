@@ -149,8 +149,7 @@ export function resolveProviderKey(
   }
 
   throw new Error(
-    `[ESVA] No API key available for ${PROVIDER_NAMES[providerId] ?? providerId}. ` +
-    `Provide your own key (BYOK) or configure ${ENV_KEY_MAP[providerId] ?? 'the environment variable'}.`,
+    `${PROVIDER_NAMES[providerId] ?? providerId} API 키가 필요합니다. BYOK 설정에서 키를 등록하거나 배포 관리자에게 문의해 주세요.`,
   );
 }
 

@@ -94,6 +94,39 @@ describe('runDebate', () => {
     expect(debates[0].totalRounds).toBeGreaterThanOrEqual(1);
     expect(debates[0].finalPosition).toBeTruthy();
   });
+
+  test('does not turn two contradictory valid calculations into consensus', () => {
+    const results = [
+      makeTeamResult('TEAM-SLD', [{ id: 'vd', value: 2.5 }]),
+      makeTeamResult('TEAM-STD', [{ id: 'vd', value: 4.0 }]),
+    ];
+
+    const debates = runDebate(results);
+
+    expect(debates).toHaveLength(1);
+    expect(debates[0].finalConsensus).toBe(false);
+    expect(debates[0].maxRoundsReached).toBe(true);
+    expect(buildEscalation(debates)?.requiresHumanReview).toBe(true);
+  });
+
+  test('accepts only the numeric majority cluster and records the outlier', () => {
+    const results = [
+      makeTeamResult('TEAM-SLD', [{ id: 'vd', value: 2.5 }]),
+      makeTeamResult('TEAM-LAYOUT', [{ id: 'vd', value: 2.501 }]),
+      makeTeamResult('TEAM-STD', [{ id: 'vd', value: 4.0 }]),
+    ];
+
+    const debates = runDebate(results, {
+      maxRounds: 1,
+      requiredAgreement: 0.66,
+      tolerancePercent: 0.1,
+      escalateOnFailure: true,
+    });
+
+    expect(debates).toHaveLength(1);
+    expect(debates[0].finalConsensus).toBe(true);
+    expect(debates[0].rounds[0].dissenters).toContain('TEAM-STD');
+  });
 });
 
 describe('buildEscalation', () => {

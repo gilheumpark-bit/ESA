@@ -1,0 +1,52 @@
+{
+  "id": "L1-03-circle-motor",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "초",
+  "fileDifficulty": [
+    "clean-dxf",
+    "circle-symbol"
+  ],
+  "description": "전동기를 CIRCLE 심볼로 작도 — 블록 없이 원으로 그리는 실무 관례.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 3,
+    "edgeCount": 2,
+    "nodes": [
+      {
+        "name": "MCCB-1",
+        "type": "breaker",
+        "x": 100,
+        "y": 500
+      },
+      {
+        "name": "M1",
+        "type": "motor",
+        "x": 60,
+        "y": 380
+      },
+      {
+        "name": "M2",
+        "type": "motor",
+        "x": 140,
+        "y": 380
+      }
+    ],
+    "edges": [
+      {
+        "from": "MCCB-1",
+        "to": "M1"
+      },
+      {
+        "from": "MCCB-1",
+        "to": "M2"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

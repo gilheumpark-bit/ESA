@@ -20,6 +20,8 @@ import {
   assertOneOf,
   round,
 } from '../types';
+import { getNecAmpacity, type NecTempRating } from '@/data/ampacity-tables/nec-ampacity';
+import { getIecAmpacity } from '@/data/ampacity-tables/iec-ampacity';
 
 // ── Ampacity Reference Tables ───────────────────────────────────────────────
 // Simplified lookup for copper, PVC/XLPE, single-circuit in air (Method C/B)
@@ -56,9 +58,30 @@ const KEC_TABLE: AmpacityEntry[] = [
   { size: 300,  pvcCu: 530, xlpeCu: 693, pvcAl: 411, xlpeAl: 538 },
 ];
 
-// NEC and IEC have slightly different values — using representative offsets
-const NEC_FACTOR = 0.98;   // NEC values typically ~2% lower for same conditions
-const IEC_FACTOR = 1.02;   // IEC values slightly higher in some cable arrangements
+// NEC·IEC는 KEC에 배율을 곱해 추정하지 않는다 — 각 표준의 실제 표를 조회한다.
+// (구 구현은 NEC=KEC×0.98, IEC=KEC×1.02로 값을 지어냈다. 허용전류 과대평가는
+//  과부하·화재 방향의 오차이므로 배율 추정을 금지한다.)
+
+/**
+ * NEC 310.16 표준 규격의 공칭 도체 단면적(mm², ASTM B258).
+ * NEC은 AWG 네이티브라 mm² 입력을 스냅해야 하는데, **보수적으로 하향**한다:
+ * 단면적이 입력보다 크지 않은 최대 규격을 고른다. 최근접 스냅은 25mm²를
+ * 3 AWG(26.67mm²)로 올려 허용전류를 +21% 과대평가한다(비보수).
+ */
+const NEC_SIZES_MM2: ReadonlyArray<readonly [string, number]> = [
+  ['14', 2.08], ['12', 3.31], ['10', 5.26], ['8', 8.37], ['6', 13.3], ['4', 21.15],
+  ['3', 26.67], ['2', 33.63], ['1', 42.41], ['1/0', 53.5], ['2/0', 67.4], ['3/0', 85.0],
+  ['4/0', 107.2], ['250', 126.7], ['300', 152.0], ['350', 177.3], ['400', 202.7],
+];
+
+/** 입력 단면적 이하의 최대 NEC 규격(보수). 최소 규격보다 작으면 최소 규격. */
+function necSizeAtOrBelow(mm2: number): readonly [string, number] {
+  let chosen = NEC_SIZES_MM2[0];
+  for (const entry of NEC_SIZES_MM2) {
+    if (entry[1] <= mm2) chosen = entry;
+  }
+  return chosen;
+}
 
 // ── Input / Output ──────────────────────────────────────────────────────────
 
@@ -97,8 +120,24 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
   // PART 2 — Base ampacity lookup
   const key = `${input.insulation.toLowerCase()}${input.conductor}` as keyof AmpacityEntry;
   const kecBase = entry[key] as number;
-  const necBase = round(kecBase * NEC_FACTOR, 0);
-  const iecBase = round(kecBase * IEC_FACTOR, 0);
+
+  // NEC 310.16 실표 조회 — mm²는 보수적으로 하향 스냅한 AWG로 환산(등가 규격 공개).
+  const [necSize, necSizeMm2] = necSizeAtOrBelow(input.cableSize);
+  const necTempRating: NecTempRating = input.insulation === 'PVC' ? 75 : 90;
+  let necBase = 0;
+  try {
+    necBase = round(getNecAmpacity({
+      size: necSize, conductor: input.conductor, tempRating: necTempRating, ambientTemp: refTemp,
+    }).corrected, 0);
+  } catch { necBase = 0; }
+
+  // IEC 60364-5-52 실표 조회 — mm² 네이티브라 환산 불필요.
+  let iecBase = 0;
+  try {
+    iecBase = round(getIecAmpacity({
+      size: input.cableSize, conductor: input.conductor, insulation: input.insulation, ambientTemp: refTemp,
+    }).corrected, 0);
+  } catch { iecBase = 0; }
 
   steps.push({
     step: 1,
@@ -111,7 +150,7 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
 
   steps.push({
     step: 2,
-    title: 'NEC base ampacity',
+    title: `NEC base ampacity (${necSize} AWG ≤ ${input.cableSize}mm², 등가 ${necSizeMm2}mm², ${necTempRating}°C)`,
     formula: 'I_{base,NEC}',
     value: necBase,
     unit: 'A',

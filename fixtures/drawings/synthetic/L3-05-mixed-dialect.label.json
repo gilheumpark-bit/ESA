@@ -1,0 +1,265 @@
+{
+  "id": "L3-05-mixed-dialect",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "고",
+  "fileDifficulty": [
+    "mixed-dialect",
+    "dxf-r12",
+    "nested-block",
+    "polyline",
+    "circle-symbol"
+  ],
+  "description": "R12 + 중첩블록 + 폴리라인 결선 + 원형 심볼 + 레이어 노이즈를 한 도면에 혼합. 단일 요인 도면을 전부 통과해도 여기서 상호작용 결함이 드러날 수 있다.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 24,
+    "edgeCount": 23,
+    "nodes": [
+      {
+        "name": "VCB-MX",
+        "type": "breaker",
+        "x": 700,
+        "y": 1200
+      },
+      {
+        "name": "TR-MX",
+        "type": "transformer",
+        "x": 700,
+        "y": 1080
+      },
+      {
+        "name": "CUBICLE-MX",
+        "type": "panel",
+        "x": 700,
+        "y": 960
+      },
+      {
+        "name": "BUSBAR-MX",
+        "type": "bus",
+        "x": 700,
+        "y": 850
+      },
+      {
+        "name": "DB-MX1",
+        "type": "panel",
+        "x": 160,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX1",
+        "type": "motor",
+        "x": 160,
+        "y": 570
+      },
+      {
+        "name": "DB-MX2",
+        "type": "panel",
+        "x": 280,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX2",
+        "type": "motor",
+        "x": 280,
+        "y": 570
+      },
+      {
+        "name": "DB-MX3",
+        "type": "panel",
+        "x": 400,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX3",
+        "type": "motor",
+        "x": 400,
+        "y": 570
+      },
+      {
+        "name": "DB-MX4",
+        "type": "panel",
+        "x": 520,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX4",
+        "type": "motor",
+        "x": 520,
+        "y": 570
+      },
+      {
+        "name": "DB-MX5",
+        "type": "panel",
+        "x": 640,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX5",
+        "type": "motor",
+        "x": 640,
+        "y": 570
+      },
+      {
+        "name": "DB-MX6",
+        "type": "panel",
+        "x": 760,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX6",
+        "type": "motor",
+        "x": 760,
+        "y": 570
+      },
+      {
+        "name": "DB-MX7",
+        "type": "panel",
+        "x": 880,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX7",
+        "type": "motor",
+        "x": 880,
+        "y": 570
+      },
+      {
+        "name": "DB-MX8",
+        "type": "panel",
+        "x": 1000,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX8",
+        "type": "motor",
+        "x": 1000,
+        "y": 570
+      },
+      {
+        "name": "DB-MX9",
+        "type": "panel",
+        "x": 1120,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX9",
+        "type": "motor",
+        "x": 1120,
+        "y": 570
+      },
+      {
+        "name": "DB-MX10",
+        "type": "panel",
+        "x": 1240,
+        "y": 700
+      },
+      {
+        "name": "MTR-MX10",
+        "type": "motor",
+        "x": 1240,
+        "y": 570
+      }
+    ],
+    "edges": [
+      {
+        "from": "VCB-MX",
+        "to": "TR-MX"
+      },
+      {
+        "from": "TR-MX",
+        "to": "CUBICLE-MX"
+      },
+      {
+        "from": "CUBICLE-MX",
+        "to": "BUSBAR-MX"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX1"
+      },
+      {
+        "from": "DB-MX1",
+        "to": "MTR-MX1"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX2"
+      },
+      {
+        "from": "DB-MX2",
+        "to": "MTR-MX2"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX3"
+      },
+      {
+        "from": "DB-MX3",
+        "to": "MTR-MX3"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX4"
+      },
+      {
+        "from": "DB-MX4",
+        "to": "MTR-MX4"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX5"
+      },
+      {
+        "from": "DB-MX5",
+        "to": "MTR-MX5"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX6"
+      },
+      {
+        "from": "DB-MX6",
+        "to": "MTR-MX6"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX7"
+      },
+      {
+        "from": "DB-MX7",
+        "to": "MTR-MX7"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX8"
+      },
+      {
+        "from": "DB-MX8",
+        "to": "MTR-MX8"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX9"
+      },
+      {
+        "from": "DB-MX9",
+        "to": "MTR-MX9"
+      },
+      {
+        "from": "BUSBAR-MX",
+        "to": "DB-MX10"
+      },
+      {
+        "from": "DB-MX10",
+        "to": "MTR-MX10"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

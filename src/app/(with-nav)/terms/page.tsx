@@ -32,7 +32,7 @@ const SECTIONS = [
   },
   {
     title: '제4조 (BYOK 정책)',
-    body: 'ESVA는 BYOK(Bring Your Own Key) 방식을 채택합니다. 사용자가 입력한 API 키는 브라우저의 로컬 스토리지에 AES-GCM으로 암호화되어 저장되며, ESVA 서버로 전송되지 않습니다. 키 관리의 책임은 사용자에게 있습니다.',
+    body: 'ESVA는 BYOK(Bring Your Own Key) 방식을 지원합니다. 저장된 키 본문은 브라우저 IndexedDB에 AES-GCM으로 암호화되며, 복호화 키는 내보낼 수 없는 브라우저 CryptoKey로 관리됩니다. AI 요청 시 복호화된 키가 TLS를 통해 ESVA 서버로 전달되어 선택한 제공자 요청에 사용될 수 있습니다. 키 폐기와 제공자 과금 관리는 사용자 책임입니다.',
   },
   {
     title: '제5조 (면책)',
@@ -62,7 +62,7 @@ export default function TermsPage() {
             이용약관
           </h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            최종 수정일: 2025-04-01
+            최종 수정일: 2026-07-20
           </p>
         </div>
       </header>

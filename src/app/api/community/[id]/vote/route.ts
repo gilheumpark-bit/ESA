@@ -31,7 +31,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Rate limit (R4 stub repair).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'community');
     if (blocked) return blocked;
 
@@ -85,7 +85,7 @@ export async function POST(
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Vote POST]', message);
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-7072', message } },
+      { success: false, error: { code: 'ESVA-7072', message: '투표를 반영하지 못했습니다.' } },
       { status: 500 },
     );
   }

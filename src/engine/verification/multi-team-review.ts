@@ -109,13 +109,19 @@ export async function runMultiTeamReview(
       const checks = runDomainCheck(team.domain, params);
       const goodPatterns = detectByCategory(team.goodPatternCategory, params);
 
-      const passed = checks.filter(c => c.passed).length;
-      const total = checks.length;
-      const score = total > 0 ? Math.round((passed / total) * 100) : 100;
+      const scored = checks.filter(c => c.outcome === 'pass' || c.outcome === 'fail');
+      const passed = scored.filter(c => c.passed).length;
+      const total = scored.length;
+      // 채점 가능 항목 0(전부 needs-data/na) → 0점 (빈 데이터 만점 금지)
+      const score = total > 0 ? Math.round((passed / total) * 100) : 0;
 
       const findings = checks
-        .filter(c => !c.passed)
-        .map(c => `[${c.severity.toUpperCase()}] ${c.title}`);
+        .filter(c => c.outcome === 'fail' || c.outcome === 'needs-data')
+        .map(c =>
+          c.outcome === 'needs-data'
+            ? `[NEEDS-DATA] ${c.title}`
+            : `[${c.severity.toUpperCase()}] ${c.title}`,
+        );
 
       const commendations = goodPatterns
         .filter(gp => gp.detected)
@@ -137,9 +143,10 @@ export async function runMultiTeamReview(
 
   // 집계
   const allChecks = teamResults.flatMap(t => t.checks);
-  const totalChecks = allChecks.length;
-  const passedChecks = allChecks.filter(c => c.passed).length;
-  const overallPassRate = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 100;
+  const scoredAll = allChecks.filter(c => c.outcome === 'pass' || c.outcome === 'fail');
+  const totalChecks = scoredAll.length;
+  const passedChecks = scoredAll.filter(c => c.outcome === 'pass').length;
+  const overallPassRate = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
 
   const totalBonus = teamResults.reduce(
     (sum, t) => sum + t.goodPatterns.filter(gp => gp.detected).reduce((s, gp) => s + gp.bonus, 0), 0,

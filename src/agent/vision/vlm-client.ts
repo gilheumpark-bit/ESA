@@ -1,7 +1,7 @@
 /**
  * VLM Client — 실제 비전 모델 API 호출
  * ---------------------------------------
- * Gemini 2.5 Flash Vision / OpenAI GPT-4.1 Vision 실 연동.
+ * Gemini / OpenAI / Anthropic Vision 실 연동.
  * BYOK 기반 — 사용자의 API 키로 호출.
  *
  * PART 1: Provider abstraction + config
@@ -12,12 +12,14 @@
  */
 
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
+import { ROLE_PROMPTS } from './role-prompts';
+import { parseRoleReviewData, type RoleReviewData } from './review-types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Provider Abstraction + Configurable Params
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type VLMProvider = 'gemini' | 'openai';
+export type VLMProvider = 'gemini' | 'openai' | 'claude';
 
 export interface VLMOptions {
   provider: VLMProvider;
@@ -27,6 +29,10 @@ export interface VLMOptions {
   temperature?: number;
   /** 최대 재시도 횟수 (기본 2) */
   maxRetries?: number;
+  /** 호출 취소를 위한 외부 signal */
+  signal?: AbortSignal;
+  /** 요청별 제한 시간(ms, 기본 30초) */
+  timeoutMs?: number;
 }
 
 export interface VLMAnalysisResult {
@@ -39,21 +45,43 @@ export interface VLMAnalysisResult {
   retryCount?: number;
 }
 
+const ROLE_PROMPT_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
+export type VLMReviewRole = (typeof ROLE_PROMPT_ROLES)[number];
+
+export interface VLMRoleAnalysisResult {
+  role: VLMReviewRole;
+  data: RoleReviewData;
+  rawText: string;
+  model: string;
+  durationMs: number;
+  retryCount: number;
+}
+
 /** VLM 호출 설정 — 하드코딩 대신 중앙 관리 */
 const VLM_CONFIG = {
   gemini: {
-    defaultModel: 'gemini-2.5-flash',
+    defaultModel: 'gemini-3.5-flash',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
   },
   openai: {
-    defaultModel: 'gpt-4.1',
+    defaultModel: 'gpt-5.6-terra',
     endpoint: 'https://api.openai.com/v1/chat/completions',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
   },
+  claude: {
+    defaultModel: 'claude-sonnet-5',
+    endpoint: 'https://api.anthropic.com/v1/messages',
+    defaultTemp: 0.1,
+    defaultMaxTokens: 8192,
+  },
 } as const;
+
+export function resolveVlmModel(provider: VLMProvider, requested?: string): string {
+  return requested ?? VLM_CONFIG[provider].defaultModel;
+}
 
 const SLD_VISION_PROMPT = `You are an expert electrical engineer analyzing a single-line diagram (SLD) / schematic.
 
@@ -62,7 +90,7 @@ Extract ALL electrical components and connections from this drawing section.
 Return ONLY valid JSON (no markdown):
 {
   "components": [
-    {"id": "unique-id", "type": "transformer|breaker|motor|panel|bus|generator|load|cable_tray|switch|fuse|spd|ground|meter|contactor|vfd|ct|vt|relay|rcd|capacitor|reactor|pv_module|pv_inverter|ev_charger|ups|ats|pdu|battery", "label": "component label/name", "rating": "rating if visible (e.g. 500kVA, 100A)", "x": approx_x_position, "y": approx_y_position, "confidence": 0.0-1.0}
+    {"id": "unique-id", "type": "transformer|breaker|motor|panel|bus|generator|load|cable_tray|switch|fuse|spd|ground|meter|contactor|vfd|ct|vt|relay|rcd|capacitor|reactor|pv_module|pv_inverter|ev_charger|ups|ats|pdu|battery", "label": "component label/name", "rating": "rating if visible (e.g. 500kVA, 100A)", "x": 0_to_1000, "y": 0_to_1000, "confidence": 0.0-1.0}
   ],
   "connections": [
     {"from": "component-id-1", "to": "component-id-2", "cableType": "cable spec if visible", "length": meters_if_shown}
@@ -73,8 +101,25 @@ Rules:
 - Include EVERY symbol, text annotation, and connection line
 - Use standardized type names from the list above
 - Rating must include units (kVA, A, V, kW, mm², AWG)
+- x and y are required integers from 0 to 1000, relative to this cropped image; origin is top-left
+- Only include connection length when a numeric length with a unit is explicitly printed in the crop
+- Convert an explicitly printed connection length to meters; never infer length from pixels or spacing
 - confidence: 1.0=certain, 0.5=uncertain
 - If text is Korean, preserve as-is in label field`;
+
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 1024 * 1024;
+const DEFAULT_TIMEOUT_MS = 30_000;
+const MAX_TIMEOUT_MS = 120_000;
+
+interface RawProviderJsonResult {
+  rawText: string;
+  model: string;
+}
+
+interface RawVLMJsonResult extends RawProviderJsonResult {
+  retryCount: number;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — Retry Logic + Key Validation
@@ -94,15 +139,46 @@ function validateApiKey(provider: VLMProvider, apiKey: string): void {
   if (provider === 'gemini' && apiKey.length < 20) {
     throw new Error(`[VLM] Gemini API key appears too short. 키를 다시 확인하세요.`);
   }
+  if (provider === 'claude' && apiKey.length < 20) {
+    throw new Error(`[VLM] Anthropic API key appears too short. 키를 다시 확인하세요.`);
+  }
 }
 
 /**
  * 지수 백오프 재시도.
  * 429 (Rate Limit) / 5xx (Server Error) 에서만 재시도.
  */
+class ProviderHttpError extends Error {
+  constructor(
+    readonly provider: string,
+    readonly status: number,
+    message: string,
+  ) {
+    super(`${provider} Vision API error ${status}: ${message}`);
+    this.name = 'ProviderHttpError';
+  }
+}
+
+function retryDelay(delayMs: number, signal: AbortSignal | undefined): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new Error('[VLM] request aborted.'));
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      signal?.removeEventListener('abort', onAbort);
+      reject(new Error('[VLM] request aborted.'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries: number = 2,
+  signal?: AbortSignal,
 ): Promise<{ result: T; retryCount: number }> {
   let lastError: Error | null = null;
 
@@ -112,10 +188,7 @@ async function withRetry<T>(
       return { result, retryCount: attempt };
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-
-      // 재시도 불가능한 에러 (401, 403) → 즉시 throw
-      const errMsg = lastError.message;
-      if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('invalid_api_key')) {
+      if (!isRetryableProviderError(lastError)) {
         throw lastError;
       }
 
@@ -124,108 +197,371 @@ async function withRetry<T>(
 
       // 지수 백오프: 1s, 2s, 4s
       const delay = Math.pow(2, attempt) * 1000;
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await retryDelay(delay, signal);
     }
   }
 
   throw lastError ?? new Error('[VLM] Unknown error after retries');
 }
 
+function isRetryableProviderError(error: Error): boolean {
+  return error instanceof ProviderHttpError
+    && (error.status === 429 || (error.status >= 500 && error.status <= 599));
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 3 — Gemini Vision
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function analyzeWithGemini(
-  imageBase64: string,
-  mimeType: string,
-  apiKey: string,
-  model?: string,
-  temperature?: number,
-  maxTokens?: number,
-): Promise<VLMAnalysisResult> {
-  const start = Date.now();
-  const cfg = VLM_CONFIG.gemini;
-  const finalModel = model ?? cfg.defaultModel;
-  const url = `${cfg.endpoint}/${finalModel}:generateContent?key=${apiKey}`;
+function validateImageInput(imageBuffer: ArrayBuffer, mimeType: string): void {
+  if (!(imageBuffer instanceof ArrayBuffer) || imageBuffer.byteLength < 1 || imageBuffer.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error('[VLM] image input exceeds the allowed byte limit.');
+  }
+  if (typeof mimeType !== 'string' || mimeType.trim().length === 0 || mimeType.length > 128) {
+    throw new Error('[VLM] image MIME type must be a bounded string.');
+  }
+}
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: SLD_VISION_PROMPT },
-          { inline_data: { mime_type: mimeType, data: imageBase64 } },
-        ],
-      }],
-      generationConfig: {
-        temperature: temperature ?? cfg.defaultTemp,
-        maxOutputTokens: maxTokens ?? cfg.defaultMaxTokens,
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
+function validateTimeout(timeoutMs: number | undefined): number {
+  const value = timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_TIMEOUT_MS) {
+    throw new Error('[VLM] timeout must be a positive bounded integer.');
+  }
+  return value;
+}
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+function sanitizeErrorText(value: unknown, apiKey: string, limit = 300): string {
+  const message = value instanceof Error ? value.message : String(value);
+  return message.split(apiKey).join('[REDACTED]').slice(0, limit);
+}
+
+function responseByteLength(text: string): number {
+  if (typeof Buffer !== 'undefined') return Buffer.byteLength(text, 'utf8');
+  return new TextEncoder().encode(text).byteLength;
+}
+
+function cancelReaderBestEffort(reader: ReadableStreamDefaultReader<Uint8Array>): void {
+  try {
+    void Promise.resolve(reader.cancel()).catch(() => undefined);
+  } catch {
+    // Stream cancellation must not delay or replace the authoritative caller error.
+  }
+}
+
+interface RequestScope {
+  signal: AbortSignal;
+  error(): Error;
+  close(): void;
+}
+
+function openRequestScope(options: VLMOptions): RequestScope {
+  if (options.signal?.aborted) {
+    throw new Error('[VLM] request aborted.');
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, validateTimeout(options.timeoutMs));
+  const forwardAbort = () => controller.abort();
+  options.signal?.addEventListener('abort', forwardAbort, { once: true });
+
+  return {
+    signal: controller.signal,
+    error: () => new Error(timedOut ? '[VLM] request timed out.' : '[VLM] request aborted.'),
+    close: () => {
+      clearTimeout(timeout);
+      options.signal?.removeEventListener('abort', forwardAbort);
+    },
+  };
+}
+
+async function readResponseText(response: Response, scope: RequestScope): Promise<string> {
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    throw new Error('[VLM] provider response exceeds the allowed byte limit.');
+  }
+  if (!response.body) {
+    throw new Error('[VLM] provider response must include a readable bounded stream.');
   }
 
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}';
+  const reader = response.body.getReader();
+  let rejectAbort: ((reason: Error) => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  let abortHandled = false;
+  const abortReader = () => {
+    if (abortHandled) return;
+    abortHandled = true;
+    rejectAbort?.(scope.error());
+    cancelReaderBestEffort(reader);
+  };
+  scope.signal.addEventListener('abort', abortReader, { once: true });
+  if (scope.signal.aborted) abortReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let preservingError = false;
+  try {
+    while (true) {
+      const { done, value } = await Promise.race([reader.read(), aborted]);
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        preservingError = true;
+        cancelReaderBestEffort(reader);
+        throw new Error('[VLM] provider response exceeds the allowed byte limit.');
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    preservingError = true;
+    if (scope.signal.aborted) throw scope.error();
+    throw error;
+  } finally {
+    scope.signal.removeEventListener('abort', abortReader);
+    try {
+      reader.releaseLock();
+    } catch (releaseError) {
+      if (!preservingError) throw releaseError;
+    }
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder().decode(bytes);
+  if (responseByteLength(text) > MAX_RESPONSE_BYTES) {
+    throw new Error('[VLM] provider response exceeds the allowed byte limit.');
+  }
+  return text;
+}
 
-  return parseVLMResponse(text, finalModel, Date.now() - start);
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  scope: RequestScope,
+  options: VLMOptions,
+): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: scope.signal });
+  } catch (error) {
+    if (scope.signal.aborted) throw scope.error();
+    throw new Error(sanitizeErrorText(error, options.apiKey));
+  }
+}
+
+async function withRequestScope<T>(options: VLMOptions, request: (scope: RequestScope) => Promise<T>): Promise<T> {
+  const scope = openRequestScope(options);
+  try {
+    return await request(scope);
+  } finally {
+    scope.close();
+  }
+}
+
+function parseProviderPayload(provider: string, raw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') throw new Error('response is not an object');
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error(`${provider} Vision API returned invalid JSON.`);
+  }
+}
+
+function recordValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+async function requestGeminiJson(
+  imageBase64: string,
+  mimeType: string,
+  prompt: string,
+  options: VLMOptions,
+): Promise<RawProviderJsonResult> {
+  const cfg = VLM_CONFIG.gemini;
+  const model = resolveVlmModel('gemini', options.model);
+  return withRequestScope(options, async (scope) => {
+    const response = await fetchWithTimeout(`${cfg.endpoint}/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.apiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
+        generationConfig: {
+          ...(model === cfg.defaultModel ? {} : { temperature: options.temperature ?? cfg.defaultTemp }),
+          maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
+          responseMimeType: 'application/json',
+        },
+      }),
+    }, scope, options);
+    const raw = await readResponseText(response, scope);
+    if (!response.ok) throw new ProviderHttpError('Gemini', response.status, sanitizeErrorText(raw, options.apiKey));
+    const data = parseProviderPayload('Gemini', raw);
+    const candidate = Array.isArray(data.candidates) ? recordValue(data.candidates[0]) : undefined;
+    const content = candidate ? recordValue(candidate.content) : undefined;
+    const firstPart = content && Array.isArray(content.parts) ? recordValue(content.parts[0]) : undefined;
+    const rawText = firstPart?.text;
+    if (typeof rawText !== 'string') throw new Error('Gemini Vision API returned no text response.');
+    return { rawText, model };
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 4 — OpenAI Vision
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function analyzeWithOpenAI(
+async function requestOpenAIJson(
   imageBase64: string,
   mimeType: string,
-  apiKey: string,
-  model?: string,
-  temperature?: number,
-  maxTokens?: number,
-): Promise<VLMAnalysisResult> {
-  const start = Date.now();
+  prompt: string,
+  options: VLMOptions,
+): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.openai;
-  const finalModel = model ?? cfg.defaultModel;
+  const model = resolveVlmModel('openai', options.model);
+  // GPT-5 계열은 임의 temperature를 지원하지 않을 수 있다. 최신 Chat
+  // Completions 규격의 max_completion_tokens를 사용하고, 구형 모델에만
+  // 요청자가 지정한 temperature를 전달한다.
+  const generationControls = model.startsWith('gpt-5')
+    ? {}
+    : { temperature: options.temperature ?? cfg.defaultTemp };
 
-  const response = await fetch(cfg.endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: finalModel,
-      messages: [
-        { role: 'system', content: SLD_VISION_PROMPT },
-        {
+  return withRequestScope(options, async (scope) => {
+    const response = await fetchWithTimeout(cfg.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: prompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' } },
+              { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
+            ],
+          },
+        ],
+        ...generationControls,
+        max_completion_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
+        response_format: { type: 'json_object' },
+      }),
+    }, scope, options);
+    const raw = await readResponseText(response, scope);
+    if (!response.ok) throw new ProviderHttpError('OpenAI', response.status, sanitizeErrorText(raw, options.apiKey));
+    const data = parseProviderPayload('OpenAI', raw);
+    const choice = Array.isArray(data.choices) ? recordValue(data.choices[0]) : undefined;
+    const message = choice ? recordValue(choice.message) : undefined;
+    const rawText = message?.content;
+    if (typeof rawText !== 'string') throw new Error('OpenAI Vision API returned no text response.');
+    return { rawText, model };
+  });
+}
+
+async function requestClaudeJson(
+  imageBase64: string,
+  mimeType: string,
+  prompt: string,
+  options: VLMOptions,
+): Promise<RawProviderJsonResult> {
+  const cfg = VLM_CONFIG.claude;
+  const model = resolveVlmModel('claude', options.model);
+  const generationControls = model.startsWith('claude-sonnet-5')
+    ? {}
+    : { temperature: options.temperature ?? cfg.defaultTemp };
+  return withRequestScope(options, async (scope) => {
+    const response = await fetchWithTimeout(cfg.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': options.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
+        ...generationControls,
+        system: prompt,
+        messages: [{
           role: 'user',
           content: [
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}`, detail: 'high' } },
+            { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
             { type: 'text', text: 'Analyze this electrical drawing. Return JSON only.' },
           ],
-        },
-      ],
-      temperature: temperature ?? cfg.defaultTemp,
-      max_tokens: maxTokens ?? cfg.defaultMaxTokens,
-      response_format: { type: 'json_object' },
-    }),
+        }],
+      }),
+    }, scope, options);
+    const raw = await readResponseText(response, scope);
+    if (!response.ok) throw new ProviderHttpError('Anthropic', response.status, sanitizeErrorText(raw, options.apiKey));
+    const data = parseProviderPayload('Anthropic', raw);
+    const rawText = Array.isArray(data.content)
+      ? data.content.reduce((text, part) => {
+        const item = recordValue(part);
+        return item?.type === 'text' && typeof item.text === 'string' ? text + item.text : text;
+      }, '')
+      : '';
+    if (!rawText) throw new Error('Anthropic API returned no text response.');
+    return { rawText, model };
   });
+}
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenAI Vision API error ${response.status}: ${errText.slice(0, 300)}`);
+function extractJson(rawText: string): string {
+  const trimmed = rawText.trim();
+  const fenced = trimmed.match(/^\x60{3}(?:json)?\s*([\s\S]*?)\s*\x60{3}$/i);
+  return fenced?.[1] ?? trimmed;
+}
+
+function retryLimit(value: number | undefined): number {
+  const limit = value ?? 2;
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > 5) {
+    throw new Error('[VLM] maxRetries must be a bounded non-negative integer.');
   }
+  return limit;
+}
 
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content ?? '{}';
+function assertRolePromptRole(role: unknown): asserts role is VLMReviewRole {
+  if (!ROLE_PROMPT_ROLES.includes(role as VLMReviewRole)) {
+    throw new Error('[VLM] unsupported role prompt.');
+  }
+}
 
-  return parseVLMResponse(text, finalModel, Date.now() - start);
+async function callProviderForJson(
+  imageBuffer: ArrayBuffer,
+  mimeType: string,
+  prompt: string,
+  options: VLMOptions,
+): Promise<RawVLMJsonResult> {
+  if (options.signal?.aborted) {
+    throw new Error('[VLM] request aborted.');
+  }
+  validateApiKey(options.provider, options.apiKey);
+  validateImageInput(imageBuffer, mimeType);
+  const imageBase64 = arrayBufferToBase64(imageBuffer);
+  const request = () => {
+    switch (options.provider) {
+      case 'gemini':
+        return requestGeminiJson(imageBase64, mimeType, prompt, options);
+      case 'openai':
+        return requestOpenAIJson(imageBase64, mimeType, prompt, options);
+      case 'claude':
+        return requestClaudeJson(imageBase64, mimeType, prompt, options);
+    }
+  };
+
+  try {
+    const { result, retryCount } = await withRetry(request, retryLimit(options.maxRetries), options.signal);
+    return { ...result, retryCount };
+  } catch (error) {
+    throw new Error(sanitizeErrorText(error, options.apiKey));
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -234,30 +570,70 @@ async function analyzeWithOpenAI(
 
 /**
  * VLM JSON 응답 파싱.
- * 형식 불일치 시 graceful 빈 결과 반환.
+ * 형식 불일치·범위 이탈·끊긴 연결은 계산 근거로 승격하지 않고 제거한다.
  */
-function parseVLMResponse(
+export function parseVLMResponse(
   rawText: string,
   model: string,
   durationMs: number,
 ): VLMAnalysisResult {
   try {
-    const parsed = JSON.parse(rawText);
-    const components: ExtractedComponent[] = (parsed.components ?? []).map((c: Record<string, unknown>, i: number) => ({
-      id: (c.id as string) ?? `vlm-${i}`,
-      type: (c.type as string) ?? 'unknown',
-      label: (c.label as string) ?? '',
-      rating: c.rating as string | undefined,
-      position: (c.x != null && c.y != null) ? { x: Number(c.x), y: Number(c.y) } : undefined,
-      confidence: Number(c.confidence ?? 0.7),
-    }));
+    const parsed: unknown = JSON.parse(rawText);
+    if (!parsed || typeof parsed !== 'object') throw new Error('VLM 응답은 객체여야 합니다.');
+    const record = parsed as Record<string, unknown>;
+    if ((record.components != null && !Array.isArray(record.components)) ||
+        (record.connections != null && !Array.isArray(record.connections))) {
+      throw new Error('VLM components/connections는 배열이어야 합니다.');
+    }
 
-    const connections: ExtractedConnection[] = (parsed.connections ?? []).map((conn: Record<string, unknown>) => ({
-      from: String(conn.from ?? ''),
-      to: String(conn.to ?? ''),
-      cableType: conn.cableType as string | undefined,
-      length: conn.length != null ? Number(conn.length) : undefined,
-    }));
+    const componentRows = (record.components ?? []) as unknown[];
+    const components: ExtractedComponent[] = [];
+    const ids = new Set<string>();
+    for (const row of componentRows.slice(0, 2_000)) {
+      if (!row || typeof row !== 'object') continue;
+      const c = row as Record<string, unknown>;
+      const id = safeText(c.id, 128);
+      const type = safeText(c.type, 64);
+      const x = finiteNumber(c.x);
+      const y = finiteNumber(c.y);
+      if (!id || ids.has(id) || !type || x == null || y == null || x < 0 || x > 1000 || y < 0 || y > 1000) continue;
+      ids.add(id);
+      const rawConfidence = finiteNumber(c.confidence) ?? 0.5;
+      const rating = safeText(c.rating, 256);
+      components.push({
+        id,
+        type,
+        label: safeText(c.label, 256) ?? type,
+        ...(rating ? { rating } : {}),
+        position: { x, y },
+        confidence: Math.max(0, Math.min(1, rawConfidence)),
+      });
+    }
+
+    const connectionRows = (record.connections ?? []) as unknown[];
+    const connections: ExtractedConnection[] = [];
+    const seenConnections = new Set<string>();
+    for (const row of connectionRows.slice(0, 5_000)) {
+      if (!row || typeof row !== 'object') continue;
+      const conn = row as Record<string, unknown>;
+      const from = safeText(conn.from, 128);
+      const to = safeText(conn.to, 128);
+      const cableType = safeText(conn.cableType, 256);
+      if (!from || !to || from === to || !ids.has(from) || !ids.has(to)) continue;
+      const key = `${from}\u0000${to}\u0000${cableType ?? ''}`;
+      if (seenConnections.has(key)) continue;
+      seenConnections.add(key);
+      const rawLength = finiteNumber(conn.length);
+      const length = rawLength != null && rawLength > 0 && rawLength <= 1_000_000
+        ? rawLength
+        : undefined;
+      connections.push({
+        from,
+        to,
+        ...(cableType ? { cableType } : {}),
+        ...(length != null ? { length, unit: 'm' } : {}),
+      });
+    }
 
     const avgConf = components.length > 0
       ? components.reduce((s, c) => s + c.confidence, 0) / components.length
@@ -267,6 +643,17 @@ function parseVLMResponse(
   } catch {
     return { components: [], connections: [], rawText, confidence: 0, model, durationMs };
   }
+}
+
+function safeText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  if (!normalized || normalized.length > maxLength) return undefined;
+  return normalized;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -297,25 +684,30 @@ export async function analyzeDrawingWithVLM(
   mimeType: string,
   options: VLMOptions,
 ): Promise<VLMAnalysisResult> {
-  // 1) 키 검증
-  validateApiKey(options.provider, options.apiKey);
+  const started = Date.now();
+  const response = await callProviderForJson(imageBuffer, mimeType, SLD_VISION_PROMPT, options);
+  return {
+    ...parseVLMResponse(response.rawText, response.model, Date.now() - started),
+    retryCount: response.retryCount,
+  };
+}
 
-  // 2) Base64 변환
-  const base64 = arrayBufferToBase64(imageBuffer);
-
-  // 3) 재시도 래핑
-  const maxRetries = options.maxRetries ?? 2;
-
-  const { result, retryCount } = await withRetry(async () => {
-    switch (options.provider) {
-      case 'gemini':
-        return analyzeWithGemini(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
-      case 'openai':
-        return analyzeWithOpenAI(base64, mimeType, options.apiKey, options.model, options.temperature, options.maxTokens);
-      default:
-        throw new Error(`Unsupported VLM provider: ${options.provider}`);
-    }
-  }, maxRetries);
-
-  return { ...result, retryCount };
+export async function analyzeDrawingRole(
+  imageBuffer: ArrayBuffer,
+  mimeType: string,
+  role: VLMReviewRole,
+  options: VLMOptions,
+): Promise<VLMRoleAnalysisResult> {
+  assertRolePromptRole(role);
+  const started = Date.now();
+  const response = await callProviderForJson(imageBuffer, mimeType, ROLE_PROMPTS[role], options);
+  const parsed = JSON.parse(extractJson(response.rawText));
+  return {
+    role,
+    data: parseRoleReviewData(role, parsed),
+    rawText: response.rawText,
+    model: response.model,
+    durationMs: Date.now() - started,
+    retryCount: response.retryCount,
+  };
 }

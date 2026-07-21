@@ -41,12 +41,12 @@ function isValidLang(l: unknown): l is ExportLang {
 // PART 2 -- Receipt loader (Supabase)
 // ---------------------------------------------------------------------------
 
-async function loadReceipt(receiptId: string) {
+async function loadReceipt(receiptId: string, requesterId: string) {
   // Dynamic import to avoid bundling Supabase on edge when not needed
   const { createClient } = await import('@supabase/supabase-js');
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('ESVA-5001: Supabase configuration missing');
@@ -58,6 +58,7 @@ async function loadReceipt(receiptId: string) {
     .from('calculation_receipts')
     .select('*')
     .eq('id', receiptId)
+    .eq('user_id', requesterId)
     .single();
 
   if (error || !data) {
@@ -73,7 +74,7 @@ async function loadReceipt(receiptId: string) {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    // Rate limit (R4 stub repair: applyRateLimit was imported but never invoked).
+    // Per-route abuse limit.
     const blocked = applyRateLimit(req, 'default');
     if (blocked) {
       return NextResponse.json(
@@ -120,20 +121,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         );
       }
       try {
-        const receiptData = await loadReceipt(body.receiptId!) as
-          import('@/engine/receipt/types').Receipt & { user_id?: string };
-        if (receiptData.user_id && receiptData.user_id !== requesterId) {
-          return NextResponse.json(
-            { error: 'ESVA-4030: You do not have access to this receipt' },
-            { status: 403 },
-          );
-        }
+        const receiptData = await loadReceipt(body.receiptId!, requesterId) as
+          import('@/engine/receipt/types').Receipt & { user_id: string };
         receipt = receiptData;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Unknown error';
+        console.error('[Export API] Stored receipt load failed:', err);
         return NextResponse.json(
-          { error: message },
-          { status: 404 },
+          {
+            error: message.startsWith('ESVA-5001')
+              ? 'Receipt storage is unavailable'
+              : 'Receipt not found',
+          },
+          { status: message.startsWith('ESVA-5001') ? 503 : 404 },
         );
       }
     }
@@ -190,9 +190,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
   } catch (err) {
     console.error('[Export API] Unhandled error:', err);
-    const message = err instanceof Error ? err.message : 'Internal server error';
     return NextResponse.json(
-      { error: `ESA-5099: ${message}` },
+      { error: 'ESA-5099: Export could not be generated' },
       { status: 500 },
     );
   }

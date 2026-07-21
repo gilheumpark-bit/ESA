@@ -143,7 +143,7 @@ const PATTERNS: GoodPattern[] = [
 
   // ── 문서화/추적성 ──
   {
-    id: 'GP-D01', title: 'Receipt 공증 (IPFS)', category: 'documentation', bonus: 3,
+    id: 'GP-D01', title: 'Receipt IPFS 타임스탬프 기록', category: 'documentation', bonus: 3,
     detect: (p) => typeof p['receiptCID'] === 'string' && (p['receiptCID'] as string).length > 0,
   },
   {

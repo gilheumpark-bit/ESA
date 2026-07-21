@@ -39,10 +39,7 @@ function getFirebaseConfig() {
 
 function validateConfig(config: ReturnType<typeof getFirebaseConfig>): void {
   if (!config.apiKey || !config.authDomain || !config.projectId) {
-    throw new Error(
-      '[ESVA] Firebase not configured. Set NEXT_PUBLIC_FIREBASE_API_KEY, ' +
-      'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN, and NEXT_PUBLIC_FIREBASE_PROJECT_ID.',
-    );
+    throw new Error('로그인 서비스를 사용할 수 없습니다. 배포 관리자에게 인증 구성을 확인해 주세요.');
   }
 }
 

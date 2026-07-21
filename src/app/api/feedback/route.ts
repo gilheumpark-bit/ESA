@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { createHmac } from 'crypto';
 
 // ─── PART 1: Request Types ─────────────────────────────────────
 
@@ -80,8 +81,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (!saved) {
-      // Non-fatal: log but still return success (feedback is best-effort)
-      console.warn('[ESVA /api/feedback] Failed to save to Supabase — logged locally');
+      console.warn('[ESVA /api/feedback] Feedback was not persisted');
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-4503', message: 'Feedback storage is temporarily unavailable' } },
+        { status: 503 },
+      );
     }
 
     return NextResponse.json(
@@ -116,7 +120,7 @@ async function saveFeedbackToSupabase(record: FeedbackRecord): Promise<boolean> 
     const { createClient } = await import('@supabase/supabase-js');
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.warn('[ESVA /api/feedback] Supabase not configured');
@@ -145,12 +149,9 @@ async function saveFeedbackToSupabase(record: FeedbackRecord): Promise<boolean> 
   }
 }
 
-/** Hash IP for privacy — store hash, not raw IP */
-function hashIp(ip: string): string {
-  let hash = 0;
-  for (let i = 0; i < ip.length; i++) {
-    const char = ip.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
-  }
-  return `ip_${Math.abs(hash).toString(36)}`;
+/** Keyed hash prevents offline reversal of small IPv4 address spaces. */
+function hashIp(ip: string): string | null {
+  const secret = process.env.FEEDBACK_IP_HASH_SECRET ?? process.env.INTERNAL_API_SECRET;
+  if (!secret) return null;
+  return createHmac('sha256', secret).update(ip).digest('hex');
 }

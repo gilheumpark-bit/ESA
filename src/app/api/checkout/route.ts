@@ -10,29 +10,20 @@
 
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
-import { getStripeSession, sanitizeStripeReturnBase, ESVA_PRICE_IDS } from '@/lib/stripe';
+import { getStripeSession } from '@/lib/stripe';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { getBillingStatus, isBillingPlanKey, type BillingPlanKey } from '@/lib/billing';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
 interface CheckoutRequestBody {
-  priceId: string;
-  returnUrl: string;
+  plan: BillingPlanKey;
 }
 
 // ─── PART 2: Auth Extraction ────────────────────────────────────
 
 // Uses shared extractVerifiedUserId from @/lib/auth-helpers
-
-// ─── PART 3: Allowed Price IDs ──────────────────────────────────
-
-function isValidPriceId(priceId: string): boolean {
-  const validIds = Object.values(ESVA_PRICE_IDS).filter((id) => id.length > 0);
-  // Accept any Stripe price ID format (price_xxxxx or prod-env IDs)
-  if (validIds.length > 0 && validIds.includes(priceId)) return true;
-  // Fallback: accept standard Stripe price ID format during dev
-  return /^price_[a-zA-Z0-9]{10,}$/.test(priceId);
-}
 
 // ─── PART 4: POST Handler ───────────────────────────────────────
 
@@ -50,36 +41,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Parse body
-    const body: CheckoutRequestBody = await request.json();
-
-    if (!body.priceId || typeof body.priceId !== 'string') {
+    const origin = request.headers.get('origin');
+    if (!isRequestOriginAllowed(
+      origin,
+      request.url,
+      process.env.NEXT_PUBLIC_ALLOWED_ORIGINS,
+      request.headers.get('host'),
+      request.headers.get('x-forwarded-proto'),
+    )) {
       return NextResponse.json(
-        { success: false, error: { code: 'ESVA-2010', message: 'Missing priceId' } },
+        { success: false, error: { code: 'ESVA-1014', message: '허용되지 않은 요청 출처입니다.' } },
+        { status: 403 },
+      );
+    }
+
+    if (!getBillingStatus().enabled) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-2020', message: '결제 기능이 현재 비활성화되어 있습니다.' } },
+        { status: 503 },
+      );
+    }
+
+    const body = await request.json() as Partial<CheckoutRequestBody>;
+    if (!isBillingPlanKey(body.plan)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-2011', message: '지원하지 않는 결제 상품입니다.' } },
         { status: 400 },
       );
     }
 
-    if (!isValidPriceId(body.priceId)) {
-      return NextResponse.json(
-        { success: false, error: { code: 'ESVA-2011', message: 'Invalid price ID' } },
-        { status: 400 },
-      );
-    }
-
-    if (!body.returnUrl || typeof body.returnUrl !== 'string') {
-      return NextResponse.json(
-        { success: false, error: { code: 'ESVA-2012', message: 'Missing returnUrl' } },
-        { status: 400 },
-      );
-    }
-
-    // Sanitize return URL to prevent open-redirect
-    const hostOrigin = request.headers.get('origin') ?? 'https://esva.engineer';
-    const safeReturnUrl = sanitizeStripeReturnBase(body.returnUrl, hostOrigin);
+    const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL ?? 'https://esva.engineer';
+    const requestOrigin = origin ?? new URL(configuredOrigin).origin;
+    const safeReturnUrl = `${new URL(requestOrigin).origin}/settings`;
 
     // Create Stripe checkout session
-    const session = await getStripeSession(body.priceId, userId, safeReturnUrl);
+    const session = await getStripeSession(body.plan, userId, safeReturnUrl);
 
     return NextResponse.json(
       {

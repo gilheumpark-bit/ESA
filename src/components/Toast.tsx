@@ -8,7 +8,7 @@
  * PART 3: Public API: toast.success / toast.error / toast.info
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
 
@@ -38,7 +38,7 @@ function emitChange() {
 
 function addToast(type: ToastType, message: string) {
   const item: ToastItem = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: crypto.randomUUID(),
     type,
     message,
     createdAt: Date.now(),
@@ -59,16 +59,18 @@ function removeToast(id: string) {
 }
 
 function useToastStore(): ToastItem[] {
-  const [, forceUpdate] = useState(0);
-
-  useEffect(() => {
-    const listener = () => forceUpdate((n) => n + 1);
+  return useSyncExternalStore(
+    (listener) => {
     listeners.add(listener);
     return () => { listeners.delete(listener); };
-  }, []);
-
-  return toasts;
+    },
+    () => toasts,
+    () => EMPTY_TOASTS,
+  );
 }
+
+const EMPTY_TOASTS: ToastItem[] = [];
+const subscribeToClient = () => () => undefined;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — ToastContainer
@@ -120,11 +122,7 @@ function ToastItemView({ item, onClose }: { item: ToastItem; onClose: () => void
 
 export function ToastContainer() {
   const items = useToastStore();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribeToClient, () => true, () => false);
 
   const handleClose = useCallback((id: string) => {
     removeToast(id);

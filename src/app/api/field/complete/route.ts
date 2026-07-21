@@ -1,120 +1,114 @@
-/**
- * POST /api/field/complete
- *
- * 작업 완료 신고 API
- * - SHA-256 해시 감사 영수증 생성
- * - 관리자 알림 발송 (existing notifications system)
- *
- * PART 1: 요청 타입
- * PART 2: 핸들러
- */
+/** Authenticated field-completion receipt persistence and configured notification. */
 
 import { NextRequest } from 'next/server';
 import { createHash } from 'crypto';
 import { withApiHandler } from '@/lib/api/api-handler';
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 1 — 요청 타입
-// ═══════════════════════════════════════════════════════════════════════════════
+import { extractVerifiedUser } from '@/lib/auth-helpers';
+import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
+import { createNotification } from '@/lib/notifications';
 
 interface FieldCompleteRequest {
   sessionId: string;
   workSite: string;
   workerCount: number;
-  supervisorIds: string[];        // 알림 수신자 ID
-  checklistDone: string[];        // 완료된 체크 항목 ID 목록
+  checklistDone: string[];
   checklistTotal: number;
-  completedAt: string;            // ISO string
+  completedAt: string;
   note?: string;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 2 — 핸들러
-// ═══════════════════════════════════════════════════════════════════════════════
+function configuredRecipients(): string[] {
+  return [...new Set((process.env.FIELD_SOS_RECIPIENT_UIDS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean))].slice(0, 50);
+}
 
 export const POST = withApiHandler(
   { rateLimit: 'calculate', checkOrigin: true },
   async (req: NextRequest, ctx) => {
+    const user = await extractVerifiedUser(req);
+    if (!user) return ctx.error('ESVA-1001', '로그인이 필요합니다.', 401);
+
     const body = await req.json() as FieldCompleteRequest;
-
-    const {
-      sessionId,
-      workSite,
-      workerCount,
-      supervisorIds,
-      checklistDone,
-      checklistTotal,
-      completedAt,
-      note,
-    } = body;
-
-    if (!sessionId || !workSite || !completedAt) {
-      return ctx.error('ESA-4001', '필수 항목 누락: sessionId, workSite, completedAt', 400);
+    const { sessionId, workSite, workerCount, checklistDone, checklistTotal, completedAt, note } = body;
+    if (!/^[A-Za-z0-9_-]{8,128}$/.test(sessionId ?? '') || !workSite || !completedAt) {
+      return ctx.error('ESA-4001', '필수 항목이 누락되었거나 sessionId가 유효하지 않습니다.', 400);
+    }
+    if (!Number.isInteger(workerCount) || workerCount < 0 || workerCount > 10_000) {
+      return ctx.error('ESA-4001', '작업자 수가 유효하지 않습니다.', 400);
+    }
+    if (!Number.isInteger(checklistTotal) || checklistTotal < 0 || checklistTotal > 1_000 || !Array.isArray(checklistDone)) {
+      return ctx.error('ESA-4001', '체크리스트 값이 유효하지 않습니다.', 400);
+    }
+    const completionMs = Date.parse(completedAt);
+    if (!Number.isFinite(completionMs) || completionMs > Date.now() + 300_000) {
+      return ctx.error('ESA-4001', '완료 시각이 유효하지 않습니다.', 400);
     }
 
-    // ── SHA-256 감사 영수증 생성
-    const payload = JSON.stringify({
+    const safeSite = ctx.sanitize(workSite).slice(0, 200);
+    const uniqueDone = [...new Set(checklistDone.filter((id): id is string => typeof id === 'string'))]
+      .slice(0, checklistTotal)
+      .sort();
+    const payload = {
+      actorUid: user.uid,
       sessionId,
-      workSite: ctx.sanitize(workSite),
+      workSite: safeSite,
       workerCount,
-      checklistDone: checklistDone.sort(), // 결정론적 정렬
+      checklistDone: uniqueDone,
       checklistTotal,
-      completedAt,
-    });
+      completedAt: new Date(completionMs).toISOString(),
+    };
+    const hash = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 
-    const hash = createHash('sha256').update(payload).digest('hex');
+    await ensureUserProfile(user.uid, user.email);
+    const admin = getSupabaseAdmin();
+    const { data: event, error } = await admin
+      .from('field_safety_events')
+      .insert({
+        user_id: user.uid,
+        session_id: sessionId,
+        event_type: 'completed',
+        work_site: safeSite,
+        worker_count: workerCount,
+        occurred_at: payload.completedAt,
+        receipt_hash: hash,
+        payload,
+      })
+      .select('id, created_at')
+      .single();
+    if (error || !event) {
+      throw new Error(`ESVA-7802: 작업 완료 기록 저장 실패: ${error?.message ?? 'unknown error'}`);
+    }
 
     const receipt = {
+      eventId: event.id,
       hash,
       algorithm: 'SHA-256',
-      payload: JSON.parse(payload),
-      completionRate: checklistTotal > 0 ? Math.round((checklistDone.length / checklistTotal) * 100) : 0,
-      issuedAt: new Date().toISOString(),
-      standard: '2026-04-16 기준 산업안전보건법 시행규칙',
-      disclaimer: '본 영수증은 데이터 무결성을 증명하며, 법적 책임의 대체 수단이 아닙니다.',
+      payload,
+      completionRate: checklistTotal > 0 ? Math.round((uniqueDone.length / checklistTotal) * 100) : 0,
+      issuedAt: event.created_at,
+      disclaimer: '이 해시는 저장된 완료 기록의 변경 여부를 확인하는 값이며, 법적 책임이나 외부 공증을 대신하지 않습니다.',
     };
 
-    // ── 관리자 알림 발송 (in-app 알림 시스템 활용) — Promise.allSettled로 실패 추적
-    const notifResult: { sent: number; failed: number } = { sent: 0, failed: 0 };
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
-
-    const notifPromises = (supervisorIds ?? []).map(async (supervisorId) => {
-      const res = await fetch(`${baseUrl}/api/notifications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 공유 시크릿으로 내부 인증 (미설정 시 헤더 생략 → notifications가 JWT 요구).
-          ...(process.env.INTERNAL_API_SECRET
-            ? { 'x-internal-secret': process.env.INTERNAL_API_SECRET }
-            : {}),
-        },
-        body: JSON.stringify({
-          userId: supervisorId,
-          type: 'system',
-          title: `[현장 완료] ${ctx.sanitize(workSite)}`,
-          message: `작업자 ${workerCount}명 전원 이상 없음, 작업 종료. 영수증 SHA-256: ${hash.slice(0, 12)}…${note ? ` / ${ctx.sanitize(note)}` : ''}`,
-          metadata: { hash, sessionId },
-        }),
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} — supervisorId=${supervisorId}`);
-      }
-    });
-
-    const results = await Promise.allSettled(notifPromises);
-    for (const r of results) {
-      if (r.status === 'fulfilled') {
-        notifResult.sent++;
-      } else {
-        notifResult.failed++;
-        console.error('[field/complete] 알림 발송 실패:', r.reason instanceof Error ? r.reason.message : r.reason);
-      }
-    }
+    const notifications = await Promise.allSettled(configuredRecipients().map((recipientId) =>
+      createNotification({
+        userId: recipientId,
+        type: 'system',
+        title: `현장 완료 — ${safeSite}`,
+        body: `작업자 ${workerCount}명, 체크리스트 ${receipt.completionRate}% 완료. 기록 ${hash.slice(0, 12)}${note ? ` / ${ctx.sanitize(note).slice(0, 200)}` : ''}`,
+        metadata: { eventId: event.id, hash, sessionId, actorUid: user.uid },
+      }),
+    ));
+    const sent = notifications.filter((result) => result.status === 'fulfilled').length;
+    const failed = notifications.length - sent;
 
     return ctx.ok({
       receipt,
-      notifications: notifResult,
-      message: `작업 완료 신고 완료. 관리자 ${notifResult.sent}명 알림 발송.`,
+      notifications: { sent, failed },
+      message: sent > 0
+        ? `작업 완료를 저장하고 관리자 ${sent}명에게 인앱 알림을 보냈습니다.`
+        : '작업 완료를 저장했습니다. 설정된 관리자 수신자가 없어 알림은 보내지 않았습니다.',
     });
   },
 );

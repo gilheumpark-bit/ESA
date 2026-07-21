@@ -11,7 +11,7 @@
  * PART 5: Expert profiles
  */
 
-import { getSupabaseClient, getSupabaseAdmin, type PaginationOptions, type PaginatedResult } from '@/lib/supabase';
+import { ensureUserProfile, getSupabaseAdmin, type PaginationOptions, type PaginatedResult } from '@/lib/supabase';
 
 // ─── PART 1: Types ────────────────────────────────────────────
 
@@ -93,7 +93,8 @@ export async function createQuestion(q: {
   standardRefs?: string[];
   calcRefs?: string[];
 }): Promise<Question> {
-  const client = getSupabaseClient();
+  await ensureUserProfile(q.authorId);
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(T.questions)
@@ -130,12 +131,15 @@ export async function getQuestions(
     status,
   } = opts;
 
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
   // Build query
-  let query = client.from(T.questions).select('*', { count: 'exact' });
+  let query = client
+    .from(T.questions)
+    .select('*', { count: 'exact' })
+    .eq('hidden', false);
 
   if (tags && tags.length > 0) {
     query = query.overlaps('tags', tags);
@@ -183,12 +187,13 @@ export async function getQuestions(
 }
 
 export async function getQuestion(id: string): Promise<Question | null> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(T.questions)
     .select('*')
     .eq('id', id)
+    .eq('hidden', false)
     .maybeSingle();
 
   if (error) {
@@ -207,7 +212,8 @@ export async function createAnswer(a: {
   isExpert?: boolean;
   standardRefs?: string[];
 }): Promise<Answer> {
-  const client = getSupabaseClient();
+  await ensureUserProfile(a.authorId);
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(T.answers)
@@ -227,14 +233,6 @@ export async function createAnswer(a: {
     throw new Error(`[ESA-7004] Failed to create answer: ${error.message}`);
   }
 
-  // Increment answer count on question
-  const admin = getSupabaseAdmin();
-  try {
-    await admin.rpc('increment_answer_count', { question_id: a.questionId });
-  } catch {
-    // Fallback: ignore — answer count may be stale
-  }
-
   return rowToAnswer(data);
 }
 
@@ -242,12 +240,13 @@ export async function getAnswersForQuestion(
   questionId: string,
   sortByVotes = true,
 ): Promise<Answer[]> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   let query = client
     .from(T.answers)
     .select('*')
-    .eq('question_id', questionId);
+    .eq('question_id', questionId)
+    .eq('hidden', false);
 
   if (sortByVotes) {
     // Accepted answer first, then by votes
@@ -274,7 +273,7 @@ export async function voteQuestion(
   userId: string,
   direction: VoteDirection,
 ): Promise<{ votes: number }> {
-  return vote('question', questionId, userId, direction, T.questions);
+  return vote('question', questionId, userId, direction);
 }
 
 export async function voteAnswer(
@@ -282,7 +281,7 @@ export async function voteAnswer(
   userId: string,
   direction: VoteDirection,
 ): Promise<{ votes: number }> {
-  return vote('answer', answerId, userId, direction, T.answers);
+  return vote('answer', answerId, userId, direction);
 }
 
 async function vote(
@@ -290,81 +289,25 @@ async function vote(
   targetId: string,
   userId: string,
   direction: VoteDirection,
-  targetTable: string,
 ): Promise<{ votes: number }> {
-  const client = getSupabaseClient();
-  const delta = direction === 'up' ? 1 : -1;
-
-  // Check for existing vote
-  const { data: existingVote } = await client
-    .from(T.votes)
-    .select('*')
-    .eq('user_id', userId)
-    .eq('target_type', targetType)
-    .eq('target_id', targetId)
-    .maybeSingle();
-
-  if (existingVote) {
-    const oldDirection = existingVote.direction as VoteDirection;
-    if (oldDirection === direction) {
-      // Same vote — remove it (toggle off)
-      await client.from(T.votes).delete().eq('id', existingVote.id);
-      const reverseDelta = direction === 'up' ? -1 : 1;
-      return updateVoteCount(targetTable, targetId, reverseDelta);
-    }
-    // Opposite vote — update and apply double delta
-    await client
-      .from(T.votes)
-      .update({ direction })
-      .eq('id', existingVote.id);
-    return updateVoteCount(targetTable, targetId, delta * 2);
-  }
-
-  // New vote
-  const { error } = await client
-    .from(T.votes)
-    .insert({
-      user_id: userId,
-      target_type: targetType,
-      target_id: targetId,
-      direction,
-    });
-
-  if (error) {
-    throw new Error(`[ESA-7006] Failed to vote: ${error.message}`);
-  }
-
-  return updateVoteCount(targetTable, targetId, delta);
-}
-
-async function updateVoteCount(
-  table: string,
-  id: string,
-  delta: number,
-): Promise<{ votes: number }> {
+  await ensureUserProfile(userId);
   const admin = getSupabaseAdmin();
-
-  // Read current votes, apply delta, write back
-  const { data: current } = await admin
-    .from(table)
-    .select('votes')
-    .eq('id', id)
-    .single();
-
-  const newVotes = ((current?.votes as number) ?? 0) + delta;
-
-  await admin
-    .from(table)
-    .update({ votes: newVotes })
-    .eq('id', id);
-
-  return { votes: newVotes };
+  const { data, error } = await admin.rpc('cast_community_vote', {
+    p_target_type: targetType,
+    p_target_id: targetId,
+    p_user_id: userId,
+    p_direction: direction,
+  });
+  if (error || typeof data !== 'number') {
+    throw new Error(`[ESA-7006] Failed to vote: ${error?.message ?? 'invalid vote result'}`);
+  }
+  return { votes: data };
 }
 
 // ─── PART 5: Expert Profile Helpers ──────────────────────────
 
 export async function getExpertProfile(userId: string): Promise<ExpertProfile | null> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(T.experts)

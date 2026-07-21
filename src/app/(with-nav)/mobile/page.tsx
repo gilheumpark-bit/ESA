@@ -10,11 +10,11 @@
  * PART 2: Offline indicator
  * PART 3: Quick calculator grid
  * PART 4: Recent calculations
- * PART 5: Camera/Voice stubs
+ * PART 5: Camera OCR and browser voice input
  * PART 6: Main page
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -33,6 +33,7 @@ import {
   Shield,
   Share2,
 } from 'lucide-react';
+import { loadStoredProviderKey } from '@/lib/byok-storage';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types and Constants
@@ -258,7 +259,7 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 5 — Camera OCR and Voice Input Stubs
+// PART 5 — Camera OCR and Browser Voice Input
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface NameplateResult {
@@ -334,8 +335,8 @@ function CameraButton() {
       const imageBlob = await captureFrame();
       stopCamera();
 
-      // Get user's BYOK API key from localStorage
-      const apiKey = localStorage.getItem('esa-byok-openai-key') ?? '';
+      // Decrypt the browser-bound BYOK key before this one request.
+      const apiKey = await loadStoredProviderKey('openai');
       if (!apiKey) {
         setError('OpenAI API 키가 필요합니다. BYOK 설정에서 등록하세요. → /settings/byok');
         setStatus('error');
@@ -520,40 +521,35 @@ function VoiceButton() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function MobileFieldPage() {
-  const [isOnline, setIsOnline] = useState(true);
+  const isOnline = useSyncExternalStore(
+    (onChange) => {
+      window.addEventListener('online', onChange);
+      window.addEventListener('offline', onChange);
+      return () => {
+        window.removeEventListener('online', onChange);
+        window.removeEventListener('offline', onChange);
+      };
+    },
+    () => navigator.onLine,
+    () => true,
+  );
   const [recentResults, setRecentResults] = useState<CachedResult[]>([]);
 
-  // Track online/offline status
-  useEffect(() => {
-    const setOnline = () => setIsOnline(true);
-    const setOffline = () => setIsOnline(false);
-
-    setIsOnline(navigator.onLine);
-    window.addEventListener('online', setOnline);
-    window.addEventListener('offline', setOffline);
-
-    return () => {
-      window.removeEventListener('online', setOnline);
-      window.removeEventListener('offline', setOffline);
-    };
-  }, []);
-
   // Load recent calculations from localStorage (offline-friendly)
-  const loadRecentCalcs = useCallback(() => {
-    try {
-      const stored = localStorage.getItem('esa-recent-calcs');
-      if (stored) {
-        const parsed = JSON.parse(stored) as CachedResult[];
-        setRecentResults(parsed.slice(0, 10));
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }, []);
-
   useEffect(() => {
-    loadRecentCalcs();
-  }, [loadRecentCalcs]);
+    const timer = window.setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('esa-recent-calcs');
+        if (stored) {
+          const parsed = JSON.parse(stored) as CachedResult[];
+          setRecentResults(Array.isArray(parsed) ? parsed.slice(0, 10) : []);
+        }
+      } catch {
+        // Ignore corrupted browser history.
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Register service worker
   useEffect(() => {

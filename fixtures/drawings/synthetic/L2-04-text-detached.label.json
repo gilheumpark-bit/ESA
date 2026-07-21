@@ -1,0 +1,52 @@
+{
+  "id": "L2-04-text-detached",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "중",
+  "fileDifficulty": [
+    "text-detached"
+  ],
+  "description": "정격 텍스트가 심볼에서 멀리(근접 임계 초과) 떨어져 인출선으로 연결된 도면. 근접도 기반 매핑의 한계를 본다.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 3,
+    "edgeCount": 2,
+    "nodes": [
+      {
+        "name": "TR-2",
+        "type": "transformer",
+        "x": 300,
+        "y": 700,
+        "rating": "750kVA"
+      },
+      {
+        "name": "ACB-2",
+        "type": "breaker",
+        "x": 300,
+        "y": 600
+      },
+      {
+        "name": "DB-2",
+        "type": "panel",
+        "x": 300,
+        "y": 500
+      }
+    ],
+    "edges": [
+      {
+        "from": "TR-2",
+        "to": "ACB-2"
+      },
+      {
+        "from": "ACB-2",
+        "to": "DB-2"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  }
+}

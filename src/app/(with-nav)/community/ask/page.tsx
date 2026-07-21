@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HelpCircle, Send, Loader2, LogIn } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { authenticatedFetch } from '@/lib/client-auth';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Constants & Types
@@ -70,13 +71,16 @@ export default function CommunityAskPage() {
     setErrorMsg('');
 
     try {
-      const res = await fetch('/api/community', {
+      const res = await authenticatedFetch('/api/community', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, body, category }),
+        body: JSON.stringify({ title, body, tags: category ? [category] : [] }),
       });
 
-      if (!res.ok) throw new Error('질문 등록에 실패했습니다');
+      if (!res.ok) {
+        const result = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+        throw new Error(result?.error?.message ?? '질문 등록에 실패했습니다');
+      }
       router.push('/community');
     } catch (err) {
       setStatus('error');

@@ -96,8 +96,11 @@ export function useSettings(): UseSettingsReturn {
 
   // Load from localStorage on mount
   useEffect(() => {
-    setSettings(loadSettings());
-    setLoaded(true);
+    const frame = requestAnimationFrame(() => {
+      setSettings(loadSettings());
+      setLoaded(true);
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   // Auto-save on change (skip initial mount)

@@ -38,11 +38,6 @@ export interface KGEdge {
   weight: number;
 }
 
-export interface PathResult {
-  path: string[];
-  totalWeight: number;
-}
-
 // ---------------------------------------------------------------------------
 // PART 2 -- KnowledgeGraph class
 // ---------------------------------------------------------------------------
@@ -52,12 +47,6 @@ export class KnowledgeGraph {
   private edges: KGEdge[] = [];
   /** Adjacency list: nodeId -> [{ to, type, weight }] */
   private adjacency = new Map<string, Array<{ to: string; type: EdgeType; weight: number }>>();
-  /**
-   * BFS 결과 캐시 (5분 TTL) — 동일 질의 반복 시 재탐색 방지.
-   * NOTE (R-cleanup): 필드는 선언됐으나 BFS 메서드에서 아직 wiring되지 않음.
-   * 50%-stub 상태로 마킹: underscore prefix로 외부 reader 차단.
-   */
-  private _pathCache = new Map<string, { result: PathResult | null; ts: number }>();
   private relatedCache = new Map<string, { result: KGNode[]; ts: number }>();
   private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5분
 
@@ -132,54 +121,6 @@ export class KnowledgeGraph {
       if (oldest) this.relatedCache.delete(oldest[0]);
     }
     return result;
-  }
-
-  /**
-   * Find shortest path between two nodes (BFS, unweighted).
-   */
-  findPath(from: string, to: string): PathResult | null {
-    if (from === to) return { path: [from], totalWeight: 0 };
-    if (!this.nodes.has(from) || !this.nodes.has(to)) return null;
-
-    const visited = new Set<string>();
-    const parent = new Map<string, string>();
-    const queue: string[] = [from];
-    visited.add(from);
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-
-      const neighbors = this.adjacency.get(current) ?? [];
-      for (const neighbor of neighbors) {
-        if (!visited.has(neighbor.to)) {
-          visited.add(neighbor.to);
-          parent.set(neighbor.to, current);
-          if (neighbor.to === to) {
-            // 경로 역추적
-            const path: string[] = [to];
-            let node = to;
-            while (parent.has(node)) {
-              node = parent.get(node)!;
-              path.unshift(node);
-            }
-            // 가중치 합산
-            let totalWeight = 0;
-            for (let i = 0; i < path.length - 1; i++) {
-              const edge = this.edges.find(
-                (e) =>
-                  (e.from === path[i] && e.to === path[i + 1]) ||
-                  (e.from === path[i + 1] && e.to === path[i]),
-              );
-              totalWeight += edge?.weight ?? 1;
-            }
-            return { path, totalWeight };
-          }
-          queue.push(neighbor.to);
-        }
-      }
-    }
-
-    return null; // 경로 없음
   }
 
   /**

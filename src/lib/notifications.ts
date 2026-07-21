@@ -5,9 +5,13 @@
  * cert D-day alerts, calc completions, and community events.
  *
  * PART 1: Types
- * PART 2: CRUD operations (Supabase with in-memory fallback)
+ * PART 2: CRUD operations (durable Supabase; ephemeral fallback is non-production only)
  * PART 3: Preference management
  */
+
+import { randomUUID } from 'crypto';
+import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
+import { allowEphemeralStorage } from '@/lib/storage-policy';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -29,6 +33,7 @@ export interface Notification {
   title: string;
   body: string;
   link?: string;
+  metadata?: Record<string, unknown>;
   read: boolean;
   createdAt: string;
 }
@@ -66,20 +71,22 @@ export interface NotificationQueryResult {
 const NOTIF_TABLE = 'notifications';
 const PREF_TABLE = 'notification_preferences';
 
-/** In-memory fallback */
+/** Development/test-only ephemeral store. Production never reports this as persisted. */
 const memoryNotifications = new Map<string, Notification[]>();
 const memoryPreferences = new Map<string, NotificationPreference>();
+
+function requireEphemeralStorage(operation: string): void {
+  if (!allowEphemeralStorage()) {
+    throw new Error(`알림 ${operation} 저장소를 사용할 수 없습니다.`);
+  }
+}
 
 function getSupabaseClientSafe() {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return null;
-     
-    const { createClient } = require('@supabase/supabase-js');
-    return createClient(url, key, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    return getSupabaseAdmin();
   } catch {
     return null;
   }
@@ -93,7 +100,8 @@ export async function createNotification(
 ): Promise<Notification> {
   const notification: Notification = {
     ...n,
-    id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    link: normalizeInternalLink(n.link),
+    id: randomUUID(),
     read: false,
     createdAt: new Date().toISOString(),
   };
@@ -101,6 +109,7 @@ export async function createNotification(
   const client = getSupabaseClientSafe();
   if (client) {
     try {
+      await ensureUserProfile(n.userId);
       const { error } = await client.from(NOTIF_TABLE).insert({
         id: notification.id,
         user_id: notification.userId,
@@ -108,14 +117,18 @@ export async function createNotification(
         title: notification.title,
         body: notification.body,
         link: notification.link ?? null,
+        metadata: notification.metadata ?? {},
         read: false,
         created_at: notification.createdAt,
       });
-      if (!error) return notification;
-    } catch { /* fall through */ }
+      if (error) throw error;
+      return notification;
+    } catch {
+      requireEphemeralStorage('생성');
+    }
   }
 
-  // In-memory fallback
+  requireEphemeralStorage('생성');
   const userNotifs = memoryNotifications.get(n.userId) ?? [];
   userNotifs.unshift(notification);
   if (userNotifs.length > 500) userNotifs.length = 500;
@@ -152,12 +165,13 @@ export async function getUserNotifications(
 
       if (!error && data) {
         // Get unread count
-        const { count: unreadCount } = await client
+        const { count: unreadCount, error: unreadError } = await client
           .from(NOTIF_TABLE)
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
           .eq('read', false);
 
+        if (unreadError) throw unreadError;
         return {
           notifications: data.map(mapDbToNotification),
           total: count ?? 0,
@@ -166,10 +180,13 @@ export async function getUserNotifications(
           pageSize,
         };
       }
-    } catch { /* fall through */ }
+      if (error) throw error;
+    } catch {
+      requireEphemeralStorage('조회');
+    }
   }
 
-  // In-memory fallback
+  requireEphemeralStorage('조회');
   let entries = memoryNotifications.get(userId) ?? [];
   const totalUnread = entries.filter(e => !e.read).length;
 
@@ -190,28 +207,34 @@ export async function getUserNotifications(
 }
 
 /**
- * Mark a notification as read.
+ * Mark a notification as read only when it belongs to the given user.
  */
-export async function markRead(id: string): Promise<void> {
+export async function markRead(id: string, userId: string): Promise<boolean> {
   const client = getSupabaseClientSafe();
   if (client) {
     try {
-      const { error } = await client
+      const { data, error } = await client
         .from(NOTIF_TABLE)
         .update({ read: true })
-        .eq('id', id);
-      if (!error) return;
-    } catch { /* fall through */ }
-  }
-
-  // In-memory fallback
-  for (const [, notifs] of memoryNotifications) {
-    const notif = notifs.find(n => n.id === id);
-    if (notif) {
-      notif.read = true;
-      return;
+        .eq('id', id)
+        .eq('user_id', userId)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      return Boolean(data);
+    } catch {
+      requireEphemeralStorage('수정');
     }
   }
+
+  requireEphemeralStorage('수정');
+  const notifs = memoryNotifications.get(userId) ?? [];
+  const notif = notifs.find(n => n.id === id);
+  if (notif) {
+    notif.read = true;
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -226,11 +249,14 @@ export async function markAllRead(userId: string): Promise<void> {
         .update({ read: true })
         .eq('user_id', userId)
         .eq('read', false);
-      if (!error) return;
-    } catch { /* fall through */ }
+      if (error) throw error;
+      return;
+    } catch {
+      requireEphemeralStorage('수정');
+    }
   }
 
-  // In-memory fallback
+  requireEphemeralStorage('수정');
   const notifs = memoryNotifications.get(userId) ?? [];
   for (const n of notifs) n.read = true;
 }
@@ -260,7 +286,7 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
         .from(PREF_TABLE)
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       if (!error && data) {
         return {
@@ -274,10 +300,14 @@ export async function getPreferences(userId: string): Promise<NotificationPrefer
           push: data.push ?? false,
         };
       }
-    } catch { /* fall through */ }
+      if (error) throw error;
+      return { userId, ...DEFAULT_PREFERENCES };
+    } catch {
+      requireEphemeralStorage('환경설정 조회');
+    }
   }
 
-  // In-memory / default
+  requireEphemeralStorage('환경설정 조회');
   return memoryPreferences.get(userId) ?? { userId, ...DEFAULT_PREFERENCES };
 }
 
@@ -294,7 +324,8 @@ export async function updatePreferences(
   const client = getSupabaseClientSafe();
   if (client) {
     try {
-      await client.from(PREF_TABLE).upsert({
+      await ensureUserProfile(userId);
+      const { error } = await client.from(PREF_TABLE).upsert({
         user_id: userId,
         standard_updates: updated.standardUpdates,
         keyword_news: updated.keywordNews,
@@ -304,9 +335,14 @@ export async function updatePreferences(
         email: updated.email,
         push: updated.push,
       });
-    } catch { /* fall through */ }
+      if (error) throw error;
+      return updated;
+    } catch {
+      requireEphemeralStorage('환경설정 저장');
+    }
   }
 
+  requireEphemeralStorage('환경설정 저장');
   memoryPreferences.set(userId, updated);
   return updated;
 }
@@ -322,8 +358,14 @@ function mapDbToNotification(row: Record<string, unknown>): Notification {
     type: row.type as NotificationType,
     title: row.title as string,
     body: row.body as string,
-    link: (row.link as string) ?? undefined,
+    link: normalizeInternalLink((row.link as string) ?? undefined),
+    metadata: (row.metadata as Record<string, unknown>) ?? undefined,
     read: row.read as boolean,
     createdAt: row.created_at as string,
   };
+}
+
+function normalizeInternalLink(link?: string): string | undefined {
+  if (!link || !link.startsWith('/') || link.startsWith('//')) return undefined;
+  return link.slice(0, 2_048);
 }

@@ -54,9 +54,14 @@ const SUPABASE: EnvVarDef[] = [
 ];
 
 const STRIPE: EnvVarDef[] = [
+  { key: 'STRIPE_BILLING_ENABLED', required: false, fallback: 'false' },
   { key: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', required: false },
   { key: 'STRIPE_SECRET_KEY', required: false },
   { key: 'STRIPE_WEBHOOK_SECRET', required: false },
+  { key: 'STRIPE_PRICE_PRO_MONTHLY', required: false },
+  { key: 'STRIPE_PRICE_PRO_YEARLY', required: false },
+  { key: 'STRIPE_PRICE_TEAM_MONTHLY', required: false },
+  { key: 'STRIPE_PRICE_TEAM_YEARLY', required: false },
 ];
 
 const WEAVIATE: EnvVarDef[] = [
@@ -154,6 +159,19 @@ export function validateEnv(): EnvValidationResult {
   });
   if (!hasAnyAiKey) {
     warnings.push('No AI API keys configured. BYOK users must supply their own keys.');
+  }
+
+  if (readEnv('STRIPE_BILLING_ENABLED') === 'true') {
+    const billingRequired = [
+      'STRIPE_SECRET_KEY',
+      'STRIPE_WEBHOOK_SECRET',
+      'STRIPE_PRICE_PRO_MONTHLY',
+      'NEXT_PUBLIC_SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+    ];
+    for (const key of billingRequired) {
+      if (!readEnv(key)) missing.push(key);
+    }
   }
 
   return {

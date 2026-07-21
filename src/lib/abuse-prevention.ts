@@ -10,7 +10,7 @@
  * PART 5: Quality enforcement (근거 조항 명시 필수)
  */
 
-import { getSupabaseClient, getSupabaseAdmin } from '@/lib/supabase';
+import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
 
 // ─── PART 1: Types ────────────────────────────────────────────
 
@@ -113,16 +113,19 @@ export function checkContent(text: string): ContentCheckResult {
  * Returns the total report count after this report.
  */
 export async function reportContent(
+  contentType: 'question' | 'answer',
   contentId: string,
   reporterId: string,
   reason: string,
 ): Promise<{ reportCount: number; autoHidden: boolean }> {
-  const client = getSupabaseClient();
+  await ensureUserProfile(reporterId);
+  const client = getSupabaseAdmin();
 
   // Prevent duplicate reports from same user
   const { data: existing } = await client
     .from(REPORTS_TABLE)
     .select('id')
+    .eq('content_type', contentType)
     .eq('content_id', contentId)
     .eq('reporter_id', reporterId)
     .maybeSingle();
@@ -132,6 +135,7 @@ export async function reportContent(
     const { count } = await client
       .from(REPORTS_TABLE)
       .select('*', { count: 'exact', head: true })
+      .eq('content_type', contentType)
       .eq('content_id', contentId);
 
     return { reportCount: count ?? 1, autoHidden: false };
@@ -141,6 +145,7 @@ export async function reportContent(
   const { error } = await client
     .from(REPORTS_TABLE)
     .insert({
+      content_type: contentType,
       content_id: contentId,
       reporter_id: reporterId,
       reason,
@@ -154,6 +159,7 @@ export async function reportContent(
   const { count } = await client
     .from(REPORTS_TABLE)
     .select('*', { count: 'exact', head: true })
+    .eq('content_type', contentType)
     .eq('content_id', contentId);
 
   const reportCount = count ?? 1;
@@ -161,7 +167,7 @@ export async function reportContent(
 
   // Auto-hide if threshold reached
   if (reportCount >= AUTO_HIDE_THRESHOLD) {
-    autoHidden = await hideContent(contentId);
+    autoHidden = await hideContent(contentType, contentId);
   }
 
   return { reportCount, autoHidden };
@@ -171,24 +177,17 @@ export async function reportContent(
  * Hide content by setting a hidden flag.
  * Tries both questions and answers tables.
  */
-async function hideContent(contentId: string): Promise<boolean> {
+async function hideContent(
+  contentType: 'question' | 'answer',
+  contentId: string,
+): Promise<boolean> {
   const admin = getSupabaseAdmin();
-
-  // Try hiding in questions
-  const { error: qErr } = await admin
-    .from('community_questions')
+  const table = contentType === 'question' ? 'community_questions' : 'community_answers';
+  const { error } = await admin
+    .from(table)
     .update({ hidden: true, hidden_reason: 'auto-hidden: multiple reports' })
     .eq('id', contentId);
-
-  if (!qErr) return true;
-
-  // Try hiding in answers
-  const { error: aErr } = await admin
-    .from('community_answers')
-    .update({ hidden: true, hidden_reason: 'auto-hidden: multiple reports' })
-    .eq('id', contentId);
-
-  return !aErr;
+  return !error;
 }
 
 // ─── PART 4: Reputation Scoring ──────────────────────────────
@@ -203,7 +202,7 @@ async function hideContent(contentId: string): Promise<boolean> {
  * - Downvote received: -2
  */
 export async function getUserReputation(userId: string): Promise<number> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   // Sum votes on user's questions
   const { data: questions } = await client

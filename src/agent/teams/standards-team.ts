@@ -99,6 +99,27 @@ async function queryKECArticle(clause: string, params?: Record<string, unknown>)
   }
 }
 
+/** NEC/IEC registry lookup. A lookup alone never produces a compliance PASS. */
+async function queryForeignArticle(standard: 'NEC' | 'IEC', clause: string) {
+  try {
+    const article = standard === 'NEC'
+      ? (await import('@/engine/standards/nec')).getNECArticleFull(clause)
+      : (await import('@/engine/standards/iec')).getIECArticle(clause);
+    if (!article) return null;
+
+    return {
+      standard: article.standard,
+      clause: article.article,
+      title: article.title,
+      judgment: 'HOLD' as StandardEntry['judgment'],
+      conditions: article.conditions,
+      relatedClauses: article.relatedClauses,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** 허용전류 테이블 조회 — 타입 안전 변환 */
 async function queryAmpacity(params: Record<string, unknown>) {
   try {
@@ -155,29 +176,45 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
   try {
     switch (intent.type) {
       case 'article_lookup': {
-        if (intent.standard === 'KEC' && intent.clause) {
-          const result = await queryKECArticle(intent.clause, input.params as Record<string, unknown>);
-          if (result) {
-            standards.push({
-              standard: result.standard,
-              clause: result.clause,
-              title: result.title,
-              judgment: result.judgment,
-            });
+        if (intent.standard && intent.clause) {
+          const result = intent.standard === 'KEC'
+            ? await queryKECArticle(intent.clause, input.params as Record<string, unknown>)
+            : await queryForeignArticle(intent.standard as 'NEC' | 'IEC', intent.clause);
 
-            // 관련 조항도 함께 조회
-            if (result.relatedClauses) {
-              for (const rel of result.relatedClauses) {
-                const related = await queryKECArticle(rel.articleId.replace('KEC-', ''));
-                if (related) {
-                  standards.push({
-                    standard: related.standard,
-                    clause: related.clause,
-                    title: related.title,
-                    judgment: 'HOLD',
-                    note: `관련: ${rel.relation}`,
-                  });
-                }
+          if (!result) {
+            return {
+              teamId: 'TEAM-STD',
+              success: false,
+              calculations,
+              standards,
+              violations,
+              recommendations,
+              confidence: 0,
+              durationMs: Date.now() - start,
+              error: `${intent.standard} ${intent.clause} 조항을 내장 기준 데이터에서 찾을 수 없습니다. 공식 원문을 확인하세요.`,
+            };
+          }
+
+          standards.push({
+            standard: result.standard,
+            clause: result.clause,
+            title: result.title,
+            judgment: result.judgment,
+          });
+
+          // KEC registry has executable related-article evaluation. Foreign
+          // references remain metadata until an equivalent evaluator exists.
+          if (intent.standard === 'KEC' && result.relatedClauses) {
+            for (const rel of result.relatedClauses) {
+              const related = await queryKECArticle(rel.articleId.replace('KEC-', ''));
+              if (related) {
+                standards.push({
+                  standard: related.standard,
+                  clause: related.clause,
+                  title: related.title,
+                  judgment: 'HOLD',
+                  note: `관련: ${rel.relation}`,
+                });
               }
             }
           }
@@ -258,14 +295,23 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
           const { queryBreakerRating } = await import('@/engine/standards/kec/kec-table-query');
           const brResult = queryBreakerRating(loadCurrent);
           if (brResult && brResult.recommended > 0) {
+            // 추천 정격 산출 ≠ 현장 적합 확정. 부하·허용전류·차단용량 교차검증 전 HOLD.
             calculations.push({
               id: 'calc-breaker',
               calculatorId: 'breaker-sizing',
-              label: '차단기 정격',
+              label: '차단기 정격 (표 조회 추천)',
               value: brResult.recommended,
               unit: 'A',
-              compliant: true,
+              compliant: null,
+              note: `부하 ${loadCurrent}A 기준 추천 ${brResult.recommended}A — 전선 허용전류·차단용량 교차검증 전 HOLD.`,
               standardRef: 'KEC 212.3',
+            });
+            standards.push({
+              standard: 'KEC',
+              clause: '212.3',
+              title: '차단기 정격',
+              judgment: 'HOLD',
+              note: `추천 ${brResult.recommended}A (부하 ${loadCurrent}A) — 교차검증 필요`,
             });
           }
         }

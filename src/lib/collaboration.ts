@@ -12,8 +12,8 @@
  * PART 6: Approval workflow
  */
 
-import { getSupabaseClient } from '@/lib/supabase';
-import { randomBytes, createHash } from 'crypto';
+import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -68,23 +68,24 @@ export interface ApprovalRequest {
 // PART 2 — Project CRUD
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const PROJECTS_TABLE = 'collaboration_projects';
+const PROJECTS_TABLE = 'projects';
 const MEMBERS_TABLE = 'project_members';
-const SHARE_LINKS_TABLE = 'project_share_links';
+const CALCULATIONS_TABLE = 'project_calculations';
+const SHARE_LINKS_TABLE = 'share_links';
 const APPROVALS_TABLE = 'project_approvals';
 
 /**
  * Create a new project.
  */
 export async function createProject(name: string, ownerId: string, description?: string): Promise<Project> {
-  const client = getSupabaseClient();
+  await ensureUserProfile(ownerId);
+  const client = getSupabaseAdmin();
   const now = new Date().toISOString();
 
   const projectData = {
     name,
     description: description ?? null,
     owner_id: ownerId,
-    calculations: [],
     status: 'active' as ProjectStatus,
     created_at: now,
     updated_at: now,
@@ -110,7 +111,7 @@ export async function createProject(name: string, ownerId: string, description?:
  * Get a project by ID with its members.
  */
 export async function getProject(projectId: string): Promise<Project | null> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data: projectRow, error } = await client
     .from(PROJECTS_TABLE)
@@ -123,8 +124,11 @@ export async function getProject(projectId: string): Promise<Project | null> {
     throw new Error(`[ESVA Collab] Failed to get project: ${error.message}`);
   }
 
-  const members = await getProjectMembers(projectId);
-  return { ...mapProjectRow(projectRow), members };
+  const [members, calculations] = await Promise.all([
+    getProjectMembers(projectId),
+    getProjectCalculations(projectId),
+  ]);
+  return { ...mapProjectRow(projectRow), members, calculations };
 }
 
 /**
@@ -134,7 +138,7 @@ export async function listUserProjects(
   userId: string,
   filter: 'all' | 'owned' | 'shared' = 'all',
 ): Promise<Project[]> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   if (filter === 'owned') {
     const { data, error } = await client
@@ -144,7 +148,7 @@ export async function listUserProjects(
       .order('updated_at', { ascending: false });
 
     if (error) throw new Error(`[ESVA Collab] Failed to list projects: ${error.message}`);
-    return (data ?? []).map(mapProjectRow);
+    return hydrateProjects(data ?? []);
   }
 
   if (filter === 'shared') {
@@ -167,7 +171,7 @@ export async function listUserProjects(
       .order('updated_at', { ascending: false });
 
     if (error) throw new Error(`[ESVA Collab] Failed to list shared projects: ${error.message}`);
-    return (data ?? []).map(mapProjectRow);
+    return hydrateProjects(data ?? []);
   }
 
   // 'all' — owned + shared
@@ -195,7 +199,7 @@ export async function updateProject(
   // Verify the user is owner or editor
   await assertRole(projectId, userId, ['owner', 'editor']);
 
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const updateData: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (updates.name !== undefined) updateData.name = updates.name;
@@ -219,12 +223,7 @@ export async function updateProject(
 export async function deleteProject(projectId: string, userId: string): Promise<void> {
   await assertRole(projectId, userId, ['owner']);
 
-  const client = getSupabaseClient();
-
-  // Clean up related data
-  await client.from(MEMBERS_TABLE).delete().eq('project_id', projectId);
-  await client.from(SHARE_LINKS_TABLE).delete().eq('project_id', projectId);
-  await client.from(APPROVALS_TABLE).delete().eq('project_id', projectId);
+  const client = getSupabaseAdmin();
 
   const { error } = await client.from(PROJECTS_TABLE).delete().eq('id', projectId);
   if (error) throw new Error(`[ESVA Collab] Failed to delete project: ${error.message}`);
@@ -249,8 +248,9 @@ export async function inviteMember(
     throw new Error('[ESVA Collab] Cannot invite a member as owner');
   }
 
+  const normalizedEmail = email.trim().toLowerCase();
   const now = new Date().toISOString();
-  const member = await addMemberRow(projectId, /* userId placeholder */ '', role, email, now);
+  const member = await addMemberRow(projectId, /* pending identity */ '', role, normalizedEmail, now);
   await touchProject(projectId);
   return member;
 }
@@ -261,30 +261,91 @@ export async function inviteMember(
 export async function removeMember(
   projectId: string,
   removerUserId: string,
-  targetUserId: string,
+  target: { userId?: string; email?: string },
 ): Promise<void> {
   await assertRole(projectId, removerUserId, ['owner']);
 
-  if (removerUserId === targetUserId) {
+  if (target.userId && removerUserId === target.userId) {
     throw new Error('[ESVA Collab] Owner cannot remove themselves');
   }
 
-  const client = getSupabaseClient();
-  const { error } = await client
+  const client = getSupabaseAdmin();
+  let deletion = client
     .from(MEMBERS_TABLE)
     .delete()
-    .eq('project_id', projectId)
-    .eq('user_id', targetUserId);
+    .eq('project_id', projectId);
+  if (target.userId) {
+    deletion = deletion.eq('user_id', target.userId);
+  } else if (target.email) {
+    deletion = deletion.ilike('email', target.email.trim().toLowerCase()).is('user_id', null);
+  } else {
+    throw new Error('[ESVA Collab] Member identity is required');
+  }
+
+  const { error } = await deletion;
 
   if (error) throw new Error(`[ESVA Collab] Failed to remove member: ${error.message}`);
   await touchProject(projectId);
 }
 
 /**
+ * Convert pending email invitations into memberships after Firebase has verified
+ * that the signed-in user controls the invited address.
+ */
+export async function claimProjectInvitations(userId: string, verifiedEmail: string): Promise<number> {
+  const email = verifiedEmail.trim().toLowerCase();
+  if (!email) return 0;
+
+  const client = getSupabaseAdmin();
+  const { data: invitations, error } = await client
+    .from(MEMBERS_TABLE)
+    .select('id, project_id')
+    .is('user_id', null)
+    .ilike('email', email);
+  if (error) throw new Error(`[ESVA Collab] Failed to find invitations: ${error.message}`);
+
+  let claimed = 0;
+  for (const invitation of invitations ?? []) {
+    const projectId = String(invitation.project_id);
+    const { data: existing, error: existingError } = await client
+      .from(MEMBERS_TABLE)
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingError) throw new Error(`[ESVA Collab] Failed to check membership: ${existingError.message}`);
+
+    if (existing) {
+      const { error: deleteError } = await client
+        .from(MEMBERS_TABLE)
+        .delete()
+        .eq('id', invitation.id)
+        .is('user_id', null);
+      if (deleteError) throw new Error(`[ESVA Collab] Failed to merge invitation: ${deleteError.message}`);
+      continue;
+    }
+
+    const { data: updated, error: updateError } = await client
+      .from(MEMBERS_TABLE)
+      .update({ user_id: userId, email, joined_at: new Date().toISOString() })
+      .eq('id', invitation.id)
+      .is('user_id', null)
+      .select('id')
+      .maybeSingle();
+    if (updateError) throw new Error(`[ESVA Collab] Failed to claim invitation: ${updateError.message}`);
+    if (updated) {
+      claimed += 1;
+      await touchProject(projectId);
+    }
+  }
+  return claimed;
+}
+
+/**
  * Get all members of a project.
  */
 async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(MEMBERS_TABLE)
@@ -317,44 +378,41 @@ export async function addCalculationToProject(
 ): Promise<void> {
   await assertRole(projectId, userId, ['owner', 'editor']);
 
-  const client = getSupabaseClient();
-
-  // Get current calculations
-  const { data: project, error: fetchError } = await client
-    .from(PROJECTS_TABLE)
-    .select('calculations')
-    .eq('id', projectId)
-    .single();
-
-  if (fetchError) throw new Error(`[ESVA Collab] Failed to fetch project: ${fetchError.message}`);
-
-  const calculations: string[] = (project?.calculations as string[]) ?? [];
-  if (calculations.includes(receiptId)) return; // already linked
-
-  calculations.push(receiptId);
+  const client = getSupabaseAdmin();
+  const { data: ownedReceipt, error: receiptError } = await client
+    .from('calculation_receipts')
+    .select('id')
+    .eq('id', receiptId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (receiptError || !ownedReceipt) {
+    throw new Error('[ESVA Collab] Receipt not found or not owned by this member');
+  }
 
   const { error } = await client
-    .from(PROJECTS_TABLE)
-    .update({ calculations, updated_at: new Date().toISOString() })
-    .eq('id', projectId);
+    .from(CALCULATIONS_TABLE)
+    .upsert(
+      { project_id: projectId, receipt_id: receiptId },
+      { onConflict: 'project_id,receipt_id', ignoreDuplicates: true },
+    );
 
   if (error) throw new Error(`[ESVA Collab] Failed to add calculation: ${error.message}`);
+  await touchProject(projectId);
 }
 
 /**
  * Get all calculation receipt IDs for a project.
  */
 export async function getProjectCalculations(projectId: string): Promise<string[]> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
-    .from(PROJECTS_TABLE)
-    .select('calculations')
-    .eq('id', projectId)
-    .single();
+    .from(CALCULATIONS_TABLE)
+    .select('receipt_id')
+    .eq('project_id', projectId);
 
   if (error) throw new Error(`[ESVA Collab] Failed to get calculations: ${error.message}`);
-  return (data?.calculations as string[]) ?? [];
+  return (data ?? []).map((row: { receipt_id: string }) => row.receipt_id);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -372,7 +430,7 @@ export async function generateShareLink(
 ): Promise<ShareLink> {
   await assertRole(projectId, userId, ['owner', 'editor']);
 
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   const token = randomBytes(32).toString('hex');
   const now = new Date();
 
@@ -380,9 +438,7 @@ export async function generateShareLink(
     ? new Date(now.getTime() + expireHours * 60 * 60 * 1000).toISOString()
     : null;
 
-  const passwordHash = password
-    ? createHash('sha256').update(password).digest('hex')
-    : null;
+  const passwordHash = password ? hashSharePassword(password) : null;
 
   const linkData = {
     token,
@@ -416,7 +472,7 @@ export async function validateShareLink(
   token: string,
   password?: string,
 ): Promise<{ valid: boolean; projectId?: string; error?: string }> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(SHARE_LINKS_TABLE)
@@ -434,15 +490,16 @@ export async function validateShareLink(
   // Check password
   if (data.password_hash) {
     if (!password) return { valid: false, error: 'Password required' };
-    const hash = createHash('sha256').update(password).digest('hex');
-    if (hash !== data.password_hash) return { valid: false, error: 'Invalid password' };
+    if (!verifySharePassword(password, data.password_hash as string)) {
+      return { valid: false, error: 'Invalid password' };
+    }
   }
 
   return { valid: true, projectId: data.project_id as string };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 6 — Approval Workflow (Stub)
+// PART 6 — Approval Workflow
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -455,7 +512,7 @@ export async function requestApproval(
 ): Promise<ApprovalRequest> {
   await assertRole(projectId, requesterId, ['owner', 'editor']);
 
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   const now = new Date().toISOString();
 
   const approvalData = {
@@ -492,7 +549,7 @@ export async function approveProject(
   approved: boolean,
   comment?: string,
 ): Promise<ApprovalRequest> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   const now = new Date().toISOString();
 
   const status: ApprovalStatus = approved ? 'approved' : 'rejected';
@@ -560,7 +617,7 @@ async function addMemberRow(
   email?: string,
   invitedAt?: string,
 ): Promise<ProjectMember> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   const now = invitedAt ?? new Date().toISOString();
 
   const memberData = {
@@ -589,7 +646,7 @@ async function assertRole(
   userId: string,
   allowedRoles: MemberRole[],
 ): Promise<void> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
 
   const { data, error } = await client
     .from(MEMBERS_TABLE)
@@ -608,9 +665,38 @@ async function assertRole(
 }
 
 async function touchProject(projectId: string): Promise<void> {
-  const client = getSupabaseClient();
+  const client = getSupabaseAdmin();
   await client
     .from(PROJECTS_TABLE)
     .update({ updated_at: new Date().toISOString() })
     .eq('id', projectId);
+}
+
+async function hydrateProjects(rows: Record<string, unknown>[]): Promise<Project[]> {
+  return Promise.all(rows.map(async (row) => {
+    const projectId = row.id as string;
+    const [members, calculations] = await Promise.all([
+      getProjectMembers(projectId),
+      getProjectCalculations(projectId),
+    ]);
+    return { ...mapProjectRow(row), members, calculations };
+  }));
+}
+
+function hashSharePassword(password: string): string {
+  const salt = randomBytes(16);
+  const digest = scryptSync(password, salt, 32);
+  return `scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
+}
+
+function verifySharePassword(password: string, encoded: string): boolean {
+  const [scheme, saltValue, hashValue] = encoded.split('$');
+  if (scheme !== 'scrypt' || !saltValue || !hashValue) return false;
+  try {
+    const expected = Buffer.from(hashValue, 'base64url');
+    const actual = scryptSync(password, Buffer.from(saltValue, 'base64url'), expected.length);
+    return expected.length > 0 && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
