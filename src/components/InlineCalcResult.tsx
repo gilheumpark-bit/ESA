@@ -39,9 +39,14 @@ interface InlineCalcResultProps {
 }
 
 
-/** 결과값에서 판정 정보 추출 */
+/**
+ * 결과값에서 판정 정보 추출.
+ * hasVerdict=false 는 실제 적합/부적합 판정이 없다는 뜻 — 이때 녹색 "적합"
+ * 배지를 띄우면 오해를 부르므로 중립으로 표기한다 (bug M9).
+ */
 function extractJudgment(result: DetailedCalcResult): {
   pass: boolean;
+  hasVerdict: boolean;
   message: string;
   standardRef?: string;
 } {
@@ -49,6 +54,7 @@ function extractJudgment(result: DetailedCalcResult): {
   if (result.judgment) {
     return {
       pass: result.judgment.pass,
+      hasVerdict: true,
       message: result.judgment.message,
       standardRef: result.judgment.standardRef,
     };
@@ -63,6 +69,7 @@ function extractJudgment(result: DetailedCalcResult): {
       const pass = pct <= 3; // KEC 기준 3% 이하
       return {
         pass,
+        hasVerdict: true,
         message: pass
           ? `전압강하율 ${pct.toFixed(2)}% - KEC 허용범위 이내`
           : `전압강하율 ${pct.toFixed(2)}% - KEC 허용범위 초과 (3% 기준)`,
@@ -71,11 +78,12 @@ function extractJudgment(result: DetailedCalcResult): {
     }
   }
 
-  // 3순위: source 태그에서 기준 참조
+  // 3순위: 판정 근거 없음 — 계산만 완료. 적합/부적합을 단정하지 않는다.
   const firstSource = result.source?.[0];
 
   return {
-    pass: true,
+    pass: false,
+    hasVerdict: false,
     message: '계산 완료',
     standardRef: firstSource
       ? `${firstSource.standard} ${firstSource.clause}`
@@ -211,8 +219,12 @@ function ResultCard({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {/* 적합/부적합 배지 */}
-          {judgment.pass ? (
+          {/* 적합/부적합 배지 — 판정 근거가 있을 때만. 없으면 중립 표기 (bug M9) */}
+          {!judgment.hasVerdict ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--bg-tertiary)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--text-secondary)]">
+              계산 완료
+            </span>
+          ) : judgment.pass ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
               <Check size={10} />
               적합
@@ -241,9 +253,11 @@ function ResultCard({
       <div className="mb-1 flex items-baseline gap-1.5">
         <span
           className={`text-2xl font-black ${
-            judgment.pass
-              ? 'text-emerald-600 dark:text-emerald-400'
-              : 'text-red-600 dark:text-red-400'
+            !judgment.hasVerdict
+              ? 'text-[var(--text-primary)]'
+              : judgment.pass
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-red-600 dark:text-red-400'
           }`}
         >
           {primary.display}

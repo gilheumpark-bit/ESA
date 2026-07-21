@@ -24,6 +24,25 @@ import { authenticatedFetch } from '@/lib/client-auth';
 
 // ─── PART 1: Types ────────────────────────────────────────────
 
+// 계산기 상세 라우트는 /calc/[category]/[id] (2 세그먼트)다. 1 세그먼트
+// /calc/{id} 는 404 이므로 category 를 붙여준다. 라우트는 id 로 계산기를
+// 해석하고 category 는 breadcrumb 표시용이라, 미매핑 시 'power' fallback 도
+// 네비게이션은 유효하다. (bug H4)
+const CALC_CATEGORY_MAP: Record<string, string> = {
+  'voltage-drop': 'voltage-drop',
+  'cable-sizing': 'cable',
+  'ground-resistance': 'grounding',
+  'ground-conductor': 'grounding',
+  'single-phase-power': 'power',
+  'three-phase-power': 'power',
+  'short-circuit': 'protection',
+  'breaker-sizing': 'protection',
+  'transformer-capacity': 'transformer',
+  'solar-generation': 'renewable',
+  'battery-capacity': 'renewable',
+  'motor-capacity': 'motor',
+};
+
 interface QuestionDetail {
   id: string;
   title: string;
@@ -418,7 +437,7 @@ export default function QuestionDetailPage() {
                 {question.calcRefs.map((calcId) => (
                   <Link
                     key={calcId}
-                    href={`/calc/${calcId}`}
+                    href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}`}
                     className="flex items-center gap-1 rounded bg-white px-2.5 py-1 text-xs text-blue-600
                                border border-gray-200 hover:bg-blue-50
                                dark:bg-gray-700 dark:border-gray-600 dark:text-blue-400"

@@ -3,53 +3,22 @@
 /**
  * Receipt List Page — /receipt
  *
- * PART 1: Types & localStorage loader
- * PART 2: Receipt list item
- * PART 3: Page component
+ * Reads recent-calc history via the shared @/lib/recent-calcs store.
+ *
+ * PART 1: Receipt list item
+ * PART 2: Page component
  */
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FileText, Clock, ArrowRight, Inbox } from 'lucide-react';
+import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 1 — Types & localStorage Loader
+// PART 1 — Receipt List Item
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface RecentCalc {
-  id: string;
-  calcName: string;
-  category: string;
-  date: string;
-  keyResult: string;
-}
-
-/** 최근 계산 기록 로드 — 최대 200건으로 제한 (localStorage 오버플로 방지) */
-const MAX_RECENT_CALCS = 200;
-
-function loadRecentCalcs(): RecentCalc[] {
-  try {
-    const raw = localStorage.getItem('esa-recent-calcs');
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    // 초과분 정리 (오래된 항목 제거)
-    if (parsed.length > MAX_RECENT_CALCS) {
-      const trimmed = parsed.slice(0, MAX_RECENT_CALCS);
-      localStorage.setItem('esa-recent-calcs', JSON.stringify(trimmed));
-      return trimmed;
-    }
-    return parsed;
-  } catch {
-    return [];
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PART 2 — Receipt List Item
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function ReceiptItem({ calc }: { calc: RecentCalc }) {
+function ReceiptItem({ calc }: { calc: RecentCalcEntry }) {
   const dateStr = new Date(calc.date).toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: 'short',
@@ -91,11 +60,11 @@ function ReceiptItem({ calc }: { calc: RecentCalc }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 3 — Page Component
+// PART 2 — Page Component
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function ReceiptListPage() {
-  const [calcs, setCalcs] = useState<RecentCalc[]>([]);
+  const [calcs, setCalcs] = useState<RecentCalcEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {

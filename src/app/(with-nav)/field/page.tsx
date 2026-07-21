@@ -111,6 +111,7 @@ export default function FieldSafetyPage() {
     setOperationError('');
     setSosDelivery('');
     setSosLog([]);
+    setCheckedIds([]); // 새 분석 → 이행 이력 초기화 (bug M3: 이전 세션 잔존 방지)
     setAnalysis(result);
     setSchedule(sched);
     setStep('checklist');
@@ -290,8 +291,12 @@ export default function FieldSafetyPage() {
             </button>
           </div>
 
-          {/* 체크리스트 */}
-          <SafetyCheckList analysis={analysis} onCheckedChange={setCheckedIds} />
+          {/* 체크리스트 — 모니터링 왕복 시 이행 상태 보존 (bug M3) */}
+          <SafetyCheckList
+            analysis={analysis}
+            onCheckedChange={setCheckedIds}
+            initialCheckedIds={checkedIds}
+          />
 
           {/* 스케줄 */}
           {schedule && <SchedulePanel schedule={schedule} />}

@@ -34,6 +34,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { loadStoredProviderKey } from '@/lib/byok-storage';
+import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types and Constants
@@ -53,6 +54,21 @@ const CALC_CATEGORY_MAP: Record<string, string> = {
   'motor-capacity': 'motor',
 };
 
+// OCR 추천 계산기 id → 표시 라벨 (서버는 string[] 만 반환). tools/ocr 와 동일 관례.
+const CALC_LABELS: Record<string, string> = {
+  'voltage-drop': '전압강하 계산',
+  'cable-sizing': '케이블 사이즈 선정',
+  'breaker-sizing': '차단기 선정',
+  'motor-starting': '모터 기동전류',
+  'motor-load': '모터 부하 계산',
+  'demand-factor': '수용률 계산',
+  'load-calculation': '부하 계산',
+  'transformer-sizing': '변압기 용량',
+  'short-circuit': '단락전류 계산',
+  'three-phase-power': '3상 전력 계산',
+  'power-factor-correction': '역률 보상',
+};
+
 interface QuickCalc {
   id: string;
   name: string;
@@ -64,13 +80,8 @@ interface QuickCalc {
   domain: string;
 }
 
-interface CachedResult {
-  id: string;
-  calculatorName: string;
-  value: number | string;
-  unit: string;
-  timestamp: string;
-}
+// 최근 계산 이력은 공용 스토어(@/lib/recent-calcs)의 RecentCalcEntry 스키마를 쓴다.
+type CachedResult = RecentCalcEntry;
 
 const QUICK_CALCS: QuickCalc[] = [
   {
@@ -210,18 +221,23 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
   return (
     <ul className="space-y-2">
       {results.map((result) => (
-        <li key={result.id}>
+        // 공유 버튼을 Link(=<a>) 밖 형제로 둔다 — 이전엔 <a> 안에 <button> 이
+        // 중첩돼 유효하지 않은 HTML 이었다 (bug L9).
+        <li
+          key={result.id}
+          className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 p-4 active:bg-gray-50"
+        >
           <Link
             href={`/receipt/${result.id}`}
-            className="flex items-center justify-between rounded-xl bg-white border border-gray-200 p-4 active:bg-gray-50"
+            className="flex min-w-0 flex-1 items-center justify-between gap-2"
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">
-                {result.calculatorName}
+                {result.calcName}
               </p>
               <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                 <Clock className="h-3 w-3" />
-                {new Date(result.timestamp).toLocaleString('ko-KR', {
+                {new Date(result.date).toLocaleString('ko-KR', {
                   month: 'short',
                   day: 'numeric',
                   hour: '2-digit',
@@ -229,15 +245,14 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
                 })}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-blue-700">
-                {result.value} <span className="text-sm font-normal text-gray-500">{result.unit}</span>
-              </span>
+            <span className="text-lg font-bold text-blue-700">
+              {result.value} <span className="text-sm font-normal text-gray-500">{result.unit}</span>
+            </span>
+          </Link>
+          <div className="flex items-center gap-2">
               <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const text = `${result.calculatorName}: ${result.value} ${result.unit}`;
+                onClick={() => {
+                  const text = `${result.calcName}: ${result.value} ${result.unit}`;
                   if (navigator.share) {
                     navigator.share({ title: 'ESVA 계산 결과', text }).catch(() => {});
                   } else {
@@ -251,7 +266,6 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
               </button>
               <ChevronRight className="h-4 w-4 text-gray-300" />
             </div>
-          </Link>
         </li>
       ))}
     </ul>
@@ -274,7 +288,8 @@ interface NameplateResult {
     rawText: string;
     confidence: number;
   };
-  suggestedCalculators: { id: string; name: string }[];
+  // 서버(/api/ocr)는 계산기 id 문자열 배열만 반환한다.
+  suggestedCalculators: string[];
 }
 
 function CameraButton() {
@@ -395,14 +410,14 @@ function CameraButton() {
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-gray-600">이 데이터로 계산하기</p>
             <div className="flex flex-wrap gap-2">
-              {result.suggestedCalculators.map((calc) => (
+              {result.suggestedCalculators.map((calcId) => (
                 <Link
-                  key={calc.id}
-                  href={`/calc/${CALC_CATEGORY_MAP[calc.id] ?? 'power'}/${calc.id}`}
+                  key={calcId}
+                  href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}`}
                   className="flex items-center gap-1 rounded-lg bg-white border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 active:scale-95"
                 >
                   <Calculator className="h-3.5 w-3.5" />
-                  {calc.name}
+                  {CALC_LABELS[calcId] ?? calcId}
                 </Link>
               ))}
             </div>
@@ -535,18 +550,10 @@ export default function MobileFieldPage() {
   );
   const [recentResults, setRecentResults] = useState<CachedResult[]>([]);
 
-  // Load recent calculations from localStorage (offline-friendly)
+  // Load recent calculations from the shared store (offline-friendly)
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      try {
-        const stored = localStorage.getItem('esa-recent-calcs');
-        if (stored) {
-          const parsed = JSON.parse(stored) as CachedResult[];
-          setRecentResults(Array.isArray(parsed) ? parsed.slice(0, 10) : []);
-        }
-      } catch {
-        // Ignore corrupted browser history.
-      }
+      setRecentResults(loadRecentCalcs().slice(0, 10));
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);

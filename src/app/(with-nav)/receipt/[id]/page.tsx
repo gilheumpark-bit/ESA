@@ -28,6 +28,7 @@ import ReceiptCard from '@/components/ReceiptCard';
 import type { Receipt } from '@/engine/receipt/types';
 import { authenticatedFetch, optionalAuthenticatedFetch } from '@/lib/client-auth';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { getCachedReceipt } from '@/lib/receipt-cache';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Skeleton & Error States
@@ -321,14 +322,26 @@ export default function ReceiptPage({
     async function loadReceipt() {
       try {
         const res = await optionalAuthenticatedFetch(`/api/receipt/${id}`);
-        if (!res.ok) {
-          if (res.status === 404) throw new Error('영수증을 찾을 수 없습니다');
-          throw new Error(`불러오기 실패 (${res.status})`);
+        if (res.ok) {
+          const data: Receipt = await res.json();
+          if (!cancelled) setReceipt(data);
+          return;
         }
-        const data: Receipt = await res.json();
-        if (!cancelled) setReceipt(data);
+        // 서버 미스 — 익명 계산은 서버에 저장되지 않으므로 클라이언트
+        // 세션 캐시에서 폴백한다 (bug M5: 비로그인 영수증 링크 404 방지).
+        const cached = getCachedReceipt(id);
+        if (cached) {
+          if (!cancelled) setReceipt(cached);
+          return;
+        }
+        if (res.status === 404) throw new Error('영수증을 찾을 수 없습니다');
+        throw new Error(`불러오기 실패 (${res.status})`);
       } catch (err) {
-        if (!cancelled) {
+        // 네트워크 오류 시에도 세션 캐시를 마지막으로 시도한다.
+        const cached = getCachedReceipt(id);
+        if (cached) {
+          if (!cancelled) setReceipt(cached);
+        } else if (!cancelled) {
           setFetchError(
             err instanceof Error ? err.message : '알 수 없는 오류',
           );

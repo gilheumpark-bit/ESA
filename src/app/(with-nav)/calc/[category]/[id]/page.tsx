@@ -9,7 +9,7 @@
  * PART 4: Main page component
  */
 
-import { use, useMemo, useCallback } from 'react';
+import { use, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import {
   FileDown,
@@ -30,6 +30,7 @@ import StandardRefPanel from '@/components/StandardRefPanel';
 import Breadcrumb from '@/components/Breadcrumb';
 import { useCalculator } from '@/hooks/useCalculator';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES, LINKED_CALCS } from '@/lib/calculator-params';
+import { recordRecentCalc } from '@/lib/recent-calcs';
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -58,7 +59,7 @@ function ResultDisplay({
     const unit = r.unit ?? '';
     // 전압강하 → 기준 3%
      
-    if (unit === '%' && (receipt as any).calculatorId?.includes('voltage')) {
+    if (unit === '%' && receipt.calcId.includes('voltage')) {
       return { value: r.value, unit: '%', limit: 3, label: '전압강하', standardRef: 'KEC 232.52', direction: 'below' as const };
     }
     return null;
@@ -142,6 +143,26 @@ export default function CalculatorPage({
   const linked = LINKED_CALCS[id] ?? [];
 
   const { execute, result: _result, receipt, isLoading, error, reset } = useCalculator(id);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Recent-calc history writer (bug H3)
+  // 계산이 성공해 receipt가 생기면 로컬 이력에 기록한다 — /receipt·/mobile 이
+  // 읽는 esa-recent-calcs 에 유일하게 쓰는 지점. recordRecentCalc가 id로 dedup.
+  // ═══════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!receipt) return;
+    const rv = receipt.result?.value;
+    const unit = receipt.result?.unit ?? '';
+    recordRecentCalc({
+      id: receipt.id,
+      calcName: calcMeta?.name ?? id,
+      category,
+      date: receipt.calculatedAt ?? new Date().toISOString(),
+      keyResult: rv == null ? '' : `${rv}${unit ? ` ${unit}` : ''}`,
+      value: rv == null ? '' : rv,
+      unit,
+    });
+  }, [receipt, calcMeta, category, id]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // URL Parameter Support — read on mount, write on calculate

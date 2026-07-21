@@ -133,47 +133,49 @@ function TreeItemNode({
   const BadgeIcon = badge.icon;
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(ref_)}
-      className="mb-1 flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          {ref_.clause && (
-            <span className="shrink-0 font-mono text-xs text-[var(--text-tertiary)]">
-              {ref_.clause}
+    <div className="mb-1 flex items-start gap-2">
+      <button
+        type="button"
+        onClick={() => onSelect?.(ref_)}
+        className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {ref_.clause && (
+              <span className="shrink-0 font-mono text-xs text-[var(--text-tertiary)]">
+                {ref_.clause}
+              </span>
+            )}
+            <span className="text-sm font-medium text-[var(--text-primary)]">
+              {ref_.title_ko}
             </span>
+          </div>
+          <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">{ref_.title_en}</p>
+          {ref_.edition && (
+            <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">Edition: {ref_.edition}</p>
           )}
-          <span className="text-sm font-medium text-[var(--text-primary)]">
-            {ref_.title_ko}
-          </span>
         </div>
-        <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">{ref_.title_en}</p>
-        {ref_.edition && (
-          <p className="mt-0.5 text-xs text-[var(--text-tertiary)]">Edition: {ref_.edition}</p>
-        )}
-      </div>
 
-      {/* License badge */}
-      <span className={`mt-0.5 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
-        <BadgeIcon size={10} />
-        {badge.label}
-      </span>
+        {/* License badge */}
+        <span className={`mt-0.5 flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
+          <BadgeIcon size={10} />
+          {badge.label}
+        </span>
+      </button>
 
-      {/* External link */}
+      {/* External link — button 밖 형제로 둔다: <a> in <button> 무효 HTML 회피 (bug L5) */}
       {ref_.url && (
         <a
           href={ref_.url}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-0.5 shrink-0 text-[var(--text-tertiary)] transition-colors hover:text-[var(--color-primary)]"
+          aria-label="표준 원문 새 탭에서 열기"
+          className="mt-2 shrink-0 text-[var(--text-tertiary)] transition-colors hover:text-[var(--color-primary)]"
         >
           <ExternalLink size={14} />
         </a>
       )}
-    </button>
+    </div>
   );
 }
 

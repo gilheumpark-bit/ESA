@@ -11,6 +11,7 @@ import { useState, useCallback } from 'react';
 import type { Receipt } from '@/engine/receipt/types';
 import type { DetailedCalcResult } from '@/engine/calculators/types';
 import { cacheReceipt } from '@/lib/receipt-cache';
+import { readStoredCountry } from '@/hooks/useSettings';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -46,10 +47,12 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
       setError(null);
 
       try {
+        // Forward the user's selected country so the Country/Standard setting
+        // actually reaches the engine (bug M2 — was always defaulting to KR).
         const res = await fetch('/api/calculate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ calculatorId, inputs }),
+          body: JSON.stringify({ calculatorId, inputs, countryCode: readStoredCountry() }),
         });
 
         if (!res.ok) {

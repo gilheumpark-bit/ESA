@@ -129,10 +129,17 @@ interface SafetyCheckListProps {
    * 완료 기록에 이행 항목이 빈 채로 남는다.
    */
   onCheckedChange?: (checkedIds: string[]) => void;
+  /**
+   * 부모가 보관 중인 체크 상태 초기값 (bug M3). 이 컴포넌트는 모니터링 단계로
+   * 이동하면 언마운트됐다가 되돌아올 때 재마운트되는데, 빈 Set 으로 초기화하면
+   * mount effect 가 onCheckedChange([]) 를 방출해 이미 이행한 항목 기록을
+   * 0 으로 오염시킨다. 부모 값을 seed 로 받아 왕복해도 상태가 보존되게 한다.
+   */
+  initialCheckedIds?: string[];
 }
 
-export function SafetyCheckList({ analysis, className = '', onCheckedChange }: SafetyCheckListProps) {
-  const [checked, setChecked] = useState<Set<string>>(new Set());
+export function SafetyCheckList({ analysis, className = '', onCheckedChange, initialCheckedIds }: SafetyCheckListProps) {
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(initialCheckedIds ?? []));
 
   // 체크 상태를 부모에 올려보낸다. setState 업데이터 안에서 부르면 렌더 중에
   // 부모 상태를 바꾸게 되므로 effect로 분리한다.

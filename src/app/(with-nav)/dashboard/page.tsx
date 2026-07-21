@@ -288,9 +288,21 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <h1 className="text-xl font-semibold text-[var(--text-primary)]">대시보드를 열 수 없습니다</h1>
         <p className="mt-2 text-sm text-[var(--color-error)]" role="alert">{error}</p>
-        <Link href={user ? '/dashboard' : '/login'} className="mt-5 inline-flex text-sm text-[var(--color-primary)] hover:underline">
-          {user ? '다시 시도' : '로그인하기'}
-        </Link>
+        {/* '다시 시도' 는 같은 라우트 Link 라 재조회가 안 됐다 — 실제 재조회를
+            위해 reload 버튼으로 교체 (bug L2). 비로그인은 /login 이동 유지. */}
+        {user ? (
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-5 inline-flex text-sm text-[var(--color-primary)] hover:underline"
+          >
+            다시 시도
+          </button>
+        ) : (
+          <Link href="/login" className="mt-5 inline-flex text-sm text-[var(--color-primary)] hover:underline">
+            로그인하기
+          </Link>
+        )}
       </div>
     );
   }

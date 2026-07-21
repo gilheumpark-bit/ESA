@@ -173,6 +173,8 @@ function ImageUploader({
             onChange={e => {
               const file = e.target.files?.[0];
               if (file) onImageSelect(file);
+              // 같은 파일 재선택 시에도 onChange 가 다시 발화하도록 초기화 (bug L1)
+              e.target.value = '';
             }}
           />
 
@@ -192,6 +194,8 @@ function ImageUploader({
             onChange={e => {
               const file = e.target.files?.[0];
               if (file) onImageSelect(file);
+              // 같은 파일 재선택 시에도 onChange 가 다시 발화하도록 초기화 (bug L1)
+              e.target.value = '';
             }}
           />
         </div>

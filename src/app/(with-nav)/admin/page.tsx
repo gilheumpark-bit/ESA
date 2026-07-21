@@ -296,9 +296,10 @@ function UsageSection({ stats }: { stats: UsageStat[] }) {
 // PART 4 — Audit Log Table
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const AUDIT_PAGE_SIZE = 10;
+
 function AuditLogSection({
   entries: initialEntries,
-  totalPages: initialTotalPages,
 }: {
   entries: AuditRow[];
   totalPages: number;
@@ -307,13 +308,29 @@ function AuditLogSection({
   const [actionFilter, setActionFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
-  const [totalPages] = useState(initialTotalPages);
   const [exporting, setExporting] = useState(false);
+
+  const filtered = entries.filter(e => {
+    if (actionFilter && e.action !== actionFilter) return false;
+    if (searchQuery && !e.resource.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  // \uD544\uD130/\uAC80\uC0C9 \uACB0\uACFC\uB97C \uD074\uB77C\uC774\uC5B8\uD2B8\uC5D0\uC11C \uD398\uC774\uC9C0 \uBD84\uD560\uD55C\uB2E4. \uC11C\uBC84\uB294 \uCD5C\uC2E0 20\uAC74\uC744 \uB2E8\uC77C
+  // \uD398\uC774\uC9C0\uB85C\uB9CC \uC8FC\uBBC0\uB85C(auditTotalPages=1) \uAE30\uC874 \uD398\uC774\uC9C0\uB124\uC774\uC158\uC740 \uC8FD\uC5B4 \uC788\uC5C8\uB2E4 (bug M4).
+  const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
+  const pageEntries = filtered.slice((page - 1) * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE);
+
+  // \uD544\uD130\u00B7\uAC80\uC0C9\uC774 \uBC14\uB00C\uBA74 1\uD398\uC774\uC9C0\uB85C \uB418\uB3CC\uB9B0\uB2E4 (\uBC94\uC704 \uBC16 \uD398\uC774\uC9C0 \uBC29\uC9C0).
+  useEffect(() => {
+    setPage(1);
+  }, [actionFilter, searchQuery]);
 
   const handleExportCSV = useCallback(async () => {
     setExporting(true);
     try {
-      const csv = entries.map(e =>
+      // \uD604\uC7AC \uD544\uD130\u00B7\uAC80\uC0C9\uC774 \uC801\uC6A9\uB41C \uACB0\uACFC \uC804\uCCB4\uB97C \uB0B4\uBCF4\uB0B8\uB2E4 (bug L8: \uD544\uD130 \uBB34\uC2DC \uC218\uC815).
+      const csv = filtered.map(e =>
         `"${e.createdAt}","${e.userId}","${e.action}","${e.resource}","${e.ip ?? ''}"`,
       ).join('\n');
       const header = '"Timestamp","User","Action","Resource","IP"\n';
@@ -327,13 +344,7 @@ function AuditLogSection({
     } finally {
       setExporting(false);
     }
-  }, [entries]);
-
-  const filtered = entries.filter(e => {
-    if (actionFilter && e.action !== actionFilter) return false;
-    if (searchQuery && !e.resource.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
+  }, [filtered]);
 
   return (
     <div className="space-y-4">
@@ -385,7 +396,7 @@ function AuditLogSection({
             </tr>
           </thead>
           <tbody>
-            {filtered.map(entry => (
+            {pageEntries.map(entry => (
               <tr key={entry.id} className="border-b border-[var(--border-default)] last:border-b-0">
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-tertiary)]">
                   {new Date(entry.createdAt).toLocaleString('ko-KR')}
