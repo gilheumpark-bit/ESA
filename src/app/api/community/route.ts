@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const opts: QuestionListOptions = {
-      page: parseInt(searchParams.get('page') ?? '1', 10) || 1,
+      page: Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1),
       pageSize: Math.min(parseInt(searchParams.get('pageSize') ?? '20', 10) || 20, 50),
       sort: (searchParams.get('sort') as QuestionListOptions['sort']) ?? 'newest',
       search: searchParams.get('search') ?? undefined,

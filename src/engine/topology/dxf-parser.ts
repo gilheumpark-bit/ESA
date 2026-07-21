@@ -477,7 +477,10 @@ export function parseDxfToSLD(
 // ── Helper ──
 
 function parseNodeCoords(nodeId: string): { x: number; y: number } | null {
-  const match = nodeId.match(/node_at_(-?\d+)_(-?\d+)/);
+  // 소수 좌표 허용(버그 사냥 F2 수리·PDF 파서 동종) — 정본 endpoint-snap NODE_AT와 정렬.
+  const match = nodeId.match(/node_at_(-?[\d.]+)_(-?[\d.]+)/);
   if (!match) return null;
-  return { x: parseInt(match[1]), y: parseInt(match[2]) };
+  const x = parseFloat(match[1]);
+  const y = parseFloat(match[2]);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }

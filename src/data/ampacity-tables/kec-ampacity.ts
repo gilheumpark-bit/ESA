@@ -135,20 +135,28 @@ interface TempCorrectionRow {
 }
 
 /**
- * Temperature correction factors.
- * Base ambient temperature: 30°C for KEC.
+ * Temperature correction factors — IEC 60364-5-52 Table B.52.14 (KEC 232 준거).
+ * Base ambient temperature: 30°C. 각 밴드는 상한 온도의 값(밴드 내 보수측)을 쓴다.
+ *
+ * 2026-07-21 버그 사냥 #1 수리: `xlpe90` 열이 실제로는 PVC70 값(35°C 0.94·45°C
+ * 0.79·60°C 0.50)을 담고, `pvc60` 열은 한 밴드 어긋나(45°C 0.71·60°C 0.00) 있었다.
+ * XLPE는 90°C 도체라 PVC(70°C)보다 열에 강해 보정계수가 높아야 하는데(45°C 0.87 vs
+ * 0.79) 역전돼 있었다 — XLPE 케이블을 과소, 저온측(15°C)은 과대(비보수·화재 방향)로
+ * 계산. 별개 `temp-correction` 계산기(공식 √((Tmax−Ta)/(Tmax−30)))는 XLPE 40°C를
+ * 0.913으로 옳게 내던 것과도 표가 모순이었다. B.52.14 정확값으로 정렬한다.
+ * (mi70 열은 70°C sheath 값이 이미 정확해 불변.)
  */
 const TEMP_CORRECTION: TempCorrectionRow[] = [
-  { ambientMin: 10, ambientMax: 15, pvc60: 1.22, mi70: 1.18, xlpe90: 1.15 },
-  { ambientMin: 16, ambientMax: 20, pvc60: 1.17, mi70: 1.14, xlpe90: 1.12 },
-  { ambientMin: 21, ambientMax: 25, pvc60: 1.12, mi70: 1.10, xlpe90: 1.08 },
+  { ambientMin: 10, ambientMax: 15, pvc60: 1.17, mi70: 1.18, xlpe90: 1.12 },
+  { ambientMin: 16, ambientMax: 20, pvc60: 1.12, mi70: 1.14, xlpe90: 1.08 },
+  { ambientMin: 21, ambientMax: 25, pvc60: 1.06, mi70: 1.10, xlpe90: 1.04 },
   { ambientMin: 26, ambientMax: 30, pvc60: 1.00, mi70: 1.00, xlpe90: 1.00 },
-  { ambientMin: 31, ambientMax: 35, pvc60: 0.91, mi70: 0.93, xlpe90: 0.94 },
-  { ambientMin: 36, ambientMax: 40, pvc60: 0.82, mi70: 0.87, xlpe90: 0.87 },
-  { ambientMin: 41, ambientMax: 45, pvc60: 0.71, mi70: 0.79, xlpe90: 0.79 },
-  { ambientMin: 46, ambientMax: 50, pvc60: 0.58, mi70: 0.71, xlpe90: 0.71 },
-  { ambientMin: 51, ambientMax: 55, pvc60: 0.41, mi70: 0.61, xlpe90: 0.61 },
-  { ambientMin: 56, ambientMax: 60, pvc60: 0.00, mi70: 0.50, xlpe90: 0.50 },
+  { ambientMin: 31, ambientMax: 35, pvc60: 0.94, mi70: 0.93, xlpe90: 0.96 },
+  { ambientMin: 36, ambientMax: 40, pvc60: 0.87, mi70: 0.87, xlpe90: 0.91 },
+  { ambientMin: 41, ambientMax: 45, pvc60: 0.79, mi70: 0.79, xlpe90: 0.87 },
+  { ambientMin: 46, ambientMax: 50, pvc60: 0.71, mi70: 0.71, xlpe90: 0.82 },
+  { ambientMin: 51, ambientMax: 55, pvc60: 0.61, mi70: 0.61, xlpe90: 0.76 },
+  { ambientMin: 56, ambientMax: 60, pvc60: 0.50, mi70: 0.50, xlpe90: 0.71 },
 ];
 
 function getTemperatureFactor(ambientTemp: number, insulation: InsulationType): number {

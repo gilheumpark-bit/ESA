@@ -56,17 +56,30 @@ export function parseSpecText(text: string): ParsedSpec {
 
   // 차단기 극수·AF/AT 정격: "3P-50/20"(bare)·"4P-400AF/400AT"(접미)·"MCCB 100/75"(키워드 문맥).
   // 실발주 분전반 일람 표기 — 골든 파일럿에서 구조화 결속 0%의 원인으로 실측된 공백.
-  // 날짜(2021/04)·분수(1/2) 오독 방지: P 토큰 또는 차단기 키워드 문맥에서만 bare 슬래시를 읽는다.
+  //
+  // bare 슬래시(dd/dd)는 정격 말고도 전압쌍(380/220V)·감도전류(50/30mA)·날짜
+  // (2021/04)와 충돌한다(버그 사냥 F1 실측: 전압쌍을 AF/AT로 오독→review 규칙
+  // false-PASS/false-FAIL, "MCCB 400A 380/220V"의 실정격 400을 220으로 덮어씀).
+  // 2번째 수가 V/mA로 이어지면 전기량이지 트립이 아니고, 앞자리 0(2021/04의 04)은
+  // 날짜다 — 꼬리 부정탐색 + 사후 타당성(날짜·최대프레임 6300A)으로 배제한다.
   const polesMatch = rest.match(/(\d)\s*P\b/i);
   if (polesMatch) spec.poles = `${polesMatch[1]}P`;
+  const TRIP_TAIL = String.raw`(?!\d)(?!\s*[Vv])(?!\s*mA)`;
   let ftMatch = rest.match(/(\d{2,4})\s*AF\s*[/-]\s*(\d{2,4})\s*AT\b/i);
-  if (!ftMatch) ftMatch = rest.match(/\dP\s*[-\s]\s*(\d{2,4})\s*\/\s*(\d{2,4})(?!\d)/i);
+  let ftExplicit = ftMatch !== null; // AF/AT 명시 표기는 타당성 검사 면제
+  if (!ftMatch) ftMatch = rest.match(new RegExp(String.raw`\dP\s*[-\s]\s*(\d{2,4})\s*\/\s*(\d{2,4})` + TRIP_TAIL, 'i'));
   if (!ftMatch && /\b(MCCB|ELCB|ELB|ACB|VCB|MCB|CB|차단기|누전차단기)\b/i.test(text)) {
-    ftMatch = rest.match(/(\d{2,4})\s*\/\s*(\d{2,4})(?!\d)/);
+    ftMatch = rest.match(new RegExp(String.raw`(\d{2,4})\s*\/\s*(\d{2,4})` + TRIP_TAIL));
   }
   if (ftMatch) {
-    spec.frameA = parseFloat(ftMatch[1]);
-    spec.tripA = parseFloat(ftMatch[2]);
+    const f = parseFloat(ftMatch[1]);
+    const t = parseFloat(ftMatch[2]);
+    // 날짜(앞자리 0)·비정격(프레임>6300A MCCB 최대) 배제 — 명시 AF/AT는 예외.
+    const looksDate = /^0\d/.test(ftMatch[1]) || /^0\d/.test(ftMatch[2]);
+    if (ftExplicit || (!looksDate && f <= 6300 && t <= 6300)) {
+      spec.frameA = f;
+      spec.tripA = t;
+    }
   }
 
   // 전류: 100A, 50AT

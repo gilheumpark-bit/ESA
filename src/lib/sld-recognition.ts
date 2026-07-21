@@ -404,6 +404,12 @@ function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
 export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[] {
   const steps: CalcChainStep[] = [];
   let stepNum = 1;
+  // 동적 스텝 번호를 결박한다(버그 사냥 F7 수리): dependsOn을 [2]/[3]으로 하드코딩하면
+  // load 단계가 없을 때 스텝 번호가 당겨져 단락전류·케이블 단계가 자기 자신을
+  // 참조한다(재현: TR+cable, load 없음 → short-circuit step2 dependsOn[2]). 실제
+  // 배정된 번호를 변수로 잡아 참조한다.
+  let txStepNum: number | undefined;
+  let scStepNum: number | undefined;
 
   const { components, connections } = analysis;
   const hasTransformers = components.some(c => c.type === 'transformer');
@@ -431,8 +437,9 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
   // Step 2: 변압기 용량 검증
   if (hasTransformers) {
     const tx = components.find(c => c.type === 'transformer')!;
+    txStepNum = stepNum++;
     steps.push({
-      step: stepNum++,
+      step: txStepNum,
       calculatorId: 'transformer-sizing',
       inputs: {
         rating: tx.rating,
@@ -447,15 +454,15 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
   // Step 3: 단락전류 계산
   if (hasTransformers) {
     const tx = components.find(c => c.type === 'transformer')!;
-    const scStep = stepNum++;
+    scStepNum = stepNum++;
     steps.push({
-      step: scStep,
+      step: scStepNum,
       calculatorId: 'short-circuit',
       inputs: {
         transformerRating: tx.rating,
         voltage: analysis.systemVoltage,
       },
-      dependsOn: hasTransformers ? [2] : undefined,
+      dependsOn: txStepNum !== undefined ? [txStepNum] : undefined,
       description: '단락전류 계산 - 차단기 선정 근거',
     });
   }
@@ -472,7 +479,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
         length: cable.length,
         voltage: analysis.systemVoltage,
       },
-      dependsOn: hasTransformers ? [3] : undefined,
+      dependsOn: scStepNum !== undefined ? [scStepNum] : undefined,
       description: '케이블 사이즈 선정',
     });
   }

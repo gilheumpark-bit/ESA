@@ -1,4 +1,4 @@
-import { parseSLDResponse } from '../sld-recognition';
+import { parseSLDResponse, generateCalcChainFromSLD } from '../sld-recognition';
 
 describe('SLD recognition response validation', () => {
   it('drops unknown components, dangling edges, and lengths without explicit units', () => {
@@ -37,5 +37,42 @@ describe('SLD recognition response validation', () => {
       connections: [],
       confidence: 0,
     }));
+  });
+});
+
+describe('generateCalcChainFromSLD — dependsOn 동적 결박 (버그 사냥 F7)', () => {
+  const mk = (
+    comps: import('../sld-recognition').SLDComponent[],
+    conns: import('../sld-recognition').SLDConnection[] = [],
+  ): import('../sld-recognition').SLDAnalysis => ({
+    components: comps, connections: conns,
+    suggestedCalculations: [], confidence: 0.9, rawDescription: 't',
+  });
+
+  it('load 없는 TR+cable에서 스텝이 자기 자신을 참조하지 않는다', () => {
+    const chain = generateCalcChainFromSLD(mk(
+      [{ id: 'c1', type: 'transformer', rating: '1000kVA', position: { x: 0, y: 0 } }],
+      [{ id: 'n1', from: 'c1', to: 'c2', length: '10m' }],
+    ));
+    for (const step of chain) {
+      expect(step.dependsOn ?? []).not.toContain(step.step);
+      for (const dep of step.dependsOn ?? []) expect(dep).toBeLessThan(step.step);
+    }
+    const sc = chain.find((s) => s.calculatorId === 'short-circuit');
+    const tx = chain.find((s) => s.calculatorId === 'transformer-sizing');
+    expect(sc?.dependsOn).toEqual([tx!.step]);
+  });
+
+  it('load 있는 경로에서도 의존이 실제 선행 스텝을 가리킨다', () => {
+    const chain = generateCalcChainFromSLD(mk(
+      [
+        { id: 'l1', type: 'load', rating: '10kW', position: { x: 0, y: 0 } },
+        { id: 'c1', type: 'transformer', rating: '1000kVA', position: { x: 0, y: 0 } },
+      ],
+      [{ id: 'n1', from: 'c1', to: 'c2', length: '10m' }],
+    ));
+    for (const step of chain) {
+      for (const dep of step.dependsOn ?? []) expect(dep).toBeLessThan(step.step);
+    }
   });
 });

@@ -72,8 +72,10 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const page = parseInt(searchParams.get('page') ?? '1', 10);
-    const pageSize = parseInt(searchParams.get('pageSize') ?? '20', 10);
+    // 페이지네이션 NaN·음수·과대 가드(버그 사냥 수리): 미검증 시 range(NaN,NaN)/
+    // 음수 오프셋으로 PostgREST 500, 과대 pageSize로 대량 조회. community와 동일 규율.
+    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1);
+    const pageSize = Math.min(Math.max(1, parseInt(searchParams.get('pageSize') ?? '20', 10) || 20), 50);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
     const type = searchParams.get('type') as NotificationType | null;
 

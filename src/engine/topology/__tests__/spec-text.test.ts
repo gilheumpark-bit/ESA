@@ -98,6 +98,27 @@ describe('차단기 극수·AF/AT 정격 — 실도면 분전반 일람 표기 (
     expect(parseSpecText('비고 100/75').frameA).toBeUndefined();
   });
 
+  // 버그 사냥 F1: bare 슬래시가 전압쌍·감도전류·날짜를 AF/AT로 오독 → review
+  // 규칙에 false-PASS/false-FAIL 주입. 2번째 수가 V/mA·앞자리 0이면 정격 아님.
+  it('전압쌍(380/220V)을 AF/AT로 오독하지 않고 실정격 400A를 보존한다', () => {
+    const s = parseSpecText('MCCB 4P 400A 3φ4W 380/220V');
+    expect(s.frameA).toBeUndefined();
+    expect(s.tripA).toBeUndefined();
+    expect(s.current).toBe(400);
+  });
+
+  it('명시 30AT + 전압쌍 표기에서 전압쌍을 트립으로 덮어쓰지 않는다', () => {
+    expect(parseSpecText('MCCB 3P 30AT 380/220V').current).toBe(30);
+    // 역순 전압쌍도 AT>AF 허위 FAIL을 만들지 않는다
+    expect(parseSpecText('MCCB 3P 30AT 220/380V').frameA).toBeUndefined();
+  });
+
+  it('감도전류(50/30mA)·날짜(2021/04)·키워드 없는 전압쌍은 정격이 아니다', () => {
+    expect(parseSpecText('ELCB 2P 50/30mA').tripA).toBeUndefined();
+    expect(parseSpecText('MCCB 교체 2021/04').frameA).toBeUndefined();
+    expect(parseSpecText('PANEL LP-1 3P 380/220V').frameA).toBeUndefined();
+  });
+
   it('트립(AT)이 있으면 정격전류는 트립이 정본 — 기존 A 단독 매칭과 충돌 없음', () => {
     const s = parseSpecText('MCCB 3P 225AF/150AT 380V');
     expect(s.voltage).toBe(380);

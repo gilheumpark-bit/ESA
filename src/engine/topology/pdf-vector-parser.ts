@@ -103,14 +103,17 @@ function detectComponentType(text: string): SLDComponentType {
 
 // 주석 문장 게이트(2026-07-21 3차 실증): 영문 노트 "If you do not have VCB but
 // you have LBS…"가 breaker/panel로 승격됐다(RSC 실도면 라이브 실측). 설비 라벨은
-// 짧은 코드(MCCB ABSc 3P 250/100A)지 문장이 아니다 — 단어가 많고(5+) 기능어
-// (관사·조동사·접속사) 또는 한국어 지시 어미가 있으면 장치가 아니라 주석이다.
-// 두 증거를 모두 요구해 "DIESEL GENERATOR (Standby)"류 정상 라벨을 보존한다.
-const PROSE_FUNCTION_WORDS = /\b(if|you|do|does|not|but|have|has|the|an?|shall|should|will|must|for|with|are|is|to|of|in)\b/i;
+// 짧은 코드(MCCB ABSc 3P 250/100A)지 문장이 아니다.
+// 임계 ≥2(버그 사냥 F3 수리): 단일 기능어는 설비 라벨에도 흔하다("PANEL A"의 A,
+// "SPARE MCCB FOR FUTURE"의 FOR) — 1개만으로 주석 판정하면 실설비를 억제한다.
+// 진짜 주석은 기능어가 여럿(if/you/do/not/have… 7개)이므로 2개 이상을 요구한다.
+const PROSE_FUNCTION_WORDS = /\b(if|you|do|does|not|but|have|has|the|an?|shall|should|will|must|for|with|are|is|to|of|in)\b/gi;
 const KOREAN_PROSE_MARKERS = /(하여|하십시오|할 것|해야|합니다|바랍니다|참조)/;
 function isProseText(text: string): boolean {
   if (text.trim().split(/\s+/).length < 5) return false;
-  return PROSE_FUNCTION_WORDS.test(text) || KOREAN_PROSE_MARKERS.test(text);
+  if (KOREAN_PROSE_MARKERS.test(text)) return true;
+  const hits = text.match(PROSE_FUNCTION_WORDS);
+  return hits !== null && hits.length >= 2;
 }
 
 // 표 문서 표제(2026-07-21 3차 실증): 실물 케이블 스케줄(EE-007)은 표 블록마다
@@ -509,7 +512,14 @@ export async function parsePdfToSLD(
 }
 
 function parseNodeCoords(nodeId: string): { x: number; y: number } | null {
-  const match = nodeId.match(/node_at_(-?\d+)_(-?\d+)/);
+  // 소수 좌표 허용(버그 사냥 F2 수리): formatEndpointId/endpoint-snap의 NODE_AT는
+  // 소수 6자리를 보존하는데 이 정수-전용 정규식이 `node_at_123.36_707.85`를 null로
+  // 떨궈, 케이블 스펙→연결 근접 매핑이 소수 좌표(PDF Y반전·A계열 841.89pt 등으로
+  // 거의 전 끝점)에서 전면 사문이었다 — CABLE-AMPACITY가 못 발화하고 DATA-GAP으로만
+  // 침묵. 정본과 같은 [\d.] 문자군으로 정렬한다.
+  const match = nodeId.match(/node_at_(-?[\d.]+)_(-?[\d.]+)/);
   if (!match) return null;
-  return { x: parseInt(match[1]), y: parseInt(match[2]) };
+  const x = parseFloat(match[1]);
+  const y = parseFloat(match[2]);
+  return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
 }

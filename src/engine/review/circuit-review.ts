@@ -195,15 +195,25 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
 
   // ── 규칙 3: TR 정격 2차전류 vs 페이지 최대 차단기 (정보 제공 — WARN까지만) ──
   // 2차전압이 같은 라벨에 무모호하게 적힌 TR만 계산한다. TR 라벨 관례:
-  // "6.6KV/380V"·"380/220V" — 마지막 전압 토큰을 2차로 읽되, 복수 해석이
-  // 가능하면(380-220V) 낮은 쪽이 아닌 상간전압(앞 값)을 쓴다.
+  // 2차전압 추출 — 상간(선간) 전압을 쓴다. 3φ 정격 2차전류는 I₂=kVA/(√3·V_LL)라
+  // V_LL(380)이 기준이지 상전압(220)이 아니다. "380/220V" 쌍은 선간/상전압이므로
+  // 큰 값(380)이 선간이다(버그 사냥 F4 실측: 구 정규식이 슬래시 뒤 220을 잡아
+  // 기준값 1.73배 과대). "6.6kV/380V"는 1·2차라 쌍 정규식(3~4자리 V 쌍)에 안
+  // 걸리고 단독 380V로 떨어진다.
+  const secondaryVoltage = (label: string): number | null => {
+    const pair = label.match(/(\d{3,4})\s*[-/]\s*(\d{3,4})\s*V\b/i);
+    if (pair) return Math.max(parseInt(pair[1], 10), parseInt(pair[2], 10));
+    const single = label.match(/(?:^|[\s/])(\d{3,4})\s*V\b/i);
+    return single ? parseInt(single[1], 10) : null;
+  };
   const transformers = analysis.components.filter((c) => c.type === 'transformer');
   let bareTransformers = 0;
   for (const tr of transformers) {
     const spec = deriveSpec(tr);
     const hasKva = spec.power !== undefined && /VA$/i.test(spec.powerUnit ?? '');
     const labelAll = [tr.label, tr.rating, tr.properties?.load].filter(Boolean).join(' ');
-    const secM = labelAll.match(/\/\s*(\d{3,4})(?:\s*[-/]\s*\d{3})?\s*V\b/i);
+    const v2parsed = secondaryVoltage(labelAll);
+    const secM = v2parsed !== null;
     // 수치 증거가 전혀 없는 bare 심볼(라벨 "TR"뿐)은 항목별 UNKNOWN을 만들지
     // 않는다 — 실측(수변전 p5)에서 TR 심볼 에코 8건이 UNKNOWN 소음으로 신호를
     // 희석했다. 존재 자체는 DATA-GAP 집계에 싣는다(은폐 아님·압축).
@@ -230,7 +240,7 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       continue;
     }
     const kva = (spec.power as number) * ((spec.powerUnit ?? '').toUpperCase() === 'MVA' ? 1000 : 1);
-    const v2 = parseInt(secM[1], 10);
+    const v2 = v2parsed as number;
     const i2 = phase3 ? (kva * 1000) / (Math.sqrt(3) * v2) : (kva * 1000) / v2;
     const formula = phase3 ? 'I₂ = kVA×1000/(√3×V₂)' : 'I₂ = kVA×1000/V₂ (단상)';
     findings.push({

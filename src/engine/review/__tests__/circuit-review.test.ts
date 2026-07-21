@@ -127,12 +127,21 @@ describe('TR-MAIN-CURRENT — 정격 2차전류 (독립 손계산 known-answer)'
 
   it('단상 10kVA·220V → 45A — 3상 산식(26A) 과소평가 방지 (적대 검증 실측 수리)', () => {
     const r = reviewAnalysis(analysisOf([
-      { id: 'comp_1', type: 'transformer', label: '단상 TR 380/220V', rating: '10kVA', position: pos },
+      { id: 'comp_1', type: 'transformer', label: '단상 TR 220V', rating: '10kVA', position: pos },
     ]));
     const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
     expect(f?.severity).toBe('INFO');
     expect(f?.computed?.['정격 2차전류']).toBe('45A');
     expect(f?.limit?.source).toContain('단상');
+  });
+
+  it('3φ 380/220V 쌍은 상간 380을 쓴다 — 슬래시 뒤 220(1519→2624 오차) 방지 (F4 수리)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'TR 3φ 380/220V', rating: '1000kVA', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
+    expect(f?.given.secondary).toBe('380V');
+    expect(f?.computed?.['정격 2차전류']).toBe('1519A');
   });
 
   it('상수(1φ/3φ) 미기재면 계산하지 않고 UNKNOWN(무발명)', () => {

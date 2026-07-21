@@ -150,7 +150,11 @@ export async function getQuestions(
   }
 
   if (search) {
-    query = query.or(`title.ilike.%${search}%,body.ilike.%${search}%`);
+    // PostgREST .or() 필터 인젝션·무결 500 차단(버그 사냥 수리): 콤마·괄호·콜론·
+    // 별표·점·백슬래시는 필터 문법 문자다 — 무인증 공개 GET 입력이라 조건 주입·
+    // 파싱 에러(→500)를 만든다. 필터 의미 문자를 제거하고 길이를 100자로 캡한다.
+    const safe = search.replace(/[,()*:.\\%]/g, ' ').trim().slice(0, 100);
+    if (safe) query = query.or(`title.ilike.%${safe}%,body.ilike.%${safe}%`);
   }
 
   // Sort
