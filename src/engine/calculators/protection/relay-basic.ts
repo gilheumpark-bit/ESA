@@ -94,6 +94,30 @@ export function calculateRelayBasic(input: RelayBasicInput): DetailedCalcResult 
     unit: '×',
   });
 
+  // If the fault current is at or below the pickup (M ≤ 1) the relay never picks up and
+  // does not trip. The input only guards faultCurrent > loadCurrent, but pickup = 1.3×load,
+  // so a fault between load and pickup lands here; the inverse-time formula would otherwise
+  // yield a NEGATIVE (unphysical) trip time (M^B − 1 < 0) — 계산기군 #11 수리.
+  if (faultMultiple <= 1) {
+    return {
+      value: round(Ip, 2),
+      unit: 'A',
+      formula: 't = \\frac{TDS \\times A}{(I/I_p)^B - 1}',
+      steps,
+      source: [createSource('IEC', '60255', { edition: '2014' })],
+      judgment: createJudgment(
+        false,
+        `Fault current ${Ifault}A ≤ pickup ${round(Ip, 2)}A (M=${round(faultMultiple, 2)}) — relay does not operate. Lower the pickup setting or verify the fault level.`,
+        'error',
+      ),
+      additionalOutputs: {
+        pickupCurrent: { value: round(Ip, 2), unit: 'A' },
+        faultMultiple: { value: round(faultMultiple, 2), unit: '×' },
+        operates: { value: 0, unit: '' },
+      },
+    };
+  }
+
   // Step 4: TDS (Time Dial Setting) — target 0.3s at fault, solve for TDS
   // t = TDS × A / (M^B - 1)  →  TDS = t × (M^B - 1) / A
   const targetTripTime = 0.3; // target 300ms at fault current

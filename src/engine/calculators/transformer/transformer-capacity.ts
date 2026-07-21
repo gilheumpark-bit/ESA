@@ -117,16 +117,22 @@ export function calculateTransformerCapacity(input: TransformerCapacityInput): D
   });
 
   // PART 3 — Judgment
-  const overSized = utilizationPct < 40;
-  const pass = !overSized && selectedSize <= STANDARD_TRANSFORMER_SIZES_KVA[STANDARD_TRANSFORMER_SIZES_KVA.length - 1];
+  const maxStandard = STANDARD_TRANSFORMER_SIZES_KVA[STANDARD_TRANSFORMER_SIZES_KVA.length - 1];
+  // undersized: the required capacity exceeds the largest standard size, so the selected
+  // transformer cannot supply the load. Prior code's `selectedSize <= max` was always true
+  // (selectedSize is capped at max), producing a vacuous PASS for over-range demand
+  // (e.g. 5000 kVA required → 3000 kVA selected → pass=true). It must FAIL (계산기군 #5).
+  const undersized = selectedSize < S_with_margin;
+  const overSized = !undersized && utilizationPct < 40;
+  const pass = !undersized && !overSized;
   const judgment = createJudgment(
     pass,
-    overSized
-      ? `Selected ${selectedSize} kVA (${utilizationPct}% utilization) - may be oversized, review demand assumptions`
-      : selectedSize < S_with_margin
-        ? `Required capacity ${round(S_with_margin, 2)} kVA exceeds maximum standard size ${STANDARD_TRANSFORMER_SIZES_KVA[STANDARD_TRANSFORMER_SIZES_KVA.length - 1]} kVA`
+    undersized
+      ? `Required capacity ${round(S_with_margin, 2)} kVA exceeds maximum standard size ${maxStandard} kVA — no single transformer suffices; use parallel units or reduce demand`
+      : overSized
+        ? `Selected ${selectedSize} kVA (${utilizationPct}% utilization) - may be oversized, review demand assumptions`
         : `Selected ${selectedSize} kVA (${utilizationPct}% utilization)`,
-    overSized ? 'warning' : 'info',
+    undersized ? 'error' : overSized ? 'warning' : 'info',
     'KEC 341',
   );
 

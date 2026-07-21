@@ -14,6 +14,7 @@ import {
   CalcStep,
   assertPositive,
   assertOneOf,
+  assertRange,
   round,
 } from '../types';
 
@@ -82,9 +83,9 @@ const AMPACITY_DATA: AmpacityRecord[] = [
   },
 ];
 
-// Correction factors — 국가별 프로파일에서 가져오되, 비교 계산기이므로 기본값도 유지
-const PVC_DERATING = activeDefaults().pvcDerating;
-const ALUMINUM_DERATING = activeDefaults().aluminumDerating;
+// Correction factors are read from the active country profile at CALL time, not module
+// load. Reading them at module load froze whatever profile was active on first import, so
+// a later country switch never took effect (계산기군 #12 수리 — 모듈로드 동결).
 
 function tempCorrectionFactor(refTemp: number, actualTemp: number, maxTemp: number): number {
   if (actualTemp >= maxTemp) return 0;
@@ -98,9 +99,16 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
   assertPositive(input.cableSize, 'cableSize');
   assertOneOf(input.conductor, ['copper', 'aluminum'] as const, 'conductor');
   assertOneOf(input.insulation, ['PVC', 'XLPE'] as const, 'insulation');
+  // ambientTemp was previously unvalidated → an omitted/NaN value produced NaN ampacities.
+  assertRange(input.ambientTemp, -50, 200, 'ambientTemp');
 
   const { cableSize, conductor, insulation, ambientTemp } = input;
   const steps: CalcStep[] = [];
+
+  // Read country-profile derating at call time (not module load).
+  const defaults = activeDefaults();
+  const PVC_DERATING = defaults.pvcDerating;
+  const ALUMINUM_DERATING = defaults.aluminumDerating;
 
   // PART 2 -- Derivation
   // Step 1: Identify material/insulation derating

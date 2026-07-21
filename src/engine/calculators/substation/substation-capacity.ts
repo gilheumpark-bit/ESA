@@ -124,15 +124,19 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
   });
 
   // Step 3: Transformer selection
-  const trRequired = redundancy === 'N+1'
-    ? totalWithGrowth / 2  // Each transformer handles 50% in N+1
-    : totalWithGrowth;
+  // True N+1 (here 1 working + 1 standby): EACH unit must carry the FULL design load
+  // so that when one fails the survivor still supplies 100%. The prior code sized each
+  // unit at totalWithGrowth/2, so a single failure would shed 50% of the load — that is
+  // not redundancy at all (계산기군 #8 수리).
+  const trRequired = totalWithGrowth;
   const trSize = selectTransformer(trRequired);
   const trCount = redundancy === 'N+1' ? 2 : 1;
   steps.push({
     step: 3,
     title: '변압기 선정 (Transformer selection)',
-    formula: `${redundancy} 방식: ${trCount} \\times ${trSize} \\text{ kVA}`,
+    formula: redundancy === 'N+1'
+      ? `N+1 방식: ${trCount} \\times ${trSize} \\text{ kVA (각 유닛이 전체 부하 부담, 1대 고장 시 100% 공급)}`
+      : `N 방식: ${trCount} \\times ${trSize} \\text{ kVA}`,
     value: trSize,
     unit: `kVA x ${trCount}`,
   });
