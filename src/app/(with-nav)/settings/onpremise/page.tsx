@@ -375,7 +375,7 @@ export default function OnPremisePage() {
             </div>
           )}
           <p className="text-[10px] text-[var(--color-text-muted)]">
-            ※ 테스트는 서버사이드 프록시를 통해 실행됩니다. 방화벽 정책에 따라 Vercel 서버→내부망 접근이 차단될 수 있습니다.
+            ※ 테스트는 서버사이드 프록시를 거쳐 실행됩니다. 방화벽 정책에 따라 Vercel 서버→내부망 접근이 차단될 수 있습니다.
             완전한 망 분리 환경에서는 ESVA를 내부망에 직접 배포하세요.
           </p>
         </div>

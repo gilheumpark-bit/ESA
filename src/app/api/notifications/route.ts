@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
     }
     if (!type || !VALID_TYPES.includes(type)) {
       return NextResponse.json(
-        { error: `유효하지 않은 type. 가능: ${VALID_TYPES.join(', ')}` },
+        { error: `잘못된 type. 가능: ${VALID_TYPES.join(', ')}` },
         { status: 400 },
       );
     }

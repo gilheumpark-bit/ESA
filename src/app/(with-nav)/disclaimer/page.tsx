@@ -24,7 +24,7 @@ const SECTIONS = [
   },
   {
     title: 'AI 검색 결과',
-    body: 'AI 기반 검색 답변은 대규모 언어모델(LLM)에 의해 생성됩니다. AI 답변에는 부정확한 정보, 오래된 기준 참조, 또는 맥락에 맞지 않는 해석이 포함될 수 있습니다. 모든 AI 답변은 원문 기준서와 대조하여 검증해야 합니다.',
+    body: 'AI 기반 검색 답변은 대규모 언어모델(LLM)이 생성합니다. AI 답변에는 부정확한 정보, 오래된 기준 참조, 또는 맥락에 맞지 않는 해석이 포함될 수 있습니다. 모든 AI 답변은 원문 기준서와 대조하여 검증해야 합니다.',
   },
   {
     title: '기준 및 규격 참조',
@@ -67,7 +67,7 @@ export default function DisclaimerPage() {
         {/* Warning banner */}
         <div className="mb-8 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950">
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            ESA는 참고용 도구입니다. 모든 공학적 판단은 자격을 갖춘 전문가에 의해 최종 검증되어야 합니다.
+            ESA는 참고용 도구입니다. 모든 공학적 판단은 자격을 갖춘 전문가가 최종 검증해야 합니다.
           </p>
         </div>
 

@@ -262,10 +262,10 @@ export class TopologyGraph {
     // 존재하지 않는 노드를 참조하는 간선
     for (const edge of this.edges.values()) {
       if (!this.nodes.has(edge.from)) {
-        issues.push({ type: 'MISSING_EDGE_TARGET', edgeId: edge.id, message: `간선 "${edge.id}"의 출발 노드 "${edge.from}"이 존재하지 않습니다.` });
+        issues.push({ type: 'MISSING_EDGE_TARGET', edgeId: edge.id, message: `간선 "${edge.id}"의 출발 노드 "${edge.from}"를 찾을 수 없습니다.` });
       }
       if (!this.nodes.has(edge.to)) {
-        issues.push({ type: 'MISSING_EDGE_TARGET', edgeId: edge.id, message: `간선 "${edge.id}"의 도착 노드 "${edge.to}"이 존재하지 않습니다.` });
+        issues.push({ type: 'MISSING_EDGE_TARGET', edgeId: edge.id, message: `간선 "${edge.id}"의 도착 노드 "${edge.to}"를 찾을 수 없습니다.` });
       }
     }
 

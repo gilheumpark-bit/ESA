@@ -529,7 +529,7 @@ function EmptyState({ query }: { query: string }) {
         검색 결과 없음
       </h2>
       <p className="mb-6 text-sm text-[var(--text-secondary)]">
-        &ldquo;{query}&rdquo;에 대한 결과를 찾을 수 없습니다.
+        &ldquo;{query}&rdquo; 검색 결과가 없습니다.
       </p>
       <div className="mx-auto max-w-md text-left text-sm text-[var(--text-secondary)]">
         <p className="mb-2 font-medium">검색 팁:</p>

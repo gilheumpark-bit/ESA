@@ -48,7 +48,7 @@ const AUTH_ERRORS: ESAError[] = [
   },
   {
     code: 'ESVA-1003',
-    message_ko: '유효하지 않은 인증 토큰입니다',
+    message_ko: '인증 토큰이 올바르지 않습니다',
     message_en: 'Invalid authentication token',
     httpStatus: 401,
   },
@@ -280,7 +280,7 @@ const CALC_ERRORS: ESAError[] = [
 const EXPORT_ERRORS: ESAError[] = [
   {
     code: 'ESVA-5001',
-    message_ko: '내보내기 형식이 지원되지 않습니다',
+    message_ko: '지원하지 않는 내보내기 형식입니다',
     message_en: 'Export format not supported',
     httpStatus: 400,
     suggestion: 'Supported formats: PDF, Excel, JSON, CSV.',
@@ -393,7 +393,7 @@ const STANDARD_ERRORS: ESAError[] = [
   },
   {
     code: 'ESVA-7002',
-    message_ko: '표준 간 변환이 지원되지 않습니다',
+    message_ko: '해당 표준 간 변환은 지원하지 않습니다',
     message_en: 'Standard conversion not supported',
     httpStatus: 400,
     suggestion: 'This standard pair is not yet supported for conversion.',

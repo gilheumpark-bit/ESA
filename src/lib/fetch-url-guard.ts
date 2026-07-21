@@ -50,7 +50,7 @@ export function assertUrlAllowedForFetch(rawUrl: string): { ok: true; href: stri
   try {
     parsed = new URL(rawUrl);
   } catch {
-    return { ok: false, reason: '유효하지 않은 URL 형식입니다.' };
+    return { ok: false, reason: 'URL 형식이 올바르지 않습니다.' };
   }
 
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {

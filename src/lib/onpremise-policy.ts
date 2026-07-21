@@ -44,7 +44,7 @@ export function validateOnpremiseTarget(
   try {
     parsed = new URL(serverUrl);
   } catch {
-    return { ok: false, reason: '유효하지 않은 서버 URL 형식' };
+    return { ok: false, reason: '서버 URL 형식이 올바르지 않습니다' };
   }
 
   if (!['http:', 'https:'].includes(parsed.protocol)) {

@@ -53,10 +53,10 @@ export async function POST(
   const existing = job.document.userCorrections.find((item) => item.idempotencyKey === body.idempotencyKey);
   if (existing) return privateJson({ success: true, data: { correction: existing, document: job.document, resumeAvailable: job.document.jobStatus === 'PARTIAL' && Boolean(job.sourceLease) } });
   if (!['COMPLETE', 'PARTIAL'].includes(job.status)) {
-    return privateJson({ success: false, error: { message: '분석 진행 중에는 결과를 수정할 수 없습니다. 분석이 끝난 뒤 다시 시도해주세요.' } }, { status: 409 });
+    return privateJson({ success: false, error: { message: '분석 진행 중에는 결과를 수정할 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.' } }, { status: 409 });
   }
   if (job.document.updatedAt !== body.expectedUpdatedAt) {
-    return privateJson({ success: false, error: { message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해주세요.' } }, { status: 409 });
+    return privateJson({ success: false, error: { message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
   }
   const textTarget = job.document.evidenceGraph.texts.find((item) => item.displayId === body.targetDisplayId);
   const symbolTarget = job.document.evidenceGraph.symbols.find((item) => item.displayId === body.targetDisplayId);
@@ -78,7 +78,7 @@ export async function POST(
   const correction = document.userCorrections.at(-1)!;
 
   const updated = updateOwnedJobIfDocumentVersion(jobId, owner.ownerId, body.expectedUpdatedAt, { document, status: document.jobStatus });
-  if (!updated) return privateJson({ success: false, error: { message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해주세요.' } }, { status: 409 });
+  if (!updated) return privateJson({ success: false, error: { message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
   return privateJson({
     success: true,
     data: {

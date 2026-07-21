@@ -46,7 +46,7 @@ export default function NotFound() {
 
       {/* Footer note */}
       <p className="text-xs text-[var(--text-tertiary)]">
-        URL을 다시 확인하시거나, 위 링크를 통해 이동하세요.
+        URL을 다시 확인하거나 위 링크로 이동하세요.
       </p>
     </div>
   );

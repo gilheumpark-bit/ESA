@@ -120,7 +120,7 @@ function PageFallback({
         문제가 발생했습니다
       </p>
       <p className="max-w-sm text-sm text-gray-500">
-        페이지를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.
+        페이지를 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.
       </p>
       {error && process.env.NODE_ENV === 'development' && (
         <pre className="max-w-lg overflow-auto rounded bg-gray-100 p-3 text-xs text-red-700">

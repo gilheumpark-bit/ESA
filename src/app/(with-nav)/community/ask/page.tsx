@@ -51,7 +51,7 @@ export default function CommunityAskPage() {
         <LogIn size={48} className="mb-4 text-[var(--color-primary)]" />
         <h1 className="text-xl font-bold text-[var(--text-primary)]">로그인이 필요합니다</h1>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          질문을 작성하려면 먼저 로그인해주세요.
+          질문을 작성하려면 먼저 로그인해 주세요.
         </p>
         <div className="mt-6 flex gap-3">
           <Link href="/login" className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white transition-colors hover:opacity-90">
