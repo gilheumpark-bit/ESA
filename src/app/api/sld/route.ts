@@ -12,6 +12,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeSLD, generateCalcChainFromSLD, type SLDAnalysis } from '@/lib/sld-recognition';
+import { reviewAnalysis } from '@/engine/review/circuit-review';
 import { buildTopologyFromSLD, type TopologyGraph, type ValidationResult } from '@/engine/topology';
 import { SagaOrchestrator } from '@/lib/saga-transaction';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
@@ -126,11 +127,23 @@ export async function POST(req: NextRequest) {
     }
 
     const calcChain = generateCalcChainFromSLD(analysis);
+    // 스캔/VLM 경로에도 검토(계산+기준+판정)를 붙인다. 단 추출 자체가 VLM
+    // 판독(미검증·HOLD)이므로 vector 경로보다 caveat가 하나 더 겹친다 —
+    // AT>AF 같은 표기 자체 오류는 유효하나, 케이블-차단기 판정은 오독 가능성을
+    // 안고 본다. 구조를 못 읽은(confidence<0.5) 판독으로는 판정하지 않는다.
+    // analysis는 saga 클로저에서 대입돼 TS 흐름상 never로 좁혀진다 — 위 COMPLETED
+    // 가드로 non-null이 보장되므로 명시 캐스트로 타입을 회복한다(파일 관례).
+    const analyzed = analysis as unknown as SLDAnalysis;
+    const review = analyzed.confidence >= 0.5
+      ? { ...reviewAnalysis(analyzed), extractionSource: 'VLM-scan (미검증·HOLD)' as const,
+          disclaimer: '스캔 판독 기반 검토 — 추출값이 VLM 판독(미검증)이라 판정은 도면 원본 재확인이 필요합니다. 최종 판정·지시는 유자격 기술자의 몫입니다.' }
+      : { skipped: true as const, reason: `confidence ${analyzed.confidence} — 구조 판독 미달로 검토 생략` };
 
     return NextResponse.json({
       success: true,
       data: analysis,
       calcChain,
+      review,
       topology: {
         nodeCount: validation!.stats.nodeCount,
         edgeCount: validation!.stats.edgeCount,
