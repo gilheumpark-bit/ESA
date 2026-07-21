@@ -1,4 +1,4 @@
-import { parseSLDResponse, generateCalcChainFromSLD } from '../sld-recognition';
+import { parseSLDResponse, generateCalcChainFromSLD, salvageTruncatedJson } from '../sld-recognition';
 
 describe('SLD recognition response validation', () => {
   it('drops unknown components, dangling edges, and lengths without explicit units', () => {
@@ -98,5 +98,28 @@ describe('parseSLDResponse — VLM 펜스·주변텍스트 견고 추출 (라이
 
   it('펜스 없는 순수 JSON도 그대로 파싱한다', () => {
     expect(parseSLDResponse(JSON.stringify(valid)).components).toHaveLength(1);
+  });
+});
+
+describe('salvageTruncatedJson + parseSLDResponse 절단 복구 (라이브 검증 — 미국 배전 실측)', () => {
+  it('components 배열 중간에서 잘린 JSON을 앞부분까지 복구한다', () => {
+    const truncated = '{"components":[' +
+      '{"id":"a","type":"breaker","position":{"x":10,"y":20}},' +
+      '{"id":"b","type":"transformer","position":{"x":30,"y":40}},' +
+      '{"id":"c","type":"gen';  // 마지막 요소가 문자열 중간에서 절단
+    const fixed = salvageTruncatedJson(truncated);
+    const parsed = JSON.parse(fixed);
+    expect(parsed.components.length).toBe(2);
+    expect(parsed.components.map((c: any) => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('절단된 VLM 응답도 parseSLDResponse가 부분 판독을 살린다(0개 폐기 방지)', () => {
+    const truncated = '```json\n{"components":[' +
+      '{"id":"c1","type":"breaker","label":"MCCB","position":{"x":10,"y":20}},' +
+      '{"id":"c2","type":"transformer","label":"TR","position":{"x":30,"y":40}},' +
+      '{"id":"c3","type":"generat';
+    const r = parseSLDResponse(truncated);
+    expect(r.components.length).toBe(2);
+    expect(r.components.map((c) => c.type).sort()).toEqual(['breaker', 'transformer']);
   });
 });

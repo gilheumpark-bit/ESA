@@ -163,6 +163,46 @@ export async function analyzeSLD(
   };
 }
 
+/**
+ * 절단된 VLM JSON을 복구한다(버그 사냥·라이브 검증 실측). 문자열 리터럴을
+ * 무시하며 괄호 깊이를 추적해, 마지막으로 "완전한 값이 끝난 지점"까지 자르고
+ * 열려 있는 `[`·`{`를 순서 반대로 닫는다. 완전 복구가 아니라 부분 판독 보존이
+ * 목적 — 상세 도면이 토큰 한도를 넘겨 잘려도 0개 폐기 대신 앞부분을 살린다.
+ */
+export function salvageTruncatedJson(input: string): string {
+  const stack: string[] = [];
+  let inStr = false;
+  let esc = false;
+  let lastComplete = -1; // 컨테이너(객체/배열)가 완결로 닫힌 직후 인덱스만 안전
+  for (let i = 0; i < input.length; i++) {
+    const c = input[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') stack.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') { stack.pop(); lastComplete = i + 1; }
+    // 문자열 닫힘·콤마는 안전 지점이 아니다(미완 객체 내부일 수 있음).
+  }
+  if (lastComplete <= 0) throw new Error('복구할 완전한 값이 없습니다.');
+  // lastComplete까지의 깊이를 재계산해 그 지점에서 열린 괄호만 닫는다.
+  let head = input.slice(0, lastComplete);
+  const closeStack: string[] = [];
+  let s = false, e = false;
+  for (let i = 0; i < head.length; i++) {
+    const c = head[i];
+    if (s) { if (e) e = false; else if (c === '\\') e = true; else if (c === '"') s = false; continue; }
+    if (c === '"') s = true;
+    else if (c === '{') closeStack.push('}');
+    else if (c === '[') closeStack.push(']');
+    else if (c === '}' || c === ']') closeStack.pop();
+  }
+  return head + closeStack.reverse().join('');
+}
+
 export function parseSLDResponse(text: string): SLDAnalysis {
   try {
     const trimmed = text.trim();
@@ -176,13 +216,27 @@ export function parseSLDResponse(text: string): SLDAnalysis {
     const lastBrace = candidate.lastIndexOf('}');
     if (firstBrace >= 0 && lastBrace > firstBrace) {
       candidate = candidate.slice(firstBrace, lastBrace + 1);
+    } else if (firstBrace >= 0) {
+      candidate = candidate.slice(firstBrace);
     }
-    const parsed: unknown = JSON.parse(candidate);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(candidate);
+    } catch {
+      // 절단 복구(라이브 검증 실측): 상세 도면은 VLM JSON이 토큰 한도(8192)도
+      // 넘겨 배열 중간에서 잘린다 — 마지막 완전한 요소까지 자르고 열린 괄호를
+      // 닫아 부분 판독을 살린다(0개 폐기 < 부분 살림). 미국 배전 도면 실측.
+      parsed = JSON.parse(salvageTruncatedJson(candidate));
+    }
     if (!parsed || typeof parsed !== 'object') throw new Error('SLD 응답은 객체여야 합니다.');
     const data = parsed as Record<string, unknown>;
-    if (!Array.isArray(data.components) || !Array.isArray(data.connections)) {
-      throw new Error('SLD components/connections는 배열이어야 합니다.');
+    // components만 필수. connections는 없으면 빈 배열로 본다(절단 복구·라이브
+    // 검증 실측: 상세 도면은 components 배열 중간에서 잘려 connections 필드가
+    // 통째로 없을 수 있는데, 이를 필수로 요구하면 살린 부분 판독마저 폐기됐다).
+    if (!Array.isArray(data.components)) {
+      throw new Error('SLD components는 배열이어야 합니다.');
     }
+    const connectionRows: unknown[] = Array.isArray(data.connections) ? data.connections : [];
 
     const ids = new Set<string>();
     const components: SLDComponent[] = [];
@@ -214,7 +268,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
 
     const connectionIds = new Set<string>();
     const connections: SLDConnection[] = [];
-    for (const row of data.connections.slice(0, 5_000)) {
+    for (const row of connectionRows.slice(0, 5_000)) {
       if (!row || typeof row !== 'object') continue;
       const connection = row as Record<string, unknown>;
       const id = boundedText(connection.id, 128);

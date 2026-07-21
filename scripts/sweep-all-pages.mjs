@@ -57,10 +57,13 @@ for (let p = 1; p <= numPages; p++) {
   for (const c of comps) byType[c.type] = (byType[c.type] ?? 0) + 1;
   const conf = r.json?.parserInfo?.confidence ?? null;
   const note = (d.rawDescription ?? '').split('segments')[1]?.trim() ?? '';
+  const rv = r.json?.review;
+  const review = rv ? (rv.skipped ? { skipped: true } : rv.summary) : null;
   rows.push({
     page: p, titleType, status: r.status, conf,
     comps: comps.length, byType, conns: (d.connections ?? []).length,
     calcSteps: (r.json?.calcChain ?? []).length,
+    review,
     note: note.slice(0, 60),
   });
   process.stderr.write(`\r${p}/${numPages} (${r.status})`);

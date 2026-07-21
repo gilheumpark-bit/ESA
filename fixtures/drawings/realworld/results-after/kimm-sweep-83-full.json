@@ -1,0 +1,1602 @@
+[
+ {
+  "page": 1,
+  "titleType": "other",
+  "status": 200,
+  "conf": 0.3,
+  "comps": 0,
+  "byType": {},
+  "conns": 0,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 기하(선분) 0: 스캔/이미지 도면 추정, 결선 해석 불가"
+ },
+ {
+  "page": 2,
+  "titleType": "sld+schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 54,
+  "byType": {
+   "panel": 5,
+   "bus": 49
+  },
+  "conns": 148,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 3,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 49,
+  "byType": {
+   "bus": 49
+  },
+  "conns": 160,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 4,
+  "titleType": "arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 50,
+  "byType": {
+   "bus": 50
+  },
+  "conns": 176,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 5,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 159,
+  "byType": {
+   "breaker": 88,
+   "meter": 11,
+   "transformer": 8,
+   "relay": 3,
+   "panel": 4,
+   "bus": 45
+  },
+  "conns": 314,
+  "calcSteps": 2,
+  "review": {
+   "pass": 2,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 6,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 6,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 160,
+  "byType": {
+   "breaker": 92,
+   "meter": 11,
+   "transformer": 8,
+   "relay": 3,
+   "panel": 4,
+   "bus": 42
+  },
+  "conns": 327,
+  "calcSteps": 2,
+  "review": {
+   "pass": 2,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 6,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 7,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 77,
+  "byType": {
+   "transformer": 4,
+   "breaker": 2,
+   "bus": 71
+  },
+  "conns": 215,
+  "calcSteps": 2,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 8,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 47,
+  "byType": {
+   "meter": 2,
+   "breaker": 2,
+   "bus": 43
+  },
+  "conns": 264,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 9,
+  "titleType": "schedule",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 165,
+  "byType": {
+   "breaker": 97,
+   "panel": 14,
+   "bus": 54
+  },
+  "conns": 306,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 표 문서 판정(표제 10회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고"
+ },
+ {
+  "page": 10,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 58,
+  "byType": {
+   "panel": 3,
+   "bus": 55
+  },
+  "conns": 124,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 11,
+  "titleType": "schedule",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 162,
+  "byType": {
+   "breaker": 84,
+   "panel": 15,
+   "bus": 63
+  },
+  "conns": 354,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 표 문서 판정(표제 14회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고"
+ },
+ {
+  "page": 12,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 75,
+  "byType": {
+   "panel": 2,
+   "transformer": 3,
+   "bus": 70
+  },
+  "conns": 175,
+  "calcSteps": 2,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 13,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 105,
+  "byType": {
+   "breaker": 62,
+   "bus": 43
+  },
+  "conns": 183,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 14,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 74,
+  "byType": {
+   "breaker": 35,
+   "switch": 2,
+   "bus": 37
+  },
+  "conns": 120,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 15,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 109,
+  "byType": {
+   "breaker": 60,
+   "bus": 49
+  },
+  "conns": 203,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 16,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 103,
+  "byType": {
+   "breaker": 57,
+   "bus": 46
+  },
+  "conns": 176,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 17,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 93,
+  "byType": {
+   "breaker": 45,
+   "meter": 1,
+   "switch": 2,
+   "bus": 45
+  },
+  "conns": 159,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 18,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 109,
+  "byType": {
+   "breaker": 58,
+   "switch": 2,
+   "bus": 49
+  },
+  "conns": 187,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 19,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 56,
+  "byType": {
+   "breaker": 22,
+   "bus": 34
+  },
+  "conns": 104,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 20,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 120,
+  "byType": {
+   "breaker": 72,
+   "bus": 48
+  },
+  "conns": 227,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 21,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 114,
+  "byType": {
+   "breaker": 66,
+   "bus": 48
+  },
+  "conns": 199,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 22,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 118,
+  "byType": {
+   "breaker": 72,
+   "meter": 2,
+   "bus": 44
+  },
+  "conns": 219,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 23,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 96,
+  "byType": {
+   "breaker": 53,
+   "bus": 43
+  },
+  "conns": 179,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 24,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 78,
+  "byType": {
+   "breaker": 38,
+   "bus": 40
+  },
+  "conns": 133,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 25,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 41,
+  "byType": {
+   "panel": 3,
+   "breaker": 2,
+   "meter": 1,
+   "capacitor": 1,
+   "bus": 34
+  },
+  "conns": 87,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 26,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 58,
+  "byType": {
+   "panel": 3,
+   "breaker": 2,
+   "meter": 1,
+   "capacitor": 1,
+   "bus": 51
+  },
+  "conns": 110,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 27,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 39,
+  "byType": {
+   "panel": 3,
+   "breaker": 2,
+   "meter": 1,
+   "capacitor": 1,
+   "bus": 32
+  },
+  "conns": 84,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 28,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 25,
+  "byType": {
+   "panel": 1,
+   "breaker": 3,
+   "bus": 21
+  },
+  "conns": 61,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 29,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 115,
+  "byType": {
+   "breaker": 75,
+   "meter": 4,
+   "bus": 36
+  },
+  "conns": 237,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 30,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 77,
+  "byType": {
+   "breaker": 41,
+   "meter": 1,
+   "switch": 2,
+   "bus": 33
+  },
+  "conns": 141,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 31,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 103,
+  "byType": {
+   "breaker": 61,
+   "meter": 3,
+   "bus": 39
+  },
+  "conns": 203,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 32,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 113,
+  "byType": {
+   "breaker": 75,
+   "bus": 38
+  },
+  "conns": 208,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 33,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 81,
+  "byType": {
+   "breaker": 46,
+   "meter": 3,
+   "bus": 32
+  },
+  "conns": 162,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 34,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 84,
+  "byType": {
+   "breaker": 48,
+   "meter": 1,
+   "bus": 35
+  },
+  "conns": 167,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 35,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 66,
+  "byType": {
+   "breaker": 35,
+   "meter": 1,
+   "bus": 30
+  },
+  "conns": 138,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 36,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 71,
+  "byType": {
+   "breaker": 39,
+   "meter": 2,
+   "bus": 30
+  },
+  "conns": 160,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 37,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 95,
+  "byType": {
+   "breaker": 59,
+   "meter": 2,
+   "bus": 34
+  },
+  "conns": 207,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 38,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 98,
+  "byType": {
+   "breaker": 63,
+   "meter": 1,
+   "bus": 34
+  },
+  "conns": 196,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 39,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 135,
+  "byType": {
+   "breaker": 88,
+   "meter": 3,
+   "bus": 44
+  },
+  "conns": 247,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 40,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 77,
+  "byType": {
+   "breaker": 41,
+   "meter": 4,
+   "bus": 32
+  },
+  "conns": 190,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 41,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 121,
+  "byType": {
+   "breaker": 74,
+   "meter": 3,
+   "bus": 44
+  },
+  "conns": 271,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 42,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 110,
+  "byType": {
+   "breaker": 66,
+   "bus": 44
+  },
+  "conns": 198,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 2,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 43,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 79,
+  "byType": {
+   "breaker": 39,
+   "meter": 3,
+   "bus": 37
+  },
+  "conns": 161,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 44,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 42,
+  "byType": {
+   "panel": 3,
+   "breaker": 2,
+   "meter": 1,
+   "capacitor": 1,
+   "bus": 35
+  },
+  "conns": 102,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 45,
+  "titleType": "sld",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 35,
+  "byType": {
+   "panel": 3,
+   "breaker": 2,
+   "meter": 1,
+   "capacitor": 1,
+   "bus": 28
+  },
+  "conns": 94,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 46,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 104,
+  "byType": {
+   "breaker": 20,
+   "panel": 7,
+   "meter": 2,
+   "bus": 75
+  },
+  "conns": 384,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 표 문서 판정(표제 2회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고"
+ },
+ {
+  "page": 47,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 122,
+  "byType": {
+   "breaker": 40,
+   "bus": 82
+  },
+  "conns": 531,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 표 문서 판정(표제 2회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고"
+ },
+ {
+  "page": 48,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 108,
+  "byType": {
+   "breaker": 31,
+   "bus": 77
+  },
+  "conns": 442,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 표 문서 판정(표제 2회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고"
+ },
+ {
+  "page": 49,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 70,
+  "byType": {
+   "breaker": 7,
+   "bus": 63
+  },
+  "conns": 228,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 50,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 72,
+  "byType": {
+   "meter": 2,
+   "panel": 4,
+   "bus": 66
+  },
+  "conns": 327,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 0,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 51,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 76,
+  "byType": {
+   "bus": 76
+  },
+  "conns": 493,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 52,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 71,
+  "byType": {
+   "bus": 71
+  },
+  "conns": 385,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 53,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 65,
+  "byType": {
+   "breaker": 5,
+   "panel": 1,
+   "bus": 59
+  },
+  "conns": 229,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 표 문서 판정(표제 2회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고"
+ },
+ {
+  "page": 54,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 87,
+  "byType": {
+   "panel": 6,
+   "breaker": 13,
+   "bus": 68
+  },
+  "conns": 360,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 55,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 75,
+  "byType": {
+   "switch": 1,
+   "panel": 4,
+   "breaker": 6,
+   "bus": 64
+  },
+  "conns": 312,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 56,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.85,
+  "comps": 71,
+  "byType": {
+   "switch": 1,
+   "panel": 4,
+   "breaker": 3,
+   "bus": 63
+  },
+  "conns": 238,
+  "calcSteps": 0,
+  "review": {
+   "pass": 0,
+   "warn": 0,
+   "fail": 0,
+   "unknown": 1,
+   "info": 0
+  },
+  "note": ""
+ },
+ {
+  "page": 57,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 73,
+  "byType": {
+   "bus": 73
+  },
+  "conns": 301,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 58,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 74,
+  "byType": {
+   "bus": 74
+  },
+  "conns": 450,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 59,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 73,
+  "byType": {
+   "bus": 73
+  },
+  "conns": 403,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 60,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 63,
+  "byType": {
+   "bus": 63
+  },
+  "conns": 228,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 61,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 74,
+  "byType": {
+   "bus": 74
+  },
+  "conns": 312,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 62,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 84,
+  "byType": {
+   "bus": 84
+  },
+  "conns": 565,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 63,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 80,
+  "byType": {
+   "bus": 80
+  },
+  "conns": 507,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 64,
+  "titleType": "schedule+floorplan+arch",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 66,
+  "byType": {
+   "bus": 66
+  },
+  "conns": 228,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 65,
+  "titleType": "other",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 49,
+  "byType": {
+   "bus": 49
+  },
+  "conns": 222,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 66,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 76,
+  "byType": {
+   "bus": 76
+  },
+  "conns": 325,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 67,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 76,
+  "byType": {
+   "bus": 76
+  },
+  "conns": 468,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 68,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 74,
+  "byType": {
+   "bus": 74
+  },
+  "conns": 414,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 69,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 66,
+  "byType": {
+   "bus": 66
+  },
+  "conns": 248,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 70,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 81,
+  "byType": {
+   "bus": 81
+  },
+  "conns": 402,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 71,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 90,
+  "byType": {
+   "bus": 90
+  },
+  "conns": 608,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 72,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 80,
+  "byType": {
+   "bus": 80
+  },
+  "conns": 557,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 73,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 68,
+  "byType": {
+   "bus": 68
+  },
+  "conns": 250,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 74,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 68,
+  "byType": {
+   "bus": 68
+  },
+  "conns": 397,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 75,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 66,
+  "byType": {
+   "bus": 66
+  },
+  "conns": 345,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 76,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 57,
+  "byType": {
+   "bus": 57
+  },
+  "conns": 184,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 77,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 72,
+  "byType": {
+   "breaker": 2,
+   "bus": 70
+  },
+  "conns": 297,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 78,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 82,
+  "byType": {
+   "bus": 82
+  },
+  "conns": 529,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 79,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 71,
+  "byType": {
+   "bus": 71
+  },
+  "conns": 383,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 80,
+  "titleType": "schedule+floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 68,
+  "byType": {
+   "breaker": 4,
+   "bus": 64
+  },
+  "conns": 233,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 81,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 73,
+  "byType": {
+   "bus": 73
+  },
+  "conns": 270,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 82,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 78,
+  "byType": {
+   "bus": 78
+  },
+  "conns": 445,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ },
+ {
+  "page": 83,
+  "titleType": "floorplan",
+  "status": 200,
+  "conf": 0.55,
+  "comps": 75,
+  "byType": {
+   "bus": 75
+  },
+  "conns": 381,
+  "calcSteps": 0,
+  "review": {
+   "skipped": true
+  },
+  "note": "— 결선 끝점이 설비보다 합성 접점에 주로 붙음: 표 격자/장식선 의심, 배치만 참고"
+ }
+]
