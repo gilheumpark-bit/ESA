@@ -48,18 +48,23 @@ export default function ThemeToggle() {
     const idx = THEME_CYCLE.indexOf(theme);
     const next = THEME_CYCLE[(idx + 1) % THEME_CYCLE.length];
     setTheme(next);
+    // 클릭 즉시 DOM 적용 — effect는 useSettings의 rAF 로드(loaded) 게이트에
+    // 걸려 백그라운드 탭에선 영구 미발화할 수 있다(실측: 라벨은 바뀌는데
+    // html.dark 무변이). 사용자 제스처 시점 직접 적용으로 죽은 컨트롤 차단.
+    applyThemeToDocument(next);
   }, [theme, setTheme]);
 
   return (
     <button
       type="button"
       onClick={cycleTheme}
-      className="flex h-11 min-h-[44px] items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--text-primary)] sm:h-8 sm:min-h-0 sm:px-2"
+      className="flex h-11 min-h-[44px] shrink-0 items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--text-primary)] sm:h-8 sm:min-h-0 sm:px-2"
       aria-label={`테마: ${THEME_LABELS[theme]}`}
       title={`테마: ${THEME_LABELS[theme]}`}
     >
       <ThemeIcon size={14} aria-hidden />
-      <span className="hidden sm:inline">{THEME_LABELS[theme]}</span>
+      {/* nowrap — "시스/템"·"어둡/게" 글자 분리 방지 */}
+      <span className="hidden whitespace-nowrap sm:inline">{THEME_LABELS[theme]}</span>
     </button>
   );
 }

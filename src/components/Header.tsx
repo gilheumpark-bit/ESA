@@ -62,23 +62,25 @@ const NAV_ITEMS: NavItem[] = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function DesktopNav({ pathname }: { pathname: string }) {
+  // 텍스트 온리 + nowrap — 아이콘 9종을 데스크톱에서 빼서(모바일 메뉴엔 유지)
+  // max-w-7xl(1280px) 예산 안에 들어가게 한다. 예전엔 아이콘+라벨 9개+검색바가
+  // ~1,450px라 어느 해상도에서도 한글 라벨이 글자 단위로 감쌌다(검/색, 계산/기).
   return (
-    <nav className="hidden items-center gap-1 xl:flex">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+    <nav className="hidden shrink-0 items-center gap-0.5 xl:flex">
+      {NAV_ITEMS.map(({ href, label }) => {
         const isActive = pathname.startsWith(href);
         return (
           <Link
             key={href}
             href={href}
             className={`
-              flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors
+              whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors
               ${isActive
                 ? 'bg-[var(--bg-tertiary)] text-[var(--color-primary)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
               }
             `}
           >
-            <Icon size={16} />
             {label}
           </Link>
         );
@@ -276,10 +278,12 @@ function UserMenu() {
   }, []);
 
   if (!user) {
+    // 다크에서 흰 글자는 밝은 네이비(#6b93c4) 위 3.2:1로 WCAG 미달 — 잉크색
+    // (var(--bg-primary)=#17150f, 5.7:1)으로 뒤집는다. nowrap으로 "로그/인" 분리 방지.
     return (
       <Link
         href="/login"
-        className="flex min-h-[44px] min-w-0 items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] sm:min-h-0"
+        className="flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] dark:text-[var(--bg-primary)] sm:min-h-0"
       >
         <LogIn size={16} aria-hidden />
         <span className="sr-only sm:hidden">로그인</span>
