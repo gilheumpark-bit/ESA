@@ -67,6 +67,12 @@ export interface SLDAnalysis {
   systemVoltage?: string;
   systemType?: string;
   confidence: number;
+  /** 케이블 스케줄 표(중급) — 표 문서에서 행 단위 피더 데이터. 검토 입력원. */
+  scheduleTables?: Array<{
+    title: string;
+    columns: Array<{ name: string; xStart: number; xEnd: number }>;
+    rows: Array<{ cells: Record<string, string> }>;
+  }>;
   rawDescription: string;
 }
 

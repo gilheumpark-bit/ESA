@@ -14,6 +14,7 @@ import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from 
 import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './endpoint-snap';
 import { parseSpecText } from './spec-text';
 import { bindScheduleRow } from './schedule-row-binding';
+import { parseScheduleTables } from './schedule-table-parser';
 
 // =========================================================================
 // PART 1 — Types
@@ -495,6 +496,12 @@ export async function parsePdfToSLD(
     : tableDocument ? 0.55
     : 0.85;
 
+  // 표 문서면 행 단위 데이터를 추출한다(중급): SLD 결선도에서 UNKNOWN이던 분기
+  // 케이블-차단기 쌍이 이 표에 있다. 표를 버리지 않고 데이터로 읽어 검토 입력원으로.
+  const scheduleTables = tableDocument
+    ? parseScheduleTables(texts.map((t) => ({ s: t.text, x: t.x, y: t.y })), pageH)
+    : [];
+
   return {
     components,
     connections: snap.connections,
@@ -508,6 +515,7 @@ export async function parsePdfToSLD(
     })),
     suggestedCalculations: [],
     confidence,
+    ...(scheduleTables.length > 0 ? { scheduleTables } : {}),
     rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text items, ${lines.length} line segments${structureNote}`,
   };
 }
