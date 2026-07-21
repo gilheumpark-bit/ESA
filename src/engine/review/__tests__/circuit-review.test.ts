@@ -1,0 +1,162 @@
+/**
+ * 초급 검토 사슬 — known-answer 반증 테스트
+ *
+ * 판정 로직이 대상이다. 허용전류 표 자체는 상류(47개 accuracy 테스트·IEC/KEC
+ * 대조)에서 이미 검증됐으므로 여기서는 신뢰 오라클로 쓴다. TR 2차전류는
+ * 표와 무관한 산식이라 독립 손계산 값으로 박는다.
+ */
+
+import { reviewAnalysis } from '../circuit-review';
+import { getAmpacity } from '@/data/ampacity-tables/kec-ampacity';
+import type { SLDAnalysis, SLDComponent, SLDConnection } from '@/lib/sld-recognition';
+
+function analysisOf(components: SLDComponent[], connections: SLDConnection[] = []): SLDAnalysis {
+  return {
+    components, connections,
+    suggestedCalculations: [], confidence: 0.85, rawDescription: 'test',
+  };
+}
+
+const pos = { x: 0, y: 0 };
+
+describe('AT-LE-AF — 트립은 프레임을 넘을 수 없다', () => {
+  it('KIMM 실측 표기 100AF/75AT는 위반이 아니다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB 3P-100/75', rating: '100AF/75AT', position: pos },
+    ]));
+    expect(r.findings.filter((f) => f.rule === 'AT-LE-AF')).toHaveLength(0);
+  });
+
+  it('트립>프레임(50AF/100AT)은 FAIL', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '50AF/100AT', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'AT-LE-AF');
+    expect(f?.severity).toBe('FAIL');
+    expect(f?.verdict).toContain('100AT');
+  });
+
+  it('정격 미파싱 차단기는 이 규칙을 건너뛰고 커버리지에 잡힌다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'VCB(DRAW OUT)', position: pos },
+    ]));
+    expect(r.findings.filter((f) => f.rule === 'AT-LE-AF')).toHaveLength(0);
+    expect(r.coverage.breakersRatedParsed).toBe(0);
+    expect(r.coverage.breakersTotal).toBe(1);
+  });
+});
+
+describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
+  const breaker = (rating: string): SLDComponent =>
+    ({ id: 'comp_1', type: 'breaker', label: 'MCCB', rating, position: pos });
+  const cableConn = (sq: string, cableType?: string): SLDConnection =>
+    ({ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: sq, cableType });
+
+  it('여유 충분(트립 ≤ 80%)은 PASS — 4sq XLPE 관로 기준', () => {
+    const amp = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const safeTrip = Math.floor(amp * 0.5);
+    const r = reviewAnalysis(analysisOf([breaker(`50AF/${safeTrip}AT`)], [cableConn('4sq', 'CV')]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('PASS');
+    expect(f?.limit?.source).toContain('KEC');
+  });
+
+  it('트립이 허용전류 초과면 FAIL — false-PASS 금지의 핵심', () => {
+    const amp = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const overTrip = Math.ceil(amp) + 10;
+    const r = reviewAnalysis(analysisOf([breaker(`225AF/${overTrip}AT`)], [cableConn('4sq', 'CV')]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('FAIL');
+    expect(f?.verdict).toContain('허용전류');
+  });
+
+  it('80% 초과~100%는 WARN(여유 부족)', () => {
+    const amp = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const nearTrip = Math.floor(amp * 0.9);
+    const r = reviewAnalysis(analysisOf([breaker(`225AF/${nearTrip}AT`)], [cableConn('25sq', 'FR-CV')]));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('WARN');
+  });
+
+  it('PVC 계열(HIV)은 XLPE보다 낮은 허용전류로 판정한다', () => {
+    const xlpe = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const pvc = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'PVC', installation: 'conduit' }).corrected;
+    expect(pvc).toBeLessThan(xlpe);
+    const trip = Math.floor((pvc + xlpe) / 2); // PVC로는 초과, XLPE로는 통과인 트립
+    const r = reviewAnalysis(analysisOf([breaker(`225AF/${trip}AT`)], [cableConn('25sq', 'HIV')]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(['FAIL', 'WARN']).toContain(f?.severity); // PVC 기준으로 판정됐다는 증거
+    expect(f?.limit?.source).toContain('PVC');
+  });
+
+  it('KEC 비표준 굵기는 판정하지 않고 UNKNOWN(무발명)', () => {
+    const r = reviewAnalysis(analysisOf([breaker('50AF/20AT')], [cableConn('7sq', 'CV')]));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('UNKNOWN');
+  });
+
+  it('복수 케이블 결속 시 가장 가는 것이 병목', () => {
+    const amp4 = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const overFor4 = Math.ceil(amp4) + 5;
+    const r = reviewAnalysis(analysisOf(
+      [breaker(`225AF/${overFor4}AT`)],
+      [cableConn('95sq', 'CV'), { id: 'conn_2', from: 'node_at_5_5', to: 'comp_1', conductorSize: '4sq', cableType: 'CV' }],
+    ));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('FAIL');
+    expect(f?.given.cable).toContain('4sq');
+  });
+});
+
+describe('TR-MAIN-CURRENT — 정격 2차전류 (독립 손계산 known-answer)', () => {
+  it('1000kVA·380V → 1519A (kVA×1000/(√3×380) = 1519.34…)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'MOLD TR-3 6.6KV/380V', rating: '1000kVA', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
+    expect(f?.severity).toBe('PASS');
+    expect(f?.computed?.['정격 2차전류']).toBe('1519A');
+  });
+
+  it('500kVA·220V → 1312A', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'MOLD TR-1 6.6KV/220V', rating: '500kVA', position: pos },
+    ]));
+    expect(r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT')?.computed?.['정격 2차전류']).toBe('1312A');
+  });
+
+  it('2차전압이 무모호하지 않으면 계산하지 않고 UNKNOWN(무발명)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'TR', rating: '1000kVA', position: pos },
+    ]));
+    expect(r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT')?.severity).toBe('UNKNOWN');
+  });
+});
+
+describe('DATA-GAP — 판정 불가의 정직 집계', () => {
+  it('케이블 미결속·정격 미파싱을 숨기지 않고 센다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB 3P-100/75', rating: '100AF/75AT', position: pos },
+      { id: 'comp_2', type: 'breaker', label: 'VCB(DRAW OUT)', position: pos },
+    ]));
+    const gap = r.findings.find((x) => x.rule === 'DATA-GAP');
+    expect(gap?.severity).toBe('UNKNOWN');
+    expect(gap?.given['케이블 미결속 차단기']).toBe('2/2');
+    expect(gap?.given['정격(AF/AT) 미파싱 차단기']).toBe('1/2');
+  });
+
+  it('차단기 0대 페이지는 GAP 자체를 만들지 않는다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'meter', label: 'DIGITAL METER', position: pos },
+    ]));
+    expect(r.findings.filter((x) => x.rule === 'DATA-GAP')).toHaveLength(0);
+  });
+});
+
+describe('리포트 계약', () => {
+  it('summary 집계와 disclaimer가 항상 실린다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '50AF/100AT', position: pos },
+    ]));
+    expect(r.summary.fail).toBeGreaterThanOrEqual(1);
+    expect(r.disclaimer).toContain('유자격');
+  });
+});

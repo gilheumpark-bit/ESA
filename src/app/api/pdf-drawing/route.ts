@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
+import { reviewAnalysis } from '@/engine/review/circuit-review';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
@@ -86,6 +87,11 @@ export async function POST(req: NextRequest) {
     const topology = buildTopologyFromSLD(analysis);
     const validation = topology.validate();
     const calcChain = generateCalcChainFromSLD(analysis);
+    // 초급 하이브리드 검토(계산+기준+결론) — 구조 신뢰가 성립한 추출(0.85)에만.
+    // 표 문서·격자 의심(0.55 이하)의 추출로 부합 판정을 내면 false-PASS 위험.
+    const review = analysis.confidence >= 0.85
+      ? reviewAnalysis(analysis)
+      : { skipped: true as const, reason: `confidence ${analysis.confidence} — 구조 신뢰 미달(표 문서/스캔/격자 의심)로 부합 판정 생략` };
 
     apiLog({
       level: 'info', event: 'pdf-drawing-parse', route: '/api/pdf-drawing',
@@ -97,6 +103,7 @@ export async function POST(req: NextRequest) {
       success: true,
       data: analysis,
       calcChain,
+      review,
       topology: {
         nodeCount: validation.stats.nodeCount,
         edgeCount: validation.stats.edgeCount,

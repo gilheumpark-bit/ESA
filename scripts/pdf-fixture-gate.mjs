@@ -250,5 +250,34 @@ await sleep(800);
     `status ${r.status} types ${JSON.stringify(comps.map(c => c.type))} conn ${r.json?.data?.connections?.length}`);
 }
 
+// ── 2026-07-21 초급 하이브리드 검토(review) 회귀 잠금 R13 ────────────────────
+// R13 — 추출값→KEC 대조→부적합: 200AT 차단기에 4sq 케이블이면 허용전류 초과
+// FAIL이 review에 실려야 한다(사슬 전체: 추출→계산→기준→결론).
+const reviewFail =
+  text(100, 700, 'MCCB 3P-225/200') + text(100, 500, 'MCC-1') +
+  text(130, 600, 'CV 4sq') +
+  stroke(103, 698, 103, 505);
+await sleep(800);
+{
+  const r = await post('review-fail.pdf', buildPdf(reviewFail));
+  const fails = (r.json?.review?.findings ?? []).filter(f => f.rule === 'CABLE-AMPACITY' && f.severity === 'FAIL');
+  check('R13 검토 사슬: 200AT vs 4sq → CABLE-AMPACITY FAIL + KEC 출처 결박',
+    r.status === 200 && fails.length >= 1 && String(fails[0]?.limit?.source ?? '').includes('KEC'),
+    `status ${r.status} review ${JSON.stringify(r.json?.review?.summary ?? r.json?.review)?.slice(0, 140)}`);
+}
+
+// R13b — AT>AF 표기 오류(3P-50/100 = 50AF/100AT)는 FAIL로 검출된다.
+const reviewAtAf =
+  text(100, 700, 'MCCB 3P-50/100') + text(100, 500, 'MCC-1') +
+  stroke(103, 698, 103, 505);
+await sleep(800);
+{
+  const r = await post('review-ataf.pdf', buildPdf(reviewAtAf));
+  const fails = (r.json?.review?.findings ?? []).filter(f => f.rule === 'AT-LE-AF' && f.severity === 'FAIL');
+  check('R13b AT>AF 표기 오류 FAIL 검출',
+    r.status === 200 && fails.length === 1,
+    `status ${r.status} findings ${JSON.stringify((r.json?.review?.findings ?? []).map(f => [f.rule, f.severity]))?.slice(0, 140)}`);
+}
+
 console.log(failures.length === 0 ? `\nGATE PASS (${totalChecks}/${totalChecks})` : `\nGATE FAIL — ${failures.length}/${totalChecks}건: ${failures.join(', ')}`);
 process.exit(failures.length === 0 ? 0 : 1);

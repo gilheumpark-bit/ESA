@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
+import { reviewAnalysis } from '@/engine/review/circuit-review';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
@@ -99,6 +100,11 @@ export async function POST(req: NextRequest) {
     const topology = buildTopologyFromSLD(analysis);
     const validation = topology.validate();
     const calcChain = generateCalcChainFromSLD(analysis);
+    // 초급 하이브리드 검토 — PDF 라우트와 동일 계약(구조 신뢰 성립 시에만).
+    // DXF 벡터 파스는 0.95가 정상 경로라 0.85 이상을 신뢰선으로 공유한다.
+    const review = analysis.confidence >= 0.85
+      ? reviewAnalysis(analysis)
+      : { skipped: true as const, reason: `confidence ${analysis.confidence} — 구조 신뢰 미달로 부합 판정 생략` };
 
     apiLog({
       level: 'info',
@@ -116,6 +122,7 @@ export async function POST(req: NextRequest) {
       success: true,
       data: analysis,
       calcChain,
+      review,
       topology: {
         nodeCount: validation.stats.nodeCount,
         edgeCount: validation.stats.edgeCount,
