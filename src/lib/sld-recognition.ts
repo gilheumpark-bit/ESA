@@ -166,8 +166,18 @@ export async function analyzeSLD(
 export function parseSLDResponse(text: string): SLDAnalysis {
   try {
     const trimmed = text.trim();
-    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-    const parsed: unknown = JSON.parse(fenced?.[1] ?? trimmed);
+    // 견고 추출(라이브 VLM 검증 실측 수리): Gemini가 ```json 펜스로 감싸거나
+    // 앞뒤에 설명 문장을 붙여 보내면 구 `^```...```$` 전체앵커가 실패해, VLM이
+    // 도면을 옳게 읽고도(예: "Main Breaker 100AF/75AT") 결과가 통째로 버려졌다
+    // (components 0·confidence 0). 펜스를 느슨히 벗기고 첫 '{'~마지막 '}'를
+    // 뽑아 주변 텍스트·미완 펜스를 허용한다.
+    let candidate = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    const firstBrace = candidate.indexOf('{');
+    const lastBrace = candidate.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      candidate = candidate.slice(firstBrace, lastBrace + 1);
+    }
+    const parsed: unknown = JSON.parse(candidate);
     if (!parsed || typeof parsed !== 'object') throw new Error('SLD 응답은 객체여야 합니다.');
     const data = parsed as Record<string, unknown>;
     if (!Array.isArray(data.components) || !Array.isArray(data.connections)) {
@@ -578,7 +588,9 @@ async function callClaudeVision(
     },
     body: JSON.stringify({
       model: options.model || 'claude-sonnet-5',
-      max_tokens: 4000,
+      // 8192로 상향(라이브 검증 수리): 4000 토큰은 분전반 일람(차단기 30+·연결
+      // 다수)의 JSON을 중간에 끊어 파싱 실패→결과 폐기를 유발했다. role-runner와 동일.
+      max_tokens: 8192,
       system: SLD_SYSTEM_PROMPT,
       messages: [
         {
@@ -630,7 +642,7 @@ async function callGeminiVision(
           ],
         },
       ],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 4000 },
+      generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
     }),
   });
 

@@ -76,3 +76,27 @@ describe('generateCalcChainFromSLD — dependsOn 동적 결박 (버그 사냥 F7
     }
   });
 });
+
+describe('parseSLDResponse — VLM 펜스·주변텍스트 견고 추출 (라이브 검증 수리)', () => {
+  const valid = { components: [{ id: 'c1', type: 'breaker', label: 'MCCB', position: { x: 10, y: 20 } }], connections: [] };
+
+  it('```json 코드펜스로 감싼 응답을 파싱한다', () => {
+    const r = parseSLDResponse('```json\n' + JSON.stringify(valid) + '\n```');
+    expect(r.components).toHaveLength(1);
+    expect(r.components[0].type).toBe('breaker');
+  });
+
+  it('펜스 앞뒤에 설명 문장이 붙어도 JSON을 뽑아낸다', () => {
+    const r = parseSLDResponse('Here is the analysis:\n```json\n' + JSON.stringify(valid) + '\n```\nNote: values are HOLD.');
+    expect(r.components).toHaveLength(1);
+  });
+
+  it('닫는 펜스가 없어도(절단 직전) 균형 JSON은 파싱한다', () => {
+    const r = parseSLDResponse('```json\n' + JSON.stringify(valid));
+    expect(r.components).toHaveLength(1);
+  });
+
+  it('펜스 없는 순수 JSON도 그대로 파싱한다', () => {
+    expect(parseSLDResponse(JSON.stringify(valid)).components).toHaveLength(1);
+  });
+});
