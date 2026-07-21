@@ -13,6 +13,7 @@
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './endpoint-snap';
 import { parseSpecText } from './spec-text';
+import { bindScheduleRow } from './schedule-row-binding';
 
 // =========================================================================
 // PART 1 — Types
@@ -309,11 +310,21 @@ export async function parsePdfToSLD(
     }
   }
 
-  // 부하명 행 결속은 의도적으로 미구현(2026-07-21 골든 파일럿 판정): 단순 y-밴드+우측
-  // 근접 휴리스틱을 라이브 실측한 결과 판넬 헤더 텍스트(사용전압·NOTE·GT)를 부하로
-  // 오결속했다(8/8 전부 오탐). 무발명 원칙상 틀린 결속은 무결속보다 위험 — 일람표
-  // 행·열 모델(표 구조 인식)을 갖춘 뒤 별도 배치로 붙인다. 골든 정답은
+  // 일람표 행 결속(2026-07-21 2차 — 실좌표 재설계): 구판 y±3·우측 휴리스틱은 실측
+  // 기하(부하명=앵커 아래 dy 3~9)와 불일치해 헤더 텍스트만 오결속(8/8 라이브 실측)
+  // → 제거 후, 골든 좌표 기반 순수 모듈(schedule-row-binding)로 교체. 채점 정본은
   // fixtures/drawings/golden/kimm-panelboard-sld.p14.adjudicated.json의 branchRows.
+  for (let a = 0; a < rawAnchors.length; a++) {
+    const comp = components[a];
+    const binding = bindScheduleRow({ x: rawAnchors[a].x, y: rawAnchors[a].y, text: comp.label ?? '' }, texts);
+    if (binding.load || binding.tag) {
+      comp.properties = {
+        ...(comp.properties ?? {}),
+        ...(binding.load ? { load: binding.load } : {}),
+        ...(binding.tag ? { tag: binding.tag } : {}),
+      };
+    }
+  }
 
   // 선분 → 연결 (일정 길이 이상)
   const ptToMeter = 0.000352778; // 1pt = 0.352778mm
