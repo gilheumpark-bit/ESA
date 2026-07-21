@@ -34,7 +34,7 @@ reviewAnalysis(analysis: SLDAnalysis): ReviewReport
 ```ts
 interface ReviewFinding {
   rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
-  severity: 'FAIL' | 'WARN' | 'PASS' | 'UNKNOWN';
+  severity: 'FAIL' | 'WARN' | 'PASS' | 'UNKNOWN' | 'INFO'; // INFO=계산 참고값(부합 계수 아님)
   subject: string;                       // 대상 라벨 (예: "ELB 2P-30/20 [전열]")
   componentId?: string;
   given: Record<string, string>;         // 도면에 적힌 값 그대로
@@ -44,7 +44,7 @@ interface ReviewFinding {
 }
 interface ReviewReport {
   findings: ReviewFinding[];
-  summary: { pass: number; warn: number; fail: number; unknown: number };
+  summary: { pass: number; warn: number; fail: number; unknown: number; info: number };
   coverage: { breakersTotal: number; breakersWithCable: number; breakersRatedParsed: number };
   disclaimer: string;                    // "검토 보조 — 최종 판정은 유자격자"
 }
@@ -64,7 +64,7 @@ interface ReviewReport {
 ### 2.3 배선
 
 - `/api/pdf-drawing`·`/api/dxf` 응답에 `review: ReviewReport` 추가 (generateCalcChainFromSLD 뒤).
-- confidence 0.55 이하(표 문서·스캔)는 review를 생략하고 사유만 — 신뢰 못 하는 추출로 판정하지 않는다.
+- confidence 0.85 미만(표 문서·스캔·격자 의심)은 review를 생략하고 사유만 — 신뢰 못 하는 추출로 판정하지 않는다.
 
 ### 2.4 검증
 
