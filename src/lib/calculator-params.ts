@@ -68,6 +68,16 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
       { value: 'XLPE', label: 'XLPE (가교폴리에틸렌)' },
       { value: 'PVC', label: 'PVC (비닐)' },
     ], defaultValue: 'XLPE' },
+    { name: 'installation', type: 'string', unit: '', description: '설치 방법 (IEC 60364-5-52)', options: [
+      { value: 'C', label: 'C — 벽/트레이 직부' },
+      { value: 'A1', label: 'A1 — 단열벽 전선관' },
+      { value: 'A2', label: 'A2 — 단열벽 케이블' },
+      { value: 'B1', label: 'B1 — 벽면 전선관' },
+      { value: 'B2', label: 'B2 — 벽면 케이블' },
+      { value: 'D', label: 'D — 지중 매설' },
+      { value: 'E', label: 'E — 기중 트레이' },
+      { value: 'F', label: 'F — 기중 이격' },
+    ], defaultValue: 'C' },
     { name: 'ambientTemp', type: 'number', unit: '°C', description: '주위 온도', min: -20, max: 80, defaultValue: 30 },
     { name: 'groupCount', type: 'number', unit: '', description: '다조 포설 회선 수', min: 1, defaultValue: 1, step: 1 },
     { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0, max: 1, defaultValue: 0.85, step: 0.01 },
@@ -236,6 +246,8 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     { name: 'noLoadLoss', type: 'number', unit: 'W', description: '무부하 손실 (철손)', min: 0, defaultValue: 500 },
     { name: 'ratedLoadLoss', type: 'number', unit: 'W', description: '정격 부하 손실 (동손)', min: 0.01, defaultValue: 3000 },
     { name: 'loadRatio', type: 'number', unit: '', description: '부하율 (0~1)', min: 0, max: 1, defaultValue: 0.75, step: 0.01 },
+    { name: 'ratedCapacity', type: 'number', unit: 'kVA', description: '정격 용량 (효율 산정용)', min: 1, defaultValue: 1000 },
+    { name: 'powerFactor', type: 'number', unit: '', description: '역률 (효율 산정용)', min: 0.01, max: 1, defaultValue: 1.0, step: 0.01 },
   ],
   'transformer-efficiency': [
     { name: 'capacity', type: 'number', unit: 'kVA', description: '용량', min: 1 },
@@ -307,6 +319,11 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
       { value: 'Cu', label: '구리 (Cu)' },
       { value: 'Al', label: '알루미늄 (Al)' },
     ], defaultValue: 'Cu' },
+    { name: 'insulation', type: 'string', unit: '', description: '절연/포설 (k 계수, IEC 60364-5-54)', options: [
+      { value: 'PVC', label: 'PVC 절연' },
+      { value: 'XLPE', label: 'XLPE/EPR 절연' },
+      { value: 'bare', label: '나도체' },
+    ], defaultValue: 'PVC' },
   ],
   'equipotential-bonding': [
     { name: 'largestPE', type: 'number', unit: 'mm²', description: '최대 보호도체(PE) 단면적', min: 0.5, defaultValue: 16 },

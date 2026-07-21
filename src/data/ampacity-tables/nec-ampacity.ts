@@ -154,19 +154,27 @@ interface NecTempCorrRow {
 }
 
 /**
- * NEC Table 310.15(C)(1)(1)
- * Ambient Temperature Correction Factors Based on 30°C
+ * NEC Table 310.15(C)(1) (formerly 310.15(B)(2)(a))
+ * Ambient Temperature Correction Factors, base 30°C (86°F).
+ *
+ * 2026-07-21 버그 사냥 (계산기군 #1) 수리: 이전 표는 (a) 저온 밴드가 한 칸씩 밀려
+ * (10-15 밴드가 "≤10" 값을, 16-20이 "11-15" 값을 담아) 저온측을 과대 계산했고,
+ * (b) 60°C 열이 어긋나 31-35=0.87(정 0.91)·46-50=0.00(정 0.58)으로 60°C 도체를
+ * 50°C 주위에서 사용 불가로 잘못 던졌다. NEC은 "10 이하"와 "11-15"를 구분하므로
+ * 첫 밴드를 ambientMax:10으로 두고 NEC 310.15(C)(1) 공표값으로 정렬한다. 75/90°C
+ * 열의 고온측(31°C↑)은 원래 정확했다("—"는 미허용 = 0.00 = throw).
  */
 const NEC_TEMP_CORRECTION: NecTempCorrRow[] = [
-  { ambientMin: 10, ambientMax: 15, f60: 1.29, f75: 1.20, f90: 1.15 },
-  { ambientMin: 16, ambientMax: 20, f60: 1.22, f75: 1.15, f90: 1.12 },
-  { ambientMin: 21, ambientMax: 25, f60: 1.15, f75: 1.11, f90: 1.08 },
+  { ambientMin: -Infinity, ambientMax: 10, f60: 1.29, f75: 1.20, f90: 1.15 },
+  { ambientMin: 11, ambientMax: 15, f60: 1.22, f75: 1.15, f90: 1.12 },
+  { ambientMin: 16, ambientMax: 20, f60: 1.15, f75: 1.11, f90: 1.08 },
+  { ambientMin: 21, ambientMax: 25, f60: 1.08, f75: 1.05, f90: 1.04 },
   { ambientMin: 26, ambientMax: 30, f60: 1.00, f75: 1.00, f90: 1.00 },
-  { ambientMin: 31, ambientMax: 35, f60: 0.87, f75: 0.94, f90: 0.96 },
-  { ambientMin: 36, ambientMax: 40, f60: 0.71, f75: 0.88, f90: 0.91 },
-  { ambientMin: 41, ambientMax: 45, f60: 0.50, f75: 0.82, f90: 0.87 },
-  { ambientMin: 46, ambientMax: 50, f60: 0.00, f75: 0.75, f90: 0.82 },
-  { ambientMin: 51, ambientMax: 55, f60: 0.00, f75: 0.67, f90: 0.76 },
+  { ambientMin: 31, ambientMax: 35, f60: 0.91, f75: 0.94, f90: 0.96 },
+  { ambientMin: 36, ambientMax: 40, f60: 0.82, f75: 0.88, f90: 0.91 },
+  { ambientMin: 41, ambientMax: 45, f60: 0.71, f75: 0.82, f90: 0.87 },
+  { ambientMin: 46, ambientMax: 50, f60: 0.58, f75: 0.75, f90: 0.82 },
+  { ambientMin: 51, ambientMax: 55, f60: 0.41, f75: 0.67, f90: 0.76 },
   { ambientMin: 56, ambientMax: 60, f60: 0.00, f75: 0.58, f90: 0.71 },
   { ambientMin: 61, ambientMax: 65, f60: 0.00, f75: 0.47, f90: 0.65 },
   { ambientMin: 66, ambientMax: 70, f60: 0.00, f75: 0.33, f90: 0.58 },

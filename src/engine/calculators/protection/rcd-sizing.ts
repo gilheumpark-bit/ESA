@@ -107,10 +107,18 @@ export function calculateRCDSizing(input: RCDSizingInput): DetailedCalcResult {
   });
 
   // PART 3 — Judgment
-  const pass = touchVoltage <= spec.touchLimit;
-  const judgmentMsg = pass
-    ? `RCD ${selectedRating}A / ${spec.sensitivity}mA suitable. Touch voltage ${round(touchVoltage, 2)}V ≤ ${spec.touchLimit}V.`
-    : `Touch voltage ${round(touchVoltage, 2)}V exceeds ${spec.touchLimit}V limit. Reduce earth resistance below ${round(maxEarthResistance, 2)}Ω.`;
+  // The selected rating must actually cover the load current. When loadCurrent exceeds the
+  // largest standard rating (125A), selectedRating falls back to 125A < load, so the RCD is
+  // under-rated. The prior code only checked touch voltage, giving a false PASS for an
+  // under-rated device (계산기군 #9 수리 — breaker-sizing과 동형).
+  const ratingAdequate = selectedRating >= loadCurrent;
+  const touchOk = touchVoltage <= spec.touchLimit;
+  const pass = ratingAdequate && touchOk;
+  const judgmentMsg = !ratingAdequate
+    ? `Load current ${loadCurrent}A exceeds maximum standard RCD rating ${STANDARD_RATINGS[STANDARD_RATINGS.length - 1]}A — split the circuit or use a higher-rated device.`
+    : touchOk
+      ? `RCD ${selectedRating}A / ${spec.sensitivity}mA suitable. Touch voltage ${round(touchVoltage, 2)}V ≤ ${spec.touchLimit}V.`
+      : `Touch voltage ${round(touchVoltage, 2)}V exceeds ${spec.touchLimit}V limit. Reduce earth resistance below ${round(maxEarthResistance, 2)}Ω.`;
 
   // PART 4 — Result assembly
   return {

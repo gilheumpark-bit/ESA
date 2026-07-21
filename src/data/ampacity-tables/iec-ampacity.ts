@@ -154,17 +154,46 @@ interface IecTempCorrRow {
   xlpe90: number;
 }
 
+/**
+ * Air temperature correction factors — IEC 60364-5-52 Table B.52.14, base 30°C.
+ * 밴드 상한(보수측) 값을 쓴다. XLPE/EPR(90°C 도체)은 PVC(70°C)보다 열에 강해 같은
+ * 온도에서 보정계수가 높다(예: 45°C XLPE 0.87 > PVC 0.79).
+ *
+ * 2026-07-21 버그 사냥 (계산기군 #1) 수리: 이전 표는 (a) `xlpe90` 열이 실제로는 PVC
+ * 값(35°C 0.94·40°C 0.87·45°C 0.79)을 담아 XLPE를 과소 계산했고, (b) `pvc70` 열이
+ * 어긋나 46°C 이상에서 0.00으로 떨어져(45°C 0.50·50°C 0.00) PVC 케이블을 50°C에서
+ * 사용 불가로 잘못 던지며 저온·중온대를 과대(비보수·화재 방향) 계산했다. KEC 정본
+ * (kec-ampacity.ts, 동일 B.52.14)와 손계산 대조해 정확값으로 정렬한다.
+ */
 const IEC_TEMP_CORRECTION: IecTempCorrRow[] = [
-  { ambientMin: 10, ambientMax: 15, pvc70: 1.22, xlpe90: 1.15 },
-  { ambientMin: 16, ambientMax: 20, pvc70: 1.17, xlpe90: 1.12 },
-  { ambientMin: 21, ambientMax: 25, pvc70: 1.12, xlpe90: 1.08 },
+  { ambientMin: 10, ambientMax: 15, pvc70: 1.17, xlpe90: 1.12 },
+  { ambientMin: 16, ambientMax: 20, pvc70: 1.12, xlpe90: 1.08 },
+  { ambientMin: 21, ambientMax: 25, pvc70: 1.06, xlpe90: 1.04 },
   { ambientMin: 26, ambientMax: 30, pvc70: 1.00, xlpe90: 1.00 },
-  { ambientMin: 31, ambientMax: 35, pvc70: 0.87, xlpe90: 0.94 },
-  { ambientMin: 36, ambientMax: 40, pvc70: 0.71, xlpe90: 0.87 },
-  { ambientMin: 41, ambientMax: 45, pvc70: 0.50, xlpe90: 0.79 },
-  { ambientMin: 46, ambientMax: 50, pvc70: 0.00, xlpe90: 0.71 },
-  { ambientMin: 51, ambientMax: 55, pvc70: 0.00, xlpe90: 0.61 },
-  { ambientMin: 56, ambientMax: 60, pvc70: 0.00, xlpe90: 0.50 },
+  { ambientMin: 31, ambientMax: 35, pvc70: 0.94, xlpe90: 0.96 },
+  { ambientMin: 36, ambientMax: 40, pvc70: 0.87, xlpe90: 0.91 },
+  { ambientMin: 41, ambientMax: 45, pvc70: 0.79, xlpe90: 0.87 },
+  { ambientMin: 46, ambientMax: 50, pvc70: 0.71, xlpe90: 0.82 },
+  { ambientMin: 51, ambientMax: 55, pvc70: 0.61, xlpe90: 0.76 },
+  { ambientMin: 56, ambientMax: 60, pvc70: 0.50, xlpe90: 0.71 },
+];
+
+/**
+ * Ground (soil) temperature correction factors — IEC 60364-5-52 Table B.52.15,
+ * base 20°C, for buried cables (Method D). 지중 base는 20°C이므로 공기표(30°C base)를
+ * 쓰면 안 된다(계산기군 #3 수리 — 이전엔 Method D도 공기표로 보정해 지중온도 과증가).
+ */
+const IEC_GROUND_TEMP_CORRECTION: IecTempCorrRow[] = [
+  { ambientMin: 10, ambientMax: 15, pvc70: 1.05, xlpe90: 1.04 },
+  { ambientMin: 16, ambientMax: 20, pvc70: 1.00, xlpe90: 1.00 },
+  { ambientMin: 21, ambientMax: 25, pvc70: 0.95, xlpe90: 0.96 },
+  { ambientMin: 26, ambientMax: 30, pvc70: 0.89, xlpe90: 0.93 },
+  { ambientMin: 31, ambientMax: 35, pvc70: 0.84, xlpe90: 0.89 },
+  { ambientMin: 36, ambientMax: 40, pvc70: 0.77, xlpe90: 0.85 },
+  { ambientMin: 41, ambientMax: 45, pvc70: 0.71, xlpe90: 0.80 },
+  { ambientMin: 46, ambientMax: 50, pvc70: 0.63, xlpe90: 0.76 },
+  { ambientMin: 51, ambientMax: 55, pvc70: 0.55, xlpe90: 0.71 },
+  { ambientMin: 56, ambientMax: 60, pvc70: 0.45, xlpe90: 0.65 },
 ];
 
 function getIecTempFactor(ambientTemp: number, insulation: IecInsulationType): number {
@@ -174,12 +203,26 @@ function getIecTempFactor(ambientTemp: number, insulation: IecInsulationType): n
       return isXlpeType ? row.xlpe90 : row.pvc70;
     }
   }
-  // Extrapolate
+  // Extrapolate (air base 30°C): Kt = sqrt((Tmax - Ta) / (Tmax - 30))
   const tMax = isXlpeType ? 90 : 70;
-  const baseAmbient = insulation === 'PVC' ? 30 : 30;
   const numerator = tMax - ambientTemp;
   if (numerator <= 0) return 0;
-  return Math.sqrt(numerator / (tMax - baseAmbient));
+  return Math.sqrt(numerator / (tMax - 30));
+}
+
+/** Ground temperature factor for buried cables (Method D), IEC B.52.15, base 20°C. */
+function getIecGroundTempFactor(groundTemp: number, insulation: IecInsulationType): number {
+  const isXlpeType = insulation === 'XLPE' || insulation === 'EPR';
+  for (const row of IEC_GROUND_TEMP_CORRECTION) {
+    if (groundTemp >= row.ambientMin && groundTemp <= row.ambientMax) {
+      return isXlpeType ? row.xlpe90 : row.pvc70;
+    }
+  }
+  // Extrapolate (ground base 20°C): Kt = sqrt((Tmax - Tg) / (Tmax - 20))
+  const tMax = isXlpeType ? 90 : 70;
+  const numerator = tMax - groundTemp;
+  if (numerator <= 0) return 0;
+  return Math.sqrt(numerator / (tMax - 20));
 }
 
 // =========================================================================
@@ -223,9 +266,13 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
   const {
     size, conductor, insulation,
     method = 'C',
-    ambientTemp = 30,
     groupCount = 1,
   } = opts;
+
+  // Method D is buried in ground (base 20°C); all other methods are in air (base 30°C).
+  const isBuried = method === 'D';
+  const baseAmbient = isBuried ? 20 : 30;
+  const ambientTemp = opts.ambientTemp ?? baseAmbient;
 
   // Find size index
   const sizeIdx = IEC_CABLE_SIZES.indexOf(size as IecSize);
@@ -235,13 +282,26 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
     );
   }
 
-  // Try exact key first, then fallback to method C
-  const primaryKey = `${conductor}_${insulation}_${method}` as IecAmpacityKey;
-  const fallbackKey = `${conductor}_${insulation}_C` as IecAmpacityKey;
-  const row = IEC_BASE_AMPACITY[primaryKey] ?? IEC_BASE_AMPACITY[fallbackKey];
+  // IEC treats EPR and XLPE identically for ampacity (both 90°C conductors); the base
+  // tables key EPR to the XLPE values. Only the requested method's own table is used —
+  // NO silent fallback to Method C. Substituting Method C for an enclosed method (A2/B2)
+  // over-rates ampacity (Method C cools better), which under-sizes the cable — fire
+  // direction. Unsupported (conductor, insulation, method) throws with the supported list
+  // (계산기군 #2 수리).
+  const lookupInsulation: IecInsulationType = insulation === 'EPR' ? 'XLPE' : insulation;
+  const tableKey = `${conductor}_${lookupInsulation}_${method}` as IecAmpacityKey;
+  const row = IEC_BASE_AMPACITY[tableKey];
 
   if (!row) {
-    throw new Error(`No IEC ampacity data for: ${conductor}/${insulation}/${method}`);
+    const supportedMethods = (Object.keys(IEC_BASE_AMPACITY) as IecAmpacityKey[])
+      .filter((k) => k.startsWith(`${conductor}_${lookupInsulation}_`))
+      .map((k) => k.split('_')[2]);
+    throw new Error(
+      supportedMethods.length > 0
+        ? `IEC method '${method}' has no table for ${conductor}/${insulation}. ` +
+          `Supported methods for this material/insulation: ${supportedMethods.join(', ')}.`
+        : `No IEC ampacity data for ${conductor}/${insulation} (any method).`,
+    );
   }
 
   const baseAmpacity = row[sizeIdx];
@@ -254,18 +314,23 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
   const factors: IecCorrectionFactor[] = [];
   let corrected = baseAmpacity;
 
-  // Temperature correction
-  if (ambientTemp !== 30) {
-    const tf = getIecTempFactor(ambientTemp, insulation);
+  // Temperature correction — ground table (B.52.15, base 20°C) for Method D,
+  // air table (B.52.14, base 30°C) otherwise.
+  if (ambientTemp !== baseAmbient) {
+    const tf = isBuried
+      ? getIecGroundTempFactor(ambientTemp, insulation)
+      : getIecTempFactor(ambientTemp, insulation);
     if (tf === 0) {
       throw new Error(
-        `Ambient temperature ${ambientTemp}°C exceeds maximum for ${insulation} insulation`,
+        `${isBuried ? 'Ground' : 'Ambient'} temperature ${ambientTemp}°C exceeds maximum for ${insulation} insulation`,
       );
     }
     factors.push({
       type: 'temperature',
       factor: tf,
-      description: `IEC 60364-5-52 Table B.52-14: ambient ${ambientTemp}°C, factor = ${tf}`,
+      description: isBuried
+        ? `IEC 60364-5-52 Table B.52.15 (buried): ground ${ambientTemp}°C (base 20°C), factor = ${tf}`
+        : `IEC 60364-5-52 Table B.52.14 (air): ambient ${ambientTemp}°C (base 30°C), factor = ${tf}`,
     });
     corrected *= tf;
   }

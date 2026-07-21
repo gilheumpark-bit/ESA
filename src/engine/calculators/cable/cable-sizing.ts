@@ -103,6 +103,29 @@ function groupCorrectionFactor(count: number): number {
   return 0.50;
 }
 
+/**
+ * Installation-method factor relative to Method C (clipped direct).
+ *
+ * The base ampacity tables above are Method C values. The prior code accepted an
+ * `installation` field of A1..F but never read it, so every method was treated as C.
+ * For ENCLOSED methods (A1/A2/B1/B2) that over-rates the cable (they cool worse than C),
+ * under-sizing it — fire direction. Factors are derived from IEC 60364-5-52 method ratios
+ * at a representative size (Cu/XLPE 25mm²: A1/C≈0.84, B1/C≈0.88, D/C≈0.95); A2/B2 sit
+ * just below A1/B1 (worse assembly). Free-air/tray methods (E/F) carry MORE than C, so
+ * they are capped at 1.0 (treated as C = conservative under-rate, never over-rated on
+ * approximate data). 계산기군 #10 수리.
+ */
+const INSTALL_FACTOR: Record<InstallationMethod, number> = {
+  A1: 0.84,
+  A2: 0.80,
+  B1: 0.88,
+  B2: 0.85,
+  C: 1.00,
+  D: 0.95,
+  E: 1.00,
+  F: 1.00,
+};
+
 // ── Input ───────────────────────────────────────────────────────────────────
 
 export interface CableSizingInput {
@@ -146,6 +169,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     voltage: V,
     conductor,
     insulation,
+    installation = 'C',
     ambientTemp = 30,
     groupCount = 1,
     powerFactor: pf = 0.85,
@@ -180,13 +204,24 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     standardRef: 'IEC 60364-5-52 Table B.52-17',
   });
 
-  // Step 3: Required ampacity before derating
-  const correctionProduct = Kt * Kg;
-  const I_required = correctionProduct > 0 ? I / correctionProduct : Infinity;
+  // Step 3: Installation-method factor (base tables are Method C)
+  const Ki = INSTALL_FACTOR[installation];
   steps.push({
     step: 3,
+    title: `Installation-method factor (${installation})`,
+    formula: 'K_i = f(\\text{method, rel. to C})',
+    value: Ki,
+    unit: '-',
+    standardRef: 'IEC 60364-5-52 Table B.52',
+  });
+
+  // Step 4: Required ampacity before derating
+  const correctionProduct = Kt * Kg * Ki;
+  const I_required = correctionProduct > 0 ? I / correctionProduct : Infinity;
+  steps.push({
+    step: 4,
     title: 'Required cable ampacity (before correction)',
-    formula: 'I_{req} = \\frac{I_{load}}{K_t \\times K_g}',
+    formula: 'I_{req} = \\frac{I_{load}}{K_t \\times K_g \\times K_i}',
     value: round(I_required, 2),
     unit: 'A',
   });
@@ -244,7 +279,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   }
 
   steps.push({
-    step: 4,
+    step: 5,
     title: 'Select minimum cable size (ampacity)',
     formula: 'I_{base} \\geq I_{req}',
     value: selectedSize,
@@ -253,7 +288,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   });
 
   steps.push({
-    step: 5,
+    step: 6,
     title: 'Verify voltage drop',
     formula: 'e\\% \\leq ' + dropLimitPercent + '\\%',
     value: vdPct,

@@ -67,7 +67,13 @@ const STANDARD_MM2 = [
 export interface AwgConverterInput {
   /** Conversion direction */
   direction: 'awg-to-mm2' | 'mm2-to-awg';
-  /** AWG number (for awg-to-mm2). Use -1=1/0, -2=2/0, -3=3/0, -4=4/0 */
+  /**
+   * AWG number (for awg-to-mm2). Aught sizes use the standard ASTM B258 convention
+   * where each additional zero decrements the number by one:
+   *   0 = 1/0, -1 = 2/0, -2 = 3/0, -3 = 4/0.
+   * (Consistent with the formula d = 0.127·92^((36-n)/39) and with
+   * global/awg-converter-full.ts. The prior "-1=1/0" doc was off by one.)
+   */
   awg?: number;
   /** Cross-sectional area in mm² (for mm2-to-awg) */
   mm2?: number;
@@ -126,9 +132,8 @@ export function convertAwgMm2(input: AwgConverterInput): DetailedCalcResult {
     const awgNum = input.awg;
 
     // Step 1: Diameter from AWG formula
-    // For AWG 0000(-3) through 36
-    const effectiveAwg = awgNum; // -1=1/0, -2=2/0, -3=3/0, -4=4/0 convention not used; lookup instead
-    const dMm = 0.127 * Math.pow(92, (36 - effectiveAwg) / 39);
+    // Aught sizes use ASTM B258 convention: 0=1/0, -1=2/0, -2=3/0, -3=4/0 (0000).
+    const dMm = 0.127 * Math.pow(92, (36 - awgNum) / 39);
     steps.push({
       step: 1,
       title: 'Wire diameter from AWG number',

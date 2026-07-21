@@ -217,10 +217,31 @@ describe('cable / ampacity', () => {
     close(value, 120.5, 0.02);
     close(extra.maxAmpacity, 130);
   });
-  test('ground-conductor: A=I√t/k=5000·√0.5/226=15.64 mm² → select 16', () => {
+  // BUG FIX (계산기군 #7): k was 226(Cu)/148(Al) — near-melting constants that UNDER-size
+  // the protective conductor. IEC 60364-5-54 k is insulation-dependent (initial 30°C):
+  //   PVC  Cu 143 / Al 95   XLPE/EPR Cu 176 / Al 116   bare Cu 159 / Al 105.
+  // A = I√t/k. I√t = 5000·√0.5 = 3535.53. Default insulation is PVC (conservative).
+  //   PVC Cu:  3535.53/143 = 24.72 → 25    (was 15.64/16 with the wrong k=226)
+  //   XLPE Cu: 3535.53/176 = 20.09 → 25
+  //   PVC Al:  3535.53/95  = 37.22 → 50
+  test('ground-conductor PVC Cu (default): 3535.53/143=24.72 mm² → select 25 (IEC 60364-5-54)', () => {
     const { value, extra } = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu' });
-    close(value, 15.64, 0.02);
-    expect(extra.selectedSize).toBe(16);
+    close(value, 24.72, 0.02);
+    expect(extra.selectedSize).toBe(25);
+    // regression guard: must NOT return to the near-melting k=226 (would give 15.64 → 16)
+    expect(value).toBeGreaterThan(20);
+  });
+  test('ground-conductor XLPE Cu: 3535.53/176=20.09 mm²; k_XLPE(176) > k_PVC(143)', () => {
+    const pvc = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'PVC' }).value;
+    const xlpe = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'XLPE' }).value;
+    close(xlpe, 20.09, 0.02);
+    // higher final temp → higher k → smaller required area
+    expect(xlpe).toBeLessThan(pvc);
+  });
+  test('ground-conductor PVC Al: 3535.53/95=37.22 mm² → select 50', () => {
+    const { value, extra } = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Al', insulation: 'PVC' });
+    close(value, 37.22, 0.02);
+    expect(extra.selectedSize).toBe(50);
   });
   test('solar-cable: Vsys=900V, Idesign=1.25·11=13.75A, minA=2ρLI/ΔV=3.26→4mm²', () => {
     const { value, extra } = run('solar-cable', { moduleVoc: 45, stringCount: 20, isc: 11, length: 100, maxVoltageDrop: 2 });
