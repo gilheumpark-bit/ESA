@@ -1,8 +1,15 @@
 # 전수 버그 사냥 분류 대장 (2026-07-21)
 
 > 6축 병렬 사냥(도면엔진·API 48라우트·계산기 57·lib·프론트 94파일·게이트착시) → 본체 재현 확정.
-> 상태: FIXED=이 배치 수리+테스트 · DEFERRED=확정됐으나 별도 세션(surface/도메인 검증 필요) · DORMANT=0-caller(배선 시 발화).
-> 우선순위 원칙: **추출→검토 hot-path 도메인 버그 먼저**(제품 핵심), 나머지는 심각도·surface별 분리.
+> 상태: FIXED=수리+테스트 잠금 · DEFERRED=별도 세션 · DORMANT=0-caller(배선 시 발화).
+>
+> **[풀수리 종결 업데이트]** "모두 풀수리" 지시로 아래 DEFERRED 대부분을 후속 배치에서
+> 수리 완료. 정리:
+> - **엔진 F5/F6/F8** = FIXED(babd357) · **lib XFF·batch·convert** = FIXED(babd357) · **/api/review 커버리지** = FIXED(8c0d3e8)
+> - **프론트엔드 H1~H4·M1~M7·M9·L1~L2·L5~L6·L8~L9** = FIXED(병합 c94cba7) · M8 6컴포넌트=declared-dead(오너 결정)·L3/L4/L7/L10=비긴급 보류
+> - **계산기 12건 전부** = FIXED(병합, IEC B.52.14/B.52.15·NEC 310.15(C)·IEC 60364-5-54 k·ASTM B258 표준 대조) · 잔여=cable-sizing A2/B2 근사(보수측)·EPR 정규화 구조부채
+> - 통합: jest 142 suites/1232(수리전 1177·+55·제거 0)·tsc 0·gate:pdf 15/15·build 0
+> 하단 원본 항목은 사냥 시점 스냅샷으로 보존(수리 이력 추적용).
 
 ## FIXED (이 배치 — 커밋 동봉·전부 known-answer/회귀 테스트 잠금)
 
