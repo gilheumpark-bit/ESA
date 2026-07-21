@@ -1,0 +1,2672 @@
+{
+  "status": 200,
+  "json": {
+    "success": true,
+    "data": {
+      "components": [
+        {
+          "id": "comp_1",
+          "type": "meter",
+          "label": "METER",
+          "position": {
+            "x": 82,
+            "y": 45
+          }
+        },
+        {
+          "id": "comp_2",
+          "type": "breaker",
+          "label": "VCB 630 A",
+          "position": {
+            "x": 79,
+            "y": 41
+          },
+          "current": "630A"
+        },
+        {
+          "id": "comp_3",
+          "type": "panel",
+          "label": "11KV HT PANEL",
+          "position": {
+            "x": 78,
+            "y": 41
+          },
+          "voltage": "11000V"
+        },
+        {
+          "id": "comp_4",
+          "type": "transformer",
+          "label": "TRANSFORMER",
+          "position": {
+            "x": 71,
+            "y": 31
+          },
+          "properties": {
+            "load": "Dyn 11, 50Hz"
+          }
+        },
+        {
+          "id": "comp_5",
+          "type": "meter",
+          "label": "HT CT",
+          "position": {
+            "x": 82,
+            "y": 37
+          }
+        },
+        {
+          "id": "comp_6",
+          "type": "meter",
+          "label": "HT PT",
+          "position": {
+            "x": 84,
+            "y": 41
+          }
+        },
+        {
+          "id": "comp_7",
+          "type": "meter",
+          "label": "CT RATIO:",
+          "position": {
+            "x": 42,
+            "y": 48
+          },
+          "properties": {
+            "load": "1000/5A"
+          }
+        },
+        {
+          "id": "comp_8",
+          "type": "bus",
+          "label": "620 A COPPER BUSBAR",
+          "position": {
+            "x": 41,
+            "y": 53
+          },
+          "current": "620A",
+          "properties": {
+            "load": "TPN:(40mmx10mm)"
+          }
+        },
+        {
+          "id": "comp_9",
+          "type": "bus",
+          "label": "CU BUSBAR-620A",
+          "position": {
+            "x": 42,
+            "y": 40
+          },
+          "current": "620A"
+        },
+        {
+          "id": "comp_10",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 44,
+            "y": 43
+          }
+        },
+        {
+          "id": "comp_11",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 34,
+            "y": 41
+          }
+        },
+        {
+          "id": "comp_12",
+          "type": "bus",
+          "label": "CU BUSBAR-496A",
+          "position": {
+            "x": 35,
+            "y": 44
+          },
+          "current": "496A",
+          "properties": {
+            "load": "40mmX8mm(TP)"
+          }
+        },
+        {
+          "id": "comp_13",
+          "type": "generator",
+          "label": "DIESEL GENERATOR (Standby)",
+          "position": {
+            "x": 78,
+            "y": 69
+          }
+        },
+        {
+          "id": "comp_14",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 72,
+            "y": 70
+          }
+        },
+        {
+          "id": "comp_15",
+          "type": "bus",
+          "label": "CU BUSBAR-620A",
+          "position": {
+            "x": 42,
+            "y": 66
+          },
+          "current": "620A"
+        },
+        {
+          "id": "comp_16",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 44,
+            "y": 70
+          }
+        },
+        {
+          "id": "comp_17",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 34,
+            "y": 48
+          }
+        },
+        {
+          "id": "comp_18",
+          "type": "bus",
+          "label": "CU BUSBAR-372A",
+          "position": {
+            "x": 35,
+            "y": 52
+          },
+          "current": "372A",
+          "properties": {
+            "load": "40mmX6mm(TP)"
+          }
+        },
+        {
+          "id": "comp_19",
+          "type": "meter",
+          "label": "CT RATIO:",
+          "position": {
+            "x": 64,
+            "y": 41
+          },
+          "properties": {
+            "load": "1000/5A"
+          }
+        },
+        {
+          "id": "comp_20",
+          "type": "bus",
+          "label": "CU BUSBAR-775A",
+          "position": {
+            "x": 64,
+            "y": 29
+          },
+          "current": "775A"
+        },
+        {
+          "id": "comp_21",
+          "type": "breaker",
+          "label": "ACB",
+          "position": {
+            "x": 66,
+            "y": 36
+          }
+        },
+        {
+          "id": "comp_22",
+          "type": "breaker",
+          "label": "MCB",
+          "position": {
+            "x": 33,
+            "y": 65
+          }
+        },
+        {
+          "id": "comp_23",
+          "type": "bus",
+          "label": "775 A COPPER BUSBAR",
+          "position": {
+            "x": 63,
+            "y": 46
+          },
+          "current": "775A",
+          "properties": {
+            "load": "TPN:(50mmx10mm)"
+          }
+        },
+        {
+          "id": "comp_24",
+          "type": "bus",
+          "label": "CU BUSBAR 279A",
+          "position": {
+            "x": 56,
+            "y": 35
+          },
+          "current": "279A",
+          "properties": {
+            "load": "30mmX6mm(TP)"
+          }
+        },
+        {
+          "id": "comp_25",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 55,
+            "y": 32
+          }
+        },
+        {
+          "id": "comp_26",
+          "type": "panel",
+          "label": "LT PANEL",
+          "position": {
+            "x": 65,
+            "y": 48
+          },
+          "properties": {
+            "load": "E:50mmX8mm"
+          }
+        },
+        {
+          "id": "comp_27",
+          "type": "bus",
+          "label": "CU BUSBAR 620A",
+          "position": {
+            "x": 57,
+            "y": 28
+          },
+          "current": "620A",
+          "properties": {
+            "load": "40mmX10mm(TP)"
+          }
+        },
+        {
+          "id": "comp_28",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 55,
+            "y": 23
+          }
+        },
+        {
+          "id": "comp_29",
+          "type": "bus",
+          "label": "CU BUSBAR 620A",
+          "position": {
+            "x": 57,
+            "y": 47
+          },
+          "current": "620A",
+          "properties": {
+            "load": "40mmX10mm(TP)"
+          }
+        },
+        {
+          "id": "comp_30",
+          "type": "breaker",
+          "label": "MCCB",
+          "position": {
+            "x": 55,
+            "y": 44
+          }
+        },
+        {
+          "id": "comp_31",
+          "type": "panel",
+          "label": "11KV HT PANEL",
+          "position": {
+            "x": 80,
+            "y": 57
+          },
+          "voltage": "11000V",
+          "properties": {
+            "load": "(30A FUSE)"
+          }
+        },
+        {
+          "id": "comp_32",
+          "type": "breaker",
+          "label": "If you do not have VCB but you",
+          "position": {
+            "x": 82,
+            "y": 55
+          },
+          "properties": {
+            "load": "Fault current clearing time"
+          }
+        },
+        {
+          "id": "comp_33",
+          "type": "panel",
+          "label": "have LBS in HT panel",
+          "position": {
+            "x": 82,
+            "y": 57
+          },
+          "properties": {
+            "load": "11KV HT PANEL"
+          }
+        },
+        {
+          "id": "junction_1122.25_48.635986",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 94,
+            "y": 6
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_79.730003_48.635986",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 6
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_79.730003_789.48",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 94
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_1122.25_789.48",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 94,
+            "y": 94
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_58.22",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 7
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_780.529998",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 93
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_199.19",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 24
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_89.119998_199.19",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 24
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_301.28",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 36
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_89.119998_301.28",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 36
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_520.22",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 62
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_89.119998_520.22",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 62
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_607.46",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 72
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_89.119998_607.46",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 72
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.3_713.57",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 85
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_89.12_713.57",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 85
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_161.45_430.25",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 14,
+            "y": 51
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_89.119998_430.25",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 7,
+            "y": 51
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_137.24_363.8",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 12,
+            "y": 43
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_1044.68_303.139999",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 88,
+            "y": 36
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_1062.11_412.790001",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 89,
+            "y": 49
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_840.62_337.64",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 71,
+            "y": 40
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_902.99_431.900001",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 76,
+            "y": 51
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_285.05_370.22",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 24,
+            "y": 44
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_814.04_707.811",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 68,
+            "y": 84
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_637.880003_623.51",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 54,
+            "y": 74
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_591.140015_563",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 50,
+            "y": 67
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_554.539978_473.359985",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 47,
+            "y": 56
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_307.463_567.89",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 26,
+            "y": 67
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_307.759_438.62",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 26,
+            "y": 52
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_565.61_234.41",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 47,
+            "y": 28
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_565.52_299.9",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 47,
+            "y": 36
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_243.710007_481.940002",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 20,
+            "y": 57
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_546.22998_675.529999",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 46,
+            "y": 80
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_310.48999_675.529999",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 26,
+            "y": 80
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_471.47_667.910013",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 40,
+            "y": 79
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_727.28_188.39",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 61,
+            "y": 22
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_727.28_470.120011",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 61,
+            "y": 56
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "conn_1",
+          "from": "junction_1122.25_48.635986",
+          "to": "junction_79.730003_48.635986",
+          "length": "0.37m"
+        },
+        {
+          "id": "conn_2",
+          "from": "junction_79.730003_48.635986",
+          "to": "junction_79.730003_789.48",
+          "length": "0.26m"
+        },
+        {
+          "id": "conn_3",
+          "from": "junction_79.730003_789.48",
+          "to": "junction_1122.25_789.48",
+          "length": "0.37m"
+        },
+        {
+          "id": "conn_4",
+          "from": "junction_1122.25_789.48",
+          "to": "junction_1122.25_48.635986",
+          "length": "0.26m"
+        },
+        {
+          "id": "conn_5",
+          "from": "junction_161.45_58.22",
+          "to": "junction_161.45_780.529998",
+          "length": "0.25m"
+        },
+        {
+          "id": "conn_6",
+          "from": "junction_161.45_58.22",
+          "to": "junction_161.45_780.529998",
+          "length": "0.25m"
+        },
+        {
+          "id": "conn_7",
+          "from": "junction_161.45_199.19",
+          "to": "junction_89.119998_199.19",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_8",
+          "from": "junction_161.45_301.28",
+          "to": "junction_89.119998_301.28",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_9",
+          "from": "junction_161.45_520.22",
+          "to": "junction_89.119998_520.22",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_10",
+          "from": "junction_161.45_607.46",
+          "to": "junction_89.119998_607.46",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_11",
+          "from": "junction_161.3_713.57",
+          "to": "junction_89.12_713.57",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_12",
+          "from": "junction_161.45_430.25",
+          "to": "junction_89.119998_430.25",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_13",
+          "from": "junction_137.24_363.8",
+          "to": "junction_161.45_430.25",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_14",
+          "from": "junction_137.24_363.8",
+          "to": "junction_161.45_430.25",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_15",
+          "from": "junction_137.24_363.8",
+          "to": "junction_161.45_430.25",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_16",
+          "from": "junction_137.24_363.8",
+          "to": "junction_161.45_430.25",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_17",
+          "from": "junction_161.45_430.25",
+          "to": "junction_89.119998_430.25",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_18",
+          "from": "junction_89.119998_301.28",
+          "to": "junction_89.119998_430.25",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_19",
+          "from": "junction_161.45_301.28",
+          "to": "junction_89.119998_301.28",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_20",
+          "from": "comp_6",
+          "to": "junction_1044.68_303.139999",
+          "length": "0.01m"
+        },
+        {
+          "id": "conn_22",
+          "from": "junction_1044.68_303.139999",
+          "to": "junction_1062.11_412.790001",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_23",
+          "from": "comp_2",
+          "to": "comp_3",
+          "length": "0.01m"
+        },
+        {
+          "id": "conn_24",
+          "from": "comp_3",
+          "to": "comp_2",
+          "length": "0.01m"
+        },
+        {
+          "id": "conn_25",
+          "from": "comp_5",
+          "to": "comp_1",
+          "length": "0.01m"
+        },
+        {
+          "id": "conn_26",
+          "from": "comp_6",
+          "to": "comp_2",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_27",
+          "from": "comp_21",
+          "to": "comp_26",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_28",
+          "from": "junction_840.62_337.64",
+          "to": "comp_19",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_29",
+          "from": "comp_3",
+          "to": "junction_902.99_431.900001",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_30",
+          "from": "comp_2",
+          "to": "comp_32",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_32",
+          "from": "comp_7",
+          "to": "comp_8",
+          "length": "0.01m"
+        },
+        {
+          "id": "conn_33",
+          "from": "comp_9",
+          "to": "comp_7",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_34",
+          "from": "junction_285.05_370.22",
+          "to": "comp_12",
+          "length": "0.04m"
+        },
+        {
+          "id": "conn_35",
+          "from": "comp_12",
+          "to": "comp_9",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_36",
+          "from": "junction_814.04_707.811",
+          "to": "comp_14",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_37",
+          "from": "comp_14",
+          "to": "junction_637.880003_623.51",
+          "length": "0.07m"
+        },
+        {
+          "id": "conn_38",
+          "from": "junction_637.880003_623.51",
+          "to": "comp_16",
+          "length": "0.04m"
+        },
+        {
+          "id": "conn_40",
+          "from": "comp_16",
+          "to": "comp_15",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_41",
+          "from": "junction_591.140015_563",
+          "to": "comp_16",
+          "length": "0.01m"
+        },
+        {
+          "id": "conn_42",
+          "from": "comp_16",
+          "to": "junction_554.539978_473.359985",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_44",
+          "from": "junction_554.539978_473.359985",
+          "to": "junction_591.140015_563",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_45",
+          "from": "junction_307.463_567.89",
+          "to": "comp_22",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_46",
+          "from": "comp_22",
+          "to": "comp_15",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_47",
+          "from": "junction_307.759_438.62",
+          "to": "comp_18",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_48",
+          "from": "comp_18",
+          "to": "comp_8",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_50",
+          "from": "comp_19",
+          "to": "comp_20",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_51",
+          "from": "junction_565.61_234.41",
+          "to": "comp_27",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_52",
+          "from": "comp_27",
+          "to": "comp_20",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_53",
+          "from": "comp_7",
+          "to": "comp_29",
+          "length": "0.04m"
+        },
+        {
+          "id": "conn_54",
+          "from": "junction_565.52_299.9",
+          "to": "comp_24",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_55",
+          "from": "comp_24",
+          "to": "comp_19",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_58",
+          "from": "comp_29",
+          "to": "comp_23",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_60",
+          "from": "junction_285.05_370.22",
+          "to": "junction_307.759_438.62",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_61",
+          "from": "junction_307.759_438.62",
+          "to": "junction_243.710007_481.940002",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_62",
+          "from": "junction_243.710007_481.940002",
+          "to": "junction_285.05_370.22",
+          "length": "0.03m"
+        },
+        {
+          "id": "conn_63",
+          "from": "junction_285.05_370.22",
+          "to": "junction_307.759_438.62",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_64",
+          "from": "junction_307.759_438.62",
+          "to": "junction_285.05_370.22",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_66",
+          "from": "junction_243.710007_481.940002",
+          "to": "junction_307.759_438.62",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_68",
+          "from": "junction_307.759_438.62",
+          "to": "junction_243.710007_481.940002",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_73",
+          "from": "comp_13",
+          "to": "comp_31",
+          "length": "0.04m"
+        },
+        {
+          "id": "conn_74",
+          "from": "comp_31",
+          "to": "comp_32",
+          "length": "0.02m"
+        },
+        {
+          "id": "conn_75",
+          "from": "comp_32",
+          "to": "comp_13",
+          "length": "0.04m"
+        },
+        {
+          "id": "conn_76",
+          "from": "comp_16",
+          "to": "comp_10",
+          "length": "0.1m"
+        },
+        {
+          "id": "conn_77",
+          "from": "comp_10",
+          "to": "comp_16",
+          "length": "0.1m"
+        },
+        {
+          "id": "conn_78",
+          "from": "junction_546.22998_675.529999",
+          "to": "junction_310.48999_675.529999",
+          "length": "0.08m"
+        },
+        {
+          "id": "conn_79",
+          "from": "junction_310.48999_675.529999",
+          "to": "junction_285.05_370.22",
+          "length": "0.12m"
+        },
+        {
+          "id": "conn_80",
+          "from": "junction_285.05_370.22",
+          "to": "comp_10",
+          "length": "0.08m"
+        },
+        {
+          "id": "conn_81",
+          "from": "comp_10",
+          "to": "junction_546.22998_675.529999",
+          "length": "0.12m"
+        },
+        {
+          "id": "conn_82",
+          "from": "comp_9",
+          "to": "junction_471.47_667.910013",
+          "length": "0.11m"
+        },
+        {
+          "id": "conn_83",
+          "from": "junction_727.28_188.39",
+          "to": "junction_727.28_470.120011",
+          "length": "0.1m"
+        },
+        {
+          "id": "conn_84",
+          "from": "junction_1122.25_48.635986",
+          "to": "junction_79.730003_48.635986",
+          "length": "0.36m"
+        },
+        {
+          "id": "conn_85",
+          "from": "junction_79.730003_48.635986",
+          "to": "junction_79.730003_789.48",
+          "length": "0.25m"
+        },
+        {
+          "id": "conn_86",
+          "from": "junction_79.730003_789.48",
+          "to": "junction_1122.25_789.48",
+          "length": "0.36m"
+        },
+        {
+          "id": "conn_87",
+          "from": "junction_1122.25_789.48",
+          "to": "junction_1122.25_48.635986",
+          "length": "0.25m"
+        }
+      ],
+      "sourceTexts": [
+        {
+          "text": "DRAWING TITLE:",
+          "position": {
+            "x": 12.55583543240974,
+            "y": 7.933491686460801
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Substation & LT",
+          "position": {
+            "x": 10.354324097397145,
+            "y": 8.225653206650831
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FACTORY NAME:",
+          "position": {
+            "x": 12.55583543240974,
+            "y": 23.86342042755344
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ADDRESS:",
+          "position": {
+            "x": 12.55583543240974,
+            "y": 36.08672707838478
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Rev: 01",
+          "position": {
+            "x": 11.815281276238455,
+            "y": 43.851543942992876
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Rev: 02",
+          "position": {
+            "x": 10.97153934508816,
+            "y": 43.90115002375297
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Date:",
+          "position": {
+            "x": 12.550797649034424,
+            "y": 47.4144893111639
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "DESIGNED BY:",
+          "position": {
+            "x": 12.550797649034424,
+            "y": 51.63601482185274
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CHECKED BY:",
+          "position": {
+            "x": 12.555426196473551,
+            "y": 62.197685035629455
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "APPROVED BY:",
+          "position": {
+            "x": 12.523026364399662,
+            "y": 73.05397163895489
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PAGE NO:",
+          "position": {
+            "x": 12.523026364399662,
+            "y": 85.353223847981
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Version 1.0",
+          "position": {
+            "x": 5.748684332493703,
+            "y": 85.45011990498811
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "LIGHTNING",
+          "position": {
+            "x": 86.69689336691854,
+            "y": 29.307125890736334
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ARRESTER (12kV)",
+          "position": {
+            "x": 86.01182205709488,
+            "y": 28.03141554631829
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "11KV DROP OUT",
+          "position": {
+            "x": 86.61118850545759,
+            "y": 42.50819901425178
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FUSE-30A",
+          "position": {
+            "x": 85.92611719563392,
+            "y": 43.8047831591449
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "DESCO",
+          "position": {
+            "x": 82.69430606213265,
+            "y": 45.244272553444176
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "METER",
+          "position": {
+            "x": 82.01661331654073,
+            "y": 45.2547094536817
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "VCB 630 A",
+          "position": {
+            "x": 78.54301230898405,
+            "y": 41.495819691211395
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "11KV HT PANEL",
+          "position": {
+            "x": 77.86304923593619,
+            "y": 41.409915973871726
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Fault current clearing time",
+          "position": {
+            "x": 77.18535649034425,
+            "y": 41.4315926128266
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "(t>>)=0.4sec",
+          "position": {
+            "x": 76.5025555079765,
+            "y": 41.44925505938241
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "500KVA",
+          "position": {
+            "x": 73.36155747271201,
+            "y": 33.04353617577196
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Step Down",
+          "position": {
+            "x": 72.67875649034426,
+            "y": 32.58029837292161
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ONAN Type 3-Phase",
+          "position": {
+            "x": 71.99368518052057,
+            "y": 30.759460700712594
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TRANSFORMER",
+          "position": {
+            "x": 71.3086138706969,
+            "y": 31.429027992874115
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "V :Vs=11/0.415",
+          "position": {
+            "x": 70.62581288832914,
+            "y": 31.69637320665083
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Dyn 11, 50Hz",
+          "position": {
+            "x": 69.94640132661628,
+            "y": 32.0820083847981
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Z%=4.5%",
+          "position": {
+            "x": 69.26360034424853,
+            "y": 32.80135166270783
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "6x1C-300 RM,NYY(TP)",
+          "position": {
+            "x": 69.27120067170445,
+            "y": 40.60570071258907
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "2x1C-300 RM,NYY (N)",
+          "position": {
+            "x": 68.58839968933668,
+            "y": 40.84655225653206
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "11KV OVERHEAD LINE",
+          "position": {
+            "x": 89.35684298908481,
+            "y": 39.804041532066506
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "HT CT",
+          "position": {
+            "x": 81.51805205709488,
+            "y": 37.31353919239904
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "HT PT",
+          "position": {
+            "x": 83.59613769941225,
+            "y": 41.229216152019
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1X3C-120 mm² (N2XSEYFGbY)",
+          "position": {
+            "x": 75.96893366918556,
+            "y": 40.42595482185271
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ECC-2x1C-50 mm²,",
+          "position": {
+            "x": 78.04450041981528,
+            "y": 30.0522565320665
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "BYA(BODY), Earth Pit#2",
+          "position": {
+            "x": 77.35942910999161,
+            "y": 29.147457565320668
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ISOLATOR",
+          "position": {
+            "x": 84.94122586062133,
+            "y": 41.11163895486936
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ECC- 2x1C-12.7 mm, HDBC CU(BODY), Earth Pit# 2, 3 (Page-29)",
+          "position": {
+            "x": 71.9159529806885,
+            "y": 41.779130475059375
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ECC- 1x1C-12.7 mm, HDBC CU(N), Earth Pit# 1 (Page-29)",
+          "position": {
+            "x": 71.23088167086482,
+            "y": 42.18135255344418
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1X3C-120 mm² (N2XSEYFGbY)",
+          "position": {
+            "x": 80.38958858102436,
+            "y": 40.31194057007125
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CT RATIO:",
+          "position": {
+            "x": 41.991603694374476,
+            "y": 48.066508313539195
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1000/5A",
+          "position": {
+            "x": 41.47510419815282,
+            "y": 48.55463410926366
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "RYB-01",
+          "position": {
+            "x": 39.17044500419815,
+            "y": 44.79189313539192
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "620 A COPPER BUSBAR",
+          "position": {
+            "x": 41.273719563392106,
+            "y": 53.33189187648456
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TPN:(40mmx10mm)",
+          "position": {
+            "x": 40.57615261125105,
+            "y": 54.35537957244656
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "E:40mmX5mm",
+          "position": {
+            "x": 39.8860988077246,
+            "y": 55.32082603325416
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR-620A",
+          "position": {
+            "x": 41.54575986565911,
+            "y": 39.91983372921615
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "40mmx10mm(TP)",
+          "position": {
+            "x": 40.86295888329135,
+            "y": 40.15105121140143
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-150 RM,NYY (N)",
+          "position": {
+            "x": 40.01889168765743,
+            "y": 39.77743467933492
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "300 KVAR PFI",
+          "position": {
+            "x": 20.67170445004198,
+            "y": 41.6104513064133
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "630A TP",
+          "position": {
+            "x": 44.611586901763225,
+            "y": 42.97850356294537
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 43.80987032745592,
+            "y": 43.42779503562945
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:504A",
+          "position": {
+            "x": 43.056700604534,
+            "y": 42.626329679334916
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "500A TP",
+          "position": {
+            "x": 34.37951301427372,
+            "y": 40.548693586698334
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 33.709291083123425,
+            "y": 40.91204960807601
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:0.9",
+          "position": {
+            "x": 33.04184324937028,
+            "y": 40.65542451306413
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR-496A",
+          "position": {
+            "x": 34.99916036943744,
+            "y": 43.74109263657957
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "40mmX8mm(TP)",
+          "position": {
+            "x": 35.25096634760705,
+            "y": 44.62859118764846
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3X1C-300 RM,NYY(TP)",
+          "position": {
+            "x": 26.597984886649872,
+            "y": 43.70035629453682
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-150 RM,BYA(ECC)",
+          "position": {
+            "x": 26.500549135180517,
+            "y": 44.77550036817102
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "4x1C-300 mm² ,NYY(TPN)",
+          "position": {
+            "x": 68.67926112510496,
+            "y": 74.63895486935867
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Cable length 45 ft",
+          "position": {
+            "x": 67.46747384550798,
+            "y": 76.2984220071259
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "400 KVA",
+          "position": {
+            "x": 78.90344248530646,
+            "y": 74.63182897862232
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "DIESEL GENERATOR (Standby)",
+          "position": {
+            "x": 78.08203598656591,
+            "y": 69.40148395486936
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ECC- 2x1C-150 RM,BYA (BODY),",
+          "position": {
+            "x": 76.36430199832074,
+            "y": 76.28503805225652
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Earth Pit#4,5 (Page-29)",
+          "position": {
+            "x": 75.54289549958018,
+            "y": 78.5336336104513
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ECC- 1x1C-150 RM,NYY (N),",
+          "position": {
+            "x": 74.72148900083964,
+            "y": 77.27638545130642
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Earth Pit#6 (Page-29)",
+          "position": {
+            "x": 73.90008250209908,
+            "y": 78.9363383847981
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "630A TP",
+          "position": {
+            "x": 72.63140218303946,
+            "y": 69.49049881235155
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 71.80999568429891,
+            "y": 70.10033642517814
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:504A",
+          "position": {
+            "x": 70.98858918555835,
+            "y": 69.14174491686461
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "G",
+          "position": {
+            "x": 74.68673383711167,
+            "y": 72.67577197149645
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR-620A",
+          "position": {
+            "x": 41.931150293870694,
+            "y": 65.99881235154395
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "40mmx10mm(TP)",
+          "position": {
+            "x": 41.24607898404702,
+            "y": 66.23002983372922
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-150 RM,NYY (N)",
+          "position": {
+            "x": 40.393571024349285,
+            "y": 65.06671687648455
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MDB",
+          "position": {
+            "x": 48.30898404701931,
+            "y": 59.22565320665083
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "RYB-02",
+          "position": {
+            "x": 39.17044500419815,
+            "y": 53.25745133016627
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "RYB-03",
+          "position": {
+            "x": 39.17296389588581,
+            "y": 67.84414966745842
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MECHANICAL",
+          "position": {
+            "x": 44.52023509655751,
+            "y": 55.21686460807601
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "INTERLOCKING",
+          "position": {
+            "x": 43.772975356842984,
+            "y": 54.625728147268404
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SYSTEM",
+          "position": {
+            "x": 43.025715617128455,
+            "y": 56.978110688836104
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1X1C-4 RM,BYA(DOOR)",
+          "position": {
+            "x": 25.246011754827872,
+            "y": 36.194774346793345
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TOTAL CONNECTED",
+          "position": {
+            "x": 47.59865659109991,
+            "y": 57.70771971496437
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "LOAD:232.04KW",
+          "position": {
+            "x": 46.89102562552477,
+            "y": 58.69443325415678
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "630A TP",
+          "position": {
+            "x": 44.729638958858104,
+            "y": 69.12957244655583
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 43.89324606213266,
+            "y": 69.58180687648456
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:504A",
+          "position": {
+            "x": 43.05685316540722,
+            "y": 68.77641757719715
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "400A TP",
+          "position": {
+            "x": 34.43744752308984,
+            "y": 48.06057007125891
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 33.76722559193954,
+            "y": 48.413723871733964
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:320A",
+          "position": {
+            "x": 33.0997777581864,
+            "y": 47.768629596199524
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR-372A",
+          "position": {
+            "x": 34.990931989924434,
+            "y": 51.93171021377672
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "40mmX6mm(TP)",
+          "position": {
+            "x": 35.30405791771621,
+            "y": 52.93525458432305
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "4X1C-150 RM,NYY(TPN)",
+          "position": {
+            "x": 26.490344248530644,
+            "y": 51.709501187648456
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-95 RM,BYA(ECC)",
+          "position": {
+            "x": 26.62656510495382,
+            "y": 52.935178812351545
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CT RATIO:",
+          "position": {
+            "x": 63.65910999160369,
+            "y": 40.55581947743468
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1000/5A",
+          "position": {
+            "x": 63.14544840470192,
+            "y": 41.043945273159146
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR-775A",
+          "position": {
+            "x": 63.62636439966415,
+            "y": 29.31116389548693
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "50mmx10mm(TP)",
+          "position": {
+            "x": 62.941293089840464,
+            "y": 29.528733123515433
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "2x1C-300 RM,NYY (N)",
+          "position": {
+            "x": 62.25849210747272,
+            "y": 28.66327324228028
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1000A TP",
+          "position": {
+            "x": 66.73971452560873,
+            "y": 34.51306413301663
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "ACB",
+          "position": {
+            "x": 65.73688337531486,
+            "y": 35.98806239904988
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:700A",
+          "position": {
+            "x": 64.73155554995802,
+            "y": 34.45655980997625
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "RYB-01",
+          "position": {
+            "x": 60.65155331654072,
+            "y": 29.139874133016626
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "RYB-03",
+          "position": {
+            "x": 60.55020990764064,
+            "y": 49.52704752969121
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TP+N+E",
+          "position": {
+            "x": 39.79764903442485,
+            "y": 74.31828978622327
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "10A TP",
+          "position": {
+            "x": 33.96389588581024,
+            "y": 64.70914489311164
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCB",
+          "position": {
+            "x": 33.293673954659944,
+            "y": 65.16196654394298
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "4x1C-4 RM,BYA(TP+N)",
+          "position": {
+            "x": 26.83795130142737,
+            "y": 67.04750593824228
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-4 RM,BYA(ECC)",
+          "position": {
+            "x": 26.923486230058774,
+            "y": 68.30970760095013
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1X1C-4 RM,BYA(DOOR)",
+          "position": {
+            "x": 53.98404701931151,
+            "y": 20.37173396674584
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1X1C-300 RM,BYA(MAIN ECC), Earth Pit#9, (Page-29)",
+          "position": {
+            "x": 53.93126190596138,
+            "y": 19.267028218527308
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "775 A COPPER BUSBAR",
+          "position": {
+            "x": 62.822921914357686,
+            "y": 46.47615821852732
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TPN:(50mmx10mm)",
+          "position": {
+            "x": 62.102163560033596,
+            "y": 47.50346945368171
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "E:50mmX8mm",
+          "position": {
+            "x": 61.38693964735518,
+            "y": 48.51514603325416
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FOR FUTURE",
+          "position": {
+            "x": 42.15281276238455,
+            "y": 29.385985748218523
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "EXTENSION",
+          "position": {
+            "x": 42.29359588581025,
+            "y": 30.183947980997615
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TO A NEW",
+          "position": {
+            "x": 42.49500092359362,
+            "y": 30.985453562945363
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CONSTRUCTION",
+          "position": {
+            "x": 41.71944122586063,
+            "y": 31.783415795724462
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "RYB-02",
+          "position": {
+            "x": 60.59865659109992,
+            "y": 37.28833019002375
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "4X1C-120 RM,NYY(TP+N)",
+          "position": {
+            "x": 47.64483627204031,
+            "y": 35.38230403800475
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-70 RM,NYY(ECC)",
+          "position": {
+            "x": 47.90450727959698,
+            "y": 36.33033089073634
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR 279A",
+          "position": {
+            "x": 56.40218303946264,
+            "y": 35.38230403800475
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "30mmX6mm(TP)",
+          "position": {
+            "x": 56.63156598656591,
+            "y": 36.269602066508305
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "250A TP",
+          "position": {
+            "x": 55.88077246011755,
+            "y": 31.662707838479815
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 55.213324626364404,
+            "y": 32.01900078384799
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:200A",
+          "position": {
+            "x": 54.54310269521411,
+            "y": 31.377830439429943
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "3x1C-6 RM,BYA",
+          "position": {
+            "x": 35.48530646515533,
+            "y": 67.19121140142518
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "(TP)",
+          "position": {
+            "x": 36.73457877413938,
+            "y": 68.21601451306414
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "LT PANEL",
+          "position": {
+            "x": 65.32913518052057,
+            "y": 47.60688836104514
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR 620A",
+          "position": {
+            "x": 56.58522250209907,
+            "y": 27.636579572446564
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "40mmX10mm(TP)",
+          "position": {
+            "x": 56.675727338371104,
+            "y": 28.523877600950122
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "630A TP",
+          "position": {
+            "x": 56.0848026868178,
+            "y": 22.56650831353919
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 55.41735485306466,
+            "y": 22.926725190023756
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:320A",
+          "position": {
+            "x": 54.747132921914364,
+            "y": 22.28163091448932
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "4X1C-300 RM,NYY(TP+N)",
+          "position": {
+            "x": 47.59017632241813,
+            "y": 47.287648456057
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "1x1C-150 RM,NYY(ECC)",
+          "position": {
+            "x": 47.718829353484466,
+            "y": 48.413639418052256
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Cable length 37 ft",
+          "position": {
+            "x": 48.539938404701935,
+            "y": 49.21916117577197
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "CU BUSBAR 620A",
+          "position": {
+            "x": 56.50797649034425,
+            "y": 47.3895486935867
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "40mmX10mm(TP)",
+          "position": {
+            "x": 56.601082040302266,
+            "y": 48.43429429928741
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "630A TP",
+          "position": {
+            "x": 56.08984047019311,
+            "y": 43.65914489311164
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "MCCB",
+          "position": {
+            "x": 55.41961853904282,
+            "y": 44.0193617695962
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SET:504A",
+          "position": {
+            "x": 54.752170705289686,
+            "y": 43.374267494061755
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FMDB-01",
+          "position": {
+            "x": 19.172963895885808,
+            "y": 49.18527315914489
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "GROUND FLOOR",
+          "position": {
+            "x": 17.802821276238458,
+            "y": 45.72503931116389
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PAGE NO= 02",
+          "position": {
+            "x": 16.43494898404702,
+            "y": 47.274517577197145
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TCL:229.295 KW",
+          "position": {
+            "x": 15.077246011754827,
+            "y": 46.19952494061758
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SPARE",
+          "position": {
+            "x": 41.68933669185558,
+            "y": 28.409619952494054
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "FIRE HYDRANT",
+          "position": {
+            "x": 42.61376994122586,
+            "y": 35.34679334916865
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PUMP-93KW",
+          "position": {
+            "x": 42.95384909319899,
+            "y": 36.1449556888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "TOTAL CONNECTED",
+          "position": {
+            "x": 64.56087321578505,
+            "y": 57.93230403800476
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "LOAD:325.04KW",
+          "position": {
+            "x": 63.85072846347607,
+            "y": 58.92257330166271
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SPARE",
+          "position": {
+            "x": 50.03946263643997,
+            "y": 27.508313539192397
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "SDB SECURITY POST",
+          "position": {
+            "x": 22.44752308984047,
+            "y": 61.53444180522566
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "=2.745KW",
+          "position": {
+            "x": 21.608497749790093,
+            "y": 64.48117562945367
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "PAGE NO= 19",
+          "position": {
+            "x": 20.883291351805205,
+            "y": 64.29216152019002
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "LBS 630 A",
+          "position": {
+            "x": 80.96893366918556,
+            "y": 58.26579572446556
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "11KV HT PANEL",
+          "position": {
+            "x": 80.29124092359362,
+            "y": 57.12576508313539
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "(30A FUSE)",
+          "position": {
+            "x": 79.60616961376994,
+            "y": 58.04180378859858
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Fault current clearing time",
+          "position": {
+            "x": 78.928476868178,
+            "y": 55.55862437054632
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "for LBS (t>>)=0.2sec",
+          "position": {
+            "x": 78.24567588581024,
+            "y": 56.49955106888361
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "If you do not have VCB but you",
+          "position": {
+            "x": 82.3392107472712,
+            "y": 54.94144893111639
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "have LBS in HT panel",
+          "position": {
+            "x": 81.63157978169605,
+            "y": 56.59486080760095
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "04",
+          "position": {
+            "x": 49.456507136859784,
+            "y": 96.83516627078384
+          },
+          "confidence": 0.99
+        },
+        {
+          "text": "Electrical Single Line Diagram Guidance_Version 1.0_November 2021",
+          "position": {
+            "x": 73.69319899244333,
+            "y": 98.8288242280285
+          },
+          "confidence": 0.99
+        }
+      ],
+      "suggestedCalculations": [],
+      "confidence": 0.85,
+      "rawDescription": "PDF vector parsed (page 4): 71 components, 73 connections (snapped 74, junctions 38, dropped 14), 165 text items, 149 line segments"
+    },
+    "calcChain": [
+      {
+        "step": 1,
+        "calculatorId": "transformer-sizing",
+        "inputs": {},
+        "description": "변압기 용량 검증 (TRANSFORMER)"
+      },
+      {
+        "step": 2,
+        "calculatorId": "short-circuit",
+        "inputs": {},
+        "dependsOn": [
+          2
+        ],
+        "description": "단락전류 계산 - 차단기 선정 근거"
+      },
+      {
+        "step": 3,
+        "calculatorId": "cable-sizing",
+        "inputs": {
+          "length": "0.37m"
+        },
+        "dependsOn": [
+          3
+        ],
+        "description": "케이블 사이즈 선정"
+      },
+      {
+        "step": 4,
+        "calculatorId": "voltage-drop",
+        "inputs": {
+          "length": "0.37m"
+        },
+        "dependsOn": [
+          3
+        ],
+        "description": "전압강하 검토"
+      }
+    ],
+    "topology": {
+      "nodeCount": 71,
+      "edgeCount": 73,
+      "connectedComponents": 20,
+      "isolatedNodes": 7,
+      "valid": false,
+      "issues": [
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_4",
+          "message": "노드 \"comp_4\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_11",
+          "message": "노드 \"comp_11\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_17",
+          "message": "노드 \"comp_17\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_25",
+          "message": "노드 \"comp_25\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_28",
+          "message": "노드 \"comp_28\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_30",
+          "message": "노드 \"comp_30\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_33",
+          "message": "노드 \"comp_33\"가 어떤 간선에도 연결되지 않았습니다."
+        }
+      ]
+    },
+    "parserInfo": {
+      "method": "pdf-vector",
+      "confidence": 0.85,
+      "description": "PDF vector parsed (page 4): 71 components, 73 connections (snapped 74, junctions 38, dropped 14), 165 text items, 149 line segments",
+      "durationMs": 83
+    }
+  }
+}
