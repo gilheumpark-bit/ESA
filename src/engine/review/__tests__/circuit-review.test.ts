@@ -211,6 +211,58 @@ describe('DATA-GAP — 판정 불가의 정직 집계', () => {
   });
 });
 
+describe('무발명 시정 제안 — 표준/KEC 역산 후보만(지어냄 금지)', () => {
+  it('AT>AF FAIL은 표준 정격 역산 제안을 단다 (100AF/150AT → 트립 100AT↓·프레임 160AF↑)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '100AF/150AT', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'AT-LE-AF');
+    expect(f?.proposal).toBeDefined();
+    const actions = (f?.proposal ?? []).map((p) => p.action).join(' | ');
+    expect(actions).toContain('100AT'); // 프레임 100AF 유지 시 트립 하향(largestTripAtMost(100))
+    expect(actions).toContain('160AF'); // 트립 150AT 유지 시 프레임 상향(smallestFrameFor(150))
+    expect((f?.proposal ?? []).every((p) => /IEC/.test(p.basis))).toBe(true);
+  });
+
+  it('케이블 초과 FAIL은 KEC 굵기 상향 + 트립 하향 제안을 단다', () => {
+    const amp4 = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const overTrip = Math.ceil(amp4) + 10;
+    const r = reviewAnalysis(analysisOf(
+      [{ id: 'comp_1', type: 'breaker', label: 'MCCB', rating: `225AF/${overTrip}AT`, position: pos }],
+      [{ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '4sq', cableType: 'CV' }],
+    ));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('FAIL');
+    const cableOpt = f?.proposal?.find((p) => /KEC/.test(p.basis));
+    expect(cableOpt).toBeDefined();                 // 케이블 상향 후보(KEC 표 역산)
+    expect(cableOpt?.action).toMatch(/\d+sq 이상/);   // 표준 굵기값이 명시됨
+    expect(f?.proposal?.some((p) => /트립.*이하/.test(p.action))).toBe(true); // 트립 하향 후보
+  });
+
+  it('표준 사다리 밖이면 그 후보를 만들지 않는다(발명 대신 보류) — 1600AF/2000AT는 프레임 상향 없음', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '1600AF/2000AT', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'AT-LE-AF');
+    expect(f?.severity).toBe('FAIL');
+    const actions = (f?.proposal ?? []).map((p) => p.action).join(' | ');
+    expect(actions).toContain('1600AT');       // 트립 하향은 사다리 안(largestTripAtMost(1600)=1600)
+    expect(actions).not.toContain('프레임을');  // 프레임 상향 후보 없음(2000 > 최대 프레임 1600·발명 금지)
+  });
+
+  it('케이블 여유 충분(PASS)에는 제안이 붙지 않는다', () => {
+    const amp = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const safeTrip = Math.floor(amp * 0.5);
+    const r = reviewAnalysis(analysisOf(
+      [{ id: 'comp_1', type: 'breaker', label: 'MCCB', rating: `50AF/${safeTrip}AT`, position: pos }],
+      [{ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '4sq', cableType: 'CV' }],
+    ));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('PASS');
+    expect(f?.proposal).toBeUndefined();
+  });
+});
+
 describe('리포트 계약', () => {
   it('summary 집계와 disclaimer가 항상 실린다', () => {
     const r = reviewAnalysis(analysisOf([

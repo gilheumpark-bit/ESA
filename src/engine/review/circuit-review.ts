@@ -13,8 +13,27 @@
 
 import type { SLDAnalysis, SLDComponent } from '@/lib/sld-recognition';
 import { getAmpacity, KEC_CABLE_SIZES } from '@/data/ampacity-tables/kec-ampacity';
-import type { InsulationType } from '@/data/ampacity-tables/kec-ampacity';
+import type { InsulationType, InstallationMethod } from '@/data/ampacity-tables/kec-ampacity';
 import { parseSpecText } from '@/engine/topology/spec-text';
+import {
+  smallestFrameFor,
+  largestTripAtMost,
+  IEC_FRAME_SOURCE,
+  IEC_TRIP_SOURCE,
+} from '@/data/breaker-standards/iec-60947-2-frames';
+
+/**
+ * 무발명 시정 제안 — 표준(IEC 정격 사다리)·KEC 표에서 역산한 후보만 담는다.
+ * action은 "무엇을 어떤 표준값으로"이고, basis는 그 값의 출처다. 출처를 붙일 수
+ * 없으면(사다리 범위 밖·표에 없음) 제안을 아예 만들지 않는다 — 숫자 발명 금지.
+ * 사내규정이 로드되면 그 저자 제공 remedy가 이 일반 제안을 우선한다(custom-rules).
+ */
+export interface ReviewProposalOption {
+  /** 시정 방향 — 표준값을 명시한 문장 (예: "프레임을 160AF 이상으로 (트립 150AT 유지)") */
+  action: string;
+  /** 그 값의 근거 표/규격 (예: "IEC 60947-2 표준 프레임 정격", "KEC 허용전류표") */
+  basis: string;
+}
 
 export interface ReviewFinding {
   rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
@@ -29,6 +48,8 @@ export interface ReviewFinding {
   /** 기준값 + 출처 */
   limit?: { value: string; source: string };
   verdict: string;
+  /** 무발명 시정 제안 — 표준/KEC 역산 후보. 출처 없으면 생략(숫자 발명 금지) */
+  proposal?: ReviewProposalOption[];
 }
 
 export interface ReviewReport {
@@ -77,6 +98,29 @@ function isKecSize(size: number): boolean {
   return (KEC_CABLE_SIZES as readonly number[]).includes(size);
 }
 
+/**
+ * 트립을 견디는 **최소** KEC 표준 굵기(보정 허용전류 × 조수 ≥ tripA)를 표에서
+ * 역산한다 — 케이블 상향 제안의 무발명 출처. 표 최대 굵기로도 못 견디면 null
+ * (발명 대신 보류). KEC_CABLE_SIZES는 이미 오름차순이라 첫 만족값이 최소.
+ */
+function smallestCableFor(
+  tripA: number,
+  insulation: InsulationType,
+  installation: InstallationMethod,
+  parallel: number,
+): { sq: number; ampacity: number } | null {
+  for (const size of KEC_CABLE_SIZES) {
+    try {
+      const r = getAmpacity({ size, conductor: 'Cu', insulation, installation });
+      const amp = r.corrected * parallel;
+      if (amp >= tripA) return { sq: size, ampacity: amp };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   const findings: ReviewFinding[] = [];
   const breakers = analysis.components.filter((c) => c.type === 'breaker');
@@ -90,6 +134,23 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     if (spec.frameA === undefined && spec.current === undefined) continue;
     ratedParsed += 1;
     if (spec.frameA !== undefined && spec.tripA !== undefined && spec.tripA > spec.frameA) {
+      // 무발명 제안: 표준 정격 사다리 역산 — 프레임 유지 시 트립 하향, 트립 유지 시
+      // 프레임 상향. 사다리 밖이면 해당 후보를 넣지 않는다(숫자 발명 금지).
+      const proposal: ReviewProposalOption[] = [];
+      const tripDown = largestTripAtMost(spec.frameA);
+      const frameUp = smallestFrameFor(spec.tripA);
+      if (tripDown !== null) {
+        proposal.push({
+          action: `트립을 ${tripDown}AT 이하로 (프레임 ${spec.frameA}AF 유지)`,
+          basis: IEC_TRIP_SOURCE,
+        });
+      }
+      if (frameUp !== null) {
+        proposal.push({
+          action: `프레임을 ${frameUp}AF 이상으로 (트립 ${spec.tripA}AT 유지)`,
+          basis: IEC_FRAME_SOURCE,
+        });
+      }
       findings.push({
         rule: 'AT-LE-AF',
         severity: 'FAIL',
@@ -97,6 +158,7 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
         componentId: b.id,
         given: { rating: `${spec.frameA}AF/${spec.tripA}AT` },
         verdict: `트립 ${spec.tripA}AT가 프레임 ${spec.frameA}AF를 초과 — 표기 오류 또는 선정 오류`,
+        ...(proposal.length > 0 ? { proposal } : {}),
       });
     }
   }
@@ -176,17 +238,39 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       computed: { 허용전류: `${ampacity}A` },
       limit: { value: `${ampacity}A`, source: sourceKey },
     };
+    // 무발명 시정 제안: 케이블을 트립 견디는 최소 KEC 굵기로 상향(표 역산), 또는
+    // 차단기 트립을 케이블 허용전류 이내 최대 표준값으로 하향(정격 사다리). 같은
+    // 공사방법(관로)으로 역산해 허용전류를 비교 가능하게 맞춘다.
+    const cableProposal: ReviewProposalOption[] = [];
+    const cableUp = smallestCableFor(tripA, insulation, 'conduit', parallel);
+    if (cableUp && cableUp.sq > worst.sq) {
+      cableProposal.push({
+        action: `케이블을 ${cableUp.sq}sq 이상으로 (허용전류 ${cableUp.ampacity}A ≥ 트립 ${tripA}A${parallel > 1 ? `·${parallel}조` : ''})`,
+        basis: `KEC 허용전류표 Cu_${insulation}_conduit`,
+      });
+    }
+    const tripDownToCable = largestTripAtMost(ampacity);
+    if (tripDownToCable !== null) {
+      cableProposal.push({
+        action: `차단기 트립을 ${tripDownToCable}AT 이하로 (케이블 허용전류 ${ampacity}A 이내)`,
+        basis: `${IEC_TRIP_SOURCE} + KEC 허용전류`,
+      });
+    }
+    const cableProposalField =
+      cableProposal.length > 0 ? { proposal: cableProposal } : {};
     if (tripA > ampacity) {
       findings.push({
         ...base,
         severity: 'FAIL',
         verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (가정: 공사방법 관로·주위 30°C)`,
+        ...cableProposalField,
       });
     } else if (tripA > ampacity * 0.8) {
       findings.push({
         ...base,
         severity: 'WARN',
         verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C)`,
+        ...cableProposalField,
       });
     } else {
       // FAIL/WARN은 집합 보정이 더해져도 방향이 안 바뀌지만(더 나빠질 뿐),
@@ -314,4 +398,4 @@ function subjectOf(c: SLDComponent): string {
   return load ? `${c.label ?? c.id} [${load}]` : (c.label ?? c.id);
 }
 
-// IDENTITY_SEAL: review/circuit-review | role=초급 단일도면 하이브리드 검토(계산+기준+결론) | inputs=SLDAnalysis | outputs=ReviewReport
+// IDENTITY_SEAL: review/circuit-review | role=초급 단일도면 하이브리드 검토(계산+기준+결론+무발명 제안) | inputs=SLDAnalysis | outputs=ReviewReport(findings.proposal=표준/KEC 역산 후보)
