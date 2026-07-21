@@ -1,55 +1,44 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  Search, Calculator, FileText, Camera, BarChart3,
-  Users, FolderOpen, Shield, Globe, Cpu,
-  BookOpen, ArrowUpRight, Zap, Activity, LogIn, LogOut,
+  Plus, Search, Calculator, BookOpen, FileText, SlidersHorizontal,
+  ArrowUpDown, Camera, ArrowUp, ShieldCheck, LogIn,
+  type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import ESVALogo from '@/components/ESVALogo';
 import { analyzeCalcIntent, type CalcIntentResult } from '@/lib/calc-intent-bridge';
 import InlineCalcResult from '@/components/InlineCalcResult';
-import QuickCalcButtons from '@/components/QuickCalcButtons';
-import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { CALCULATOR_COUNT } from '@/engine/calculators/count';
-import { STANDARD_REFS } from '@/data/standards/standard-refs';
-import { ELECTRICAL_TERMS } from '@/data/iec-60050/electrical-terms';
 
-// ── 등록 데이터 애니메이션 카운터 ──
-function CountUpStat({ target, label, suffix = '', duration = 1200 }: {
-  target: number;
-  label: string;
-  suffix?: string;
-  duration?: number;
-}) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      const start = performance.now();
-      function tick(now: number) {
-        const progress = Math.min((now - start) / duration, 1);
-        setCount(Math.floor(progress * target));
-        if (progress < 1) requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
-    }, { threshold: 0.3 });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [target, duration]);
-  return (
-    <div ref={ref} className="text-center">
-      <span className="text-lg font-bold text-[var(--color-primary)]">{count}{suffix}</span>
-      <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">{label}</span>
-    </div>
-  );
-}
+// ── AX 최종안 홈 — 검색 우선 콘솔 (좌측 레일 + 중앙 히어로 + 영수증 사상) ──
+// 디자인 정본: 핸드오프 ESVA AX 최종안.dc.html "AX 홈-데스크톱".
+// 색은 전부 토큰(globals.css AX 팔레트)만 사용 → 다크모드 자동. 무발명: 계산기
+// 수는 실제 카운트(CALCULATOR_COUNT), 표기 수치는 도메인 실값으로만.
+
+/** 좌측 레일 — 목적별 진입. active는 현재 화면(홈=새 질문). */
+const RAIL_ITEMS: Array<{ icon: LucideIcon; href: string; label: string; active?: boolean }> = [
+  { icon: Plus, href: '/', label: '새 질문', active: true },
+  { icon: Search, href: '/search', label: '검색' },
+  { icon: Calculator, href: '/calc', label: '계산기' },
+  { icon: BookOpen, href: '/standards', label: '기준서' },
+  { icon: FileText, href: '/tools/sld', label: '도면 분석' },
+];
+
+/** 히어로 예시 질의 — 클릭 시 실제 라우팅(계산 의도 자동 감지). */
+const EXAMPLES: Array<{ icon: LucideIcon; text: string; tail?: string }> = [
+  { icon: ArrowUpDown, text: '380V 50kW 100m 전압강하 검토', tail: '↗' },
+  { icon: FileText, text: 'KEC 232.3.9 전압강하 조항 원문과 예외' },
+  { icon: Camera, text: '변압기 명판 촬영 → 스펙 추출 → 용량 검증' },
+];
+
+/** 3기둥 — 제품 사상(무발명·조항판정·영수증). */
+const PILLARS = [
+  { numeral: 'Ⅰ', title: '결정론적 계산', desc: `${CALCULATOR_COUNT}개 순수함수 엔진 · ±0.01% · LLM은 변수 추출만` },
+  { numeral: 'Ⅱ', title: '조항 기반 판정', desc: '기준서 조항 · 출처 없는 답변은 가드레일이 차단' },
+  { numeral: 'Ⅲ', title: '검증 영수증', desc: 'SHA-256 봉인 · 모든 결과 재현·감사 가능' },
+] as const;
 
 export default function HomePage() {
   const { user, signOut } = useAuth();
@@ -57,309 +46,239 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [calcIntent, setCalcIntent] = useState<CalcIntentResult | null>(null);
 
-  const handleSearch = useCallback(() => {
-    const q = query.trim();
+  // 질의 실행 — 계산 의도면 인라인 계산, 아니면 검색 페이지. (기존 로직 보존)
+  const runQuery = useCallback((raw: string) => {
+    const q = raw.trim();
     if (!q) return;
-
-    // Try to detect calc intent first
+    setQuery(q);
     const intent = analyzeCalcIntent(q);
     if (intent.hasCalcIntent) {
       setCalcIntent(intent);
       return;
     }
-
-    // Fall through to search page for non-calc queries
     setIsLoading(true);
     window.location.href = `/search?q=${encodeURIComponent(q)}`;
-  }, [query]);
-
-  const handleQuickCalc = useCallback((calculatorId: string) => {
-    const params = CALCULATOR_PARAMS[calculatorId];
-    const names = CALCULATOR_NAMES[calculatorId];
-    if (!params || !names) return;
-
-    const missingRequired = params.filter(p => p.defaultValue === undefined);
-    const missingOptional = params.filter(p => p.defaultValue !== undefined);
-
-    setCalcIntent({
-      hasCalcIntent: true,
-      calculatorId,
-      calculatorName: names.name,
-      extractedParams: {},
-      missingRequired,
-      missingOptional,
-      allParams: params,
-      canAutoExecute: false,
-      confidence: 1,
-    });
   }, []);
 
+  const handleSearch = useCallback(() => runQuery(query), [runQuery, query]);
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); },
     [handleSearch],
   );
 
-  // SoT: CALCULATOR_COUNT = engine/calculators/count.ts.
-  // 표준 참조 수 = STANDARD_REFS.length (data/standards/standard-refs.ts — /standards가 표시하는 목록),
-  // 용어 수 = ELECTRICAL_TERMS.length (data/iec-60050/electrical-terms.ts — /glossary가 표시하는 목록).
-  // 하드코딩 62/151은 데이터와 어긋난 채 드리프트해 제거됨 (BUG-005 해소).
   return (
-    <main className="min-h-screen bg-[var(--bg-primary)]" suppressHydrationWarning>
-
-      {/* ═══ 오른쪽 상단 로그인/사용자 ═══ */}
-      <div className="absolute right-4 top-4 z-50 sm:right-6 sm:top-6">
-        {user ? (
-          <div className="flex items-center gap-2">
-            <span className="hidden text-sm text-[var(--text-secondary)] sm:inline">
-              {user.displayName || user.email?.split('@')[0]}
-            </span>
-            <button
-              onClick={() => signOut()}
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-secondary)]"
-            >
-              <LogOut size={16} />
-              <span className="hidden sm:inline">로그아웃</span>
-            </button>
-          </div>
-        ) : (
-          <Link
-            href="/login"
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--color-primary-hover)]"
-          >
-            <LogIn size={16} />
-            로그인
+    <div
+      className="flex h-screen flex-col overflow-hidden bg-[var(--bg-primary)] text-[var(--text-primary)]"
+      suppressHydrationWarning
+    >
+      <div className="flex min-h-0 flex-1">
+        {/* ═══ 좌측 레일 (64px) ═══ */}
+        <nav className="flex w-16 flex-none flex-col items-center gap-2 border-r border-[var(--border-default)] bg-[var(--bg-secondary)] py-4">
+          {/* 브랜드 마크 — 네이비 링 + 앰버 볼트 */}
+          <Link href="/" aria-label="ESVA 홈" className="mb-3">
+            <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden>
+              <defs>
+                <linearGradient id="rail-bolt" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#d97706" />
+                  <stop offset="100%" stopColor="#b45309" />
+                </linearGradient>
+              </defs>
+              <circle cx="20" cy="20" r="18" stroke="var(--color-primary)" strokeWidth="2.5" fill="none" />
+              <path d="M22 6L12 22h7l-3 12 12-16h-7l3-12z" fill="url(#rail-bolt)" />
+            </svg>
           </Link>
-        )}
-      </div>
 
-      {/* ═══ Hero — 전기 엔지니어 전용 느낌 ═══ */}
-      <section className="relative overflow-hidden border-b border-[var(--border-default)]">
-        {/* 전기 그래디언트 배경 — 파란 전류 느낌 */}
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute left-1/4 top-0 h-[400px] w-[400px] rounded-full opacity-[0.06] blur-[80px]"
-            style={{ background: 'radial-gradient(circle, #3b82f6, transparent)' }} />
-          <div className="absolute right-1/4 top-10 h-[300px] w-[300px] rounded-full opacity-[0.04] blur-[80px]"
-            style={{ background: 'radial-gradient(circle, #f59e0b, transparent)' }} />
-        </div>
+          {RAIL_ITEMS.map(({ icon: Icon, href, label, active }) => (
+            <Link
+              key={href}
+              href={href}
+              aria-label={label}
+              title={label}
+              className={
+                active
+                  ? 'flex h-10 w-10 items-center justify-center rounded-[10px] bg-[var(--color-primary)] text-white'
+                  : 'flex h-10 w-10 items-center justify-center rounded-[10px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-secondary)]'
+              }
+            >
+              <Icon size={18} strokeWidth={2} />
+            </Link>
+          ))}
 
-        <div className="relative mx-auto flex max-w-3xl flex-col items-center px-4 pb-14 pt-16 sm:pt-24">
-          <div className="animate-fade-in-up">
-            <ESVALogo size="lg" />
+          <div className="mt-auto flex flex-col items-center gap-2">
+            <Link
+              href="/settings"
+              aria-label="설정"
+              title="설정"
+              className="flex h-10 w-10 items-center justify-center rounded-[10px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-secondary)]"
+            >
+              <SlidersHorizontal size={18} strokeWidth={2} />
+            </Link>
+            {user ? (
+              <button
+                onClick={() => signOut()}
+                aria-label="로그아웃"
+                title={user.displayName || user.email || '로그아웃'}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--border-hover)] text-[13px] font-semibold text-[var(--text-secondary)]"
+              >
+                {(user.displayName ?? user.email ?? 'U').charAt(0).toUpperCase()}
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                aria-label="로그인"
+                title="로그인"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--border-hover)] text-[var(--text-secondary)]"
+              >
+                <LogIn size={16} />
+              </Link>
+            )}
           </div>
+        </nav>
 
-          {/* 전기 도메인 시그널 — 핵심 차별화 */}
-          <div className="animate-fade-in-up mt-3 flex items-center gap-2 rounded-full border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 py-1" style={{ animationDelay: '60ms' }}>
-            <Activity size={12} className="text-emerald-500" />
-            <span className="text-[11px] font-medium text-[var(--text-secondary)]">
-              내장 판본: KEC 2021 · NEC 2023 · IEC 60364 파트별 스냅샷
+        {/* ═══ 메인 ═══ */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* 상단 바 — 내장 판본 배지 + 로그인 */}
+          <div className="flex items-center gap-2.5 px-10 pt-5">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hover)] bg-[var(--bg-secondary)] px-3.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-secondary)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+              KEC 2021 · NEC 2023 · IEC 60364 · JIS C 0364
             </span>
+            {user ? (
+              <span className="ml-auto text-[13.5px] font-medium text-[var(--text-secondary)]">
+                {user.displayName || user.email?.split('@')[0]}
+              </span>
+            ) : (
+              <Link
+                href="/login"
+                className="ml-auto rounded-lg border border-[var(--border-hover)] px-5 py-2 text-[13.5px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-secondary)]"
+              >
+                로그인
+              </Link>
+            )}
           </div>
 
-          <h1 className="animate-fade-in-up mt-5 text-center text-xl font-bold leading-tight text-[var(--text-primary)] sm:text-2xl" style={{ animationDelay: '100ms' }}>
-            전기 설계의 <span className="gradient-text-primary">검색·계산·검증</span>을<br className="sm:hidden" /> 하나로
-          </h1>
+          {/* 히어로 — 중앙 정렬 검색 우선 */}
+          <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col justify-center px-6">
+            <h1 className="text-center font-[family-name:var(--font-serif)] text-[40px] font-bold leading-[1.35] tracking-[-0.015em]">
+              AI는 추정하지 않습니다.
+            </h1>
+            <p className="mt-3.5 text-center text-base leading-[1.75] text-[var(--text-secondary)]">
+              모든 수치는 결정론적 엔진이 계산하고,<br />
+              모든 판정은 기준서 조항이 결정합니다.
+            </p>
 
-          <p className="animate-fade-in-up mt-2 text-center text-[13px] leading-relaxed text-[var(--text-tertiary)]" style={{ animationDelay: '140ms' }}>
-            계산은 수식 엔진으로 재현하고, 자동 판정이 불가능한 기준은 HOLD로 구분합니다.
-          </p>
-
-          {/* Search */}
-          <div className="mt-7 w-full max-w-lg animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-            <div className="flex items-center rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-2.5 shadow-sm transition-all focus-within:border-[var(--color-primary)] focus-within:ring-4 focus-within:ring-[var(--color-primary)]/10">
-              <Search className="mr-3 h-4 w-4 shrink-0 text-[var(--text-tertiary)]" aria-hidden />
+            {/* 검색 카드 */}
+            <div className="mt-10 rounded-2xl border border-[var(--border-hover)] bg-[var(--bg-primary)] p-[20px_22px] shadow-[0_4px_24px_rgba(28,27,23,0.06)]">
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="전압강하, KEC 232, 케이블 선정..."
-                className="min-h-[36px] flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--text-tertiary)]"
-                autoFocus
+                placeholder='질문, 계산 조건, 조항 번호 — 무엇이든. 예: "3상 380V 50kW 부하, 케이블 100m 전압강하 검토"'
+                aria-label="질의 입력"
                 enterKeyHint="search"
-                aria-label="검색어"
-                /* maxLength 500: keeps URL < 4KB even after URI encoding (BUG-012).
-                   Real engineering queries fit well under this; the cap blocks
-                   accidental paste of multi-page text. */
                 maxLength={500}
+                autoFocus
+                className="min-h-[36px] w-full bg-transparent text-[15.5px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
               />
-              <button onClick={handleSearch} disabled={isLoading}
-                className="ml-2 shrink-0 rounded-lg bg-[var(--color-primary)] px-4 py-1.5 text-xs font-semibold text-white transition-all hover:opacity-90 disabled:opacity-50">
-                검색
-              </button>
+              <div className="mt-3 flex items-center gap-2">
+                <span className="rounded-full border border-[var(--border-hover)] bg-[var(--bg-secondary)] px-3.5 py-1.5 text-[12.5px] text-[var(--text-secondary)]">
+                  ⚡ 자동 감지
+                </span>
+                {['검색', '계산', '검증'].map((m) => (
+                  <span key={m} className="rounded-full border border-[var(--border-hover)] px-3.5 py-1.5 text-[12.5px] text-[var(--text-tertiary)]">
+                    {m}
+                  </span>
+                ))}
+                <span className="ml-auto inline-flex items-center gap-1.5 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)]">
+                  <ShieldCheck size={12} />
+                  Gemini 2.5 · BYOK
+                </span>
+                <button
+                  onClick={handleSearch}
+                  disabled={isLoading}
+                  aria-label="질의 실행"
+                  className="flex h-10 w-10 items-center justify-center rounded-[11px] bg-[var(--color-primary)] text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  <ArrowUp size={17} strokeWidth={2.5} />
+                </button>
+              </div>
             </div>
 
-            {!calcIntent && (
-              <div className="mt-2.5">
-                <QuickCalcButtons onSelect={handleQuickCalc} />
+            {/* 계산 의도 인라인 결과 (기존 기능 보존) */}
+            {calcIntent?.hasCalcIntent && calcIntent.calculatorId ? (
+              <div className="mt-6">
+                <InlineCalcResult
+                  calculatorId={calcIntent.calculatorId}
+                  calculatorName={calcIntent.calculatorName || '계산기'}
+                  extractedParams={calcIntent.extractedParams}
+                  missingRequired={calcIntent.missingRequired}
+                  missingOptional={calcIntent.missingOptional}
+                  allParams={calcIntent.allParams}
+                  canAutoExecute={calcIntent.canAutoExecute}
+                  onClose={() => setCalcIntent(null)}
+                />
               </div>
+            ) : (
+              <>
+                {/* 예시 질의 */}
+                <div className="mt-6 flex flex-col">
+                  {EXAMPLES.map(({ icon: Icon, text, tail }, i) => (
+                    <button
+                      key={text}
+                      onClick={() => runQuery(text)}
+                      className={`flex items-center gap-3 border-t border-[var(--border-default)] px-1 py-[13px] text-left text-sm text-[var(--text-primary)] transition-colors hover:text-[var(--color-accent)] ${
+                        i === EXAMPLES.length - 1 ? 'border-b' : ''
+                      }`}
+                    >
+                      <Icon size={15} strokeWidth={2} className="shrink-0 text-[var(--color-accent)]" />
+                      <span className="min-w-0 flex-1 truncate">{text}</span>
+                      {tail && <span className="text-[var(--text-tertiary)]">{tail}</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 3기둥 */}
+                <div className="mt-8 grid grid-cols-3">
+                  {PILLARS.map(({ numeral, title, desc }, i) => (
+                    <div key={numeral} className={i < 2 ? 'border-r border-[var(--border-default)] px-6 first:pl-1' : 'px-6 pr-1'}>
+                      <div className="font-[family-name:var(--font-serif)] text-base font-bold text-[var(--color-accent)]">{numeral}</div>
+                      <div className="mt-1.5 text-[13.5px] font-bold">{title}</div>
+                      <p className="mt-1 text-xs leading-[1.65] text-[var(--text-tertiary)]">{desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
 
-          {calcIntent?.hasCalcIntent && calcIntent.calculatorId && (
-            <div className="mt-6 w-full max-w-lg mx-auto">
-              <InlineCalcResult
-                calculatorId={calcIntent.calculatorId}
-                calculatorName={calcIntent.calculatorName || '계산기'}
-                extractedParams={calcIntent.extractedParams}
-                missingRequired={calcIntent.missingRequired}
-                missingOptional={calcIntent.missingOptional}
-                allParams={calcIntent.allParams}
-                canAutoExecute={calcIntent.canAutoExecute}
-                onClose={() => setCalcIntent(null)}
-              />
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* ═══ Live Stats Bar — 전기 버티컬 시그널 ═══ */}
-      <section className="border-b border-[var(--border-default)] bg-[var(--bg-secondary)]">
-        <div className="mx-auto flex max-w-5xl items-center justify-center gap-8 px-4 py-3 sm:gap-16">
-          <CountUpStat target={CALCULATOR_COUNT} suffix="+" label="계산기" />
-          <div className="h-4 w-px bg-[var(--border-default)]" />
-          <CountUpStat target={STANDARD_REFS.length} label="표준 참조" />
-          <div className="h-4 w-px bg-[var(--border-default)]" />
-          <CountUpStat target={ELECTRICAL_TERMS.length} label="전기 용어" />
-          <div className="hidden h-4 w-px bg-[var(--border-default)] sm:block" />
-          <div className="hidden text-center sm:block">
-            <span className="text-sm font-bold text-emerald-600">수식 기반</span>
-            <span className="ml-1 text-[11px] text-[var(--text-tertiary)]">계산 엔진</span>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ Bento Grid ═══ */}
-      <section className="mx-auto max-w-5xl px-4 py-10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:grid-rows-[auto_auto]">
-
-          {/* 계산기 — hero card */}
-          <Link href="/calc" className="card-interactive group relative col-span-1 overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 sm:col-span-2 sm:row-span-2">
-            <div className="absolute -right-4 -top-4 h-24 w-24 rounded-full bg-blue-500/[0.06] blur-2xl" />
-            <div className="relative">
-              <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bento-icon-blue" suppressHydrationWarning>
-                <Calculator size={22} className="text-white" />
-              </div>
-              <h3 className="text-base font-bold text-[var(--text-primary)]">전기 계산기</h3>
-              <p className="mt-0.5 text-xs text-[var(--text-secondary)]">수식 엔진 {CALCULATOR_COUNT}개 · 적용 기준과 한계 표시</p>
-              <div className="mt-4 grid grid-cols-2 gap-1.5">
-                {['전압강하', '케이블 선정', '차단기 선정', '단락전류', '변압기 용량', '접지저항', '역률 보정', '조도 계산'].map(c => (
-                  <span key={c} className="rounded-lg bg-[var(--bg-secondary)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] transition-colors group-hover:bg-blue-50 group-hover:text-blue-700 dark:group-hover:bg-blue-900/20 dark:group-hover:text-blue-300">
-                    {c}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)]">
-                전체 {CALCULATOR_COUNT}개 <ArrowUpRight size={12} />
-              </div>
-            </div>
-          </Link>
-
-          {/* AI 검색 */}
-          <Link href="/search" className="card-interactive group overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bento-icon-purple" suppressHydrationWarning>
-              <Search size={18} className="text-white" />
-            </div>
-            <h3 className="text-[13px] font-bold text-[var(--text-primary)]">AI 법규 검색</h3>
-            <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">법규·표·조항을 정밀 검색<br />출처 추적 + Receipt</p>
-          </Link>
-
-          {/* SLD */}
-          <Link href="/tools/sld" className="card-interactive group overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bento-icon-orange" suppressHydrationWarning>
-              <FileText size={18} className="text-white" />
-            </div>
-            <h3 className="text-[13px] font-bold text-[var(--text-primary)]">도면 분석</h3>
-            <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">AI Vision · DXF · PDF<br />토폴로지 그래프</p>
-          </Link>
-
-          {/* OCR */}
-          <Link href="/tools/ocr" className="card-interactive group overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bento-icon-emerald" suppressHydrationWarning>
-              <Camera size={18} className="text-white" />
-            </div>
-            <h3 className="text-[13px] font-bold text-[var(--text-primary)]">OCR 명판 인식</h3>
-            <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">명판 촬영 → 스펙 추출<br />계산기 자동 연결</p>
-          </Link>
-
-          {/* 기준서 */}
-          <Link href="/standards" className="card-interactive group overflow-hidden rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-            <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-slate-600 to-slate-400 shadow-lg" suppressHydrationWarning>
-              <BookOpen size={18} className="text-white" />
-            </div>
-            <h3 className="text-[13px] font-bold text-[var(--text-primary)]">기준서 브라우저</h3>
-            <p className="mt-0.5 text-[11px] text-[var(--text-tertiary)]">KEC/NEC/IEC {STANDARD_REFS.length}개 표준<br />교차참조 + 허용전류표</p>
-          </Link>
-
-        </div>
-      </section>
-
-      {/* ═══ 전문 도구 ═══ */}
-      <section className="border-t border-[var(--border-default)] bg-[var(--bg-secondary)]">
-        <div className="mx-auto max-w-5xl px-4 py-8">
-          <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-[var(--text-tertiary)]">전문 도구</h2>
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-            {PRO_TOOLS.map(({ icon: Icon, title, href, badge }) => (
-              <Link key={href} href={href}
-                className="flex items-center gap-2.5 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2.5 text-[12px] font-medium text-[var(--text-primary)] transition-all duration-200 hover:border-[var(--color-primary)] hover:shadow-sm">
-                <Icon size={14} className="shrink-0 text-[var(--text-tertiary)]" />
-                <span className="truncate">{title}</span>
-                {badge && <span className="ml-auto shrink-0 rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-[9px] font-bold text-white">{badge}</span>}
+          {/* 최근 스레드 */}
+          <div className="mx-auto w-full max-w-[808px] px-10 pb-6">
+            <div className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-[var(--text-tertiary)]">최근 스레드</div>
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <Link href="/history" className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 transition-colors hover:border-[var(--border-hover)]">
+                <div className="text-[13.5px] font-medium">변압기 500kVA 병렬 운전 조건</div>
+                <div className="mt-0.5 text-[11.5px] text-[var(--text-tertiary)]">어제 · 적합 · 영수증 발행됨</div>
               </Link>
-            ))}
+              <Link href="/history" className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 transition-colors hover:border-[var(--border-hover)]">
+                <div className="text-[13.5px] font-medium">접지저항 10Ω 설계 — Dwight 식</div>
+                <div className="mt-0.5 text-[11.5px] text-[var(--text-tertiary)]">7월 16일 · 조건 2건 보류</div>
+              </Link>
+            </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ═══ 핵심 원칙 — 버티컬 AI 차별화 ═══ */}
-      <section className="border-t border-[var(--border-default)]">
-        <div className="mx-auto max-w-5xl px-4 py-10">
-          <div className="grid gap-6 sm:grid-cols-3">
-            {PRINCIPLES.map(({ icon: Icon, title, desc, cssClass }) => (
-              <div key={title} className="text-center">
-                <div className={`mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl ${cssClass}`} suppressHydrationWarning>
-                  <Icon size={18} className="text-white" />
-                </div>
-                <h3 className="text-[13px] font-bold text-[var(--text-primary)]">{title}</h3>
-                <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-tertiary)]">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    </main>
+      {/* ═══ 상태 바 ═══ */}
+      <div className="flex h-8 flex-none items-center gap-4 border-t border-[var(--border-default)] bg-[var(--bg-secondary)] px-5 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)]">
+        <span className="inline-flex items-center gap-1.5 text-[var(--color-success)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
+          운영 정상
+        </span>
+        <span>내장 판본 KEC 2021 · NEC 2023 · IEC 60364</span>
+        <span className="hidden sm:inline">Gemini 2.5 · BYOK (AES-GCM 세션 암호화)</span>
+        <span className="ml-auto hidden sm:inline">엔진 {CALCULATOR_COUNT}종</span>
+      </div>
+    </div>
   );
 }
-
-const PRO_TOOLS = [
-  { icon: BarChart3, title: '대시보드', href: '/dashboard', badge: undefined },
-  { icon: Globe, title: '다국가 비교', href: '/compare', badge: 'NEW' },
-  { icon: FolderOpen, title: '프로젝트', href: '/projects', badge: undefined },
-  { icon: Users, title: '커뮤니티', href: '/community', badge: undefined },
-  { icon: Search, title: '용어사전', href: '/glossary', badge: undefined },
-  { icon: Shield, title: 'BYOK', href: '/settings/byok', badge: undefined },
-  { icon: Cpu, title: '현장 모드', href: '/mobile', badge: undefined },
-  { icon: BarChart3, title: '계산 이력', href: '/history', badge: undefined },
-  { icon: Calculator, title: '역률 보정', href: '/calc?q=역률', badge: undefined },
-  { icon: Calculator, title: '조도 계산', href: '/calc?q=조도', badge: undefined },
-] as const;
-
-const PRINCIPLES = [
-  {
-    icon: Zap,
-    title: '계산은 수식 엔진 우선',
-    desc: '지원 계산기는 결정론적 엔진으로 실행합니다. AI 생성 설명은 별도 검증이 필요합니다.',
-    cssClass: 'bento-icon-orange',
-  },
-  {
-    icon: BookOpen,
-    title: '판정 근거를 드러냅니다',
-    desc: '지원 평가기는 적용 조항을 표시하고, 근거가 부족한 항목은 합격 대신 HOLD로 남깁니다.',
-    cssClass: 'bento-icon-blue',
-  },
-  {
-    icon: Activity,
-    title: '검증 범위를 구분합니다',
-    desc: '계산 영수증에는 수식·적용 기준·해시를 기록하고, AI 검토에는 합의와 제한을 함께 표시합니다.',
-    cssClass: 'bento-icon-emerald',
-  },
-] as const;

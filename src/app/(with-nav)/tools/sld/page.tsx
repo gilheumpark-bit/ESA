@@ -36,6 +36,7 @@ import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
+import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
 import {
   labelDocumentReadStatus,
   labelJobStatus,
@@ -297,6 +298,7 @@ export default function SLDAnalysisPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
+  const [review, setReview] = useState<ReviewLike | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 사내 규정(선택) — JSON 룰셋. 서버가 린트하고 무효면 400으로 거절한다.
@@ -334,6 +336,7 @@ export default function SLDAnalysisPage() {
     setPreview(URL.createObjectURL(file));
     setAnalysis(null);
     setCalcChain([]);
+    setReview(null);
     setError(null);
   }, []);
 
@@ -400,6 +403,7 @@ export default function SLDAnalysisPage() {
     setReviewError(null);
     setAnalysis(null);
     setCalcChain([]);
+    setReview(null);
     setError(null);
     setV3Doc(null);
     setV3JobId(null);
@@ -673,6 +677,7 @@ export default function SLDAnalysisPage() {
 
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
+      setReview(data.review ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'SLD 분석 중 오류가 발생했습니다');
     } finally {
@@ -691,6 +696,7 @@ export default function SLDAnalysisPage() {
     setError(null);
     setAnalysis(null);
     setCalcChain([]);
+    setReview(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -699,6 +705,7 @@ export default function SLDAnalysisPage() {
       if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'DXF 파싱 실패');
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
+      setReview(data.review ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'DXF 파싱 오류');
     } finally {
@@ -717,6 +724,7 @@ export default function SLDAnalysisPage() {
     setError(null);
     setAnalysis(null);
     setCalcChain([]);
+    setReview(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -725,6 +733,7 @@ export default function SLDAnalysisPage() {
       if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'PDF 파싱 실패');
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
+      setReview(data.review ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF 파싱 오류');
     } finally {
@@ -1065,6 +1074,7 @@ export default function SLDAnalysisPage() {
           <ComponentList components={analysis.components} />
           <ConnectionMap connections={analysis.connections} components={analysis.components} />
           <CalcChain steps={calcChain} />
+          <ReviewReportPanel review={review} />
         </div>
       )}
     </div>
