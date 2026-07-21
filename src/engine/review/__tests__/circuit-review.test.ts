@@ -107,20 +107,41 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
 });
 
 describe('TR-MAIN-CURRENT — 정격 2차전류 (독립 손계산 known-answer)', () => {
-  it('1000kVA·380V → 1519A (kVA×1000/(√3×380) = 1519.34…)', () => {
+  it('3φ 1000kVA·380V → 1519A (kVA×1000/(√3×380) = 1519.34…) · INFO(부합 판정 아님)', () => {
     const r = reviewAnalysis(analysisOf([
-      { id: 'comp_1', type: 'transformer', label: 'MOLD TR-3 6.6KV/380V', rating: '1000kVA', position: pos },
+      { id: 'comp_1', type: 'transformer', label: 'MOLD TR-3 3∅ 6.6KV/380V', rating: '1000kVA', position: pos },
     ]));
     const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
-    expect(f?.severity).toBe('PASS');
+    expect(f?.severity).toBe('INFO');
     expect(f?.computed?.['정격 2차전류']).toBe('1519A');
+    expect(r.summary.info).toBe(1);
+    expect(r.summary.pass).toBe(0); // 정보 제공이 부합으로 계수되면 안 된다
   });
 
-  it('500kVA·220V → 1312A', () => {
+  it('3φ 500kVA·220V → 1312A', () => {
     const r = reviewAnalysis(analysisOf([
-      { id: 'comp_1', type: 'transformer', label: 'MOLD TR-1 6.6KV/220V', rating: '500kVA', position: pos },
+      { id: 'comp_1', type: 'transformer', label: 'MOLD TR-1 3φ 6.6KV/220V', rating: '500kVA', position: pos },
     ]));
     expect(r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT')?.computed?.['정격 2차전류']).toBe('1312A');
+  });
+
+  it('단상 10kVA·220V → 45A — 3상 산식(26A) 과소평가 방지 (적대 검증 실측 수리)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: '단상 TR 380/220V', rating: '10kVA', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
+    expect(f?.severity).toBe('INFO');
+    expect(f?.computed?.['정격 2차전류']).toBe('45A');
+    expect(f?.limit?.source).toContain('단상');
+  });
+
+  it('상수(1φ/3φ) 미기재면 계산하지 않고 UNKNOWN(무발명)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'TR 6.6KV/380V', rating: '1000kVA', position: pos },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT');
+    expect(f?.severity).toBe('UNKNOWN');
+    expect(f?.verdict).toContain('상수');
   });
 
   it('2차전압이 무모호하지 않으면 계산하지 않고 UNKNOWN(무발명)', () => {
@@ -128,6 +149,16 @@ describe('TR-MAIN-CURRENT — 정격 2차전류 (독립 손계산 known-answer)'
       { id: 'comp_1', type: 'transformer', label: 'TR', rating: '1000kVA', position: pos },
     ]));
     expect(r.findings.find((x) => x.rule === 'TR-MAIN-CURRENT')?.severity).toBe('UNKNOWN');
+  });
+
+  it('수치 없는 bare TR 심볼은 항목별 UNKNOWN 대신 DATA-GAP에 압축된다(신호 희석 방지)', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'transformer', label: 'TR', position: pos },
+      { id: 'comp_2', type: 'transformer', label: 'TR', position: pos },
+    ]));
+    expect(r.findings.filter((x) => x.rule === 'TR-MAIN-CURRENT')).toHaveLength(0);
+    const gap = r.findings.find((x) => x.rule === 'DATA-GAP');
+    expect(gap?.given['수치 없는 TR 심볼']).toBe('2/2');
   });
 });
 

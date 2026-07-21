@@ -18,7 +18,8 @@ import { parseSpecText } from '@/engine/topology/spec-text';
 
 export interface ReviewFinding {
   rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
-  severity: 'FAIL' | 'WARN' | 'PASS' | 'UNKNOWN';
+  /** INFO = 계산 참고값(부합 판정 아님) — summary.pass에 계수하지 않는다 */
+  severity: 'FAIL' | 'WARN' | 'PASS' | 'UNKNOWN' | 'INFO';
   subject: string;
   componentId?: string;
   /** 도면에 적힌 값 그대로 */
@@ -32,7 +33,7 @@ export interface ReviewFinding {
 
 export interface ReviewReport {
   findings: ReviewFinding[];
-  summary: { pass: number; warn: number; fail: number; unknown: number };
+  summary: { pass: number; warn: number; fail: number; unknown: number; info: number };
   coverage: {
     breakersTotal: number;
     breakersRatedParsed: number;
@@ -182,10 +183,12 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
         verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C)`,
       });
     } else {
+      // FAIL/WARN은 집합 보정이 더해져도 방향이 안 바뀌지만(더 나빠질 뿐),
+      // PASS는 다회로 동일 관로에서 뒤집힐 수 있다 — 가정 전제를 명시한다.
       findings.push({
         ...base,
         severity: 'PASS',
-        verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 관로·30°C)`,
+        verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 단독 회로·관로·30°C — 다회로 동일 관로면 집합 보정으로 낮아질 수 있어 재확인 대상)`,
       });
     }
   }
@@ -195,59 +198,81 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   // "6.6KV/380V"·"380/220V" — 마지막 전압 토큰을 2차로 읽되, 복수 해석이
   // 가능하면(380-220V) 낮은 쪽이 아닌 상간전압(앞 값)을 쓴다.
   const transformers = analysis.components.filter((c) => c.type === 'transformer');
+  let bareTransformers = 0;
   for (const tr of transformers) {
     const spec = deriveSpec(tr);
     const hasKva = spec.power !== undefined && /VA$/i.test(spec.powerUnit ?? '');
     const labelAll = [tr.label, tr.rating, tr.properties?.load].filter(Boolean).join(' ');
     const secM = labelAll.match(/\/\s*(\d{3,4})(?:\s*[-/]\s*\d{3})?\s*V\b/i);
-    if (!hasKva || !secM) {
+    // 수치 증거가 전혀 없는 bare 심볼(라벨 "TR"뿐)은 항목별 UNKNOWN을 만들지
+    // 않는다 — 실측(수변전 p5)에서 TR 심볼 에코 8건이 UNKNOWN 소음으로 신호를
+    // 희석했다. 존재 자체는 DATA-GAP 집계에 싣는다(은폐 아님·압축).
+    if (!hasKva && !secM) {
+      bareTransformers += 1;
+      continue;
+    }
+    // 상수(단상/3상)는 산식을 √3배 가른다 — 도면 표기에서만 읽고, 미기재면
+    // 계산하지 않는다(적대 검증 실측: 단상 10kVA/220V를 3상 산식으로 26.2A
+    // 과소평가 — false 근거). 국내 표기 관례: 3φ·3∅·3상 / 1φ·1∅·단상.
+    const phase3 = /3\s*[φ∅Φ]|3\s*상|three/i.test(labelAll);
+    const phase1 = /1\s*[φ∅Φ]|단상|single/i.test(labelAll);
+    if (!hasKva || !secM || (!phase3 && !phase1)) {
       findings.push({
         rule: 'TR-MAIN-CURRENT',
         severity: 'UNKNOWN',
         subject: subjectOf(tr),
         componentId: tr.id,
         given: { rating: tr.rating ?? '(미파싱)', label: tr.label ?? '' },
-        verdict: '용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)',
+        verdict: !hasKva || !secM
+          ? '용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)'
+          : '상수(1φ/3φ)가 도면에 없어 2차전류 산식을 정할 수 없음 — 판정 보류(무발명)',
       });
       continue;
     }
     const kva = (spec.power as number) * ((spec.powerUnit ?? '').toUpperCase() === 'MVA' ? 1000 : 1);
     const v2 = parseInt(secM[1], 10);
-    const i2 = (kva * 1000) / (Math.sqrt(3) * v2);
+    const i2 = phase3 ? (kva * 1000) / (Math.sqrt(3) * v2) : (kva * 1000) / v2;
+    const formula = phase3 ? 'I₂ = kVA×1000/(√3×V₂)' : 'I₂ = kVA×1000/V₂ (단상)';
     findings.push({
       rule: 'TR-MAIN-CURRENT',
-      severity: 'PASS',
+      severity: 'INFO',
       subject: subjectOf(tr),
       componentId: tr.id,
-      given: { rating: `${kva}kVA`, secondary: `${v2}V` },
+      given: { rating: `${kva}kVA`, secondary: `${v2}V`, phase: phase3 ? '3φ' : '1φ' },
       computed: { '정격 2차전류': `${Math.round(i2)}A` },
-      limit: { value: `${Math.round(i2)}A`, source: 'I₂ = kVA×1000/(√3×V₂)' },
-      verdict: `정격 2차전류 ${Math.round(i2)}A — 2차 주차단기 선정 대조 기준값(정보 제공)`,
+      limit: { value: `${Math.round(i2)}A`, source: formula },
+      verdict: `정격 2차전류 ${Math.round(i2)}A — 2차 주차단기 선정 대조 기준값(계산 참고·부합 판정 아님)`,
     });
   }
 
   // ── 규칙 4: 판정 불가의 정직 집계 (무발명 원칙의 잔여 선언) ──
   const gapCable = breakers.length - breakersWithCable;
   const gapRating = breakers.length - ratedParsed;
-  if (breakers.length > 0 && (gapCable > 0 || gapRating > 0)) {
+  if ((breakers.length > 0 && (gapCable > 0 || gapRating > 0)) || bareTransformers > 0) {
+    const given: Record<string, string> = {};
+    if (breakers.length > 0) {
+      given['케이블 미결속 차단기'] = `${gapCable}/${breakers.length}`;
+      given['정격(AF/AT) 미파싱 차단기'] = `${gapRating}/${breakers.length}`;
+    }
+    if (bareTransformers > 0) {
+      given['수치 없는 TR 심볼'] = `${bareTransformers}/${transformers.length}`;
+    }
     findings.push({
       rule: 'DATA-GAP',
       severity: 'UNKNOWN',
       subject: '페이지 전체',
-      given: {
-        '케이블 미결속 차단기': `${gapCable}/${breakers.length}`,
-        '정격(AF/AT) 미파싱 차단기': `${gapRating}/${breakers.length}`,
-      },
+      given,
       verdict:
         '이 회로들은 이 도면만으로 케이블 판정 불가 — 분기 케이블은 통상 간선 스케줄(표)에 있다(중급 교차 검토 대상)',
     });
   }
 
-  const summary = { pass: 0, warn: 0, fail: 0, unknown: 0 };
+  const summary = { pass: 0, warn: 0, fail: 0, unknown: 0, info: 0 };
   for (const f of findings) {
     if (f.severity === 'PASS') summary.pass += 1;
     else if (f.severity === 'WARN') summary.warn += 1;
     else if (f.severity === 'FAIL') summary.fail += 1;
+    else if (f.severity === 'INFO') summary.info += 1;
     else summary.unknown += 1;
   }
 

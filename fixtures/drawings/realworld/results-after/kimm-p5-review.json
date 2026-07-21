@@ -10763,39 +10763,6 @@
         {
           "rule": "TR-MAIN-CURRENT",
           "severity": "UNKNOWN",
-          "subject": "TR",
-          "componentId": "comp_45",
-          "given": {
-            "rating": "(미파싱)",
-            "label": "TR"
-          },
-          "verdict": "용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)"
-        },
-        {
-          "rule": "TR-MAIN-CURRENT",
-          "severity": "UNKNOWN",
-          "subject": "TR",
-          "componentId": "comp_46",
-          "given": {
-            "rating": "(미파싱)",
-            "label": "TR"
-          },
-          "verdict": "용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)"
-        },
-        {
-          "rule": "TR-MAIN-CURRENT",
-          "severity": "UNKNOWN",
-          "subject": "TR",
-          "componentId": "comp_47",
-          "given": {
-            "rating": "(미파싱)",
-            "label": "TR"
-          },
-          "verdict": "용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)"
-        },
-        {
-          "rule": "TR-MAIN-CURRENT",
-          "severity": "UNKNOWN",
           "subject": "DOWN TR [3∅ 10KVA]",
           "componentId": "comp_75",
           "given": {
@@ -10805,23 +10772,13 @@
           "verdict": "용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)"
         },
         {
-          "rule": "TR-MAIN-CURRENT",
-          "severity": "UNKNOWN",
-          "subject": "TR FL&FAN [AC 220V 35KA]",
-          "componentId": "comp_95",
-          "given": {
-            "rating": "(미파싱)",
-            "label": "TR FL&FAN"
-          },
-          "verdict": "용량 또는 2차전압이 무모호하게 파싱되지 않아 2차전류 판정 보류(무발명)"
-        },
-        {
           "rule": "DATA-GAP",
           "severity": "UNKNOWN",
           "subject": "페이지 전체",
           "given": {
             "케이블 미결속 차단기": "88/88",
-            "정격(AF/AT) 미파싱 차단기": "2/88"
+            "정격(AF/AT) 미파싱 차단기": "2/88",
+            "수치 없는 TR 심볼": "4/8"
           },
           "verdict": "이 회로들은 이 도면만으로 케이블 판정 불가 — 분기 케이블은 통상 간선 스케줄(표)에 있다(중급 교차 검토 대상)"
         }
@@ -10830,7 +10787,8 @@
         "pass": 0,
         "warn": 0,
         "fail": 0,
-        "unknown": 9
+        "unknown": 5,
+        "info": 0
       },
       "coverage": {
         "breakersTotal": 88,
@@ -10942,7 +10900,7 @@
       "method": "pdf-vector",
       "confidence": 0.85,
       "description": "PDF vector parsed (page 5): 159 components, 314 connections (snapped 826, junctions 45, dropped 199), 903 text items, 1987 line segments",
-      "durationMs": 310
+      "durationMs": 351
     }
   }
 }

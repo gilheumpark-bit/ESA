@@ -56,7 +56,7 @@ interface ReviewReport {
 |---|---|---|---|
 | **AT-LE-AF** | 트립(AT) ≤ 프레임(AF). 위반=FAIL | rating "xAF/yAT" 파싱분 전부 | 차단기 구조 정의(트립은 프레임을 넘을 수 없음) |
 | **CABLE-AMPACITY** | 차단기 AT ≤ 케이블 허용전류. 위반=FAIL·80% 초과 근접=WARN | 차단기에 결속된 연결의 conductorSize+cableType | `kec-ampacity.getAmpacity` (Cu·절연 매핑·공사방법 가정 명시) |
-| **TR-MAIN-CURRENT** | TR 정격 2차전류 계산 → 페이지 내 최대 차단기 AT와 대조(정보 제공·WARN까지만) | TR power+2차전압이 무모호할 때만, 아니면 UNKNOWN | I₂ = kVA×1000/(√3×V₂) |
+| **TR-MAIN-CURRENT** | TR 정격 2차전류 계산(severity=INFO — 부합 계수 아님) | TR power+2차전압+**상수(1φ/3φ)**가 전부 무모호할 때만, 아니면 UNKNOWN. 수치 0인 bare 심볼은 DATA-GAP에 압축 | 3φ: I₂=kVA×1000/(√3×V₂) · 1φ: I₂=kVA×1000/V₂ |
 | **DATA-GAP** | 판정 불가 회로의 정직 집계 | 케이블 미결속·정격 미파싱 수 | 무발명 원칙 |
 
 절연 매핑(도면 관례): `CV·FCV·FR-CV·TFR-CV → XLPE` / `HIV·IV·VV → PVC`. 공사방법 미기재 시 `conduit`(관로) 가정 — verdict에 가정 명시(도면에 공사방법이 적히는 경우가 드물고, 관로가 국내 옥내 기본 관례).
