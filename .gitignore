@@ -107,3 +107,5 @@ NOA_RULES_v*.md
 # local/     = 인터넷 교보재 등 재배포 불가 자료 → 로컬 검증 전용, 결과 수치만 기록.
 #              실수로 올라가는 사고를 구조적으로 차단한다.
 fixtures/drawings/local/
+# scan-golden-score가 임시로 생성하는 고용량 래스터 계층(원본 픽스처 아님)
+fixtures/drawings/realworld/raster/

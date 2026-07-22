@@ -5,6 +5,11 @@ export type VisionProvider = 'openai' | 'claude' | 'gemini';
 
 const VISION_PROVIDERS: readonly VisionProvider[] = ['openai', 'claude', 'gemini'];
 
+/** 실제 OCR·도면 분석 요청에 BYOK 키와 선택 모델이 전달되는 공급자인지 판별한다. */
+export function isVisionProvider(provider: string): provider is VisionProvider {
+  return (VISION_PROVIDERS as readonly string[]).includes(provider);
+}
+
 /**
  * 사용자가 BYOK에서 명시 선택한 모델 id를 돌려준다. 미선택이거나, 저장된 id가
  * 현재 카탈로그에 없으면(구 모델 제거) 빈 문자열을 돌려준다 — 이때 서버는 각

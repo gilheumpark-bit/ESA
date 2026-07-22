@@ -322,10 +322,6 @@ function AuditLogSection({
   const pageEntries = filtered.slice((page - 1) * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE);
 
   // \uD544\uD130\u00B7\uAC80\uC0C9\uC774 \uBC14\uB00C\uBA74 1\uD398\uC774\uC9C0\uB85C \uB418\uB3CC\uB9B0\uB2E4 (\uBC94\uC704 \uBC16 \uD398\uC774\uC9C0 \uBC29\uC9C0).
-  useEffect(() => {
-    setPage(1);
-  }, [actionFilter, searchQuery]);
-
   const handleExportCSV = useCallback(async () => {
     setExporting(true);
     try {
@@ -356,7 +352,10 @@ function AuditLogSection({
             type="text"
             placeholder="리소스 검색..."
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] py-2 pl-9 pr-3 text-sm"
           />
         </div>
@@ -364,7 +363,10 @@ function AuditLogSection({
           <Filter size={14} className="text-[var(--text-tertiary)]" />
           <select
             value={actionFilter}
-            onChange={e => setActionFilter(e.target.value)}
+            onChange={e => {
+              setActionFilter(e.target.value);
+              setPage(1);
+            }}
             className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-2 text-xs"
           >
             <option value="">전체 액션</option>

@@ -26,7 +26,7 @@ import {
   saveSelectedModel,
   saveStoredProviderKey,
 } from '@/lib/byok-storage';
-import { resolveSelectedModel } from '@/lib/vision-byok';
+import { isVisionProvider, resolveSelectedModel } from '@/lib/vision-byok';
 
 // =============================================================================
 // PART 1 — Types & Constants
@@ -122,8 +122,8 @@ function ProviderKeyCard({
         </div>
       )}
 
-      {/* 모델 선택: 키 저장 + 클라우드 공급자 + 선택지 2개 이상일 때 */}
-      {hasSavedKey && !isLocal && models.length > 1 && (
+      {/* 모델 선택: 실제 OCR·도면 분석에 배선된 공급자만 노출 */}
+      {hasSavedKey && isVisionProvider(provider.id) && models.length > 1 && (
         <div className="mb-3">
           <label
             htmlFor={`provider-model-${provider.id}`}

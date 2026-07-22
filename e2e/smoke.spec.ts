@@ -308,6 +308,22 @@ test.describe('설정 페이지', () => {
     await page.goto('/settings/byok');
     await expect(page.getByRole('heading', { level: 1, name: 'API 키 관리' })).toBeVisible();
   });
+
+  test('도면 분석에 실제 배선된 공급자만 모델 선택을 노출', async ({ page }) => {
+    await page.goto('/settings/byok');
+
+    for (const [provider, key] of [
+      ['openai', 'sk-test-openai-model-ui'],
+      ['groq', 'gsk-test-groq-model-ui'],
+    ] as const) {
+      const input = page.locator(`#provider-key-${provider}`);
+      await input.fill(key);
+      await input.locator('..').locator('..').getByRole('button', { name: '저장' }).click();
+    }
+
+    await expect(page.locator('#provider-model-openai')).toBeVisible();
+    await expect(page.locator('#provider-model-groq')).toHaveCount(0);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

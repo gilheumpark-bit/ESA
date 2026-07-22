@@ -8,7 +8,7 @@
  * node 환경이라 window 전역만 정의하고 저장소는 mock 한다. getModelList 는 실제
  * 카탈로그를 쓰므로(mock 안 함) 카탈로그 존재 검증이 진짜로 돈다.
  */
-import { getFirstAvailableVisionKey, resolveSelectedModel } from '../vision-byok';
+import { getFirstAvailableVisionKey, isVisionProvider, resolveSelectedModel } from '../vision-byok';
 import * as storage from '../byok-storage';
 
 jest.mock('../byok-storage', () => ({
@@ -75,5 +75,13 @@ describe('vision-byok — 모델 배선', () => {
 
     mockStorage.loadSelectedModel.mockReturnValue('nonexistent-model'); // 카탈로그 부재
     expect(resolveSelectedModel('gemini')).toBe('');
+  });
+
+  it('Vision 모델 선택 UI를 실제 OCR/도면 분석 공급자에만 허용한다', () => {
+    expect(isVisionProvider('openai')).toBe(true);
+    expect(isVisionProvider('claude')).toBe(true);
+    expect(isVisionProvider('gemini')).toBe(true);
+    expect(isVisionProvider('groq')).toBe(false);
+    expect(isVisionProvider('mistral')).toBe(false);
   });
 });

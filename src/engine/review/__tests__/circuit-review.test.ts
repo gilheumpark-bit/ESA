@@ -93,31 +93,39 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('UNKNOWN');
   });
 
-  it('병렬 다조는 단조보다 허용전류가 커 false-FAIL을 막는다 (F5)', () => {
+  it('병렬 다조는 포설배치·집합회로 수가 없으면 명목합계만 제시하고 판정을 보류한다', () => {
     const amp1 = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
-    // 단조로는 초과(FAIL)지만 2조면 통과인 트립
+    // 단조로는 초과지만 2조 명목합계 이내다. 병렬 조수만으로 집합보정계수를
+    // 발명할 수 없으므로 PASS/FAIL 대신 필요한 입력을 요구해야 한다.
     const trip = Math.floor(amp1 * 1.4);
     const conn: SLDConnection = { id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '25sq', cableType: 'FR-CV', parallelCount: 2 };
     const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
-    expect(['PASS', 'WARN']).toContain(f?.severity);
-    expect(f?.limit?.source).toContain('2조');
+    expect(f?.severity).toBe('UNKNOWN');
+    expect(f?.limit?.source).toContain('집합·배치 미반영');
+    expect(f?.verdict).toContain('포설배치');
   });
 
-  it('병렬 2조는 KEC 집합보정(0.80)을 반영한다 — 선형 2배가 아니다 (#7)', () => {
+  it('병렬 조수를 집합회로 수로 오인해 0.80을 자동 적용하지 않는다', () => {
     const single = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
-    // 총 허용전류 = 단조 × 2조 × 집합보정(0.80) = 단조 × 1.6 (선형이면 × 2.0)
-    const groupedTotal = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit', groupCount: 2 }).corrected * 2;
-    expect(groupedTotal / single).toBeCloseTo(1.6, 5);
-
-    // 트립을 보정(1.6×)과 선형(2.0×) 사이에 두면: 집합보정 적용으로 FAIL(안전 방향).
-    // 선형 배만 했다면 이 트립은 PASS/WARN이었을 것.
+    // 트립을 임의 0.80 보정치(1.6×)와 명목합계(2.0×) 사이에 둔다.
+    // 포설조건이 없으므로 어느 쪽도 확정하지 않고 UNKNOWN이어야 한다.
     const trip = Math.round(single * 1.8);
     const conn: SLDConnection = { id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '25sq', cableType: 'FR-CV', parallelCount: 2 };
     const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('UNKNOWN');
+    expect(f?.limit?.source).not.toContain('집합보정 적용');
+  });
+
+  it('병렬 케이블의 집합보정 전 명목합계조차 초과하면 확정 FAIL이다', () => {
+    const single = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const trip = Math.ceil(single * 2) + 1;
+    const conn: SLDConnection = { id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '25sq', cableType: 'FR-CV', parallelCount: 2 };
+    const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('FAIL');
-    expect(f?.limit?.source).toContain('집합보정');
+    expect(f?.verdict).toContain('명목 합계');
   });
 
   it('복수 케이블 결속 시 가장 가는 것이 병목', () => {
