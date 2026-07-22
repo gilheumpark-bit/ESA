@@ -17,13 +17,16 @@ import Link from 'next/link';
 import {
   PROVIDERS,
   isLocalProvider,
+  getModelList,
   type AIProvider,
 } from '@/lib/ai-providers';
 import {
   deleteStoredProviderKey,
   loadStoredProviderKey,
+  saveSelectedModel,
   saveStoredProviderKey,
 } from '@/lib/byok-storage';
+import { resolveSelectedModel } from '@/lib/vision-byok';
 
 // =============================================================================
 // PART 1 — Types & Constants
@@ -35,6 +38,8 @@ interface ProviderKeyState {
   maskedKey: string;
   status: KeyStatus;
   rawInput: string;
+  /** 선택된 모델 id — 미선택 시 공급자 카탈로그 기본값으로 표시된다. */
+  selectedModel: string;
 }
 
 const PROVIDER_ORDER: string[] = [
@@ -73,6 +78,7 @@ function ProviderKeyCard({
   onTest,
   onDelete,
   onInputChange,
+  onModelChange,
 }: {
   provider: AIProvider;
   state: ProviderKeyState;
@@ -80,10 +86,12 @@ function ProviderKeyCard({
   onTest: () => void;
   onDelete: () => void;
   onInputChange: (value: string) => void;
+  onModelChange: (modelId: string) => void;
 }) {
   const isLocal = isLocalProvider(provider.id);
   const hasSavedKey = state.status !== 'empty';
   const showInput = !hasSavedKey;
+  const models = getModelList(provider.id);
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -111,6 +119,34 @@ function ProviderKeyCard({
           <code className="rounded bg-zinc-100 px-2 py-1 text-sm text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
             {state.maskedKey}
           </code>
+        </div>
+      )}
+
+      {/* 모델 선택: 키 저장 + 클라우드 공급자 + 선택지 2개 이상일 때 */}
+      {hasSavedKey && !isLocal && models.length > 1 && (
+        <div className="mb-3">
+          <label
+            htmlFor={`provider-model-${provider.id}`}
+            className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            사용할 모델
+          </label>
+          <select
+            id={`provider-model-${provider.id}`}
+            value={state.selectedModel}
+            onChange={(e) => onModelChange(e.target.value)}
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
+          >
+            <option value="">자동 (제공자 기본 · 권장)</option>
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+            OCR·도면(SLD)·검토 요청에 이 모델이 사용됩니다. 자동은 각 기능에 맞는 기본 모델을 씁니다.
+          </p>
         </div>
       )}
 
@@ -281,6 +317,8 @@ export default function BYOKPage() {
           maskedKey: raw ? maskKey(raw) : '',
           status: raw ? 'saved' : 'empty',
           rawInput: '',
+          // 저장된 유효 선택만 표시 — 미선택/구모델이면 '' → "자동" 옵션 표시.
+          selectedModel: resolveSelectedModel(id),
         };
       }
       setStates(initial);
@@ -365,6 +403,14 @@ export default function BYOKPage() {
     [updateState],
   );
 
+  const handleModelChange = useCallback(
+    (id: string, modelId: string) => {
+      saveSelectedModel(id, modelId);
+      updateState(id, { selectedModel: modelId });
+    },
+    [updateState],
+  );
+
   // 로딩 상태
   if (!loaded) {
     return (
@@ -407,6 +453,7 @@ export default function BYOKPage() {
             maskedKey: '',
             status: 'empty' as KeyStatus,
             rawInput: '',
+            selectedModel: '',
           };
           return (
             <ProviderKeyCard
@@ -417,6 +464,7 @@ export default function BYOKPage() {
               onTest={() => handleTest(id)}
               onDelete={() => handleDelete(id)}
               onInputChange={(v) => updateState(id, { rawInput: v })}
+              onModelChange={(m) => handleModelChange(id, m)}
             />
           );
         })}

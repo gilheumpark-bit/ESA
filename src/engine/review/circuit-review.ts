@@ -111,7 +111,7 @@ function smallestCableFor(
 ): { sq: number; ampacity: number } | null {
   for (const size of KEC_CABLE_SIZES) {
     try {
-      const r = getAmpacity({ size, conductor: 'Cu', insulation, installation });
+      const r = getAmpacity({ size, conductor: 'Cu', insulation, installation, groupCount: parallel });
       const amp = r.corrected * parallel;
       if (amp >= tripA) return { sq: size, ampacity: amp };
     } catch {
@@ -204,17 +204,17 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       continue;
     }
     const insulation = INSULATION_BY_CABLE[(worst.cableType ?? 'CV').toUpperCase()] ?? 'XLPE';
-    // 병렬 다조는 허용전류가 조수배다(버그 사냥 F5): "150sq x 2"를 단조로 보면
-    // 옳은 도면을 과전류 FAIL로 오판한다. IEC/KEC 병렬 접속은 집합보정이 별도로
-    // 붙지만(보수측), 무발명 원칙상 여기선 조수 선형배까지만 반영하고 verdict에
-    // 병렬 전제를 명시한다.
+    // 병렬 다조는 허용전류가 조수배지만(F5: "150sq x 2"를 단조로 보면 옳은 도면을
+    // 과전류 FAIL로 오판), 같은 관로에 묶이면 KEC/IEC 집합보정계수가 붙는다(2조 0.80·
+    // 3조 0.70·4조 0.65…). getAmpacity(groupCount)로 KEC 표의 계수를 적용해
+    // 총 허용전류 = 단조 허용전류 × 집합보정 × 조수로 계산한다(무발명 — ESA 자체 표).
     const parallel = worst.parallel;
     let ampacity: number;
     let sourceKey: string;
     try {
-      const r = getAmpacity({ size: worst.sq, conductor: 'Cu', insulation, installation: 'conduit' });
+      const r = getAmpacity({ size: worst.sq, conductor: 'Cu', insulation, installation: 'conduit', groupCount: parallel });
       ampacity = r.corrected * parallel;
-      sourceKey = `KEC Cu_${insulation}_conduit ${worst.sq}sq${parallel > 1 ? ` ×${parallel}조` : ''}`;
+      sourceKey = `KEC Cu_${insulation}_conduit ${worst.sq}sq${parallel > 1 ? ` ×${parallel}조(집합보정 적용)` : ''}`;
     } catch {
       findings.push({
         rule: 'CABLE-AMPACITY',
@@ -262,23 +262,23 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       findings.push({
         ...base,
         severity: 'FAIL',
-        verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (가정: 공사방법 관로·주위 30°C)`,
+        verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C${parallel > 1 ? `·${parallel}조 집합보정 반영` : ''})`,
         ...cableProposalField,
       });
     } else if (tripA > ampacity * 0.8) {
       findings.push({
         ...base,
         severity: 'WARN',
-        verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C)`,
+        verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C${parallel > 1 ? `·${parallel}조 집합보정 반영` : ''})`,
         ...cableProposalField,
       });
     } else {
-      // FAIL/WARN은 집합 보정이 더해져도 방향이 안 바뀌지만(더 나빠질 뿐),
-      // PASS는 다회로 동일 관로에서 뒤집힐 수 있다 — 가정 전제를 명시한다.
+      // 집합보정을 이미 반영했으므로(getAmpacity groupCount) PASS도 다회로 관로
+      // 기준으로 판정됐다. 남은 가정은 공사방법(관로)·주위온도(30°C)뿐.
       findings.push({
         ...base,
         severity: 'PASS',
-        verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 단독 회로·관로·30°C — 다회로 동일 관로면 집합 보정으로 낮아질 수 있어 재확인 대상)`,
+        verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 관로·30°C${parallel > 1 ? `·${parallel}조 집합보정 반영` : ''})`,
       });
     }
   }

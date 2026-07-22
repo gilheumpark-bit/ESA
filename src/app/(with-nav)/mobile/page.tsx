@@ -34,6 +34,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { loadStoredProviderKey } from '@/lib/byok-storage';
+import { resolveSelectedModel } from '@/lib/vision-byok';
 import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -361,6 +362,7 @@ function CameraButton() {
       const formData = new FormData();
       formData.append('image', imageBlob, 'nameplate.jpg');
       formData.append('provider', 'openai');
+      formData.append('model', resolveSelectedModel('openai'));
       formData.append('apiKey', apiKey);
 
       const res = await fetch('/api/ocr', { method: 'POST', body: formData });

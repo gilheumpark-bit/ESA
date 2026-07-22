@@ -241,6 +241,11 @@ main {
 /* 스크롤 복원 시 부드러운 동작 */
 html {
   scroll-behavior: smooth;
+  /* viewTransition 크로스페이드(old→opacity0 / new→0에서 페이드인)와 overscroll
+     중 두 스냅샷 뒤로 html 기본 흰색이 새어 나오는 플래시 차단.
+     --bg-primary는 :root(라이트 #fbfaf7)·html.dark(다크 #17150f) 양쪽에 정의돼
+     테마 전환에 자동 대응한다. */
+  background-color: var(--bg-primary);
 }
 
 /* 페이지 전환 중 레이아웃 시프트 방지 */

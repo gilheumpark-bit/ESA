@@ -93,7 +93,7 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('UNKNOWN');
   });
 
-  it('병렬 2조는 허용전류가 2배 — 단조로 보면 나던 false-FAIL 방지 (F5)', () => {
+  it('병렬 다조는 단조보다 허용전류가 커 false-FAIL을 막는다 (F5)', () => {
     const amp1 = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
     // 단조로는 초과(FAIL)지만 2조면 통과인 트립
     const trip = Math.floor(amp1 * 1.4);
@@ -102,6 +102,22 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(['PASS', 'WARN']).toContain(f?.severity);
     expect(f?.limit?.source).toContain('2조');
+  });
+
+  it('병렬 2조는 KEC 집합보정(0.80)을 반영한다 — 선형 2배가 아니다 (#7)', () => {
+    const single = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    // 총 허용전류 = 단조 × 2조 × 집합보정(0.80) = 단조 × 1.6 (선형이면 × 2.0)
+    const groupedTotal = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit', groupCount: 2 }).corrected * 2;
+    expect(groupedTotal / single).toBeCloseTo(1.6, 5);
+
+    // 트립을 보정(1.6×)과 선형(2.0×) 사이에 두면: 집합보정 적용으로 FAIL(안전 방향).
+    // 선형 배만 했다면 이 트립은 PASS/WARN이었을 것.
+    const trip = Math.round(single * 1.8);
+    const conn: SLDConnection = { id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '25sq', cableType: 'FR-CV', parallelCount: 2 };
+    const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('FAIL');
+    expect(f?.limit?.source).toContain('집합보정');
   });
 
   it('복수 케이블 결속 시 가장 가는 것이 병목', () => {

@@ -253,6 +253,7 @@ function ChatPanel({ file }: ChatPanelProps) {
             throw new Error('이미지 전문팀 검토에는 OpenAI, Claude 또는 Gemini BYOK 키가 필요합니다.');
           }
           formData.append('provider', visionKey.provider);
+          formData.append('model', visionKey.model);
           formData.append('apiKey', visionKey.key);
         }
         const { getIdToken } = await import('@/lib/firebase');

@@ -120,7 +120,7 @@ export default function HomePage() {
               title="BYOK 키 설정"
             >
               <ShieldCheck size={12} />
-              Gemini 2.5 · BYOK
+              내 API 키 · BYOK
             </Link>
             <button
               onClick={handleSearch}
@@ -226,7 +226,7 @@ export default function HomePage() {
           운영 정상
         </span>
         <span className="shrink-0">내장 판본 KEC 2021 · NEC 2023 · IEC 60364</span>
-        <span className="hidden shrink-0 sm:inline">Gemini 2.5 · BYOK (AES-GCM 세션 암호화)</span>
+        <span className="hidden shrink-0 sm:inline">BYOK · AES-GCM 세션 암호화</span>
         <span className="ml-auto hidden shrink-0 sm:inline">엔진 {CALCULATOR_COUNT}종</span>
       </div>
     </div>

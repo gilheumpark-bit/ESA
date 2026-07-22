@@ -26,25 +26,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { loadStoredProviderKey } from '@/lib/byok-storage';
+import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & State
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const DEFAULT_VISION_PROVIDERS = ['openai', 'claude', 'gemini'] as const;
-
-/** Read first available vision API key from BYOK localStorage */
-async function getFirstAvailableVisionKey(): Promise<{ provider: string; key: string } | null> {
-  if (typeof window === 'undefined') return null;
-  for (const provider of DEFAULT_VISION_PROVIDERS) {
-    try {
-      const key = await loadStoredProviderKey(provider);
-      if (key) return { provider, key };
-    } catch { /* try the next provider */ }
-  }
-  return null;
-}
+// Vision 키·모델 해석은 공유 모듈(@/lib/vision-byok)로 일원화 — 로컬 사본 제거(§2.4).
 
 interface NameplateResult {
   manufacturer?: string;
@@ -424,7 +412,7 @@ export default function OCRNameplatePage() {
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('provider', visionKey.provider);
-      formData.append('model', '');
+      formData.append('model', visionKey.model);
       formData.append('apiKey', visionKey.key);
 
       const res = await fetch('/api/ocr', { method: 'POST', body: formData });

@@ -124,14 +124,14 @@ const COMPONENT_ICONS: Record<string, string> = {
 };
 
 const COMPONENT_COLORS: Record<string, string> = {
-  transformer: 'bg-amber-100 text-amber-800 border-amber-300',
-  breaker: 'bg-red-100 text-red-800 border-red-300',
-  cable: 'bg-gray-100 text-gray-800 border-gray-300',
-  bus: 'bg-blue-100 text-blue-800 border-blue-300',
-  generator: 'bg-green-100 text-green-800 border-green-300',
-  motor: 'bg-purple-100 text-purple-800 border-purple-300',
-  capacitor: 'bg-cyan-100 text-cyan-800 border-cyan-300',
-  load: 'bg-orange-100 text-orange-800 border-orange-300',
+  transformer: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800',
+  breaker: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800',
+  cable: 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-800/60 dark:text-gray-200 dark:border-gray-700',
+  bus: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-800',
+  generator: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800',
+  motor: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-800',
+  capacitor: 'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-200 dark:border-cyan-800',
+  load: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-800',
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -154,10 +154,10 @@ function ComponentList({ components }: { components: SLDComponent[] }) {
           <div
             key={comp.id}
             className={`flex items-center gap-3 rounded-lg border p-3 ${
-              COMPONENT_COLORS[comp.type] ?? 'bg-gray-50 text-gray-800 border-gray-200'
+              COMPONENT_COLORS[comp.type] ?? 'bg-gray-50 text-gray-800 border-gray-200 dark:bg-gray-800/50 dark:text-gray-200 dark:border-gray-700'
             }`}
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/60 text-xs font-bold">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/60 text-xs font-bold dark:bg-black/30">
               {COMPONENT_ICONS[comp.type] ?? comp.type.slice(0, 3).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
@@ -360,6 +360,7 @@ export default function SLDAnalysisPage() {
           throw new Error('이미지 전문팀 검토에는 OpenAI, Claude 또는 Gemini BYOK 키가 필요합니다.');
         }
         formData.append('provider', visionKey.provider);
+        formData.append('model', visionKey.model);
         formData.append('apiKey', visionKey.key);
       }
       const { getIdToken } = await import('@/lib/firebase');
@@ -457,6 +458,7 @@ export default function SLDAnalysisPage() {
       const visionKey = await getFirstAvailableVisionKey();
       if (visionKey) {
         runForm.append('provider', visionKey.provider);
+        runForm.append('model', visionKey.model);
         runForm.append('apiKey', visionKey.key);
       }
       const runResponse = await fetch(`/api/drawing-jobs/${jobId}/run`, {
@@ -570,6 +572,7 @@ export default function SLDAnalysisPage() {
       const visionKey = await getFirstAvailableVisionKey();
       if (visionKey) {
         formData.append('provider', visionKey.provider);
+        formData.append('model', visionKey.model);
         formData.append('apiKey', visionKey.key);
       }
       const { getIdToken } = await import('@/lib/firebase');
@@ -665,7 +668,7 @@ export default function SLDAnalysisPage() {
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('provider', visionKey.provider);
-      formData.append('model', '');
+      formData.append('model', visionKey.model);
       formData.append('apiKey', visionKey.key);
 
       const res = await fetch('/api/sld', { method: 'POST', body: formData });
