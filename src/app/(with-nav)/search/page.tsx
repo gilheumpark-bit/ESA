@@ -33,15 +33,9 @@ import SearchBar from '@/components/SearchBar';
 import KnowledgePanel from '@/components/KnowledgePanel';
 import InlineCalcResult from '@/components/InlineCalcResult';
 import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
-import { decodeOnPremiseConfig } from '@/lib/onpremise-storage';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
-import { authenticatedFetch } from '@/lib/client-auth';
-import { buildVisionChatRequest, getFirstAvailableVisionKey } from '@/lib/vision-byok';
-import { splitCompleteSseLines } from '@/lib/sse-line-buffer';
-import {
-  ELECTRICAL_CHAT_MAX_TOKENS,
-  buildElectricalAssistantPrompt,
-} from '@/lib/electrical-chat';
+import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
+import { requestElectricalChat } from '@/lib/electrical-chat-client';
 import { scheduleInitialChatSend } from '@/lib/chat-initial-send';
 import { readStoredCountry, readStoredLanguage } from '@/hooks/useSettings';
 import type {
@@ -356,120 +350,35 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
     setStreaming(true);
 
     try {
-      // On-Premise 모드(설정에서 활성 시): 브라우저 결합 암호문을
-      // 요청 직전에만 복호화하고 사설 LLM 경로로 라우팅한다.
-      let providerBody: Record<string, unknown> | null = null;
-      try {
-        const raw = sessionStorage.getItem('esva-onpremise');
-        if (raw) {
-          const onprem = await decodeOnPremiseConfig(raw);
-          if (onprem.enabled && onprem.serverUrl && onprem.modelName) {
-            providerBody = {
-              provider: 'onpremise',
-              model: onprem.modelName,
-              onpremise: { serverUrl: onprem.serverUrl, apiType: onprem.apiType ?? 'ollama', apiKey: onprem.apiKey || undefined },
-            };
-          }
-        }
-      } catch {
-        throw new Error('On-Premise 설정을 안전하게 읽지 못했습니다. 설정 페이지에서 다시 저장하세요.');
-      }
-
-      if (!providerBody) {
-        const browserByok = buildVisionChatRequest(await getFirstAvailableVisionKey());
-        providerBody = browserByok ?? {
-          provider: 'openai',
-          model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-5.6-luna',
-        };
-      }
-
-      const chatFetch = providerBody.provider === 'onpremise' ? authenticatedFetch : fetch;
       const responseLanguage = readStoredLanguage();
-      const res = await chatFetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: allMessages,
-          ...providerBody,
-          systemPrompt: buildElectricalAssistantPrompt(query, responseLanguage),
-          temperature: 0.2,
-          maxTokens: ELECTRICAL_CHAT_MAX_TOKENS,
-        }),
+      const result = await requestElectricalChat(allMessages, responseLanguage, {
         signal: controller.signal,
+        onUpdate: (assistantText) => {
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: assistantText };
+            return updated;
+          });
+        },
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        const errMsg = errData?.error?.message ?? `Error (${res.status})`;
+      if (result.calculation) {
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: `오류: ${errMsg}` };
+          updated[updated.length - 1] = {
+            role: 'assistant',
+            content: `[ESA 계산기 실행 · ${result.calculation?.calculatorName}]\n\n${result.text}`,
+          };
           return updated;
         });
-        return;
       }
-
-      const reader = res.body?.getReader();
-      if (!reader) return;
-
-      const decoder = new TextDecoder();
-      let assistantText = '';
-      let sseRemainder = '';
-
-      const applySseLine = (line: string) => {
-        if (!line.startsWith('data: ')) return false;
-        const payload = line.slice(6).trim();
-        if (payload === '[DONE]') return true;
-        try {
-          const parsed = JSON.parse(payload);
-          if (parsed.text) {
-            assistantText += parsed.text;
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: 'assistant', content: assistantText };
-              return updated;
-            });
-          }
-          // 서버 output-filter: 무근거 수치 차단 시 필터 본문으로 교체
-          if (parsed.filter && parsed.filter.passed === false && parsed.filter.filteredText) {
-            const notice = parsed.filter.notice
-              ? `\n\n[주의] ${parsed.filter.notice}`
-              : '';
-            assistantText = `${parsed.filter.filteredText}${notice}`;
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: 'assistant', content: assistantText };
-              return updated;
-            });
-          }
-        } catch { /* incomplete JSON is retained by splitCompleteSseLines */ }
-        return false;
-      };
-
-      let streamDone = false;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const split = splitCompleteSseLines(sseRemainder, chunk);
-        sseRemainder = split.remainder;
-        for (const line of split.lines) {
-          if (applySseLine(line)) {
-            streamDone = true;
-            break;
-          }
-        }
-        if (streamDone) break;
-      }
-
-      const tail = splitCompleteSseLines(sseRemainder, `${decoder.decode()}\n`);
-      for (const line of tail.lines) applySseLine(line);
-    } catch {
+    } catch (error) {
       if (controller.signal.aborted) return;
       setMessages((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = { role: 'assistant', content: '네트워크 오류가 발생했습니다.' };
+        updated[updated.length - 1] = {
+          role: 'assistant',
+          content: error instanceof Error ? `오류: ${error.message}` : '네트워크 오류가 발생했습니다.',
+        };
         return updated;
       });
     } finally {
@@ -478,7 +387,7 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
         setStreaming(false);
       }
     }
-  }, [messages, streaming, query]);
+  }, [messages, streaming]);
 
   useEffect(() => () => activeRequestRef.current?.abort(), []);
 
@@ -588,13 +497,14 @@ function EmptyState({ query }: { query: string }) {
 function SearchPageInner() {
   const searchParams = useSearchParams();
   const query = searchParams.get('q') ?? '';
+  const answerRequested = searchParams.get('answer') === '1';
 
   const calcIntent = query ? analyzeCalcIntent(query) : null;
 
   const [result, setResult] = useState<SearchResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [showChat, setShowChat] = useState(false);
+  const [showChat, setShowChat] = useState(answerRequested);
 
   useEffect(() => {
     if (!query.trim()) return;

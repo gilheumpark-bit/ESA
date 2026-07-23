@@ -22,6 +22,8 @@ import {
   Microscope,
 } from 'lucide-react';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
+import { requestElectricalChat } from '@/lib/electrical-chat-client';
+import { readStoredLanguage } from '@/hooks/useSettings';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
@@ -280,19 +282,14 @@ function ChatPanel({ file }: ChatPanelProps) {
           answer = `파일 검토는 실행됐지만 다중팀 합의 보고서는 생성되지 않았습니다.${teams ? ` 성공 팀: ${teams}.` : ''} 입력 종류와 팀별 오류를 확인해 주세요.`;
         }
       } else {
-        const res = await fetch('/api/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: text, mode: 'studio' }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data?.success) {
-          throw new Error(data?.error?.message ?? `검색 실패 (${res.status})`);
-        }
-        const docs: Array<{ title: string; excerpt: string }> = data.data?.documents ?? [];
-        answer = data.answer ?? data.data?.answer ?? (docs.length > 0
-          ? docs.slice(0, 3).map(d => `${d.title}\n${d.excerpt}`).join('\n\n')
-          : '검색 결과가 없습니다. 질문의 기준 국가·설비 종류·수치를 더 구체적으로 입력해 주세요.');
+        const conversation = messages.slice(1).map(({ role, content }) => ({ role, content }));
+        const result = await requestElectricalChat(
+          [...conversation, { role: 'user', content: text.trim() }],
+          readStoredLanguage(),
+        );
+        answer = result.calculation
+          ? `[ESA 계산기 실행 · ${result.calculation.calculatorName}]\n\n${result.text}`
+          : result.text;
       }
       setMessages(prev => [
         ...prev,
@@ -311,7 +308,7 @@ function ChatPanel({ file }: ChatPanelProps) {
       setIsLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
-  }, [file, isLoading]);
+  }, [file, isLoading, messages]);
 
   return (
     <div className="flex h-full flex-col bg-[var(--color-surface)]">

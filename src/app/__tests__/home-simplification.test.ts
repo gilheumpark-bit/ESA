@@ -17,4 +17,8 @@ describe('home surface simplification', () => {
     expect(source).not.toContain('text-center');
     expect(source).not.toContain('<div className="flex justify-center">');
   });
+
+  test('routes a general home question to the visible AI answer surface', () => {
+    expect(source).toContain('answer=1');
+  });
 });

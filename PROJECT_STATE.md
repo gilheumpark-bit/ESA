@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: codex/sld-boundary-continuity
-codeBaselineCommit: 9d49f8be0929bafa5302472294f3a20d64b75e07
-updatedAt: 2026-07-23T05:44:17.1673533+09:00
+codeBaselineCommit: 1abcd18698fbc5cbea426184f64c14a40e6c1ddd
+updatedAt: 2026-07-23T10:37:20.7797168+09:00
 trigger: architecture
-changedDomains: [agent, app, build]
+changedDomains: [app, llm, build]
 ---
 
 # ESA 프로젝트 상태
@@ -24,6 +24,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `src/agent/drawing`은 V3 전체 문서 작업, PDF/DXF 전체 좌표 문자, 페이지·구획 ledger, 교차 페이지 관계, 수량·제안·정정·평가기 계약을 소유한다.
 - `DRAWING_JOB_STORE_DIR`은 다중 인스턴스가 공유하는 작업·암호화 원본 임대 볼륨이다. 운영 미설정 시 취소·재개는 503으로 닫힌다.
 - `src/lib/drawing-asset-store.ts`는 원본을 브라우저 IndexedDB에만 보관하고 SHA-256 재검증 뒤 같은 브라우저에서 다시 연다.
+- `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
 - `scripts/enforce.ps1`은 타입, 무경고 린트, 전체 Jest, production build, PDF fixture를 순차 차단한다.
 - 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이며, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에만 남긴다.
 
@@ -56,6 +57,9 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 꼭짓점이 경계에 정확히 놓인 선, 일부 구간만 경계와 나란한 선, 5px 근접 평행선의 C 번호 뒤바뀜을 반증 테스트로 수리했다. 불일치·짝 부재는 오병합하지 않고 U와 HOLD 영수증으로 남긴다.
 - PDF.js worker뿐 아니라 CMap·표준 폰트·JBIG2/OpenJPEG WASM을 브라우저 loader와 standalone 배포물에 연결했다. 벡터 PDF에 Vision 심사가 붙는 경우 공급자·모델도 페이지 재사용 지문에 포함한다.
 - 반복 schedule 표제는 페이지 전체가 아닌 표제 주변 구역만 비계수 처리하고, 표제란은 복수 마커의 실제 경계만 제외한다. A/C/U와 stitch 영수증은 durable JSON 왕복에서 보존된다.
+- 홈의 일반 질문은 검색 결과와 함께 AI 답변 표면을 자동으로 열고, Studio의 무파일 질문은 검색 스니펫 폴백 대신 실제 `/api/chat`을 호출한다.
+- 채팅 시스템 지침은 서버가 생성해 사용자 질의와 분리한다. 완전한 계산 질의는 ESA 계산기 레지스트리를 먼저 실행하고 계산기 ID·입력·결과 영수증을 모델 답변보다 앞선 SSE 이벤트로 반환한다.
+- Groq·Ollama·LM Studio·온프렘 OpenAI 호환 공급자는 Responses API가 아닌 Chat Completions 모델을 사용한다. `gate:chat-live`가 production 서버→정본 계산기 결과→모델 입력 영수증→로컬 호환 모델 답변 순서를 검증한다.
 
 ## 부분 완료
 
@@ -65,6 +69,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 공유 인메모리 레이트 리밋은 단일 프로세스 보호만 제공한다. V3 작업 저장은 내구 볼륨으로 전환했지만 전역 레이트 리밋은 별도다.
 - 비로그인 팀 검토 보고서는 현재 브라우저 `sessionStorage`에서만 다시 열 수 있다. `/api/reports/[id]` reader는 있지만 이 경로의 서버 writer는 없으며 화면도 다른 세션 보관을 약속하지 않는다.
 - 경계 위 3·4방향 junction은 현재 자동 병합 대상이 아니며, 두 조각 계약을 벗어나면 안전하게 HOLD한다. junction 자동 합산은 별도 그래프 계약과 라벨 fixture가 필요하다.
+- 일반 채팅은 계산 영수증을 결박하지만 기준서 검색 결과를 같은 모델 호출의 검색 근거로 자동 합성하는 RAG 도구 호출은 아직 분리돼 있다. 정확한 조항 답변은 원문 조회 필요 상태를 유지한다.
 
 ## 미검증
 
@@ -73,12 +78,13 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 대상 Supabase 마이그레이션 적용 뒤 새 세션에서 원본 메타데이터·보고서·티어를 읽는 왕복.
 - Stripe 테스트 모드 Checkout→서명 웹훅→티어 반영→새 로그인→Portal 전체 흐름.
 - 실제 Weaviate 컬렉션의 insert→검색→재연결과 전용 보안 스캐너 결과.
+- 실제 Gemini·OpenAI·Claude로 초급·중급·고급 일반 전기 질문을 반복 호출한 정답성·근거성·제안 품질 비교.
 
 ## 보류
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
-- 코드 기준선은 `896ae31`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 이번 답변 경로 배치의 Git 기준선은 `1abcd18`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
@@ -96,12 +102,15 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `npm run gate:sld-golden`: exit 1, `verified95=false`; 실패 사유는 키·예측·실도면 데이터 부재와 claim 비활성이다.
 - 2026-07-23 경계 연속성 배치: `test:drawing-v3` 27개 스위트·138개, vision/UI 13개 스위트·130개, 4×4 production integration 1개 모두 통과했다. `npx tsc --noEmit --incremental false`, 수정 파일 ESLint, `npm run build`도 exit 0이며 65개 페이지를 생성했다.
 - standalone과 브라우저 공개 자산에서 `jbig2.wasm` 104,852B, `FoxitFixed.pfb` 17,597B, `78-H.bcmap` 2,379B, worker 1,304,896B를 non-empty로 확인했다.
+- 2026-07-23 답변 경로 배치: 전체 Jest 175개 스위트·1,412개, 전체 ESLint, `npx tsc --noEmit --incremental false`, 65페이지 production build가 모두 exit 0이었다.
+- `npm run gate:chat-live`: HTTP 200, 입력 `3상 380V·100A·50m·35mm² Cu·PF 0.9`가 정본 `voltage-drop` 계산기에서 `4.14V·1.09%·PASS`로 실행됐고, 같은 영수증이 모델 요청에 들어간 뒤 UI용 SSE 영수증→답변 순서로 전송됐다.
 
 ## 다음 첫 행동
 
 1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
 2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
 3. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate, AI 공급자 순으로 write→persist→새 세션 read-back을 검증한다.
+4. 초급·중급·고급 일반 전기 질문 정답 세트를 고정하고 공급자별 답변의 정답성·근거성·누락·제안 품질을 반복 채점한다.
 
 ## 상세 문서
 

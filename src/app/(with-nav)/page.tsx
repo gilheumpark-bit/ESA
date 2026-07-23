@@ -51,7 +51,7 @@ export default function HomePage() {
       return;
     }
     setIsLoading(true);
-    window.location.href = `/search?q=${encodeURIComponent(q)}`;
+    window.location.href = `/search?q=${encodeURIComponent(q)}&answer=1`;
   }, []);
 
   const handleSearch = useCallback(() => runQuery(query), [runQuery, query]);

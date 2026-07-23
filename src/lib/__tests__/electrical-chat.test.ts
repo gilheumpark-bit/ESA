@@ -9,7 +9,7 @@ describe('electrical chat calibration contract', () => {
   });
 
   test('requires evidence labels, missing-input handling, and complete answers', () => {
-    const prompt = buildElectricalAssistantPrompt('VCB 관계를 설명해줘');
+    const prompt = buildElectricalAssistantPrompt('ko');
 
     expect(prompt).toContain('[확인]');
     expect(prompt).toContain('[추정]');
@@ -30,11 +30,11 @@ describe('electrical chat calibration contract', () => {
     expect(prompt).toContain('25.8kV→22.9kV');
     expect(prompt).toContain('판정 보류');
     expect(prompt).toContain('로컬 태그');
-    expect(prompt).toContain('VCB 관계를 설명해줘');
+    expect(prompt).not.toContain('현재 사용자 질문');
   });
 
   test('applies the selected response language to the model contract', () => {
-    expect(buildElectricalAssistantPrompt('Explain VCB relationships', 'en'))
+    expect(buildElectricalAssistantPrompt('en'))
       .toContain('Answer in English');
   });
 });

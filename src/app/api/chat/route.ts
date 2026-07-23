@@ -21,7 +21,11 @@ import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { validateOnpremiseTarget } from '@/lib/onpremise-policy';
 import { filterLLMOutput } from '@/engine/llm/output-filter';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
-import { resolveChatCalculationEvidence } from '@/lib/chat-calculation-evidence';
+import {
+  resolveChatCalculationEvidence,
+  type ChatCalculationEvidence,
+} from '@/lib/chat-calculation-evidence';
+import { buildElectricalAssistantPrompt } from '@/lib/electrical-chat';
 
 // ─── PART 1: Types & Constants ──────────────────────────────────
 
@@ -30,7 +34,7 @@ interface ChatRequestBody {
   provider: string;
   model: string;
   apiKey?: string;
-  systemPrompt?: string;
+  language?: 'ko' | 'en';
   temperature?: number;
   maxTokens?: number;
   /** provider==='onpremise'일 때: settings/onpremise 저장 설정(사설 IP만 허용) */
@@ -104,14 +108,14 @@ async function buildStreamingResponse(
   temperature: number,
   maxTokens: number,
   onpremBaseUrl?: string,
-  trustedCalculationEvidence = '',
+  calculationEvidence: ChatCalculationEvidence | null = null,
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
 
   // Use Vercel AI SDK for streaming
   const { streamText } = await import('ai');
 
-  let sdkProvider;
+  let sdkModel: Parameters<typeof streamText>[0]['model'];
   switch (provider) {
     case 'onpremise': {
       // 사설 LLM 서버(ollama/vllm/localai/openai-compat) — 전부 OpenAI 호환
@@ -119,20 +123,23 @@ async function buildStreamingResponse(
       const { createOpenAI } = await import('@ai-sdk/openai');
       const base = (onpremBaseUrl ?? '').replace(/\/+$/, '');
       const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
-      sdkProvider = createOpenAI({ apiKey, baseURL });
+      const compatibleProvider = createOpenAI({ apiKey, baseURL });
+      sdkModel = compatibleProvider.chat(model);
       break;
     }
     case 'openai': {
       const { createOpenAI } = await import('@ai-sdk/openai');
-      sdkProvider = createOpenAI({ apiKey });
+      const openaiProvider = createOpenAI({ apiKey });
+      sdkModel = openaiProvider(model);
       break;
     }
     case 'groq': {
       const { createOpenAI } = await import('@ai-sdk/openai');
-      sdkProvider = createOpenAI({
+      const groqProvider = createOpenAI({
         apiKey,
         baseURL: 'https://api.groq.com/openai/v1',
       });
+      sdkModel = groqProvider.chat(model);
       break;
     }
     case 'ollama':
@@ -140,27 +147,32 @@ async function buildStreamingResponse(
       const { createOpenAI } = await import('@ai-sdk/openai');
       const base = getLocalProviderUrl(provider).replace(/\/+$/, '');
       const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
-      sdkProvider = createOpenAI({ apiKey: 'local-provider', baseURL });
+      const localProvider = createOpenAI({ apiKey: 'local-provider', baseURL });
+      sdkModel = localProvider.chat(model);
       break;
     }
     case 'claude': {
       const { createAnthropic } = await import('@ai-sdk/anthropic');
-      sdkProvider = createAnthropic({ apiKey });
+      const anthropicProvider = createAnthropic({ apiKey });
+      sdkModel = anthropicProvider(model);
       break;
     }
     case 'gemini': {
       const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-      sdkProvider = createGoogleGenerativeAI({ apiKey });
+      const googleProvider = createGoogleGenerativeAI({ apiKey });
+      sdkModel = googleProvider(model);
       break;
     }
     case 'mistral': {
       const { createMistral } = await import('@ai-sdk/mistral');
-      sdkProvider = createMistral({ apiKey });
+      const mistralProvider = createMistral({ apiKey });
+      sdkModel = mistralProvider(model);
       break;
     }
     case 'deepseek': {
       const { createDeepSeek } = await import('@ai-sdk/deepseek');
-      sdkProvider = createDeepSeek({ apiKey });
+      const deepseekProvider = createDeepSeek({ apiKey });
+      sdkModel = deepseekProvider(model);
       break;
     }
     default: {
@@ -169,7 +181,7 @@ async function buildStreamingResponse(
   }
 
   const result = streamText({
-    model: sdkProvider(model),
+    model: sdkModel,
     instructions: systemPrompt,
     messages: messages.map((m) => ({
       role: m.role,
@@ -183,6 +195,21 @@ async function buildStreamingResponse(
     async start(controller) {
       let fullText = '';
       try {
+        if (calculationEvidence) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                calculation: {
+                  calculatorId: calculationEvidence.calculatorId,
+                  calculatorName: calculationEvidence.calculatorName,
+                  input: calculationEvidence.input,
+                  result: calculationEvidence.result,
+                },
+              })}\n\n`,
+            ),
+          );
+        }
+
         for await (const part of result.textStream) {
           fullText += part;
         }
@@ -194,7 +221,11 @@ async function buildStreamingResponse(
           .filter((message) => message.role === 'user')
           .map((message) => message.content)
           .join('\n');
-        const filtered = filterLLMOutput(fullText, [], `${trustedUserInput}\n${trustedCalculationEvidence}`);
+        const filtered = filterLLMOutput(
+          fullText,
+          [],
+          `${trustedUserInput}\n${calculationEvidence?.trustedText ?? ''}`,
+        );
         const safeText = filtered.filtered;
         const finishReason = await result.finishReason;
         console.info(JSON.stringify({
@@ -205,6 +236,7 @@ async function buildStreamingResponse(
           rawChars: fullText.length,
           safeChars: safeText.length,
           blockedCount: filtered.blocked.length,
+          calculatorId: calculationEvidence?.calculatorId ?? null,
           finishReason,
         }));
         for (let offset = 0; offset < safeText.length; offset += 512) {
@@ -361,12 +393,13 @@ export async function POST(request: NextRequest) {
     const calculationEvidence = lastUser && typeof lastUser.content === 'string'
       ? resolveChatCalculationEvidence(lastUser.content)
       : null;
-    const calibratedSystemPrompt = `${body.systemPrompt ?? ''}${calculationEvidence?.promptContext ?? ''}` || undefined;
+    const responseLanguage = body.language === 'en' ? 'en' : 'ko';
+    const calibratedSystemPrompt = `${buildElectricalAssistantPrompt(responseLanguage)}${calculationEvidence?.promptContext ?? ''}`;
 
     // Token budget check
     cleanupTokenUsage();
     const estimatedTokens = body.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
-      + Math.ceil((calculationEvidence?.promptContext.length ?? 0) / 4);
+      + Math.ceil(calibratedSystemPrompt.length / 4);
     const budget = checkTokenBudget(ip, estimatedTokens);
     if (!budget.allowed) {
       return jsonWithEsa(
@@ -428,7 +461,7 @@ export async function POST(request: NextRequest) {
       temperature,
       maxTokens,
       onpremiseBaseUrl,
-      calculationEvidence?.trustedText,
+      calculationEvidence,
     );
 
     return new Response(stream, {

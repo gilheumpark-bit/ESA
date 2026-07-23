@@ -23,7 +23,7 @@ jest.mock('ai', () => ({
 }));
 
 jest.mock('@ai-sdk/openai', () => ({
-  createOpenAI: () => () => ({}),
+  createOpenAI: () => Object.assign(() => ({}), { chat: () => ({}) }),
 }));
 
 const mockExtractVerifiedUserId = jest.mocked(extractVerifiedUserId);
@@ -96,7 +96,7 @@ describe('POST /api/chat on-premise security boundary', () => {
     expect(streamBody).toContain('[BLOCKED: Tool 호출 필요');
   });
 
-  test('passes the system prompt through SDK instructions, not a system message', async () => {
+  test('uses server-owned instructions and keeps the user content in a user message', async () => {
     mockExtractVerifiedUserId.mockResolvedValue('firebase-user-1');
     process.env.ONPREMISE_ALLOWED_ORIGINS = 'http://127.0.0.1:11434';
 
@@ -105,7 +105,8 @@ describe('POST /api/chat on-premise security boundary', () => {
 
     expect(streamTextMock).toHaveBeenCalledTimes(1);
     const options = streamTextMock.mock.calls[0][0];
-    expect(options.instructions).toBe('system rules');
+    expect(options.instructions).toContain('ESVA 전기 직무 보조 AI');
+    expect(options.instructions).not.toContain('system rules');
     expect(options.messages).toEqual([{ role: 'user', content: 'hello' }]);
   });
 
