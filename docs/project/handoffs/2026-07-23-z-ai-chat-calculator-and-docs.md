@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: codex/sld-boundary-continuity
-codeBaselineCommit: ad7b91c83dc2beb4d1311ac6d766bf2ad5fb540e
-updatedAt: 2026-07-23T10:51:32.8678727+09:00
+codeBaselineCommit: f966c6e3fb72bb327978f13c9bec601cd064d799
+updatedAt: 2026-07-23T11:02:59.2916851+09:00
 trigger: architecture
 changedDomains: [app, lib, docs, scripts, ci]
 ---
