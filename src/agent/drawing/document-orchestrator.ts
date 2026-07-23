@@ -6,9 +6,11 @@
  * deterministic reconciliation and the V3 report contract.
  */
 
+import type { LogicConflict } from '@/agent/electrical/logic-conflicts';
 import { executeSLDTeam, type SLDTeamDeps } from '@/agent/teams/sld-team';
 import type { TeamInput, TeamResult } from '@/agent/teams/types';
 import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
+import type { RescanTargetEvidence, RoleReviewEnvelope } from '@/agent/vision/review-types';
 import { resolveVlmModel } from '@/agent/vision/vlm-client';
 
 import {
@@ -21,6 +23,7 @@ import { adaptDrawingCalculations } from './calculation-adapter';
 import { assignPhysicalEquipmentIds, buildEquipmentCounts } from './count-register';
 import { extractPageRefHits, reconcileCrossPage } from './cross-page-graph';
 import { buildDrawingDocumentV3 } from './drawing-document-report';
+import { stitchBoundaryLines } from './boundary-line-stitcher';
 import { applyConfiguredEvaluationSuiteBadge } from './drawing-evaluation-gate';
 import { prepareDrawingSource, type PreparedDrawingPage, type PreparedDrawingSource } from './drawing-source';
 import {
@@ -37,7 +40,7 @@ import { surveyPageKind } from './page-classifier';
 import { adjudicateOcr } from './ocr-adjudicator';
 import { buildRecommendations } from './recommendation-engine';
 import { extractRatedValues } from './rated-value-extractor';
-import { adaptTeamResult, type RawTextSeed } from './team-result-adapter';
+import { adaptTeamResult, deduplicateTextSeeds, type AdaptedTeamResult, type RawTextSeed } from './team-result-adapter';
 import type {
   CoverageRegionRecord,
   DocumentBudget,
@@ -59,6 +62,8 @@ export interface OrchestrateInput {
   mimeType: string;
   fileName?: string;
   requestedPages?: 'all' | number[];
+  /** 전체 결과 정책은 유지하면서 이번 호출에서 렌더할 페이지. */
+  preparationPages?: number[];
   budget?: Partial<DocumentBudget>;
   vision?: {
     provider: 'gemini' | 'openai' | 'claude';
@@ -73,6 +78,8 @@ export interface OrchestrateInput {
   };
   jobId?: string;
   ownerId?: string;
+  /** HTTP 실행 한 번에 새로 처리할 페이지 수. 전체 작업 예산과 별개다. */
+  maxPagesPerRun?: number;
 }
 
 export interface DocumentAnalysisDependencies {
@@ -109,7 +116,8 @@ function normalizeBudget(input: Partial<DocumentBudget> | undefined): DocumentBu
 }
 
 function requestedPageIndexes(source: PreparedDrawingSource, requested: OrchestrateInput['requestedPages']): number[] {
-  const available = new Set(source.pages.map((page) => page.pageIndex));
+  const pageCount = source.totalPageCount ?? (source.pages.length === 0 ? 0 : Math.max(...source.pages.map((page) => page.pageIndex)) + 1);
+  const available = new Set(Array.from({ length: pageCount }, (_, index) => index));
   if (requested === undefined || requested === 'all') return [...available].sort((a, b) => a - b);
   const unique = [...new Set(requested)];
   if (unique.some((page) => !available.has(page))) throw new Error('DRAWING_REQUESTED_PAGE_OUT_OF_RANGE');
@@ -129,7 +137,10 @@ function pageDigestFingerprint(
 ) {
   const usesVision = Boolean(input.vision && page.imageBuffer
     && source.formatClass !== 'dxf'
-    && (page.renderMode === 'raster' || page.renderMode === 'hybrid' || source.formatClass === 'raster-image'));
+    && (page.renderMode === 'raster'
+      || page.renderMode === 'hybrid'
+      || page.renderMode === 'vector'
+      || source.formatClass === 'raster-image'));
   return {
     documentHash: source.documentHash,
     pageRenderHash: page.renderHash,
@@ -208,7 +219,7 @@ function markVectorCoverage(
   return { regions: next, roles: completedRoles };
 }
 
-function councilEnvelope(result: TeamResult, role: Exclude<RoleId, 'coverage-auditor'>) {
+function councilEnvelope(result: TeamResult, role: RoleId) {
   return result.drawingReview?.envelopes.find((envelope) => envelope.role === role);
 }
 
@@ -217,11 +228,17 @@ function hasSourceFailure(result: TeamResult, role: RoleId, sourceId: string): b
     failure.role === role && failure.sourceId === sourceId);
 }
 
+function hasReviewedSource(result: TeamResult, role: RoleId, sourceId: string): boolean {
+  const envelope = councilEnvelope(result, role);
+  if (!envelope) return false;
+  return envelope.reviewedSourceIds === undefined || envelope.reviewedSourceIds.includes(sourceId);
+}
+
 function markCouncilCoverage(
   regions: CoverageRegionRecord[],
   page: PreparedDrawingPage,
   result: TeamResult,
-): { regions: CoverageRegionRecord[]; roles: RoleId[]; unresolvedRescans: number } {
+): { regions: CoverageRegionRecord[]; roles: RoleId[]; unresolvedRescans: number; rescanTargets: RescanTargetEvidence[] } {
   let next = regions;
   const completedRoles: RoleId[] = [];
   const review = result.drawingReview;
@@ -229,7 +246,7 @@ function markCouncilCoverage(
   for (const role of ['symbols', 'connections', 'text', 'logic'] as const) {
     const envelope = councilEnvelope(result, role);
     const sourceId = review?.coverage.roles[role]?.variantId ?? 'missing-source';
-    const success = Boolean(envelope) && !hasSourceFailure(result, role, sourceId);
+    const success = hasReviewedSource(result, role, sourceId) && !hasSourceFailure(result, role, sourceId);
     next = recordRoleCall(
       next,
       fullId,
@@ -248,8 +265,12 @@ function markCouncilCoverage(
       const envelope = councilEnvelope(result, role);
       const variantId = review?.coverage.roles[role]?.variantId ?? 'missing-source';
       const sourceId = `${variantId}:region:${index}`;
-      const planned = (review?.coverage.roles[role]?.actualRegionCount ?? 0) > index;
-      const success = Boolean(envelope) && planned && !hasSourceFailure(result, role, sourceId);
+      const selectedRegionIds = review?.coverage.roles[role]?.regionIds;
+      const planned = selectedRegionIds
+        ? selectedRegionIds.includes(sourceId)
+        : (review?.coverage.roles[role]?.actualRegionCount ?? 0) > index;
+      if (!planned) continue;
+      const success = planned && hasReviewedSource(result, role, sourceId) && !hasSourceFailure(result, role, sourceId);
       next = recordRoleCall(
         next,
         regionId,
@@ -262,20 +283,44 @@ function markCouncilCoverage(
   }
 
   const graphConflicts = review?.graph?.conflicts ?? [];
+  const coverageEnvelope = councilEnvelope(result, 'coverage-auditor');
+  const rescanTargets = coverageEnvelope?.data.rescanTargets ?? [];
   const coverageSuccess = Boolean(review?.coverage.complete)
+    && Boolean(coverageEnvelope)
+    && rescanTargets.length === 0
     && review?.failures.length === 0
     && graphConflicts.every((conflict) => !/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/.test(conflict));
   next = recordRoleCall(
     next,
     fullId,
     'coverage-auditor',
-    `coverage:${review?.snapshot.drawingHash ?? page.renderHash}`,
+    coverageEnvelope?.outputHash ?? `coverage:${review?.snapshot.drawingHash ?? page.renderHash}:missing`,
     coverageSuccess,
     coverageSuccess ? undefined : 'coverage audit found unresolved regions or graph conflicts',
   );
   if (coverageSuccess) completedRoles.push('coverage-auditor');
   const unresolvedRescans = coverageSuccess ? 0 : 1;
-  return { regions: next, roles: completedRoles, unresolvedRescans };
+  return { regions: next, roles: completedRoles, unresolvedRescans, rescanTargets };
+}
+
+function boundsIntersect(
+  left: { x: number; y: number; w: number; h: number },
+  right: { x: number; y: number; w: number; h: number },
+): boolean {
+  return left.x < right.x + right.w
+    && left.x + left.w > right.x
+    && left.y < right.y + right.h
+    && left.y + left.h > right.y;
+}
+
+function plannedTargetedRetryCalls(page: PreparedDrawingPage, targets: RescanTargetEvidence[]): number {
+  if (targets.length === 0) return 7 + gridSizeFor(page) * 3;
+  const regions = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
+  const roles = ['symbols', 'connections', 'text'] as const;
+  const precisionCalls = roles.reduce((total, role) => total + regions.filter((region) =>
+    targets.some((target) => target.suggestedRoles.includes(role) && boundsIntersect(region, target.bounds))).length, 0);
+  // four primary full-page readers + two extra text variants + coverage auditor
+  return 7 + precisionCalls;
 }
 
 function addUnresolved(
@@ -284,13 +329,14 @@ function addUnresolved(
   code: UnresolvedItem['code'],
   note: string,
   regionId?: string,
+  bounds?: UnresolvedItem['bounds'],
 ): void {
   target.push({
     id: `${code}-${page.pageIndex}-${target.length + 1}`,
     code,
     pageIndex: page.pageIndex,
     regionId,
-    bounds: { x: 0, y: 0, w: page.width, h: page.height },
+    bounds: bounds ?? { x: 0, y: 0, w: page.width, h: page.height },
     note,
   });
 }
@@ -316,6 +362,8 @@ function teamInputForRaster(
   input: OrchestrateInput,
   source: PreparedDrawingSource,
   page: PreparedDrawingPage,
+  rescanTargets: RescanTargetEvidence[] = [],
+  priorDrawingReviewEnvelopes: RoleReviewEnvelope[] = [],
 ): TeamInput {
   return {
     sessionId: `drawing-raster-${source.documentHash.slice(0, 12)}-${page.pageIndex}`,
@@ -323,6 +371,8 @@ function teamInputForRaster(
     fileBuffer: page.imageBuffer,
     fileName: `${input.fileName ?? 'drawing'}#page-${page.pageIndex + 1}.png`,
     mimeType: 'image/png',
+    ...(rescanTargets.length === 0 ? {} : { params: { rescanTargets } }),
+    ...(priorDrawingReviewEnvelopes.length === 0 ? {} : { priorDrawingReviewEnvelopes }),
     signal: input.signal,
     vision: input.vision,
   };
@@ -335,6 +385,7 @@ function mergeAdapted(
   symbolHits: RawSymbolHit[],
   lineHits: RawLineHit[],
   textSeeds: RawTextSeed[],
+  continuityByPage: Map<number, NonNullable<AdaptedTeamResult['continuity']>>,
 ): void {
   const adapted = adaptTeamResult(result, {
     pageIndex: page.pageIndex,
@@ -345,6 +396,7 @@ function mergeAdapted(
   symbolHits.push(...adapted.symbols);
   lineHits.push(...adapted.lines);
   textSeeds.push(...adapted.texts);
+  if (adapted.continuity) continuityByPage.set(page.pageIndex, adapted.continuity);
 }
 
 function existingEvidenceSeeds(
@@ -392,6 +444,10 @@ export async function runDocumentAnalysis(
   deps: DocumentAnalysisDependencies = {},
 ): Promise<{ job: DrawingJobRecord; document: DrawingDocumentV3 }> {
   const budget = normalizeBudget(input.budget);
+  const maxPagesPerRun = input.maxPagesPerRun ?? budget.maxPages;
+  if (!Number.isSafeInteger(maxPagesPerRun) || maxPagesPerRun < 1 || maxPagesPerRun > budget.maxPages) {
+    throw new Error('DRAWING_RUN_PAGE_LIMIT_INVALID');
+  }
   const ownerId = input.ownerId ?? 'internal';
   const jobBeforePreparation = input.jobId ? getOwnedJob(input.jobId, ownerId) : undefined;
   if (input.jobId && !jobBeforePreparation) throw new Error('DRAWING_JOB_NOT_FOUND');
@@ -400,7 +456,7 @@ export async function runDocumentAnalysis(
     bytes: input.bytes,
     mimeType: input.mimeType,
     fileName: input.fileName,
-    requestedPages: requestedSpec,
+    requestedPages: input.preparationPages ?? requestedSpec,
     budget,
     signal: input.signal,
     shouldCancel: () => Boolean(input.jobId && getOwnedJob(input.jobId, ownerId)?.cancelRequested),
@@ -436,33 +492,42 @@ export async function runDocumentAnalysis(
   const pageStates: PageAnalysisState[] = requested.map((pageIndex) => {
     const previous = previousPages.get(pageIndex);
     const sourcePage = source.pages.find((page) => page.pageIndex === pageIndex);
-    const reusable = Boolean(previousJob && sourcePage && canReusePage(
-      previousJob,
-      pageIndex,
-      pageDigestFingerprint(source, sourcePage, input),
-    ));
+    const previousDigest = previousJob?.pageDigests[pageIndex];
+    const reusable = Boolean(previousJob && (sourcePage
+      ? canReusePage(previousJob, pageIndex, pageDigestFingerprint(source, sourcePage, input))
+      : previousDigest?.complete
+        && previousDigest.promptVersion === PROMPT_VERSION
+        && previousDigest.preprocessVersion === PREPROCESS_VERSION
+        && previousDigest.graphVersion === GRAPH_ASSEMBLY_VERSION
+        && previousDigest.provider === input.vision?.provider
+        && previousDigest.model === (input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined)));
     return (previous?.status === 'complete' || previous?.status === 'skipped-empty') && reusable
       ? { ...previous }
-      : { pageIndex, status: 'pending', drawingKind: 'unknown', vlmCalls: 0 };
+      : !sourcePage && previous
+        ? { ...previous }
+        : { pageIndex, status: 'pending', drawingKind: 'unknown', vlmCalls: 0 };
   });
   const preservedPages = new Set(pageStates
     .filter((page) => page.status === 'complete' || page.status === 'skipped-empty')
     .map((page) => page.pageIndex));
   const retryPages = new Set(requested.filter((pageIndex) => !preservedPages.has(pageIndex)));
+  const activeRetryPages = new Set(source.pages.map((page) => page.pageIndex).filter((pageIndex) => retryPages.has(pageIndex)));
   const previousSeeds = existingEvidenceSeeds(previousJob?.document, preservedPages);
   const symbolHits: RawSymbolHit[] = [...previousSeeds.symbols, ...(input.seedDetections?.symbols ?? [])];
   const lineHits: RawLineHit[] = [...previousSeeds.lines, ...(input.seedDetections?.lines ?? [])];
   const textSeeds: RawTextSeed[] = [...(input.seedDetections?.texts ?? [])];
+  const continuityByPage = new Map<number, NonNullable<AdaptedTeamResult['continuity']>>();
   const calculationHits: DrawingDocumentV3['calculations'] = (previousJob?.document?.calculations ?? [])
     .filter((calculation) => {
       const pageMatch = calculation.id.match(/^P(\d+)-/);
-      return pageMatch ? preservedPages.has(Number(pageMatch[1]) - 1) : retryPages.size === 0;
+      return pageMatch ? !activeRetryPages.has(Number(pageMatch[1]) - 1) : activeRetryPages.size === 0;
     });
+  const finalLogicConflictsByPage = new Map<number, LogicConflict[]>();
   const unresolved: UnresolvedItem[] = (previousJob?.document?.unresolvedItems ?? [])
-    .filter((item) => !retryPages.has(item.pageIndex));
+    .filter((item) => !activeRetryPages.has(item.pageIndex));
   const rolesPresent = new Set<RoleId>(previousJob?.document?.coverageLedger.rolesPresent ?? []);
   let regionRecords: CoverageRegionRecord[] = (previousJob?.document?.coverageLedger.regions ?? [])
-    .filter((region) => !retryPages.has(region.pageIndex));
+    .filter((region) => !activeRetryPages.has(region.pageIndex));
   let unresolvedRescans = 0;
   let vlmCalls = 0;
   let pixelsUsed = 0;
@@ -475,11 +540,7 @@ export async function runDocumentAnalysis(
   for (const state of pageStates) {
     if (state.status === 'complete' || state.status === 'skipped-empty') continue;
     const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
-    if (!page) {
-      state.status = 'failed';
-      state.error = 'PAGE_NOT_FOUND';
-      continue;
-    }
+    if (!page) continue;
     state.status = 'surveying';
     state.quality = page.quality;
     if (page.preparationError) {
@@ -501,7 +562,8 @@ export async function runDocumentAnalysis(
   let attemptedPages = 0;
   for (const state of pageStates) {
     if (state.status === 'complete' || state.status === 'skipped-empty') continue;
-    const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex)!;
+    const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
+    if (!page) continue;
     const rasterPlans = rasterCoveragePlans(page);
     const vectorPlans = vectorCoveragePlans(page);
 
@@ -522,7 +584,7 @@ export async function runDocumentAnalysis(
     }
 
     if (
-      attemptedPages >= budget.maxPages
+      attemptedPages >= maxPagesPerRun
       || Date.now() >= deadline
       || pixelsUsed + page.width * page.height > budget.maxPixels
       || input.signal?.aborted
@@ -554,7 +616,7 @@ export async function runDocumentAnalysis(
         modelsUsed.add(envelope.model);
       }
       if (vectorResult.success && (vectorResult.components?.length ?? 0) > 0) {
-        mergeAdapted(vectorResult, page, source, symbolHits, lineHits, textSeeds);
+        mergeAdapted(vectorResult, page, source, symbolHits, lineHits, textSeeds, continuityByPage);
         pageHasUsableResult = true;
         if (!input.vision || source.formatClass === 'dxf') {
           const vectorCoverage = markVectorCoverage(
@@ -581,16 +643,21 @@ export async function runDocumentAnalysis(
         || (page.renderMode === 'vector' && Boolean(input.vision)));
     if (shouldRunRaster && input.vision) {
       // symbols + connections + logic + three independent full-page text
-      // reads, plus the three spatial-role precision grids.
-      const plannedCalls = 6 + gridSizeFor(page) * 3;
+      // reads + one post-review coverage audit, plus three precision grids.
+      const plannedCalls = 7 + gridSizeFor(page) * 3;
       if (previousVlmCalls + vlmCalls + plannedCalls > budget.maxVlmCalls) {
         pageRegions = markAllFailed(createCoverageRegions(rasterPlans), 'PARTIAL_BUDGET_EXCEEDED');
         addUnresolved(unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지 독립 심사 예상 호출 수가 문서 호출 예산을 초과합니다.');
       } else {
         pageRegions = createCoverageRegions(rasterPlans);
         let rescanAttempt = 0;
+        let latestRescanTargets: RescanTargetEvidence[] = [];
+        let priorDrawingReviewEnvelopes: RoleReviewEnvelope[] = [];
         while (rescanAttempt <= 2) {
-          const rasterResult = await executeTeam(teamInputForRaster(input, source, page), deps.teamDeps);
+          const rasterResult = await executeTeam(
+            teamInputForRaster(input, source, page, latestRescanTargets, priorDrawingReviewEnvelopes),
+            deps.teamDeps,
+          );
           for (const envelope of rasterResult.drawingReview?.envelopes ?? []) {
             providersUsed.add(envelope.provider);
             modelsUsed.add(envelope.model);
@@ -599,15 +666,21 @@ export async function runDocumentAnalysis(
           vlmCalls += actualCalls;
           state.vlmCalls += actualCalls;
           if (rasterResult.success && rasterResult.drawingReview) {
-            mergeAdapted(rasterResult, page, source, symbolHits, lineHits, textSeeds);
+            mergeAdapted(rasterResult, page, source, symbolHits, lineHits, textSeeds, continuityByPage);
             calculationHits.push(...adaptDrawingCalculations(rasterResult.drawingSynthesis).map((calculation) => ({
               ...calculation,
               id: `P${String(page.pageIndex + 1).padStart(2, '0')}-${calculation.id}`,
             })));
+            finalLogicConflictsByPage.set(page.pageIndex, [...(rasterResult.drawingSynthesis?.conflicts ?? [])]);
             pageHasUsableResult = true;
             const coverage = markCouncilCoverage(pageRegions, page, rasterResult);
             pageRegions = coverage.regions;
+            latestRescanTargets = coverage.rescanTargets;
             coverage.roles.forEach((role) => rolesPresent.add(role));
+            priorDrawingReviewEnvelopes = [
+              ...priorDrawingReviewEnvelopes,
+              ...rasterResult.drawingReview.envelopes.filter((envelope) => envelope.role !== 'coverage-auditor'),
+            ];
           } else {
             pageRegions = markAllFailed(pageRegions, rasterResult.error ?? 'ROLE_CALL_FAILED');
           }
@@ -615,8 +688,9 @@ export async function runDocumentAnalysis(
           const gapsRemain = pageRegions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
           if (!gapsRemain) break;
           rescanAttempt += 1;
+          const nextPlannedCalls = plannedTargetedRetryCalls(page, latestRescanTargets);
           const canRetry = rescanAttempt <= 2
-            && previousVlmCalls + vlmCalls + plannedCalls <= budget.maxVlmCalls
+            && previousVlmCalls + vlmCalls + nextPlannedCalls <= budget.maxVlmCalls
             && Date.now() < deadline
             && !input.signal?.aborted
             && !getJob(job.jobId)?.cancelRequested;
@@ -625,7 +699,25 @@ export async function runDocumentAnalysis(
         const gapsRemain = pageRegions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
         if (gapsRemain) {
           unresolvedRescans += 1;
-          addUnresolved(unresolved, page, 'HOLD_RESCAN_UNRESOLVED', '최대 2회 정밀 재스캔 후에도 공간 그래프 충돌 또는 구획 호출 실패가 남았습니다.');
+          if (latestRescanTargets.length > 0) {
+            for (const target of latestRescanTargets) {
+              const code: UnresolvedItem['code'] = target.reason === 'boundary-clip'
+                ? 'BOUNDARY_CLIP'
+                : target.reason === 'empty-result'
+                  ? 'EMPTY_REGION_RESULT'
+                  : 'HOLD_RESCAN_UNRESOLVED';
+              addUnresolved(
+                unresolved,
+                page,
+                code,
+                `coverage-auditor가 ${target.reason} 누락 가능성을 지적했습니다. 재검사 역할: ${target.suggestedRoles.join(', ')}.`,
+                target.sourceId,
+                { x: target.bounds.x, y: target.bounds.y, w: target.bounds.w, h: target.bounds.h },
+              );
+            }
+          } else {
+            addUnresolved(unresolved, page, 'HOLD_RESCAN_UNRESOLVED', '최대 2회 정밀 재스캔 후에도 공간 그래프 충돌 또는 구획 호출 실패가 남았습니다.');
+          }
         }
       }
     } else if (shouldRunRaster && !input.vision && !pageHasUsableResult) {
@@ -644,7 +736,7 @@ export async function runDocumentAnalysis(
   }
 
   updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: previousVlmCalls + vlmCalls });
-  const texts = [...previousSeeds.texts, ...adjudicateTextSeeds(textSeeds, unresolved)]
+  const texts = [...previousSeeds.texts, ...adjudicateTextSeeds(deduplicateTextSeeds(textSeeds), unresolved)]
     .sort((left, right) => (left.evidence[0]?.pageIndex ?? 0) - (right.evidence[0]?.pageIndex ?? 0)
       || left.displayId.localeCompare(right.displayId));
   for (const page of source.pages) {
@@ -667,12 +759,77 @@ export async function runDocumentAnalysis(
   }
 
   updateJob(job.jobId, { status: 'RECONCILING_PAGES' });
+  const continuity: NonNullable<DrawingDocumentV3['continuity']> = {
+    regions: (previousJob?.document?.continuity?.regions ?? []).filter((item) => preservedPages.has(item.pageIndex)),
+    continuations: (previousJob?.document?.continuity?.continuations ?? []).filter((item) => preservedPages.has(item.pageIndex)),
+    unresolvedEndpoints: (previousJob?.document?.continuity?.unresolvedEndpoints ?? []).filter((item) => preservedPages.has(item.pageIndex)),
+    stitchReceipts: (previousJob?.document?.continuity?.stitchReceipts ?? []).filter((item) => {
+      const page = item.continuationIds[0]?.match(/^P(\d+)-C/);
+      return page ? preservedPages.has(Number(page[1]) - 1) : false;
+    }),
+  };
+  for (const [pageIndex, pageContinuity] of [...continuityByPage.entries()].sort(([left], [right]) => left - right)) {
+    const stitched = stitchBoundaryLines({
+      continuations: pageContinuity.plan.continuations,
+      localLines: pageContinuity.localLines,
+      globalLines: pageContinuity.globalLines,
+    });
+    lineHits.push(...pageContinuity.globalLines, ...stitched.lines);
+    continuity.regions.push(...pageContinuity.plan.regions);
+    continuity.continuations.push(...stitched.continuations);
+    continuity.unresolvedEndpoints.push(...stitched.unresolvedEndpoints);
+    continuity.stitchReceipts.push(...stitched.receipts);
+    for (const endpoint of stitched.unresolvedEndpoints) {
+      unresolved.push({
+        id: endpoint.id,
+        code: 'LINE_CONTINUITY_UNCERTAIN',
+        displayId: endpoint.displayId,
+        pageIndex,
+        regionId: endpoint.regionId,
+        bounds: { x: endpoint.point.x - 6, y: endpoint.point.y - 6, w: 12, h: 12 },
+        candidates: endpoint.continuationId ? [endpoint.continuationId] : undefined,
+        userConfirmItems: [{
+          question: `${endpoint.displayId} 경계 선로의 반대편 연결과 선종을 확인하십시오.`,
+          options: endpoint.continuationId ? [endpoint.continuationId] : undefined,
+        }],
+        note: `${endpoint.continuationId ?? '경계점'}을 전체 도면과 구획 결과로 합치지 못했습니다: ${endpoint.reason}`,
+      });
+    }
+  }
   const symbols = deduplicateSymbols(symbolHits);
   const lines = deduplicateLines(lineHits);
   const relations = requested.flatMap((pageIndex) => buildPageRelations(symbols, lines, pageIndex));
   const pageRefs = extractPageRefHits(texts);
   const crossPageRelations = reconcileCrossPage(symbols, texts, pageRefs);
   unresolved.push(...findUnboundLineItems(lines, relations));
+  const uniqueLogicConflicts = [...new Map([...finalLogicConflictsByPage.entries()].flatMap(([pageIndex, conflicts]) =>
+    conflicts.map((conflict) => [`${pageIndex}:${conflict.id}`, { pageIndex, conflict }] as const))).values()];
+  for (const { pageIndex, conflict } of uniqueLogicConflicts) {
+    const conflictBounds = conflict.logicEvidenceBounds[0]
+      ?? conflict.graphEvidenceBounds[0]
+      ?? {
+        x: 0,
+        y: 0,
+        w: source.pages[pageIndex]?.width ?? 1,
+        h: source.pages[pageIndex]?.height ?? 1,
+        page: pageIndex + 1,
+      };
+    const bounds = { x: conflictBounds.x, y: conflictBounds.y, w: conflictBounds.w, h: conflictBounds.h };
+    const candidates = [...new Set([...conflict.graphEvidenceIds, ...conflict.logicEvidenceIds])];
+    unresolved.push({
+      id: `logic-conflict-${pageIndex}-${conflict.id}`,
+      code: 'ELECTRICAL_LOGIC_CONFLICT',
+      displayId: `P${String(pageIndex + 1).padStart(2, '0')}-LC${String(unresolved.length + 1).padStart(3, '0')}`,
+      pageIndex,
+      bounds,
+      candidates,
+      userConfirmItems: [{
+        question: `${conflict.topic} 관계에서 독립 논리 판독과 공간 그래프 중 어느 근거가 맞는지 확인하십시오.`,
+        options: candidates,
+      }],
+      note: `${conflict.message} (${conflict.reasonCode})`,
+    });
+  }
   for (const relation of crossPageRelations.filter((item) => item.status !== 'confirmed')) {
     const evidence = relation.evidence[0];
     unresolved.push({
@@ -729,6 +886,7 @@ export async function runDocumentAnalysis(
     pages: pageStates,
     coverageLedger,
     evidenceGraph: { symbols, lines, texts, relations },
+    continuity,
     crossPageRelations,
     equipmentCounts,
     ratedValues,

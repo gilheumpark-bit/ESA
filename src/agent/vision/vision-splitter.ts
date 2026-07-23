@@ -7,7 +7,11 @@
  */
 
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
-import { cropPrecisionRegions, planAdaptiveBounds } from './adaptive-regions';
+import {
+  cropAnalysisRegions,
+  planAdaptiveBounds,
+  planAnalysisRegions,
+} from './adaptive-regions';
 import { profileImage } from './image-quality';
 import { createImageVariants } from './image-variants';
 
@@ -76,8 +80,8 @@ export async function preparePrecisionRegions(
   const regions = [];
 
   for (const variant of selected) {
-    const bounds = planAdaptiveBounds(variant.width, variant.height, gridSize, 0.18);
-    regions.push(...await cropPrecisionRegions(variant, bounds));
+    const plans = planAnalysisRegions(variant.width, variant.height, gridSize, 0.18);
+    regions.push(...await cropAnalysisRegions(variant, plans));
   }
 
   return { profile, variants, regions };

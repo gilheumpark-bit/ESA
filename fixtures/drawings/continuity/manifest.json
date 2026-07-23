@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "grid": { "columns": 4, "rows": 4, "width": 1600, "height": 1200 },
+  "cases": [
+    {
+      "id": "horizontal-four-regions",
+      "sourceLineId": "global-main",
+      "regions": ["P01-A05", "P01-A06", "P01-A07", "P01-A08"],
+      "continuations": ["P01-C001", "P01-C002", "P01-C003"],
+      "expectedMergedLines": 1,
+      "expectedUnresolved": 0
+    }
+  ]
+}

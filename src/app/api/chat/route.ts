@@ -21,6 +21,7 @@ import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { validateOnpremiseTarget } from '@/lib/onpremise-policy';
 import { filterLLMOutput } from '@/engine/llm/output-filter';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { resolveChatCalculationEvidence } from '@/lib/chat-calculation-evidence';
 
 // ─── PART 1: Types & Constants ──────────────────────────────────
 
@@ -103,15 +104,9 @@ async function buildStreamingResponse(
   temperature: number,
   maxTokens: number,
   onpremBaseUrl?: string,
+  trustedCalculationEvidence = '',
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
-
-  // Build the full message array with system prompt
-  const fullMessages: ChatMessage[] = [];
-  if (systemPrompt) {
-    fullMessages.push({ role: 'system', content: systemPrompt });
-  }
-  fullMessages.push(...messages);
 
   // Use Vercel AI SDK for streaming
   const { streamText } = await import('ai');
@@ -130,6 +125,22 @@ async function buildStreamingResponse(
     case 'openai': {
       const { createOpenAI } = await import('@ai-sdk/openai');
       sdkProvider = createOpenAI({ apiKey });
+      break;
+    }
+    case 'groq': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      sdkProvider = createOpenAI({
+        apiKey,
+        baseURL: 'https://api.groq.com/openai/v1',
+      });
+      break;
+    }
+    case 'ollama':
+    case 'lmstudio': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const base = getLocalProviderUrl(provider).replace(/\/+$/, '');
+      const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
+      sdkProvider = createOpenAI({ apiKey: 'local-provider', baseURL });
       break;
     }
     case 'claude': {
@@ -159,7 +170,8 @@ async function buildStreamingResponse(
 
   const result = streamText({
     model: sdkProvider(model),
-    messages: fullMessages.map((m) => ({
+    instructions: systemPrompt,
+    messages: messages.map((m) => ({
       role: m.role,
       content: m.content,
     })),
@@ -178,8 +190,23 @@ async function buildStreamingResponse(
         // No model token crosses the API boundary before the complete answer is
         // filtered. This trades token-by-token display for a fail-closed output
         // contract: clients can never briefly render a blocked value.
-        const filtered = filterLLMOutput(fullText, []);
+        const trustedUserInput = messages
+          .filter((message) => message.role === 'user')
+          .map((message) => message.content)
+          .join('\n');
+        const filtered = filterLLMOutput(fullText, [], `${trustedUserInput}\n${trustedCalculationEvidence}`);
         const safeText = filtered.filtered;
+        const finishReason = await result.finishReason;
+        console.info(JSON.stringify({
+          level: 'info',
+          event: 'chat_generation_complete',
+          provider,
+          model,
+          rawChars: fullText.length,
+          safeChars: safeText.length,
+          blockedCount: filtered.blocked.length,
+          finishReason,
+        }));
         for (let offset = 0; offset < safeText.length; offset += 512) {
           controller.enqueue(
             encoder.encode(
@@ -331,9 +358,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const calculationEvidence = lastUser && typeof lastUser.content === 'string'
+      ? resolveChatCalculationEvidence(lastUser.content)
+      : null;
+    const calibratedSystemPrompt = `${body.systemPrompt ?? ''}${calculationEvidence?.promptContext ?? ''}` || undefined;
+
     // Token budget check
     cleanupTokenUsage();
-    const estimatedTokens = body.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+    const estimatedTokens = body.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
+      + Math.ceil((calculationEvidence?.promptContext.length ?? 0) / 4);
     const budget = checkTokenBudget(ip, estimatedTokens);
     if (!budget.allowed) {
       return jsonWithEsa(
@@ -390,11 +423,12 @@ export async function POST(request: NextRequest) {
       body.provider,
       body.model,
       body.messages,
-      body.systemPrompt,
+      calibratedSystemPrompt,
       resolvedKey,
       temperature,
       maxTokens,
       onpremiseBaseUrl,
+      calculationEvidence?.trustedText,
     );
 
     return new Response(stream, {

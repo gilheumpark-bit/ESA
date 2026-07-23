@@ -4,6 +4,12 @@
  */
 
 import type { EvidenceBounds, ImageQualityProfile } from '../vision/evidence-types';
+import type {
+  BoundaryContinuation,
+  StitchReceipt,
+  UnresolvedEndpoint,
+} from '../vision/continuity-types';
+import type { AnalysisRegionPlan } from '../vision/evidence-types';
 
 export const DRAWING_DOCUMENT_SCHEMA_VERSION = 3 as const;
 
@@ -34,6 +40,7 @@ export type ReadFailureCode =
   | 'UNREADABLE_SYMBOL'
   | 'UNREADABLE_LINE'
   | 'LINE_CONTINUITY_UNCERTAIN'
+  | 'ELECTRICAL_LOGIC_CONFLICT'
   | 'AMBIGUOUS_OCR'
   | 'LOW_RESOLUTION_HOLD'
   | 'HOLD_RESCAN_UNRESOLVED'
@@ -305,6 +312,12 @@ export interface DrawingDocumentV3 {
     texts: TextNode[];
     relations: RelationEdge[];
   };
+  continuity?: {
+    regions: AnalysisRegionPlan[];
+    continuations: BoundaryContinuation[];
+    unresolvedEndpoints: UnresolvedEndpoint[];
+    stitchReceipts: StitchReceipt[];
+  };
   crossPageRelations: CrossPageRelation[];
   equipmentCounts: EquipmentCountRow[];
   ratedValues: RatedValue[];
@@ -356,7 +369,7 @@ export interface OcrCandidateSet {
 }
 
 export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
-export const PROMPT_VERSION = 'role-prompts-v1';
-export const PREPROCESS_VERSION = 'lanczos-variants-v1';
+export const PROMPT_VERSION = 'sld-role-v5';
+export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-v1';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v2';

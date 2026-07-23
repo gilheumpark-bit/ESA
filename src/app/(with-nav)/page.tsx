@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  Search, Calculator, FileText, Camera, BarChart3, Globe, FolderOpen,
+  Search, FileText, Camera, BarChart3, Globe, FolderOpen,
   Users, BookOpen, Shield, HardHat, Columns2, ClipboardCheck,
   ArrowUpDown, ArrowUp, ShieldCheck,
   type LucideIcon,
@@ -12,11 +12,7 @@ import { analyzeCalcIntent, type CalcIntentResult } from '@/lib/calc-intent-brid
 import InlineCalcResult from '@/components/InlineCalcResult';
 import { CALCULATOR_COUNT } from '@/engine/calculators/count';
 
-// ── AX 최종안 홈 — 검색 우선 콘솔 ──
-// 디자인 정본: 핸드오프 ESVA AX 최종안.dc.html. 좌측 레일 대신 공용 상단
-// 헤더(with-nav)에 편입 — 홈만 다른 네비 패러다임이던 어색함을 없애고,
-// 전 라우트 도달성(BYOK 포함·비로그인 접근)을 도구 행으로 복원한다.
-// 색은 전부 토큰(globals.css AX 팔레트)만 → 다크모드 자동.
+// 검색을 첫 진입점으로 두고 나머지 기능은 동일한 좌측 축에 정렬한다.
 
 /** 히어로 예시 질의 — 클릭 시 실제 라우팅(계산 의도 자동 감지). */
 const EXAMPLES: Array<{ icon: LucideIcon; text: string; tail?: string }> = [
@@ -24,13 +20,6 @@ const EXAMPLES: Array<{ icon: LucideIcon; text: string; tail?: string }> = [
   { icon: FileText, text: 'KEC 232.3.9 전압강하 조항 원문과 예외' },
   { icon: Camera, text: '변압기 명판 촬영 → 스펙 추출 → 용량 검증' },
 ];
-
-/** 3기둥 — 제품 사상(무발명·조항판정·영수증). */
-const PILLARS = [
-  { numeral: 'Ⅰ', title: '결정론적 계산', desc: `${CALCULATOR_COUNT}개 순수함수 엔진 · ±0.01% · LLM은 변수 추출만` },
-  { numeral: 'Ⅱ', title: '조항 기반 판정', desc: '기준서 조항 · 출처 없는 답변은 가드레일이 차단' },
-  { numeral: 'Ⅲ', title: '검증 영수증', desc: 'SHA-256 봉인 · 모든 결과 재현·감사 가능' },
-] as const;
 
 /** 도구 행 — 헤더 밖 라우트 전부 홈에서 도달 가능하게. BYOK는 비로그인도 사용. */
 const TOOLS: Array<{ icon: LucideIcon; label: string; href: string }> = [
@@ -72,32 +61,16 @@ export default function HomePage() {
   );
 
   return (
-    <div className="bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      {/* ═══ 히어로 — 검색 우선 ═══ */}
-      <section className="mx-auto w-full max-w-[760px] px-4 pb-4 pt-14 sm:px-6 sm:pt-20">
-        <div className="flex justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--border-hover)] bg-[var(--bg-secondary)] px-3.5 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-secondary)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-            KEC 2021 · NEC 2023 · IEC 60364 · JIS C 0364
-          </span>
-        </div>
-
-        <h1 className="mt-6 text-center font-[family-name:var(--font-serif)] text-[32px] font-bold leading-[1.35] tracking-[-0.015em] sm:text-[40px]">
-          AI는 추정하지 않습니다.
-        </h1>
-        <p className="mt-3.5 text-center text-[15px] leading-[1.75] text-[var(--text-secondary)] sm:text-base">
-          모든 수치는 결정론적 엔진이 계산하고,<br />
-          모든 판정은 기준서 조항이 결정합니다.
-        </p>
-
-        {/* 검색 카드 */}
-        <div className="mt-9 rounded-2xl border border-[var(--border-hover)] bg-[var(--bg-primary)] p-5 shadow-[0_4px_24px_rgba(28,27,23,0.06)]">
+    <div className="flex flex-1 flex-col bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <section className="mx-auto w-full max-w-[808px] px-4 pb-4 pt-10 sm:px-6 sm:pt-14">
+        <h1 className="sr-only">전기 엔지니어 검색</h1>
+        <div className="rounded-xl border border-[var(--border-hover)] bg-[var(--bg-primary)] p-4 shadow-[0_4px_24px_rgba(28,27,23,0.06)] sm:p-5">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder='질문, 계산 조건, 조항 번호 — 무엇이든. 예: "3상 380V 50kW 부하, 케이블 100m 전압강하 검토"'
+            placeholder="질문, 계산 조건 또는 도면 검토 내용을 입력하세요"
             aria-label="질의 입력"
             enterKeyHint="search"
             maxLength={500}
@@ -105,14 +78,10 @@ export default function HomePage() {
             className="min-h-[36px] w-full bg-transparent text-[15px] leading-relaxed text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] sm:text-[15.5px]"
           />
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-[var(--border-hover)] bg-[var(--bg-secondary)] px-3.5 py-1.5 text-[12.5px] text-[var(--text-secondary)]">
-              ⚡ 자동 감지
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-hover)] bg-[var(--bg-secondary)] px-3.5 py-1.5 text-[12.5px] text-[var(--text-secondary)]">
+              <Search size={13} aria-hidden="true" />
+              자동 분류
             </span>
-            {['검색', '계산', '검증'].map((m) => (
-              <span key={m} className="hidden rounded-full border border-[var(--border-hover)] px-3.5 py-1.5 text-[12.5px] text-[var(--text-tertiary)] sm:inline">
-                {m}
-              </span>
-            ))}
             {/* BYOK 상태 겸 입구 — 키 등록 페이지로 (비로그인도 사용 가능) */}
             <Link
               href="/settings/byok"
@@ -149,7 +118,6 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {/* 예시 질의 */}
             <div className="mt-6 flex flex-col">
               {EXAMPLES.map(({ icon: Icon, text, tail }, i) => (
                 <button
@@ -165,39 +133,21 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-
-            {/* 3기둥 */}
-            <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-3 sm:gap-0">
-              {PILLARS.map(({ numeral, title, desc }, i) => (
-                <div
-                  key={numeral}
-                  className={
-                    i < 2
-                      ? 'sm:border-r sm:border-[var(--border-default)] sm:px-6 sm:first:pl-1'
-                      : 'sm:px-6 sm:pr-1'
-                  }
-                >
-                  <div className="font-[family-name:var(--font-serif)] text-base font-bold text-[var(--color-accent)]">{numeral}</div>
-                  <div className="mt-1.5 text-[13.5px] font-bold">{title}</div>
-                  <p className="mt-1 text-xs leading-[1.65] text-[var(--text-tertiary)]">{desc}</p>
-                </div>
-              ))}
-            </div>
           </>
         )}
       </section>
 
-      {/* ═══ 최근 스레드 ═══ */}
+      {/* ═══ 예시 작업 ═══ */}
       <section className="mx-auto w-full max-w-[808px] px-4 pb-2 pt-8 sm:px-6">
-        <div className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-[var(--text-tertiary)]">최근 스레드</div>
+        <div className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-[var(--text-tertiary)]">예시 작업</div>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <Link href="/history" className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 transition-colors hover:border-[var(--border-hover)]">
             <div className="text-[13.5px] font-medium">변압기 500kVA 병렬 운전 조건</div>
-            <div className="mt-0.5 text-[11.5px] text-[var(--text-tertiary)]">어제 · 적합 · 영수증 발행됨</div>
+            <div className="mt-0.5 text-[11.5px] text-[var(--text-tertiary)]">계산 이력에서 결과와 영수증 확인</div>
           </Link>
           <Link href="/history" className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 py-3 transition-colors hover:border-[var(--border-hover)]">
             <div className="text-[13.5px] font-medium">접지저항 10Ω 설계 — Dwight 식</div>
-            <div className="mt-0.5 text-[11.5px] text-[var(--text-tertiary)]">7월 16일 · 조건 2건 보류</div>
+            <div className="mt-0.5 text-[11.5px] text-[var(--text-tertiary)]">계산 조건과 판정 근거 확인</div>
           </Link>
         </div>
       </section>
@@ -220,10 +170,10 @@ export default function HomePage() {
       </section>
 
       {/* ═══ 상태 바 ═══ */}
-      <div className="flex h-8 items-center gap-4 overflow-x-auto border-t border-[var(--border-default)] bg-[var(--bg-secondary)] px-4 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)] sm:px-5">
+      <div className="mt-auto flex h-8 items-center gap-4 overflow-x-auto border-t border-[var(--border-default)] bg-[var(--bg-secondary)] px-4 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)] sm:px-5">
         <span className="inline-flex shrink-0 items-center gap-1.5 text-[var(--color-success)]">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
-          운영 정상
+          내장 계산 엔진 준비
         </span>
         <span className="shrink-0">내장 판본 KEC 2021 · NEC 2023 · IEC 60364</span>
         <span className="hidden shrink-0 sm:inline">BYOK · AES-GCM 세션 암호화</span>

@@ -17,6 +17,17 @@ const nextConfig: NextConfig = {
   // (실도면 라이브 실측으로 발각). node_modules에서 직접 로드해야 워커가 산다.
   serverExternalPackages: ['pdfjs-dist', '@napi-rs/canvas'],
 
+  // pdf.js loads these files by name at render time, so static import tracing
+  // cannot discover them. Keep the decoder/font/CMap payload in standalone
+  // deployments instead of shipping only legacy/build/pdf.mjs.
+  outputFileTracingIncludes: {
+    '/*': [
+      './node_modules/pdfjs-dist/wasm/**/*',
+      './node_modules/pdfjs-dist/standard_fonts/**/*',
+      './node_modules/pdfjs-dist/cmaps/**/*',
+    ],
+  },
+
   experimental: {
     // proxy.ts 사용 시 요청 본문이 기본 10MB에서 절단된다(공식 문서 확인).
     // 실측: 24.8MB 실도면 업로드가 절단돼 formData 파싱이 깨지고 "multipart가
@@ -61,6 +72,9 @@ const nextConfig: NextConfig = {
               // browser-local IndexedDB through an object URL.
               "img-src 'self' data: blob: https:",
               "font-src 'self' https://cdn.jsdelivr.net",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
               "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://*.firebaseio.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.stripe.com",
               "frame-src 'self' https://js.stripe.com",
             ].join('; '),

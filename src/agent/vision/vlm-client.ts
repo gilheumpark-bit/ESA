@@ -45,7 +45,7 @@ export interface VLMAnalysisResult {
   retryCount?: number;
 }
 
-const ROLE_PROMPT_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
+const ROLE_PROMPT_ROLES = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as const;
 export type VLMReviewRole = (typeof ROLE_PROMPT_ROLES)[number];
 
 export interface VLMRoleAnalysisResult {
@@ -697,10 +697,13 @@ export async function analyzeDrawingRole(
   mimeType: string,
   role: VLMReviewRole,
   options: VLMOptions,
+  context?: string,
 ): Promise<VLMRoleAnalysisResult> {
   assertRolePromptRole(role);
   const started = Date.now();
-  const response = await callProviderForJson(imageBuffer, mimeType, ROLE_PROMPTS[role], options);
+  const contextLabel = role === 'coverage-auditor' ? 'COVERAGE_CONTEXT' : 'REGION_CONTEXT';
+  const prompt = context ? `${ROLE_PROMPTS[role]}\n\n${contextLabel}:\n${context}` : ROLE_PROMPTS[role];
+  const response = await callProviderForJson(imageBuffer, mimeType, prompt, options);
   const parsed = JSON.parse(extractJson(response.rawText));
   return {
     role,

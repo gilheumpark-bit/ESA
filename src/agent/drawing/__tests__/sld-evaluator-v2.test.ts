@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 
 import type { DrawingDocumentV3 } from '../types-v3';
 import { ENGINE_VERSION, PREPROCESS_VERSION, PROMPT_VERSION } from '../types-v3';
+import { ROLE_PROMPT_VERSION } from '../../vision/role-prompts';
 import { applyEvaluationSuiteBadge } from '../drawing-evaluation-gate';
 import {
   buildEvaluationSuiteResult,
@@ -36,6 +37,10 @@ function fixture(): DrawingDocumentV3 {
 }
 
 describe('SLD evaluator V2 spatial and signed gate', () => {
+  it('binds evaluation and resume fingerprints to the production role prompt version', () => {
+    expect(PROMPT_VERSION).toBe(ROLE_PROMPT_VERSION);
+  });
+
   const label = {
     labelId: 'gold-1',
     stratum: 'real-adjudicated-low-resolution',

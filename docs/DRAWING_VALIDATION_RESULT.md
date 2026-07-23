@@ -1,5 +1,8 @@
 # 도면 파서 검증 결과 — 1차 (합성 15장)
 
+> 2026-07-23 공개 단선도·복합 시트·전기 평면도·저해상도 스캔 추가 벤치마크:
+> [project/handoffs/2026-07-23-public-drawing-benchmark.md](./project/handoffs/2026-07-23-public-drawing-benchmark.md)
+
 측정 2026-07-20 · 계획 = [DRAWING_VALIDATION_PLAN.md](./DRAWING_VALIDATION_PLAN.md)
 대상 `src/engine/topology/{dxf-parser,pdf-vector-parser,endpoint-snap}.ts`
 

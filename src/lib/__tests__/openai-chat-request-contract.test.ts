@@ -53,5 +53,6 @@ describe('OpenAI current Chat Completions request contract', () => {
       expect(body).not.toHaveProperty('max_tokens');
       expect(body).not.toHaveProperty('temperature');
     }
+    expect(requestBody(fetchMock, 1).max_completion_tokens).toBe(8192);
   });
 });

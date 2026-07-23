@@ -91,7 +91,7 @@ export class UnsupportedSynthesisClaimError extends Error {
   }
 }
 
-const REQUIRED_ROLES: readonly ReviewRole[] = ['symbols', 'connections', 'text', 'logic'];
+const REQUIRED_ROLES: readonly ReviewRole[] = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'];
 const HOLD_CLAIM_QUESTION = '종합 판단에 필요한 현재 도면 근거를 확인해야 합니다.';
 const HOLD_RECOMMENDATION_TITLE = '도면 근거 확인 필요';
 const HOLD_RECOMMENDATION_DESCRIPTION = '제안 판단에 필요한 현재 도면 근거를 확인해야 합니다.';

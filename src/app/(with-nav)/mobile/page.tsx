@@ -90,8 +90,8 @@ const QUICK_CALCS: QuickCalc[] = [
     name: '전압강하',
     nameEn: 'Voltage Drop',
     icon: Zap,
-    color: 'text-yellow-600',
-    bgColor: 'bg-yellow-50 border-yellow-200',
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bgColor: 'bg-yellow-50 border-yellow-200 dark:bg-yellow-950/30 dark:border-yellow-800',
     href: '/calc/voltage-drop/voltage-drop',
     domain: 'electrical',
   },
@@ -100,8 +100,8 @@ const QUICK_CALCS: QuickCalc[] = [
     name: '케이블 선정',
     nameEn: 'Cable Sizing',
     icon: Zap,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50 border-blue-200',
+    color: 'text-blue-600 dark:text-blue-400',
+    bgColor: 'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800',
     href: '/calc/cable/cable-sizing',
     domain: 'electrical',
   },
@@ -110,8 +110,8 @@ const QUICK_CALCS: QuickCalc[] = [
     name: '단락전류',
     nameEn: 'Short-Circuit',
     icon: Shield,
-    color: 'text-red-600',
-    bgColor: 'bg-red-50 border-red-200',
+    color: 'text-red-600 dark:text-red-400',
+    bgColor: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800',
     href: '/calc/protection/short-circuit',
     domain: 'electrical',
   },
@@ -120,8 +120,8 @@ const QUICK_CALCS: QuickCalc[] = [
     name: '접지 저항',
     nameEn: 'Grounding',
     icon: Zap,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50 border-green-200',
+    color: 'text-green-600 dark:text-green-400',
+    bgColor: 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800',
     href: '/calc/grounding/ground-resistance',
     domain: 'electrical',
   },
@@ -130,8 +130,8 @@ const QUICK_CALCS: QuickCalc[] = [
     name: '단상 전력',
     nameEn: 'Single Phase',
     icon: Calculator,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50 border-purple-200',
+    color: 'text-purple-600 dark:text-purple-400',
+    bgColor: 'bg-purple-50 border-purple-200 dark:bg-purple-950/30 dark:border-purple-800',
     href: '/calc/power/single-phase-power',
     domain: 'electrical',
   },
@@ -146,8 +146,8 @@ function OfflineIndicator({ isOnline }: { isOnline: boolean }) {
     <div
       className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
         isOnline
-          ? 'bg-green-50 text-green-700'
-          : 'bg-red-50 text-red-700 animate-pulse'
+          ? 'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300'
+          : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 animate-pulse'
       }`}
     >
       {isOnline ? (
@@ -181,7 +181,7 @@ function QuickCalcGrid({ calcs }: { calcs: QuickCalc[] }) {
             className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 p-5 transition-transform active:scale-95 ${calc.bgColor}`}
           >
             <Icon className={`h-8 w-8 ${calc.color}`} />
-            <span className="text-sm font-semibold text-gray-900 text-center leading-tight">
+            <span className="text-center text-sm font-semibold leading-tight text-[var(--text-primary)]">
               {calc.name}
             </span>
             <span className="text-[10px] text-gray-500">{calc.nameEn}</span>
@@ -192,7 +192,7 @@ function QuickCalcGrid({ calcs }: { calcs: QuickCalc[] }) {
       {/* All calculators button */}
       <Link
         href="/calc"
-        className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 p-5 transition-transform active:scale-95"
+        className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-[var(--border-default)] p-5 transition-transform active:scale-95"
       >
         <Calculator className="h-8 w-8 text-gray-400" />
         <span className="text-sm font-medium text-gray-500 text-center">
@@ -210,7 +210,7 @@ function QuickCalcGrid({ calcs }: { calcs: QuickCalc[] }) {
 function RecentCalculations({ results }: { results: CachedResult[] }) {
   if (results.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-200 p-6 text-center">
+      <div className="rounded-xl border border-dashed border-[var(--border-default)] p-6 text-center">
         <History className="mx-auto h-8 w-8 text-gray-300" />
         <p className="mt-2 text-sm text-gray-500">
           최근 계산 내역이 없습니다
@@ -226,14 +226,14 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
         // 중첩돼 유효하지 않은 HTML 이었다 (bug L9).
         <li
           key={result.id}
-          className="flex items-center gap-2 rounded-xl bg-white border border-gray-200 p-4 active:bg-gray-50"
+          className="flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4 active:bg-[var(--bg-secondary)]"
         >
           <Link
             href={`/receipt/${result.id}`}
             className="flex min-w-0 flex-1 items-center justify-between gap-2"
           >
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
+              <p className="truncate text-sm font-medium text-[var(--text-primary)]">
                 {result.calcName}
               </p>
               <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -260,7 +260,7 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
                     navigator.clipboard.writeText(text).then(() => alert('복사됨'));
                   }
                 }}
-                className="p-1.5 rounded-lg hover:bg-gray-100 active:bg-gray-200"
+                className="rounded-lg p-1.5 hover:bg-[var(--bg-secondary)] active:bg-[var(--bg-tertiary)]"
                 aria-label="결과 공유"
               >
                 <Share2 className="h-4 w-4 text-gray-400" />
@@ -395,7 +395,7 @@ function CameraButton() {
     return (
       <div className="col-span-2 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-gray-900">네임플레이트 인식 결과</h3>
+              <h3 className="text-sm font-bold text-[var(--text-primary)]">네임플레이트 인식 결과</h3>
           <button onClick={handleReset} className="text-xs text-blue-600 hover:underline">다시 촬영</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-xs">
@@ -416,7 +416,7 @@ function CameraButton() {
                 <Link
                   key={calcId}
                   href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}`}
-                  className="flex items-center gap-1 rounded-lg bg-white border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-700 active:scale-95"
+                  className="flex items-center gap-1 rounded-lg border border-blue-200 bg-[var(--bg-primary)] px-3 py-1.5 text-xs font-medium text-blue-700 active:scale-95 dark:border-blue-800 dark:text-blue-300"
                 >
                   <Calculator className="h-3.5 w-3.5" />
                   {CALC_LABELS[calcId] ?? calcId}
@@ -434,7 +434,7 @@ function CameraButton() {
       <button
         onClick={handleCapture}
         disabled={status === 'capturing' || status === 'processing'}
-        className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-gray-200 bg-white p-5 w-full transition-transform active:scale-95 disabled:opacity-50"
+        className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[var(--border-default)] bg-[var(--bg-primary)] p-5 transition-transform active:scale-95 disabled:opacity-50"
       >
         <Camera className={`h-8 w-8 ${status === 'processing' ? 'animate-pulse text-blue-500' : 'text-gray-600'}`} />
         <span className="text-sm font-medium text-gray-700">
@@ -516,7 +516,7 @@ function VoiceButton() {
       <button
         onClick={handleVoice}
         disabled={listening}
-        className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-gray-200 bg-white p-5 w-full transition-transform active:scale-95 disabled:opacity-50"
+        className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-[var(--border-default)] bg-[var(--bg-primary)] p-5 transition-transform active:scale-95 disabled:opacity-50"
       >
         <Mic className={`h-8 w-8 ${listening ? 'animate-pulse text-red-500' : 'text-gray-600'}`} />
         <span className="text-sm font-medium text-gray-700">
@@ -570,17 +570,17 @@ export default function MobileFieldPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[var(--bg-secondary)] text-[var(--text-primary)]">
       {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <Link href="/" className="rounded-lg p-1.5 hover:bg-gray-100">
+            <Link href="/" className="rounded-lg p-1.5 hover:bg-[var(--bg-secondary)]">
               <ArrowLeft className="h-5 w-5 text-gray-600" />
             </Link>
             <div className="flex items-center gap-2">
               <Smartphone className="h-5 w-5 text-blue-600" />
-              <h1 className="text-lg font-bold text-gray-900">현장 모드</h1>
+              <h1 className="text-lg font-bold text-[var(--text-primary)]">현장 모드</h1>
             </div>
           </div>
           <OfflineIndicator isOnline={isOnline} />

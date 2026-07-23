@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import {
   toOriginalPoint,
+  type AnalysisRegionPlan,
   type EvidenceBounds,
   type ImageVariant,
   type PrecisionRegion,
@@ -51,15 +52,27 @@ export function planAdaptiveBounds(
   gridSize: 4 | 9 | 16,
   overlap: number,
 ): EvidenceBounds[] {
+  return planAnalysisRegions(width, height, gridSize, overlap).map((region) => region.cropBounds);
+}
+
+export function planAnalysisRegions(
+  width: number,
+  height: number,
+  gridSize: 4 | 9 | 16,
+  overlap: number,
+  pageIndex = 0,
+): AnalysisRegionPlan[] {
   assertDimensions(width, height);
   assertGridSize(gridSize);
   assertOverlap(overlap);
+  if (!Number.isSafeInteger(pageIndex) || pageIndex < 0) {
+    throw new Error('정밀 영역 pageIndex는 0 이상의 정수여야 합니다.');
+  }
 
   const side = Math.sqrt(gridSize);
-  const bounds: EvidenceBounds[] = [];
+  const regions: AnalysisRegionPlan[] = [];
   const horizontalBoundaries = partitionBoundaries(width, side);
   const verticalBoundaries = partitionBoundaries(height, side);
-  const uniqueBounds = new Set<string>();
   for (let row = 0; row < verticalBoundaries.length - 1; row += 1) {
     const baseTop = verticalBoundaries[row];
     const baseBottom = verticalBoundaries[row + 1];
@@ -72,17 +85,30 @@ export function planAdaptiveBounds(
       const y = Math.max(0, baseTop - padY);
       const right = Math.min(width, baseRight + padX);
       const bottom = Math.min(height, baseBottom + padY);
-      const item = { x, y, w: right - x, h: bottom - y };
-      assertBounds(item, width, height);
-      const key = `${item.x}:${item.y}:${item.w}:${item.h}`;
-      if (!uniqueBounds.has(key)) {
-        uniqueBounds.add(key);
-        bounds.push(item);
-      }
+      const logicalBounds = {
+        x: baseLeft,
+        y: baseTop,
+        w: baseRight - baseLeft,
+        h: baseBottom - baseTop,
+      };
+      const cropBounds = { x, y, w: right - x, h: bottom - y };
+      assertBounds(logicalBounds, width, height);
+      assertBounds(cropBounds, width, height);
+      const sequence = regions.length + 1;
+      const page = String(pageIndex + 1).padStart(2, '0');
+      regions.push({
+        id: `p${pageIndex}-a${sequence}`,
+        displayId: `P${page}-A${String(sequence).padStart(2, '0')}`,
+        pageIndex,
+        row,
+        column,
+        logicalBounds,
+        cropBounds,
+      });
     }
   }
 
-  return bounds;
+  return regions;
 }
 
 export async function cropPrecisionRegions(
@@ -137,4 +163,48 @@ export async function cropPrecisionRegions(
   }
 
   return regions;
+}
+
+export async function cropAnalysisRegions(
+  variant: ImageVariant,
+  plans: readonly AnalysisRegionPlan[],
+): Promise<PrecisionRegion[]> {
+  for (const plan of plans) {
+    assertBounds(plan.logicalBounds, variant.width, variant.height);
+    assertBounds(plan.cropBounds, variant.width, variant.height);
+    if (
+      plan.logicalBounds.x < plan.cropBounds.x
+      || plan.logicalBounds.y < plan.cropBounds.y
+      || plan.logicalBounds.x + plan.logicalBounds.w > plan.cropBounds.x + plan.cropBounds.w
+      || plan.logicalBounds.y + plan.logicalBounds.h > plan.cropBounds.y + plan.cropBounds.h
+    ) {
+      throw new Error('논리 구획은 실제 crop 경계 안에 있어야 합니다.');
+    }
+  }
+  const cropped = await cropPrecisionRegions(variant, plans.map((plan) => plan.cropBounds));
+  return cropped.map((region, index) => {
+    const plan = plans[index];
+    const logicalOrigin = toOriginalPoint(
+      { x: plan.logicalBounds.x, y: plan.logicalBounds.y },
+      variant.transform,
+    );
+    const logicalEnd = toOriginalPoint(
+      {
+        x: plan.logicalBounds.x + plan.logicalBounds.w,
+        y: plan.logicalBounds.y + plan.logicalBounds.h,
+      },
+      variant.transform,
+    );
+    return {
+      ...region,
+      displayId: plan.displayId,
+      logicalVariantBounds: { ...plan.logicalBounds },
+      logicalOriginalBounds: {
+        x: logicalOrigin.x,
+        y: logicalOrigin.y,
+        w: logicalEnd.x - logicalOrigin.x,
+        h: logicalEnd.y - logicalOrigin.y,
+      },
+    };
+  });
 }

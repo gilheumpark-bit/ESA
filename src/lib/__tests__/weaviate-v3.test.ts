@@ -92,7 +92,8 @@ describe('Weaviate v3 adapter', () => {
       where: { path: ['country'], operator: 'Equal', valueText: 'kr' },
       alpha: 2,
       limit: 1000,
-    });
+      vector: [0.1, 0.2],
+    } as never);
 
     expect(byProperty).toHaveBeenCalledWith('country');
     expect(equal).toHaveBeenCalledWith('kr');
@@ -100,6 +101,7 @@ describe('Weaviate v3 adapter', () => {
       alpha: 1,
       limit: 100,
       filters: equalFilter,
+      vector: [0.1, 0.2],
       returnMetadata: ['score', 'distance', 'certainty'],
     }));
     expect(hits).toEqual([{

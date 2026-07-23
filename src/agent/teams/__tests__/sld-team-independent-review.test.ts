@@ -12,6 +12,7 @@ import { normalizeElectricalGraph } from '../../electrical/domain-normalizer';
 import { synthesizeDrawingReview } from '../../electrical/synthesis';
 import type { ElectricalIssue } from '../../electrical/electrical-invariants';
 import type { SpatialEvidenceGraph, SpatialSymbol, SpatialText } from '../../vision/spatial-graph';
+import type { DrawingCouncilInput } from '../../vision/drawing-council';
 
 jest.mock('@/engine/topology/pdf-vector-parser', () => ({ parsePdfToSLD: jest.fn() }));
 
@@ -49,6 +50,7 @@ function envelopes(): RoleReviewEnvelope[] {
     sealed('connections', { lines: [{ id: 'l-a', sourceId: 'variant:line-enhanced', lineKind: 'power', path: [{ x: 20, y: 50 }, { x: 80, y: 50 }], start: { x: 20, y: 50 }, end: { x: 80, y: 50 }, junctions: [], crossovers: [], confidence: 0.97 }] }),
     sealed('text', { texts: [{ id: 't-a', sourceId: 'variant:text-high-contrast', raw: 'PT', candidates: ['PT', 'PPT'], bounds: { x: 72, y: 60, w: 12, h: 8, page: 1 }, confidence: 0.9 }] }),
     sealed('logic', { logic: [] }),
+    sealed('coverage-auditor', { rescanTargets: [] }),
   ];
 }
 
@@ -156,15 +158,67 @@ describe('SLD raster independent council integration', () => {
     const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), { prepareRaster, resolveVisionKey, runCouncil });
 
     expect(runCouncil).toHaveBeenCalledTimes(1);
-    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, signal: controller.signal, timeoutMs: 15_000, maxRetries: 0 }) }));
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, signal: controller.signal, timeoutMs: 30_000, maxRetries: 1 }) }));
     expect(prepareRaster).toHaveBeenCalledTimes(1);
     expect(resolveVisionKey).toHaveBeenCalledWith('openai', ` ${KEY} `);
     expect(result.success).toBe(true);
     expect(result.components).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'VCB-01', type: 'breaker_vcb' }), expect.objectContaining({ id: 'TR-01', type: 'transformer' })]));
     expect(result.connections).toEqual([expect.objectContaining({ from: 'VCB-01', to: 'TR-01' })]);
-    expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 18, complete: true, maxRegionCallsPerRole: 16 } });
+    expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 19, complete: true, maxRegionCallsPerRole: 16 } });
     expect(result.drawingSynthesis).toMatchObject({ drawingHash: DRAWING_HASH, verdict: 'CONDITIONAL', requiresHumanReview: true });
     expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('keeps the review on HOLD when the independent coverage auditor requests a rescan', async () => {
+    const auditTarget = sealed('coverage-auditor', {
+      rescanTargets: [{
+        id: 'audit:boundary:1',
+        sourceId: 'variant:original',
+        reason: 'boundary-clip',
+        bounds: { x: 40, y: 0, w: 20, h: 80, page: 1 },
+        suggestedRoles: ['symbols', 'connections'],
+        confidence: 0.92,
+      }],
+    });
+    const reviewed = [...envelopes().filter((item) => item.role !== 'coverage-auditor'), auditTarget];
+
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({ envelopes: reviewed, failures: [] }),
+    });
+
+    expect(result.drawingReview?.coverage.complete).toBe(false);
+    expect(result.standards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ judgment: 'HOLD', note: expect.stringContaining('boundary-clip') }),
+    ]));
+    expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
+  it('limits a follow-up council pass to auditor-requested roles and intersecting regions', async () => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const result = await executeSLDTeam(rasterInput({
+      params: {
+        rescanTargets: [{
+          id: 'target-1', sourceId: 'variant:original', reason: 'boundary-clip',
+          bounds: { x: 0, y: 0, w: 25, h: 80, page: 1 },
+          suggestedRoles: ['connections'], confidence: 0.9,
+        }],
+      },
+    }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({
+      regions: expect.arrayContaining([expect.objectContaining({ variantId: 'variant:line-enhanced' })]),
+    }));
+    const councilInput = (runCouncil.mock.calls as unknown as Array<[DrawingCouncilInput]>)[0]?.[0];
+    const councilRegions = councilInput?.regions ?? [];
+    expect(councilRegions).toHaveLength(4);
+    expect(councilRegions.every((region) => region.variantId === 'variant:line-enhanced')).toBe(true);
+    expect(result.drawingReview?.coverage.complete).toBe(true);
   });
 
   it('runs the image analysis stages once in evidence order with the same normalized graph', async () => {
@@ -284,9 +338,9 @@ describe('SLD raster independent council integration', () => {
   });
 
   it.each([
-    [1, 'variant:original', 4, 18],
-    [2, 'variant:upscale-2x', 9, 33],
-    [4, 'variant:upscale-4x', 16, 54],
+    [1, 'variant:original', 4, 19],
+    [2, 'variant:upscale-2x', 9, 34],
+    [4, 'variant:upscale-4x', 16, 55],
   ] as const)('plans scale %i with %s symbols and exact adaptive calls', async (scale, symbolVariant, regionCount, plannedCalls) => {
     const prepareRaster = jest.fn(async () => prepared(scale));
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
@@ -332,13 +386,13 @@ describe('SLD raster independent council integration', () => {
     expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 
-  it.each(['symbols', 'connections', 'text', 'logic'] as const)('fails closed and exposes HOLD when required %s review is absent', async (missing) => {
+  it.each(['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as const)('fails closed and exposes HOLD when required %s review is absent', async (missing) => {
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes().filter((item) => item.role !== missing), failures: [] }));
     const result = await executeSLDTeam(rasterInput(), { prepareRaster: async () => prepared(), resolveVisionKey: () => ({ key: KEY, source: 'user' }), runCouncil });
 
     expect(result.success).toBe(true);
     expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD', note: expect.stringContaining(missing) })]));
-    expect(result.drawingReview?.envelopes).toHaveLength(3);
+    expect(result.drawingReview?.envelopes).toHaveLength(4);
     expect(result.drawingSynthesis).toMatchObject({
       verdict: 'CONDITIONAL',
       requiresHumanReview: true,
@@ -355,6 +409,45 @@ describe('SLD raster independent council integration', () => {
 
     expect(result.success).toBe(true);
     expect(result.standards).toEqual(expect.arrayContaining([expect.objectContaining({ standard: 'VISION-COUNCIL', judgment: 'HOLD', note: expect.stringMatching(/graph(?:가 불완전| edges가 비어)/) })]));
+    expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
+  });
+
+  it('preserves broad-read devices and links as ambiguous candidates when the independent graph is empty', async () => {
+    const empty = envelopes().map((envelope) => {
+      if (envelope.role === 'symbols') return sealed('symbols', { symbols: [] });
+      if (envelope.role === 'connections') return sealed('connections', { lines: [] });
+      return envelope;
+    });
+    const analyzeBroad = jest.fn(async () => ({
+      components: [
+        { id: 'BROAD-BUS-01', type: 'bus' as const, label: 'Main Bus', position: { x: 50, y: 15 } },
+        { id: 'BROAD-VCB-01', type: 'breaker' as const, label: 'VCB-1', position: { x: 50, y: 35 } },
+      ],
+      connections: [{ id: 'BROAD-LINK-01', from: 'BROAD-BUS-01', to: 'BROAD-VCB-01' }],
+      suggestedCalculations: [],
+      confidence: 0.96,
+      rawDescription: 'broad candidate read',
+    }));
+
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({ envelopes: empty, failures: [] }),
+      analyzeBroad,
+    });
+
+    expect(analyzeBroad).toHaveBeenCalledTimes(1);
+    expect(result.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'BROAD-BUS-01', label: 'Main Bus', confidence: 0.79 }),
+      expect.objectContaining({ id: 'BROAD-VCB-01', label: 'VCB-1', confidence: 0.79 }),
+    ]));
+    expect(result.connections).toEqual([
+      expect.objectContaining({ from: 'BROAD-BUS-01', to: 'BROAD-VCB-01' }),
+    ]);
+    expect(result.confidence).toBe(0.79);
+    expect(result.standards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ judgment: 'HOLD', note: expect.stringContaining('보조 전체 판독 후보') }),
+    ]));
     expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 

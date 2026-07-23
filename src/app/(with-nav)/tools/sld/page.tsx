@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
+import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
@@ -297,6 +298,7 @@ export default function SLDAnalysisPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
+  const [runComparison, setRunComparison] = useState<SLDRunComparison | null>(null);
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [review, setReview] = useState<ReviewLike | null>(null);
   const [loading, setLoading] = useState(false);
@@ -335,6 +337,7 @@ export default function SLDAnalysisPage() {
     setImageFile(file);
     setPreview(URL.createObjectURL(file));
     setAnalysis(null);
+    setRunComparison(null);
     setCalcChain([]);
     setReview(null);
     setError(null);
@@ -403,6 +406,7 @@ export default function SLDAnalysisPage() {
     setDrawingFile(null);
     setReviewError(null);
     setAnalysis(null);
+    setRunComparison(null);
     setCalcChain([]);
     setReview(null);
     setError(null);
@@ -454,32 +458,122 @@ export default function SLDAnalysisPage() {
       setV3JobStatus(String(created.data.status));
       sessionStorage.setItem(V3_JOB_SESSION_KEY, jobId);
 
-      const runForm = new FormData();
       const visionKey = await getFirstAvailableVisionKey();
-      if (visionKey) {
-        runForm.append('provider', visionKey.provider);
-        runForm.append('model', visionKey.model);
-        runForm.append('apiKey', visionKey.key);
+      let endpoint: 'run' | 'resume' = 'run';
+      let previousSettledPages = 0;
+      for (let chunk = 0; chunk < 500; chunk += 1) {
+        const runForm = new FormData();
+        if (visionKey) {
+          runForm.append('provider', visionKey.provider);
+          runForm.append('model', visionKey.model);
+          runForm.append('apiKey', visionKey.key);
+        }
+        const runResponse = await fetch(`/api/drawing-jobs/${jobId}/${endpoint}`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: runForm,
+        });
+        const result = await runResponse.json();
+        if (!runResponse.ok || !result?.success) {
+          throw new Error(result?.error?.message ?? `전체 문서 분석 실패 (${runResponse.status})`);
+        }
+        const checkpoint = result.data.document as DrawingDocumentV3;
+        const settledPages = checkpoint.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty' || page.status === 'failed').length;
+        const resumeAvailable = Boolean(result.data.resumeAvailable) && checkpoint.jobStatus === 'PARTIAL';
+        setV3Doc(checkpoint);
+        setV3JobStatus(String(result.data.status));
+        setV3ResumeAvailable(resumeAvailable);
+        if (!resumeAvailable || checkpoint.jobStatus !== 'PARTIAL' || settledPages <= previousSettledPages) break;
+        previousSettledPages = settledPages;
+        endpoint = 'resume';
       }
-      const runResponse = await fetch(`/api/drawing-jobs/${jobId}/run`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: runForm,
-      });
-      const result = await runResponse.json();
-      if (!runResponse.ok || !result?.success) {
-        throw new Error(result?.error?.message ?? `전체 문서 분석 실패 (${runResponse.status})`);
-      }
-      const completed = result.data.document as DrawingDocumentV3;
-      setV3Doc(completed);
-      setV3JobStatus(String(result.data.status));
-      setV3ResumeAvailable(Boolean(result.data.resumeAvailable) && completed.jobStatus === 'PARTIAL');
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
     } finally {
       setV3Loading(false);
     }
   }, []);
+
+  const handlePublicFixtureCalibration = useCallback(async () => {
+    setV3Loading(true);
+    setV3Error(null);
+    setV3Doc(null);
+    setV3JobId(null);
+    setV3JobStatus(null);
+    setV3ResumeAvailable(false);
+    try {
+      const response = await fetch('/api/dev/drawing-fixture?id=wiki-oneline', {
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error('공개 교보재를 불러오지 못했습니다.');
+      const blob = await response.blob();
+      const file = new File([blob], 'wiki-oneline.png', { type: 'image/png' });
+      setDrawingFile(file);
+      setV3SourceFile(file);
+      setV3PageIndex(0);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('pages', 'all');
+      const visionKey = await getFirstAvailableVisionKey();
+      if (visionKey) {
+        formData.append('provider', visionKey.provider);
+        formData.append('model', visionKey.model);
+        formData.append('apiKey', visionKey.key);
+      }
+      const resultResponse = await fetch('/api/drawing-jobs', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await resultResponse.json();
+      if (!resultResponse.ok || !result?.success || !result.data?.document) {
+        throw new Error(result?.error?.message ?? `공개 교보재 분석 실패 (${resultResponse.status})`);
+      }
+      const document = result.data.document as DrawingDocumentV3;
+      setV3Doc(document);
+      setV3JobId(String(result.data.jobId));
+      setV3JobStatus(document.jobStatus);
+    } catch (error) {
+      setV3Error(error instanceof Error ? error.message : '공개 교보재 분석을 시작하지 못했습니다.');
+    } finally {
+      setV3Loading(false);
+    }
+  }, []);
+
+  const handlePublicFixtureQuickAnalysis = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setAnalysis(null);
+    setCalcChain([]);
+    setReview(null);
+    try {
+      const response = await fetch('/api/dev/drawing-fixture?id=wiki-oneline', { cache: 'no-store' });
+      if (!response.ok) throw new Error('공개 교보재를 불러오지 못했습니다.');
+      const blob = await response.blob();
+      const file = new File([blob], 'wiki-oneline.png', { type: 'image/png' });
+      setDrawingFile(file);
+      handleImageSelect(file);
+      setActiveTab('image');
+      const visionKey = await getFirstAvailableVisionKey();
+      if (!visionKey) throw new Error('공개 교보재 AI 분석에는 Vision BYOK 키가 필요합니다.');
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('provider', visionKey.provider);
+      formData.append('model', visionKey.model);
+      formData.append('apiKey', visionKey.key);
+      const resultResponse = await fetch('/api/sld', { method: 'POST', body: formData });
+      const result = await resultResponse.json();
+      if (!resultResponse.ok || !result.success) {
+        throw new Error(result.error ?? `빠른 SLD 분석 실패 (${resultResponse.status})`);
+      }
+      setAnalysis(result.data);
+      setCalcChain(result.calcChain ?? []);
+      setReview(result.review ?? null);
+    } catch (analysisError) {
+      setError(analysisError instanceof Error ? analysisError.message : '공개 교보재 빠른 분석에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [handleImageSelect]);
 
   useEffect(() => {
     if (v3JobId) return;
@@ -568,32 +662,39 @@ export default function SLDAnalysisPage() {
     setV3Loading(true);
     setV3Error(null);
     try {
-      const formData = new FormData();
       const visionKey = await getFirstAvailableVisionKey();
-      if (visionKey) {
-        formData.append('provider', visionKey.provider);
-        formData.append('model', visionKey.model);
-        formData.append('apiKey', visionKey.key);
-      }
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
-      const response = await fetch(`/api/drawing-jobs/${v3JobId}/resume`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: formData,
-      });
-      const json = await response.json();
-      if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '분석 재개에 실패했습니다.');
-      const resumed = json.data.document as DrawingDocumentV3;
-      setV3Doc(resumed);
-      setV3JobStatus(String(json.data.status));
-      setV3ResumeAvailable(Boolean(json.data.resumeAvailable) && resumed.jobStatus === 'PARTIAL');
+      let previousSettledPages = v3Doc?.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty' || page.status === 'failed').length ?? -1;
+      for (let chunk = 0; chunk < 500; chunk += 1) {
+        const formData = new FormData();
+        if (visionKey) {
+          formData.append('provider', visionKey.provider);
+          formData.append('model', visionKey.model);
+          formData.append('apiKey', visionKey.key);
+        }
+        const response = await fetch(`/api/drawing-jobs/${v3JobId}/resume`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body: formData,
+        });
+        const json = await response.json();
+        if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '분석 재개에 실패했습니다.');
+        const resumed = json.data.document as DrawingDocumentV3;
+        const settledPages = resumed.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty' || page.status === 'failed').length;
+        const resumeAvailable = Boolean(json.data.resumeAvailable) && resumed.jobStatus === 'PARTIAL';
+        setV3Doc(resumed);
+        setV3JobStatus(String(json.data.status));
+        setV3ResumeAvailable(resumeAvailable);
+        if (!resumeAvailable || settledPages <= previousSettledPages) break;
+        previousSettledPages = settledPages;
+      }
     } catch (err) {
       setV3Error(err instanceof Error ? err.message : '전체 문서 분석 재개 오류');
     } finally {
       setV3Loading(false);
     }
-  }, [canResumeV3, v3JobId]);
+  }, [canResumeV3, v3Doc, v3JobId]);
 
   const handleV3Correct = useCallback(async (
     targetDisplayId: string,
@@ -646,7 +747,12 @@ export default function SLDAnalysisPage() {
       ...v3Doc.evidenceGraph.texts,
       ...v3Doc.evidenceGraph.relations,
     ].find((item) => item.displayId === displayId);
-    const pageIndex = entity?.evidence[0]?.pageIndex;
+    const continuityEntity = [
+      ...(v3Doc.continuity?.regions ?? []),
+      ...(v3Doc.continuity?.continuations ?? []),
+      ...(v3Doc.continuity?.unresolvedEndpoints ?? []),
+    ].find((item) => item.displayId === displayId);
+    const pageIndex = entity?.evidence[0]?.pageIndex ?? continuityEntity?.pageIndex;
     if (pageIndex !== undefined) setV3PageIndex(pageIndex);
   }, [v3Doc]);
 
@@ -678,15 +784,20 @@ export default function SLDAnalysisPage() {
         throw new Error(data.error ?? 'SLD 분석에 실패했습니다');
       }
 
-      setAnalysis(data.data);
-      setCalcChain(data.calcChain ?? []);
+      const nextAnalysis = data.data as SLDAnalysisResult;
+      const nextCalcChain = (data.calcChain ?? []) as CalcChainStep[];
+      setRunComparison(analysis
+        ? compareSLDAnalysisRuns(analysis, nextAnalysis, [calcChain.length, nextCalcChain.length])
+        : null);
+      setAnalysis(nextAnalysis);
+      setCalcChain(nextCalcChain);
       setReview(data.review ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'SLD 분석 중 오류가 발생했습니다');
     } finally {
       setLoading(false);
     }
-  }, [imageFile]);
+  }, [analysis, calcChain.length, imageFile]);
 
   // DXF 벡터 파싱 (DRAWING_PARSER 플래그 필수)
   const handleDxfUpload = useCallback(async (file: File) => {
@@ -744,6 +855,22 @@ export default function SLDAnalysisPage() {
     }
   }, []);
 
+  // 기본 업로드는 빠른 형식별 파싱/미리보기를 살리면서 V3 전체 문서 판독도
+  // 함께 시작한다. 한쪽만 호출하면 legacy 결과·정밀검증 또는 전체 페이지 판독
+  // 중 하나가 영구 미도달이 된다.
+  const handlePrimaryDocumentUpload = useCallback(async (file: File) => {
+    setDrawingFile(file);
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (file.type.startsWith('image/')) {
+      handleImageSelect(file);
+    } else if (extension === 'dxf') {
+      await handleDxfUpload(file);
+    } else if (extension === 'pdf') {
+      await handlePdfUpload(file);
+    }
+    await handleFullDocumentAnalyze(file);
+  }, [handleDxfUpload, handleFullDocumentAnalyze, handleImageSelect, handlePdfUpload]);
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       {/* Header */}
@@ -790,11 +917,7 @@ export default function SLDAnalysisPage() {
           ))}
         </div>
         <p className="mt-2 text-xs text-[var(--text-tertiary)]">
-          {activeTab === 'image'
-            ? 'Vision AI로 도면 이미지를 분석합니다 (BYOK API 키 필요). 인식 값은 미검증(HOLD)일 수 있습니다.'
-            : isFeatureEnabled('DRAWING_PARSER')
-              ? 'AI 없이 벡터 좌표에서 직접 추출합니다 (API 키 불필요).'
-              : 'DXF/PDF 파서는 현재 비활성(DRAWING_PARSER=false)입니다. 이미지 AI 분석을 사용하세요.'}
+          기본 분석은 전체 페이지·구획·독립 심사를 수행합니다. 이미지 정밀 판독은 등록된 BYOK 키를 사용하고, 벡터 PDF/DXF는 파서 근거와 함께 교차검증합니다.
         </p>
       </div>
 
@@ -820,7 +943,7 @@ export default function SLDAnalysisPage() {
             </button>
           )}
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) handleImageSelect(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -835,7 +958,7 @@ export default function SLDAnalysisPage() {
             </div>
           </button>
           <input ref={dxfInputRef} type="file" accept=".dxf" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) handleDxfUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -846,11 +969,11 @@ export default function SLDAnalysisPage() {
             <Upload size={28} />
             <div className="text-center">
               <p className="font-semibold">PDF 도면 업로드</p>
-              <p className="mt-1 text-xs opacity-70">CAD 출력 PDF 파일 (최대 100MB) — API 키 불필요</p>
+              <p className="mt-1 text-xs opacity-70">CAD 출력 PDF 파일 (최대 50MB) — API 키 불필요</p>
             </div>
           </button>
           <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) handlePdfUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -907,6 +1030,26 @@ export default function SLDAnalysisPage() {
           >
             {v3Loading ? '전체 분석 중…' : 'PDF/DXF/이미지 전체 분석'}
           </button>
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <button
+                type="button"
+                onClick={() => void handlePublicFixtureCalibration()}
+                disabled={v3Loading}
+                className="rounded-xl border border-[var(--border-default)] px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-50"
+              >
+                공개 교보재로 시험
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePublicFixtureQuickAnalysis()}
+                disabled={loading}
+                className="rounded-xl border border-[var(--border-default)] px-4 py-2 text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-50"
+              >
+                공개 교보재 빠른 분석
+              </button>
+            </>
+          )}
           {canResumeV3 && (
             <button
               type="button"
@@ -1016,14 +1159,29 @@ export default function SLDAnalysisPage() {
               </button>
               <button
                 type="button"
-                onClick={handleReset}
+                onClick={() => void handleAnalyze()}
+                disabled={loading}
                 className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
               >
-                <RefreshCw size={12} />
-                다시 분석
+                {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                {loading ? '재분석 중…' : '같은 도면 다시 분석'}
               </button>
             </div>
           </div>
+
+          {runComparison?.changed && (
+            <div className="rounded-xl border border-[var(--color-warning)] bg-[var(--bg-secondary)] px-4 py-3" role="alert">
+              <p className="text-sm font-semibold text-[var(--color-warning)]">반복 판독 불일치 · HOLD</p>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                기기 {runComparison.componentCounts[0]}→{runComparison.componentCounts[1]}
+                {' · '}관계 {runComparison.connectionCounts[0]}→{runComparison.connectionCounts[1]}
+                {' · '}제안 {runComparison.suggestionCounts[0]}→{runComparison.suggestionCounts[1]}
+              </p>
+              <p className="mt-1 text-xs text-[var(--text-tertiary)]">
+                같은 원본의 반복 판독이 달라 현재 결과를 확정값으로 쓰지 않습니다. 정밀 검증에서 구획·선로·전체 관계를 교차 확인하세요.
+              </p>
+            </div>
+          )}
 
           {/* 사내 규정 첨부(선택) — 정밀 검증 시 KEC와 나란히 대조된다 */}
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
@@ -1065,12 +1223,15 @@ export default function SLDAnalysisPage() {
                   <span className="font-medium text-[var(--text-primary)]">{analysis.systemType}</span>
                 </span>
               )}
-              <span>
-                <span className="text-[var(--text-tertiary)]">정확도: </span>
-                <span className="font-medium text-[var(--text-primary)]">
-                  {Math.round(analysis.confidence * 100)}%
-                </span>
-              </span>
+                  <span>
+                    <span className="text-[var(--text-tertiary)]">모델 추정 확신도: </span>
+                    <span className="font-medium text-[var(--text-primary)]">
+                      {Math.round(analysis.confidence * 100)}%
+                    </span>
+                    <span className="ml-1 text-[10px] text-[var(--text-tertiary)]" title="정답률이 아닌 AI 자체 추정치">
+                      (정답률이 아닌 AI 자체 추정치)
+                    </span>
+                  </span>
             </div>
           )}
 

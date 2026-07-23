@@ -30,6 +30,9 @@ export const RATE_LIMIT_PROFILES: Record<string, RateLimitProfile> = {
   export:     { maxRequests: 10, windowMs: 60_000 },
   ocr:        { maxRequests: 10, windowMs: 60_000 },
   sld:        { maxRequests: 10, windowMs: 60_000 },
+  // 한 작업을 페이지 단위로 체크포인트하는 내부 실행/재개 호출.
+  // 작업 생성 자체는 위의 낮은 sld 한도를 계속 적용한다.
+  'sld-job':  { maxRequests: 120, windowMs: 60_000 },
   dxf:        { maxRequests: 20, windowMs: 60_000 },
   notarize:   { maxRequests: 5,  windowMs: 60_000 },
   admin:      { maxRequests: 30, windowMs: 60_000 },

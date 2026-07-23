@@ -13,6 +13,8 @@
 
 import { applyRateLimit } from '@/lib/rate-limit';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { validateClientReceiptForExport } from '@/lib/calculation-execution';
+import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { NextRequest, NextResponse } from 'next/server';
 
 // ---------------------------------------------------------------------------
@@ -74,6 +76,19 @@ async function loadReceipt(receiptId: string, requesterId: string) {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    if (!isRequestOriginAllowed(
+      req.headers.get('origin'),
+      req.url,
+      undefined,
+      req.headers.get('host'),
+      req.headers.get('x-forwarded-proto'),
+    )) {
+      return NextResponse.json(
+        { error: 'ESVA-9001: Invalid origin' },
+        { status: 403 },
+      );
+    }
+
     // Per-route abuse limit.
     const blocked = applyRateLimit(req, 'default');
     if (blocked) {
@@ -108,7 +123,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let receipt: import('@/engine/receipt/types').Receipt;
 
     if (body.receipt) {
-      // 클라이언트가 영수증 객체를 직접 제공 (익명·자기 소유) — 그대로 사용.
+      // 키 없는 체크섬만 믿지 않고 서버 계산기로 입력을 재실행해 전체 claim을 대조한다.
+      const validation = await validateClientReceiptForExport(body.receipt);
+      if (!validation.valid) {
+        return NextResponse.json(
+          { error: `ESVA-5012: Receipt verification failed (${validation.reason})` },
+          { status: 422 },
+        );
+      }
       receipt = body.receipt;
     } else {
       // receiptId로 DB 조회 시에는 소유권 검증 필수 — 미검증이면 SERVICE_ROLE_KEY로

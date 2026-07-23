@@ -24,6 +24,15 @@
   --border-default: #e9e5db;
   --border-hover: #ddd7c8;
 
+  /* Legacy component aliases. Keep older field/safety surfaces on the same
+     theme-aware token source instead of leaving unresolved CSS variables. */
+  --color-border: var(--border-default);
+  --color-surface: var(--bg-primary);
+  --color-surface-2: var(--bg-secondary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-tertiary);
+
   /* Gradients */
   --gradient-primary: linear-gradient(135deg, #1e3a5f, #2d5280);
   --gradient-accent: linear-gradient(135deg, #b45309, #d97706);

@@ -52,14 +52,14 @@ describe('vision-byok — 모델 배선', () => {
     expect(result?.model).toBe('');
   });
 
-  it('저장된 모델이 현재 카탈로그에 없으면(구 모델 제거) 빈 문자열로 폴백한다', async () => {
+  it('공급자 API에서 선택한 안전한 모델은 정적 카탈로그에 없어도 전달한다', async () => {
     mockStorage.loadStoredProviderKey.mockImplementation(async (id) =>
       id === 'gemini' ? 'AIza-fake-key' : null,
     );
-    mockStorage.loadSelectedModel.mockReturnValue('gemini-1.0-ancient-removed');
+    mockStorage.loadSelectedModel.mockReturnValue('gemini-account-model-2026');
 
     const result = await getFirstAvailableVisionKey();
-    expect(result?.model).toBe('');
+    expect(result?.model).toBe('gemini-account-model-2026');
   });
 
   it('어느 Vision 공급자도 키가 없으면 null 을 반환한다', async () => {
@@ -69,11 +69,28 @@ describe('vision-byok — 모델 배선', () => {
     expect(await getFirstAvailableVisionKey()).toBeNull();
   });
 
-  it('resolveSelectedModel: 유효 선택만 통과시키고 미등록 id 는 빈 문자열', () => {
+  it('임베딩 공급자만 요청하면 Claude 키를 건너뛰고 Gemini 키를 찾는다', async () => {
+    mockStorage.loadStoredProviderKey.mockImplementation(async (id) => {
+      if (id === 'claude') return 'claude-test-key';
+      if (id === 'gemini') return 'gemini-test-key';
+      return null;
+    });
+    mockStorage.loadSelectedModel.mockReturnValue(null);
+
+    expect(await getFirstAvailableVisionKey(['openai', 'gemini'])).toMatchObject({
+      provider: 'gemini',
+      key: 'gemini-test-key',
+    });
+  });
+
+  it('resolveSelectedModel: 안전한 공급자 모델은 통과시키고 위험한 id 는 거부한다', () => {
     mockStorage.loadSelectedModel.mockReturnValue('gemini-3.5-flash'); // 카탈로그 존재
     expect(resolveSelectedModel('gemini')).toBe('gemini-3.5-flash');
 
-    mockStorage.loadSelectedModel.mockReturnValue('nonexistent-model'); // 카탈로그 부재
+    mockStorage.loadSelectedModel.mockReturnValue('provider-only-model-2026');
+    expect(resolveSelectedModel('gemini')).toBe('provider-only-model-2026');
+
+    mockStorage.loadSelectedModel.mockReturnValue('../unsafe?model');
     expect(resolveSelectedModel('gemini')).toBe('');
   });
 

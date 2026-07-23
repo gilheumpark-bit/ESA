@@ -423,10 +423,11 @@ export function runDebate(
 
     // 합의 실패 시: 가장 보수적(안전 측) 값 채택
     if (!finalConsensus) {
-      const conservativeEntry = dis.entries
+      const isVoltageDrop = dis.calcId.replaceAll('_', '-').includes('voltage-drop');
+      const conservativeEntry = [...dis.entries]
         .sort((a, b) => {
           // 전압강하는 높은 값이 보수적, 허용전류는 낮은 값이 보수적
-          if (dis.calcId.includes('voltage_drop')) return b.value - a.value;
+          if (isVoltageDrop) return b.value - a.value;
           return a.value - b.value;
         })[0];
       finalPosition = `${conservativeEntry.value} ${conservativeEntry.unit} (보수적 채택)`;

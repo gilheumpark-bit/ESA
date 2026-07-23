@@ -38,6 +38,7 @@ import type {
   GlobalComparison,
 } from '@search/types';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { buildStudioAnswer } from '@/search/studio-answer';
 
 // ─── PART 1: CSRF Origin Check ─────────────────────────────────
 
@@ -55,6 +56,10 @@ interface SearchRequestBody {
    * — 응답에 `answer` 필드 포함 (상위 문서 요약)
    */
   mode?: 'studio';
+  embeddingByok?: {
+    provider: 'openai' | 'gemini';
+    apiKey: string;
+  };
 }
 
 // ─── PART 3: Agent Singleton ────────────────────────────────────
@@ -115,6 +120,20 @@ export async function POST(request: NextRequest) {
     if (body.query.length > 500) {
       return jsonWithEsa(
         { success: false, error: { code: 'ESVA-3004', message: 'Query too long (max 500 chars)' } },
+        { status: 400 },
+      );
+    }
+
+    const embeddingByok = body.embeddingByok;
+    if (embeddingByok !== undefined && (
+      !embeddingByok
+      || !['openai', 'gemini'].includes(embeddingByok.provider)
+      || typeof embeddingByok.apiKey !== 'string'
+      || embeddingByok.apiKey.trim().length === 0
+      || embeddingByok.apiKey.length > 4_096
+    )) {
+      return jsonWithEsa(
+        { success: false, error: { code: 'ESVA-3005', message: 'Invalid embedding BYOK configuration' } },
         { status: 400 },
       );
     }
@@ -216,6 +235,12 @@ export async function POST(request: NextRequest) {
           query: body.query,
           country: countryCode,
           limit: pageSize,
+          ...(embeddingByok ? {
+            embeddingByok: {
+              provider: embeddingByok.provider,
+              apiKey: embeddingByok.apiKey.trim(),
+            },
+          } : {}),
         });
         documents = ragResults.map((r, idx) => ({
           id: `rag-${idx}`,
@@ -428,13 +453,16 @@ export async function POST(request: NextRequest) {
 
     // Studio 모드: 상위 문서를 요약한 `answer` 필드 추가 (ChatPanel에서 직접 표시)
     const studioAnswer = isStudioMode
-      ? (agentResponse?.answer) ??
-        (paginated.length > 0
-          ? paginated
-              .slice(0, 3)
-              .map(r => `**${r.document.title}**\n${r.document.excerpt}`)
-              .join('\n\n')
-          : null)
+      ? buildStudioAnswer(
+          agentResponse
+            ? { answer: agentResponse.answer, sourceCount: agentResponse.sources.length }
+            : null,
+          paginated.map((result) => ({
+            title: result.document.title,
+            excerpt: result.document.excerpt,
+            body: result.document.body,
+          })),
+        )
       : undefined;
 
     void logAudit({

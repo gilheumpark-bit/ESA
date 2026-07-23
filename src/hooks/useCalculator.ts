@@ -7,11 +7,11 @@
  * PART 2: Hook implementation — execute, cache, error handling
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Receipt } from '@/engine/receipt/types';
 import type { DetailedCalcResult } from '@/engine/calculators/types';
 import { cacheReceipt } from '@/lib/receipt-cache';
-import { readStoredCountry } from '@/hooks/useSettings';
+import { readStoredCountry, readStoredLanguage } from '@/hooks/useSettings';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -40,9 +40,15 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => activeRequestRef.current?.abort(), []);
 
   const execute = useCallback(
     async (inputs: Record<string, unknown>) => {
+      activeRequestRef.current?.abort();
+      const controller = new AbortController();
+      activeRequestRef.current = controller;
       setIsLoading(true);
       setError(null);
 
@@ -52,7 +58,13 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         const res = await fetch('/api/calculate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ calculatorId, inputs, countryCode: readStoredCountry() }),
+          body: JSON.stringify({
+            calculatorId,
+            inputs,
+            countryCode: readStoredCountry(),
+            language: readStoredLanguage(),
+          }),
+          signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -74,19 +86,25 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
           cacheReceipt(data.receipt);
         }
       } catch (err) {
+        if (controller.signal.aborted) return;
         const message =
           err instanceof Error ? err.message : 'Unknown calculation error';
         setError(message);
         setResult(null);
         setReceipt(null);
       } finally {
-        setIsLoading(false);
+        if (activeRequestRef.current === controller) {
+          activeRequestRef.current = null;
+          setIsLoading(false);
+        }
       }
     },
     [calculatorId],
   );
 
   const reset = useCallback(() => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
     setResult(null);
     setReceipt(null);
     setError(null);

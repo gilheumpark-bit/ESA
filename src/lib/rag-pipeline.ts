@@ -55,6 +55,7 @@ export interface RAGSearchOptions {
   limit?: number;
   /** Additional metadata filters (key=property name, value=exact match) */
   filters?: Record<string, string>;
+  embeddingByok?: { provider: 'openai' | 'gemini'; apiKey: string };
 }
 
 /** Internal scored hit before final output */
@@ -164,7 +165,7 @@ function applyLicenseFilter(hit: WeaviateSearchHit): { snippet: string; restrict
  * if Weaviate is unavailable or embedding generation fails.
  */
 export async function searchRAG(opts: RAGSearchOptions): Promise<RAGResult[]> {
-  const { query, country, genre, limit = 10, filters } = opts;
+  const { query, country, genre, limit = 10, filters, embeddingByok } = opts;
 
   if (!query || !query.trim()) {
     return [];
@@ -180,7 +181,7 @@ export async function searchRAG(opts: RAGSearchOptions): Promise<RAGResult[]> {
   // Step 2: Generate query embedding (best-effort, search can still work keyword-only)
   let _queryEmbedding: number[] | null = null;
   try {
-    _queryEmbedding = await generateEmbedding(query);
+    _queryEmbedding = await generateEmbedding(query, embeddingByok?.provider, embeddingByok?.apiKey);
   } catch (err) {
     console.warn(
       '[ESA/RAG] Embedding generation failed, falling back to keyword-only search:',
@@ -212,6 +213,7 @@ export async function searchRAG(opts: RAGSearchOptions): Promise<RAGResult[]> {
         alpha: RAG_HYBRID_ALPHA,
         limit: Math.min(limit * 2, RAG_FETCH_LIMIT_CAP),
         where: whereFilter,
+        ...(_queryEmbedding ? { vector: _queryEmbedding } : {}),
       });
 
       for (const hit of hits) {

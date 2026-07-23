@@ -23,10 +23,7 @@ import { checkCalcAccess, type Tier, type CalcDifficulty } from '@/lib/tier-gate
 import { getUserTier, listUserCalculations, saveCalculation } from '@/lib/supabase';
 import { sanitizeInput } from '@/lib/security-hardening';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
-import { setActiveCountry } from '@/engine/calculators/country-defaults';
-import { convertInputsToSI, convertResultToImperial, appendAwgEquivalent } from '@/engine/conversion/imperial-adapter';
-import { getSafetyProfile } from '@/engine/constants/safety-factors';
-import type { CountryCode } from '@/engine/constants/safety-factors';
+import { executeRegisteredCalculator } from '@/lib/calculation-execution';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
@@ -47,18 +44,6 @@ const DIFFICULTY_TO_CALC_DIFFICULTY: Record<string, CalcDifficulty> = {
   intermediate: 'intermediate',
   advanced: 'advanced',
   expert: 'expert',
-};
-
-// ─── PART 4: Standard Lookup ────────────────────────────────────
-
-const COUNTRY_STANDARD_MAP: Record<string, { standard: string; version: string }> = {
-  KR: { standard: 'KEC', version: 'KEC 2021' },
-  US: { standard: 'NEC', version: 'NEC 2023' },
-  JP: { standard: 'JIS', version: 'JIS C 0364:2019' },
-  CN: { standard: 'GB', version: 'GB 50054-2011' },
-  DE: { standard: 'VDE', version: 'IEC 60364:2017' },
-  AU: { standard: 'AS/NZS', version: 'AS/NZS 3000:2018' },
-  ME: { standard: 'DEWA', version: 'DEWA 2020' },
 };
 
 // ─── PART 5: GET persistent history ────────────────────────────
@@ -175,31 +160,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine country/standard + set active country for safety factor defaults
-    const countryCode = (body.countryCode ?? 'KR') as CountryCode;
-    const safetyProfile = getSafetyProfile(countryCode in { KR: 1, US: 1, JP: 1, INT: 1 } ? countryCode : 'KR');
-    setActiveCountry(safetyProfile.country);
-
-    // Imperial → SI 입력 변환 (미국 시장 지원)
-    const unitSystem = safetyProfile.unitSystem;
-    const { converted: siInputs, conversions } = convertInputsToSI(body.inputs, unitSystem);
-
-    // Execute calculator (항상 SI 단위로 실행)
-    let calcResult = entry.calculator(siInputs);
-
-    // SI → Imperial 출력 변환 (필요 시)
-    if (unitSystem === 'Imperial') {
-      calcResult = convertResultToImperial(calcResult);
-    }
-    // mm² 결과에 AWG 등가 표시 추가 (미국 시장)
-    if (countryCode === 'US') {
-      calcResult = appendAwgEquivalent(calcResult);
-    }
-    // 변환 이력을 경고에 추가
-    if (conversions.length > 0) {
-      calcResult = { ...calcResult, warnings: [...(calcResult.warnings || []), `[Unit Conversion] ${conversions.join('; ')}`] };
-    }
-    const stdInfo = COUNTRY_STANDARD_MAP[countryCode] ?? COUNTRY_STANDARD_MAP.KR;
+    const execution = executeRegisteredCalculator(
+      entry.id,
+      body.inputs,
+      body.countryCode ?? 'KR',
+    );
+    const { result: calcResult, countryCode, unitSystem } = execution;
 
     // Generate receipt
     const receiptOpts: GenerateReceiptOpts = {
@@ -212,8 +178,9 @@ export async function POST(request: NextRequest) {
         .filter((ref): ref is string => !!ref),
       inputs: body.inputs,
       countryCode,
-      standard: stdInfo.standard,
-      standardVersion: stdInfo.version,
+      standard: execution.standard,
+      standardVersion: execution.standardVersion,
+      unitSystem,
       difficulty: entry.difficulty,
       userId: userId ?? undefined,
       lang: (body.language ?? 'ko') as 'ko' | 'en',
@@ -246,7 +213,7 @@ export async function POST(request: NextRequest) {
           inputs: body.inputs,
           outputs: calcResult as unknown as Record<string, unknown>,
           formula_used: calcResult.formula,
-          standard_ref: stdInfo.version,
+          standard_ref: execution.standardVersion,
           lang: body.language ?? 'ko',
           receipt_hash: receipt.receiptHash,
           country_code: receipt.countryCode,

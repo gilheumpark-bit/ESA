@@ -67,6 +67,10 @@ export interface SLDAnalysis {
   systemVoltage?: string;
   systemType?: string;
   confidence: number;
+  /** True when a syntactically truncated model response was only partially recovered. */
+  partial?: boolean;
+  /** Machine-readable analysis warnings that must remain visible to downstream review. */
+  warnings?: string[];
   /** 케이블 스케줄 표(중급) — 표 문서에서 행 단위 피더 데이터. 검토 입력원. */
   scheduleTables?: Array<{
     title: string;
@@ -226,6 +230,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       candidate = candidate.slice(firstBrace);
     }
     let parsed: unknown;
+    let partialRecovery = false;
     try {
       parsed = JSON.parse(candidate);
     } catch {
@@ -233,6 +238,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       // 넘겨 배열 중간에서 잘린다 — 마지막 완전한 요소까지 자르고 열린 괄호를
       // 닫아 부분 판독을 살린다(0개 폐기 < 부분 살림). 미국 배전 도면 실측.
       parsed = JSON.parse(salvageTruncatedJson(candidate));
+      partialRecovery = true;
     }
     if (!parsed || typeof parsed !== 'object') throw new Error('SLD 응답은 객체여야 합니다.');
     const data = parsed as Record<string, unknown>;
@@ -303,7 +309,13 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       suggestedCalculations: [],
       ...optionalTextField('systemVoltage', data.systemVoltage),
       ...optionalTextField('systemType', data.systemType),
-      confidence: components.length > 0 ? Math.max(0, Math.min(1, rawConfidence)) : 0,
+      confidence: components.length > 0
+        ? Math.max(0, Math.min(partialRecovery ? 0.5 : 1, rawConfidence))
+        : 0,
+      ...(partialRecovery ? {
+        partial: true,
+        warnings: ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'],
+      } : {}),
       rawDescription: boundedText(data.rawDescription, 2_000) ?? '',
     };
   } catch {
@@ -620,7 +632,7 @@ async function callOpenAIVision(
           ],
         },
       ],
-      max_completion_tokens: 4000,
+      max_completion_tokens: 8192,
       ...(model.startsWith('gpt-5') ? {} : { temperature: 0.1 }),
     }),
   });

@@ -267,7 +267,7 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
             compliant: vdSuccess,
             standardRef: 'KEC 232.52',
           });
-          const vdVerdict = vdResult?.notes?.[0]?.includes('적합') ? 'PASS' : vdResult?.judgment ?? 'HOLD';
+          const vdVerdict = vdResult?.judgment ?? 'HOLD';
           standards.push({
             standard: 'KEC',
             clause: '232.52',

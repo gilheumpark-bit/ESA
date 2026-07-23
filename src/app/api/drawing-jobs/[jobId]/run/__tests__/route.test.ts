@@ -1,17 +1,19 @@
 import { NextRequest } from 'next/server';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { claimOwnedJobRun, getOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-lease-store';
-import { POST } from '../route';
+import { maxDuration, POST } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
 jest.mock('@/lib/request-origin', () => ({ isRequestOriginAllowed: jest.fn(() => true) }));
 jest.mock('@/agent/drawing/drawing-api-owner', () => ({ resolveDrawingOwner: jest.fn() }));
 jest.mock('@/agent/drawing/document-orchestrator', () => ({ runDocumentAnalysis: jest.fn() }));
 jest.mock('@/agent/drawing/drawing-job-store', () => ({
-  claimOwnedJobRun: jest.fn(), getOwnedJob: jest.fn(), updateOwnedJob: jest.fn(),
+  claimOwnedJobRun: jest.fn(), getOwnedJob: jest.fn(), nextPendingRequestedPage: jest.fn(() => 0), updateOwnedJob: jest.fn(),
 }));
 jest.mock('@/agent/drawing/source-lease-store', () => ({
   readSourceLease: jest.fn(), releaseSourceLease: jest.fn(),
@@ -31,6 +33,12 @@ function request(): NextRequest {
 }
 
 describe('drawing job run API', () => {
+  it('keeps the route execution window aligned with the full-document budget', () => {
+    expect(maxDuration).toBe(1800);
+    const deployment = JSON.parse(readFileSync(join(process.cwd(), 'vercel.json'), 'utf8')) as { functions?: unknown };
+    expect(deployment.functions).toBeUndefined();
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(resolveDrawingOwner).mockResolvedValue(owner);
@@ -46,7 +54,9 @@ describe('drawing job run API', () => {
     const response = await POST(request(), { params: Promise.resolve({ jobId: 'job-a' }) });
     expect(response.status).toBe(200);
     expect(claimOwnedJobRun).toHaveBeenCalledWith('job-a', owner.ownerId, ['QUEUED']);
-    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ jobId: 'job-a', ownerId: owner.ownerId, signal: undefined }));
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: 'job-a', ownerId: owner.ownerId, signal: undefined, maxPagesPerRun: 1, preparationPages: [0],
+    }));
   });
 
   it('rejects a duplicate run and redacts fatal provider details', async () => {

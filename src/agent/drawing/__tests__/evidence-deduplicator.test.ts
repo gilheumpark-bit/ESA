@@ -52,6 +52,40 @@ describe('drawing evidence numbering and merge', () => {
     expect(lines).toHaveLength(2);
   });
 
+  it('merges substantially overlapping collinear line reads but keeps offset parallel lines separate', () => {
+    const lines = deduplicateLines([
+      { localId: 'full', lineKind: 'power', path: [{ x: 100, y: 0 }, { x: 100, y: 300 }], confidence: 0.79, pageIndex: 0, regionId: 'full' },
+      { localId: 'region', lineKind: 'power', path: [{ x: 102, y: 60 }, { x: 102, y: 295 }], confidence: 0.79, pageIndex: 0, regionId: 'region' },
+      { localId: 'parallel', lineKind: 'power', path: [{ x: 150, y: 0 }, { x: 150, y: 300 }], confidence: 0.79, pageIndex: 0, regionId: 'parallel' },
+    ]);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0].evidence).toHaveLength(2);
+    expect(lines[0].path).toEqual([{ x: 100, y: 0 }, { x: 100, y: 300 }]);
+  });
+
+  it('merges the same device type at the same coordinates even when broad and region labels differ', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'full', type: 'breaker', label: 'Line Breaker Left', bounds: { x: 100, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'full' },
+      { localId: 'region', type: 'breaker', label: 'Left Line Breaker', bounds: { x: 100, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'region' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]).toMatchObject({ typeCandidates: ['breaker'], certainty: 'ambiguous' });
+    expect(symbols[0].evidence).toHaveLength(2);
+  });
+
+  it('merges colocated cross-type readings with the same label into one ambiguous candidate set', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'capacitor-read', type: 'capacitor', label: 'Shunt Reactor', bounds: { x: 100, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'full' },
+      { localId: 'load-read', type: 'load', label: 'Shunt Reactor', bounds: { x: 112, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'region' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]).toMatchObject({ typeCandidates: ['capacitor', 'load'], rawLabel: 'Shunt Reactor', certainty: 'ambiguous' });
+    expect(symbols[0].confirmedType).toBeUndefined();
+  });
+
   it('keeps a parser-derived low-confidence endpoint relation as an ambiguous relation', () => {
     const symbols = deduplicateSymbols([
       { localId: 'vcb', type: 'vcb', label: 'VCB-1', bounds: { x: 0, y: 0, w: 10, h: 10 }, confidence: 0.85, pageIndex: 0, regionId: 'vector' },
@@ -61,6 +95,21 @@ describe('drawing evidence numbering and merge', () => {
       { localId: 'line', lineKind: 'power', path: [{ x: 5, y: 5 }, { x: 105, y: 5 }], confidence: 0.55, pageIndex: 0, regionId: 'vector' },
     ]);
 
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([
+      expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[0].id, certainty: 'ambiguous' }),
+    ]);
+  });
+
+  it('keeps a spatial relation between ambiguous device candidates without promoting it to confirmed', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'bus-candidate', type: 'bus', label: 'Main Bus', bounds: { x: 0, y: 0, w: 10, h: 10 }, confidence: 0.79, pageIndex: 0, regionId: 'broad' },
+      { localId: 'vcb-candidate', type: 'breaker', label: 'Bus Tie Breaker', bounds: { x: 100, y: 0, w: 10, h: 10 }, confidence: 0.79, pageIndex: 0, regionId: 'broad' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'candidate-line', lineKind: 'power', path: [{ x: 5, y: 5 }, { x: 105, y: 5 }], confidence: 0.79, pageIndex: 0, regionId: 'broad' },
+    ]);
+
+    expect(symbols.every((symbol) => symbol.certainty === 'ambiguous')).toBe(true);
     expect(buildPageRelations(symbols, lines, 0)).toEqual([
       expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[0].id, certainty: 'ambiguous' }),
     ]);

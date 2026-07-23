@@ -78,6 +78,8 @@ interface ExtractedNumber {
   hasSource: boolean;
   /** Whether this number appears in an allowed context */
   isAllowed: boolean;
+  /** Whether the value is copied from the user's trusted input. */
+  isTrustedInput: boolean;
 }
 
 /**
@@ -86,6 +88,7 @@ interface ExtractedNumber {
 function extractNumbers(
   output: string,
   sourcePositions: Set<number>,
+  trustedNumbers: Set<string> = new Set(),
 ): ExtractedNumber[] {
   const results: ExtractedNumber[] = [];
   let match: RegExpExecArray | null;
@@ -123,10 +126,27 @@ function extractNumbers(
       unit,
       hasSource,
       isAllowed,
+      isTrustedInput: trustedNumbers.has(normalizeNumericToken(match[0]))
+        || trustedNumbers.has(match[1]),
     });
   }
 
   return results;
+}
+
+function normalizeNumericToken(value: string): string {
+  return value.replace(/\s+/g, '').toLowerCase();
+}
+
+function findTrustedNumbers(input: string): Set<string> {
+  const numbers = new Set<string>();
+  const pattern = new RegExp(NUMBER_PATTERN.source, NUMBER_PATTERN.flags);
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(input)) !== null) {
+    numbers.add(normalizeNumericToken(match[0]));
+    numbers.add(match[1]);
+  }
+  return numbers;
 }
 
 /**
@@ -158,6 +178,7 @@ function findSourcePositions(output: string): Set<number> {
 export function filterLLMOutput(
   output: string,
   toolCalls: Array<{ name: string; result?: unknown }> = [],
+  trustedInput = '',
 ): FilterResult {
   const blocked: BlockedItem[] = [];
   const hasAnyToolCalls = toolCalls.length > 0;
@@ -166,10 +187,10 @@ export function filterLLMOutput(
   const sourcePositions = findSourcePositions(output);
 
   // Step 2: Extract and check all numbers
-  const numbers = extractNumbers(output, sourcePositions);
+  const numbers = extractNumbers(output, sourcePositions, findTrustedNumbers(trustedInput));
 
   for (const num of numbers) {
-    if (num.isAllowed) continue;
+    if (num.isAllowed || num.isTrustedInput) continue;
 
     if (!num.hasSource && !hasAnyToolCalls) {
       // No tool calls at all — any number is suspicious
@@ -196,8 +217,11 @@ export function filterLLMOutput(
     const pos = probMatch.index;
     const afterText = output.slice(pos, pos + 80);
 
-    // Check if a number follows within 40 characters
-    const numAfter = /\d+(?:\.\d+)?/.exec(afterText.slice(probMatch[0].length));
+    // Check whether a measured/quantified value follows nearby. Bare integers
+    // such as a subsequent "1. 원본 확인" checklist item are structure, not a
+    // probabilistic engineering claim, and must not corrupt the answer.
+    const numericWindow = afterText.slice(probMatch[0].length, probMatch[0].length + 40);
+    const numAfter = /\d+(?:\.\d+)?\s*(?:%|[A-Za-z\u03A9]+(?:\/[A-Za-z]+)?|개|명|회|배|년|개월|시간|분)/.exec(numericWindow);
     if (numAfter) {
       blocked.push({
         text: afterText.slice(0, probMatch[0].length + numAfter.index! + numAfter[0].length),
@@ -240,8 +264,19 @@ export function filterLLMOutput(
     return { original: output, filtered: output, blocked: [], passed: true };
   }
 
-  // Sort blocked items by position (descending) for safe removal
-  const sortedBlocked = [...blocked].sort((a, b) => b.position - a.position);
+  // Collapse overlapping findings before replacement. A probabilistic phrase
+  // such as "약 32A" otherwise produces two markers whose offsets corrupt
+  // each other after the first replacement.
+  const nonOverlapping = [...blocked]
+    .sort((a, b) => a.position - b.position || b.text.length - a.text.length)
+    .filter((item, index, items) => !items.slice(0, index).some((kept) => {
+      const keptEnd = kept.position + kept.text.length;
+      const itemEnd = item.position + item.text.length;
+      return kept.position < itemEnd && item.position < keptEnd;
+    }));
+
+  // Sort by position (descending) for safe removal.
+  const sortedBlocked = [...nonOverlapping].sort((a, b) => b.position - a.position);
 
   let filtered = output;
   for (const item of sortedBlocked) {
@@ -263,7 +298,7 @@ export function filterLLMOutput(
   return {
     original: output,
     filtered,
-    blocked,
+    blocked: nonOverlapping,
     passed: false,
   };
 }

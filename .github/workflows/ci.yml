@@ -28,8 +28,14 @@ jobs:
       - name: TypeScript check
         run: npx tsc --noEmit
 
+      - name: Lint
+        run: npm run lint
+
       - name: Run tests
         run: npm test -- --ci --forceExit
+
+      - name: SLD V3 contract gate
+        run: npm run gate:sld-v3-contract
 
       - name: Build
         run: npm run build
@@ -37,3 +43,26 @@ jobs:
           NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy' }}
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'dummy' }}
           NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'dummy' }}
+
+      - name: Install Chromium for UI smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Live PDF pipeline and UI smoke gates
+        shell: bash
+        run: |
+          npm start -- --hostname 127.0.0.1 --port 3010 > /tmp/esa-next.log 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3010/ > /dev/null; then
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              cat /tmp/esa-next.log
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:3010/ > /dev/null
+          npm run gate:pdf -- http://127.0.0.1:3010
+          BASE_URL=http://127.0.0.1:3010 npx playwright test

@@ -24,6 +24,7 @@ describe('encrypted drawing source lease ownership', () => {
     const bytes = Uint8Array.from([1, 2, 3]).buffer;
     const lease = createSourceLease(bytes, 'a'.repeat(64), 'owner-a');
     if ('error' in lease) throw new Error(lease.error);
+    expect(lease.expiresAt - Date.now()).toBeGreaterThan(23 * 60 * 60_000);
 
     expect(readSourceLease(lease.leaseId, 'owner-b')).toBeNull();
     expect(releaseSourceLease(lease.leaseId, 'owner-b')).toBe(false);

@@ -2,11 +2,11 @@
 schemaVersion: 1
 project: ESA
 status: active
-baselineBranch: codex/sld-v3-completion
-codeBaselineCommit: 896ae31f5faf764aa3b44acfd8573c9d4a0cec77
-updatedAt: 2026-07-21T06:53:49.8775095+09:00
+baselineBranch: codex/sld-boundary-continuity
+codeBaselineCommit: 9d49f8be0929bafa5302472294f3a20d64b75e07
+updatedAt: 2026-07-23T05:44:17.1673533+09:00
 trigger: architecture
-changedDomains: [agent, app]
+changedDomains: [agent, app, build]
 ---
 
 # ESA 프로젝트 상태
@@ -52,6 +52,10 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 벡터 감사는 실제 검출·토폴로지 결과에 따라 역할별로 기록하고, 저장소 미구성 동기 API는 불투명 500 대신 503을 반환한다.
 - V3 화면의 작업·페이지·확신·제안 상태를 한국어화하고 수정 연타를 차단했다. SVG 오버레이는 의미 토큰과 키보드 초점 표식을 사용한다.
 - 체크인된 합성 DXF를 production 분석기→V3 평가기→예측·영수증 writer로 실행하는 `npm run test:sld-benchmark` 진입점과 브라우저 업로드→기기 5개·관계 4개 E2E를 연결했다.
+- 4×4 논리 구획에 `Pxx-Axx`, 구획 경계 선에 `Pxx-Cxxx`, 연결 불확정 끝에 `Pxx-Uxxx`를 부여했다. 구획 crop은 겹치되 논리 면은 겹치지 않으며, 전체선→정밀 구획→정확한 원본선 ID 교차검증 뒤에만 선을 합친다.
+- 꼭짓점이 경계에 정확히 놓인 선, 일부 구간만 경계와 나란한 선, 5px 근접 평행선의 C 번호 뒤바뀜을 반증 테스트로 수리했다. 불일치·짝 부재는 오병합하지 않고 U와 HOLD 영수증으로 남긴다.
+- PDF.js worker뿐 아니라 CMap·표준 폰트·JBIG2/OpenJPEG WASM을 브라우저 loader와 standalone 배포물에 연결했다. 벡터 PDF에 Vision 심사가 붙는 경우 공급자·모델도 페이지 재사용 지문에 포함한다.
+- 반복 schedule 표제는 페이지 전체가 아닌 표제 주변 구역만 비계수 처리하고, 표제란은 복수 마커의 실제 경계만 제외한다. A/C/U와 stitch 영수증은 durable JSON 왕복에서 보존된다.
 
 ## 부분 완료
 
@@ -60,6 +64,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 기준서 화면은 저장소 스냅샷을 탐색하지만 관할 기관 최신 원문을 자동 동기화하지 않는다.
 - 공유 인메모리 레이트 리밋은 단일 프로세스 보호만 제공한다. V3 작업 저장은 내구 볼륨으로 전환했지만 전역 레이트 리밋은 별도다.
 - 비로그인 팀 검토 보고서는 현재 브라우저 `sessionStorage`에서만 다시 열 수 있다. `/api/reports/[id]` reader는 있지만 이 경로의 서버 writer는 없으며 화면도 다른 세션 보관을 약속하지 않는다.
+- 경계 위 3·4방향 junction은 현재 자동 병합 대상이 아니며, 두 조각 계약을 벗어나면 안전하게 HOLD한다. junction 자동 합산은 별도 그래프 계약과 라벨 fixture가 필요하다.
 
 ## 미검증
 
@@ -89,6 +94,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 공개 PDF 생산 API: 대산전기 11/11페이지·관계 244건(HOLD, 저신뢰 관계 명시), 한국기계연구원 18/18페이지·확정 관계 1,168건(COMPLETE), 두 파일 모두 실패·빈 페이지 오판정·가짜 페이지 간 관계 0.
 - 독립 코드·회귀·비밀자료 심사에서 최종 P0~P2와 회사 원본·키·대형 생성물 유입 0건을 확인했다.
 - `npm run gate:sld-golden`: exit 1, `verified95=false`; 실패 사유는 키·예측·실도면 데이터 부재와 claim 비활성이다.
+- 2026-07-23 경계 연속성 배치: `test:drawing-v3` 27개 스위트·138개, vision/UI 13개 스위트·130개, 4×4 production integration 1개 모두 통과했다. `npx tsc --noEmit --incremental false`, 수정 파일 ESLint, `npm run build`도 exit 0이며 65개 페이지를 생성했다.
+- standalone과 브라우저 공개 자산에서 `jbig2.wasm` 104,852B, `FoxitFixed.pfb` 17,597B, `78-H.bcmap` 2,379B, worker 1,304,896B를 non-empty로 확인했다.
 
 ## 다음 첫 행동
 
@@ -104,3 +111,5 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [최신 인수인계](docs/project/handoffs/2026-07-21-sld-v3-independent-review-repair.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
+- [경계 연속성 설계](docs/superpowers/specs/2026-07-23-sld-region-continuity-integrated-recovery-design.md)
+- [경계 연속성 구현 계획](docs/superpowers/plans/2026-07-23-sld-region-continuity-integrated-recovery.md)

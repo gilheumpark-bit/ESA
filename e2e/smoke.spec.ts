@@ -12,40 +12,37 @@ import { test, expect } from '@playwright/test';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('메인 페이지', () => {
-  test('로고 + 히어로 텍스트 표시', async ({ page }) => {
+  test('로고 + 검색 진입점 표시', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('text=ESVA')).toBeVisible();
-    await expect(page.locator('text=검색·계산·검증')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'ESVA', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '전기 엔지니어 검색' })).toBeAttached();
   });
 
   test('검색바 존재', async ({ page }) => {
     await page.goto('/');
-    const searchBar = page.locator('input[type="search"], input[placeholder*="검색"]');
+    const searchBar = page.getByRole('searchbox', { name: '질의 입력' });
     await expect(searchBar).toBeVisible();
   });
 
-  test('Bento 카드 5개 렌더링', async ({ page }) => {
+  test('예시 질의 3개가 실제 버튼으로 렌더링', async ({ page }) => {
     await page.goto('/');
-    const cards = page.locator(
-      'main a[href="/calc"], main a[href="/search"], main a[href="/tools/sld"], ' +
-      'main a[href="/tools/ocr"], main a[href="/standards"]',
-    );
-    await expect(cards).toHaveCount(5);
-    await expect(page.locator('main a[href="/calc"] h3')).toHaveText('전기 계산기');
-    await expect(page.locator('main a[href="/tools/sld"] h3')).toHaveText('도면 분석');
-    await expect(page.locator('main a[href="/standards"] h3')).toHaveText('기준서 브라우저');
+    await expect(page.getByRole('button', { name: /380V 50kW 100m 전압강하 검토/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /KEC 232\.3\.9/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /변압기 명판 촬영/ })).toBeVisible();
   });
 
-  test('3 원칙 섹션 표시', async ({ page }) => {
+  test('헤더 밖 핵심 도구도 홈에서 도달 가능', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: '계산은 수식 엔진 우선' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '판정 근거를 드러냅니다' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '검증 범위를 구분합니다' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'BYOK 키 설정' })).toHaveAttribute('href', '/settings/byok');
+    await expect(page.getByRole('link', { name: 'OCR 명판' })).toHaveAttribute('href', '/tools/ocr');
+    await expect(page.getByRole('link', { name: '프로젝트' })).toHaveAttribute('href', '/projects');
+    await expect(page.getByRole('link', { name: '계산 이력', exact: true })).toHaveAttribute('href', '/history');
   });
 
   test('메인 → 계산기 네비게이션', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
-    await page.click('text=전기 계산기');
+    await page.getByRole('navigation').getByRole('link', { name: '계산기', exact: true }).click();
     await expect(page).toHaveURL(/\/calc/);
   });
 });
@@ -267,35 +264,28 @@ test.describe('반응형 레이아웃', () => {
   test('태블릿 뷰포트 정상 렌더링', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto('/');
-    await expect(page.locator('main a[href="/calc"]')).toBeVisible();
+    await expect(page.getByRole('searchbox', { name: '질의 입력' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
   test('모바일 뷰포트 정상 렌더링', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
-    const calc = page.locator('main a[href="/calc"]');
-    const search = page.locator('main a[href="/search"]');
-    const [calcBox, searchBox] = await Promise.all([calc.boundingBox(), search.boundingBox()]);
-
-    expect(calcBox).not.toBeNull();
-    expect(searchBox).not.toBeNull();
-    expect(Math.abs(calcBox!.x - searchBox!.x)).toBeLessThanOrEqual(1);
-    expect(searchBox!.y).toBeGreaterThan(calcBox!.y);
+    await expect(page.getByRole('searchbox', { name: '질의 입력' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'BYOK 키 설정' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
   test('와이드 뷰포트 정상 렌더링', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
-    const calc = page.locator('main a[href="/calc"]');
-    const search = page.locator('main a[href="/search"]');
-    const [calcBox, searchBox] = await Promise.all([calc.boundingBox(), search.boundingBox()]);
+    const search = page.getByRole('searchbox', { name: '질의 입력' });
+    const box = await search.boundingBox();
 
-    expect(calcBox).not.toBeNull();
-    expect(searchBox).not.toBeNull();
-    expect(searchBox!.x).toBeGreaterThan(calcBox!.x);
-    expect(calcBox!.width).toBeGreaterThan(searchBox!.width);
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(808);
+    expect(Math.abs((box!.x + box!.width / 2) - 720)).toBeLessThanOrEqual(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
 

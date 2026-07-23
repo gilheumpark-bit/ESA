@@ -17,9 +17,10 @@ import { useAuth, type UserTier } from '@/contexts/AuthContext';
 import {
   useSettings,
   COUNTRY_LABELS,
+  CALCULATION_COUNTRIES,
   type Country,
 } from '@/hooks/useSettings';
-import { LANG_LABELS, SUPPORTED_LANGS, type Lang } from '@/lib/i18n';
+import { LANG_LABELS, RESPONSE_LANGS, type Lang } from '@/lib/i18n';
 import { Server } from 'lucide-react';
 
 // =============================================================================
@@ -33,7 +34,9 @@ const TIER_BADGES: Record<UserTier, { label: string; color: string }> = {
   enterprise: { label: 'Enterprise', color: 'bg-purple-600' },
 };
 
-const COUNTRY_OPTIONS = Object.entries(COUNTRY_LABELS) as [Country, string][];
+const COUNTRY_OPTIONS = CALCULATION_COUNTRIES.map(
+  (country) => [country, COUNTRY_LABELS[country]] as [Country, string],
+);
 
 // =============================================================================
 // PART 2 — Section Components
@@ -91,9 +94,12 @@ function LanguageSection({
   onChange: (lang: Lang) => void;
 }) {
   return (
-    <SectionCard title="Language / 언어">
+    <SectionCard title="AI 답변·계산서 언어">
+      <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+        AI 답변과 계산서 문구에 적용됩니다. 화면 메뉴는 현재 한국어로 제공됩니다.
+      </p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {SUPPORTED_LANGS.map((lang) => (
+        {RESPONSE_LANGS.map((lang) => (
           <button
             key={lang}
             onClick={() => onChange(lang)}
@@ -119,7 +125,10 @@ function CountrySection({
   onChange: (country: Country) => void;
 }) {
   return (
-    <SectionCard title="Country / Standard">
+    <SectionCard title="계산 기준 국가 / 표준">
+      <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+        내장 안전계수와 단위 변환이 검증 배선된 기준만 선택할 수 있습니다. 다른 국가 비교는 다국가 비교 도구에서 확인하세요.
+      </p>
       <select
         value={current}
         onChange={(e) => onChange(e.target.value as Country)}

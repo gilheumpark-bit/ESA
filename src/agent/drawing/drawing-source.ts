@@ -5,6 +5,7 @@ import { createCanvas, DOMMatrix, ImageData, Path2D } from '@napi-rs/canvas';
 import { createImageVariants } from '../vision/image-variants';
 import { profileImage } from '../vision/image-quality';
 import type { ImageQualityProfile } from '../vision/evidence-types';
+import { pdfjsNodeDocumentOptions } from './pdfjs-assets';
 
 export type PreparedFormatClass =
   | 'raster-image'
@@ -178,7 +179,10 @@ export async function enumerateDrawingPageCount(
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   let loadingTask: ReturnType<typeof pdfjs.getDocument> | undefined;
   try {
-    loadingTask = pdfjs.getDocument({ data: new Uint8Array(input.bytes.slice(0)) });
+    loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(input.bytes.slice(0)),
+      ...pdfjsNodeDocumentOptions(),
+    });
     const document = await loadingTask.promise;
     if (!Number.isSafeInteger(document.numPages) || document.numPages < 1 || document.numPages > MAX_PDF_PAGES) {
       throw new Error('DRAWING_SOURCE_PDF_PAGE_LIMIT');
@@ -212,7 +216,10 @@ async function preparePdf(
   let loadingTask: ReturnType<typeof pdfjs.getDocument>;
   let document: Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>;
   try {
-    loadingTask = pdfjs.getDocument({ data: new Uint8Array(input.bytes.slice(0)) });
+    loadingTask = pdfjs.getDocument({
+      data: new Uint8Array(input.bytes.slice(0)),
+      ...pdfjsNodeDocumentOptions(),
+    });
     document = await loadingTask.promise;
   } catch {
     throw new Error('DRAWING_SOURCE_PDF_INVALID');

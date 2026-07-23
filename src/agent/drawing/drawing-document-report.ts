@@ -88,6 +88,7 @@ export function buildDrawingDocumentV3(input: {
   pages: PageAnalysisState[];
   coverageLedger: CoverageLedger;
   evidenceGraph: DrawingDocumentV3['evidenceGraph'];
+  continuity?: DrawingDocumentV3['continuity'];
   crossPageRelations: DrawingDocumentV3['crossPageRelations'];
   equipmentCounts: DrawingDocumentV3['equipmentCounts'];
   ratedValues: DrawingDocumentV3['ratedValues'];
@@ -166,6 +167,12 @@ export function buildDrawingDocumentV3(input: {
     pages: input.pages,
     coverageLedger: input.coverageLedger,
     evidenceGraph: input.evidenceGraph,
+    continuity: input.continuity ?? {
+      regions: [],
+      continuations: [],
+      unresolvedEndpoints: [],
+      stitchReceipts: [],
+    },
     crossPageRelations: input.crossPageRelations,
     equipmentCounts: input.equipmentCounts,
     ratedValues: input.ratedValues,

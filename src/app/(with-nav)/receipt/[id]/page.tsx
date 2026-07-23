@@ -29,6 +29,7 @@ import type { Receipt } from '@/engine/receipt/types';
 import { authenticatedFetch, optionalAuthenticatedFetch } from '@/lib/client-auth';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getCachedReceipt } from '@/lib/receipt-cache';
+import { receiptLoadErrorMessage, safeReceiptLoadError } from '@/lib/receipt-load-error';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Skeleton & Error States
@@ -51,7 +52,7 @@ function ReceiptSkeleton() {
   );
 }
 
-function ErrorState({ message, id }: { message: string; id: string }) {
+function ErrorState({ message }: { message: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--bg-secondary)]">
       <div className="mx-4 max-w-md text-center">
@@ -59,8 +60,7 @@ function ErrorState({ message, id }: { message: string; id: string }) {
         <h1 className="mb-2 text-xl font-bold text-[var(--text-primary)]">
           영수증을 불러올 수 없습니다
         </h1>
-        <p className="mb-1 text-sm text-[var(--text-secondary)]">{message}</p>
-        <p className="mb-6 font-mono text-xs text-[var(--text-tertiary)]">ID: {id}</p>
+        <p className="mb-6 text-sm text-[var(--text-secondary)]">{message}</p>
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm text-[var(--color-primary)] hover:underline"
@@ -334,17 +334,14 @@ export default function ReceiptPage({
           if (!cancelled) setReceipt(cached);
           return;
         }
-        if (res.status === 404) throw new Error('영수증을 찾을 수 없습니다');
-        throw new Error(`불러오기 실패 (${res.status})`);
+        throw new Error(receiptLoadErrorMessage(res.status));
       } catch (err) {
         // 네트워크 오류 시에도 세션 캐시를 마지막으로 시도한다.
         const cached = getCachedReceipt(id);
         if (cached) {
           if (!cancelled) setReceipt(cached);
         } else if (!cancelled) {
-          setFetchError(
-            err instanceof Error ? err.message : '알 수 없는 오류',
-          );
+          setFetchError(safeReceiptLoadError(err));
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -370,8 +367,8 @@ export default function ReceiptPage({
   }, []);
 
   if (isLoading) return <ReceiptSkeleton />;
-  if (fetchError) return <ErrorState message={fetchError} id={id} />;
-  if (!receipt) return <ErrorState message="영수증 데이터가 없습니다" id={id} />;
+  if (fetchError) return <ErrorState message={fetchError} />;
+  if (!receipt) return <ErrorState message="영수증 데이터가 없습니다." />;
 
   return (
     <div className="min-h-screen bg-[var(--bg-secondary)]">

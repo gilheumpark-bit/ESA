@@ -32,7 +32,7 @@ import ESVALogo from '@/components/ESVALogo';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
-import { type Lang, SUPPORTED_LANGS } from '@/lib/i18n';
+import { type Lang, RESPONSE_LANGS } from '@/lib/i18n';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
@@ -108,9 +108,10 @@ function LangSelect({ className }: { className: string }) {
       value={language}
       onChange={handleChange}
       className={className}
-      aria-label="언어 선택"
+      aria-label="AI 답변 및 계산서 언어 선택"
+      title="AI 답변·계산서 언어 (화면 메뉴는 한국어)"
     >
-      {SUPPORTED_LANGS.map((lang) => (
+      {RESPONSE_LANGS.map((lang) => (
         <option key={lang} value={lang}>
           {lang.toUpperCase()}
         </option>

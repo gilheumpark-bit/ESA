@@ -1,5 +1,5 @@
 import { analyzeDrawingWithVLM } from '@/agent/vision/vlm-client';
-import { clearEmbeddingCache, generateEmbedding } from '../embedding';
+import { clearEmbeddingCache, generateEmbedding, generateEmbeddings } from '../embedding';
 import { recognizeNameplate } from '../ocr-nameplate';
 import { analyzeSLD } from '../sld-recognition';
 
@@ -56,5 +56,39 @@ describe('Gemini API key transport', () => {
       expect(String(url)).not.toContain(GEMINI_KEY);
       expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(GEMINI_KEY);
     }
+  });
+
+  test('does not reuse an embedding cached for a different provider', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ embedding: [1, 2], index: 0 }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ embeddings: [{ values: [3, 4] }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await expect(generateEmbedding('same text, provider-specific vector', 'openai')).resolves.toEqual([1, 2]);
+    await expect(generateEmbedding('same text, provider-specific vector', 'gemini')).resolves.toEqual([3, 4]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test('isolates provider caches for batch embeddings too', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ embedding: [5, 6], index: 0 }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ embeddings: [{ values: [7, 8] }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }));
+    global.fetch = fetchMock as typeof fetch;
+
+    await expect(generateEmbeddings(['same batch text'], 'openai')).resolves.toEqual([[5, 6]]);
+    await expect(generateEmbeddings(['same batch text'], 'gemini')).resolves.toEqual([[7, 8]]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

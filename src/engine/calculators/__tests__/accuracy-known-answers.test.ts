@@ -203,14 +203,22 @@ describe('cable / ampacity', () => {
   // NEC: 25mm² → 보수 하향 스냅 4 AWG(21.15mm²) @90°C = 95A (NEC 310.16)
   // IEC: 25mm² XLPE Cu = 133A (IEC 60364-5-52)
   // (구 구현은 NEC=138×0.98=135, IEC=138×1.02=141로 날조 — 허용전류 과대 = 화재 방향)
-  test('ampacity-compare 25mm² Cu XLPE: KEC 138, NEC 실표 95, IEC 실표 133', () => {
+  test('ampacity-compare 25mm² Cu XLPE: KEC free-air 133, NEC 실표 95, IEC 실표 133', () => {
     const { value, extra } = run('ampacity-compare', { cableSize: 25, conductor: 'Cu', insulation: 'XLPE', ambientTemp: 30 });
-    close(value, 138);
+    close(value, 133);
     close(extra.necAmpacity, 95);
     close(extra.iecAmpacity, 133);
     // 회귀 방지: 다시 KEC 배율 추정으로 돌아가면 실패한다
-    expect(extra.necAmpacity).not.toBe(Math.round(138 * 0.98));
-    expect(extra.iecAmpacity).not.toBe(Math.round(138 * 1.02));
+    expect(extra.necAmpacity).not.toBe(Math.round(133 * 0.98));
+    expect(extra.iecAmpacity).not.toBe(Math.round(133 * 1.02));
+  });
+  test('ampacity-compare는 표에 없는 NEC 조합을 0A로 위장하지 않는다', () => {
+    expect(() => run('ampacity-compare', {
+      cableSize: 2.5,
+      conductor: 'Al',
+      insulation: 'PVC',
+      ambientTemp: 30,
+    })).toThrow(/NEC.*not available|not available.*NEC/i);
   });
   test('ampacity-global-compare 25mm² XLPE: min=AS 110·√(60/50)=120.5A', () => {
     const { value, extra } = run('ampacity-global-compare', { cableSize: 25, conductor: 'copper', insulation: 'XLPE', ambientTemp: 30 });

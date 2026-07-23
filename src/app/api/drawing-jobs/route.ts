@@ -21,7 +21,7 @@ export const maxDuration = 300;
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
-const MIN_VISION_CALLS_PER_PAGE = 18;
+const DEFAULT_VISION_CALL_BUDGET_PER_PAGE = 110;
 const VISION_PROVIDERS = new Set(['gemini', 'openai', 'claude'] as const);
 const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
 type VisionProvider = 'gemini' | 'openai' | 'claude';
@@ -144,16 +144,20 @@ export async function POST(req: NextRequest) {
         return userError(`요청 페이지가 도면 범위를 벗어났습니다. 전체 ${availablePages}페이지입니다.`);
       }
       const estimatedPages = requestedPages === 'all' ? availablePages : requestedPages.length;
-      // A clean page needs one complete symbols/connections/text/logic council
-      // pass (18 calls). A fixed 120-call default made every 7+ page document
-      // structurally incapable of completing even its first precision pass.
-      // An explicit user budget still wins and low-quality retries remain capped.
-      const deferredBudget = hasExplicitVlmBudget
-        ? budget
-        : {
-            ...budget,
-            maxVlmCalls: Math.min(10_000, Math.max(120, estimatedPages * MIN_VISION_CALLS_PER_PAGE)),
-          };
+      // A clean page needs the four independent readers, triple text read,
+      // precision grids, and the post-review coverage audit (19 calls at 2x2).
+      // Page, pixel, and deadline caps must also grow with the enumerated source;
+      // otherwise an 83-page teaching document is accepted as "all" but is
+      // structurally stopped at page 50 before analysis starts.
+      const deferredBudget = {
+        ...budget,
+        maxPages: Math.min(500, Math.max(budget.maxPages, estimatedPages)),
+        maxVlmCalls: hasExplicitVlmBudget
+          ? budget.maxVlmCalls
+          : Math.min(10_000, Math.max(120, estimatedPages * DEFAULT_VISION_CALL_BUDGET_PER_PAGE)),
+        maxPixels: Math.min(1_000_000_000, Math.max(budget.maxPixels, estimatedPages * 6_000_000)),
+        deadlineMs: Math.min(3_600_000, Math.max(budget.deadlineMs, estimatedPages * 60_000)),
+      };
       const documentHash = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
       const job = createJob({
         documentHash,
@@ -240,7 +244,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const blocked = applyRateLimit(req, 'sld');
+  const blocked = applyRateLimit(req, 'sld-job');
   if (blocked) return blocked;
   const owner = await resolveDrawingOwner(req, false);
   if (!owner) return userError('작업 세션이 만료되었습니다.', 401);

@@ -58,6 +58,18 @@ describe('source-linked SLD report surface', () => {
     expect(page).toContain('labelDocumentReadStatus(v3Doc.verification.documentStatus)');
     expect(report).toContain('labelReadFailureCode(item.code)');
     expect(report).toContain('correctingDisplayId === item.displayId');
+    expect(report).toContain("node.rawLabel ? ` · ${node.rawLabel}` : ''");
+  });
+
+  it('routes every primary drawing upload through the V3 full-document analysis', () => {
+    const page = source('src/app/(with-nav)/tools/sld/page.tsx');
+
+    expect(page).toContain('const handlePrimaryDocumentUpload');
+    expect(page.match(/handlePrimaryDocumentUpload\(file\)/g)).toHaveLength(3);
+    expect(page).toContain('기본 분석은 전체 페이지·구획·독립 심사를 수행합니다.');
+    expect(page).toContain("let endpoint: 'run' | 'resume' = 'run'");
+    expect(page).toContain("endpoint = 'resume'");
+    expect(page).toContain('settledPages <= previousSettledPages');
   });
 
   it('uses semantic drawing tokens and a visible SVG keyboard focus target', () => {
@@ -69,5 +81,42 @@ describe('source-linked SLD report surface', () => {
     expect(overlay).toContain('drawing-overlay-target');
     expect(overlay).toContain('drawing-overlay-line-target');
     expect(overlay).not.toContain('#b42318');
+  });
+
+  it('shows numbered A regions, C continuation ports, and U holds without treating them as equipment', () => {
+    const overlay = source('src/components/DrawingDocumentV3Overlay.tsx');
+    const report = source('src/components/DrawingDocumentV3Report.tsx');
+
+    expect(overlay).toContain('continuityRegions');
+    expect(overlay).toContain('경계 연결점');
+    expect(overlay).toContain('미해결 선 끝');
+    expect(overlay).toContain('strokeDasharray="6 4"');
+    expect(report).toContain("'continuity'");
+    expect(report).toContain('경계 연결');
+    expect(report).toContain('구획 번호는 기기 수량에 포함되지 않습니다.');
+  });
+
+  it('loads browser PDF binary assets and routes A/C/U selections to their source page', () => {
+    const preview = source('src/components/DrawingSourcePreview.tsx');
+    const page = source('src/app/(with-nav)/tools/sld/page.tsx');
+
+    expect(preview).toContain("cMapUrl: '/vendor/pdfjs/cmaps/'");
+    expect(preview).toContain("standardFontDataUrl: '/vendor/pdfjs/standard_fonts/'");
+    expect(preview).toContain("wasmUrl: '/vendor/pdfjs/wasm/'");
+    expect(page).toContain('continuity?.regions');
+    expect(page).toContain('continuity?.continuations');
+    expect(page).toContain('continuity?.unresolvedEndpoints');
+  });
+
+  it('reruns the retained drawing and labels model confidence without implying measured accuracy', () => {
+    const page = source('src/app/(with-nav)/tools/sld/page.tsx');
+
+    expect(page).toContain('onClick={() => void handleAnalyze()}');
+    expect(page).toContain('모델 추정 확신도:');
+    expect(page).toContain('정답률이 아닌 AI 자체 추정치');
+    expect(page).not.toContain('정확도:');
+    expect(page).toContain('compareSLDAnalysisRuns');
+    expect(page).toContain('반복 판독 불일치 · HOLD');
+    expect(page).toContain('기기 {runComparison.componentCounts[0]}→{runComparison.componentCounts[1]}');
   });
 });

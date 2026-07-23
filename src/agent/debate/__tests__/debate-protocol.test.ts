@@ -109,6 +109,21 @@ describe('runDebate', () => {
     expect(buildEscalation(debates)?.requiresHumanReview).toBe(true);
   });
 
+  test('전압강하 합의 실패 시 높은 값을 보수값으로 채택한다', () => {
+    const debates = runDebate([
+      makeTeamResult('TEAM-SLD', [{ id: 'voltage-drop', value: 2.5 }]),
+      makeTeamResult('TEAM-STD', [{ id: 'voltage-drop', value: 4.0 }]),
+    ], {
+      maxRounds: 1,
+      requiredAgreement: 1,
+      tolerancePercent: 0.1,
+      escalateOnFailure: true,
+    });
+
+    expect(debates[0].finalConsensus).toBe(false);
+    expect(debates[0].finalPosition).toContain('4');
+  });
+
   test('accepts only the numeric majority cluster and records the outlier', () => {
     const results = [
       makeTeamResult('TEAM-SLD', [{ id: 'vd', value: 2.5 }]),

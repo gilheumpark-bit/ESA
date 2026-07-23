@@ -78,4 +78,11 @@ describe('CALCULATOR_PARAMS ↔ 계산기 입력 계약 (전 계산기 UI 경로
     const missing = allIds.filter((id) => !CALCULATOR_NAMES[id]);
     expect(missing).toEqual([]);
   });
+
+  test('케이블 계산기 UI는 모든 도체·절연 조합에 정본 표가 있는 설치방법만 노출한다', () => {
+    const installation = (CALCULATOR_PARAMS['cable-sizing'] as ExtendedParamDef[])
+      .find((param) => param.name === 'installation');
+
+    expect(installation?.options?.map((option) => option.value)).toEqual(['C', 'A1', 'D']);
+  });
 });

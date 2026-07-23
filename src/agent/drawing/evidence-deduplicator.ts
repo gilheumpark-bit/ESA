@@ -28,6 +28,11 @@ export interface RawLineHit {
   confidence: number;
   pageIndex: number;
   regionId: string;
+  regionDisplayId?: string;
+  regionDisplayIds?: string[];
+  startAnchorId?: string;
+  endAnchorId?: string;
+  openEndReason?: 'page-edge' | 'device-boundary' | 'unresolved' | null;
   certainty?: Certainty;
   sourceEvidenceIds?: string[];
 }
@@ -59,19 +64,25 @@ export function deduplicateSymbols(
     || left.localId.localeCompare(right.localId));
 
   for (const hit of ordered) {
-    const dup = kept.find((k) =>
-      k.evidence[0]?.pageIndex === hit.pageIndex
-      && typesCompatible(k.typeCandidates[0] ?? '', hit.type)
-      && boundsNear(k.evidence[0].bounds, hit.bounds, tolerance)
-      && labelsCompatible(k.rawLabel, hit.label));
+    const dup = kept.find((k) => {
+      if (k.evidence[0]?.pageIndex !== hit.pageIndex) return false;
+      if (!boundsNear(k.evidence[0].bounds, hit.bounds, tolerance)) return false;
+      const sameType = k.typeCandidates.some((candidate) => typesCompatible(candidate, hit.type));
+      return sameType || labelsEquivalent(k.rawLabel, hit.label);
+    });
 
     if (dup) {
       const previousMaxConfidence = Math.max(...dup.evidence.map((item) => item.confidence));
       const incoming = evidenceRefs(hit, `${dup.id}-e${dup.evidence.length}`)
         .filter((item) => !dup.evidence.some((existing) => existing.evidenceId === item.evidenceId));
       dup.evidence.push(...incoming);
-      if (hit.confidence > previousMaxConfidence) {
-        dup.typeCandidates = unique([hit.type, ...dup.typeCandidates]);
+      const typeConflict = !dup.typeCandidates.some((candidate) => typesCompatible(candidate, hit.type));
+      dup.typeCandidates = unique([...dup.typeCandidates, hit.type]);
+      if (typeConflict) {
+        dup.confirmedType = undefined;
+        dup.certainty = 'ambiguous';
+        dup.rawLabel = dup.rawLabel ?? hit.label;
+      } else if (hit.confidence > previousMaxConfidence) {
         dup.rawLabel = hit.label ?? dup.rawLabel;
         if (hit.certainty === 'confirmed' || hit.confidence >= 0.85) {
           dup.confirmedType = hit.type;
@@ -117,7 +128,8 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
       const ks = k.path[0];
       const ke = k.path[k.path.length - 1];
       return (dist(ks, start) <= tolerance && dist(ke, end) <= tolerance)
-        || (dist(ks, end) <= tolerance && dist(ke, start) <= tolerance);
+        || (dist(ks, end) <= tolerance && dist(ke, start) <= tolerance)
+        || substantiallyOverlappingSegments(ks, ke, start, end, tolerance);
     });
     if (dup) {
       const incoming = evidenceRefs({ ...hit, bounds: pathBounds(hit.path) }, `${dup.id}-e${dup.evidence.length}`)
@@ -125,6 +137,9 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
       dup.evidence.push(...incoming);
       dup.junctions = mergePoints(dup.junctions, hit.junctions ?? [], tolerance);
       dup.crossovers = mergePoints(dup.crossovers, hit.crossovers ?? [], tolerance);
+      if (dist(start, end) > dist(dup.path[0], dup.path[dup.path.length - 1])) {
+        dup.path = hit.path.map((point) => ({ ...point }));
+      }
       continue;
     }
     const page = hit.pageIndex + 1;
@@ -189,7 +204,9 @@ export function buildPageRelations(
   lines: LineNode[],
   pageIndex: number,
 ): RelationEdge[] {
-  const pageSymbols = symbols.filter((s) => s.evidence[0]?.pageIndex === pageIndex && s.certainty === 'confirmed');
+  // 모호한 기기 후보도 선로 종단 후보로 연결해 사용자가 번호 관계를 검토할 수
+  // 있게 한다. 단, 어느 한쪽이라도 미확정이면 관계 전체를 ambiguous로 유지한다.
+  const pageSymbols = symbols.filter((s) => s.evidence[0]?.pageIndex === pageIndex && s.certainty !== 'unread');
   const pageLines = lines.filter((l) => l.evidence[0]?.pageIndex === pageIndex && l.certainty !== 'unread');
   const relations: RelationEdge[] = [];
   let seq = 0;
@@ -208,7 +225,9 @@ export function buildPageRelations(
       from: from.id,
       to: to.id,
       lineId: line.id,
-      certainty: line.certainty,
+      certainty: line.certainty === 'confirmed' && from.certainty === 'confirmed' && to.certainty === 'confirmed'
+        ? 'confirmed'
+        : 'ambiguous',
       evidence: [...from.evidence, ...to.evidence, ...line.evidence],
     });
   }
@@ -258,9 +277,9 @@ function boundsNear(a: EvidenceBounds, b: EvidenceBounds, tol: number): boolean 
   return Math.hypot(ac.x - bc.x, ac.y - bc.y) <= tol;
 }
 
-function labelsCompatible(a?: string, b?: string): boolean {
-  if (!a || !b) return true;
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+function labelsEquivalent(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  return normalizeLabel(a) === normalizeLabel(b);
 }
 
 function typesCompatible(a: string, b: string): boolean {
@@ -286,6 +305,37 @@ function stableId(prefix: string, parts: Array<string | number>): string {
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function substantiallyOverlappingSegments(
+  aStart: { x: number; y: number },
+  aEnd: { x: number; y: number },
+  bStart: { x: number; y: number },
+  bEnd: { x: number; y: number },
+  tolerance: number,
+): boolean {
+  const ax = aEnd.x - aStart.x;
+  const ay = aEnd.y - aStart.y;
+  const bx = bEnd.x - bStart.x;
+  const by = bEnd.y - bStart.y;
+  const aLength = Math.hypot(ax, ay);
+  const bLength = Math.hypot(bx, by);
+  if (aLength === 0 || bLength === 0) return false;
+
+  // Same axis within about six degrees.
+  const crossRatio = Math.abs(ax * by - ay * bx) / (aLength * bLength);
+  if (crossRatio > 0.1) return false;
+
+  const perpendicularDistance = (point: { x: number; y: number }) =>
+    Math.abs(ax * (aStart.y - point.y) - (aStart.x - point.x) * ay) / aLength;
+  if (perpendicularDistance(bStart) > tolerance || perpendicularDistance(bEnd) > tolerance) return false;
+
+  const ux = ax / aLength;
+  const uy = ay / aLength;
+  const b0 = (bStart.x - aStart.x) * ux + (bStart.y - aStart.y) * uy;
+  const b1 = (bEnd.x - aStart.x) * ux + (bEnd.y - aStart.y) * uy;
+  const overlap = Math.max(0, Math.min(aLength, Math.max(b0, b1)) - Math.max(0, Math.min(b0, b1)));
+  return overlap / Math.min(aLength, bLength) >= 0.75;
 }
 
 function pathBounds(path: Array<{ x: number; y: number }>): EvidenceBounds {

@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 
-import { prepareDrawingSource } from '../drawing-source';
+import { enumerateDrawingPageCount, prepareDrawingSource } from '../drawing-source';
 
 jest.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
   OPS: {
@@ -54,6 +54,26 @@ function buildVectorPdf(pageCount: number): ArrayBuffer {
 }
 
 describe('prepareDrawingSource', () => {
+  it('binds CMap, standard fonts, image decoder wasm, and system fonts to every server PDF load', async () => {
+    const getDocument = jest.requireMock('pdfjs-dist/legacy/build/pdf.mjs').getDocument as jest.Mock;
+    getDocument.mockClear();
+    const bytes = buildVectorPdf(1);
+
+    await enumerateDrawingPageCount({ bytes, mimeType: 'application/pdf' });
+    await prepareDrawingSource({ bytes, mimeType: 'application/pdf', requestedPages: [0] });
+
+    expect(getDocument).toHaveBeenCalledTimes(2);
+    for (const [options] of getDocument.mock.calls) {
+      expect(options).toEqual(expect.objectContaining({
+        cMapPacked: true,
+        useSystemFonts: true,
+        cMapUrl: expect.stringMatching(/[\\/]cmaps[\\/]$/),
+        standardFontDataUrl: expect.stringMatching(/[\\/]standard_fonts[\\/]$/),
+        wasmUrl: expect.stringMatching(/[\\/]wasm[\\/]$/),
+      }));
+    }
+  });
+
   it('measures and normalizes an image page from the actual pixels', async () => {
     const png = await sharp({
       create: {

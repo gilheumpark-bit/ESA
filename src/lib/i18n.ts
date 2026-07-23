@@ -7,6 +7,7 @@
 // ─── PART 1: Types ────────────────────────────────────────────
 
 export type Lang = 'ko' | 'en' | 'ja' | 'zh';
+export type ResponseLang = 'ko' | 'en';
 
 export interface LangTexts {
   ko: string;
@@ -16,6 +17,8 @@ export interface LangTexts {
 }
 
 export const SUPPORTED_LANGS: Lang[] = ['ko', 'en', 'ja', 'zh'];
+/** Languages currently wired through AI/search/calculation receipt outputs. */
+export const RESPONSE_LANGS: ResponseLang[] = ['ko', 'en'];
 
 export const LANG_LABELS: Record<Lang, string> = {
   ko: '한국어',

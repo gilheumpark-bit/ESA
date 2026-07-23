@@ -36,6 +36,14 @@ import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
 import { decodeOnPremiseConfig } from '@/lib/onpremise-storage';
 import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
 import { authenticatedFetch } from '@/lib/client-auth';
+import { buildVisionChatRequest, getFirstAvailableVisionKey } from '@/lib/vision-byok';
+import { splitCompleteSseLines } from '@/lib/sse-line-buffer';
+import {
+  ELECTRICAL_CHAT_MAX_TOKENS,
+  buildElectricalAssistantPrompt,
+} from '@/lib/electrical-chat';
+import { scheduleInitialChatSend } from '@/lib/chat-initial-send';
+import { readStoredCountry, readStoredLanguage } from '@/hooks/useSettings';
 import type {
   SearchResult,
   RankedResult,
@@ -332,9 +340,14 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const activeRequestRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || streaming) return;
+
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    activeRequestRef.current = controller;
 
     const userMsg = { role: 'user' as const, content: text.trim() };
     const allMessages = [...messages, userMsg];
@@ -345,10 +358,7 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
     try {
       // On-Premise 모드(설정에서 활성 시): 브라우저 결합 암호문을
       // 요청 직전에만 복호화하고 사설 LLM 경로로 라우팅한다.
-      let providerBody: Record<string, unknown> = {
-        provider: 'openai',
-        model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-5.6-luna',
-      };
+      let providerBody: Record<string, unknown> | null = null;
       try {
         const raw = sessionStorage.getItem('esva-onpremise');
         if (raw) {
@@ -365,17 +375,27 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
         throw new Error('On-Premise 설정을 안전하게 읽지 못했습니다. 설정 페이지에서 다시 저장하세요.');
       }
 
+      if (!providerBody) {
+        const browserByok = buildVisionChatRequest(await getFirstAvailableVisionKey());
+        providerBody = browserByok ?? {
+          provider: 'openai',
+          model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || 'gpt-5.6-luna',
+        };
+      }
+
       const chatFetch = providerBody.provider === 'onpremise' ? authenticatedFetch : fetch;
+      const responseLanguage = readStoredLanguage();
       const res = await chatFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: allMessages,
           ...providerBody,
-          systemPrompt: `You are an electrical engineering assistant for ESVA (전기 검색 AI). Answer in Korean. Be concise. Reference KEC/NEC/IEC standards when relevant. Current query context: "${query}"`,
-          temperature: 0.7,
-          maxTokens: 1024,
+          systemPrompt: buildElectricalAssistantPrompt(query, responseLanguage),
+          temperature: 0.2,
+          maxTokens: ELECTRICAL_CHAT_MAX_TOKENS,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -394,53 +414,73 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
 
       const decoder = new TextDecoder();
       let assistantText = '';
+      let sseRemainder = '';
 
+      const applySseLine = (line: string) => {
+        if (!line.startsWith('data: ')) return false;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') return true;
+        try {
+          const parsed = JSON.parse(payload);
+          if (parsed.text) {
+            assistantText += parsed.text;
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'assistant', content: assistantText };
+              return updated;
+            });
+          }
+          // 서버 output-filter: 무근거 수치 차단 시 필터 본문으로 교체
+          if (parsed.filter && parsed.filter.passed === false && parsed.filter.filteredText) {
+            const notice = parsed.filter.notice
+              ? `\n\n[주의] ${parsed.filter.notice}`
+              : '';
+            assistantText = `${parsed.filter.filteredText}${notice}`;
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = { role: 'assistant', content: assistantText };
+              return updated;
+            });
+          }
+        } catch { /* incomplete JSON is retained by splitCompleteSseLines */ }
+        return false;
+      };
+
+      let streamDone = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6).trim();
-          if (payload === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(payload);
-            if (parsed.text) {
-              assistantText += parsed.text;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: 'assistant', content: assistantText };
-                return updated;
-              });
-            }
-            // 서버 output-filter: 무근거 수치 차단 시 필터 본문으로 교체
-            if (parsed.filter && parsed.filter.passed === false && parsed.filter.filteredText) {
-              const notice = parsed.filter.notice
-                ? `\n\n[주의] ${parsed.filter.notice}`
-                : '';
-              assistantText = `${parsed.filter.filteredText}${notice}`;
-              setMessages((prev) => {
-                const updated = [...prev];
-                updated[updated.length - 1] = { role: 'assistant', content: assistantText };
-                return updated;
-              });
-            }
-          } catch { /* skip malformed */ }
+        const split = splitCompleteSseLines(sseRemainder, chunk);
+        sseRemainder = split.remainder;
+        for (const line of split.lines) {
+          if (applySseLine(line)) {
+            streamDone = true;
+            break;
+          }
         }
+        if (streamDone) break;
       }
+
+      const tail = splitCompleteSseLines(sseRemainder, `${decoder.decode()}\n`);
+      for (const line of tail.lines) applySseLine(line);
     } catch {
+      if (controller.signal.aborted) return;
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: 'assistant', content: '네트워크 오류가 발생했습니다.' };
         return updated;
       });
     } finally {
-      setStreaming(false);
+      if (activeRequestRef.current === controller) {
+        activeRequestRef.current = null;
+        setStreaming(false);
+      }
     }
   }, [messages, streaming, query]);
+
+  useEffect(() => () => activeRequestRef.current?.abort(), []);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -449,10 +489,7 @@ function AIChatPanel({ query, onClose }: { query: string; onClose: () => void })
   // Auto-send initial query
   const initialSentRef = useRef(false);
   useEffect(() => {
-    if (!query.trim() || initialSentRef.current) return;
-    initialSentRef.current = true;
-    const timer = window.setTimeout(() => { void sendMessage(query); }, 0);
-    return () => window.clearTimeout(timer);
+    return scheduleInitialChatSend(query, initialSentRef, sendMessage);
   }, [query, sendMessage]);
 
   return (
@@ -563,11 +600,18 @@ function SearchPageInner() {
     if (!query.trim()) return;
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function doSearch() {
       try {
+        const responseLanguage = readStoredLanguage();
+        const countryCode = readStoredCountry();
+        const browserEmbeddingByok = await getFirstAvailableVisionKey(['openai', 'gemini']);
+        const searchCacheVariant = browserEmbeddingByok
+          ? `search-vector-${browserEmbeddingByok.provider}-${responseLanguage}-${countryCode}`
+          : `search-keyword-${responseLanguage}-${countryCode}`;
         // AI 캐시 확인 — 동일 쿼리 재요청 시 API 비용 0
-        const cached = await getCachedResponse('esva', 'search', [{ role: 'user', content: query.trim() }], 0);
+        const cached = await getCachedResponse('esva', searchCacheVariant, [{ role: 'user', content: query.trim() }], 0);
         if (cached && !cancelled) {
           const data: SearchResult = JSON.parse(cached);
           setResult(data);
@@ -577,7 +621,18 @@ function SearchPageInner() {
         const res = await fetch('/api/search', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: query.trim() }),
+          body: JSON.stringify({
+            query: query.trim(),
+            language: responseLanguage,
+            countryCode,
+            ...(browserEmbeddingByok ? {
+              embeddingByok: {
+                provider: browserEmbeddingByok.provider,
+                apiKey: browserEmbeddingByok.key,
+              },
+            } : {}),
+          }),
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error(`Search failed (${res.status})`);
         const json = await res.json();
@@ -585,7 +640,7 @@ function SearchPageInner() {
         if (!cancelled) {
           setResult(data);
           // 캐시 저장 (temperature 0 = 결정론적 검색)
-          await cacheResponse('esva', 'search', [{ role: 'user', content: query.trim() }], 0, JSON.stringify(data));
+          await cacheResponse('esva', searchCacheVariant, [{ role: 'user', content: query.trim() }], 0, JSON.stringify(data));
         }
       } catch (err) {
         if (!cancelled) {
@@ -603,7 +658,11 @@ function SearchPageInner() {
       setSearchError(null);
       void doSearch();
     }, 0);
-    return () => { cancelled = true; window.clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
   }, [query]);
 
   return (

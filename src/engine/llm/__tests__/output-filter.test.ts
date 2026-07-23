@@ -13,6 +13,30 @@ import { filterLLMOutput, isClean } from '../output-filter';
 // -- Clean Output Tests (should PASS) ----------------------------------------
 
 describe('LLM Output Filter - Clean Output', () => {
+  test('probability wording followed by a numbered checklist is not mistaken for a numeric estimate', () => {
+    const output = '일반적으로 OCR 오인 가능성을 먼저 확인합니다.\n1. 원본 확인\n2. 범례 대조';
+    const result = filterLLMOutput(output);
+
+    expect(result.passed).toBe(true);
+    expect(result.filtered).toBe(output);
+  });
+
+  test('numbers copied from the user question are treated as input evidence', () => {
+    const output = '입력값은 3상 380V, 50kW입니다.';
+    const result = filterLLMOutput(output, [], '부하는 3상 380V 50kW입니다.');
+
+    expect(result.passed).toBe(true);
+  });
+
+  test('a derived number is still blocked when only inputs are trusted', () => {
+    const output = '입력은 380V, 50kW이고 계산 전류는 75A입니다.';
+    const result = filterLLMOutput(output, [], '부하는 380V 50kW입니다.');
+
+    expect(result.passed).toBe(false);
+    expect(result.filtered).toContain('380V');
+    expect(result.filtered).toContain('50kW');
+    expect(result.filtered).not.toContain('75A');
+  });
   test('Clean output with tool calls -- passes', () => {
     const output = 'The voltage drop is 2.8%. [SOURCE: KEC 232.52]';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 2.8 } }];
@@ -97,6 +121,12 @@ describe('LLM Output Filter - Blocked Output', () => {
 // -- Filter Replacement Tests ------------------------------------------------
 
 describe('LLM Output Filter - Replacement Markers', () => {
+  test('overlapping probabilistic and numeric findings produce one intact marker', () => {
+    const result = filterLLMOutput('약 32A가 흐릅니다.');
+
+    expect(result.filtered.match(/\[BLOCKED:/g)).toHaveLength(1);
+    expect(result.filtered).not.toContain(']LOCKED');
+  });
   test('Blocked probabilistic text gets replacement marker', () => {
     const output = '대략 50A의 전류가 필요합니다.';
     const result = filterLLMOutput(output);

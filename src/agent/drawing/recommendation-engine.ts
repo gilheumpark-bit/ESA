@@ -139,7 +139,11 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
   for (const u of input.unresolved) {
     if (u.code === 'UNREADABLE_TEXT' || u.code === 'UNREADABLE_SYMBOL' || u.code === 'LOW_RESOLUTION_HOLD') continue;
     out.push(rec(++seq, {
-      severity: u.code === 'LINE_CONTINUITY_UNCERTAIN' || u.code === 'HOLD_RESCAN_UNRESOLVED' ? 'major' : 'minor',
+      severity: u.code === 'LINE_CONTINUITY_UNCERTAIN'
+        || u.code === 'HOLD_RESCAN_UNRESOLVED'
+        || u.code === 'ELECTRICAL_LOGIC_CONFLICT'
+        ? 'major'
+        : 'minor',
       problem: `미해결 항목 ${u.displayId ?? u.id}: ${u.code}.`,
       relatedDisplayIds: u.displayId ? [u.displayId] : [],
       evidenceIds: [],

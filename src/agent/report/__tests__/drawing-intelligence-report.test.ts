@@ -28,14 +28,15 @@ function artifact(): DrawingReviewArtifact {
       connections: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
       text: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
       logic: { variantId: 'original', expectedRegionCount: 1, actualRegionCount: 1, plannedCalls: 1 },
-    }, plannedCalls: 4, complete: true, maxRegionCallsPerRole: 1 },
+      'coverage-auditor': { variantId: 'original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+    }, plannedCalls: 5, complete: true, maxRegionCallsPerRole: 1 },
   };
 }
 
 function synthesis(): DrawingSynthesis {
   return {
     drawingHash: HASH,
-    requiredRoles: ['symbols', 'connections', 'text', 'logic'], completedRoles: ['symbols', 'connections', 'text', 'logic'], missingRoles: [],
+    requiredRoles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'], completedRoles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'], missingRoles: [],
     reviewIntegrity: { coverageComplete: true, roleFailures: [] },
     stages: { normalizer: 'COMPLETE', invariants: 'COMPLETE', calculator: 'COMPLETE', logicResolver: 'COMPLETE', synthesis: 'COMPLETE' },
     evidenceRegistry: [

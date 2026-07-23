@@ -3,6 +3,7 @@ import {
   cancelOwnedJob,
   createJob,
   getOwnedJob,
+  nextPendingRequestedPage,
   updateOwnedJob,
   updateOwnedJobIfDocumentVersion,
 } from '../drawing-job-store';
@@ -34,6 +35,20 @@ describe('drawing job ownership', () => {
     expect(cancelOwnedJob(job.jobId, 'owner-b')).toBe(false);
     expect(cancelOwnedJob(job.jobId, 'owner-a')).toBe(true);
     expect(getOwnedJob(job.jobId, 'owner-a')).toMatchObject({ status: 'CANCELLED', cancelRequested: true });
+  });
+
+  it('selects the first unfinished page for a checkpointed all-page job', () => {
+    const job = createJob({ documentHash: '9'.repeat(64), ownerId: 'owner-a', budget, estimatedPages: 3 });
+    const updated = updateOwnedJob(job.jobId, 'owner-a', {
+      sourceMetadata: { mimeType: 'application/pdf', requestedPages: 'all' },
+      document: { pages: [
+        { pageIndex: 0, status: 'complete' },
+        { pageIndex: 1, status: 'failed' },
+        { pageIndex: 2, status: 'pending' },
+      ] } as DrawingDocumentV3,
+    });
+
+    expect(nextPendingRequestedPage(updated!)).toBe(2);
   });
 
   it('persists jobs on a configured durable shared directory', () => {
@@ -103,6 +118,42 @@ describe('drawing job ownership', () => {
       delete process.env.DRAWING_JOB_STORE_DIR;
       rmSync(storeDir, { recursive: true, force: true });
     }
+  });
+
+  it('round-trips numbered continuity evidence and HOLD receipts through durable storage', () => {
+    const storeDir = mkdtempSync(join(tmpdir(), 'esa-drawing-continuity-'));
+    process.env.DRAWING_JOB_STORE_DIR = storeDir;
+    try {
+      const job = createJob({ documentHash: '7'.repeat(64), ownerId: 'owner-a', budget, estimatedPages: 1 });
+      const continuity = {
+        regions: [{ id: 'region-1', displayId: 'P01-A01', pageIndex: 0 }],
+        continuations: [{ id: 'continuation-1', displayId: 'P01-C001', pageIndex: 0, status: 'hold' }],
+        unresolvedEndpoints: [{ id: 'unresolved-1', displayId: 'P01-U001', pageIndex: 0, continuationId: 'P01-C001' }],
+        stitchReceipts: [{ continuationIds: ['P01-C001'], consumedLocalLineIds: ['left'], checks: { adjacency: true, cardinality: false, distance: false, tangent: false, lineKind: false, globalCorroboration: true }, status: 'hold' }],
+      };
+      updateOwnedJob(job.jobId, 'owner-a', {
+        status: 'PARTIAL',
+        document: { continuity } as unknown as DrawingDocumentV3,
+      });
+
+      jest.resetModules();
+      const reloaded = jest.requireActual('../drawing-job-store') as typeof import('../drawing-job-store');
+      expect(reloaded.getOwnedJob(job.jobId, 'owner-a')?.document?.continuity).toEqual(continuity);
+    } finally {
+      delete process.env.DRAWING_JOB_STORE_DIR;
+      rmSync(storeDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps an ephemeral development job across a module reload', () => {
+    delete process.env.DRAWING_JOB_STORE_DIR;
+    const job = createJob({ documentHash: '1'.repeat(64), ownerId: 'owner-hmr', budget, estimatedPages: 1 });
+
+    jest.resetModules();
+    const reloaded = jest.requireActual('../drawing-job-store') as typeof import('../drawing-job-store');
+
+    expect(reloaded.getOwnedJob(job.jobId, 'owner-hmr')?.jobId).toBe(job.jobId);
+    reloaded._resetJobsForTests();
   });
 });
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from 'node:fs';

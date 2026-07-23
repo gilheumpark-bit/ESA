@@ -94,17 +94,16 @@ describe('#9 rcd-sizing 정격초과', () => {
 });
 
 describe('#10 cable-sizing 설치방법', () => {
-  test('밀폐 A2는 Method C보다 큰 케이블 강제 (125A: C=25mm², A2=35mm²)', () => {
+  test('정본 표가 없는 A2는 근사계수로 계산하지 않고 거부한다', () => {
     const c = calculateCableSizing({ current: 125, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'C', phase: 3 });
-    const a2 = calculateCableSizing({ current: 125, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'A2', phase: 3 });
     expect(c.value).toBe(25);
-    expect(a2.value as number).toBeGreaterThan(c.value as number);
+    expect(() => calculateCableSizing({ current: 125, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'A2', phase: 3 }))
+      .toThrow(/no table|지원하지|Supported methods/i);
   });
-  test('설치방법이 correctedAmpacity에 반영된다 (더는 무시 아님)', () => {
+  test('지원되는 A1 정본 표는 Method C보다 보수적인 케이블을 선정한다', () => {
     const c = calculateCableSizing({ current: 100, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'C', phase: 3 });
-    const a2 = calculateCableSizing({ current: 100, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'A2', phase: 3 });
-    // 같은 25mm²라도 A2는 0.80 derate → 보정 허용전류가 더 낮다
-    expect(a2.additionalOutputs!.correctedAmpacity!.value).toBeLessThan(c.additionalOutputs!.correctedAmpacity!.value);
+    const a1 = calculateCableSizing({ current: 100, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'A1', phase: 3 });
+    expect(a1.value as number).toBeGreaterThanOrEqual(c.value as number);
   });
 });
 

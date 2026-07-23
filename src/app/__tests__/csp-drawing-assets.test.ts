@@ -12,4 +12,15 @@ describe('drawing source CSP contract', () => {
     expect(policy?.split('; ').find((directive) => directive.startsWith('img-src ')))
       .toContain('blob:');
   });
+
+  it('blocks plugin objects and constrains document base/form targets', async () => {
+    const rules = await nextConfig.headers?.();
+    const policy = rules?.find((rule) => rule.source === '/(.*)')?.headers.find(
+      (header) => header.key === 'Content-Security-Policy',
+    )?.value;
+
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("form-action 'self'");
+  });
 });

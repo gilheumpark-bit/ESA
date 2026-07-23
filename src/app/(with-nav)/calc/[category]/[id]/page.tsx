@@ -30,6 +30,7 @@ import StandardRefPanel from '@/components/StandardRefPanel';
 import Breadcrumb from '@/components/Breadcrumb';
 import { useCalculator } from '@/hooks/useCalculator';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES, LINKED_CALCS } from '@/lib/calculator-params';
+import { buildCalculatorGauge } from '@/lib/calculator-result-gauge';
 import { recordRecentCalc } from '@/lib/recent-calcs';
 
 
@@ -55,14 +56,8 @@ function ResultDisplay({
   // 게이지 데이터 추출 (전압강하/허용전류 등 기준값이 있는 경우)
   const gaugeData = (() => {
     const r = receipt.result;
-    if (!r || r.value == null || typeof r.value !== 'number') return null;
-    const unit = r.unit ?? '';
-    // 전압강하 → 기준 3%
-     
-    if (unit === '%' && receipt.calcId.includes('voltage')) {
-      return { value: r.value, unit: '%', limit: 3, label: '전압강하', standardRef: 'KEC 232.52', direction: 'below' as const };
-    }
-    return null;
+    if (!r) return null;
+    return buildCalculatorGauge(receipt.calcId, r.value, r.unit);
   })();
 
   return (

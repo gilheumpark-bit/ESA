@@ -4,14 +4,14 @@ import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { claimOwnedJobRun, getOwnedJob, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease } from '@/agent/drawing/source-lease-store';
-import { POST } from '../route';
+import { maxDuration, POST } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
 jest.mock('@/lib/request-origin', () => ({ isRequestOriginAllowed: jest.fn(() => true) }));
 jest.mock('@/agent/drawing/drawing-api-owner', () => ({ resolveDrawingOwner: jest.fn() }));
 jest.mock('@/agent/drawing/document-orchestrator', () => ({ runDocumentAnalysis: jest.fn() }));
 jest.mock('@/agent/drawing/drawing-job-store', () => ({
-  claimOwnedJobRun: jest.fn(), getOwnedJob: jest.fn(), updateOwnedJob: jest.fn(),
+  claimOwnedJobRun: jest.fn(), getOwnedJob: jest.fn(), nextPendingRequestedPage: jest.fn(() => 0), updateOwnedJob: jest.fn(),
 }));
 jest.mock('@/agent/drawing/source-lease-store', () => ({
   readSourceLease: jest.fn(), releaseSourceLease: jest.fn(),
@@ -43,6 +43,10 @@ function validRequest(): NextRequest {
 }
 
 describe('drawing job resume API', () => {
+  it('uses the supported long-running route ceiling', () => {
+    expect(maxDuration).toBe(1800);
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(resolveDrawingOwner).mockResolvedValue(owner);
@@ -84,6 +88,6 @@ describe('drawing job resume API', () => {
     const response = await POST(validRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
 
     expect(response.status).toBe(200);
-    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ signal: undefined }));
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ signal: undefined, maxPagesPerRun: 1, preparationPages: [0] }));
   });
 });

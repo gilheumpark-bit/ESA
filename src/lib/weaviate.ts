@@ -479,6 +479,7 @@ export async function hybridSearch(
     limit?: number;
     fields?: string[];
     where?: Record<string, unknown>;
+    vector?: number[];
   } = {},
 ): Promise<WeaviateSearchHit[]> {
   const client = await getWeaviateClient();
@@ -508,6 +509,7 @@ export async function hybridSearch(
       filters,
       returnProperties,
       returnMetadata: ['score', 'distance', 'certainty'],
+      ...(opts.vector ? { vector: opts.vector } : {}),
     });
 
     return result.objects.map((object) => ({

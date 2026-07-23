@@ -71,12 +71,7 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
     { name: 'installation', type: 'string', unit: '', description: '설치 방법 (IEC 60364-5-52)', options: [
       { value: 'C', label: 'C — 벽/트레이 직부' },
       { value: 'A1', label: 'A1 — 단열벽 전선관' },
-      { value: 'A2', label: 'A2 — 단열벽 케이블' },
-      { value: 'B1', label: 'B1 — 벽면 전선관' },
-      { value: 'B2', label: 'B2 — 벽면 케이블' },
       { value: 'D', label: 'D — 지중 매설' },
-      { value: 'E', label: 'E — 기중 트레이' },
-      { value: 'F', label: 'F — 기중 이격' },
     ], defaultValue: 'C' },
     { name: 'ambientTemp', type: 'number', unit: '°C', description: '주위 온도', min: -20, max: 80, defaultValue: 30 },
     { name: 'groupCount', type: 'number', unit: '', description: '다조 포설 회선 수', min: 1, defaultValue: 1, step: 1 },

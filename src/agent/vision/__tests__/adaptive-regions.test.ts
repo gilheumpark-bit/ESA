@@ -1,5 +1,10 @@
 import sharp from 'sharp';
-import { cropPrecisionRegions, planAdaptiveBounds } from '../adaptive-regions';
+import {
+  cropAnalysisRegions,
+  cropPrecisionRegions,
+  planAdaptiveBounds,
+  planAnalysisRegions,
+} from '../adaptive-regions';
 import type { ImageVariant } from '../evidence-types';
 
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
@@ -7,6 +12,38 @@ function toArrayBuffer(buffer: Buffer): ArrayBuffer {
 }
 
 describe('adaptive precision regions', () => {
+  it('plans stable row-major analysis IDs with exact logical cores and overlapping crops', () => {
+    const regions = planAnalysisRegions(1600, 1200, 16, 0.18, 0);
+
+    expect(regions).toHaveLength(16);
+    expect(regions.map((region) => region.displayId)).toEqual(
+      Array.from({ length: 16 }, (_, index) => `P01-A${String(index + 1).padStart(2, '0')}`),
+    );
+    expect(regions[0]).toMatchObject({
+      row: 0,
+      column: 0,
+      logicalBounds: { x: 0, y: 0, w: 400, h: 300 },
+      cropBounds: { x: 0, y: 0, w: 472, h: 354 },
+    });
+    expect(regions[5]).toMatchObject({
+      row: 1,
+      column: 1,
+      logicalBounds: { x: 400, y: 300, w: 400, h: 300 },
+      cropBounds: { x: 328, y: 246, w: 544, h: 408 },
+    });
+    for (let y = 0; y < 1200; y += 60) {
+      for (let x = 0; x < 1600; x += 80) {
+        expect(regions.filter((region) =>
+          x >= region.logicalBounds.x
+          && x < region.logicalBounds.x + region.logicalBounds.w
+          && y >= region.logicalBounds.y
+          && y < region.logicalBounds.y + region.logicalBounds.h)).toHaveLength(1);
+      }
+    }
+    expect(regions[0].cropBounds.x + regions[0].cropBounds.w)
+      .toBeGreaterThan(regions[1].cropBounds.x);
+  });
+
   it('covers the source bounds with integer overlapping regions', () => {
     const bounds = planAdaptiveBounds(1200, 800, 4, 0.18);
 
@@ -78,5 +115,29 @@ describe('adaptive precision regions', () => {
     await expect(cropPrecisionRegions(variant, [{ x: 90, y: 50, w: 20, h: 20 }])).rejects.toThrow();
     await expect(cropPrecisionRegions({ ...variant, width: 50, height: 30 }, [{ x: 0, y: 0, w: 50, h: 30 }])).rejects.toThrow();
     await expect(cropPrecisionRegions({ ...variant, width: 200, height: 120 }, [{ x: 0, y: 0, w: 100, h: 60 }])).rejects.toThrow();
+  });
+
+  it('preserves logical core metadata when cropping an analysis plan', async () => {
+    const png = await sharp({
+      create: { width: 100, height: 60, channels: 3, background: '#336699' },
+    }).png().toBuffer();
+    const variant: ImageVariant = {
+      id: 'variant:original',
+      kind: 'original',
+      buffer: toArrayBuffer(png),
+      width: 100,
+      height: 60,
+      transform: { scaleX: 2, scaleY: 2, offsetX: 4, offsetY: 6 },
+    };
+    const [plan] = planAnalysisRegions(100, 60, 4, 0.18, 0);
+
+    const [region] = await cropAnalysisRegions(variant, [plan]);
+
+    expect(region).toMatchObject({
+      displayId: 'P01-A01',
+      variantBounds: plan.cropBounds,
+      logicalVariantBounds: plan.logicalBounds,
+      logicalOriginalBounds: { x: -2, y: -3, w: 25, h: 15 },
+    });
   });
 });

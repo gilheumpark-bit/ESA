@@ -18,7 +18,7 @@
 // PART 1 — Cache Configuration
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = 'esa-v3';
+const CACHE_VERSION = 'esa-v4';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
@@ -91,6 +91,16 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET and cross-origin
   if (request.method !== 'GET' || url.origin !== self.location.origin) {
+    return;
+  }
+
+  // Turbopack 개발 청크는 파일명이 재사용될 수 있다. 로컬에서 cache-first로
+  // 제공하면 수정 뒤에도 이전 UI가 실행되므로 항상 현재 개발 서버에서 받는다.
+  if (
+    (url.hostname === 'localhost' || url.hostname === '127.0.0.1')
+    && url.pathname.startsWith('/_next/')
+  ) {
+    event.respondWith(fetch(request));
     return;
   }
 

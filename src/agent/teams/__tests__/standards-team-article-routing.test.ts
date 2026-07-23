@@ -30,4 +30,18 @@ describe('TEAM-STD article routing', () => {
     expect(result.success).toBe(false);
     expect(result.error).toContain('NEC 999.9');
   });
+
+  test('전압강하 부적합 문구의 적합 부분문자열을 PASS로 오인하지 않는다', async () => {
+    const result = await executeStandardsTeam({
+      ...input('전압강하 판정'),
+      params: { voltageDropPercent: 5, circuitType: 'branch' },
+    });
+
+    expect(result.standards).toEqual(expect.arrayContaining([
+      expect.objectContaining({ standard: 'KEC', clause: '232.52', judgment: 'FAIL' }),
+    ]));
+    expect(result.calculations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ calculatorId: 'voltage-drop-judgment', compliant: false }),
+    ]));
+  });
 });

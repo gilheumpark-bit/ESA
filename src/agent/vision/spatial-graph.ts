@@ -245,6 +245,7 @@ function sealedOutputHash(envelope: RoleReviewEnvelope): string {
     model: envelope.model,
     promptVersion: envelope.promptVersion,
     durationMs: envelope.durationMs,
+    reviewedSourceIds: envelope.reviewedSourceIds,
     data: envelope.data,
   };
   return createHash('sha256').update(canonicalize(seal)).digest('hex');

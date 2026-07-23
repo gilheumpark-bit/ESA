@@ -187,7 +187,7 @@ function input(options: {
 } = {}): DrawingSynthesisInput {
   return {
     drawingHash: DRAWING_HASH,
-    completedRoles: options.completedRoles ?? ['symbols', 'connections', 'text', 'logic'],
+    completedRoles: options.completedRoles ?? ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'],
     coverageComplete: options.coverageComplete ?? true,
     roleFailures: options.roleFailures ?? [],
     normalizedGraph: options.normalizedGraph ?? normalized(),
@@ -201,7 +201,7 @@ function input(options: {
 }
 
 function inputWithGap(gap: 'missing-role' | 'incomplete-review' | 'role-failure' | 'graph-conflict' | 'missing-calculation' | 'unresolved-logic'): DrawingSynthesisInput {
-  if (gap === 'missing-role') return input({ completedRoles: ['symbols', 'connections', 'text'] });
+  if (gap === 'missing-role') return input({ completedRoles: ['symbols', 'connections', 'text', 'logic'] });
   if (gap === 'incomplete-review') return input({ coverageComplete: false });
   if (gap === 'role-failure') return input({ roleFailures: [{ role: 'text', sourceId: 'source:text', fatal: true }] });
   if (gap === 'graph-conflict') return input({ normalizedGraph: normalized({ conflict: true }) });

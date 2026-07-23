@@ -3,6 +3,7 @@ import { _resetJobsForTests, cancelOwnedJob, createJob, updateJob } from '../dra
 import { evaluatePredictionAgainstLabel } from '../sld-evaluator-v2';
 import { DRAWING_DOCUMENT_SCHEMA_VERSION } from '../types-v3';
 import type { PreparedDrawingPage, PreparedDrawingSource } from '../drawing-source';
+import type { TeamInput } from '../../teams/types';
 import sharp from 'sharp';
 
 async function makePng(width = 100, height = 80): Promise<ArrayBuffer> {
@@ -152,11 +153,23 @@ describe('document-orchestrator + evaluator', () => {
         vectorAudit: { parser: 'pdf', pageNumber, complete: true, roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] },
       };
     });
-    const deps = { prepareSource: async () => source, executeTeam: executeTeam as never };
+    const deps = {
+      prepareSource: async (request: { requestedPages?: 'all' | number[] }) => {
+        const selected = Array.isArray(request.requestedPages) ? new Set<number>(request.requestedPages) : null;
+        return {
+          ...source,
+          totalPageCount: 2,
+          pages: selected ? pages.filter((page) => selected.has(page.pageIndex)) : pages,
+        };
+      },
+      executeTeam: executeTeam as never,
+    };
 
     const first = await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a',
-      budget: { maxPages: 1, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+      budget: { maxPages: 2, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+      maxPagesPerRun: 1,
+      preparationPages: [0],
     }, deps);
     expect(first.document.jobStatus).toBe('PARTIAL');
     expect(executeTeam).toHaveBeenCalledTimes(1);
@@ -164,6 +177,8 @@ describe('document-orchestrator + evaluator', () => {
     const resumed = await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a', jobId: first.job.jobId,
       budget: { maxPages: 2, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+      maxPagesPerRun: 1,
+      preparationPages: [1],
     }, deps);
 
     expect(resumed.job.jobId).toBe(first.job.jobId);
@@ -171,7 +186,6 @@ describe('document-orchestrator + evaluator', () => {
     expect(resumed.document.pages.map((page) => page.status)).toEqual(['complete', 'complete']);
     expect(resumed.document.evidenceGraph.symbols.map((symbol) => symbol.rawLabel)).toEqual(['VCB-1', 'VCB-2']);
     expect(executeTeam).toHaveBeenCalledTimes(2);
-
     updateJob(first.job.jobId, {
       pageDigests: {
         ...resumed.job.pageDigests,
@@ -181,6 +195,7 @@ describe('document-orchestrator + evaluator', () => {
     await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a', jobId: first.job.jobId,
       budget: { maxPages: 2, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
+      preparationPages: [0],
     }, deps);
     expect(executeTeam).toHaveBeenCalledTimes(3);
   });
@@ -199,21 +214,24 @@ describe('document-orchestrator + evaluator', () => {
         rasterOpCount: 1, renderHash: 'render-0', quality, imageBuffer: await makePng(),
       }],
     };
-    const review = (complete: boolean) => ({
+    const review = (complete: boolean, plannedCalls = 19) => ({
       snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
-      envelopes: ['symbols', 'connections', 'text', 'logic'].map((role) => ({
+      envelopes: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'].map((role) => ({
         role, outputHash: `${role}-hash`, drawingHash: source.documentHash, provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
-        data: { warnings: [], confidence: 0.95 },
+        data: role === 'coverage-auditor'
+          ? { rescanTargets: complete ? [] : [{ id: 'boundary-1', sourceId: 'variant:original', reason: 'boundary-clip', bounds: { x: 40, y: 0, w: 20, h: 80, page: 1 }, suggestedRoles: ['symbols', 'connections'], confidence: 0.95 }], warnings: [], confidence: 0.95 }
+          : { warnings: [], confidence: 0.95 },
       })),
-      failures: complete ? [] : [{ role: 'connections', sourceId: 'variant:line-enhanced:region:0', error: 'retry', fatal: false }],
+      failures: [],
       coverage: {
         roles: {
           symbols: { variantId: 'variant:original', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
           connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
           text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 7 },
           logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+          'coverage-auditor': { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
         },
-        plannedCalls: 18, complete, maxRegionCallsPerRole: 16,
+        plannedCalls, complete: true, maxRegionCallsPerRole: 16,
       },
       graph: {
         drawingHash: source.documentHash,
@@ -222,31 +240,99 @@ describe('document-orchestrator + evaluator', () => {
       },
     });
     let attempt = 0;
-    const executeTeam = jest.fn(async () => ({
-      success: true, components: [], connections: [], confidence: 0.95,
-      drawingReview: review(++attempt > 1),
-      drawingSynthesis: {
-        calculations: [{
+    const executeTeam = jest.fn(async () => {
+      attempt += 1;
+      return {
+        success: true, components: [], connections: [], confidence: 0.95,
+        drawingReview: review(attempt > 1),
+        drawingSynthesis: {
+          calculations: [{
           id: 'calc-1', calculatorId: 'breaker-sizing', scopeKey: 'VCB-01@p1', status: 'CALCULATED', judgment: 'HOLD',
           missingInputs: [], ambiguousInputs: [], inputEvidence: [{ evidenceId: 'spec-1', originalEvidenceIds: ['txt-1'], sourceIds: ['variant:text'], adapterField: 'loadCurrent', normalizedField: 'current_A', value: 80, sourceUnit: 'A', targetUnit: 'A', bounds: { page: 1, x: 1, y: 1, w: 2, h: 2 }, confidence: 0.9, transform: 'identity' }],
           optionalDefaultsUsed: [], internalMechanics: [], scopeIssues: [], calculatorResult: { value: 100, unit: 'A' },
-        }],
-      },
-    }));
+          }],
+          conflicts: attempt === 1 ? [{
+            id: 'transient-conflict', kind: 'CONTRADICTION', topic: 'PROTECTION_CHAIN', severity: 'major', status: 'open', action: 'TARGETED_REVIEW', reasonCode: 'transient', message: '재스캔 전 충돌',
+            graphEvidenceIds: ['VCB-01'], graphOriginalEvidenceIds: ['original:VCB-01'], graphSourceIds: ['variant:original'], graphEvidencePages: [1], graphEvidenceBounds: [{ x: 10, y: 10, w: 10, h: 10, page: 1 }], logicEvidenceIds: ['logic-transient'], logicEvidenceBounds: [{ x: 8, y: 8, w: 20, h: 20, page: 1 }], graphConflictIds: [],
+          }] : [],
+        },
+      };
+    });
 
     const result = await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-a',
       vision: { provider: 'openai', apiKey: 'test-request-key' },
-      budget: { maxPages: 1, maxVlmCalls: 54, maxPixels: 100_000, deadlineMs: 60_000 },
+      budget: { maxPages: 1, maxVlmCalls: 57, maxPixels: 100_000, deadlineMs: 60_000 },
     }, { prepareSource: async () => source, executeTeam: executeTeam as never });
 
     expect(executeTeam).toHaveBeenCalledTimes(2);
+    const secondAttemptInput = (executeTeam.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0];
+    expect(secondAttemptInput).toMatchObject({
+      params: { rescanTargets: [expect.objectContaining({ id: 'boundary-1', reason: 'boundary-clip' })] },
+      priorDrawingReviewEnvelopes: expect.arrayContaining([
+        expect.objectContaining({ role: 'connections', outputHash: 'connections-hash' }),
+      ]),
+    });
     expect(result.document.coverageLedger.regionsFailed).toBe(0);
     expect(result.document.coverageLedger.unresolvedRescans).toBe(0);
     expect(result.document.jobStatus).toBe('COMPLETE');
     expect(result.document.calculations).toEqual([expect.objectContaining({
       id: 'P01-calc-1', calculatorId: 'breaker-sizing', value: 100, compliant: null,
     })]);
+    expect(result.document.unresolvedItems).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'ELECTRICAL_LOGIC_CONFLICT' }),
+    ]));
+
+    let holdAttempt = 0;
+    const executeTeamHold = jest.fn(async () => {
+      holdAttempt += 1;
+      return {
+        success: true, components: [], connections: [], confidence: 0.95,
+        drawingReview: review(false, holdAttempt === 1 ? 19 : 15),
+        drawingSynthesis: { calculations: [] },
+      };
+    });
+    const held = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-boundary-hold',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 49, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeamHold as never });
+
+    expect(executeTeamHold).toHaveBeenCalledTimes(3);
+    expect(held.document.jobStatus).toBe('PARTIAL');
+    expect(held.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'BOUNDARY_CLIP', pageIndex: 0, bounds: { x: 40, y: 0, w: 20, h: 80 } }),
+    ]));
+
+    const executeTeamLogic = jest.fn(async () => ({
+      success: true, components: [], connections: [], confidence: 0.95,
+      drawingReview: review(true),
+      drawingSynthesis: {
+        calculations: [],
+        conflicts: [{
+          id: 'logic-conflict-1', kind: 'CONTRADICTION', topic: 'PROTECTION_CHAIN', severity: 'critical',
+          status: 'open', action: 'TARGETED_REVIEW', reasonCode: 'protected-device-mismatch',
+          message: '독립 논리 판독과 조립 그래프의 보호 관계가 일치하지 않습니다.',
+          graphEvidenceIds: ['VCB-01'], graphOriginalEvidenceIds: ['original:VCB-01'],
+          graphSourceIds: ['variant:original'], graphEvidencePages: [1],
+          graphEvidenceBounds: [{ x: 10, y: 10, w: 10, h: 10, page: 1 }],
+          logicEvidenceIds: ['logic-1'], logicEvidenceBounds: [{ x: 8, y: 8, w: 20, h: 20, page: 1 }],
+          graphConflictIds: [],
+        }],
+      },
+    }));
+    const logicHeld = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-logic-hold',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeamLogic as never });
+
+    expect(logicHeld.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'ELECTRICAL_LOGIC_CONFLICT', candidates: expect.arrayContaining(['VCB-01', 'logic-1']) }),
+    ]));
+    expect(logicHeld.document.recommendations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'HOLD', problem: expect.stringContaining('ELECTRICAL_LOGIC_CONFLICT') }),
+    ]));
   });
 
   it('returns concrete re-upload guidance when low-resolution OCR remains ambiguous', async () => {
@@ -387,10 +473,12 @@ describe('document-orchestrator + evaluator', () => {
     };
     const review = {
       snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
-      envelopes: ['symbols', 'connections', 'text', 'logic'].map((role) => ({
+      envelopes: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'].map((role) => ({
         role, outputHash: `${role}-hash`, drawingHash: source.documentHash,
         provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
-        data: { warnings: [], confidence: 0.95 },
+        data: role === 'coverage-auditor'
+          ? { rescanTargets: [], warnings: [], confidence: 0.95 }
+          : { warnings: [], confidence: 0.95 },
       })),
       failures: [],
       coverage: {
@@ -399,8 +487,9 @@ describe('document-orchestrator + evaluator', () => {
           connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
           text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 7 },
           logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+          'coverage-auditor': { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
         },
-        plannedCalls: 18, complete: true, maxRegionCallsPerRole: 16,
+        plannedCalls: 19, complete: true, maxRegionCallsPerRole: 16,
       },
       graph: {
         drawingHash: source.documentHash,
@@ -429,11 +518,26 @@ describe('document-orchestrator + evaluator', () => {
     const result = await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-vector-vision',
       vision: { provider: 'openai', apiKey: 'test-request-key' },
-      budget: { maxPages: 1, maxVlmCalls: 18, maxPixels: 100_000, deadlineMs: 60_000 },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 60_000 },
     }, { prepareSource: async () => source, executeTeam: executeTeam as never });
 
     expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification)).toEqual(['sld_pdf', 'sld_image']);
     expect(result.document.jobStatus).toBe('COMPLETE');
+    expect(result.job.pageDigests[0]).toMatchObject({
+      provider: 'openai',
+      model: expect.any(String),
+    });
+
+    const changedModel = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-vector-vision',
+      jobId: result.job.jobId,
+      vision: { provider: 'openai', model: 'gpt-4.1', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 100, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification))
+      .toEqual(['sld_pdf', 'sld_image', 'sld_pdf', 'sld_image']);
+    expect(changedModel.job.pageDigests[0]).toMatchObject({ provider: 'openai', model: 'gpt-4.1' });
   });
 
   it('reports a source-preparation budget stop as failed instead of an empty page', async () => {

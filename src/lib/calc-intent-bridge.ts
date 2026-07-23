@@ -58,6 +58,17 @@ const NO_INTENT: CalcIntentResult = {
   confidence: 0,
 };
 
+const EXPLICIT_TOOL_CALCULATOR_IDS: Record<string, string> = {
+  calculate_voltage_drop: 'voltage-drop',
+  calculate_cable_sizing: 'cable-sizing',
+  calculate_breaker_sizing: 'breaker-sizing',
+  calculate_short_circuit: 'short-circuit',
+  calculate_transformer: 'transformer-capacity',
+  calculate_grounding: 'ground-resistance',
+  calculate_illumination: 'illuminance',
+  calculate_load: 'max-demand',
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — Language Detection Helper
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -171,18 +182,26 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
     return { ...NO_INTENT };
   }
 
-  const calculatorId = parsed.suggestedCalculator;
+  // 3. Use parseIntent to extract numeric params from the query. An explicit
+  // engineering keyword such as "전압강하" is more specific than a generic
+  // entity such as "3상" found by the search parser.
+  const lang = detectLang(query);
+  const intentResult = parseIntent(query, lang);
+  const explicitCalculatorId = intentResult.tool
+    ? EXPLICIT_TOOL_CALCULATOR_IDS[intentResult.tool]
+    : undefined;
+  const calculatorId = intentResult.intent === 'calculate'
+    && intentResult.confidence >= 0.8
+    && explicitCalculatorId
+    ? explicitCalculatorId
+    : parsed.suggestedCalculator;
 
-  // 3. Get the calculator's param definitions from CALCULATOR_PARAMS
+  // 4. Get the calculator's param definitions from CALCULATOR_PARAMS
   const paramDefs = CALCULATOR_PARAMS[calculatorId];
   if (!paramDefs || paramDefs.length === 0) {
     // Calculator ID exists in keyword map but has no param definitions
     return { ...NO_INTENT };
   }
-
-  // 4. Use parseIntent to extract numeric params from the query
-  const lang = detectLang(query);
-  const intentResult = parseIntent(query, lang);
 
   // 5. Map extracted params to the correct param names
   const mappedParams = mapParamNames(intentResult.extractedParams);

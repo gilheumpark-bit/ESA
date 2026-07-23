@@ -15,6 +15,7 @@ import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './en
 import { parseSpecText } from './spec-text';
 import { bindScheduleRow } from './schedule-row-binding';
 import { parseScheduleTables } from './schedule-table-parser';
+import { pdfjsNodeDocumentOptions } from '@/agent/drawing/pdfjs-assets';
 
 // =========================================================================
 // PART 1 — Types
@@ -161,7 +162,10 @@ export async function parsePdfToSLD(
   let doc: Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>;
   let page: Awaited<ReturnType<typeof doc.getPage>>;
   try {
-    doc = await pdfjsLib.getDocument({ data: new Uint8Array(pdfBytes) }).promise;
+    doc = await pdfjsLib.getDocument({
+      data: new Uint8Array(pdfBytes),
+      ...pdfjsNodeDocumentOptions(),
+    }).promise;
     page = await doc.getPage(pageNumber);
   } catch (err) {
     return {

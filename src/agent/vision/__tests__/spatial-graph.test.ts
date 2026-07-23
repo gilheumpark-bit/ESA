@@ -36,6 +36,7 @@ function reseal(envelopes: RoleReviewEnvelope[]): void {
       model: item.model,
       promptVersion: item.promptVersion,
       durationMs: item.durationMs,
+      reviewedSourceIds: item.reviewedSourceIds,
       data: item.data,
     };
     item.outputHash = createHash('sha256').update(canonicalize(seal)).digest('hex');
@@ -249,6 +250,18 @@ describe('source-linked spatial graph', () => {
     expect(() => assembleSpatialGraph(valid, { snapTolerance: -1 })).toThrow(/snapTolerance/);
     expect(() => assembleSpatialGraph(valid, { dedupeIou: Infinity })).toThrow(/dedupeIou/);
     expect(() => assembleSpatialGraph([envelope('symbols', { symbols: new Array(2_001).fill({}) })])).toThrow(/budget/);
+  });
+
+  it('accepts council envelopes sealed with reviewed source ids and protects that provenance', () => {
+    const input = fixture();
+    for (const item of input) item.reviewedSourceIds = ['variant:original', 'region:1'];
+    reseal(input);
+
+    expect(() => assembleSpatialGraph(input)).not.toThrow();
+
+    const tampered = structuredClone(input);
+    tampered[0].reviewedSourceIds = ['variant:original'];
+    expect(() => assembleSpatialGraph(tampered)).toThrow(/outputHash/);
   });
 
   it('merges overlapping candidate sets and duplicate OCR text while preserving union provenance', () => {

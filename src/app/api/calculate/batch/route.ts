@@ -15,6 +15,7 @@ import { CALCULATOR_REGISTRY } from '@engine/calculators';
 import { CalcValidationError } from '@engine/calculators/types';
 import { generateReceipt } from '@engine/receipt';
 import type { GenerateReceiptOpts } from '@engine/receipt';
+import { executeRegisteredCalculator } from '@/lib/calculation-execution';
 
 // ─── PART 1: Request/Response Types ────────────────────────────
 
@@ -42,18 +43,6 @@ interface BatchSummary {
   failed: number;
   errors: string[];
 }
-
-// ─── PART 2: Country → Standard Mapping ────────────────────────
-
-const COUNTRY_STANDARD_MAP: Record<string, { standard: string; version: string }> = {
-  KR: { standard: 'KEC', version: 'KEC 2021' },
-  US: { standard: 'NEC', version: 'NEC 2023' },
-  JP: { standard: 'JIS', version: 'JIS C 0364:2019' },
-  CN: { standard: 'GB', version: 'GB 50054-2011' },
-  DE: { standard: 'VDE', version: 'IEC 60364:2017' },
-  AU: { standard: 'AS/NZS', version: 'AS/NZS 3000:2018' },
-  ME: { standard: 'DEWA', version: 'DEWA 2020' },
-};
 
 // ─── PART 3: Auth Token Extraction ─────────────────────────────
 
@@ -85,10 +74,12 @@ async function executeSingle(
       };
     }
 
-    const calcResult = entry.calculator(calc.inputs);
-
-    const countryCode = calc.countryCode ?? 'KR';
-    const stdInfo = COUNTRY_STANDARD_MAP[countryCode] ?? COUNTRY_STANDARD_MAP.KR;
+    const execution = executeRegisteredCalculator(
+      entry.id,
+      calc.inputs,
+      calc.countryCode ?? 'KR',
+    );
+    const calcResult = execution.result;
 
     const receiptOpts: GenerateReceiptOpts = {
       calcId: entry.id,
@@ -99,9 +90,10 @@ async function executeSingle(
         .map((s) => s.standardRef)
         .filter((ref): ref is string => !!ref),
       inputs: calc.inputs,
-      countryCode,
-      standard: stdInfo.standard,
-      standardVersion: stdInfo.version,
+      countryCode: execution.countryCode,
+      standard: execution.standard,
+      standardVersion: execution.standardVersion,
+      unitSystem: execution.unitSystem,
       difficulty: entry.difficulty,
       lang: 'ko',
     };

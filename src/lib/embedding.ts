@@ -191,9 +191,10 @@ async function callGemini(texts: string[], apiKey: string): Promise<number[][]> 
 async function callProvider(
   provider: EmbeddingProvider,
   texts: string[],
+  userKey?: string,
 ): Promise<number[][]> {
   const config = PROVIDER_CONFIGS[provider];
-  const { key } = resolveProviderKey(config.providerId);
+  const { key } = resolveProviderKey(config.providerId, userKey);
 
   switch (provider) {
     case 'openai':
@@ -222,6 +223,7 @@ async function callProvider(
 export async function generateEmbedding(
   text: string,
   provider?: EmbeddingProvider | string,
+  userKey?: string,
 ): Promise<number[]> {
   if (!text || !text.trim()) {
     throw new Error('[ESA/Embedding] Cannot embed empty text');
@@ -229,23 +231,23 @@ export async function generateEmbedding(
 
   const trimmed = text.trim();
 
-  // Check cache first
-  const cached = embeddingCache.get(trimmed);
+  const preferred = (provider as EmbeddingProvider) ?? 'openai';
+  const cacheText = `${preferred}\u0000${trimmed}`;
+  // OpenAI and Gemini vectors have different dimensions; isolate their cache entries.
+  const cached = embeddingCache.get(cacheText);
   if (cached) return cached;
 
   // Build provider attempt order
-  const preferred = (provider as EmbeddingProvider) ?? 'openai';
-  const attemptOrder: EmbeddingProvider[] = [
-    preferred,
-    ...FALLBACK_ORDER.filter((p) => p !== preferred),
-  ];
+  const attemptOrder: EmbeddingProvider[] = userKey
+    ? [preferred]
+    : [preferred, ...FALLBACK_ORDER.filter((p) => p !== preferred)];
 
   let lastError: Error | null = null;
 
   for (const p of attemptOrder) {
     try {
-      const [embedding] = await callProvider(p, [trimmed]);
-      embeddingCache.set(trimmed, embedding);
+      const [embedding] = await callProvider(p, [trimmed], userKey);
+      embeddingCache.set(cacheText, embedding);
       return embedding;
     } catch (err) {
       lastError = err as Error;
@@ -271,17 +273,20 @@ export async function generateEmbedding(
 export async function generateEmbeddings(
   texts: string[],
   provider?: EmbeddingProvider | string,
+  userKey?: string,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
   const trimmed = texts.map((t) => t.trim());
+  const preferred = (provider as EmbeddingProvider) ?? 'openai';
+  const cacheTexts = trimmed.map((text) => `${preferred}\u0000${text}`);
   const results: (number[] | null)[] = new Array(trimmed.length).fill(null);
   const uncachedIndices: number[] = [];
   const uncachedTexts: string[] = [];
 
   // Separate cached from uncached
   for (let i = 0; i < trimmed.length; i++) {
-    const cached = embeddingCache.get(trimmed[i]);
+    const cached = embeddingCache.get(cacheTexts[i]);
     if (cached) {
       results[i] = cached;
     } else {
@@ -292,18 +297,16 @@ export async function generateEmbeddings(
 
   // Embed uncached texts
   if (uncachedTexts.length > 0) {
-    const preferred = (provider as EmbeddingProvider) ?? 'openai';
-    const attemptOrder: EmbeddingProvider[] = [
-      preferred,
-      ...FALLBACK_ORDER.filter((p) => p !== preferred),
-    ];
+    const attemptOrder: EmbeddingProvider[] = userKey
+      ? [preferred]
+      : [preferred, ...FALLBACK_ORDER.filter((p) => p !== preferred)];
 
     let embeddings: number[][] | null = null;
     let lastError: Error | null = null;
 
     for (const p of attemptOrder) {
       try {
-        embeddings = await callProvider(p, uncachedTexts);
+        embeddings = await callProvider(p, uncachedTexts, userKey);
         break;
       } catch (err) {
         lastError = err as Error;
@@ -321,7 +324,7 @@ export async function generateEmbeddings(
     for (let j = 0; j < uncachedIndices.length; j++) {
       const idx = uncachedIndices[j];
       results[idx] = embeddings[j];
-      embeddingCache.set(uncachedTexts[j], embeddings[j]);
+      embeddingCache.set(`${preferred}\u0000${uncachedTexts[j]}`, embeddings[j]);
     }
   }
 

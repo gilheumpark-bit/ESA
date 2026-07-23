@@ -10,13 +10,13 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import type { Lang } from '@/lib/i18n';
+import type { Lang, ResponseLang } from '@/lib/i18n';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type Country = 'KR' | 'US' | 'JP' | 'CN' | 'DE' | 'AU' | 'ME';
+export type Country = 'KR' | 'US' | 'JP' | 'INT' | 'CN' | 'DE' | 'AU' | 'ME';
 export type Theme = 'light' | 'dark' | 'system';
 
 export interface ESASettings {
@@ -44,6 +44,7 @@ export const COUNTRY_LABELS: Record<Country, string> = {
   KR: '한국 (KEC)',
   US: 'USA (NEC)',
   JP: '日本 (JIS)',
+  INT: 'International (IEC)',
   CN: '中国 (GB)',
   DE: 'Deutschland (VDE)',
   AU: 'Australia (AS/NZS)',
@@ -54,11 +55,15 @@ export const COUNTRY_STANDARDS: Record<Country, string> = {
   KR: 'KEC',
   US: 'NEC',
   JP: 'JIS',
+  INT: 'IEC',
   CN: 'GB',
   DE: 'VDE',
   AU: 'AS/NZS',
   ME: 'BS/IEC',
 };
+
+/** Countries with embedded, fail-closed calculator safety profiles. */
+export const CALCULATION_COUNTRIES: readonly Country[] = ['KR', 'US', 'JP', 'INT'];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — Hook Implementation
@@ -72,8 +77,12 @@ function loadSettings(): ESASettings {
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<ESASettings>;
     return {
-      language: parsed.language ?? DEFAULTS.language,
-      country: parsed.country ?? DEFAULTS.country,
+      // JA/ZH dictionaries exist, but the product surface is not fully wired.
+      // Do not preserve a selection that would leave the visible control inert.
+      language: parsed.language === 'en' ? 'en' : DEFAULTS.language,
+      country: CALCULATION_COUNTRIES.includes(parsed.country as Country)
+        ? parsed.country as Country
+        : DEFAULTS.country,
       theme: parsed.theme ?? DEFAULTS.theme,
     };
   } catch {
@@ -96,6 +105,11 @@ function saveSettings(settings: ESASettings): void {
  */
 export function readStoredCountry(): Country {
   return loadSettings().country;
+}
+
+/** Output language currently supported end-to-end by chat/search/receipts. */
+export function readStoredLanguage(): ResponseLang {
+  return loadSettings().language === 'en' ? 'en' : 'ko';
 }
 
 // ---------------------------------------------------------------------------

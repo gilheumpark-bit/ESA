@@ -5,6 +5,7 @@ import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable } fr
 import { createSourceLease, isSourceLeaseAvailable } from '@/agent/drawing/source-lease-store';
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
+import { applyRateLimit } from '@/lib/rate-limit';
 import { DELETE, GET, POST } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
@@ -110,10 +111,33 @@ describe('drawing jobs API ownership and input boundary', () => {
     expect(createJob).toHaveBeenCalledWith(expect.objectContaining({
       ownerId: owner.ownerId,
       estimatedPages: 18,
-      budget: expect.objectContaining({ maxVlmCalls: 324 }),
+      budget: expect.objectContaining({ maxVlmCalls: 1980 }),
     }));
     expect(createSourceLease).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.stringMatching(/^[a-f0-9]{64}$/), owner.ownerId);
     expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('sizes the deferred budget for the 83-page teaching-document target', async () => {
+    jest.mocked(isSourceLeaseAvailable).mockReturnValue(true);
+    jest.mocked(enumerateDrawingPageCount).mockResolvedValueOnce(83);
+    jest.mocked(createJob).mockReturnValue({ jobId: 'job-83', status: 'QUEUED', estimated: { pages: 83 } } as never);
+    jest.mocked(createSourceLease).mockReturnValue({ leaseId: 'lease-83', documentHash: 'b'.repeat(64), expiresAt: Date.now() + 60_000 });
+
+    const response = await POST(formRequest(
+      { deferred: '1' },
+      new File(['%PDF-1.7\n'], 'kimm-20210602-design.pdf', { type: 'application/pdf' }),
+    ));
+
+    expect(response.status).toBe(202);
+    expect(createJob).toHaveBeenCalledWith(expect.objectContaining({
+      estimatedPages: 83,
+      budget: expect.objectContaining({
+        maxPages: 83,
+        maxVlmCalls: 9130,
+        maxPixels: 498_000_000,
+        deadlineMs: 3_600_000,
+      }),
+    }));
   });
 
   it('requires an owner scope for lookup and cancels only through owned store calls', async () => {
@@ -129,6 +153,15 @@ describe('drawing jobs API ownership and input boundary', () => {
     expect(cancelled.status).toBe(200);
     expect(cancelOwnedJob).toHaveBeenCalledWith('job-a', owner.ownerId);
     expect(getOwnedJob).toHaveBeenCalledWith('job-a', owner.ownerId);
+  });
+
+  it('uses the job polling rate profile for status lookup', async () => {
+    jest.mocked(getOwnedJob).mockReturnValue({ jobId: 'job-a', status: 'ANALYZING' } as never);
+
+    const response = await GET(new NextRequest('http://localhost/api/drawing-jobs?jobId=job-a'));
+
+    expect(response.status).toBe(200);
+    expect(applyRateLimit).toHaveBeenLastCalledWith(expect.any(NextRequest), 'sld-job');
   });
 
   it('does not expose provider errors to the client', async () => {

@@ -50,10 +50,23 @@ export interface ImageVariant {
 
 export interface PrecisionRegion {
   id: string;
+  displayId?: string;
   variantId: string;
   variantBounds: EvidenceBounds;
+  logicalVariantBounds?: EvidenceBounds;
   originalBounds: EvidenceBounds;
+  logicalOriginalBounds?: EvidenceBounds;
   buffer: ArrayBuffer;
+}
+
+export interface AnalysisRegionPlan {
+  id: string;
+  displayId: string;
+  pageIndex: number;
+  row: number;
+  column: number;
+  logicalBounds: EvidenceBounds;
+  cropBounds: EvidenceBounds;
 }
 
 export function createDrawingSnapshot(

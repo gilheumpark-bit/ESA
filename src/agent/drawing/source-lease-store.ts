@@ -24,6 +24,7 @@ interface LeaseRecord extends SourceLease {
 
 const leases = new Map<string, LeaseRecord>();
 const developmentProcessKey = randomBytes(32);
+const DEFAULT_SOURCE_LEASE_TTL_MS = 24 * 60 * 60_000;
 
 type SerializedLeaseRecord = Omit<LeaseRecord, 'iv' | 'ciphertext' | 'tag'> & {
   iv: string;
@@ -106,7 +107,7 @@ export function createSourceLease(
   bytes: ArrayBuffer,
   documentHash: string,
   ownerId: string,
-  ttlMs = 30 * 60_000,
+  ttlMs = DEFAULT_SOURCE_LEASE_TTL_MS,
 ): SourceLease | { error: 'LEASE_STORE_UNAVAILABLE' } {
   purgeExpiredLeases();
   const key = getLeaseKey();

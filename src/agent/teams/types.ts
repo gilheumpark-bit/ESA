@@ -60,6 +60,8 @@ export interface TeamInput {
   fileName?: string;
   mimeType?: string;
   params?: Record<string, unknown>;
+  /** Orchestrator-internal sealed receipts from earlier gap-rescan attempts. */
+  priorDrawingReviewEnvelopes?: import('@/agent/vision/review-types').RoleReviewEnvelope[];
   countryCode?: string;
   language?: string;
   /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
@@ -81,6 +83,7 @@ export interface ExtractedComponent {
   rating?: string;        // "100A", "22.9kV", "630kVA"
   position?: { x: number; y: number };
   confidence: number;     // 0~1
+  properties?: Record<string, string>;
 }
 
 export interface ExtractedConnection {
@@ -101,14 +104,17 @@ export interface DrawingReviewArtifact {
     quality: import('../vision/evidence-types').ImageQualityProfile;
   };
   envelopes: import('../vision/review-types').RoleReviewEnvelope[];
+  continuityPlan?: import('../vision/continuity-types').BoundaryContinuationPlan;
   graph?: import('../vision/spatial-graph').SpatialEvidenceGraph;
   failures: import('../vision/drawing-council').RoleFailure[];
   coverage: {
-    roles: Record<'symbols' | 'connections' | 'text' | 'logic', {
+    roles: Record<'symbols' | 'connections' | 'text' | 'logic' | 'coverage-auditor', {
       variantId: string;
       expectedRegionCount: number;
       actualRegionCount: number;
       plannedCalls: number;
+      /** 이번 심사에서 실제 호출하도록 선택한 정밀 구획 ID. */
+      regionIds?: string[];
     }>;
     plannedCalls: number;
     complete: boolean;

@@ -46,7 +46,10 @@ export interface DrawingJobRecord {
   cancelRequested: boolean;
 }
 
-const jobs = new Map<string, DrawingJobRecord>();
+const processState = globalThis as typeof globalThis & {
+  __esaDrawingJobs?: Map<string, DrawingJobRecord>;
+};
+const jobs = processState.__esaDrawingJobs ??= new Map<string, DrawingJobRecord>();
 
 function durableRoot(): string | null {
   const configured = process.env.DRAWING_JOB_STORE_DIR?.trim();
@@ -268,6 +271,22 @@ export function canReusePage(
     && prev.graphVersion === fingerprint.graphVersion
     && prev.model === fingerprint.model
     && prev.provider === fingerprint.provider;
+}
+
+export function nextPendingRequestedPage(job: DrawingJobRecord): number | undefined {
+  const requested = job.sourceMetadata?.requestedPages;
+  const ordered = requested === 'all'
+    ? Array.from({ length: job.estimated.pages }, (_, index) => index)
+    : Array.isArray(requested)
+      ? [...new Set(requested)].sort((left, right) => left - right)
+      : [];
+  const finished = new Set((job.document?.pages ?? [])
+    .filter((page) => page.status === 'complete' || page.status === 'skipped-empty')
+    .map((page) => page.pageIndex));
+  const states = new Map((job.document?.pages ?? []).map((page) => [page.pageIndex, page.status]));
+  // A permanent HOLD on an early page must not starve later unvisited pages.
+  return ordered.find((pageIndex) => !states.has(pageIndex) || states.get(pageIndex) === 'pending')
+    ?? ordered.find((pageIndex) => !finished.has(pageIndex));
 }
 
 /** Test helper */

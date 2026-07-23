@@ -29,8 +29,9 @@ import { compareLogicToGraph, type LogicConflict } from '../electrical/logic-con
 import { synthesizeDrawingReview, type DrawingSynthesis } from '../electrical/synthesis';
 import { preparePrecisionRegions as preparePlan1PrecisionRegions, precisionGridSize } from '../vision/vision-splitter';
 import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
-import type { RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
+import type { RescanTargetEvidence, RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
 import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
+import { analyzeSLD, type SLDAnalysis } from '@/lib/sld-recognition';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { calculateVoltageDrop } from '@/engine/calculators/voltage-drop/voltage-drop';
 import { parseSpecText } from '@/engine/topology/spec-text';
@@ -71,6 +72,7 @@ async function extractFromDrawing(
         rating: c.rating,
         position: c.position,
         confidence: analysis.confidence ?? 0,
+        properties: c.properties,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
@@ -102,6 +104,7 @@ async function extractFromDrawing(
         rating: c.rating,
         position: c.position,
         confidence: 0.85,
+        properties: c.properties,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
@@ -129,14 +132,21 @@ export interface SLDTeamDeps {
   routeCalculations?: typeof routeDrawingCalculations;
   compareLogic?: typeof compareLogicToGraph;
   synthesize?: typeof synthesizeDrawingReview;
+  /**
+   * 역할별 독립 심사가 비었을 때만 실행하는 전체 도면 보조 판독기.
+   * 이 결과는 단독 증거이므로 최대 0.79의 ambiguous 후보로만 보존한다.
+   */
+  analyzeBroad?: typeof analyzeSLD;
 }
 
-const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic'] as const;
+const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as const;
 const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_REGION_CALLS_PER_ROLE = 16;
 const COUNCIL_MAX_CONCURRENT_CALLS = 4;
-const COUNCIL_SOURCE_TIMEOUT_MS = 15_000;
-const COUNCIL_SOURCE_MAX_RETRIES = 0;
+const COUNCIL_SOURCE_TIMEOUT_MS = 30_000;
+const COUNCIL_SOURCE_MAX_RETRIES = 1;
+const RESCAN_REASONS = new Set<RescanTargetEvidence['reason']>(['empty-result', 'dense-cluster', 'boundary-clip', 'low-coverage']);
+const RESCAN_ROLES = new Set<RescanTargetEvidence['suggestedRoles'][number]>(['symbols', 'connections', 'text']);
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new Error('request aborted');
@@ -186,6 +196,94 @@ function graphLegacy(graph: SpatialEvidenceGraph, envelopeConfidence: number): {
 
 function redactSecret(value: string, secret: string | undefined): string {
   return secret ? value.split(secret).join('[REDACTED]') : value;
+}
+
+function broadReadCandidates(analysis: SLDAnalysis): {
+  components: ExtractedComponent[];
+  connections: ExtractedConnection[];
+  confidence: number;
+} {
+  const confidence = Math.min(0.79, Math.max(0, analysis.confidence));
+  const components = analysis.components.map((component) => ({
+    id: component.id,
+    type: component.type,
+    label: component.label ?? component.id,
+    ...(component.rating || component.voltage || component.current
+      ? { rating: component.rating ?? component.voltage ?? component.current }
+      : {}),
+    position: component.position,
+    confidence,
+  }));
+  const ids = new Set(components.map((component) => component.id));
+  const connections = analysis.connections
+    .filter((connection) => ids.has(connection.from) && ids.has(connection.to))
+    .map((connection) => ({
+      from: connection.from,
+      to: connection.to,
+      ...(connection.cableType || connection.conductorSize
+        ? { cableType: [connection.cableType, connection.conductorSize].filter(Boolean).join(' ') }
+        : {}),
+      ...(connection.length && Number.isFinite(parseFloat(connection.length))
+        ? { length: parseFloat(connection.length) }
+        : {}),
+    }));
+  return { components, connections, confidence };
+}
+
+function requestedRescanTargets(input: TeamInput, snapshot: DrawingSnapshot): RescanTargetEvidence[] {
+  const raw = input.params?.rescanTargets;
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_REGION_CALLS_PER_ROLE) {
+    throw new Error(`rescanTargets는 1~${MAX_REGION_CALLS_PER_ROLE}개 배열이어야 합니다.`);
+  }
+  return raw.map((candidate, index) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      throw new Error(`rescanTargets[${index}] 형식이 올바르지 않습니다.`);
+    }
+    const value = candidate as Record<string, unknown>;
+    const bounds = value.bounds as Record<string, unknown> | undefined;
+    const suggestedRoles = value.suggestedRoles;
+    const reason = value.reason;
+    const confidence = value.confidence;
+    if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 200
+      || (value.sourceId !== undefined && (typeof value.sourceId !== 'string' || value.sourceId.length === 0 || value.sourceId.length > 200))
+      || typeof reason !== 'string' || !RESCAN_REASONS.has(reason as RescanTargetEvidence['reason'])
+      || !Array.isArray(suggestedRoles) || suggestedRoles.length === 0
+      || suggestedRoles.some((role) => typeof role !== 'string' || !RESCAN_ROLES.has(role as RescanTargetEvidence['suggestedRoles'][number]))
+      || !Number.isFinite(confidence) || (confidence as number) < 0 || (confidence as number) > 1
+      || !bounds
+      || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y) || !Number.isFinite(bounds.w) || !Number.isFinite(bounds.h)
+      || bounds.page !== snapshot.page
+      || (bounds.x as number) < 0 || (bounds.y as number) < 0 || (bounds.w as number) <= 0 || (bounds.h as number) <= 0
+      || (bounds.x as number) + (bounds.w as number) > snapshot.width
+      || (bounds.y as number) + (bounds.h as number) > snapshot.height) {
+      throw new Error(`rescanTargets[${index}] 값이 현재 도면 범위를 벗어났습니다.`);
+    }
+    return {
+      id: value.id,
+      ...(value.sourceId === undefined ? {} : { sourceId: value.sourceId as string }),
+      reason: reason as RescanTargetEvidence['reason'],
+      bounds: {
+        x: bounds.x as number,
+        y: bounds.y as number,
+        w: bounds.w as number,
+        h: bounds.h as number,
+        page: bounds.page as number,
+      },
+      suggestedRoles: [...new Set(suggestedRoles as RescanTargetEvidence['suggestedRoles'])],
+      confidence: confidence as number,
+    };
+  });
+}
+
+function boundsIntersect(
+  left: PrecisionRegion['originalBounds'],
+  right: RescanTargetEvidence['bounds'],
+): boolean {
+  return left.x < right.x + right.w
+    && left.x + left.w > right.x
+    && left.y < right.y + right.h
+    && left.y + left.h > right.y;
 }
 
 function synthesizeRasterReview(artifact: DrawingReviewArtifact, deps: SLDTeamDeps): DrawingSynthesis {
@@ -250,16 +348,27 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   throwIfAborted(input.signal);
   const resolved = (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
   onResolvedKey(resolved.key);
+  const selectedRoles = ['symbols', 'connections', 'text'] as const;
+  const selectedVariants = Object.fromEntries(selectedRoles.map((role) => [
+    role,
+    selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale),
+  ])) as Record<(typeof selectedRoles)[number], ImageVariant>;
+  const requestedTargets = requestedRescanTargets(input, prepared.snapshot);
+  const reviewRegions = requestedTargets.length === 0
+    ? prepared.regions
+    : prepared.regions.filter((region) => requestedTargets.some((target) =>
+      target.suggestedRoles.some((role) => selectedVariants[role].id === region.variantId)
+      && boundsIntersect(region.originalBounds, target.bounds)));
   const council = await (deps.runCouncil ?? runDrawingCouncil)({
     snapshot: prepared.snapshot,
     variants: prepared.variants,
-    regions: prepared.regions,
+    regions: reviewRegions,
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     maxConcurrentCalls: COUNCIL_MAX_CONCURRENT_CALLS,
+    priorEnvelopes: input.priorDrawingReviewEnvelopes,
     options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model, signal: input.signal, timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS, maxRetries: COUNCIL_SOURCE_MAX_RETRIES },
   });
   throwIfAborted(input.signal);
-  const selectedRoles = ['symbols', 'connections', 'text'] as const;
   const expectedRegionCount = precisionGridSize(prepared.snapshot.quality.recommendedScale);
   const requiredSymbolVariantKind = prepared.snapshot.quality.recommendedScale === 4
     ? 'upscale-4x'
@@ -271,27 +380,40 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     .every((kind) => prepared.variants.some((variant) => variant.kind === kind));
   const coverageRoles = {
     logic: { variantId: selectCouncilVariant('logic', prepared.variants, prepared.snapshot.quality.recommendedScale).id, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+    'coverage-auditor': { variantId: selectCouncilVariant('coverage-auditor', prepared.variants, prepared.snapshot.quality.recommendedScale).id, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
     ...Object.fromEntries(selectedRoles.map((role) => {
-      const variantId = selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale).id;
-      const actualRegionCount = prepared.regions.filter((region) => region.variantId === variantId).length;
+      const variantId = selectedVariants[role].id;
+      const roleRegions = reviewRegions.filter((region) => region.variantId === variantId);
+      const actualRegionCount = roleRegions.length;
+      const roleExpectedRegionCount = requestedTargets.length === 0 ? expectedRegionCount : actualRegionCount;
       return [role, {
         variantId,
-        expectedRegionCount,
+        expectedRegionCount: roleExpectedRegionCount,
         actualRegionCount,
         plannedCalls: 1 + actualRegionCount + (role === 'text' && hasTripleTextVariants ? 2 : 0),
+        regionIds: roleRegions.map((region) => region.id),
       }];
     })),
   } as DrawingReviewArtifact['coverage']['roles'];
   const selectedVariantIds = new Set(selectedRoles.map((role) => coverageRoles[role].variantId));
-  const coverageComplete = hasRequiredSymbolVariant
+  const everyRequestedTargetCovered = requestedTargets.every((target) => target.suggestedRoles.every((role) =>
+    reviewRegions.some((region) => region.variantId === selectedVariants[role].id && boundsIntersect(region.originalBounds, target.bounds))));
+  const precisionCoverageComplete = hasRequiredSymbolVariant
     && hasTripleTextVariants
+    && everyRequestedTargetCovered
     && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
-    && prepared.regions.length === expectedRegionCount * selectedRoles.length
-    && prepared.regions.every((region) => selectedVariantIds.has(region.variantId));
+    && reviewRegions.length === Object.values(coverageRoles).reduce((total, role) => total + role.expectedRegionCount, 0)
+    && reviewRegions.every((region) => selectedVariantIds.has(region.variantId));
   const failures = council.failures.map((failure) => ({ ...failure, error: redactSecret(failure.error, resolved.key) }));
+  const coverageEnvelope = council.envelopes.find((envelope) => envelope.role === 'coverage-auditor');
+  const rescanTargets = coverageEnvelope?.data.rescanTargets ?? [];
+  const coverageComplete = precisionCoverageComplete
+    && Boolean(coverageEnvelope)
+    && rescanTargets.length === 0;
   const artifact: DrawingReviewArtifact = {
     snapshot: safeSnapshot(prepared.snapshot),
     envelopes: council.envelopes,
+    continuityPlan: council.continuityPlan,
     failures,
     coverage: {
       roles: coverageRoles,
@@ -309,11 +431,13 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     ...failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
     ...(!hasRequiredSymbolVariant ? [hold(`symbols precision source ${requiredSymbolVariantKind}가 없습니다.`)] : []),
     ...(!hasTripleTextVariants ? [hold('text triple-read sources original/upscale-4x/text-high-contrast가 모두 필요합니다.')] : []),
+    ...(!everyRequestedTargetCovered ? [hold('요청된 재스캔 구역과 교차하는 정밀 region이 없습니다.')] : []),
+    ...rescanTargets.map((target) => hold(`coverage-auditor ${target.reason} 재스캔 필요: ${target.id}`)),
     ...(!coverageComplete ? selectedRoles.flatMap((role) => {
       const coverage = coverageRoles[role];
       return coverage.actualRegionCount === coverage.expectedRegionCount ? [] : [hold(`${role} precision coverage expected ${coverage.expectedRegionCount}, actual ${coverage.actualRegionCount}.`)];
     }) : []),
-    ...(!coverageComplete && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
+    ...(!precisionCoverageComplete && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
       ? [hold('precision coverage에 선택되지 않은 variant 또는 초과 region이 포함되었습니다.')]
       : []),
   ];
@@ -333,8 +457,33 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   if (graph && graph.edges.length === 0) holds.push(hold('graph edges가 비어 있습니다.'));
   const complete = coverageComplete && missing.length === 0 && fatal.length === 0 && graph !== undefined && graph.symbols.length > 0 && graph.edges.length > 0;
   const envelopeConfidence = council.envelopes.length === 0 ? 0 : Math.min(...council.envelopes.map((item) => item.data.confidence));
-  const legacy = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
-  return { artifact, ...legacy, holds, complete };
+  let extracted = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
+
+  // 독립 역할 심사가 심볼 또는 연결을 전혀 만들지 못해도, 같은 전체 이미지를
+  // 넓게 읽은 후보를 폐기하지 않는다. 단일 VLM 판독은 교차 검증이 아니므로
+  // confidence를 0.79로 제한해 downstream adapter가 confirmed로 승격하지 못하게 한다.
+  if (extracted.components.length === 0 || extracted.connections.length === 0) {
+    try {
+      throwIfAborted(input.signal);
+      const broad = await (deps.analyzeBroad ?? analyzeSLD)(
+        new Blob([new Uint8Array(input.fileBuffer)], { type: input.mimeType ?? 'image/png' }),
+        { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model ?? '' },
+      );
+      throwIfAborted(input.signal);
+      const candidates = broadReadCandidates(broad);
+      if (candidates.components.length > 0) {
+        extracted = candidates;
+        holds.push(hold(`보조 전체 판독 후보 ${candidates.components.length}개와 연결 ${candidates.connections.length}개를 보존했습니다. 독립 역할 심사 확인 전 확정 판정은 금지됩니다.`));
+      } else {
+        holds.push(hold('보조 전체 판독에서도 기기 후보를 찾지 못했습니다.'));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      holds.push(hold(`보조 전체 판독 실패: ${redactSecret(message, resolved.key)}`));
+    }
+  }
+
+  return { artifact, ...extracted, holds, complete };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

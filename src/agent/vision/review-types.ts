@@ -19,10 +19,12 @@ const REVIEW_ROLES = [
   'connections',
   'text',
   'logic',
+  'coverage-auditor',
   'synthesis',
   'adversary',
 ] as const;
 const LINE_KINDS = ['power', 'bus', 'control', 'ground', 'unknown'] as const;
+const OPEN_END_REASONS = ['page-edge', 'device-boundary', 'unresolved'] as const;
 const LOGIC_TOPICS = [
   'DIRECTION',
   'PROTECTION_CHAIN',
@@ -30,6 +32,8 @@ const LOGIC_TOPICS = [
   'DEVICE_IDENTITY',
   'MISSING_RELATION',
 ] as const;
+const RESCAN_REASONS = ['empty-result', 'dense-cluster', 'boundary-clip', 'low-coverage'] as const;
+const RESCAN_ROLES = ['symbols', 'connections', 'text'] as const;
 
 export type ReviewRole = (typeof REVIEW_ROLES)[number];
 export type ReviewBounds = EvidenceBounds & { page: number };
@@ -51,6 +55,9 @@ export interface LineEvidence {
   path: Point[];
   start: Point;
   end: Point;
+  startAnchorId?: string | null;
+  endAnchorId?: string | null;
+  openEndReason?: (typeof OPEN_END_REASONS)[number] | null;
   junctions: Point[];
   crossovers: Point[];
   confidence: number;
@@ -82,11 +89,21 @@ export interface LogicEvidence {
   confidence: number;
 }
 
+export interface RescanTargetEvidence {
+  id: string;
+  sourceId?: string;
+  reason: (typeof RESCAN_REASONS)[number];
+  bounds: ReviewBounds;
+  suggestedRoles: Array<(typeof RESCAN_ROLES)[number]>;
+  confidence: number;
+}
+
 export interface RoleReviewData {
   symbols?: SymbolEvidence[];
   lines?: LineEvidence[];
   texts?: TextEvidence[];
   logic?: LogicEvidence[];
+  rescanTargets?: RescanTargetEvidence[];
   warnings: string[];
   confidence: number;
 }
@@ -99,11 +116,13 @@ export interface RoleReviewEnvelope {
   promptVersion: string;
   outputHash: string;
   durationMs: number;
+  /** Valid full-page/region reads, including successful reads with zero findings. */
+  reviewedSourceIds?: string[];
   data: RoleReviewData;
 }
 
 type RawRecord = Record<string, unknown>;
-type DetectionKey = 'symbols' | 'lines' | 'texts' | 'logic';
+type DetectionKey = 'symbols' | 'lines' | 'texts' | 'logic' | 'rescanTargets';
 
 const ROLE_COLLECTIONS: Record<ReviewRole, readonly DetectionKey[]> = {
   overview: [],
@@ -111,6 +130,7 @@ const ROLE_COLLECTIONS: Record<ReviewRole, readonly DetectionKey[]> = {
   connections: ['lines'],
   text: ['texts'],
   logic: ['logic'],
+  'coverage-auditor': ['rescanTargets'],
   synthesis: ['symbols', 'lines', 'texts', 'logic'],
   adversary: ['symbols', 'lines', 'texts', 'logic'],
 };
@@ -385,6 +405,23 @@ function isLineKind(value: unknown): value is LineEvidence['lineKind'] {
   return typeof value === 'string' && LINE_KINDS.includes(value as LineEvidence['lineKind']);
 }
 
+function parseAnchorId(role: ReviewRole, value: unknown, label: string): string | null {
+  if (value === null) return null;
+  const anchorId = boundedString(role, value, label, MAX_ID_LENGTH);
+  if (!/^P\d{2,}-C\d{3,}$/.test(anchorId)) {
+    return invalid(role, `${label} must be an allowed continuation display ID.`);
+  }
+  return anchorId;
+}
+
+function parseOpenEndReason(role: ReviewRole, value: unknown): LineEvidence['openEndReason'] {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !OPEN_END_REASONS.includes(value as (typeof OPEN_END_REASONS)[number])) {
+    return invalid(role, 'line.openEndReason is not supported.');
+  }
+  return value as (typeof OPEN_END_REASONS)[number];
+}
+
 function isLogicTopic(value: unknown): value is LogicEvidence['topic'] {
   return typeof value === 'string' && LOGIC_TOPICS.includes(value as LogicEvidence['topic']);
 }
@@ -419,6 +456,9 @@ function parseLine(role: ReviewRole, value: unknown): LineEvidence {
     'path',
     'start',
     'end',
+    'startAnchorId',
+    'endAnchorId',
+    'openEndReason',
     'junctions',
     'crossovers',
     'confidence',
@@ -439,6 +479,15 @@ function parseLine(role: ReviewRole, value: unknown): LineEvidence {
     path,
     start,
     end,
+    ...(item.startAnchorId === undefined ? {} : {
+      startAnchorId: parseAnchorId(role, item.startAnchorId, 'line.startAnchorId'),
+    }),
+    ...(item.endAnchorId === undefined ? {} : {
+      endAnchorId: parseAnchorId(role, item.endAnchorId, 'line.endAnchorId'),
+    }),
+    ...(item.openEndReason === undefined ? {} : {
+      openEndReason: parseOpenEndReason(role, item.openEndReason),
+    }),
     junctions: parsePoints(role, item.junctions, 'line.junctions'),
     crossovers: parsePoints(role, item.crossovers, 'line.crossovers'),
     confidence: parseConfidence(role, item.confidence, 'line.confidence'),
@@ -530,6 +579,25 @@ function parseLogic(role: ReviewRole, value: unknown): LogicEvidence {
   };
 }
 
+function parseRescanTarget(role: ReviewRole, value: unknown): RescanTargetEvidence {
+  const item = asRecord(role, value, 'rescanTarget');
+  assertAllowedKeys(role, item, 'rescanTarget', ['id', 'reason', 'bounds', 'suggestedRoles', 'confidence']);
+  if (!RESCAN_REASONS.includes(item.reason as (typeof RESCAN_REASONS)[number])) {
+    return invalid(role, 'rescanTarget.reason is not supported.');
+  }
+  const suggestedRoles = boundedStringArray(role, item.suggestedRoles, 'rescanTarget.suggestedRoles', 1);
+  if (suggestedRoles.some((candidate) => !RESCAN_ROLES.includes(candidate as (typeof RESCAN_ROLES)[number]))) {
+    return invalid(role, 'rescanTarget.suggestedRoles contains an unsupported role.');
+  }
+  return {
+    id: boundedString(role, item.id, 'rescanTarget.id', MAX_ID_LENGTH),
+    reason: item.reason as RescanTargetEvidence['reason'],
+    bounds: parseBounds(role, item.bounds, 'rescanTarget.bounds'),
+    suggestedRoles: suggestedRoles as RescanTargetEvidence['suggestedRoles'],
+    confidence: parseConfidence(role, item.confidence, 'rescanTarget.confidence'),
+  };
+}
+
 function parseCollection<T>(
   role: ReviewRole,
   raw: RawRecord,
@@ -589,13 +657,15 @@ export function parseRoleReviewData(role: ReviewRole, value: unknown): RoleRevie
   const lines = parseCollection(role, raw, 'lines', (item) => parseLine(role, item));
   const texts = parseCollection(role, raw, 'texts', (item) => parseText(role, item));
   const logic = parseCollection(role, raw, 'logic', (item) => parseLogic(role, item));
-  assertUniqueLocalIds(role, [symbols, lines, texts, logic]);
+  const rescanTargets = parseCollection(role, raw, 'rescanTargets', (item) => parseRescanTarget(role, item));
+  assertUniqueLocalIds(role, [symbols, lines, texts, logic, rescanTargets]);
   const result: RoleReviewData = { warnings, confidence };
 
   if (allowedCollections.includes('symbols')) result.symbols = symbols ?? [];
   if (allowedCollections.includes('lines')) result.lines = lines ?? [];
   if (allowedCollections.includes('texts')) result.texts = texts ?? [];
   if (allowedCollections.includes('logic')) result.logic = logic ?? [];
+  if (allowedCollections.includes('rescanTargets')) result.rescanTargets = rescanTargets ?? [];
 
   return result;
 }

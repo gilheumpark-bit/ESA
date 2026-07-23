@@ -23,52 +23,26 @@ import type { CalcResult } from '@/engine/standards/types';
 import type { Receipt } from '@/engine/receipt/types';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 import { compareVoltageDropLimits } from '@/engine/chain/standard-comparator';
+import { readStoredCountry } from '@/hooks/useSettings';
+import { CALCULATOR_PARAMS } from '@/lib/calculator-params';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CALCULATOR_OPTIONS: { value: string; label: string; params: ExtendedParamDef[] }[] = [
-  {
-    value: 'voltage-drop',
-    label: '전압 강하 계산',
-    params: [
-      { name: 'voltage', type: 'number', unit: 'V', description: '공급 전압', defaultValue: 380 },
-      { name: 'current', type: 'number', unit: 'A', description: '부하 전류' },
-      { name: 'length', type: 'number', unit: 'm', description: '전선 길이' },
-      { name: 'crossSection', type: 'number', unit: 'mm\u00B2', description: '전선 단면적' },
-      { name: 'powerFactor', type: 'number', unit: '', description: '역률', defaultValue: 0.85, step: 0.01 },
-    ],
-  },
-  {
-    value: 'cable-sizing',
-    label: '케이블 사이징',
-    params: [
-      { name: 'current', type: 'number', unit: 'A', description: '설계 전류' },
-      { name: 'ambientTemp', type: 'number', unit: '\u00B0C', description: '주위 온도', defaultValue: 30 },
-      { name: 'groupingFactor', type: 'number', unit: '', description: '다조 보정계수', defaultValue: 1, step: 0.01 },
-    ],
-  },
-  {
-    value: 'transformer-capacity',
-    label: '변압기 용량 선정',
-    params: [
-      { name: 'totalLoad', type: 'number', unit: 'kW', description: '총 부하 용량' },
-      { name: 'demandFactor', type: 'number', unit: '', description: '수용률', defaultValue: 0.7, step: 0.01 },
-      { name: 'growthFactor', type: 'number', unit: '', description: '장래 증설 계수', defaultValue: 1.25, step: 0.05 },
-      { name: 'powerFactor', type: 'number', unit: '', description: '역률', defaultValue: 0.85, step: 0.01 },
-    ],
-  },
-  {
-    value: 'short-circuit',
-    label: '단락 전류 계산',
-    params: [
-      { name: 'voltage', type: 'number', unit: 'V', description: '계통 전압', defaultValue: 380 },
-      { name: 'transformerCapacity', type: 'number', unit: 'kVA', description: '변압기 용량' },
-      { name: 'impedancePercent', type: 'number', unit: '%', description: '%임피던스', defaultValue: 5, step: 0.1 },
-    ],
-  },
-];
+const COMPARISON_CALCULATORS = [
+  ['voltage-drop', '전압 강하 계산'],
+  ['cable-sizing', '케이블 사이징'],
+  ['transformer-capacity', '변압기 용량 선정'],
+  ['short-circuit', '단락 전류 계산'],
+] as const;
+
+const CALCULATOR_OPTIONS: { value: string; label: string; params: ExtendedParamDef[] }[] =
+  COMPARISON_CALCULATORS.map(([value, label]) => ({
+    value,
+    label,
+    params: CALCULATOR_PARAMS[value] as ExtendedParamDef[],
+  }));
 
 const SCENARIO_LABELS = ['A안', 'B안', 'C안', 'D안'];
 
@@ -127,15 +101,30 @@ function ScenarioForm({
               {p.description ?? p.name}
               {p.unit && ` (${p.unit})`}
             </label>
-            <input
-              id={fieldId}
-              type="number"
-              value={scenario.inputs[p.name] ?? ''}
-              onChange={(e) => onInputChange(index, p.name, e.target.value)}
-              step={p.step ?? 'any'}
-              placeholder={p.defaultValue != null ? String(p.defaultValue) : ''}
-              className="h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
-            />
+            {p.type === 'string' && p.options?.length ? (
+              <select
+                id={fieldId}
+                value={scenario.inputs[p.name] ?? ''}
+                onChange={(e) => onInputChange(index, p.name, e.target.value)}
+                className="h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
+              >
+                {p.options.map((option) => (
+                  <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id={fieldId}
+                type="number"
+                value={scenario.inputs[p.name] ?? ''}
+                onChange={(e) => onInputChange(index, p.name, e.target.value)}
+                min={p.min}
+                max={p.max}
+                step={p.step ?? 'any'}
+                placeholder={p.defaultValue != null ? String(p.defaultValue) : ''}
+                className="h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
+              />
+            )}
           </div>
           );
         })}
@@ -265,7 +254,11 @@ export default function ComparePage() {
         const res = await fetch('/api/calculate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ calculatorId: selectedCalc, inputs: parsedInputs }),
+          body: JSON.stringify({
+            calculatorId: selectedCalc,
+            inputs: parsedInputs,
+            countryCode: readStoredCountry(),
+          }),
         });
 
         if (!res.ok) {

@@ -3,14 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
-import { claimOwnedJobRun, getOwnedJob, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { claimOwnedJobRun, getOwnedJob, nextPendingRequestedPage, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 1800;
 
 type VisionProvider = 'gemini' | 'openai' | 'claude';
 const PROVIDERS = new Set<VisionProvider>(['gemini', 'openai', 'claude']);
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
   if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
     return userError('Invalid origin', 403);
   }
-  const blocked = applyRateLimit(req, 'sld');
+  const blocked = applyRateLimit(req, 'sld-job');
   if (blocked) return blocked;
   const owner = await resolveDrawingOwner(req, false);
   if (!owner) return userError('작업 세션이 만료되었습니다.', 401);
@@ -67,10 +67,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
       mimeType: job.sourceMetadata.mimeType,
       fileName: job.sourceMetadata.fileName,
       requestedPages: job.sourceMetadata.requestedPages,
+      preparationPages: [nextPendingRequestedPage(job) ?? 0],
       budget: job.budget,
       vision: apiKey ? { provider, apiKey, model: model || undefined } : undefined,
       ownerId: owner.ownerId,
       jobId,
+      maxPagesPerRun: 1,
       signal: undefined,
     });
     if (result.document.jobStatus === 'COMPLETE' || result.document.jobStatus === 'CANCELLED') {

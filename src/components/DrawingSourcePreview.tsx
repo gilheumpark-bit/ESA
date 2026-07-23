@@ -70,9 +70,16 @@ export function DrawingSourcePreview({
     void (async () => {
       try {
         const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-        pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.mjs';
+        pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const task = pdfjs.getDocument({ data: bytes });
+        const task = pdfjs.getDocument({
+          data: bytes,
+          cMapUrl: '/vendor/pdfjs/cmaps/',
+          cMapPacked: true,
+          standardFontDataUrl: '/vendor/pdfjs/standard_fonts/',
+          wasmUrl: '/vendor/pdfjs/wasm/',
+          useSystemFonts: true,
+        });
         loadingTask = task;
         const pdf = await task.promise;
         if (pageIndex < 0 || pageIndex >= pdf.numPages) throw new Error('PAGE_OUT_OF_RANGE');

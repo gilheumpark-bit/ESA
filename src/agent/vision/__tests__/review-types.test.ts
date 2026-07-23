@@ -117,6 +117,31 @@ describe('role review contracts', () => {
     ).toThrow();
   });
 
+  it('accepts bounded continuation anchors and rejects invented anchor formats', () => {
+    const line = {
+      id: 'line-1',
+      lineKind: 'power',
+      path: [{ x: 10, y: 20 }, { x: 30, y: 40 }],
+      start: { x: 10, y: 20 },
+      end: { x: 30, y: 40 },
+      startAnchorId: 'P01-C001',
+      endAnchorId: null,
+      openEndReason: 'unresolved',
+      junctions: [],
+      crossovers: [],
+      confidence: 0.75,
+    };
+
+    expect(parseRoleReviewData('connections', { lines: [line] }).lines?.[0])
+      .toMatchObject(line);
+    expect(() => parseRoleReviewData('connections', {
+      lines: [{ ...line, startAnchorId: 'C999' }],
+    })).toThrow();
+    expect(() => parseRoleReviewData('connections', {
+      lines: [{ ...line, openEndReason: 'invented' }],
+    })).toThrow();
+  });
+
   it('validates logic topics, attributes, evidence bounds, and evidence links', () => {
     const logic = {
       id: 'logic-1',

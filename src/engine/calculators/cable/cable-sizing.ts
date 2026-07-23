@@ -16,8 +16,13 @@
 
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { createSource, createJudgment } from '@engine/sjc/types';
-import { DEFAULT_REACTANCE_OHM_PER_KM, getInsulationTempLimit } from '@engine/constants/calc-thresholds';
+import { DEFAULT_REACTANCE_OHM_PER_KM } from '@engine/constants/calc-thresholds';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
+import {
+  getIecAmpacity,
+  IEC_CABLE_SIZES,
+  type IecAmpacityResult,
+} from '@/data/ampacity-tables/iec-ampacity';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -26,105 +31,16 @@ import {
   round,
 } from '../types';
 
-// ── Ampacity lookup tables (simplified KEC / IEC 60364-5-52 Table B.52-1) ──
-
 /** Standard cable sizes in mm^2 */
-export const CABLE_SIZES_MM2 = [
-  1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240, 300, 400, 500, 630,
-] as const;
-
-/**
- * Base ampacity (A) for XLPE insulated Cu cables, installation method C
- * (single-layer on wall/tray, 30 deg C ambient, 90 deg C conductor)
- * Reference: KEC Table 232-3 / IEC 60364-5-52 Table B.52-4
- */
-const XLPE_CU_AMPACITY: Record<number, number> = {
-  1.5: 23, 2.5: 31, 4: 42, 6: 54, 10: 73, 16: 98,
-  25: 129, 35: 158, 50: 190, 70: 243, 95: 295, 120: 340,
-  150: 387, 185: 440, 240: 514, 300: 586, 400: 671, 500: 760, 630: 865,
-};
-
-const XLPE_AL_AMPACITY: Record<number, number> = {
-  2.5: 24, 4: 32, 6: 42, 10: 57, 16: 76,
-  25: 100, 35: 123, 50: 148, 70: 189, 95: 230, 120: 265,
-  150: 302, 185: 343, 240: 400, 300: 456, 400: 523, 500: 590, 630: 673,
-};
-
-const PVC_CU_AMPACITY: Record<number, number> = {
-  1.5: 19, 2.5: 26, 4: 35, 6: 45, 10: 61, 16: 81,
-  25: 106, 35: 131, 50: 158, 70: 200, 95: 241, 120: 278,
-  150: 318, 185: 362, 240: 424, 300: 486, 400: 560, 500: 636, 630: 730,
-};
-
-const PVC_AL_AMPACITY: Record<number, number> = {
-  2.5: 20, 4: 27, 6: 35, 10: 47, 16: 63,
-  25: 83, 35: 102, 50: 123, 70: 156, 95: 188, 120: 217,
-  150: 248, 185: 283, 240: 330, 300: 378, 400: 437, 500: 497, 630: 570,
-};
+export const CABLE_SIZES_MM2 = IEC_CABLE_SIZES;
 
 type InsulationType = 'XLPE' | 'PVC';
 type ConductorMaterial = 'Cu' | 'Al';
 type InstallationMethod = 'A1' | 'A2' | 'B1' | 'B2' | 'C' | 'D' | 'E' | 'F';
 
-function getAmpacityTable(conductor: ConductorMaterial, insulation: InsulationType): Record<number, number> {
-  if (insulation === 'XLPE') {
-    return conductor === 'Cu' ? XLPE_CU_AMPACITY : XLPE_AL_AMPACITY;
-  }
-  return conductor === 'Cu' ? PVC_CU_AMPACITY : PVC_AL_AMPACITY;
+function isUnavailableSize(error: unknown): boolean {
+  return error instanceof Error && /not available/i.test(error.message);
 }
-
-/**
- * Temperature correction factor (simplified KEC Table 232-3 note)
- * Base: 30 deg C for XLPE (90 deg C rated), 30 deg C for PVC (70 deg C rated)
- */
-function tempCorrectionFactor(ambientTemp: number, insulation: InsulationType): number {
-  const maxTemp = getInsulationTempLimit(insulation);
-  const baseAmbient = 30;
-  if (ambientTemp >= maxTemp) {
-    throw new Error(
-      `Ambient temperature (${ambientTemp}°C) must be below maximum conductor temperature (${maxTemp}°C)`,
-    );
-  }
-  if (ambientTemp <= baseAmbient) return 1.0;
-  const factor = Math.sqrt((maxTemp - ambientTemp) / (maxTemp - baseAmbient));
-  return factor > 0 ? round(factor, 4) : 0;
-}
-
-/**
- * Grouping correction factor (simplified IEC 60364-5-52 Table B.52-17)
- */
-function groupCorrectionFactor(count: number): number {
-  if (count <= 1) return 1.00;
-  if (count === 2) return 0.80;
-  if (count === 3) return 0.70;
-  if (count <= 5) return 0.65;
-  if (count <= 8) return 0.60;
-  if (count <= 12) return 0.55;
-  return 0.50;
-}
-
-/**
- * Installation-method factor relative to Method C (clipped direct).
- *
- * The base ampacity tables above are Method C values. The prior code accepted an
- * `installation` field of A1..F but never read it, so every method was treated as C.
- * For ENCLOSED methods (A1/A2/B1/B2) that over-rates the cable (they cool worse than C),
- * under-sizing it — fire direction. Factors are derived from IEC 60364-5-52 method ratios
- * at a representative size (Cu/XLPE 25mm²: A1/C≈0.84, B1/C≈0.88, D/C≈0.95); A2/B2 sit
- * just below A1/B1 (worse assembly). Free-air/tray methods (E/F) carry MORE than C, so
- * they are capped at 1.0 (treated as C = conservative under-rate, never over-rated on
- * approximate data). 계산기군 #10 수리.
- */
-const INSTALL_FACTOR: Record<InstallationMethod, number> = {
-  A1: 0.84,
-  A2: 0.80,
-  B1: 0.88,
-  B2: 0.85,
-  C: 1.00,
-  D: 0.95,
-  E: 1.00,
-  F: 1.00,
-};
 
 // ── Input ───────────────────────────────────────────────────────────────────
 
@@ -178,12 +94,30 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   } = input;
 
   const steps: CalcStep[] = [];
-  const ampacityTable = getAmpacityTable(conductor, insulation);
-
   // PART 2 — Correction factors
 
-  // Step 1: Temperature correction
-  const Kt = tempCorrectionFactor(ambientTemp, insulation);
+  let correctionProbe: IecAmpacityResult | null = null;
+  for (const size of CABLE_SIZES_MM2) {
+    try {
+      correctionProbe = getIecAmpacity({
+        size,
+        conductor,
+        insulation,
+        method: installation,
+        ambientTemp,
+        groupCount,
+      });
+      break;
+    } catch (error) {
+      if (isUnavailableSize(error)) continue;
+      throw error;
+    }
+  }
+  if (!correctionProbe) {
+    throw new Error(`No IEC ampacity entries are available for ${conductor}/${insulation}/${installation}.`);
+  }
+
+  const Kt = correctionProbe.factors.find((factor) => factor.type === 'temperature')?.factor ?? 1;
   steps.push({
     step: 1,
     title: 'Temperature correction factor',
@@ -193,8 +127,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     standardRef: 'KEC 232.3',
   });
 
-  // Step 2: Grouping correction
-  const Kg = groupCorrectionFactor(groupCount);
+  const Kg = correctionProbe.factors.find((factor) => factor.type === 'grouping')?.factor ?? 1;
   steps.push({
     step: 2,
     title: 'Grouping correction factor',
@@ -204,24 +137,13 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     standardRef: 'IEC 60364-5-52 Table B.52-17',
   });
 
-  // Step 3: Installation-method factor (base tables are Method C)
-  const Ki = INSTALL_FACTOR[installation];
-  steps.push({
-    step: 3,
-    title: `Installation-method factor (${installation})`,
-    formula: 'K_i = f(\\text{method, rel. to C})',
-    value: Ki,
-    unit: '-',
-    standardRef: 'IEC 60364-5-52 Table B.52',
-  });
-
-  // Step 4: Required ampacity before derating
-  const correctionProduct = Kt * Kg * Ki;
+  // Step 3: Required ampacity before derating
+  const correctionProduct = Kt * Kg;
   const I_required = correctionProduct > 0 ? I / correctionProduct : Infinity;
   steps.push({
-    step: 4,
+    step: 3,
     title: 'Required cable ampacity (before correction)',
-    formula: 'I_{req} = \\frac{I_{load}}{K_t \\times K_g \\times K_i}',
+    formula: 'I_{req} = \\frac{I_{load}}{K_t \\times K_g}',
     value: round(I_required, 2),
     unit: 'A',
   });
@@ -234,13 +156,27 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   let selectedAmpacity = 0;
   let correctedAmpacity = 0;
   let vdPct = Infinity;
+  let largestAvailable: { size: number; result: IecAmpacityResult } | null = null;
 
   for (const size of CABLE_SIZES_MM2) {
-    const baseAmp = ampacityTable[size];
-    if (baseAmp === undefined) continue;
+    let ampacity: IecAmpacityResult;
+    try {
+      ampacity = getIecAmpacity({
+        size,
+        conductor,
+        insulation,
+        method: installation,
+        ambientTemp,
+        groupCount,
+      });
+    } catch (error) {
+      if (isUnavailableSize(error)) continue;
+      throw error;
+    }
+    largestAvailable = { size, result: ampacity };
 
     // Ampacity check
-    if (baseAmp < I_required) continue;
+    if (ampacity.corrected < I) continue;
 
     // Voltage drop check
     const R = (rho * 1000) / size; // Ohm/km
@@ -251,26 +187,27 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
 
     if (pct <= dropLimitPercent) {
       selectedSize = size;
-      selectedAmpacity = baseAmp;
-      correctedAmpacity = round(baseAmp * correctionProduct, 2);
+      selectedAmpacity = ampacity.ampacity;
+      correctedAmpacity = ampacity.corrected;
       vdPct = round(pct, 2);
       break;
     }
 
     // Ampacity passes but VD fails — update to current best candidate and keep looking
     selectedSize = size;
-    selectedAmpacity = baseAmp;
-    correctedAmpacity = round(baseAmp * correctionProduct, 2);
+    selectedAmpacity = ampacity.ampacity;
+    correctedAmpacity = ampacity.corrected;
     vdPct = round(pct, 2);
   }
 
   // If we iterated all and none passed VD, select the last one tried
   if (selectedSize === null) {
-    // Fallback: largest available
-    const sizes = Object.keys(ampacityTable).map(Number).sort((a, b) => a - b);
-    selectedSize = sizes[sizes.length - 1];
-    selectedAmpacity = ampacityTable[selectedSize] ?? 0;
-    correctedAmpacity = round(selectedAmpacity * correctionProduct, 2);
+    if (!largestAvailable) {
+      throw new Error(`No IEC ampacity entries are available for ${conductor}/${insulation}/${installation}.`);
+    }
+    selectedSize = largestAvailable.size;
+    selectedAmpacity = largestAvailable.result.ampacity;
+    correctedAmpacity = largestAvailable.result.corrected;
     const R = (rho * 1000) / selectedSize;
     const sinPhi = Math.sqrt(1 - pf * pf);
     const multiplier = phase === 3 ? SQRT3 : 2;
@@ -279,8 +216,8 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   }
 
   steps.push({
-    step: 5,
-    title: 'Select minimum cable size (ampacity)',
+    step: 4,
+    title: `Select minimum cable size (IEC Method ${installation})`,
     formula: 'I_{base} \\geq I_{req}',
     value: selectedSize,
     unit: 'mm\u00B2',
@@ -288,7 +225,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   });
 
   steps.push({
-    step: 6,
+    step: 5,
     title: 'Verify voltage drop',
     formula: 'e\\% \\leq ' + dropLimitPercent + '\\%',
     value: vdPct,

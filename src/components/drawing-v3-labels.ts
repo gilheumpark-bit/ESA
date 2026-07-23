@@ -88,6 +88,7 @@ const READ_FAILURE_LABELS: Record<ReadFailureCode, string> = {
   UNREADABLE_SYMBOL: '기호 판독 불가',
   UNREADABLE_LINE: '선로 판독 불가',
   LINE_CONTINUITY_UNCERTAIN: '선로 연속성 확인',
+  ELECTRICAL_LOGIC_CONFLICT: '전기 논리 교차검증 충돌',
   AMBIGUOUS_OCR: '문자 판독 후보 확인',
   LOW_RESOLUTION_HOLD: '원본 해상도 부족',
   HOLD_RESCAN_UNRESOLVED: '재검토 후에도 미확정',

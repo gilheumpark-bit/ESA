@@ -33,6 +33,20 @@ import { isVisionProvider, resolveSelectedModel } from '@/lib/vision-byok';
 // =============================================================================
 
 type KeyStatus = 'empty' | 'saved' | 'testing' | 'valid' | 'invalid' | 'unavailable';
+type ProbeStatus = 'success' | 'failed' | 'hold';
+
+interface ProbeOutcome {
+  status: ProbeStatus;
+  detail: string;
+  latencyMs: number;
+}
+
+interface ModelProbeResult {
+  model: string;
+  name: string;
+  text: ProbeOutcome;
+  vision: ProbeOutcome;
+}
 
 interface ProviderKeyState {
   maskedKey: string;
@@ -40,6 +54,14 @@ interface ProviderKeyState {
   rawInput: string;
   /** 선택된 모델 id — 미선택 시 공급자 카탈로그 기본값으로 표시된다. */
   selectedModel: string;
+  availableModels: ProviderModelOption[];
+  probeRunning: boolean;
+  probeResults: ModelProbeResult[];
+}
+
+interface ProviderModelOption {
+  id: string;
+  name: string;
 }
 
 const PROVIDER_ORDER: string[] = [
@@ -79,6 +101,8 @@ function ProviderKeyCard({
   onDelete,
   onInputChange,
   onModelChange,
+  onProbeModels,
+  models,
 }: {
   provider: AIProvider;
   state: ProviderKeyState;
@@ -87,11 +111,17 @@ function ProviderKeyCard({
   onDelete: () => void;
   onInputChange: (value: string) => void;
   onModelChange: (modelId: string) => void;
+  onProbeModels: () => void;
+  models: ProviderModelOption[];
 }) {
   const isLocal = isLocalProvider(provider.id);
   const hasSavedKey = state.status !== 'empty';
   const showInput = !hasSavedKey;
-  const models = getModelList(provider.id);
+  const catalogModels = getModelList(provider.id);
+  const providerModels = models.length > 0 ? models : catalogModels;
+  const selectableModels = state.selectedModel && !providerModels.some((model) => model.id === state.selectedModel)
+    ? [{ id: state.selectedModel, name: `${state.selectedModel} (저장됨 · 현재 API 목록에 없음)` }, ...providerModels]
+    : providerModels;
 
   return (
     <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -123,7 +153,7 @@ function ProviderKeyCard({
       )}
 
       {/* 모델 선택: 실제 OCR·도면 분석에 배선된 공급자만 노출 */}
-      {hasSavedKey && isVisionProvider(provider.id) && models.length > 1 && (
+      {hasSavedKey && isVisionProvider(provider.id) && selectableModels.length > 0 && (
         <div className="mb-3">
           <label
             htmlFor={`provider-model-${provider.id}`}
@@ -138,14 +168,15 @@ function ProviderKeyCard({
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"
           >
             <option value="">자동 (제공자 기본 · 권장)</option>
-            {models.map((m) => (
+            {selectableModels.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
               </option>
             ))}
           </select>
           <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-            OCR·도면(SLD)·검토 요청에 이 모델이 사용됩니다. 자동은 각 기능에 맞는 기본 모델을 씁니다.
+            {models.length > 0 ? 'API에서 조회한 모델' : '기본 카탈로그 모델'} · OCR·도면(SLD)·AI 답변에 사용됩니다.
+            자동은 각 기능에 맞는 기본 모델을 씁니다.
           </p>
         </div>
       )}
@@ -171,7 +202,7 @@ function ProviderKeyCard({
       )}
 
       {/* 액션 버튼 */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {showInput && !isLocal && (
           <button
             type="button"
@@ -189,7 +220,17 @@ function ProviderKeyCard({
             disabled={state.status === 'testing' || state.status === 'empty'}
             className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            키 확인
+            키 확인·모델 불러오기
+          </button>
+        )}
+        {provider.id === 'gemini' && models.length > 0 && (
+          <button
+            type="button"
+            onClick={onProbeModels}
+            disabled={state.probeRunning}
+            className="min-h-11 rounded-lg border border-zinc-300 px-3 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            {state.probeRunning ? '모델 검사 중…' : '기본 호출 호환성 검사'}
           </button>
         )}
         {isLocal && (
@@ -210,8 +251,49 @@ function ProviderKeyCard({
           </button>
         )}
       </div>
+
+      {provider.id === 'gemini' && (state.probeRunning || state.probeResults.length > 0) && (
+        <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700" aria-live="polite">
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h4>
+            <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+              {state.probeResults.length}/{models.length} 완료
+            </span>
+          </div>
+          <div className="max-h-72 overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead className="sticky top-0 bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                <tr>
+                  <th scope="col" className="px-3 py-2 font-medium">모델</th>
+                  <th scope="col" className="px-3 py-2 font-medium">텍스트</th>
+                  <th scope="col" className="px-3 py-2 font-medium">이미지 입력</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.probeResults.map((result) => (
+                  <tr key={result.model} className="border-t border-zinc-200 dark:border-zinc-700">
+                    <td className="max-w-48 truncate px-3 py-2" title={result.model}>{result.name}</td>
+                    <td className="px-3 py-2" title={result.text.detail}>{probeStatusLabel(result.text.status)}</td>
+                    <td className="px-3 py-2" title={result.vision.detail}>{probeStatusLabel(result.vision.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            성공: 텍스트·이미지 입력 호출 확인 · 실패: 이 호출 형식 미지원 · 보류: 할당량·일시 장애·시간 초과.
+            이 검사는 도면 판독 품질을 보증하지 않습니다.
+          </p>
+        </div>
+      )}
     </div>
   );
+}
+
+function probeStatusLabel(status: ProbeStatus): string {
+  if (status === 'success') return '성공';
+  if (status === 'failed') return '실패';
+  return '보류';
 }
 
 // =============================================================================
@@ -319,6 +401,9 @@ export default function BYOKPage() {
           rawInput: '',
           // 저장된 유효 선택만 표시 — 미선택/구모델이면 '' → "자동" 옵션 표시.
           selectedModel: resolveSelectedModel(id),
+          availableModels: [],
+          probeRunning: false,
+          probeResults: [],
         };
       }
       setStates(initial);
@@ -384,8 +469,14 @@ export default function BYOKPage() {
           return;
         }
 
-        const body = await response.json() as { data?: { valid?: boolean } };
-        updateState(id, { status: body.data?.valid ? 'valid' : 'invalid' });
+        const body = await response.json() as {
+          data?: { valid?: boolean; models?: ProviderModelOption[] };
+        };
+        updateState(id, {
+          status: body.data?.valid ? 'valid' : 'invalid',
+          availableModels: body.data?.models ?? [],
+          probeResults: [],
+        });
       } catch {
         updateState(id, { status: 'unavailable' });
       }
@@ -398,9 +489,63 @@ export default function BYOKPage() {
       const ok = window.confirm('이 API 키를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.');
       if (!ok) return;
       deleteStoredProviderKey(id);
-      updateState(id, { maskedKey: '', status: 'empty', rawInput: '' });
+      updateState(id, {
+        maskedKey: '',
+        status: 'empty',
+        rawInput: '',
+        availableModels: [],
+        probeRunning: false,
+        probeResults: [],
+      });
     },
     [updateState],
+  );
+
+  const handleProbeModels = useCallback(
+    async (id: string) => {
+      if (id !== 'gemini') return;
+      const models = states[id]?.availableModels ?? [];
+      if (models.length === 0) return;
+
+      const apiKey = await loadStoredProviderKey(id).catch(() => null);
+      if (!apiKey) {
+        updateState(id, { status: 'invalid' });
+        return;
+      }
+
+      updateState(id, { probeRunning: true, probeResults: [] });
+      const collected: ModelProbeResult[] = [];
+      for (let index = 0; index < models.length; index += 3) {
+        const batch = models.slice(index, index + 3);
+        const results = await Promise.all(batch.map(async (model): Promise<ModelProbeResult> => {
+          try {
+            const response = await fetch('/api/settings/byok-test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                provider: id,
+                apiKey,
+                action: 'probe-model',
+                model: model.id,
+              }),
+            });
+            if (!response.ok) throw new Error('probe unavailable');
+            const body = await response.json() as {
+              data?: { text?: ProbeOutcome; vision?: ProbeOutcome };
+            };
+            if (!body.data?.text || !body.data.vision) throw new Error('invalid probe response');
+            return { model: model.id, name: model.name, text: body.data.text, vision: body.data.vision };
+          } catch {
+            const hold: ProbeOutcome = { status: 'hold', detail: '검사 요청을 완료하지 못했습니다.', latencyMs: 0 };
+            return { model: model.id, name: model.name, text: hold, vision: hold };
+          }
+        }));
+        collected.push(...results);
+        updateState(id, { probeResults: [...collected] });
+      }
+      updateState(id, { probeRunning: false, probeResults: [...collected] });
+    },
+    [states, updateState],
   );
 
   const handleModelChange = useCallback(
@@ -454,6 +599,9 @@ export default function BYOKPage() {
             status: 'empty' as KeyStatus,
             rawInput: '',
             selectedModel: '',
+            availableModels: [],
+            probeRunning: false,
+            probeResults: [],
           };
           return (
             <ProviderKeyCard
@@ -465,6 +613,8 @@ export default function BYOKPage() {
               onDelete={() => handleDelete(id)}
               onInputChange={(v) => updateState(id, { rawInput: v })}
               onModelChange={(m) => handleModelChange(id, m)}
+              onProbeModels={() => handleProbeModels(id)}
+              models={state.availableModels}
             />
           );
         })}

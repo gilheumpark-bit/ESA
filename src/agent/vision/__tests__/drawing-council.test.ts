@@ -72,6 +72,13 @@ function resultFor(role: VLMReviewRole, sourceByteLength = 1): VLMRoleAnalysisRe
       }, rawText: '{}', model: `text-${sourceByteLength}`, durationMs: 1, retryCount: 0,
     };
   }
+  if (role === 'coverage-auditor') {
+    return {
+      role,
+      data: { rescanTargets: [], warnings: [], confidence: 1 },
+      rawText: '{}', model: `coverage-${sourceByteLength}`, durationMs: 1, retryCount: 0,
+    };
+  }
   return {
     role,
     data: {
@@ -82,6 +89,137 @@ function resultFor(role: VLMReviewRole, sourceByteLength = 1): VLMRoleAnalysisRe
 }
 
 describe('sealed independent drawing council', () => {
+  it('finishes the full connection survey before annotated region calls and allowlists C anchors', async () => {
+    const precisionRegions: PrecisionRegion[] = [
+      {
+        id: 'lines:left',
+        displayId: 'P03-A01',
+        variantId: 'variant:lines',
+        variantBounds: { x: 0, y: 0, w: 50, h: 80 },
+        logicalVariantBounds: { x: 0, y: 0, w: 50, h: 80 },
+        originalBounds: { x: 0, y: 0, w: 50, h: 80 },
+        logicalOriginalBounds: { x: 0, y: 0, w: 50, h: 80 },
+        buffer: new ArrayBuffer(21),
+      },
+      {
+        id: 'lines:right',
+        displayId: 'P03-A02',
+        variantId: 'variant:lines',
+        variantBounds: { x: 50, y: 0, w: 50, h: 80 },
+        logicalVariantBounds: { x: 50, y: 0, w: 50, h: 80 },
+        originalBounds: { x: 50, y: 0, w: 50, h: 80 },
+        logicalOriginalBounds: { x: 50, y: 0, w: 50, h: 80 },
+        buffer: new ArrayBuffer(22),
+      },
+    ];
+    let fullConnectionComplete = false;
+    const regionContexts: string[] = [];
+    const annotatedPorts: string[][] = [];
+
+    const result = await runDrawingCouncil(
+      { snapshot: snapshot(), variants: variants(), regions: precisionRegions, options, maxRegionCallsPerRole: 2 },
+      async (buffer, _mime, role, _options, context) => {
+        if (role === 'symbols') {
+          return {
+            ...resultFor(role, buffer.byteLength),
+            data: { symbols: [], warnings: [], confidence: 1 },
+          };
+        }
+        if (role === 'connections' && buffer.byteLength === 4) {
+          fullConnectionComplete = true;
+        }
+        if (role === 'connections' && buffer.byteLength >= 21) {
+          expect(fullConnectionComplete).toBe(true);
+          regionContexts.push(context ?? '');
+          const reviewed = resultFor(role, buffer.byteLength);
+          const lines = reviewed.data.lines ?? [];
+          lines[0] = { ...lines[0], startAnchorId: 'P03-C001' };
+          return reviewed;
+        }
+        return resultFor(role, buffer.byteLength);
+      },
+      async (region, ports) => {
+        annotatedPorts.push(ports.map((port) => port.displayId));
+        return region;
+      },
+    );
+
+    expect(result.continuityPlan?.continuations.map((port) => port.displayId)).toEqual(['P03-C001']);
+    expect(annotatedPorts).toEqual([['P03-C001'], ['P03-C001']]);
+    expect(regionContexts).toHaveLength(2);
+    expect(regionContexts.every((context) => context.includes('P03-C001'))).toBe(true);
+    expect(result.failures.filter((failure) => failure.role === 'connections')).toEqual([]);
+  });
+
+  it('runs a post-review coverage auditor with coverage context and returns rescan targets', async () => {
+    let auditContext = '';
+    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 }, async (buffer, _mime, role, _options, context) => {
+      if ((role as string) === 'coverage-auditor') {
+        auditContext = context ?? '';
+        return {
+          role,
+          data: {
+            rescanTargets: [{
+              id: 'miss-1',
+              reason: 'boundary-clip',
+              bounds: { x: 450, y: 0, w: 100, h: 1000, page: 1 },
+              suggestedRoles: ['symbols', 'connections'],
+              confidence: 0.9,
+            }],
+            warnings: [],
+            confidence: 0.9,
+          },
+          rawText: '{}',
+          model: 'coverage-model',
+          durationMs: 1,
+          retryCount: 0,
+        } as never;
+      }
+      return resultFor(role, buffer.byteLength);
+    });
+
+    const audit = result.envelopes.find((item) => (item.role as string) === 'coverage-auditor');
+    expect(auditContext).toContain('region:right');
+    expect(auditContext).toContain('reviewedSourceIds');
+    expect(result.envelopes.find((item) => item.role === 'symbols')?.reviewedSourceIds)
+      .toEqual(expect.arrayContaining(['variant:original', 'region:right']));
+    expect((audit?.data as { rescanTargets?: unknown[] } | undefined)?.rescanTargets).toHaveLength(1);
+  });
+
+  it('shows the coverage auditor prior independent attempts without summing duplicate findings', async () => {
+    let auditContext = '';
+    const prior = {
+      role: 'connections' as const,
+      drawingHash: snapshot().drawingHash,
+      provider: 'openai' as const,
+      model: 'prior-model',
+      promptVersion: 'prior-prompt',
+      outputHash: 'prior-output',
+      durationMs: 1,
+      reviewedSourceIds: ['variant:lines', 'variant:lines:region:0'],
+      data: {
+        lines: [
+          { id: 'prior-1', lineKind: 'power' as const, path: [{ x: 0, y: 0 }, { x: 10, y: 10 }], start: { x: 0, y: 0 }, end: { x: 10, y: 10 }, junctions: [], crossovers: [], confidence: 0.9 },
+          { id: 'prior-2', lineKind: 'power' as const, path: [{ x: 10, y: 10 }, { x: 20, y: 20 }], start: { x: 10, y: 10 }, end: { x: 20, y: 20 }, junctions: [], crossovers: [], confidence: 0.9 },
+        ],
+        warnings: [], confidence: 0.9,
+      },
+    };
+
+    await runDrawingCouncil({
+      snapshot: snapshot(), variants: variants(), regions: regions(), options,
+      maxRegionCallsPerRole: 1, priorEnvelopes: [prior],
+    }, async (buffer, _mime, role, _options, context) => {
+      if (role === 'coverage-auditor') auditContext = context ?? '';
+      return resultFor(role, buffer.byteLength);
+    });
+
+    expect(auditContext).toContain('attempts');
+    expect(auditContext).toContain('prior-output');
+    expect(auditContext).toContain('"lines":2');
+    expect(auditContext).toContain('"lines":1');
+  });
+
   it('triple-reads text with independent original, 4x, and high-contrast calls', async () => {
     const inputVariants = [
       ...variants(),
@@ -118,8 +256,8 @@ describe('sealed independent drawing council', () => {
     expect([...new Set(started)].sort()).toEqual(['connections', 'logic', 'symbols', 'text']);
     release?.();
     const result = await pending;
-    expect(invoke).toHaveBeenCalledTimes(5);
-    expect(result.envelopes.map((item) => item.role)).toEqual(['symbols', 'connections', 'text', 'logic']);
+    expect(invoke).toHaveBeenCalledTimes(6);
+    expect(result.envelopes.map((item) => item.role)).toEqual(['symbols', 'connections', 'text', 'logic', 'coverage-auditor']);
     expect(result.envelopes.find((item) => item.role === 'logic')?.data.logic).toHaveLength(1);
   });
 
@@ -198,7 +336,7 @@ describe('sealed independent drawing council', () => {
 
     const result = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 }, invoke);
 
-    expect(result.envelopes.map((item) => item.role)).toEqual(['symbols', 'logic']);
+    expect(result.envelopes.map((item) => item.role)).toEqual(['symbols', 'logic', 'coverage-auditor']);
     expect(result.envelopes[0].data.warnings).toContain('REGION_REVIEW_FAILED:region:right');
     expect(result.failures.map((item) => [item.role, item.sourceId, item.fatal])).toEqual([
       ['symbols', 'region:right', false],
@@ -234,7 +372,7 @@ describe('sealed independent drawing council', () => {
       return resultFor(role, buffer.byteLength);
     });
 
-    expect(seenMime).toEqual(['image/png', 'image/png', 'image/png', 'image/png']);
+    expect(seenMime).toEqual(['image/png', 'image/png', 'image/png', 'image/png', 'image/png']);
   });
 
   it('propagates external pre-abort and does not invoke queued work', async () => {
@@ -264,7 +402,7 @@ describe('sealed independent drawing council', () => {
     expect(invoke.mock.calls.length).toBeLessThanOrEqual(4);
   });
 
-  it('limits 52 calls globally and schedules every role full source before regions', async () => {
+  it('limits 53 calls globally and schedules every primary role full source before regions', async () => {
     const manyRegions = Array.from({ length: 16 }, (_, index) => ({
       ...regions()[0],
       id: `region:${index}`,
@@ -290,7 +428,7 @@ describe('sealed independent drawing council', () => {
     expect(started).toEqual(['symbols:1', 'connections:1', 'text:1', 'logic:1']);
     release?.();
     await pending;
-    expect(invoke).toHaveBeenCalledTimes(52);
+    expect(invoke).toHaveBeenCalledTimes(53);
   });
 
   it('rejects unsafe provider configuration, duplicate kinds, and input-count overflow before invoking', async () => {
@@ -313,7 +451,7 @@ describe('sealed independent drawing council', () => {
       model: `${role}-${buffer.byteLength}-${'m'.repeat(180)}`,
     }));
 
-    expect(result.envelopes.map((item) => item.role)).toEqual(['logic']);
+    expect(result.envelopes.map((item) => item.role)).toEqual(['logic', 'coverage-auditor']);
     expect(result.failures.filter((item) => item.fatal).map((item) => item.role)).toEqual(['symbols', 'connections', 'text']);
   });
 });
