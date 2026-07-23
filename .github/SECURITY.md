@@ -1,27 +1,5 @@
-# Security Policy
+# 보안 취약점 제보
 
-## Reporting a Vulnerability
+공개 issue를 만들지 마십시오. 현재 제보 절차, 신뢰 경계와 알려진 공백은 저장소 루트의 [SECURITY.md](../SECURITY.md)가 정본입니다.
 
-If you discover a security vulnerability, please report it responsibly:
-
-1. **Do NOT** open a public issue
-2. Email the maintainer directly with details
-3. Include steps to reproduce if possible
-
-## Security Measures
-
-ESVA implements the following security controls:
-
-- **Input Sanitization** — `sanitizeInput()` on all user-facing API inputs
-- **URL Allowlist** — `assertUrlAllowedForFetch()` blocks unauthorized external requests
-- **Rate Limiting** — Sliding window rate limiter on all API endpoints
-- **BYOK Encryption** — AES-GCM encryption for user API keys (session-scoped, never stored server-side)
-- **Memory Limits** — All in-memory Maps have `MAX_ENTRIES` with periodic cleanup
-- **Guardrails** — 9 blocking rules prevent unsafe estimations
-- **No Server-Side Key Storage** — ESVA never persists user API keys beyond the session
-
-## Supported Versions
-
-| Version | Supported |
-|---------|-----------|
-| 0.1.x   | Yes       |
+실제 API 키, 회사 도면, 개인정보는 첨부하지 말고 비민감 재현 자료를 사용하십시오.

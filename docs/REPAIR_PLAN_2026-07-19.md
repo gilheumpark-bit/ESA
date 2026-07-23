@@ -1,5 +1,7 @@
 # ESVA 풀수리 계획 (결제·티어 제외) — 2026-07-19
 
+> 문서 상태: 2026-07-19 수리 계획. 체크 항목을 현재 완료 근거로 사용하지 말고 [구현 배선 지도](project/IMPLEMENTATION_MAP.md)에서 production caller를 확인하십시오.
+
 ## 범위
 - 포함: 거짓 적합, 깨진 배선, 데모 오인, quality 공백 PASS, chat output-filter, 플래그 UI, SOS 정직 라벨
 - 제외: Stripe / OPEN_BETA / 티어 게이트 / webhook

@@ -1,25 +1,34 @@
 ---
-name: Feature Request
-about: Suggest a new feature for ESVA
+name: 기능 제안
+about: 해결할 사용자 문제와 검증 방법을 제안합니다
 title: '[FEAT] '
 labels: enhancement
 assignees: ''
 ---
 
-## Problem
-What problem does this solve?
+## 사용자 문제
 
-## Proposed Solution
-How should it work?
+누가 어떤 작업에서 막히는지 적어 주십시오.
 
-## Category
-- [ ] Calculator
-- [ ] Standards
-- [ ] Search
-- [ ] Agent
-- [ ] UI/UX
-- [ ] API
-- [ ] Other
+## 원하는 흐름
 
-## Additional Context
-Any references, standards, or technical details.
+사용자 진입점부터 결과 확인·저장·재조회까지 순서대로 적어 주십시오.
+
+## 범위
+
+- [ ] 계산기
+- [ ] 기준서
+- [ ] 검색·AI 답변
+- [ ] 도면 분석
+- [ ] 현장·안전
+- [ ] 프로젝트·저장
+- [ ] UI·접근성
+- [ ] API·운영
+
+## 실패와 보류
+
+입력 부족, 권한 없음, 외부 서비스 장애 또는 판단 불가일 때 어떻게 보여야 하는지 적어 주십시오.
+
+## 완료 확인
+
+이 기능이 실제로 작동한다고 판정할 테스트, 교보재 또는 사용자 왕복을 적어 주십시오.

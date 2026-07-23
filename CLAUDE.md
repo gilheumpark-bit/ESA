@@ -4,7 +4,7 @@ ESA(Electrical Search Vertical AI)는 전기 엔지니어용 검색·계산·도
 
 ## 현재 제품 경계
 
-- 57개 계산기는 `src/engine/calculators/registry.ts`와 `count.ts`가 정본이다. 계산기마다 공식과 기준값이 다르므로 하나의 보편 정확도 수치를 주장하지 않는다.
+- 계산기 레지스트리는 `src/engine/calculators/index.ts`, 고정 개수 계약은 `src/engine/calculators/count.ts`가 정본이다. 계산기마다 공식과 기준값이 다르므로 하나의 보편 정확도 수치를 주장하지 않는다.
 - 기준서 데이터는 저장소 스냅샷이다. 공인 원문을 자동 동기화하지 않으며, 판본과 확인일이 없으면 `is_standard_current=false`다.
 - 전문 검토는 계통도·평면도·기준서의 3개 전문팀과 별도 합의 단계로 구성된다. 합의 단계는 네 번째 독립 전문가가 아니다.
 - 서로 다른 전문팀 두 곳 이상이 성공하지 않으면 합의를 완료로 표시하지 않는다.
@@ -55,7 +55,7 @@ docs/                     사용자·검증·운영 문서
 | 도면 | `dxf-parser`, `pdfjs-dist`, `sharp` |
 | 테스트 | Jest 30, TypeScript, ESLint, Next production build |
 
-AI 모델 목록은 `src/lib/ai-providers.ts`가 정본이다. 2026-07-20 확인 기준 기본 계열은 OpenAI GPT-5.6, Google Gemini 3.x, Anthropic Claude 5/4.x, Groq GPT-OSS다. 모델 ID·가격·종료 일정은 바뀔 수 있으므로 수정 전 공급자 공식 문서를 다시 확인한다.
+AI 모델 목록은 `src/lib/ai-providers.ts`가 정본이다. 모델 ID·가격·종료 일정은 바뀔 수 있으므로 수정 전 공급자 공식 문서를 확인하고, 문서에 모델 목록을 복제하지 않는다.
 
 ## 구현 규칙
 
@@ -92,6 +92,7 @@ pwsh -NoProfile -File scripts/enforce.ps1
 
 ## 문서 정본
 
+- 문서 분류와 읽는 순서: `docs/README.md`
 - 사용 범위와 배포 경계: `README.md`, `docs/USER_GUIDE.md`
 - 공개 핵심 API: `docs/API_REFERENCE.md`, `GET /api/openapi`
 - 도면 검증 범위: `docs/DRAWING_VALIDATION_RESULT.md`

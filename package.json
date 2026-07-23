@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "test": "jest",
     "test:watch": "jest --watch",
+    "check:docs": "node scripts/check-docs.mjs",
     "test:calc": "jest --testPathPatterns=calculators",
     "fixtures:drawings": "node scripts/fixtures/generate-drawings.mjs",
     "test:drawings": "jest --testPathPatterns=topology",

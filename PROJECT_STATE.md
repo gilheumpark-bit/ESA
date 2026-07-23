@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: codex/sld-boundary-continuity
-codeBaselineCommit: 1abcd18698fbc5cbea426184f64c14a40e6c1ddd
-updatedAt: 2026-07-23T10:37:20.7797168+09:00
+codeBaselineCommit: ad7b91c83dc2beb4d1311ac6d766bf2ad5fb540e
+updatedAt: 2026-07-23T10:51:32.8678727+09:00
 trigger: architecture
-changedDomains: [app, llm, build]
+changedDomains: [app, lib, docs, scripts, ci]
 ---
 
 # ESA 프로젝트 상태
@@ -84,7 +84,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
-- 이번 답변 경로 배치의 Git 기준선은 `1abcd18`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 현재 제품 코드 기준선은 `ad7b91c`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
@@ -114,10 +114,11 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 상세 문서
 
+- [문서 지도](docs/README.md)
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계](docs/project/handoffs/2026-07-21-sld-v3-independent-review-repair.md)
+- [최신 인수인계](docs/project/handoffs/2026-07-23-z-ai-chat-calculator-and-docs.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
 - [경계 연속성 설계](docs/superpowers/specs/2026-07-23-sld-region-continuity-integrated-recovery-design.md)

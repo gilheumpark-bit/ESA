@@ -1,26 +1,45 @@
-## Summary
+## 해결한 문제
 
-Brief description of changes.
+사용자 문제, 재현 조건과 변경하지 않은 범위를 적으십시오.
 
-## Type
-- [ ] Feature
-- [ ] Bug fix
-- [ ] Refactor
-- [ ] Documentation
-- [ ] Test
+## 변경 내용
 
-## Changes
 - 
 
-## Checklist
-- [ ] `npm test` passes (22 suites)
-- [ ] `npm run build` succeeds
-- [ ] `npm run lint` passes
-- [ ] Calculator tests maintain ±0.01% accuracy
-- [ ] No hardcoded API keys or secrets
-- [ ] `sanitizeInput()` used on new user inputs
-- [ ] Error codes follow `ESA-XXXX` format
-- [ ] Korean comments for domain logic, English for infrastructure
+## 신뢰 경계
 
-## Related Issues
+- [ ] 인증·소유권
+- [ ] 계산·단위·판정
+- [ ] AI·BYOK·출력 필터
+- [ ] 도면·업로드·저장
+- [ ] 결제·외부 서비스
+- [ ] 해당 없음
+
+영향이 있는 항목의 실패 상태와 복구 경로를 설명하십시오.
+
+## 검증
+
+실행한 명령과 exit code를 적으십시오. 실행하지 않은 항목은 지우거나 미검증 사유를 씁니다.
+
+- [ ] 관련 테스트
+- [ ] `npm run check:docs`
+- [ ] `npx tsc --noEmit --incremental false`
+- [ ] `npm run lint -- --max-warnings=0`
+- [ ] `npm test -- --runInBand`
+- [ ] `npm run build`
+- [ ] 기능별 실왕복 게이트 또는 브라우저 확인
+
+## 문서와 데이터
+
+- [ ] 사용자·API·아키텍처·구현 배선 문서를 필요한 범위에서 갱신함
+- [ ] 새 환경 변수는 `.env.example`과 소비 코드가 일치함
+- [ ] 실제 키, 개인정보, 회사 도면, 재배포 불가 원본이 diff에 없음
+- [ ] 외부 실증 주장은 교보재·커밋·재실행 명령과 연결됨
+
+## 남은 HOLD·미검증
+
+- 없음 또는 구체적인 항목
+
+## 관련 issue
+
 Closes #

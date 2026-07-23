@@ -40,7 +40,7 @@ changedDomains: [agent, app, components, lib, scripts]
 - 보고서 원본·기기·선·수량·관계·HOLD·계산의 번호와 provenance를 일관되게 표시한다.
 - 브라우저 데스크톱·모바일에서 원본 크기, 페이지 폭, 기기와 관계의 양방향 선택을 실측했다.
 - 전체 Jest, TypeScript, 무경고 ESLint, production build, PDF fixture, E2E와 독립 diff·비밀자료 심사를 통과했다.
-- [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)와 [구조 결정 기록](docs/project/DECISIONS.md)을 현재 코드 기준선으로 갱신했다.
+- [기능 배선 지도](../IMPLEMENTATION_MAP.md)와 [구조 결정 기록](../DECISIONS.md)을 당시 코드 기준선으로 갱신했다.
 
 ## 부분 완료
 

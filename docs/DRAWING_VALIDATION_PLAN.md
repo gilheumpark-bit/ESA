@@ -1,5 +1,7 @@
 # 도면 파서 검증 계획 — 교보재 15장 (초5·중5·고5)
 
+> 문서 상태: 초기 검증 계획. 완료 여부와 이후 공개 교보재 결과는 [VALIDATION_EVIDENCE](VALIDATION_EVIDENCE.md)에서 확인합니다.
+
 작성 2026-07-20 · 대상 `src/engine/topology/{dxf-parser,pdf-vector-parser,endpoint-snap}.ts`
 
 ## 왜 지금인가

@@ -1,5 +1,7 @@
 # 도면 분석 기능 — 전체 구성·성능·약속 감사 + 체크리스트
 
+> 문서 상태: 역사적 감사 스냅샷. 현재 배선은 [IMPLEMENTATION_MAP](project/IMPLEMENTATION_MAP.md), 현재 실증은 [VALIDATION_EVIDENCE](VALIDATION_EVIDENCE.md)를 우선합니다.
+
 작성 2026-07-20 · 대상 커밋 4993b7c(feat/esva-v1.0) · 방법: 코드 file:line + 라이브 실측(dev :3010)
 [평가 좌표] 대상=도면 분석 기능 전체 · 모드=absolute · 렌즈=technology/frontend/integration · 단계=I/X(구현·통합) · as-is
 

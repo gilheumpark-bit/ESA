@@ -2,6 +2,8 @@
 
 작성 2026-07-20 · 대상 리비전 `23f7e0c` 이후
 
+> 문서 상태: v1 설계와 당시 독립 심사 기록. 현재 production 배선과 활성 범위는 [IMPLEMENTATION_MAP](project/IMPLEMENTATION_MAP.md), API 계약은 [API_REFERENCE](API_REFERENCE.md)를 우선합니다.
+
 ## 왜
 
 판정 엔진(`CodeArticle` + `evaluateCondition`)은 이미 데이터 구동인데, 규칙을

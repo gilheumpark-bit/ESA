@@ -1,5 +1,7 @@
 # 외부 도면 테스트 코퍼스 (인터넷 공개·스캔/VLM 경로 검증)
 
+> 아래 VLM 검출 수와 confidence는 2026-07-21 당시 모델·프롬프트의 실행 기록이며 현재 모델 일반 품질을 보증하지 않는다. 현재 실증 앵커는 `docs/VALIDATION_EVIDENCE.md`를 사용한다.
+
 Wikimedia Commons (CC 라이선스) 전기 단선도 — 한국 실발주 도면과 다른 스타일로
 스캔/VLM 경로 일반성 검증용. 원본 SVG + sharp 렌더 PNG/JPG.
 

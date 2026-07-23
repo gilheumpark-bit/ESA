@@ -1,94 +1,105 @@
-# Contributing to ESVA
+# ESVA 기여 가이드
 
-## Development Setup
+## 개발 환경
 
 ```bash
 git clone https://github.com/gilheumpark-bit/ESA.git
 cd ESA
-npm install
+npm ci
+cp .env.example .env.local
 npm run dev
 ```
 
-## Branch Strategy
+Node.js 요구 버전은 `.nvmrc`와 `package.json`을 확인하십시오. 실제 비밀값은 `.env.local`에만 넣고 Git에 커밋하지 않습니다.
 
-| Branch | Purpose |
-|--------|---------|
-| `main` | Production-ready code |
-| `feat/*` | New features |
-| `fix/*` | Bug fixes |
-| `docs/*` | Documentation updates |
+## 작업 순서
 
-## Code Conventions
+1. `main` 최신 상태에서 목적이 드러나는 브랜치를 만듭니다.
+2. 현재 production caller와 기존 테스트를 먼저 찾습니다.
+3. 실패를 재현하는 테스트 또는 실행 영수증을 만듭니다.
+4. 요청 범위 안에서 최소 변경합니다.
+5. 관련 테스트를 통과시킨 뒤 전체 게이트가 필요한 변경인지 판단합니다.
+6. 사용자 진입점부터 실패·복구·재조회까지 확인합니다.
+7. 기능 경계나 운영 상태가 달라졌으면 문서를 같은 커밋 또는 후속 문서 커밋으로 갱신합니다.
 
-### Language
-- **Korean comments** for electrical engineering domain logic
-- **English** for infrastructure code, CI/CD, configs
+## 브랜치와 커밋
 
-### TypeScript
-- Strict mode enabled (`strict: true`)
-- No `any` except in documented third-party type bridges
-- Absolute imports from `@/` (maps to `src/`)
+권장 브랜치 접두사는 `feat/`, `fix/`, `docs/`, `test/`, `chore/`, 자동화 작업은 `codex/`입니다.
 
-### Calculator Functions
-- Pure functions only — no side effects
-- All inputs validated at boundary
-- Outputs must include units and reference standard clause
-- Accuracy target: ±0.01% of reference values
+커밋 메시지는 저장소 관례에 맞춰 무엇을 왜 바꿨는지 적습니다.
 
-### API Routes
-- Use `withApiHandler()` wrapper — do not write manual try-catch
-- Response shape: `{ success: true, data }` or `{ success: false, error: { code, message } }`
-- Error codes: `ESA-XXXX` format
+```text
+feat(sld): 경계 연결 근거를 보고서에 보존
+fix(ai): 정본 계산기 영수증을 채팅에 결박
+docs: 현재 배선과 검증 경계를 정본화
+```
 
-### Security
-- `sanitizeInput()` on all user-facing inputs
-- `assertUrlAllowedForFetch()` on external URLs
-- In-memory Maps must have `MAX_ENTRIES` and periodic cleanup
-- Never hardcode API keys
+`update`, `improve`처럼 대상과 이유가 없는 제목은 피하십시오.
 
-### Constants
-- Use `@/engine/constants/electrical` — no inline magic numbers
-- All electrical constants centralized with source references
+## TypeScript와 API
 
-## Testing
+- `strict` 모드를 유지합니다.
+- 외부 입력과 AI 응답은 경계에서 타입, 길이, 범위, ID 연결성을 검증합니다.
+- API는 저장소의 기존 `withApiHandler`와 오류 계약을 우선합니다. 모든 기존 라우트가 같은 응답 형태라고 가정하지 마십시오.
+- 인증이 필요한 쓰기는 Firebase UID와 대상 소유권을 함께 확인합니다.
+- same-origin, 크기 제한, rate limit, 타임아웃과 실패 응답을 검토합니다.
+- 외부 URL을 받는 기능은 허용 origin과 사설 주소 우회를 실제 caller에서 차단해야 합니다. 유틸리티 export만으로 배선 완료라고 판단하지 않습니다.
+
+## 계산기 기여
+
+- 계산 함수 입력은 명시적 타입과 단위를 갖습니다.
+- 함수는 네트워크와 파일시스템에 의존하지 않는 결정론적 계산으로 유지합니다.
+- 폼 필드, API 입력, 계산 함수 필드 이름을 같은 계약으로 맞춥니다.
+- 기준값 출처와 허용오차를 계산기별 테스트에 기록합니다.
+- 모든 계산기에 공통 `±0.01%` 같은 보편 정확도 목표를 적용하지 않습니다.
+- 판정 임계값과 물리 상수는 출처가 있는 정본에서 가져옵니다.
+
+## AI와 도면 기여
+
+- 시스템 지침과 사용자 메시지를 분리합니다.
+- 계산 질문은 AI의 암산보다 정본 계산기 실행을 우선합니다.
+- 누락 입력, 낮은 확신, 역할 실패를 임의 기본값으로 채우지 않고 HOLD로 보존합니다.
+- 이미지, DXF, PDF의 좌표와 물리 단위를 혼동하지 않습니다.
+- 구획 분석 결과는 전체 도면 그래프에서 다시 합치고 경계선과 미확정 끝점을 추적합니다.
+- 합성 fixture 통과를 외부 95% 정확도라고 표현하지 않습니다.
+
+## 문서
+
+- 현재 사용 문서와 과거 설계·검토 기록을 구분합니다.
+- 기능 상태는 `사용 가능`, `조건부`, `부분 완료`, `휴면`, `미검증`으로 씁니다.
+- 테스트 수, 페이지 수, 모델 ID처럼 자주 변하는 값은 필요할 때만 기준 커밋과 함께 기록합니다.
+- 새 문서가 생기면 `docs/README.md`에 역할과 상태를 등록합니다.
+- 환경 변수를 추가하거나 제거하면 `.env.example`과 소비 코드를 양방향으로 대조합니다.
+
+## 검증
+
+국소 변경은 관련 테스트부터 실행합니다. 출고·병합 전 기본 게이트는 다음과 같습니다.
 
 ```bash
-npm test             # All 22 suites / 336 tests
-npm run test:calc    # Calculator accuracy only
-npm run test:watch   # Watch mode
+npm run check:docs
+npx tsc --noEmit --incremental false
+npm run lint -- --max-warnings=0
+npm test -- --runInBand
+npm run build
 ```
 
-- Calculator tests enforce ±0.01% accuracy
-- New calculators must include test file with reference values
-- Standards tests must validate condition-tree DSL evaluation
+도면이나 AI 계산 경계를 바꿨다면 관련 실왕복 게이트를 추가합니다.
 
-## Pull Request Process
-
-1. Create feature branch from `main`
-2. Implement changes following conventions above
-3. Ensure all tests pass: `npm test`
-4. Ensure build succeeds: `npm run build`
-5. Ensure lint passes: `npm run lint`
-6. Submit PR with clear description of changes
-
-## Standards Data
-
-- **KEC** — Copyright-free per Korean Copyright Act Article 7 (government works)
-- **NEC/IEC/JIS** — Self-authored Korean descriptions only. Do not copy English original text.
-- All standard articles use condition-tree DSL format
-
-## Commit Message Format
-
-```
-type: short description
-
-type = feat | fix | docs | refactor | test | chore
+```bash
+npm run gate:pdf
+npm run gate:chat-live
+npm run gate:sld-v3-contract
 ```
 
-Examples:
-```
-feat: add JIS C 0364 grounding articles
-fix: correct voltage drop formula for 3-phase balanced load
-docs: update README with API documentation
-test: add arc flash calculator accuracy tests
-```
+실행하지 않은 검사를 통과했다고 쓰지 말고, 외부 자격증명 부재와 코드 실패를 구분하십시오.
+
+## Pull Request
+
+PR에는 다음 내용을 남깁니다.
+
+- 해결한 사용자 문제와 변경 범위
+- 주요 파일과 신뢰 경계 변화
+- 실행한 명령과 exit code
+- 잡은 결함과 남은 HOLD·미검증
+- UI 변경이면 주요 해상도의 실제 화면 확인
+- 데이터·인증·결제 변경이면 마이그레이션과 rollback 경로

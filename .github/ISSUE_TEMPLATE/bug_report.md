@@ -1,32 +1,37 @@
 ---
-name: Bug Report
-about: Report a bug in ESVA
+name: 버그 신고
+about: ESVA에서 재현되는 결함을 신고합니다
 title: '[BUG] '
 labels: bug
 assignees: ''
 ---
 
-## Description
-A clear description of the bug.
+## 문제
 
-## Steps to Reproduce
-1. Go to '...'
-2. Click on '...'
-3. See error
+무엇이 잘못됐는지 한 문단으로 적어 주십시오.
 
-## Expected Behavior
-What should happen.
+## 재현 절차
 
-## Actual Behavior
-What actually happens.
+1. 사용한 화면 또는 API:
+2. 입력값과 단위:
+3. 실행 순서:
+4. 다시 실행했을 때 재현 여부:
 
-## Environment
-- Browser:
-- OS:
-- ESVA version:
+## 기대 결과와 실제 결과
 
-## Error Code (if applicable)
-`ESA-XXXX`
+- 기대:
+- 실제:
+- PASS, PARTIAL, HOLD, FAIL 중 화면 상태:
 
-## Screenshots
-If applicable, add screenshots.
+## 환경
+
+- Git 커밋 또는 배포 버전:
+- 브라우저·OS:
+- AI 공급자·모델(해당할 때):
+- 파일 형식·페이지 수·해상도(도면일 때):
+
+## 증거
+
+오류 코드, 비민감 로그, 화면 캡처, 계산 영수증 또는 도면 근거 ID를 첨부하십시오.
+
+실제 API 키, 개인정보, 회사 도면 원본은 올리지 마십시오. 보안 취약점은 [보안 정책](../SECURITY.md)에 따라 비공개로 제보하십시오.

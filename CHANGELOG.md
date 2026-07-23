@@ -5,6 +5,9 @@ All notable changes to ESVA are documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **AI 계산 경로** — 홈 일반 질문과 Studio 무파일 질문을 공용 `/api/chat` 경로에 연결했다. 완전한 계산 질문은 정본 계산기 레지스트리를 먼저 실행하고 입력·결과 영수증을 모델과 UI에 전달하며, 불완전한 입력은 임의 계산하지 않는다.
+- **호환 모델 전송 방식** — Groq, Ollama, LM Studio, 온프레미스 OpenAI 호환 공급자를 Responses API가 아닌 Chat Completions 계약으로 호출한다.
+- **채팅 지침 경계** — 클라이언트 `systemPrompt` 신뢰를 제거하고 서버 소유 전기 직무 지침과 사용자 메시지를 분리했다.
 - **False compliance (SLD/Layout/Standards)** — Hardcoded `compliant: true` and assumed 100A load removed. Unverified ratings return `compliant: null` (HOLD) with explicit notes; consensus no longer scores HOLD as pass/fail.
 - **Receipt 404 path** — Added `GET /api/receipt/[id]` alias (loads calculation receipts); UI path no longer dead.
 - **Demo verification report** — Removed demo fallback and `/report/demo` nav link; missing reports show honest empty state. Excel export uses POST `/api/export`.
@@ -18,6 +21,9 @@ All notable changes to ESVA are documented in this file.
 - **Standards judgment**: articles carrying a `value: 0` placeholder threshold auto-PASS'd (`>= 0`) or always-FAIL'd (`<= 0`); now return **HOLD** with the source rule.
 
 ### Added
+- **AI 계산 실왕복 게이트** — `npm run gate:chat-live`가 production 서버, 정본 전압강하 계산기, 모델 입력 영수증, SSE 표시 순서를 실제 HTTP로 검증한다.
+- **SLD 구획 경계 연속성** — `Pxx-A` 논리 구획, `Pxx-C` 경계선, `Pxx-U` 미확정 끝점과 전체 도면 재합성 영수증을 추가했다.
+- **문서 정본 지도와 자동 검사** — 현재 정본, 검증 원장, 설계 참고, 역사 기록을 분류하고 로컬 링크·환경 변수 중복을 검사한다.
 - **Array-input calculator forms** — `CalculatorForm` gains `type: 'array'` (repeatable rows, `flatten` for primitive arrays); wires the 7 list-input calculators (loads/sections/transformers/emergencyLoads) that a flat form could not express.
 - **Dedicated standards evaluators** — breaking-capacity (IEC-434.1/533.1, JIS-434.1) and ampacity (NEC-310.16, IEC-523.1) promoted from HOLD to real judgment; thresholds come only from authoritative tables or measured inputs.
 - **AX design** — `/preview/ax` (thread home + answer + mobile, receipt-as-first-class, governance status bar); AX palette + typography (navy + amber, warm paper, IBM Plex Sans KR / Noto Serif KR / IBM Plex Mono) applied app-wide via the token system.
@@ -26,6 +32,7 @@ All notable changes to ESVA are documented in this file.
 
 ### Changed
 - App-wide theme re-mapped to AX: `--color-primary` navy `#1e3a5f`, `--color-accent` amber `#b45309`, warm-paper surfaces, IBM Plex Sans KR body font (light + warm-dark).
+- README, 아키텍처, 사용자·API·평가·기여·보안 문서를 현재 production 배선과 검증 경계 기준으로 재구성했다. 고정 페이지·테스트 수와 외부 근거 없는 경쟁 우위·범용 정확도 주장은 제거했다.
 
 ### Removed
 - Safety copy that promised delivery not yet implemented ("관리자에게 즉시 발송", "자동 신고") — no SMS/push/email channel exists, so the claims were removed until delivery is built.

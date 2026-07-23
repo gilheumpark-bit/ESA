@@ -1,314 +1,157 @@
-# ESVA 프로젝트 평가 가이드
+# ESVA 평가 가이드
 
-## 평가 대상
+> 기준: 2026-07-23 · 고정 점수표가 아니라 재현 가능한 평가 절차
 
-**ESVA (Electrical Search Vertical AI)** — AI 기반 전기공학 버티컬 검색 및 검증 플랫폼
+ESVA는 계산기, AI 답변, 기준서, 도면 분석, 저장·결제처럼 증거 수준이 다른 기능을 포함합니다. 단일 총점으로 합치면 구현 완료와 현장 정확도, 코드 품질과 사업성을 혼동하기 쉽습니다. 먼저 평가 좌표와 단계를 고정하고, 같은 단계의 필수 근거만 판정하십시오.
 
-## 프로젝트 목적
+## 1. 평가 좌표
 
-전기 기술자(기술사, 설계 엔지니어, 감리원, 시공자, 학생)가 전기설비 기준서(KEC/NEC/IEC/JIS)를 AI로 검색하고, 52개 이상의 공학 계산기로 설계값을 산출하며, 4-Team 에이전트 시스템으로 결과를 교차 검증하고, 모든 AI 응답에 투명한 영수증(SHA-256 해시)을 첨부하는 원스톱 플랫폼.
+평가 시작 전에 다음 여섯 항목을 적습니다.
 
-**핵심 차별점**: AI 기반 다국가 기준서 검색 + 확정적 공학 계산기 + 에이전트 토론 검증 + 영수증 투명성을 단일 플랫폼에서 제공하는 제품은 현재 시장에 존재하지 않음.
+| 항목 | 선택 예시 |
+|---|---|
+| 대상 | 전체 제품, `/api/chat`, SLD V3, 계산기 레지스트리 |
+| 상태 | 현재 코드(as-is), 제안 설계(to-be) |
+| 모드 | 절대평가, 이전 커밋 대비, 경쟁 제품 기준 |
+| 렌즈 | 기술, 제품, UX, 프론트엔드, 백엔드, 통합, 보안, 운영, 사업 |
+| 단계 | C 개념, D 설계, I 구현, X 통합, V 실증, O 운영 |
+| 리비전 | Git 커밋 SHA와 dirty 여부 |
 
----
+뒤 단계가 시작되지 않았으면 `N/A`입니다. 운영 미착수를 구현 감점으로 쓰거나, 구현 테스트 통과를 현장 실증 점수로 바꾸지 마십시오.
 
-## 프로젝트 규모
+## 2. 단계별 필수 근거
 
-| 항목 | 수치 |
-|------|------|
-| TypeScript 파일 | 366개 |
-| 코드 라인 | ~77,000줄 |
-| 페이지 (Next.js App Router) | 29개 |
-| API 엔드포인트 | 31개 |
-| React 컴포넌트 | 27개 |
-| 공학 계산기 | 58개 |
-| 기준서 조문 (DSL) | 211+ (KEC 136, NEC 41, IEC 25, JIS 15) |
-| 테스트 스위트 | 22개 / 323 테스트 |
-| 전기공학 상수 | 170+ |
-| IEC 60050 용어 | 250+ (4개국어) |
-| 동의어 매핑 | 200+ |
-| 전기 심볼 DB | 150+ |
+| 단계 | 평가 질문 | 최소 근거 |
+|---|---|---|
+| C 개념 | 해결할 전기 직무 문제와 사용자가 명확한가 | 사용자 과업, 제외 범위, 위험 경계 |
+| D 설계 | 입력·근거·계산·보류·사람 검토 흐름이 닫혔는가 | 아키텍처, API·데이터 계약, 실패 상태, 결정 기록 |
+| I 구현 | 코드가 존재하고 도메인 불변식을 지키는가 | production caller, 단위·계약 테스트, 타입·린트 |
+| X 통합 | 실제 UI에서 API·저장·재조회·복구까지 이어지는가 | 브라우저 또는 실 HTTP 왕복, 오류·재시도·세션 복구 |
+| V 실증 | 독립 정답이 구현을 반박할 수 있는가 | 출처 있는 교보재, 독립 라벨, 반복 실행, 고정 평가기 |
+| O 운영 | 실제 배포에서 권한·비용·장애·감사를 관리하는가 | 모니터링, SLO, 백업·복구, 사고 대응, 운영 왕복 |
 
----
+## 3. 증거 등급
 
-## 기술 스택
+| 등급 | 의미 | 사용 예 |
+|---|---|---|
+| E1 | 현재 리비전에서 직접 실행·관측 | HTTP 응답, 테스트 로그, 브라우저 왕복, 저장 후 재조회 |
+| E2 | 코드·계약·정적 자료로 확인 | 호출 경로, 타입, 스키마, 공식 원문과 대조한 표 |
+| E3 | 내부 fixture·모의 서비스 | 합성 DXF, mock 공급자, 테스트 DB |
+| E4 | 설계 또는 계획 | 아직 실행하지 않은 평가 계획 |
+| E5 | 의견·선호 | UI 인상, 문체 취향 |
 
-| 레이어 | 기술 |
-|--------|------|
-| 프레임워크 | Next.js 16 (App Router, Turbopack) |
-| 언어 | TypeScript (strict mode) |
-| 스타일링 | Tailwind CSS 4 |
-| 인증 | Firebase Auth |
-| 데이터베이스 | Supabase (PostgreSQL + Edge Functions) |
-| 결제 | Stripe |
-| AI SDK | Vercel AI SDK (multi-provider) |
-| 상태관리 | Zustand + React Query |
-| 벡터 DB | Weaviate (+ local fallback) |
-| 배포 | Vercel |
+E3는 구현 회귀를 잡는 근거지만 외부 현장 정확도를 증명하지 않습니다. E4와 E5를 완료 증거로 사용하지 마십시오.
 
----
+## 4. 기술 평가 렌즈
 
-## 평가 기준 (10개 카테고리, 각 10점 만점)
+### 계산기
 
-### 1. 아키텍처 설계 (Architecture) — /10
+- 사용자 폼의 필드명이 계산 함수 입력 계약과 일치하는가
+- 범위·단위·enum 검증이 HTTP 경계에도 적용되는가
+- 공인 표, 수계산, 독립 구현 중 하나와 known-answer를 대조했는가
+- 반올림과 판정 임계값이 공식과 분리되어 있는가
+- 모든 계산기에 동일한 오차율을 주장하지 않는가
 
-평가 포인트:
-- **4-Team Agent System**: Orchestrator → SLD/Layout/Standards/Consensus 팀 분리 및 라우팅 로직
-- **Legacy 3-Tier Agent**: Main → Bridge → Sandbox (17개 샌드박스) 계층 분리
-- **5-Stage DAG Pipeline**: EXTRACT→LOOKUP→CALCULATE→VERIFY→REPORT 강제 순서 상태기계
-- **Debate Protocol**: 물리법칙 교차검증(V=IR, P=VI), 3라운드 토론, 2/3 합의, HITL 에스컬레이션
-- **관심사 분리**: agent/ vs engine/ vs lib/ vs data/ vs components/ 명확한 계층
-- **확장성**: 새 계산기/기준서/에이전트 팀 추가 시 기존 코드 수정 없이 레지스트리 등록만으로 가능한지
+### AI 답변
 
-검토 파일:
-- `src/agent/orchestrator.ts` — 4-Team 오케스트레이터
-- `src/agent/pipeline.ts` — DAG 파이프라인
-- `src/agent/debate/` — 토론 프로토콜
-- `src/engine/calculators/plugin-registry.ts` — 계산기 레지스트리
-- `src/engine/standards/registry.ts` — 기준서 레지스트리
+- 사용자가 시스템 지침을 덮어쓸 수 없는가
+- 계산 질문은 정본 계산기를 실제 실행하고 영수증을 모델과 UI에 전달하는가
+- 입력 부족 시 임의 숫자나 적합 판정을 만들지 않는가
+- 답변이 비어 있거나 공급자가 실패할 때 성공처럼 보이지 않는가
+- 초급·중급·고급 질문을 공급자·모델별 반복 표본으로 채점했는가
 
----
+### 기준서
 
-### 2. 코드 품질 (Code Quality) — /10
+- 판본과 확인일이 있는가
+- 검색 성공과 규정 적합 판정을 구분하는가
+- 임계값이나 전용 평가기가 없으면 HOLD가 되는가
+- 정확한 조항 번호는 조회된 원문이나 저장소 스냅샷에 존재하는가
 
-평가 포인트:
-- **TypeScript strict mode** 적용 여부 (`tsconfig.json` → `"strict": true`)
-- **`any` 타입 사용**: 총 13개소 — 각각 정당한 사유가 있는지 (eslint-disable 주석 포함)
-- **Pure function 원칙**: 52개 계산기가 부작용 없는 순수 함수인지
-- **withApiHandler 패턴**: 모든 API 라우트가 중앙 에러 핸들러를 사용하는지
-- **상수 중앙화**: 매직 넘버 없이 `engine/constants/electrical.ts`와 `safety-factors.ts`에서 참조하는지
-- **메모리 관리**: in-memory Map에 MAX_ENTRIES + 주기적 cleanup이 있는지
-- **에러 코드 체계**: ESA-XXXX 형식의 구조화된 에러 코드 사용 여부
+### 도면 분석
 
-검토 파일:
-- `tsconfig.json`
-- `src/lib/api/api-handler.ts` — withApiHandler
-- `src/engine/constants/electrical.ts` — 상수 중앙화
-- `src/data/error-codes.ts` — 에러 코드
+- 전체 페이지와 전체 이미지를 먼저 열거하는가
+- 구획 crop의 좌표가 원본 좌표로 복원되는가
+- 기호, 문자, 선, 논리를 독립 역할로 판독하는가
+- 구획 경계선과 미확정 끝점을 번호로 추적하는가
+- 전체 도면에서 구획 결과를 재합성하고 중복·오병합을 제거하는가
+- 기기 수량, 연결, 상하류, 보호 논리, 계산 입력과 제안을 각각 평가하는가
+- 독립 라벨이 없는 내부 fixture 결과를 95% 정확도라고 부르지 않는가
 
----
+### 프론트엔드
 
-### 3. 테스트 (Testing) — /10
+- 모든 버튼·링크·탭이 실제 route 또는 동작에 연결되는가
+- 로딩, 빈 상태, 실패, PARTIAL, HOLD가 서로 다르게 표시되는가
+- 모바일·태블릿·데스크톱에서 정보와 조작이 잘리지 않는가
+- 키보드, 초점, 대비, 스크린리더 의미가 유지되는가
 
-평가 포인트:
-- **테스트 커버리지**: 89 suites / 749 tests — 주요 모듈 커버 여부
-- **계산기 정확도**: ±0.01% 오차 범위 내 reference value 검증
-- **기준서 DSL 테스트**: KEC/NEC/IEC condition tree 평가 정확성
-- **LLM 도구 테스트**: Intent parser, output filter, judge, source tracker
-- **보안 테스트**: Rate limit, safety policies
-- **E2E 테스트 유무**: Playwright 설정 존재 여부 (현재 설정 파일만 존재)
-- **CI/CD**: `.github/workflows/ci.yml` — PR 시 자동 test+build 실행 여부
+### 백엔드·통합
 
-실행 명령:
-```bash
-npm test              # 전체 89 suites
-npm run test:calc     # 계산기 정확도만
-```
+- 인증 UID와 리소스 소유권을 함께 검증하는가
+- write 뒤 새 요청·새 세션 read-back이 되는가
+- 외부 서비스 미설정 시 fail-closed 또는 문서화된 로컬 폴백인가
+- 타임아웃, 취소, 재개, 멱등, 동시 수정 충돌을 처리하는가
+- API·UI·DB enum과 단위가 같은 정본을 쓰는가
 
----
+### 보안·운영
 
-### 4. 기능 완성도 (Feature Completeness) — /10
+- BYOK 평문, 자격증명, 회사 도면이 로그·응답·DB에 남지 않는가
+- 업로드 크기·페이지·픽셀·시간 예산이 있는가
+- SSRF, IDOR, CSRF, rate limit, 출력 필터가 실제 호출 경로에 배선됐는가
+- 인메모리 상태를 다중 인스턴스 영구 보장으로 표현하지 않는가
+- 운영 DB, Stripe, Weaviate, AI 공급자를 실제 자격증명으로 왕복했는가
 
-평가 포인트:
-- **52+ 계산기**: 전압강하, 케이블 사이징, 아크플래시(IEEE 1584), 단락전류, 접지, 태양광, 변압기, 조명, 전동기, 역률, 수요율, 전선관 — 각각 실제 계산 가능한지
-- **211+ 기준서 조문**: KEC/NEC/IEC/JIS condition tree DSL — 실제 판정 가능한지
-- **Excel 내보내기**: exceljs 기반 실제 .xlsx (2-sheet, 서식, 라이브 수식)
-- **Receipt 시스템**: SHA-256 해시, 타임스탬프, 모델 추적
-- **BYOK**: 사용자가 자기 LLM API 키를 등록하고 사용하는 흐름
-- **Vision Pipeline**: DXF/PDF 벡터 파싱 + 150+ 전기 심볼 인식
-- **SLD 실도면 정확도**: 실제 공급자 기반 정확도는 판정된 현장 도면 라벨로 측정하기 전까지 미검증으로 유지하고 수치를 주장하지 않는지
+## 5. 현재 저장소의 근거 위치
 
-검토 파일:
-- `src/engine/calculators/` — 전체 58개 계산기 파일
-- `src/engine/standards/kec/`, `nec/`, `iec/`, `jis/` — 기준서 DSL
-- `src/lib/export-excel.ts` — Excel 내보내기
-- `src/engine/receipt/` — Receipt 생성기
-- `src/agent/vision/`, `src/agent/teams/sld-team.ts` — 판정된 현장 도면 라벨 기반 SLD 정확도 측정 경계
+| 근거 | 위치 |
+|---|---|
+| 기능별 마지막 1마일 | `docs/project/IMPLEMENTATION_MAP.md` |
+| 구조 결정 | `docs/project/DECISIONS.md` |
+| 도면 §1–15 배선 | `docs/project/SLD_V3_TRACEABILITY.md` |
+| 교보재·게이트 원장 | `docs/VALIDATION_EVIDENCE.md` |
+| 휴면·미구현 | `docs/DORMANT_MANIFEST.md` |
+| 현재 한계와 다음 검증 | `PROJECT_STATE.md`, `docs/REALIZATION_PLAN.md` |
+| 공개 API 계약 | `docs/API_REFERENCE.md`, `GET /api/openapi` |
 
----
+현재 저장소에는 계산기 known-answer, PDF/DXF 공개 교보재, SLD V3 계약, AI 계산기 실왕복 근거가 있습니다. 외부 독립 도면 라벨의 반복 평가, 실제 클라우드 모델별 답변 품질, Supabase·Stripe·Weaviate 운영 왕복은 별도 단계입니다.
 
-### 5. 데이터 충실도 (Data Fidelity) — /10
+## 6. 판정 규칙
 
-평가 포인트:
-- **기준서 정확성**: KEC 2021 조문이 실제 법규와 일치하는지 (저작권법 제7조 근거로 원문 사용 가능)
-- **NEC/IEC 저작권 준수**: 자체 작성 한국어 설명만 사용, 영문 원문 미포함
-- **전기공학 상수**: 저항률(Cu 0.017241, Al 0.028264), 온도계수, IEEE 1584 계수 등의 정확성
-- **AWG 테이블**: ASTM B258 기준 41개 항목 정확성
-- **Motor FLC 테이블**: NEC 430.248/250 기준 39개 항목
-- **IEC 60050 용어**: 250+ 항목 4개국어(KR/EN/JP/ZH) 대응 정확성
+- `PASS`: 대상 단계의 필수 근거가 있고 반증 조건을 통과했습니다.
+- `PARTIAL`: 핵심 흐름은 작동하지만 명시된 일부 경로·데이터·환경이 빠졌습니다.
+- `HOLD`: 필수 입력, 독립 근거, 권한 또는 운영 환경이 없어 안전하게 판정할 수 없습니다.
+- `FAIL`: 대상 단계의 필수 계약을 위반하거나 안전하지 않은 방향의 결과를 냅니다.
+- `N/A`: 아직 요청하거나 착수하지 않은 뒤 단계입니다.
 
-검토 파일:
-- `src/engine/constants/physical.ts` — 물리 상수
-- `src/engine/constants/electrical.ts` — 전기공학 상수
-- `src/engine/conversion/unit-conversion.ts` — AWG 테이블
-- `src/data/motor-flc/motor-flc-tables.ts` — 전동기 FLC
-- `src/data/iec-60050/electrical-terms.ts` — IEC 용어
+HOLD는 낮은 점수가 아니라 근거 부족을 정직하게 표시한 상태입니다.
 
----
-
-### 6. 보안 (Security) — /10
-
-평가 포인트:
-- **입력 살균**: `sanitizeInput()` — 모든 사용자 입력 API에 적용 여부
-- **URL 허용목록**: `assertUrlAllowedForFetch()` — 외부 URL 페치 제한
-- **속도 제한**: 슬라이딩 윈도우 기반 rate limiter
-- **BYOK 암호화**: AES-GCM으로 사용자 API 키 세션 내 암호화
-- **메모리 DoS 방지**: in-memory Map에 MAX_ENTRIES 설정
-- **Guardrails**: 11개 차단 규칙 (물리적 한계, 확신도 게이트)
-- **LLM Output Filter**: 확률적 표현 차단, 출처 없는 수치 차단, INSUFFICIENT_DATA 차단
-- **서버 사이드 키 미저장**: BYOK 키가 세션 외 어디에도 저장되지 않는지
-
-검토 파일:
-- `src/lib/security-hardening.ts`
-- `src/lib/rate-limit.ts`
-- `src/agent/guardrails.ts` — 11개 규칙
-- `src/engine/llm/output-filter.ts` — LLM 필터
-
----
-
-### 7. 문서화 (Documentation) — /10
-
-평가 포인트:
-- **README.md**: 프로젝트 개요, 아키텍처 다이어그램, 설치 가이드, API 레퍼런스
-- **CLAUDE.md**: AI 협업 가이드 (페르소나, 판단 체계, NOA 스택)
-- **CONTRIBUTING.md**: 코드 컨벤션, 브랜치 전략, PR 프로세스
-- **CHANGELOG.md**: v0.1.0 릴리즈 내역
-- **SECURITY.md**: 보안 정책, 취약점 리포트 절차
-- **OpenAPI 3.1**: `/api/openapi` 자동 문서화 엔드포인트
-- **인라인 주석**: 도메인 로직 한국어, 인프라 영어 컨벤션 준수
-- **GitHub 템플릿**: Issue(버그/기능/계산기), PR 체크리스트
-
----
-
-### 8. UX/디자인 (User Experience) — /10
-
-평가 포인트:
-- **반응형**: 모바일/태블릿/데스크톱 레이아웃 적응
-- **다크 모드**: 시스템 설정 연동 + 수동 토글
-- **접근성**: Skip links, ARIA labels, 키보드 내비게이션
-- **계산 진행 표시**: CalcProgressDAG (5-stage 시각화)
-- **기준서 참조 패널**: StandardRefPanel (계산 결과 옆에 참조 조문 고정)
-- **SplitView**: 드래그 리사이즈, 모바일 탭 모드
-- **KnowledgePanel**: 검색 결과 우측 지식 패널
-- **Loading UX**: Skeleton 로딩, 스트리밍 인디케이터
-- **빈 상태**: 가이드 메시지 + 예시 자동채우기
-- **전문 도구로서의 신뢰감**: 불필요한 애니메이션 없이 정확한 정보 전달
-
-검토 파일:
-- `src/app/page.tsx` — 메인 페이지
-- `src/app/(with-nav)/search/page.tsx` — 검색 결과
-- `src/app/(with-nav)/calc/[category]/[id]/page.tsx` — 계산기
-- `src/components/CalcProgressDAG.tsx`
-- `src/components/StandardRefPanel.tsx`
-- `src/components/SplitView.tsx`
-
----
-
-### 9. 배포 준비도 (Deployment Readiness) — /10
-
-평가 포인트:
-- **프로덕션 빌드**: `npm run build` 성공 여부
-- **CI/CD**: `.github/workflows/ci.yml` — TypeScript 체크 + Jest + Build
-- **환경변수**: `.env.example` — 필수 변수 문서화
-- **에러 핸들링**: 중앙 에러 바운더리 + 구조화된 에러 응답
-- **성능 헤더**: `X-Response-Time`, `Server-Timing`
-- **Health 엔드포인트**: `/api/health` — 종속성 대시보드
-- **PWA**: Service Worker + IndexedDB 오프라인 지원
-- **SEO**: sitemap.xml 자동 생성
-
-실행 명령:
-```bash
-npm run build         # 프로덕션 빌드
-npm test -- --ci      # CI 모드 테스트
-```
-
----
-
-### 10. 엔지니어링 전문성 (Engineering Domain Expertise) — /10
-
-평가 포인트:
-- **PE급 면책조항**: 모든 안전 관련 계산에 법적 면책 텍스트 포함
-- **추정 금지 규칙**: 아크플래시/전동기 기동전류/과도현상 추정 금지 (guardrails + output filter)
-- **물리법칙 검증**: V=IR, P=VI 교차 검증 (0.1% 차이 시 즉시 반려)
-- **국가별 Safety Factor**: KR/US/JP/INT 4개국 안전율 프로파일 자동 적용
-- **단위계 분리**: Metric↔Imperial 정의값 기반 변환 (오차 0%)
-- **Imperial Adapter**: 미국 시장 지원 — ft/HP/°F 입출력 + AWG 등가 표시
-- **Engineering Review Report**: 5단계 포맷 (Issue Analysis → Applicable Codes → Technical Verification → Conclusion → Pending RFI)
-- **Chief Principal Engineer 페르소나**: 30년 경력 수석 전기 엔지니어 톤 (Cold & Professional)
-- **INSUFFICIENT_DATA 차단**: 확신도 < 70% 시 "계산 불가" 단호 차단
-
-검토 파일:
-- `src/engine/constants/safety-factors.ts` — 국가별 Safety Factor Registry
-- `src/engine/conversion/imperial-adapter.ts` — Imperial 어댑터
-- `src/engine/calculators/country-defaults.ts` — 국가별 기본값
-- `src/engine/llm/system-prompt.ts` — 페르소나 + 리포트 포맷
-- `src/engine/constants/disclaimer.ts` — PE 면책조항
-
----
-
-## 경쟁사 비교 참고
-
-| 기능 | ESVA | Kopperfield | Ask NETA | ETAP | ELEK |
-|------|------|-------------|----------|------|------|
-| 다국가 기준서 (KEC+NEC+IEC+JIS) | O | NEC만 | NEC만 | X | AS/NZS |
-| BYOK 멀티모델 LLM | O (6사 22모델) | X | X | X | X |
-| 4-Team 에이전트 토론 검증 | O | X | X | X | X |
-| 물리법칙 교차검증 | O | X | X | X | X |
-| 영수증 투명성 (SHA-256) | O | X | X | X | X |
-| Imperial↔Metric 자동 변환 | O | X | X | O | O |
-| 국가별 Safety Factor 자동 적용 | O | X | X | 부분 | 부분 |
-
----
-
-## 평가 실행 방법
+## 7. 최소 재현 명령
 
 ```bash
-# 1. 저장소 클론
-git clone https://github.com/gilheumpark-bit/ESA.git
-cd ESA
-
-# 2. 의존성 설치
-npm install
-
-# 3. 테스트 실행
-npm test
-
-# 4. 프로덕션 빌드
+npm run check:docs
+npx tsc --noEmit --incremental false
+npm run lint -- --max-warnings=0
+npm test -- --runInBand
 npm run build
-
-# 5. 개발 서버 (선택)
-npm run dev
+npm run gate:pdf
+npm run gate:chat-live
+npm run gate:sld-v3-contract
 ```
 
-## 평가 결과 양식
+`npm run gate:sld-golden`은 외부 독립 라벨과 서명 자격을 확인하는 fail-closed 게이트입니다. 필요한 평가 자료가 없으면 exit 1이 정상일 수 있으므로 생성된 영수증 사유를 함께 읽으십시오.
 
-```
-## ESVA 평가 결과
+## 8. 평가 결과 양식
 
-| # | 카테고리 | 점수 (/10) | 근거 |
-|---|----------|-----------|------|
-| 1 | 아키텍처 설계 | /10 | |
-| 2 | 코드 품질 | /10 | |
-| 3 | 테스트 | /10 | |
-| 4 | 기능 완성도 | /10 | |
-| 5 | 데이터 충실도 | /10 | |
-| 6 | 보안 | /10 | |
-| 7 | 문서화 | /10 | |
-| 8 | UX/디자인 | /10 | |
-| 9 | 배포 준비도 | /10 | |
-| 10 | 엔지니어링 전문성 | /10 | |
-| **종합** | | **/100** | |
+```text
+[평가 좌표]
+대상= · 상태=as-is/to-be · 모드=absolute/delta/benchmark
+렌즈= · 단계=C/D/I/X/V/O · 리비전=
 
-### 강점 (Top 3)
-1.
-2.
-3.
+[판정]
+- 결론:
+- 직접 근거:
+- 반증 또는 실패:
+- 보류와 필요한 다음 근거:
 
-### 개선 필요 (Top 3)
-1.
-2.
-3.
-
-### 경쟁 우위 평가
--
+[단계 벡터]
+C- / D- / I- / X- / V- / O- · 근거등급 E-
 ```

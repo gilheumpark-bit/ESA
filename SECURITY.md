@@ -1,65 +1,87 @@
-# Security Policy — ESVA
+# ESVA 보안 정책
 
-## Supported Versions
+> 최종 확인: 2026-07-23 · 적용 대상: 현재 `main`과 병합 예정 변경
 
-ESVA is in active development. Security patches apply to the current `main` branch only.
+## 취약점 제보
 
-## Reporting a Vulnerability
+보안 취약점은 공개 GitHub issue에 올리지 마십시오.
 
-If you discover a security vulnerability, **do NOT open a public GitHub issue.** Instead:
+1. `gilheumpark@gmail.com`으로 재현 절차, 영향 범위, 관련 파일과 가능한 완화책을 보냅니다.
+2. 실제 API 키, 회사 도면, 개인정보는 첨부하지 않습니다. 필요한 경우 비민감 재현 자료를 만듭니다.
+3. 접수 확인 목표는 영업일 기준 5일입니다. 수정·공개 일정은 심각도와 배포 상태를 확인한 뒤 조정합니다.
 
-1. Email the maintainer: `gilheumpark@gmail.com`
-2. Include: reproduction steps, affected files (with line numbers), impact assessment, suggested fix.
-3. Expect acknowledgment within 5 business days.
+## 신뢰 경계
 
-## Security Posture
+### BYOK와 AI
 
-### What ESVA does
+- 새 BYOK 키는 브라우저 Web Crypto의 AES-256-GCM으로 암호화합니다.
+- 추출 불가능한 `CryptoKey`는 IndexedDB, 암호문은 `localStorage`에 저장합니다.
+- 복호화한 키는 AI 요청 중 TLS로 ESVA 서버를 통과해 공급자 호출에 사용됩니다. “서버를 전혀 통과하지 않는다”고 표현하지 않습니다.
+- 애플리케이션은 평문 키를 DB, 로그, URL, 응답에 저장하지 않아야 합니다.
+- 채팅 시스템 지침은 서버가 생성합니다. 클라이언트가 보낸 시스템 지침은 신뢰하지 않습니다.
+- 완전한 계산 질문은 정본 계산기를 먼저 실행하고 그 영수증만 확인된 수치 근거로 모델에 전달합니다.
 
-- **BYOK (Bring Your Own Key)**: API keys for LLM providers (OpenAI / Claude / Gemini / Groq / Mistral / Ollama) are stored in the client session (sessionStorage / IndexedDB), never on the server.
-- **Same-origin enforcement**: Public ingestion endpoints (`/api/error-report`, `/api/analytics`, `/api/vitals`) reject cross-origin requests at the server.
-- **Per-IP rate limiting**: Sliding-window limits applied to every API route via `lib/rate-limit.ts` (default: 60/min; tighter limits for `notarize`, `chat`, `ocr`, `sld`).
-- **Input sanitization**: All user-controlled strings pass through `sanitizeInput()` (`lib/security-hardening.ts`) before reaching calculators or LLM tools.
-- **URL allow-listing**: Outbound fetches use `assertUrlAllowedForFetch()` to block SSRF.
-- **CSP headers**: `next.config.ts` sets `Content-Security-Policy` with restricted `script-src` / `connect-src`, plus `X-Frame-Options: DENY` and `Referrer-Policy: strict-origin-when-cross-origin`.
+레거시 BYOK 암호문은 마이그레이션을 위해 복호화 경로가 남아 있습니다. 새 저장은 브라우저 결박 v5 형식만 사용합니다.
 
-### Known gaps (tracked)
+### 인증과 소유권
 
-- **Sentry SDK installed but not configured.** `@sentry/nextjs` is a dependency, but no `sentry.*.config.ts` files exist. Currently relies on Vercel runtime logs + custom `lib/api-logger.ts` for stdout structured logging. Action item: either wire Sentry (`sentry.client/server/edge.config.ts` + DSN env var) or remove the dependency.
-- **No formal threat model documented.** Architecture-level threat modeling (data-flow / trust-boundary diagrams) has not been written.
-- **Receipt integrity is SHA-256 only.** No Ed25519 signing or external timestamping yet (LearningGuard-style anchoring is a candidate; see project docs).
+- 보호 API는 Firebase ID 토큰을 서버에서 검증합니다.
+- 요청 본문의 `userId`나 디코딩만 한 JWT를 권한 근거로 사용하지 않습니다.
+- 프로젝트, 영수증, 보고서, 알림, 커뮤니티, 현장 기록은 서버 검증 UID와 리소스 소유권 또는 공개 범위를 함께 확인합니다.
+- Supabase service-role 키는 서버 전용이며 `NEXT_PUBLIC_*`로 노출하지 않습니다.
 
-### What ESVA explicitly does NOT do
+### 파일과 도면
 
-- Server-side storage of user API keys (BYOK enforced).
-- Arc-flash / motor-starting / transient estimation without tool calls (system prompt rule 11 — `engine/llm/system-prompt.ts`).
-- LLM-only numeric output (every value must come from a deterministic calculator — `engine/llm/tools.ts`).
+- 업로드는 형식, 크기, 페이지 수, 총 픽셀과 실행 예산을 제한합니다.
+- 원본 도면과 작업 결과는 SHA-256 source hash로 결박합니다.
+- SLD V3 원본 임대는 `DRAWING_SOURCE_LEASE_SECRET`으로 파생한 AES-256-GCM 암호문으로 저장하며 owner와 작업 ID를 확인합니다.
+- 운영 저장 경로가 없으면 내구 저장 성공으로 위장하지 않습니다.
 
-## Dependency Hygiene
+### 외부 연결
 
-`npm audit` is expected to run clean (production-only):
+- 온프레미스 AI는 `ONPREMISE_ALLOWED_ORIGINS`의 정확한 origin만 허용합니다.
+- Stripe는 서명 웹훅과 멱등 이벤트 원장을 권한 정본으로 사용합니다.
+- Weaviate, Pinata, 크롤러와 기타 외부 fetch는 별도 자격증명·허용 정책·타임아웃이 필요합니다.
+- `src/lib/fetch-url-guard.ts`는 현재 export만 있고 일반 production caller가 없습니다. 이 유틸리티가 존재한다는 이유로 전체 SSRF 방어가 활성화됐다고 주장하지 않습니다. 새 사용자 지정 URL 기능은 실제 호출부에 정책을 연결하고 우회 IP를 테스트해야 합니다.
+
+### 요청 제한과 관측
+
+- `src/proxy.ts`와 Route Handler의 제한은 단일 프로세스 보호입니다. 다중 인스턴스 전역 쿼터는 공유 저장소 또는 신뢰 프록시가 필요합니다.
+- Sentry client, server, edge 설정은 DSN이 있을 때만 초기화하며 `sendDefaultPii=false`를 사용합니다.
+- DSN이 없으면 Sentry는 no-op이고 구조화 로그가 기본 관측 수단입니다.
+- 오류 응답과 로그에 환경 변수, 공급자 원문 응답, API 키와 업로드 본문을 넣지 않습니다.
+
+## 영수증과 서명
+
+- 일반 계산·보고서의 SHA-256은 저장 내용의 동일성을 확인합니다. 제3자 공증이나 법적 서명이 아닙니다.
+- 구형 SLD golden 영수증과 SLD V3 외부 평가 영수증은 별도 계약입니다.
+- V3의 Ed25519 서명은 승인된 평가 메타데이터와 지표 위조를 막는 장치입니다. 현장 설계 승인이나 도면 소유권을 증명하지 않습니다.
+- IPFS 타임스탬프 등록은 기본 비활성이며 블록체인 거래나 제3자 공증으로 표현하지 않습니다.
+
+## 알려진 공백
+
+- 다중 인스턴스 공유 레이트 리밋이 없습니다.
+- 일반 사용자 지정 URL fetch 전체를 포괄하는 공통 SSRF guard는 production caller에 배선되지 않았습니다.
+- 외부 AI 공급자별 프롬프트 주입·출력 품질은 실제 모델과 반복 표본으로 계속 검증해야 합니다.
+- Supabase, Stripe, Weaviate, Pinata의 운영 자격증명 왕복은 배포 환경마다 별도 확인해야 합니다.
+- 회사 기밀 도면, 실제 고객 개인정보, 운영 결제 데이터로 자동 QA를 실행하지 않습니다.
+
+## 배포 전 보안 확인
 
 ```bash
 npm audit --omit=dev
+npm run lint -- --max-warnings=0
+npm test -- --runInBand
+npm run build
 ```
 
-Any CVE flagged at severity ≥ moderate must be patched before deploy.
+추가로 다음을 실제 배포 환경에서 확인합니다.
 
-## Calculator Trust Boundary
+- Firebase 토큰 만료·다른 사용자 IDOR 거부
+- Supabase RLS와 service-role 서버 경계
+- Stripe 테스트 모드 서명 웹훅과 중복 이벤트
+- 온프레미스 origin 허용·거부와 loopback 정책
+- 업로드 크기·페이지·픽셀·시간 제한
+- 로그와 Sentry 이벤트의 키·PII·도면 본문 누출 여부
 
-- All 57 calculators (`engine/calculators/`) are **pure functions**: input validation at the boundary (`assertRange`, `assertOneOf`, etc.), no network access, no filesystem access, no global state.
-- Calculator errors throw `CalcValidationError` with explicit `ESVA-44xx` error codes for traceability.
-- The `/api/calculate` route is the only HTTP surface for calculator execution. Direct imports outside `engine/` are blocked by convention.
-
-## Disclosure Timeline
-
-| Phase | Duration |
-|-------|----------|
-| Acknowledge report | ≤ 5 business days |
-| Investigate + reproduce | ≤ 10 business days |
-| Fix in `main` | depends on severity |
-| Public disclosure | ≥ 90 days after fix lands, or coordinated with reporter |
-
----
-
-*Last updated: 2026-05-12 (bug-hunter PHASE 3 audit)*
+보안 상태는 문서만으로 통과하지 않습니다. 현재 리비전의 테스트와 실제 배포 관측을 함께 남겨야 합니다.

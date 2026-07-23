@@ -1,24 +1,37 @@
 ---
-name: Calculator Request
-about: Request a new engineering calculator
+name: 계산기 요청
+about: 근거가 있는 새 전기 계산기를 제안합니다
 title: '[CALC] '
 labels: calculator
 assignees: ''
 ---
 
-## Calculator Name
-Name of the calculation.
+## 계산 목적
 
-## Formula / Standard Reference
-Reference standard and formula (e.g., KEC 242.3, NEC 220.12).
+어떤 직무 판단에 필요한 계산인지 적어 주십시오.
 
-## Input Parameters
-| Parameter | Unit | Range |
-|-----------|------|-------|
-| | | |
+## 공식과 출처
 
-## Output
-Expected output with units.
+- 공식:
+- 규격·교재·제조사 자료:
+- 판본·페이지·표 번호:
+- 관할 또는 적용 조건:
 
-## Reference Values for Testing
-Provide at least 2 reference values for accuracy validation (±0.01%).
+저작권 원문 전체를 붙이지 말고 확인 가능한 서지 정보와 필요한 범위의 근거만 적으십시오.
+
+## 입력
+
+| 입력 | 단위 | 허용 범위 | 필수 여부 |
+|---|---|---|---|
+| | | | |
+
+## 출력과 판정
+
+- 주 출력과 단위:
+- 추가 출력:
+- PASS·FAIL·HOLD 조건:
+- 반올림 규칙:
+
+## 독립 기준값
+
+수계산, 공표 표 또는 승인 도구에서 얻은 기준값을 두 건 이상 적어 주십시오. 허용오차는 계산 특성과 출처 정밀도를 근거로 제안하십시오. 모든 계산기에 같은 오차율을 적용하지 않습니다.

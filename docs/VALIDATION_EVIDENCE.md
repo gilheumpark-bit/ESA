@@ -1,6 +1,6 @@
 # 실증 증거 원장 — Validation Evidence Ledger
 
-작성 2026-07-22 · 이 리포의 실증(교보재 기반 검증)이 **언제·무엇으로·어떤 결과로** 수행됐는지의 원장.
+최종 갱신 2026-07-23 · 이 저장소의 실증과 production 실왕복이 **언제·무엇으로·어떤 결과로** 수행됐는지 기록하는 원장.
 
 **사용법이 곧 목적이다**: "실증이 없다 / 실증이 필요하다"는 판단을 내리기 전에
 ① 이 원장의 해당 행을 찾고 ② 그 행의 앵커(커밋 SHA·교보재 경로·게이트 명령)를 **직접 재실행**한다.
@@ -24,18 +24,20 @@
 | golden 판정 라벨 | 2026-07-21 | `58feeab` | `fixtures/drawings/golden/kimm-panelboard-sld.p14.adjudicated.json` | KIMM p14 텍스트축 adjudicated 라벨 등재 | `gate:sld-golden`의 대조 기준 |
 | 계산기 전수 | 2026-07-19 | `7c84d42` | IEC/NEC/KEC 공표 기준값 | 57 계산기 known-answer 손계산 대조 | 치명 2 수리(impedance-voltage %Z 1140%→5% · motor-efficiency IE1 절감 부호역전) · accuracy 스위트 잠금(현 52 test) |
 | BYOK 모델 배선·QA | 2026-07-22 | `5b8d0b7` | — | 브라우저 실측 + 단위테스트 + 9축 독립 패널 리뷰 | 확정 결함 7건 수리 (직후 `93ff4ab`가 셀렉터 노출 범위·병렬 허용전류 처리를 정련) |
+| AI 정본 계산기 왕복 | 2026-07-23 | `ad7b91c` | 계산 질문 `3상 380V·100A·50m·35mm² Cu·PF 0.9`, 로컬 OpenAI 호환 mock | production `/api/chat` → 정본 계산기 → 모델 입력 영수증 → UI SSE 순서 | `4.14V·1.09%·PASS`, 계산기 ID·입력·결과 일치, 영수증이 답변보다 먼저 전달됨 |
 
-**수행 주체**: 위 커밋 전부 `Co-Authored-By: Claude` 트레일러 보유 — `git show -s --format=%B <sha>` 로 확인된다.
+**수행 주체 확인**: 각 행의 커밋 작성자와 트레일러는 `git show -s --format=fuller <sha>`로 확인한다. 도구 이름이나 세션 기억은 실증 결과의 대체 근거로 사용하지 않는다.
 
 ## 재실증 레시피 (앵커 재실행)
 
 | 명령 | 전제 | 커버 |
 |---|---|---|
-| `npx jest` | 없음 | 전체 스위트 — `5b8d0b7` 푸시 시점 146 suites / 1263 tests green 실측 |
+| `npm test -- --runInBand` | 없음 | 전체 회귀 — `ad7b91c` 직전 동일 제품 코드에서 175 suites / 1,412 tests green 실측 |
 | `npm run test:calc` | 없음 | 계산기 known-answer 52 test (`src/engine/calculators/__tests__/accuracy-known-answers.test.ts`) |
 | `npm run gate:pdf` | **3010 라이브 서버** | 실도면 fixtures → `/api/pdf-drawing` 라이브 관통 |
 | `npm run gate:sld-golden` | 예측 산출물 + attestation 키 (아래 주의) | golden adjudicated 라벨 대조 |
 | `npm run gate:sld-v3-contract` | 없음 | evaluator 계약 |
+| `npm run gate:chat-live` | production build | 실제 `/api/chat` 계산기 실행, 모델 영수증 전달, SSE 순서 |
 
 3010 서버 기동 (standalone은 static/public을 **자동 복사하지 않는다** — 재발 함정):
 
@@ -67,5 +69,4 @@ fixtures/
 새 실증을 수행하면 이 표에 행을 추가한다(커밋 SHA·교보재 경로·결과·재실행 게이트).
 **앵커 없는 실증 주장은 이 원장에 올릴 수 없다** — 이 문서 자체에도 적용된다.
 
-> 작성 시점 상태: HEAD `93ff4ab`, vision/drawing 층은 다른 세션이 편집 진행 중이라
-> 라이브 게이트의 "현 HEAD green" 인증은 그 작업 착지 후 위 레시피로 재실행할 몫이다.
+> 현재 제품 코드 기준선: `ad7b91c`. 문서 후속 커밋은 제품 코드를 바꾸지 않는다. 새로운 제품 코드가 착지하면 위 명령을 같은 리비전에서 다시 실행하고 결과 차이를 기록한다.

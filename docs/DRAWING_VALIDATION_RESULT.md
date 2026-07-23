@@ -1,5 +1,7 @@
 # 도면 파서 검증 결과 — 1차 (합성 15장)
 
+> 문서 상태: 합성 교보재 1차 결과 스냅샷. 현재 제품 전체 정확도나 외부 95% 근거가 아닙니다. 최신 앵커는 [VALIDATION_EVIDENCE](VALIDATION_EVIDENCE.md)를 참조하십시오.
+
 > 2026-07-23 공개 단선도·복합 시트·전기 평면도·저해상도 스캔 추가 벤치마크:
 > [project/handoffs/2026-07-23-public-drawing-benchmark.md](./project/handoffs/2026-07-23-public-drawing-benchmark.md)
 
