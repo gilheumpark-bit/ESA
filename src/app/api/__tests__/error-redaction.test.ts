@@ -7,7 +7,11 @@ import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
 import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import { analyzeSLD } from '@/lib/sld-recognition';
 
-jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
+jest.mock('@/lib/rate-limit', () => ({
+  applyRateLimit: jest.fn(() => null),
+  getClientIp: jest.fn(() => 'test-client'),
+  checkRateLimit: jest.fn(() => ({ allowed: true, remaining: 1 })),
+}));
 jest.mock('@/engine/topology/dxf-parser', () => ({ parseDxfToSLD: jest.fn() }));
 jest.mock('@/engine/topology/pdf-vector-parser', () => ({ parsePdfToSLD: jest.fn() }));
 jest.mock('@/lib/ocr-nameplate', () => ({

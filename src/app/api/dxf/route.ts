@@ -6,7 +6,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
-import { getFormFile } from '@/lib/api';
+import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
@@ -17,8 +17,10 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 export const runtime = 'nodejs';
+const DXF_FILE_MAX_BYTES = 16 * 1024 * 1024;
+const DXF_BODY_MAX_BYTES = DXF_FILE_MAX_BYTES + (1024 * 1024);
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const timer = createRequestTimer();
 
   // 피처 플래그 확인
@@ -44,7 +46,7 @@ export async function POST(req: NextRequest) {
       // 여기로 온다 — "multipart가 아니다"로 단정하면 오진이다(PDF 라우트
       // 24.8MB 실도면 실측에서 발각된 동종 패턴).
       return NextResponse.json(
-        { error: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 .dxf)인지, 파일이 50MB 이하인지 확인하세요.' },
+        { error: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 .dxf)인지, 파일이 16MB 이하인지 확인하세요.' },
         { status: 400 },
       );
     }
@@ -63,8 +65,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only .dxf files are accepted.' }, { status: 400 });
     }
 
-    if (dxfFile.size > 50 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 50MB).' }, { status: 400 });
+    if (dxfFile.size > DXF_FILE_MAX_BYTES) {
+      return NextResponse.json({ error: 'File too large (max 16MB).' }, { status: 413 });
     }
 
     const dxfContent = await dxfFile.text();
@@ -152,3 +154,8 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withApiHandler(
+  { rateLimit: null, checkOrigin: false, maxBodySize: DXF_BODY_MAX_BYTES },
+  handlePost,
+);

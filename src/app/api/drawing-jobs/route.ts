@@ -14,6 +14,7 @@ import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable, upd
 import { createSourceLease, isSourceLeaseAvailable, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyDrawingOwnerCookie, resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
+import { isCatalogModel } from '@/lib/ai-providers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -129,6 +130,9 @@ export async function POST(req: NextRequest) {
       return userError('지속형 작업 저장소가 설정되지 않아 도면 분석 작업을 시작할 수 없습니다.', 503);
     }
     if (form.get('deferred') === '1') {
+      if (!owner.authenticated) {
+        return userError('취소·재개용 도면 보관은 로그인이 필요합니다.', 401);
+      }
       if (!isSourceLeaseAvailable()) return userError('암호화 원본 임시 보관소가 설정되지 않아 취소·재개 작업을 시작할 수 없습니다.', 503);
       let availablePages: number;
       try {
@@ -136,6 +140,8 @@ export async function POST(req: NextRequest) {
           bytes,
           mimeType: file.type || 'application/octet-stream',
           fileName: file.name,
+          signal: req.signal,
+          budget: { maxPages: 500, maxPixels: 1, deadlineMs: 30_000 },
         });
       } catch {
         return userError('도면의 페이지 구조를 읽을 수 없습니다. 원본 파일을 확인해주세요.');
@@ -183,9 +189,18 @@ export async function POST(req: NextRequest) {
     const provider = providerRaw as VisionProvider;
     const suppliedKey = String(form.get('apiKey') ?? '').trim();
     if (suppliedKey.length > 4096) return userError('Vision 키 형식이 올바르지 않습니다.');
+    if (!suppliedKey && !owner.authenticated) {
+      return userError('비로그인 도면 분석에는 Vision BYOK 키가 필요합니다.', 401);
+    }
+    if (form.get('leaseSource') === '1' && !owner.authenticated) {
+      return userError('취소·재개용 도면 보관은 로그인이 필요합니다.', 401);
+    }
     const apiKey = suppliedKey || serverVisionKey(provider);
     const modelRaw = String(form.get('model') ?? '').trim();
     if (modelRaw && !MODEL_PATTERN.test(modelRaw)) return userError('Vision 모델 이름 형식이 올바르지 않습니다.');
+    if (modelRaw && !suppliedKey && !isCatalogModel(provider, modelRaw)) {
+      return userError('서버 Vision 키로 사용할 수 없는 모델입니다.');
+    }
 
     const vision = apiKey
       ? { provider, apiKey, model: modelRaw || undefined }

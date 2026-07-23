@@ -8,6 +8,7 @@ import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { isCatalogModel } from '@/lib/ai-providers';
 
 export const runtime = 'nodejs';
 export const maxDuration = 1800;
@@ -51,9 +52,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
   const provider = providerRaw as VisionProvider;
   const suppliedKey = String(form.get('apiKey') ?? '').trim();
   if (suppliedKey.length > 4096) return userError('Vision 키 형식이 올바르지 않습니다.', 400);
+  if (!suppliedKey && !owner.authenticated) {
+    return userError('비로그인 작업 실행에는 Vision BYOK 키가 필요합니다.', 401);
+  }
   const apiKey = suppliedKey || serverKey(provider);
   const model = String(form.get('model') ?? '').trim();
   if (model && !MODEL_PATTERN.test(model)) return userError('Vision 모델 이름 형식이 올바르지 않습니다.', 400);
+  if (model && !suppliedKey && !isCatalogModel(provider, model)) {
+    return userError('서버 Vision 키로 사용할 수 없는 모델입니다.', 400);
+  }
   const bytes = readSourceLease(job.sourceLease.leaseId, owner.ownerId);
   if (!bytes) {
     updateOwnedJob(jobId, owner.ownerId, { status: 'FAILED', error: 'SOURCE_LEASE_EXPIRED' });
@@ -73,7 +80,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
       ownerId: owner.ownerId,
       jobId,
       maxPagesPerRun: 1,
-      signal: undefined,
+      signal: req.signal,
     });
     if (result.document.jobStatus === 'COMPLETE' || result.document.jobStatus === 'CANCELLED') {
       releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);

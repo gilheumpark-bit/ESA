@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 const RULES_MAX_BYTES = 1024 * 1024;
 
 export const POST = withApiHandler(
-  { rateLimit: 'calculate', checkOrigin: true },
+  { rateLimit: 'calculate', checkOrigin: true, maxBodySize: RULES_MAX_BYTES },
   async (req: NextRequest, ctx) => {
     const text = await req.text();
     // text.length는 UTF-16 단위라 한글 위주 룰셋에서 실바이트의 1/3까지 과소측정

@@ -10,8 +10,9 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379
       - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_API_KEY=${WEAVIATE_API_KEY:?set WEAVIATE_API_KEY}
       - DRAWING_JOB_STORE_DIR=/var/lib/esa/drawing-jobs
     env_file:
       - .env
@@ -29,12 +30,14 @@ services:
   # ─── Weaviate Vector Database ───────────────────────────────────
   weaviate:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
-    ports:
-      - "8080:8080"
-      - "50051:50051"
     environment:
       QUERY_DEFAULTS_LIMIT: 25
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "false"
+      AUTHENTICATION_APIKEY_ENABLED: "true"
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: ${WEAVIATE_API_KEY:?set WEAVIATE_API_KEY}
+      AUTHENTICATION_APIKEY_USERS: esa-service
+      AUTHORIZATION_ADMINLIST_ENABLED: "true"
+      AUTHORIZATION_ADMINLIST_USERS: esa-service
       PERSISTENCE_DATA_PATH: /var/lib/weaviate
       DEFAULT_VECTORIZER_MODULE: none
       CLUSTER_HOSTNAME: node1
@@ -47,9 +50,16 @@ services:
   # ─── Redis Cache ────────────────────────────────────────────────
   redis:
     image: redis:alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD:?set REDIS_PASSWORD}
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
     volumes:
       - redis-data:/data
     networks:

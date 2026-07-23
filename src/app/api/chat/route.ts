@@ -64,6 +64,9 @@ function checkTokenBudget(ip: string, estimatedTokens: number): { allowed: boole
   const resetAt = midnightUtc.getTime();
 
   if (!entry || now >= entry.resetAt) {
+    if (estimatedTokens > DAILY_TOKEN_BUDGET) {
+      return { allowed: false, remaining: DAILY_TOKEN_BUDGET };
+    }
     tokenUsage.set(ip, { tokens: estimatedTokens, resetAt });
     return { allowed: true, remaining: DAILY_TOKEN_BUDGET - estimatedTokens };
   }

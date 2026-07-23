@@ -192,7 +192,7 @@ function isCloudProvider(value: unknown): value is CloudProvider {
 }
 
 export const POST = withApiHandler(
-  { rateLimit: 'default', checkOrigin: true },
+  { rateLimit: 'default', checkOrigin: true, maxBodySize: 2_048 },
   async (request: NextRequest, ctx) => {
     const declaredLength = Number(request.headers.get('content-length') ?? 0);
     if (Number.isFinite(declaredLength) && declaredLength > 2_048) {

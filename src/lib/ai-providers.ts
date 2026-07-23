@@ -333,6 +333,10 @@ export function getModelList(providerId: string): AIModel[] {
   return PROVIDERS[providerId]?.models ?? [];
 }
 
+export function isCatalogModel(providerId: string, modelId: string): boolean {
+  return getModelList(providerId).some((model) => model.id === modelId);
+}
+
 export function getDefaultModel(providerId: string): string {
   return PROVIDERS[providerId]?.defaultModel ?? '';
 }

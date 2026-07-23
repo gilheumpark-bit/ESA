@@ -78,6 +78,40 @@ describe('drawing jobs API ownership and input boundary', () => {
     }));
   });
 
+  it('does not spend a server Vision key for an anonymous synchronous request', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: 'anon:session-a',
+      authenticated: false,
+    });
+    process.env.OPENAI_API_KEY = 'deployment-owned-key';
+
+    const response = await POST(formRequest({ provider: 'openai' }));
+
+    expect(response.status).toBe(401);
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('allows an anonymous synchronous request when it supplies BYOK', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: 'anon:session-a',
+      authenticated: false,
+    });
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job: { jobId: 'job-byok', status: 'COMPLETE', estimated: {} },
+      document: { documentHash: 'a'.repeat(64), jobStatus: 'COMPLETE' },
+    } as never);
+
+    const response = await POST(formRequest({
+      provider: 'openai',
+      apiKey: 'request-owned-key',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      vision: expect.objectContaining({ apiKey: 'request-owned-key' }),
+    }));
+  });
+
   it('rejects malformed pages and providers before analysis', async () => {
     expect((await POST(formRequest({ pages: '1,bad' }))).status).toBe(400);
     expect((await POST(formRequest({ provider: 'unknown' }))).status).toBe(400);
@@ -115,6 +149,23 @@ describe('drawing jobs API ownership and input boundary', () => {
     }));
     expect(createSourceLease).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.stringMatching(/^[a-f0-9]{64}$/), owner.ownerId);
     expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('requires authentication before allocating a durable deferred lease', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: 'anon:session-a',
+      authenticated: false,
+    });
+    jest.mocked(isSourceLeaseAvailable).mockReturnValue(true);
+
+    const response = await POST(formRequest(
+      { deferred: '1' },
+      new File(['%PDF-1.7\n'], 'sample.pdf', { type: 'application/pdf' }),
+    ));
+
+    expect(response.status).toBe(401);
+    expect(createJob).not.toHaveBeenCalled();
+    expect(createSourceLease).not.toHaveBeenCalled();
   });
 
   it('sizes the deferred budget for the 83-page teaching-document target', async () => {

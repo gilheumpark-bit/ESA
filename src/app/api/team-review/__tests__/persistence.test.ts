@@ -168,4 +168,41 @@ describe('POST /api/team-review report persistence', () => {
     }));
     expect(JSON.stringify(body)).not.toContain(secret);
   });
+
+  test('requires BYOK for anonymous image review even when a server key exists', async () => {
+    mockExtractUser.mockResolvedValue(null);
+    process.env.OPENAI_API_KEY = 'deployment-owned-key';
+    const formData = new FormData();
+    formData.append('file', new File([new Uint8Array([1, 2, 3])], 'drawing.png', { type: 'image/png' }));
+    formData.append('provider', 'openai');
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      headers: { Origin: 'http://localhost:3000' },
+      body: formData,
+    }));
+
+    expect(response.status).toBe(401);
+    expect(mockRunOrchestrator).not.toHaveBeenCalled();
+  });
+
+  test('rejects a model outside the catalog when a server Vision key is used', async () => {
+    process.env.OPENAI_API_KEY = 'deployment-owned-key';
+    const formData = new FormData();
+    formData.append('file', new File([new Uint8Array([1, 2, 3])], 'drawing.png', { type: 'image/png' }));
+    formData.append('provider', 'openai');
+    formData.append('model', 'operator-disallowed-model');
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:3000',
+        Authorization: 'Bearer verified-token',
+      },
+      body: formData,
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockRunOrchestrator).not.toHaveBeenCalled();
+  });
 });

@@ -227,6 +227,38 @@ export interface DxfParseOptions {
   textProximityThreshold?: number;
   /** 결선 추출에서 제외할 레이어 (기본: 치수·해칭·도면틀류) */
   ignoreLayers?: RegExp;
+  /** 파싱 뒤 의미 탐색에 투입할 최대 엔티티 수 */
+  maxEntities?: number;
+  /** 폴리라인 좌표의 최대 합계 */
+  maxVertices?: number;
+  /** 추출할 최대 장치 수 */
+  maxComponents?: number;
+  /** 추출할 최대 연결 수 */
+  maxConnections?: number;
+  /** 의미 매핑에 투입할 최대 텍스트 수 */
+  maxTexts?: number;
+}
+
+const DXF_WORK_LIMITS = {
+  entities: 25_000,
+  vertices: 100_000,
+  components: 2_000,
+  connections: 4_000,
+  texts: 5_000,
+} as const;
+
+function workLimit(value: number | undefined, fallback: number): number {
+  return Number.isSafeInteger(value) && value! >= 0 ? value! : fallback;
+}
+
+function dxfResourceLimit(reason: string): SLDAnalysis {
+  return {
+    components: [],
+    connections: [],
+    suggestedCalculations: [],
+    confidence: 0,
+    rawDescription: `DXF_RESOURCE_LIMIT: ${reason}`,
+  };
 }
 
 const DXF_UNIT_SCALE_M: Partial<Record<number, number>> = {
@@ -278,6 +310,22 @@ export function parseDxfToSLD(
     };
   }
 
+  const maxEntities = workLimit(options.maxEntities, DXF_WORK_LIMITS.entities);
+  const maxVertices = workLimit(options.maxVertices, DXF_WORK_LIMITS.vertices);
+  const maxComponents = workLimit(options.maxComponents, DXF_WORK_LIMITS.components);
+  const maxConnections = workLimit(options.maxConnections, DXF_WORK_LIMITS.connections);
+  const maxTexts = workLimit(options.maxTexts, DXF_WORK_LIMITS.texts);
+  if (dxf.entities.length > maxEntities) {
+    return dxfResourceLimit(`entities ${dxf.entities.length} > ${maxEntities}`);
+  }
+  let vertexCount = 0;
+  for (const entity of dxf.entities) {
+    vertexCount += entity.vertices?.length ?? 0;
+    if (vertexCount > maxVertices) {
+      return dxfResourceLimit(`vertices ${vertexCount} > ${maxVertices}`);
+    }
+  }
+
   const isIgnoredLayer = (layer?: string) => !!layer && ignoreLayers.test(layer);
 
   const components: SLDComponent[] = [];
@@ -306,6 +354,7 @@ export function parseDxfToSLD(
           position: { x: entity.position.x, y: entity.position.y },
           properties: { blockName: entity.name, layer: entity.layer ?? '' },
         });
+        if (components.length > maxComponents) return dxfResourceLimit(`components > ${maxComponents}`);
         break;
       }
 
@@ -329,6 +378,7 @@ export function parseDxfToSLD(
             shape: 'circle',
           },
         });
+        if (components.length > maxComponents) return dxfResourceLimit(`components > ${maxComponents}`);
         break;
       }
 
@@ -350,6 +400,7 @@ export function parseDxfToSLD(
           conductorSize: undefined,
           cableType: undefined,
         });
+        if (connections.length > maxConnections) return dxfResourceLimit(`connections > ${maxConnections}`);
         break;
       }
 
@@ -369,6 +420,7 @@ export function parseDxfToSLD(
           conductorSize: undefined,
           cableType: undefined,
         });
+        if (connections.length > maxConnections) return dxfResourceLimit(`connections > ${maxConnections}`);
         break;
       }
 
@@ -387,6 +439,7 @@ export function parseDxfToSLD(
           y: anchor.y,
           spec,
         });
+        if (texts.length > maxTexts) return dxfResourceLimit(`texts > ${maxTexts}`);
         break;
       }
     }
@@ -459,6 +512,9 @@ export function parseDxfToSLD(
     components.map((c) => ({ id: c.id, x: c.position.x, y: c.position.y })),
     connections,
   );
+  if (components.length + snap.junctions.length > maxComponents) {
+    return dxfResourceLimit(`components including junctions > ${maxComponents}`);
+  }
   for (const j of snap.junctions) {
     components.push({
       id: j.id,

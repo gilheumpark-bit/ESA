@@ -133,50 +133,54 @@ describe('Rate Limiter - Store', () => {
 // -- IP Extraction Tests -----------------------------------------------------
 
 describe('getClientIp', () => {
-  // 버그 사냥 수리: XFF 최좌측은 클라이언트가 위조 가능 → 신뢰 프록시가 붙이는
-  // 최우측을 쓴다(스푸핑 저항). 최좌측 신뢰는 레이트리밋 우회 취약점이었다.
-  test('x-forwarded-for에서 신뢰측(최우측)을 쓴다 — 위조 방지', () => {
-    const headers = new Headers();
-    headers.set('x-forwarded-for', '203.0.113.50, 70.41.3.18');
-    expect(getClientIp(headers)).toBe('70.41.3.18');
+  const originalVercel = process.env.VERCEL;
+  const originalTrustedHeader = process.env.TRUSTED_CLIENT_IP_HEADER;
+
+  afterEach(() => {
+    if (originalVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = originalVercel;
+    if (originalTrustedHeader === undefined) delete process.env.TRUSTED_CLIENT_IP_HEADER;
+    else process.env.TRUSTED_CLIENT_IP_HEADER = originalTrustedHeader;
   });
 
-  test('공격자가 최좌측에 위조 IP를 주입해도 실IP(최우측)를 쓴다', () => {
+  test('ignores forwarding headers when no trusted proxy is configured', () => {
+    delete process.env.VERCEL;
+    delete process.env.TRUSTED_CLIENT_IP_HEADER;
     const headers = new Headers();
-    headers.set('x-forwarded-for', '1.2.3.4, 5.6.7.8, 198.51.100.99');
+    headers.set('x-forwarded-for', '203.0.113.50, 70.41.3.18');
+    headers.set('x-real-ip', '198.51.100.23');
+    headers.set('cf-connecting-ip', '93.184.216.34');
+    expect(getClientIp(headers)).toBe('untrusted-client');
+  });
+
+  test('uses Vercel-owned client IP headers only in a Vercel runtime', () => {
+    process.env.VERCEL = '1';
+    const headers = new Headers();
+    headers.set('x-vercel-forwarded-for', '198.51.100.99');
+    headers.set('x-forwarded-for', '1.2.3.4');
     expect(getClientIp(headers)).toBe('198.51.100.99');
   });
 
-  test('플랫폼 헤더(x-real-ip)를 XFF보다 우선한다 — 클라이언트가 못 덮는 값', () => {
+  test('uses only the explicitly configured header behind another trusted proxy', () => {
+    delete process.env.VERCEL;
+    process.env.TRUSTED_CLIENT_IP_HEADER = 'x-esa-client-ip';
     const headers = new Headers();
+    headers.set('x-esa-client-ip', '203.0.113.25');
     headers.set('x-forwarded-for', '1.2.3.4');
-    headers.set('x-real-ip', '198.51.100.23');
-    expect(getClientIp(headers)).toBe('198.51.100.23');
+    expect(getClientIp(headers)).toBe('203.0.113.25');
   });
 
-  test('Extracts from cf-connecting-ip header', () => {
+  test('rejects an invalid value in the configured trusted header', () => {
+    process.env.TRUSTED_CLIENT_IP_HEADER = 'x-esa-client-ip';
     const headers = new Headers();
-    headers.set('cf-connecting-ip', '93.184.216.34');
-    expect(getClientIp(headers)).toBe('93.184.216.34');
+    headers.set('x-esa-client-ip', '999.999.999.999');
+    expect(getClientIp(headers)).toBe('untrusted-client');
   });
 
-  test('Falls back to 127.0.0.1 when no headers present', () => {
+  test('falls back to a shared fail-closed identity when no trusted header exists', () => {
+    delete process.env.VERCEL;
+    delete process.env.TRUSTED_CLIENT_IP_HEADER;
     const headers = new Headers();
-    expect(getClientIp(headers)).toBe('127.0.0.1');
-  });
-
-  test('Rejects an out-of-range IPv4 address that only looks syntactically valid', () => {
-    const headers = new Headers();
-    headers.set('x-forwarded-for', '999.999.999.999');
-    expect(getClientIp(headers)).toBe('127.0.0.1');
-  });
-
-  // 보안 수리(버그 사냥): 신뢰 프록시가 세팅하는 x-real-ip를 위조 가능한 XFF보다
-  // 우선한다. 구 테스트는 XFF 우선(취약)을 잠갔었다 — 표준 대조 후 정정.
-  test('플랫폼 헤더(x-real-ip)가 위조 가능한 XFF보다 우선한다', () => {
-    const headers = new Headers();
-    headers.set('x-forwarded-for', '10.0.0.1');
-    headers.set('x-real-ip', '10.0.0.2');
-    expect(getClientIp(headers)).toBe('10.0.0.2');
+    expect(getClientIp(headers)).toBe('untrusted-client');
   });
 });

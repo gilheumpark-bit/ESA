@@ -12,6 +12,7 @@ import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { isCatalogModel } from '@/lib/ai-providers';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
 const RULES_MAX_BYTES = 1024 * 1024;
@@ -55,7 +56,13 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 export const POST = withApiHandler(
-  { rateLimit: 'sld', checkOrigin: true },
+  {
+    rateLimit: 'sld',
+    checkOrigin: true,
+    maxBodySize: (req) => (req.headers.get('content-type') ?? '').includes('multipart/form-data')
+      ? DRAWING_MAX_BYTES + RULES_MAX_BYTES + (512 * 1024)
+      : 256 * 1024,
+  },
   async (req: NextRequest, ctx) => {
     const perf = startPerf('team-review');
     const requestScope = createRequestSignal(req.signal);
@@ -128,6 +135,9 @@ export const POST = withApiHandler(
           if (apiKey.length > VISION_KEY_MAX_CHARS) {
             return ctx.error('ESVA-4400', 'Vision API 키 형식이 올바르지 않습니다', 400);
           }
+          if (!apiKey && !userId) {
+            return ctx.error('ESVA-9401', '비로그인 이미지 검토에는 Vision BYOK 키가 필요합니다', 401);
+          }
           if (!apiKey && !hasServerVisionKey(provider)) {
             return ctx.error('ESVA-9401', '이미지 전문팀 검토에는 Vision BYOK 키가 필요합니다', 401);
           }
@@ -135,6 +145,9 @@ export const POST = withApiHandler(
           const model = typeof modelRaw === 'string' ? modelRaw.trim() : '';
           if (model && !VISION_MODEL_PATTERN.test(model)) {
             return ctx.error('ESVA-4400', 'Vision 모델 이름 형식이 올바르지 않습니다', 400);
+          }
+          if (model && !apiKey && !isCatalogModel(provider, model)) {
+            return ctx.error('ESVA-4400', '서버 Vision 키로 사용할 수 없는 모델입니다', 400);
           }
           vision = {
             provider,

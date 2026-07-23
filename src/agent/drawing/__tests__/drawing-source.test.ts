@@ -118,4 +118,24 @@ describe('prepareDrawingSource', () => {
     expect(source.pages.every((page) => page.preparationError === undefined)).toBe(true);
     expect(source.pages.reduce((sum, page) => sum + page.width * page.height, 0)).toBeLessThanOrEqual(maxPixels);
   });
+
+  it('cancels page enumeration when the caller signal aborts', async () => {
+    const getDocument = jest.requireMock('pdfjs-dist/legacy/build/pdf.mjs').getDocument as jest.Mock;
+    const destroy = jest.fn(async () => undefined);
+    getDocument.mockReturnValueOnce({
+      promise: new Promise(() => undefined),
+      destroy,
+    });
+    const controller = new AbortController();
+    const pending = enumerateDrawingPageCount({
+      bytes: buildVectorPdf(1),
+      mimeType: 'application/pdf',
+      signal: controller.signal,
+    });
+
+    controller.abort();
+
+    await expect(pending).rejects.toThrow('DRAWING_SOURCE_CANCELLED');
+    expect(destroy).toHaveBeenCalled();
+  });
 });

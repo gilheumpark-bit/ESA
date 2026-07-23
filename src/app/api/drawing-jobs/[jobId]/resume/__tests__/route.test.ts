@@ -42,6 +42,15 @@ function validRequest(): NextRequest {
   });
 }
 
+function byokRequest(): NextRequest {
+  const form = new FormData();
+  form.set('provider', 'openai');
+  form.set('apiKey', 'request-owned-key');
+  return new NextRequest('http://localhost/api/drawing-jobs/job-a/resume', {
+    method: 'POST', headers: { origin: 'http://localhost' }, body: form,
+  });
+}
+
 describe('drawing job resume API', () => {
   it('uses the supported long-running route ceiling', () => {
     expect(maxDuration).toBe(1800);
@@ -80,6 +89,37 @@ describe('drawing job resume API', () => {
     }
   });
 
+  it('requires BYOK before an anonymous owner can resume analysis', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: owner.ownerId,
+      authenticated: false,
+    });
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'deployment-owned-key';
+
+    const response = await POST(validRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+    expect(response.status).toBe(401);
+    expect(claimOwnedJobRun).not.toHaveBeenCalled();
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('preserves anonymous resume with BYOK', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: owner.ownerId,
+      authenticated: false,
+    });
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job, document: { ...job.document, jobStatus: 'PARTIAL' },
+    } as never);
+
+    const response = await POST(byokRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      vision: expect.objectContaining({ apiKey: 'request-owned-key' }),
+    }));
+  });
+
   it('does not bind a resumable analysis lifetime to the HTTP request signal', async () => {
     jest.mocked(runDocumentAnalysis).mockResolvedValue({
       job, document: { ...job.document, jobStatus: 'PARTIAL' },
@@ -88,6 +128,6 @@ describe('drawing job resume API', () => {
     const response = await POST(validRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
 
     expect(response.status).toBe(200);
-    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ signal: undefined, maxPagesPerRun: 1, preparationPages: [0] }));
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({ signal: expect.any(AbortSignal), maxPagesPerRun: 1, preparationPages: [0] }));
   });
 });

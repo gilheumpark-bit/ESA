@@ -31,7 +31,6 @@ import { preparePrecisionRegions as preparePlan1PrecisionRegions, precisionGridS
 import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
 import type { RescanTargetEvidence, RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
 import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
-import { analyzeSLD, type SLDAnalysis } from '@/lib/sld-recognition';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { calculateVoltageDrop } from '@/engine/calculators/voltage-drop/voltage-drop';
 import { parseSpecText } from '@/engine/topology/spec-text';
@@ -94,7 +93,7 @@ async function extractFromDrawing(
     const pdfBytes = Uint8Array.from(new Uint8Array(fileBuffer));
     const analysis = await parsePdfToSLD(
       pdfBytes.buffer as ArrayBuffer,
-      { pageNumber: (params?.pageNumber as number) ?? 1 },
+      { pageNumber: (params?.pageNumber as number) ?? 1, signal: input.signal },
     );
     return {
       components: (analysis.components ?? []).map((c, index) => ({
@@ -132,11 +131,8 @@ export interface SLDTeamDeps {
   routeCalculations?: typeof routeDrawingCalculations;
   compareLogic?: typeof compareLogicToGraph;
   synthesize?: typeof synthesizeDrawingReview;
-  /**
-   * 역할별 독립 심사가 비었을 때만 실행하는 전체 도면 보조 판독기.
-   * 이 결과는 단독 증거이므로 최대 0.79의 ambiguous 후보로만 보존한다.
-   */
-  analyzeBroad?: typeof analyzeSLD;
+  /** @deprecated 추가 공급자 호출을 막기 위해 더 이상 실행하지 않는다. */
+  analyzeBroad?: typeof import('@/lib/sld-recognition').analyzeSLD;
 }
 
 const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as const;
@@ -196,38 +192,6 @@ function graphLegacy(graph: SpatialEvidenceGraph, envelopeConfidence: number): {
 
 function redactSecret(value: string, secret: string | undefined): string {
   return secret ? value.split(secret).join('[REDACTED]') : value;
-}
-
-function broadReadCandidates(analysis: SLDAnalysis): {
-  components: ExtractedComponent[];
-  connections: ExtractedConnection[];
-  confidence: number;
-} {
-  const confidence = Math.min(0.79, Math.max(0, analysis.confidence));
-  const components = analysis.components.map((component) => ({
-    id: component.id,
-    type: component.type,
-    label: component.label ?? component.id,
-    ...(component.rating || component.voltage || component.current
-      ? { rating: component.rating ?? component.voltage ?? component.current }
-      : {}),
-    position: component.position,
-    confidence,
-  }));
-  const ids = new Set(components.map((component) => component.id));
-  const connections = analysis.connections
-    .filter((connection) => ids.has(connection.from) && ids.has(connection.to))
-    .map((connection) => ({
-      from: connection.from,
-      to: connection.to,
-      ...(connection.cableType || connection.conductorSize
-        ? { cableType: [connection.cableType, connection.conductorSize].filter(Boolean).join(' ') }
-        : {}),
-      ...(connection.length && Number.isFinite(parseFloat(connection.length))
-        ? { length: parseFloat(connection.length) }
-        : {}),
-    }));
-  return { components, connections, confidence };
 }
 
 function requestedRescanTargets(input: TeamInput, snapshot: DrawingSnapshot): RescanTargetEvidence[] {
@@ -457,31 +421,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   if (graph && graph.edges.length === 0) holds.push(hold('graph edges가 비어 있습니다.'));
   const complete = coverageComplete && missing.length === 0 && fatal.length === 0 && graph !== undefined && graph.symbols.length > 0 && graph.edges.length > 0;
   const envelopeConfidence = council.envelopes.length === 0 ? 0 : Math.min(...council.envelopes.map((item) => item.data.confidence));
-  let extracted = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
-
-  // 독립 역할 심사가 심볼 또는 연결을 전혀 만들지 못해도, 같은 전체 이미지를
-  // 넓게 읽은 후보를 폐기하지 않는다. 단일 VLM 판독은 교차 검증이 아니므로
-  // confidence를 0.79로 제한해 downstream adapter가 confirmed로 승격하지 못하게 한다.
-  if (extracted.components.length === 0 || extracted.connections.length === 0) {
-    try {
-      throwIfAborted(input.signal);
-      const broad = await (deps.analyzeBroad ?? analyzeSLD)(
-        new Blob([new Uint8Array(input.fileBuffer)], { type: input.mimeType ?? 'image/png' }),
-        { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model ?? '' },
-      );
-      throwIfAborted(input.signal);
-      const candidates = broadReadCandidates(broad);
-      if (candidates.components.length > 0) {
-        extracted = candidates;
-        holds.push(hold(`보조 전체 판독 후보 ${candidates.components.length}개와 연결 ${candidates.connections.length}개를 보존했습니다. 독립 역할 심사 확인 전 확정 판정은 금지됩니다.`));
-      } else {
-        holds.push(hold('보조 전체 판독에서도 기기 후보를 찾지 못했습니다.'));
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      holds.push(hold(`보조 전체 판독 실패: ${redactSecret(message, resolved.key)}`));
-    }
-  }
+  const extracted = graph ? graphLegacy(graph, envelopeConfidence) : { components: [], connections: [], confidence: 0 };
 
   return { artifact, ...extracted, holds, complete };
 }

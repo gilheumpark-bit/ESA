@@ -16,6 +16,17 @@ import { SANDBOX_REGISTRY } from './sandbox-registry';
 
 export class IsolationMatrix {
   private readonly auditLog: CrossAccessLog[] = [];
+  private static readonly MAX_AUDIT_ENTRIES = 1_000;
+
+  private appendAudit(entry: CrossAccessLog): void {
+    if (this.auditLog.length >= IsolationMatrix.MAX_AUDIT_ENTRIES) {
+      this.auditLog.splice(
+        0,
+        this.auditLog.length - IsolationMatrix.MAX_AUDIT_ENTRIES + 1,
+      );
+    }
+    this.auditLog.push(entry);
+  }
 
   /**
    * Assert that direct communication between two sandboxes is forbidden.
@@ -32,7 +43,7 @@ export class IsolationMatrix {
       reason: `BLOCKED: Direct access attempted from ${from} to ${to}`,
       bridgeMediated: false,
     };
-    this.auditLog.push(entry);
+    this.appendAudit(entry);
 
     throw new IsolationViolationError(
       `Direct sandbox communication forbidden: ${from} → ${to}. ` +
@@ -82,7 +93,7 @@ export class IsolationMatrix {
       reason,
       bridgeMediated: true,
     };
-    this.auditLog.push(entry);
+    this.appendAudit(entry);
   }
 
   /**

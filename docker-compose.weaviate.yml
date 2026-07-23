@@ -1,6 +1,6 @@
 # Weaviate Vector DB for ESVA RAG Pipeline
 # Usage: docker compose -f docker-compose.weaviate.yml up -d
-# Then set WEAVIATE_URL=http://localhost:8080 in .env
+# Then set WEAVIATE_URL=http://localhost:8080 and the same WEAVIATE_API_KEY in .env
 
 version: '3.8'
 
@@ -9,11 +9,16 @@ services:
     image: cr.weaviate.io/semitechnologies/weaviate:1.28.4
     restart: unless-stopped
     ports:
-      - "8080:8080"  # REST API
-      - "50051:50051" # gRPC
+      - "127.0.0.1:8080:8080"  # REST API — local host only
+      - "127.0.0.1:50051:50051" # gRPC — local host only
     environment:
       QUERY_DEFAULTS_LIMIT: 25
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "false"
+      AUTHENTICATION_APIKEY_ENABLED: "true"
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: ${WEAVIATE_API_KEY:?set WEAVIATE_API_KEY}
+      AUTHENTICATION_APIKEY_USERS: esa-service
+      AUTHORIZATION_ADMINLIST_ENABLED: "true"
+      AUTHORIZATION_ADMINLIST_USERS: esa-service
       PERSISTENCE_DATA_PATH: /var/lib/weaviate
       DEFAULT_VECTORIZER_MODULE: text2vec-openai
       ENABLE_MODULES: text2vec-openai,text2vec-google,generative-openai,generative-google

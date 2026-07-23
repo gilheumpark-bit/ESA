@@ -169,6 +169,63 @@ function installPdfCanvasGlobals(): void {
   globals.Path2D ??= Path2D;
 }
 
+async function boundedPdfOperation<T>(
+  operation: Promise<T>,
+  input: PrepareDrawingSourceInput,
+  deadline: number,
+  cancel?: () => unknown | Promise<unknown>,
+): Promise<T> {
+  const cancelQuietly = () => {
+    try {
+      void Promise.resolve(cancel?.()).catch(() => undefined);
+    } catch {
+      // Cancellation is best-effort; the caller still receives the bounded error.
+    }
+  };
+  if (input.signal?.aborted || input.shouldCancel?.()) {
+    cancelQuietly();
+    throw new Error('DRAWING_SOURCE_CANCELLED');
+  }
+  if (Date.now() >= deadline) {
+    cancelQuietly();
+    throw new Error('DRAWING_SOURCE_DEADLINE_EXCEEDED');
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
+    let cancellationPoll: ReturnType<typeof setInterval> | undefined;
+    const finish = (settle: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (deadlineTimer) clearTimeout(deadlineTimer);
+      if (cancellationPoll) clearInterval(cancellationPoll);
+      input.signal?.removeEventListener('abort', onAbort);
+      settle();
+    };
+    const fail = (code: 'DRAWING_SOURCE_CANCELLED' | 'DRAWING_SOURCE_DEADLINE_EXCEEDED') => {
+      cancelQuietly();
+      finish(() => reject(new Error(code)));
+    };
+    const onAbort = () => fail('DRAWING_SOURCE_CANCELLED');
+
+    input.signal?.addEventListener('abort', onAbort, { once: true });
+    deadlineTimer = setTimeout(
+      () => fail('DRAWING_SOURCE_DEADLINE_EXCEEDED'),
+      Math.max(1, deadline - Date.now()),
+    );
+    if (input.shouldCancel) {
+      cancellationPoll = setInterval(() => {
+        if (input.shouldCancel?.()) fail('DRAWING_SOURCE_CANCELLED');
+      }, 100);
+    }
+    operation.then(
+      (value) => finish(() => resolve(value)),
+      (cause) => finish(() => reject(cause)),
+    );
+  });
+}
+
 /** Enumerates pages without rendering them, so queued-job cost estimates are honest. */
 export async function enumerateDrawingPageCount(
   input: PrepareDrawingSourceInput,
@@ -178,21 +235,32 @@ export async function enumerateDrawingPageCount(
   installPdfCanvasGlobals();
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   let loadingTask: ReturnType<typeof pdfjs.getDocument> | undefined;
+  let destroyed = false;
+  const destroy = async () => {
+    if (destroyed) return;
+    destroyed = true;
+    await loadingTask?.destroy().catch(() => undefined);
+  };
+  const deadline = Date.now() + (input.budget?.deadlineMs ?? 30_000);
   try {
     loadingTask = pdfjs.getDocument({
       data: new Uint8Array(input.bytes.slice(0)),
       ...pdfjsNodeDocumentOptions(),
     });
-    const document = await loadingTask.promise;
+    const document = await boundedPdfOperation(loadingTask.promise, input, deadline, destroy);
     if (!Number.isSafeInteger(document.numPages) || document.numPages < 1 || document.numPages > MAX_PDF_PAGES) {
       throw new Error('DRAWING_SOURCE_PDF_PAGE_LIMIT');
     }
     return document.numPages;
   } catch (cause) {
-    if (cause instanceof Error && cause.message === 'DRAWING_SOURCE_PDF_PAGE_LIMIT') throw cause;
+    if (cause instanceof Error && [
+      'DRAWING_SOURCE_PDF_PAGE_LIMIT',
+      'DRAWING_SOURCE_CANCELLED',
+      'DRAWING_SOURCE_DEADLINE_EXCEEDED',
+    ].includes(cause.message)) throw cause;
     throw new Error('DRAWING_SOURCE_PDF_INVALID');
   } finally {
-    await loadingTask?.destroy().catch(() => undefined);
+    await destroy();
   }
 }
 
@@ -213,6 +281,7 @@ async function preparePdf(
 ): Promise<PreparedDrawingSource> {
   installPdfCanvasGlobals();
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const deadline = Date.now() + (input.budget?.deadlineMs ?? 10 * 60_000);
   let loadingTask: ReturnType<typeof pdfjs.getDocument>;
   let document: Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>;
   try {
@@ -220,8 +289,17 @@ async function preparePdf(
       data: new Uint8Array(input.bytes.slice(0)),
       ...pdfjsNodeDocumentOptions(),
     });
-    document = await loadingTask.promise;
-  } catch {
+    document = await boundedPdfOperation(
+      loadingTask.promise,
+      input,
+      deadline,
+      () => loadingTask.destroy(),
+    );
+  } catch (cause) {
+    if (cause instanceof Error && [
+      'DRAWING_SOURCE_CANCELLED',
+      'DRAWING_SOURCE_DEADLINE_EXCEEDED',
+    ].includes(cause.message)) throw cause;
     throw new Error('DRAWING_SOURCE_PDF_INVALID');
   }
   if (!Number.isSafeInteger(document.numPages) || document.numPages < 1 || document.numPages > MAX_PDF_PAGES) {
@@ -238,7 +316,6 @@ async function preparePdf(
   }
   const maxPages = input.budget?.maxPages ?? MAX_PDF_PAGES;
   const maxPixels = input.budget?.maxPixels ?? Number.MAX_SAFE_INTEGER;
-  const deadline = Date.now() + (input.budget?.deadlineMs ?? 10 * 60_000);
   const renderablePageCount = Math.max(1, Math.min(maxPages, requested.length));
   const perPagePixelLimit = Math.max(1, Math.floor(maxPixels / renderablePageCount));
   let renderedPages = 0;
@@ -276,23 +353,30 @@ async function preparePdf(
         continue;
       }
       const pageNumber = pageIndex + 1;
-      const page = await document.getPage(pageNumber);
-      const sourceViewport = page.getViewport({ scale: 1 });
-      const scale = renderScale(sourceViewport.width, sourceViewport.height, perPagePixelLimit);
-      const viewport = page.getViewport({ scale });
-      const width = Math.max(1, Math.ceil(viewport.width));
-      const height = Math.max(1, Math.ceil(viewport.height));
-      const pagePixels = width * height;
-      if (renderedPixels + pagePixels > maxPixels) {
-        pages.push(skippedPage(pageIndex, 'PARTIAL_BUDGET_EXCEEDED'));
-        page.cleanup();
-        continue;
-      }
+      const page = await boundedPdfOperation(
+        document.getPage(pageNumber),
+        input,
+        deadline,
+        () => loadingTask.destroy(),
+      );
+      try {
+        const sourceViewport = page.getViewport({ scale: 1 });
+        const scale = renderScale(sourceViewport.width, sourceViewport.height, perPagePixelLimit);
+        const viewport = page.getViewport({ scale });
+        const width = Math.max(1, Math.ceil(viewport.width));
+        const height = Math.max(1, Math.ceil(viewport.height));
+        const pagePixels = width * height;
+        if (renderedPixels + pagePixels > maxPixels) {
+          pages.push(skippedPage(pageIndex, 'PARTIAL_BUDGET_EXCEEDED'));
+          continue;
+        }
 
-      const [operatorList, textContent] = await Promise.all([
-        page.getOperatorList(),
-        page.getTextContent(),
-      ]);
+        const [operatorList, textContent] = await boundedPdfOperation(
+          Promise.all([page.getOperatorList(), page.getTextContent()]),
+          input,
+          deadline,
+          () => loadingTask.destroy(),
+        );
       const vectorOps = new Set<number>([
         pdfjs.OPS.constructPath,
         pdfjs.OPS.showText,
@@ -311,15 +395,21 @@ async function preparePdf(
           ? 'raster'
           : 'vector';
 
-      const canvas = createCanvas(width, height);
-      const context = canvas.getContext('2d');
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, width, height);
-      await page.render({
-        canvas: canvas as never,
-        canvasContext: context as never,
-        viewport,
-      } as never).promise;
+        const canvas = createCanvas(width, height);
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        const renderTask = page.render({
+          canvas: canvas as never,
+          canvasContext: context as never,
+          viewport,
+        } as never);
+        await boundedPdfOperation(
+          renderTask.promise,
+          input,
+          deadline,
+          () => renderTask.cancel(),
+        );
       const png = canvas.toBuffer('image/png');
       const imageBuffer = toArrayBuffer(png);
       const quality = await profileImage(imageBuffer);
@@ -346,7 +436,9 @@ async function preparePdf(
       });
       renderedPages += 1;
       renderedPixels += pagePixels;
-      page.cleanup();
+      } finally {
+        page.cleanup();
+      }
     }
   } finally {
     await loadingTask!.destroy();

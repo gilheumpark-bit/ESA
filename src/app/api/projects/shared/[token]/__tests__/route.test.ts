@@ -2,8 +2,12 @@ import { NextRequest } from 'next/server';
 import { getProject, validateShareLink } from '@/lib/collaboration';
 import { loadCalculation } from '@/lib/supabase';
 import { POST } from '../route';
+import { checkRateLimit } from '@/lib/rate-limit';
 
-jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
+jest.mock('@/lib/rate-limit', () => ({
+  applyRateLimit: jest.fn(() => null),
+  checkRateLimit: jest.fn(() => ({ allowed: true, remaining: 4 })),
+}));
 jest.mock('@/lib/collaboration', () => ({
   getProject: jest.fn(),
   validateShareLink: jest.fn(),
@@ -88,6 +92,30 @@ describe('POST /api/projects/shared/[token]', () => {
 
     expect(response.status).toBe(401);
     expect(body.passwordRequired).toBe(true);
+    expect(mockGetProject).not.toHaveBeenCalled();
+  });
+
+  test('applies a per-link password-attempt boundary before password validation', async () => {
+    const response = await POST(request({ password: 'guess' }));
+
+    expect(response.status).toBe(200);
+    expect(checkRateLimit).toHaveBeenCalledWith(
+      expect.stringMatching(/^share:/),
+      'share-password',
+    );
+  });
+
+  test('returns the shared-store retry window when the global password budget is exhausted', async () => {
+    mockValidate.mockResolvedValue({
+      valid: false,
+      error: 'Too many password attempts',
+      retryAfter: 840,
+    });
+
+    const response = await POST(request({ password: 'guess' }));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('840');
     expect(mockGetProject).not.toHaveBeenCalled();
   });
 

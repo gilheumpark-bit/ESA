@@ -13,7 +13,8 @@
  */
 
 import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
-import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, scrypt, timingSafeEqual } from 'crypto';
+import { promisify } from 'node:util';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -277,7 +278,7 @@ export async function removeMember(
   if (target.userId) {
     deletion = deletion.eq('user_id', target.userId);
   } else if (target.email) {
-    deletion = deletion.ilike('email', target.email.trim().toLowerCase()).is('user_id', null);
+    deletion = deletion.eq('email', target.email.trim().toLowerCase()).is('user_id', null);
   } else {
     throw new Error('[ESVA Collab] Member identity is required');
   }
@@ -301,7 +302,7 @@ export async function claimProjectInvitations(userId: string, verifiedEmail: str
     .from(MEMBERS_TABLE)
     .select('id, project_id')
     .is('user_id', null)
-    .ilike('email', email);
+    .eq('email', email);
   if (error) throw new Error(`[ESVA Collab] Failed to find invitations: ${error.message}`);
 
   let claimed = 0;
@@ -438,7 +439,7 @@ export async function generateShareLink(
     ? new Date(now.getTime() + expireHours * 60 * 60 * 1000).toISOString()
     : null;
 
-  const passwordHash = password ? hashSharePassword(password) : null;
+  const passwordHash = password ? await hashSharePassword(password) : null;
 
   const linkData = {
     token,
@@ -471,7 +472,7 @@ export async function generateShareLink(
 export async function validateShareLink(
   token: string,
   password?: string,
-): Promise<{ valid: boolean; projectId?: string; error?: string }> {
+): Promise<{ valid: boolean; projectId?: string; error?: string; retryAfter?: number }> {
   const client = getSupabaseAdmin();
 
   const { data, error } = await client
@@ -490,7 +491,22 @@ export async function validateShareLink(
   // Check password
   if (data.password_hash) {
     if (!password) return { valid: false, error: 'Password required' };
-    if (!verifySharePassword(password, data.password_hash as string)) {
+    const linkHash = createHash('sha256').update(token).digest('hex');
+    const { data: attemptRows, error: attemptError } = await client.rpc(
+      'consume_share_password_attempt',
+      { p_link_hash: linkHash },
+    );
+    const attempt = Array.isArray(attemptRows) ? attemptRows[0] as Record<string, unknown> | undefined : undefined;
+    if (attemptError || !attempt || typeof attempt.allowed !== 'boolean') {
+      return { valid: false, error: 'Too many password attempts', retryAfter: 900 };
+    }
+    if (!attempt.allowed) {
+      const retryAfter = typeof attempt.retry_after === 'number'
+        ? Math.max(1, Math.ceil(attempt.retry_after))
+        : 900;
+      return { valid: false, error: 'Too many password attempts', retryAfter };
+    }
+    if (!await verifySharePassword(password, data.password_hash as string)) {
       return { valid: false, error: 'Invalid password' };
     }
   }
@@ -683,18 +699,24 @@ async function hydrateProjects(rows: Record<string, unknown>[]): Promise<Project
   }));
 }
 
-function hashSharePassword(password: string): string {
+const scryptAsync = promisify(scrypt);
+
+async function hashSharePassword(password: string): Promise<string> {
   const salt = randomBytes(16);
-  const digest = scryptSync(password, salt, 32);
+  const digest = await scryptAsync(password, salt, 32) as Buffer;
   return `scrypt$${salt.toString('base64url')}$${digest.toString('base64url')}`;
 }
 
-function verifySharePassword(password: string, encoded: string): boolean {
+async function verifySharePassword(password: string, encoded: string): Promise<boolean> {
   const [scheme, saltValue, hashValue] = encoded.split('$');
   if (scheme !== 'scrypt' || !saltValue || !hashValue) return false;
   try {
     const expected = Buffer.from(hashValue, 'base64url');
-    const actual = scryptSync(password, Buffer.from(saltValue, 'base64url'), expected.length);
+    const actual = await scryptAsync(
+      password,
+      Buffer.from(saltValue, 'base64url'),
+      expected.length,
+    ) as Buffer;
     return expected.length > 0 && timingSafeEqual(actual, expected);
   } catch {
     return false;

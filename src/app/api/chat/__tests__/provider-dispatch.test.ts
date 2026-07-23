@@ -110,4 +110,18 @@ describe('POST /api/chat advertised provider dispatch', () => {
     expect(options.instructions).toContain('ESVA 전기 직무 보조 AI');
     expect(options.instructions).not.toContain('CLIENT_CONTROLLED_SYSTEM_PROMPT');
   });
+
+  test('rejects a first request that exceeds the full daily token budget', async () => {
+    const response = await POST(request(
+      'openai',
+      'gpt-5.6-luna',
+      '198.51.100.250',
+      'a'.repeat(2_000_100),
+    ));
+
+    expect(response.status).toBe(429);
+    const body = await response.json();
+    expect(body.error.code).toBe('ESVA-3014');
+    expect(streamTextMock).not.toHaveBeenCalled();
+  });
 });

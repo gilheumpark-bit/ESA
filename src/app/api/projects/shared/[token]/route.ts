@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
+
 import { NextRequest, NextResponse } from 'next/server';
-import { applyRateLimit } from '@/lib/rate-limit';
+import { applyRateLimit, checkRateLimit } from '@/lib/rate-limit';
 import { getProject, validateShareLink } from '@/lib/collaboration';
 import { loadCalculation } from '@/lib/supabase';
 
@@ -31,8 +33,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '올바른 JSON 요청이 아닙니다.' }, { status: 400 });
   }
 
+  if (password !== undefined) {
+    const linkKey = createHash('sha256').update(token).digest('hex');
+    const attempt = checkRateLimit(`share:${linkKey}`, 'share-password');
+    if (!attempt.allowed) {
+      return NextResponse.json(
+        { error: '비밀번호 확인 요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(attempt.retryAfter ?? 900) },
+        },
+      );
+    }
+  }
+
   const validation = await validateShareLink(token, password);
   if (!validation.valid || !validation.projectId) {
+    if (validation.error === 'Too many password attempts') {
+      return NextResponse.json(
+        { error: '비밀번호 확인 요청이 너무 많습니다. 잠시 후 다시 시도하세요.' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(validation.retryAfter ?? 900) },
+        },
+      );
+    }
     if (validation.error === 'Password required' || validation.error === 'Invalid password') {
       return NextResponse.json(
         {

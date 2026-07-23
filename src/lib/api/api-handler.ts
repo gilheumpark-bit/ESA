@@ -36,13 +36,15 @@ export interface ApiContext {
 export interface ApiHandlerOptions {
   /** 레이트리밋 프로필 (null = 안 함) */
   rateLimit?: string | null;
-  /** 최대 요청 바디 크기 (bytes, 기본 10MB) */
-  maxBodySize?: number;
+  /** 최대 요청 바디 크기 (bytes, 기본 10MB). content-type별 함수도 허용한다. */
+  maxBodySize?: number | ((req: NextRequest) => number);
   /** CORS origin 체크 (기본 true) */
   checkOrigin?: boolean;
 }
 
-type ApiHandlerFn = (req: NextRequest, ctx: ApiContext) => Promise<NextResponse>;
+type ApiHandlerFn = (req: NextRequest, ctx: ApiContext) => Promise<Response>;
+
+const DEFAULT_MAX_BODY_SIZE = 10 * 1024 * 1024;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CORS
@@ -71,6 +73,53 @@ function buildError(
   );
 }
 
+async function readBoundedRequest(
+  req: NextRequest,
+  maxBodySize: number,
+): Promise<NextRequest | null> {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.body === null) return req;
+  if (!Number.isSafeInteger(maxBodySize) || maxBodySize < 0) return null;
+
+  const declaredLength = req.headers.get('content-length');
+  if (declaredLength && /^\d+$/.test(declaredLength) && Number(declaredLength) > maxBodySize) {
+    return null;
+  }
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBodySize) {
+        await reader.cancel('request body limit exceeded').catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  // Reconstruct from public request fields. Passing a bundled NextRequest
+  // instance back into its constructor crosses Next.js chunk/class boundaries
+  // in production and throws on the class's private #state member.
+  return new NextRequest(req.url, {
+    method: req.method,
+    headers: new Headers(req.headers),
+    body,
+    signal: req.signal,
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Handler wrapper
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -86,7 +135,7 @@ export function withApiHandler(
   options: ApiHandlerOptions,
   handler: ApiHandlerFn,
 ) {
-  return async (req: NextRequest): Promise<NextResponse> => {
+  return async (req: NextRequest): Promise<Response> => {
     const startTime = Date.now();
     const ip = getClientIp(req.headers);
     const route = req.nextUrl.pathname;
@@ -117,6 +166,15 @@ export function withApiHandler(
       }
     }
 
+    const bodyLimit = typeof options.maxBodySize === 'function'
+      ? options.maxBodySize(req)
+      : options.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
+    const boundedRequest = await readBoundedRequest(req, bodyLimit);
+    if (!boundedRequest) {
+      log.warn('api', 'Request body too large', { ip, route, maxBodySize: bodyLimit });
+      return buildError('ESVA-9413', 'Request body too large', 413);
+    }
+
     // Context
     const ctx: ApiContext = {
       ip,
@@ -127,7 +185,7 @@ export function withApiHandler(
     };
 
     try {
-      const response = await handler(req, ctx);
+      const response = await handler(boundedRequest, ctx);
 
       // 응답 시간 로깅
       const durationMs = Date.now() - startTime;

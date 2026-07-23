@@ -118,8 +118,17 @@ function computeFreshnessMultiplier(publishedAt?: string, collectedAt?: string):
  * - 'summary_only': content truncated to summary field
  * - 'link_only': only title + url returned, no content snippet
  */
-function applyLicenseFilter(hit: WeaviateSearchHit): { snippet: string; restricted: boolean } {
-  const licenseType = (hit.license_type as string) ?? 'open';
+function normalizeLicenseType(value: unknown): ESALicenseType {
+  if (value === 'open' || value === 'summary_only' || value === 'link_only') {
+    return value;
+  }
+  return 'link_only';
+}
+
+function applyLicenseFilter(
+  hit: WeaviateSearchHit,
+  licenseType: ESALicenseType,
+): { snippet: string; restricted: boolean } {
 
   if (licenseType === 'link_only') {
     return {
@@ -130,13 +139,16 @@ function applyLicenseFilter(hit: WeaviateSearchHit): { snippet: string; restrict
 
   if (licenseType === 'summary_only') {
     const summary = hit.summary as string | undefined;
-    if (summary) {
+    if (summary?.trim()) {
       return { snippet: summary, restricted: false };
     }
-    // Fall through to content if no summary available
+    return {
+      snippet: '[Summary unavailable — see source link]',
+      restricted: true,
+    };
   }
 
-  // 'open' or fallback
+  // Only an explicit, validated 'open' value reaches full content.
   const content = (hit.content as string) ?? '';
   const maxSnippet = RAG_SNIPPET_MAX_CHARS;
   const snippet = content.length > maxSnippet
@@ -247,8 +259,8 @@ export async function searchRAG(opts: RAGSearchOptions): Promise<RAGResult[]> {
   const results: RAGResult[] = [];
 
   for (const { hit, collection, adjustedScore } of allHits) {
-    const licenseType = (hit.license_type as ESALicenseType) ?? 'open';
-    const { snippet } = applyLicenseFilter(hit);
+    const licenseType = normalizeLicenseType(hit.license_type);
+    const { snippet } = applyLicenseFilter(hit, licenseType);
 
     const publishedAt = hit.published_at as string | undefined;
     const collectedAt = hit.collected_at as string | undefined;

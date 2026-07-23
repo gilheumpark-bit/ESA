@@ -412,7 +412,7 @@ describe('SLD raster independent council integration', () => {
     expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });
 
-  it('preserves broad-read devices and links as ambiguous candidates when the independent graph is empty', async () => {
+  it('does not issue an unaccounted broad-read call when the independent graph is empty', async () => {
     const empty = envelopes().map((envelope) => {
       if (envelope.role === 'symbols') return sealed('symbols', { symbols: [] });
       if (envelope.role === 'connections') return sealed('connections', { lines: [] });
@@ -436,17 +436,11 @@ describe('SLD raster independent council integration', () => {
       analyzeBroad,
     });
 
-    expect(analyzeBroad).toHaveBeenCalledTimes(1);
-    expect(result.components).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'BROAD-BUS-01', label: 'Main Bus', confidence: 0.79 }),
-      expect.objectContaining({ id: 'BROAD-VCB-01', label: 'VCB-1', confidence: 0.79 }),
-    ]));
-    expect(result.connections).toEqual([
-      expect.objectContaining({ from: 'BROAD-BUS-01', to: 'BROAD-VCB-01' }),
-    ]);
-    expect(result.confidence).toBe(0.79);
+    expect(analyzeBroad).not.toHaveBeenCalled();
+    expect(result.components).toHaveLength(0);
+    expect(result.connections).toHaveLength(0);
     expect(result.standards).toEqual(expect.arrayContaining([
-      expect.objectContaining({ judgment: 'HOLD', note: expect.stringContaining('보조 전체 판독 후보') }),
+      expect.objectContaining({ judgment: 'HOLD', note: expect.stringContaining('graph') }),
     ]));
     expect(result.drawingSynthesis).toMatchObject({ verdict: 'CONDITIONAL', requiresHumanReview: true });
   });

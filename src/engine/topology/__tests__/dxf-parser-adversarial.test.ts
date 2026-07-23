@@ -202,3 +202,17 @@ describe('적대 — 물리 단위 근거', () => {
     expect(result.connections[0]?.length).toBe('0.1m');
   });
 });
+
+describe('적대 — 의미 엔티티 작업 예산', () => {
+  it('중첩 탐색 전에 지정된 엔티티 예산을 초과한 도면을 중단한다', () => {
+    const result = parseDxfToSLD(
+      doc([I('TR-1', 0, 0), I('DB-1', 0, 100), L(0, 0, 0, 100)]),
+      { maxEntities: 2 },
+    );
+
+    expect(result.confidence).toBe(0);
+    expect(result.components).toHaveLength(0);
+    expect(result.connections).toHaveLength(0);
+    expect(result.rawDescription).toContain('DXF_RESOURCE_LIMIT');
+  });
+});

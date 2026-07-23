@@ -33,6 +33,7 @@ export const RATE_LIMIT_PROFILES: Record<string, RateLimitProfile> = {
   // 한 작업을 페이지 단위로 체크포인트하는 내부 실행/재개 호출.
   // 작업 생성 자체는 위의 낮은 sld 한도를 계속 적용한다.
   'sld-job':  { maxRequests: 120, windowMs: 60_000 },
+  'share-password': { maxRequests: 5, windowMs: 15 * 60_000 },
   dxf:        { maxRequests: 20, windowMs: 60_000 },
   notarize:   { maxRequests: 5,  windowMs: 60_000 },
   admin:      { maxRequests: 30, windowMs: 60_000 },
@@ -161,29 +162,23 @@ export function checkRateLimit(
 // ─── PART 4: IP Extraction ───────────────────────────────────
 
 /**
- * Extract client IP from request headers.
- * Checks standard proxy headers, falls back to '127.0.0.1'.
+ * Extract a client IP only from a header owned by the configured trusted edge.
+ * Unconfigured self-hosted deployments share a fail-closed bucket instead of
+ * trusting caller-controlled forwarding headers.
  */
 export function getClientIp(headers: Headers): string {
-  // 버그 사냥 수리: x-forwarded-for **최좌측**은 클라이언트가 주입 가능한 값이다.
-  // Vercel은 실제 IP를 XFF에 append하므로 헤더가 "<위조값>, <실IP>"가 되고 최좌측을
-  // 신뢰하면 공격자가 매 요청 IP를 회전시켜 레이트리밋을 우회한다. 신뢰 프록시가
-  // 세팅하는(클라이언트가 못 덮는) 플랫폼 헤더를 **먼저** 신뢰하고, XFF는 최후 수단·
-  // **최우측**(서버에 가장 가까운 = 신뢰 프록시가 붙인 값)을 쓴다.
-  const realIp = headers.get('x-real-ip');
-  if (realIp && isValidIp(realIp.trim())) return realIp.trim();
-
-  const cfIp = headers.get('cf-connecting-ip');
-  if (cfIp && isValidIp(cfIp.trim())) return cfIp.trim();
-
-  const forwarded = headers.get('x-forwarded-for');
-  if (forwarded) {
-    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean);
-    const rightmost = parts[parts.length - 1];
-    if (rightmost && isValidIp(rightmost)) return rightmost;
+  if (process.env.VERCEL === '1') {
+    const vercelIp = headers.get('x-vercel-forwarded-for')?.trim();
+    if (vercelIp && isValidIp(vercelIp)) return vercelIp;
   }
 
-  return '127.0.0.1';
+  const configuredHeader = process.env.TRUSTED_CLIENT_IP_HEADER?.trim().toLowerCase();
+  if (configuredHeader && /^x-[a-z0-9-]{1,63}$/.test(configuredHeader)) {
+    const configuredIp = headers.get(configuredHeader)?.trim();
+    if (configuredIp && isValidIp(configuredIp)) return configuredIp;
+  }
+
+  return 'untrusted-client';
 }
 
 /** Basic IP validation (IPv4 or IPv6). */

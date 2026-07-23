@@ -34,4 +34,43 @@ describe('RAG browser BYOK embedding wiring', () => {
       expect.objectContaining({ vector: [0.11, 0.22] }),
     );
   });
+
+  it('fails closed for missing, unknown, or incomplete restricted licenses', async () => {
+    (hybridSearch as jest.Mock).mockResolvedValue([
+      {
+        _additional: { id: 'a', score: 0.9 },
+        title: 'summary missing',
+        content: 'RESTRICTED FULL CONTENT A',
+        license_type: 'summary_only',
+      },
+      {
+        _additional: { id: 'b', score: 0.8 },
+        title: 'license missing',
+        content: 'RESTRICTED FULL CONTENT B',
+      },
+      {
+        _additional: { id: 'c', score: 0.7 },
+        title: 'license unknown',
+        content: 'RESTRICTED FULL CONTENT C',
+        license_type: 'partner_only',
+      },
+    ]);
+
+    const results = await searchRAG({
+      query: 'restricted records',
+      country: 'KR',
+    } as never);
+
+    expect(results.map((result) => result.snippet)).toEqual([
+      '[Summary unavailable — see source link]',
+      '[Content restricted — see source link]',
+      '[Content restricted — see source link]',
+    ]);
+    expect(results.map((result) => result.licenseType)).toEqual([
+      'summary_only',
+      'link_only',
+      'link_only',
+    ]);
+    expect(JSON.stringify(results)).not.toContain('RESTRICTED FULL CONTENT');
+  });
 });

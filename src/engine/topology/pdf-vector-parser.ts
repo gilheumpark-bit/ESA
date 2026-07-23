@@ -48,6 +48,84 @@ export interface PdfParseOptions {
   textProximityThreshold?: number;
   /** 최소 선 길이 (포인트, 기본: 10) — 짧은 장식선 무시 */
   minLineLength?: number;
+  /** 의미 분석에 투입할 최대 텍스트 항목 수 */
+  maxTextItems?: number;
+  /** 순회할 최대 PDF 연산자 수 */
+  maxOperators?: number;
+  /** constructPath 내부 좌표·명령 값의 최대 합계 */
+  maxPathValues?: number;
+  /** PDF.js 로딩·페이지 추출 전체 시간 상한 */
+  deadlineMs?: number;
+  /** 호출자가 연결을 끊거나 작업을 취소할 때 중단한다. */
+  signal?: AbortSignal;
+}
+
+const PDF_WORK_LIMITS = {
+  textItems: 5_000,
+  operators: 100_000,
+  pathValues: 300_000,
+} as const;
+
+function workLimit(value: number | undefined, fallback: number): number {
+  return Number.isSafeInteger(value) && value! >= 0 ? value! : fallback;
+}
+
+function pdfResourceLimit(reason: string): SLDAnalysis {
+  return {
+    components: [],
+    connections: [],
+    suggestedCalculations: [],
+    confidence: 0,
+    rawDescription: `PDF_RESOURCE_LIMIT: ${reason}`,
+  };
+}
+
+async function boundedPdfWork<T>(
+  operation: Promise<T>,
+  signal: AbortSignal | undefined,
+  deadline: number,
+  cancel: () => unknown | Promise<unknown>,
+): Promise<T> {
+  const cancelQuietly = () => {
+    try {
+      void Promise.resolve(cancel()).catch(() => undefined);
+    } catch {
+      // The bounded error is authoritative even if pdf.js cancellation fails.
+    }
+  };
+  if (signal?.aborted) {
+    cancelQuietly();
+    throw new Error('PDF_PARSE_CANCELLED');
+  }
+  if (Date.now() >= deadline) {
+    cancelQuietly();
+    throw new Error('PDF_PARSE_DEADLINE_EXCEEDED');
+  }
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (settle: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      settle();
+    };
+    const fail = (code: string) => {
+      cancelQuietly();
+      finish(() => reject(new Error(code)));
+    };
+    const onAbort = () => fail('PDF_PARSE_CANCELLED');
+    signal?.addEventListener('abort', onAbort, { once: true });
+    timer = setTimeout(
+      () => fail('PDF_PARSE_DEADLINE_EXCEEDED'),
+      Math.max(1, deadline - Date.now()),
+    );
+    operation.then(
+      (value) => finish(() => resolve(value)),
+      (cause) => finish(() => reject(cause)),
+    );
+  });
 }
 
 // =========================================================================
@@ -148,6 +226,10 @@ export async function parsePdfToSLD(
   options: PdfParseOptions = {},
 ): Promise<SLDAnalysis> {
   const { pageNumber = 1, textProximityThreshold = 30, minLineLength = 10 } = options;
+  const maxTextItems = workLimit(options.maxTextItems, PDF_WORK_LIMITS.textItems);
+  const maxOperators = workLimit(options.maxOperators, PDF_WORK_LIMITS.operators);
+  const maxPathValues = workLimit(options.maxPathValues, PDF_WORK_LIMITS.pathValues);
+  const deadline = Date.now() + workLimit(options.deadlineMs, 30_000);
 
   // pdfjs-dist 동적 임포트 (서버 번들 최소화).
   // 반드시 legacy 빌드 — 기본 빌드는 모듈 최상위에서 new DOMMatrix()를 실행해
@@ -159,15 +241,28 @@ export async function parsePdfToSLD(
   // 손상·비PDF·페이지 범위 초과는 사용자 입력 문제지 서버 장애가 아니다.
   // 여기서 흡수하지 않으면 라우트가 500을 내며 내부 오류 문자열까지 노출한다
   // (DXF 파서와 동일 계약으로 맞춤 — 파싱 실패는 예외가 아니라 결과다).
+  let loadingTask: ReturnType<typeof pdfjsLib.getDocument> | undefined;
   let doc: Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>;
   let page: Awaited<ReturnType<typeof doc.getPage>>;
   try {
-    doc = await pdfjsLib.getDocument({
+    loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(pdfBytes),
       ...pdfjsNodeDocumentOptions(),
-    }).promise;
-    page = await doc.getPage(pageNumber);
+    });
+    doc = await boundedPdfWork(
+      loadingTask.promise,
+      options.signal,
+      deadline,
+      () => loadingTask!.destroy(),
+    );
+    page = await boundedPdfWork(
+      doc.getPage(pageNumber),
+      options.signal,
+      deadline,
+      () => loadingTask!.destroy(),
+    );
   } catch (err) {
+    await loadingTask?.destroy().catch(() => undefined);
     return {
       components: [],
       connections: [],
@@ -176,11 +271,20 @@ export async function parsePdfToSLD(
       rawDescription: `PDF parse failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
-  const viewport = page.getViewport({ scale: 1.0 });
+  try {
+    const viewport = page.getViewport({ scale: 1.0 });
 
-  // 텍스트 추출
-  const textContent = await page.getTextContent();
-  const texts: PdfTextItem[] = textContent.items
+    // 텍스트 추출
+    const textContent = await boundedPdfWork(
+      page.getTextContent(),
+      options.signal,
+      deadline,
+      () => loadingTask!.destroy(),
+    );
+    if (textContent.items.length > maxTextItems) {
+      return pdfResourceLimit(`text items ${textContent.items.length} > ${maxTextItems}`);
+    }
+    const texts: PdfTextItem[] = textContent.items
     .filter((item): item is typeof item & { str: string; transform: number[] } =>
       'str' in item && typeof (item as { str?: unknown }).str === 'string')
     .map((item) => {
@@ -214,8 +318,34 @@ export async function parsePdfToSLD(
   // transform 스택을 추적해 절대 좌표로 환원해야 텍스트 좌표와 같은 공간에서
   // 스냅·근접 매핑이 성립한다. 칠하기 전용(fill)·클립 전용(endPath) 경로는
   // 면/마스크지 결선이 아니므로 stroke 계열 paint일 때만 선분으로 채택한다.
-  const opList = await page.getOperatorList();
-  const OPS = pdfjsLib.OPS;
+    const opList = await boundedPdfWork(
+      page.getOperatorList(),
+      options.signal,
+      deadline,
+      () => loadingTask!.destroy(),
+    );
+    if (opList.fnArray.length > maxOperators) {
+      return pdfResourceLimit(`operators ${opList.fnArray.length} > ${maxOperators}`);
+    }
+    const OPS = pdfjsLib.OPS;
+    let pathValueCount = 0;
+    for (let i = 0; i < opList.fnArray.length; i++) {
+      if (opList.fnArray[i] !== OPS.constructPath) continue;
+      const args = opList.argsArray[i] as unknown[] | undefined;
+      const subpaths = args?.[1];
+      if (!Array.isArray(subpaths)) continue;
+      for (const raw of subpaths) {
+        if (!raw || typeof raw !== 'object' || !('length' in raw)) continue;
+        const length = Number((raw as ArrayLike<number>).length);
+        if (!Number.isSafeInteger(length) || length < 0) {
+          return pdfResourceLimit('invalid constructPath length');
+        }
+        pathValueCount += length;
+        if (pathValueCount > maxPathValues) {
+          return pdfResourceLimit(`path values ${pathValueCount} > ${maxPathValues}`);
+        }
+      }
+    }
   const STROKE_PAINTS = new Set<number>([
     OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke,
     OPS.closeFillStroke, OPS.closeEOFillStroke,
@@ -506,22 +636,37 @@ export async function parsePdfToSLD(
     ? parseScheduleTables(texts.map((t) => ({ s: t.text, x: t.x, y: t.y })), pageH)
     : [];
 
-  return {
-    components,
-    connections: snap.connections,
-    sourceTexts: texts.map((item) => ({
-      text: item.text,
-      position: {
-        x: Math.max(0, Math.min(100, (item.x / Math.max(1, pageW)) * 100)),
-        y: Math.max(0, Math.min(100, (item.y / Math.max(1, pageH)) * 100)),
-      },
-      confidence: 0.99,
-    })),
-    suggestedCalculations: [],
-    confidence,
-    ...(scheduleTables.length > 0 ? { scheduleTables } : {}),
-    rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text items, ${lines.length} line segments${structureNote}`,
-  };
+    return {
+      components,
+      connections: snap.connections,
+      sourceTexts: texts.map((item) => ({
+        text: item.text,
+        position: {
+          x: Math.max(0, Math.min(100, (item.x / Math.max(1, pageW)) * 100)),
+          y: Math.max(0, Math.min(100, (item.y / Math.max(1, pageH)) * 100)),
+        },
+        confidence: 0.99,
+      })),
+      suggestedCalculations: [],
+      confidence,
+      ...(scheduleTables.length > 0 ? { scheduleTables } : {}),
+      rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text items, ${lines.length} line segments${structureNote}`,
+    };
+  } catch (err) {
+    return {
+      components: [],
+      connections: [],
+      suggestedCalculations: [],
+      confidence: 0,
+      rawDescription: `PDF parse failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  } finally {
+    try {
+      page.cleanup();
+    } finally {
+      await loadingTask.destroy().catch(() => undefined);
+    }
+  }
 }
 
 function parseNodeCoords(nodeId: string): { x: number; y: number } | null {

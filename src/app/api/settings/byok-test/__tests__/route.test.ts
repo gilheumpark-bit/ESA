@@ -159,6 +159,26 @@ describe('POST /api/settings/byok-test', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  test('rejects an oversized chunked-style body before JSON parsing', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new Error('provider must not be contacted'),
+    );
+    const response = await POST(new NextRequest('http://localhost:3000/api/settings/byok-test', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'http://localhost:3000',
+      },
+      body: JSON.stringify({
+        provider: 'openai',
+        apiKey: 'x'.repeat(3_000),
+      }),
+    }));
+
+    expect(response.status).toBe(413);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   test('does not mark image-only candidates as compatible with text-based ESA analysis', async () => {
     const imageOnly = new Response(JSON.stringify({
       candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'abc' } }] } }],

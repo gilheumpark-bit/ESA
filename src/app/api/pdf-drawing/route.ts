@@ -7,7 +7,7 @@
  */
 
 import { applyRateLimit } from '@/lib/rate-limit';
-import { getFormFile } from '@/lib/api';
+import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
@@ -18,8 +18,10 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 
 export const runtime = 'nodejs';
+const PDF_FILE_MAX_BYTES = 32 * 1024 * 1024;
+const PDF_BODY_MAX_BYTES = PDF_FILE_MAX_BYTES + (2 * 1024 * 1024);
 
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest) {
   const timer = createRequestTimer();
 
   if (!isFeatureEnabled('DRAWING_PARSER')) {
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
       // 여기로 온다 — "multipart가 아니다"로 단정하면 오진이다(24.8MB 실도면
       // 실측 발각). 원인 중립으로 안내한다.
       return NextResponse.json(
-        { error: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 .pdf)인지, 파일이 100MB 이하인지 확인하세요.' },
+        { error: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 .pdf)인지, 파일이 32MB 이하인지 확인하세요.' },
         { status: 400 },
       );
     }
@@ -59,8 +61,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Only .pdf files are accepted.' }, { status: 400 });
     }
 
-    if (pdfFile.size > 100 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File too large (max 100MB).' }, { status: 400 });
+    if (pdfFile.size > PDF_FILE_MAX_BYTES) {
+      return NextResponse.json({ error: 'File too large (max 32MB).' }, { status: 413 });
     }
 
     const pagePart = formData.get('page');
@@ -70,7 +72,11 @@ export async function POST(req: NextRequest) {
     }
     const pdfBytes = await pdfFile.arrayBuffer();
 
-    const analysis = await parsePdfToSLD(pdfBytes, { pageNumber });
+    const analysis = await parsePdfToSLD(pdfBytes, {
+      pageNumber,
+      signal: req.signal,
+      deadlineMs: 30_000,
+    });
 
     // DXF 라우트와 동일 계약 — 파싱 실패는 success:true가 아니라 400이다.
     if (analysis.confidence === 0 && analysis.components.length === 0) {
@@ -133,3 +139,8 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withApiHandler(
+  { rateLimit: null, checkOrigin: false, maxBodySize: PDF_BODY_MAX_BYTES },
+  handlePost,
+);
