@@ -60,6 +60,7 @@
 | [DECISIONS](project/DECISIONS.md) | 현재 정본 | 유지해야 할 구조적 결정과 불변식 |
 | [SLD_V3_TRACEABILITY](project/SLD_V3_TRACEABILITY.md) | 현재 정본 | 설계 §1–15와 생산 코드·검증 연결 |
 | [도면 심사 단계 설계](project/design/2026-07-21-drawing-review-ladder.md) | 설계 참고 | 심사 강도와 역할 분리 |
+| [토폴로지 스냅·분류 재설계](project/design/2026-07-24-topology-snap-and-classification-redesign.md) | 설계 확정·실측 대기 | 스냅 허용반경 유도, 기기 분류 어휘 계층, 경로 탐색 비용 |
 | [HANDOFFS](project/HANDOFFS.md) | 역사 기록 색인 | 작업 시점별 인수인계와 검증 영수증 |
 
 ## 상세 설계와 실행 계획
