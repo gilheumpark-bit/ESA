@@ -337,7 +337,14 @@ test.describe('도면 분석', () => {
 
   test('공개 합성 DXF 업로드부터 기기·관계 결과까지 실주행', async ({ page }) => {
     await page.goto('/tools/sld');
-    await page.locator('input[accept=".dxf"]').setInputFiles('fixtures/drawings/synthetic/L1-01-basic-radial.dxf');
+    const dxfInput = page.locator('input[accept=".dxf"]');
+    await dxfInput.setInputFiles('fixtures/drawings/synthetic/L1-01-basic-radial.dxf');
+
+    // 브라우저가 이 파일에 붙인 MIME 을 기록해 둔다. OS 마다 다르고(Linux
+    // image/vnd.dxf · Windows 빈 문자열) 그 차이가 실제로 라우팅 버그를
+    // 만들었다. 다음에 이 테스트가 환경별로 갈리면 로그가 첫 단서다.
+    const mime = await dxfInput.evaluate((el) => (el as HTMLInputElement).files?.[0]?.type ?? '');
+    console.log(`[진단] .dxf MIME = ${JSON.stringify(mime)}`);
 
     // 이 단언은 "업로드 → DXF 파싱 → 기기·관계 분석 → 렌더" 왕복 전체를 기다린다.
     // Playwright 기본 expect 타임아웃 5초는 그 계약에 맞지 않는다 — 로컬(3테스트

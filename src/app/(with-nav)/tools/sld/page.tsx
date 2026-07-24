@@ -35,6 +35,7 @@ import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { documentKindOf } from '@/lib/document-kind';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
@@ -860,13 +861,15 @@ export default function SLDAnalysisPage() {
   // 중 하나가 영구 미도달이 된다.
   const handlePrimaryDocumentUpload = useCallback(async (file: File) => {
     setDrawingFile(file);
-    const extension = file.name.split('.').pop()?.toLowerCase();
-    if (file.type.startsWith('image/')) {
-      handleImageSelect(file);
-    } else if (extension === 'dxf') {
+    // 확장자 우선 — MIME 우선이면 Linux 에서 .dxf 가 image/vnd.dxf 로 잡혀
+    // 이미지 경로로 새어 나간다(document-kind.ts 주석에 실측 근거).
+    const kind = documentKindOf(file);
+    if (kind === 'dxf') {
       await handleDxfUpload(file);
-    } else if (extension === 'pdf') {
+    } else if (kind === 'pdf') {
       await handlePdfUpload(file);
+    } else if (kind === 'image') {
+      handleImageSelect(file);
     }
     await handleFullDocumentAnalyze(file);
   }, [handleDxfUpload, handleFullDocumentAnalyze, handleImageSelect, handlePdfUpload]);
