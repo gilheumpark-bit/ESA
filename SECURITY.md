@@ -66,6 +66,7 @@
 - 외부 AI 공급자별 프롬프트 주입·출력 품질은 실제 모델과 반복 표본으로 계속 검증해야 합니다.
 - Supabase, Stripe, Weaviate, Pinata의 운영 자격증명 왕복은 배포 환경마다 별도 확인해야 합니다.
 - 회사 기밀 도면, 실제 고객 개인정보, 운영 결제 데이터로 자동 QA를 실행하지 않습니다.
+- `npm audit` high 33건이 남아 있으며 전부 `brace-expansion <=5.0.7`의 ReDoS 하나에서 파생됩니다(minimatch → readdir-glob → archiver → exceljs, 그리고 eslint·jest 계열). 2026-07-25에 `overrides`로 `brace-expansion@5.0.8` 강제를 실제로 적용해 봤습니다 — `npm audit`은 0건이 됐지만 `minimatch@3`이 `TypeError: expand is not a function`으로 깨졌습니다(5.x가 기본 내보내기를 바꿨습니다). ESLint가 즉시 실패했고, 같은 `minimatch@3`을 `archiver`/`readdir-glob`도 쓰므로 Excel 내보내기가 테스트로는 안 잡히는 방식으로 깨질 수 있어 되돌렸습니다. npm이 제시하는 대안은 `exceljs@4.1.1`로의 semver-major 다운그레이드라 취약점 해소가 아니라 기능 후퇴입니다. ReDoS는 공격자가 glob 패턴을 제어할 때 도달하는데 이 앱의 glob은 전부 저장소 설정과 자체 생성 경로라 현재 도달 경로가 없습니다. 상류 `minimatch`가 patched `brace-expansion`을 받으면 재평가합니다.
 - RLS 정책이 `auth.uid()`에 묶여 있어, 브라우저 Supabase 클라이언트를 추가하면 Firebase 사용자에게는 `auth.uid()`가 NULL이라 own-row 정책이 전면 차단됩니다. 차단은 안전한 방향이지만 원인을 알기 어려운 장애로 나타납니다. Firebase 주체를 RLS로 실제 집행하려면 `request.jwt.claims` 기준으로 정책을 다시 써야 합니다.
 
 ## 배포 전 보안 확인
