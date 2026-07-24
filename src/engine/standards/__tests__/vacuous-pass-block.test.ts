@@ -38,9 +38,16 @@ describe('조건이 없는 조항은 PASS가 아니라 BLOCK이다', () => {
 
   test('조건 없는 조항을 평가하면 어떤 입력에도 PASS가 나오지 않는다', () => {
     const article = articleWithoutConditions();
+    // 배열 리터럴을 그대로 두면 빈 객체가 `{ voltageDropPercent?: undefined }`로
+    // 추론돼 Record<string, number>에 맞지 않는다. 명시적으로 고정한다.
+    const cases: Array<Record<string, number>> = [
+      {},
+      { voltageDropPercent: 0 },
+      { voltageDropPercent: 99 },
+    ];
     KEC_ARTICLES.set(article.id, article);
     try {
-      for (const params of [{}, { voltageDropPercent: 0 }, { voltageDropPercent: 99 }]) {
+      for (const params of cases) {
         const result = evaluateKEC(article.id, params);
         expect(result.judgment).toBe('BLOCK');
         expect(result.judgment).not.toBe('PASS');
