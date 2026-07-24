@@ -15,7 +15,7 @@ import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './en
 import { parseSpecText } from './spec-text';
 import { bindScheduleRow } from './schedule-row-binding';
 import { parseScheduleTables } from './schedule-table-parser';
-import { pdfjsNodeDocumentOptions } from '@/agent/drawing/pdfjs-assets';
+import { pdfjsNodeDocumentOptions } from './pdfjs-assets';
 
 // =========================================================================
 // PART 1 — Types

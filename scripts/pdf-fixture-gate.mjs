@@ -279,5 +279,30 @@ await sleep(800);
     `status ${r.status} findings ${JSON.stringify((r.json?.review?.findings ?? []).map(f => [f.rule, f.severity]))?.slice(0, 140)}`);
 }
 
+// ── 2026-07-23 표→판정 결박(H7) 회귀 잠금 R14 ────────────────────────────────
+// R14 — 케이블 스케줄 표는 결선(topology)을 못 믿어 conf 0.55로 강등되지만, 표 행
+// 데이터(텍스트 0.99)로는 판정할 수 있다. 헤더 행(REMARK/CABLE SCHEDULE 열) +
+// 데이터 행(차단기·케이블 쌍)이 있으면 review가 '생략'이 아니라 표 경로로 판정을
+// 낸다. 결선도에서 UNKNOWN이던 분기 케이블-차단기 쌍이 이 표로 해소된다.
+// EE-007 실측 표기: REMARK에 "MCCB 3P 225/200", CABLE에 "FCV 4sq"(허용전류 초과).
+const scheduleReview =
+  text(100, 760, 'CABLE SCHEDULE (B1F)') + text(300, 760, 'CABLE SCHEDULE (1F)') +
+  text(100, 720, 'NO') + text(180, 720, 'REMARK') + text(300, 720, 'CABLE SCHEDULE') +
+  text(100, 690, '1') + text(180, 690, 'MCCB 3P 225/200') + text(300, 690, 'FCV 4sq') +
+  text(100, 660, '2') + text(180, 660, 'MCCB 3P 100/150') + text(300, 660, 'CV 16sq') +
+  stroke(103, 758, 103, 655) + stroke(303, 758, 303, 655);
+await sleep(800);
+{
+  const r = await post('schedule-review.pdf', buildPdf(scheduleReview));
+  const review = r.json?.review;
+  const findings = review?.findings ?? [];
+  const cableFail = findings.some(f => f.rule === 'CABLE-AMPACITY' && f.severity === 'FAIL'
+    && String(f.limit?.source ?? '').includes('KEC'));
+  const atafFail = findings.some(f => f.rule === 'AT-LE-AF' && f.severity === 'FAIL');
+  check('R14 표 문서→판정: conf 0.55 강등에도 표 행으로 CABLE-AMPACITY FAIL + AT>AF FAIL 산출(생략 아님)',
+    r.status === 200 && review && !review.skipped && cableFail && atafFail,
+    `status ${r.status} skipped ${review?.skipped} findings ${JSON.stringify(findings.map(f => [f.rule, f.severity]))?.slice(0, 160)}`);
+}
+
 console.log(failures.length === 0 ? `\nGATE PASS (${totalChecks}/${totalChecks})` : `\nGATE FAIL — ${failures.length}/${totalChecks}건: ${failures.join(', ')}`);
 process.exit(failures.length === 0 ? 0 : 1);

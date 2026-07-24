@@ -5,7 +5,7 @@ import { createCanvas, DOMMatrix, ImageData, Path2D } from '@napi-rs/canvas';
 import { createImageVariants } from '../vision/image-variants';
 import { profileImage } from '../vision/image-quality';
 import type { ImageQualityProfile } from '../vision/evidence-types';
-import { pdfjsNodeDocumentOptions } from './pdfjs-assets';
+import { pdfjsNodeDocumentOptions } from '@/engine/topology/pdfjs-assets';
 
 export type PreparedFormatClass =
   | 'raster-image'

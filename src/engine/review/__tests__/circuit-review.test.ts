@@ -6,7 +6,7 @@
  * 표와 무관한 산식이라 독립 손계산 값으로 박는다.
  */
 
-import { reviewAnalysis } from '../circuit-review';
+import { reviewAnalysis, reviewScheduleTables } from '../circuit-review';
 import { getAmpacity } from '@/data/ampacity-tables/kec-ampacity';
 import type { SLDAnalysis, SLDComponent, SLDConnection } from '@/lib/sld-recognition';
 
@@ -294,5 +294,62 @@ describe('리포트 계약', () => {
     ]));
     expect(r.summary.fail).toBeGreaterThanOrEqual(1);
     expect(r.disclaimer).toContain('유자격');
+  });
+});
+
+describe('reviewScheduleTables — 케이블 스케줄 표 판정 (H7)', () => {
+  // KIMM EE-007 실측 표기: REMARK에 차단기, CABLE에 케이블. 결선(topology) 없이
+  // 표 행만으로 판정한다 — conf 0.55(결선 불신)여도 표 행은 판정 가능.
+  const rowsOf = (cells: Record<string, string>[]) => [{
+    title: 'CABLE SCHEDULE',
+    rows: cells.map((c) => ({ cells: c })),
+  }];
+
+  it('표 행의 차단기-케이블을 결선도와 동일 규칙으로 판정한다', () => {
+    // 200AT vs 4sq(허용전류 ~한참 미달) → 케이블이 먼저 위험 FAIL
+    const r = reviewScheduleTables(rowsOf([
+      { panelNo: 'PNL-1', no: '1', remark: 'MCCB 3P 225/200', cable: 'FCV 4sq' },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('FAIL');
+    expect(f?.limit?.source).toContain('KEC');           // 출처 결박
+    expect(f?.subject).toContain('PNL-1');                // 피더 식별
+  });
+
+  it('여유 충분한 행은 PASS + 표준 역산 제안 없음', () => {
+    const amp = getAmpacity({ size: 16, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
+    const safe = Math.floor(amp * 0.5);
+    const r = reviewScheduleTables(rowsOf([
+      { no: '2', remark: `MCCB 3P 225/${safe}`, cable: 'CV 16sq' },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('PASS');
+    expect(f?.proposal).toBeUndefined();
+  });
+
+  it('표 행의 AT>AF 표기 오류도 잡는다(결선 불필요)', () => {
+    const r = reviewScheduleTables(rowsOf([
+      { no: '3', remark: 'MCCB 3P 100/150', cable: 'CV 16sq' },
+    ]));
+    const atle = r.findings.find((x) => x.rule === 'AT-LE-AF');
+    expect(atle?.severity).toBe('FAIL');
+    expect(atle?.verdict).toContain('150AT');
+  });
+
+  it('케이블 열이 비면 그 행은 케이블 판정을 만들지 않는다(무발명)', () => {
+    const r = reviewScheduleTables(rowsOf([
+      { no: '4', remark: 'MCCB 3P 100/50', cable: '' },
+    ]));
+    expect(r.findings.some((x) => x.rule === 'CABLE-AMPACITY')).toBe(false);
+    expect(r.coverage.breakersWithCable).toBe(0);
+  });
+
+  it('차단기 정격 미파싱 행은 건너뛰고 커버리지에 반영', () => {
+    const r = reviewScheduleTables(rowsOf([
+      { no: '5', remark: '예비', cable: 'CV 16sq' },
+    ]));
+    expect(r.coverage.breakersTotal).toBe(1);
+    expect(r.coverage.breakersRatedParsed).toBe(0);
+    expect(r.findings).toHaveLength(0);
   });
 });

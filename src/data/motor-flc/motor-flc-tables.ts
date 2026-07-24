@@ -8,7 +8,23 @@
  * PART 1: 3-Phase AC motors (Table 430.250)
  * PART 2: Single-Phase AC motors (Table 430.248)
  * PART 3: Lookup functions
+ *
+ * ⚠ 미검증 구간(2026-07-23 감사): 3상 표의 250HP 이상 행은 내부 정합성 이상이
+ * 있다 — A/HP 비가 ≤200HP 구간에서 1.20~1.25로 평탄하다가 250HP에서 1.05로
+ * 12% 계단 하락한다(전동기가 커질수록 완만히 감소해야 정상). ≤200HP 행은
+ * 별도 대조에서 NEC 430.250과 일치했으므로, ≥250HP만 다른 출처/오기가 섞였을
+ * 강한 정황이다. **NEC 430.250 원문을 확보하지 못해 정답값을 넣지 않는다**
+ * (추정을 임계값으로 인코딩 금지 — 잘못된 값이 화재 방향 오차가 될 수 있다).
+ * 이 구간을 실제 판정에 쓰려면 getMotorFLC3PH의 UNVERIFIED_FLC_MIN_HP 가드를
+ * 먼저 해소하라. 현재 이 표의 lookup 함수는 어떤 계산기에서도 호출되지 않는다
+ * (motor-capacity는 Irated를 직접 산식으로 구한다 — 실호출 0, 위험 미발화).
  */
+
+/**
+ * 이 HP 이상 3상 FLC 행은 내부 불연속으로 미검증(위 주석). 소비처가 생기면
+ * 이 값 이상에서 판정을 HOLD로 유도해 미검증 값이 조용히 통과하지 않게 한다.
+ */
+export const UNVERIFIED_FLC_MIN_HP = 250;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 3-Phase AC Motor FLC (Table 430.250)
@@ -123,6 +139,14 @@ export function getMotorFLC3PH(hp: number, voltage: number): number | null {
     );
   if (!entry) return null;
   return entry[voltageKey3PH(voltage)];
+}
+
+/**
+ * 조회하려는 HP가 미검증 3상 FLC 구간(≥250HP)에 드는지. 소비처는 true면 그 값을
+ * 확정 판정에 쓰지 말고 HOLD/재확인으로 처리해야 한다(내부 불연속·NEC 원문 미확보).
+ */
+export function isMotorFLC3PHUnverified(hp: number): boolean {
+  return hp >= UNVERIFIED_FLC_MIN_HP;
 }
 
 /**

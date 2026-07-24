@@ -20,7 +20,9 @@ import {
   assertOneOf,
   round,
 } from '../types';
-import { getMotorFLC3PH, getMotorFLC1PH } from '@/data/motor-flc/motor-flc-tables';
+// NOTE: FLC 표(getMotorFLC3PH/1PH)는 여기서 쓰지 않는다 — 정격전류는 아래 Step 4에서
+// 선정 kW로 직접 산식(I = P/(√3·V·pf·η))으로 구한다. 죽은 import를 제거해 표가
+// 이 계산기에 배선됐다는 착시를 없앤다(FLC 표 ≥250HP 미검증 구간과 무관함을 명시).
 import { MOTOR_STARTING } from '@/engine/constants/electrical';
 
 // ── Input / Output ──────────────────────────────────────────────────────────

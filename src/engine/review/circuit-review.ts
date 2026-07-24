@@ -120,6 +120,228 @@ function smallestCableFor(
   return null;
 }
 
+/**
+ * 차단기 트립 vs 케이블 KEC 허용전류 판정 — 단일 정본.
+ *
+ * 입력원이 둘이라 함수로 뽑는다: ① 결선도(연결에 결속된 케이블) ② 케이블 스케줄
+ * 표(행마다 차단기·케이블 쌍). 같은 규칙이 두 벌로 갈라지면 한쪽만 고쳐지므로
+ * (spec-text 복제본 드리프트 실측) 판정은 여기 한 곳에만 둔다.
+ */
+function judgeCableAmpacity(input: {
+  tripA: number;
+  sq: number;
+  cableType?: string;
+  parallel: number;
+  subject: string;
+  componentId?: string;
+}): ReviewFinding {
+  const { tripA, sq, cableType, parallel, subject, componentId } = input;
+  const idField = componentId ? { componentId } : {};
+
+  if (!isKecSize(sq)) {
+    return {
+      rule: 'CABLE-AMPACITY',
+      severity: 'UNKNOWN',
+      subject,
+      ...idField,
+      given: { trip: `${tripA}A`, cable: `${sq}sq ${cableType ?? ''}`.trim() },
+      verdict: `${sq}sq는 KEC 표준 굵기가 아님 — 표기 재확인 필요(판정 보류)`,
+    };
+  }
+
+  const insulation = INSULATION_BY_CABLE[(cableType ?? 'CV').toUpperCase()] ?? 'XLPE';
+  // parallelCount는 병렬 케이블 조수이지 집합 회로 수가 아니다. 포설배치·간격·집합
+  // 회로 수가 없으면 KEC 집합보정계수를 정할 수 없으므로 단조 허용전류의 조수배는
+  // '집합·배치 미반영 명목합계'로만 제시한다. 이 합계 이내는 UNKNOWN, 이 합계조차
+  // 초과한 경우에만 어떤 추가 보정을 적용해도 부합할 수 없으므로 FAIL이다.
+  let ampacity: number;
+  let sourceKey: string;
+  try {
+    const r = getAmpacity({ size: sq, conductor: 'Cu', insulation, installation: 'conduit' });
+    ampacity = r.corrected * parallel;
+    sourceKey = `KEC Cu_${insulation}_conduit ${sq}sq${parallel > 1 ? ` ×${parallel}조(집합·배치 미반영 명목합계)` : ''}`;
+  } catch {
+    return {
+      rule: 'CABLE-AMPACITY',
+      severity: 'UNKNOWN',
+      subject,
+      ...idField,
+      given: { trip: `${tripA}A`, cable: `${sq}sq` },
+      verdict: `KEC 표에 ${sq}sq/${insulation} 조합 없음 — 판정 보류`,
+    };
+  }
+
+  const base = {
+    rule: 'CABLE-AMPACITY' as const,
+    subject,
+    ...idField,
+    given: {
+      trip: `${tripA}A`,
+      cable: `${sq}sq ${cableType ?? '(종류 미기재→XLPE 가정)'}`.trim(),
+    },
+    computed: { 허용전류: `${ampacity}A` },
+    limit: { value: `${ampacity}A`, source: sourceKey },
+  };
+
+  if (parallel > 1) {
+    return {
+      ...base,
+      severity: tripA > ampacity ? 'FAIL' : 'UNKNOWN',
+      verdict: tripA > ampacity
+        ? `차단기 ${tripA}A > 병렬 ${parallel}조의 집합보정 전 명목 합계 ${ampacity}A — 관로·30°C 가정에서도 용량 부족`
+        : `차단기 ${tripA}A가 병렬 ${parallel}조의 명목 합계 ${ampacity}A 이내이나 포설배치·간격·집합 회로 수 미기재 — 최종 허용전류 판정 보류`,
+    };
+  }
+
+  // 무발명 시정 제안: 케이블을 트립 견디는 최소 KEC 굵기로 상향(표 역산), 또는
+  // 차단기 트립을 케이블 허용전류 이내 최대 표준값으로 하향(정격 사다리).
+  const cableProposal: ReviewProposalOption[] = [];
+  const cableUp = smallestCableFor(tripA, insulation, 'conduit');
+  if (cableUp && cableUp.sq > sq) {
+    cableProposal.push({
+      action: `케이블을 ${cableUp.sq}sq 이상으로 (허용전류 ${cableUp.ampacity}A ≥ 트립 ${tripA}A)`,
+      basis: `KEC 허용전류표 Cu_${insulation}_conduit`,
+    });
+  }
+  const tripDownToCable = largestTripAtMost(ampacity);
+  if (tripDownToCable !== null) {
+    cableProposal.push({
+      action: `차단기 트립을 ${tripDownToCable}AT 이하로 (케이블 허용전류 ${ampacity}A 이내)`,
+      basis: `${IEC_TRIP_SOURCE} + KEC 허용전류`,
+    });
+  }
+  const cableProposalField = cableProposal.length > 0 ? { proposal: cableProposal } : {};
+
+  if (tripA > ampacity) {
+    return {
+      ...base,
+      severity: 'FAIL',
+      verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C)`,
+      ...cableProposalField,
+    };
+  }
+  if (tripA > ampacity * 0.8) {
+    return {
+      ...base,
+      severity: 'WARN',
+      verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C)`,
+      ...cableProposalField,
+    };
+  }
+  return {
+    ...base,
+    severity: 'PASS',
+    verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 관로·30°C)`,
+  };
+}
+
+/** 케이블 스케줄 표 한 행 — 열 이름은 schedule-table-parser의 정규화 이름을 따른다. */
+interface ScheduleRowLike {
+  cells: Record<string, string>;
+}
+interface ScheduleTableLike {
+  title: string;
+  rows: ScheduleRowLike[];
+}
+
+/** 표 행의 피더 식별자 — 있는 것만 이어 붙인다(없으면 행 번호). */
+function subjectOfRow(cells: Record<string, string>, index: number): string {
+  const parts = [cells.panelNo, cells.no, cells.from, cells.to].filter(
+    (v) => typeof v === 'string' && v.trim().length > 0,
+  );
+  return parts.length > 0 ? parts.join(' ') : `표 ${index + 1}행`;
+}
+
+/**
+ * 케이블 스케줄 표 → 부합 판정 (중급).
+ *
+ * 왜 필요한가: 표 문서는 격자 괘선이 결선 행세를 해 topology 신뢰도가 0.55로
+ * 강등된다. 그러나 그것은 *결선*을 못 믿는다는 뜻이지 *표 행 데이터*가 부정확
+ * 하다는 뜻이 아니다(텍스트 추출 신뢰도는 0.99). 결선도에서 UNKNOWN이던
+ * 차단기-케이블 쌍이 이 표에는 행마다 명시돼 있으므로, topology 없이도 판정할
+ * 수 있다. 두 신뢰도 축을 뭉뚱그려 표를 통째로 버리던 것이 UNKNOWN 잔존의 원인.
+ *
+ * 판정 규칙은 결선도 경로와 동일한 정본(judgeCableAmpacity)을 쓴다.
+ */
+export function reviewScheduleTables(tables: ScheduleTableLike[]): ReviewReport {
+  const findings: ReviewFinding[] = [];
+  let rowsTotal = 0;
+  let rowsRated = 0;
+  let rowsWithCable = 0;
+
+  for (const table of tables) {
+    for (const [index, row] of table.rows.entries()) {
+      rowsTotal += 1;
+      const cells = row.cells ?? {};
+      // 차단기는 REMARK/비고 열 관례(실측 KIMM EE-007: "MCCB 3P 125/50").
+      // 열 이름이 갈릴 수 있어 remark가 비면 행 전체를 이어 붙여 재시도한다.
+      const breakerText = cells.remark ?? '';
+      const cableText = cells.cable ?? '';
+      const rowText = Object.values(cells).join(' ');
+
+      const bSpec = parseSpecText(breakerText.trim().length > 0 ? breakerText : rowText);
+      const tripA = bSpec.tripA ?? bSpec.current;
+      if (tripA == null) continue;
+      rowsRated += 1;
+
+      const subject = subjectOfRow(cells, index);
+
+      // AT ≤ AF — 표에 프레임·트립이 함께 적히므로 결선 없이도 판정 가능.
+      if (bSpec.frameA !== undefined && bSpec.tripA !== undefined && bSpec.tripA > bSpec.frameA) {
+        const proposal: ReviewProposalOption[] = [];
+        const tripDown = largestTripAtMost(bSpec.frameA);
+        const frameUp = smallestFrameFor(bSpec.tripA);
+        if (tripDown !== null) {
+          proposal.push({
+            action: `트립을 ${tripDown}AT 이하로 (프레임 ${bSpec.frameA}AF 유지)`,
+            basis: IEC_TRIP_SOURCE,
+          });
+        }
+        if (frameUp !== null) {
+          proposal.push({
+            action: `프레임을 ${frameUp}AF 이상으로 (트립 ${bSpec.tripA}AT 유지)`,
+            basis: IEC_FRAME_SOURCE,
+          });
+        }
+        findings.push({
+          rule: 'AT-LE-AF',
+          severity: 'FAIL',
+          subject,
+          given: { rating: `${bSpec.frameA}AF/${bSpec.tripA}AT` },
+          verdict: `트립 ${bSpec.tripA}AT가 프레임 ${bSpec.frameA}AF를 초과 — 표기 오류 또는 선정 오류`,
+          ...(proposal.length > 0 ? { proposal } : {}),
+        });
+      }
+
+      // 케이블 허용전류 — 케이블 열이 비면 판정 대상이 아니다(무발명: 없는 값 추정 금지).
+      if (cableText.trim().length === 0) continue;
+      const cSpec = parseSpecText(cableText);
+      const sq = cSpec.conductorSize ?? parseSq(cableText);
+      if (sq == null) continue;
+      rowsWithCable += 1;
+
+      findings.push(judgeCableAmpacity({
+        tripA,
+        sq,
+        cableType: cSpec.cableType,
+        parallel: cSpec.parallelCount && cSpec.parallelCount >= 2 ? cSpec.parallelCount : 1,
+        subject,
+      }));
+    }
+  }
+
+  return {
+    findings,
+    summary: summarize(findings),
+    coverage: {
+      breakersTotal: rowsTotal,
+      breakersRatedParsed: rowsRated,
+      breakersWithCable: rowsWithCable,
+    },
+    disclaimer: DISCLAIMER,
+  };
+}
+
 export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   const findings: ReviewFinding[] = [];
   const breakers = analysis.components.filter((c) => c.type === 'breaker');
@@ -191,105 +413,14 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
 
     // 여러 케이블이 결속되면 가장 가는 것이 병목이다.
     const worst = cables.reduce((a, c) => (c.sq < a.sq ? c : a));
-    if (!isKecSize(worst.sq)) {
-      findings.push({
-        rule: 'CABLE-AMPACITY',
-        severity: 'UNKNOWN',
-        subject: subjectOf(b),
-        componentId: b.id,
-        given: { trip: `${tripA}A`, cable: `${worst.sq}sq ${worst.cableType ?? ''}`.trim() },
-        verdict: `${worst.sq}sq는 KEC 표준 굵기가 아님 — 표기 재확인 필요(판정 보류)`,
-      });
-      continue;
-    }
-    const insulation = INSULATION_BY_CABLE[(worst.cableType ?? 'CV').toUpperCase()] ?? 'XLPE';
-    // parallelCount는 병렬 케이블 조수이지 집합 회로 수가 아니다. 포설배치·간격·집합
-    // 회로 수가 없으면 KEC 집합보정계수를 정할 수 없으므로 단조 허용전류의 조수배는
-    // '집합·배치 미반영 명목합계'로만 제시한다. 이 합계 이내는 UNKNOWN, 이 합계조차
-    // 초과한 경우에만 어떤 추가 보정을 적용해도 부합할 수 없으므로 FAIL이다.
-    const parallel = worst.parallel;
-    let ampacity: number;
-    let sourceKey: string;
-    try {
-      const r = getAmpacity({ size: worst.sq, conductor: 'Cu', insulation, installation: 'conduit' });
-      ampacity = r.corrected * parallel;
-      sourceKey = `KEC Cu_${insulation}_conduit ${worst.sq}sq${parallel > 1 ? ` ×${parallel}조(집합·배치 미반영 명목합계)` : ''}`;
-    } catch {
-      findings.push({
-        rule: 'CABLE-AMPACITY',
-        severity: 'UNKNOWN',
-        subject: subjectOf(b),
-        componentId: b.id,
-        given: { trip: `${tripA}A`, cable: `${worst.sq}sq` },
-        verdict: `KEC 표에 ${worst.sq}sq/${insulation} 조합 없음 — 판정 보류`,
-      });
-      continue;
-    }
-
-    const base = {
-      rule: 'CABLE-AMPACITY' as const,
+    findings.push(judgeCableAmpacity({
+      tripA,
+      sq: worst.sq,
+      cableType: worst.cableType,
+      parallel: worst.parallel,
       subject: subjectOf(b),
       componentId: b.id,
-      given: {
-        trip: `${tripA}A`,
-        cable: `${worst.sq}sq ${worst.cableType ?? '(종류 미기재→XLPE 가정)'}`.trim(),
-      },
-      computed: { 허용전류: `${ampacity}A` },
-      limit: { value: `${ampacity}A`, source: sourceKey },
-    };
-
-    if (parallel > 1) {
-      findings.push({
-        ...base,
-        severity: tripA > ampacity ? 'FAIL' : 'UNKNOWN',
-        verdict: tripA > ampacity
-          ? `차단기 ${tripA}A > 병렬 ${parallel}조의 집합보정 전 명목 합계 ${ampacity}A — 관로·30°C 가정에서도 용량 부족`
-          : `차단기 ${tripA}A가 병렬 ${parallel}조의 명목 합계 ${ampacity}A 이내이나 포설배치·간격·집합 회로 수 미기재 — 최종 허용전류 판정 보류`,
-      });
-      continue;
-    }
-
-    // 무발명 시정 제안: 케이블을 트립 견디는 최소 KEC 굵기로 상향(표 역산), 또는
-    // 차단기 트립을 케이블 허용전류 이내 최대 표준값으로 하향(정격 사다리). 같은
-    // 공사방법(관로)으로 역산해 허용전류를 비교 가능하게 맞춘다.
-    const cableProposal: ReviewProposalOption[] = [];
-    const cableUp = smallestCableFor(tripA, insulation, 'conduit');
-    if (cableUp && cableUp.sq > worst.sq) {
-      cableProposal.push({
-        action: `케이블을 ${cableUp.sq}sq 이상으로 (허용전류 ${cableUp.ampacity}A ≥ 트립 ${tripA}A)`,
-        basis: `KEC 허용전류표 Cu_${insulation}_conduit`,
-      });
-    }
-    const tripDownToCable = largestTripAtMost(ampacity);
-    if (tripDownToCable !== null) {
-      cableProposal.push({
-        action: `차단기 트립을 ${tripDownToCable}AT 이하로 (케이블 허용전류 ${ampacity}A 이내)`,
-        basis: `${IEC_TRIP_SOURCE} + KEC 허용전류`,
-      });
-    }
-    const cableProposalField =
-      cableProposal.length > 0 ? { proposal: cableProposal } : {};
-    if (tripA > ampacity) {
-      findings.push({
-        ...base,
-        severity: 'FAIL',
-        verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C)`,
-        ...cableProposalField,
-      });
-    } else if (tripA > ampacity * 0.8) {
-      findings.push({
-        ...base,
-        severity: 'WARN',
-        verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C)`,
-        ...cableProposalField,
-      });
-    } else {
-      findings.push({
-        ...base,
-        severity: 'PASS',
-        verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 관로·30°C)`,
-      });
-    }
+    }));
   }
 
   // ── 규칙 3: TR 정격 2차전류 vs 페이지 최대 차단기 (정보 제공 — WARN까지만) ──
@@ -381,6 +512,20 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     });
   }
 
+  return {
+    findings,
+    summary: summarize(findings),
+    coverage: {
+      breakersTotal: breakers.length,
+      breakersRatedParsed: ratedParsed,
+      breakersWithCable,
+    },
+    disclaimer: DISCLAIMER,
+  };
+}
+
+/** severity 집계 — reviewAnalysis(결선도)와 reviewScheduleTables(표) 공용. */
+function summarize(findings: ReviewFinding[]): ReviewReport['summary'] {
   const summary = { pass: 0, warn: 0, fail: 0, unknown: 0, info: 0 };
   for (const f of findings) {
     if (f.severity === 'PASS') summary.pass += 1;
@@ -389,17 +534,7 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     else if (f.severity === 'INFO') summary.info += 1;
     else summary.unknown += 1;
   }
-
-  return {
-    findings,
-    summary,
-    coverage: {
-      breakersTotal: breakers.length,
-      breakersRatedParsed: ratedParsed,
-      breakersWithCable,
-    },
-    disclaimer: DISCLAIMER,
-  };
+  return summary;
 }
 
 function subjectOf(c: SLDComponent): string {

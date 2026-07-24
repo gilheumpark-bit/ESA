@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parsePdfToSLD } from '@/engine/topology/pdf-vector-parser';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
-import { reviewAnalysis } from '@/engine/review/circuit-review';
+import { reviewAnalysis, reviewScheduleTables } from '@/engine/review/circuit-review';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
@@ -94,10 +94,14 @@ async function handlePost(req: NextRequest) {
     const validation = topology.validate();
     const calcChain = generateCalcChainFromSLD(analysis);
     // 초급 하이브리드 검토(계산+기준+결론) — 구조 신뢰가 성립한 추출(0.85)에만.
-    // 표 문서·격자 의심(0.55 이하)의 추출로 부합 판정을 내면 false-PASS 위험.
-    const review = analysis.confidence >= 0.85
-      ? reviewAnalysis(analysis)
-      : { skipped: true as const, reason: `confidence ${analysis.confidence} — 구조 신뢰 미달(표 문서/스캔/격자 의심)로 부합 판정 생략` };
+    // 표 문서·격자 의심(0.55 이하)의 추출로 결선 기반 부합 판정을 내면 false-PASS 위험.
+    // 단, 표 문서면 결선을 못 믿을 뿐 표 행 데이터(텍스트 0.99)는 판정 가능하므로
+    // scheduleTables가 있으면 표 경로로 판정한다(H7: UNKNOWN 잔존 해소).
+    const review = analysis.scheduleTables && analysis.scheduleTables.length > 0
+      ? reviewScheduleTables(analysis.scheduleTables)
+      : analysis.confidence >= 0.85
+        ? reviewAnalysis(analysis)
+        : { skipped: true as const, reason: `confidence ${analysis.confidence} — 구조 신뢰 미달(표 문서/스캔/격자 의심)로 부합 판정 생략` };
 
     apiLog({
       level: 'info', event: 'pdf-drawing-parse', route: '/api/pdf-drawing',
