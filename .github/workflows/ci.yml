@@ -77,3 +77,18 @@ jobs:
           curl --fail --silent http://127.0.0.1:3010/ > /dev/null
           npm run gate:pdf -- http://127.0.0.1:3010
           BASE_URL=http://127.0.0.1:3010 npx playwright test
+
+      # E2E 실패는 스크린샷과 페이지 스냅샷 없이는 진단할 수 없다. DXF 실주행이
+      # CI 에서만 실패하는데(run 30132954958) 로컬은 standalone·next start 양쪽
+      # 모두 통과라 원격 산출물이 유일한 증거원이다. 서버 로그도 같이 올린다 —
+      # 화면에 아무것도 안 나온 이유가 API 쪽일 수 있다.
+      - name: Upload E2E failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-evidence
+          path: |
+            test-results/
+            /tmp/esa-next.log
+          retention-days: 7
+          if-no-files-found: warn
