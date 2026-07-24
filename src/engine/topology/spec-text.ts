@@ -20,19 +20,32 @@ export interface ParsedSpec {
   tripA?: number;
   /** 병렬 다조 수 — "150sq x 2"·"2조" 등. 허용전류는 조수배(버그 사냥 F5) */
   parallelCount?: number;
+  /** 도체 재질 — AL/알루미늄 명시 시 'Al'. 미상은 undefined(판정층이 보수 처리·CRIT). */
+  conductor?: 'Cu' | 'Al';
 }
 
 export function parseSpecText(text: string): ParsedSpec {
   const spec: ParsedSpec = {};
 
-  // 케이블 종류: CV, XLPE, HIV, FR-CV 등
-  const cableMatch = text.match(/\b(FR-CV|CV|XLPE|HIV|TFR-CV|HFIX|IV|VV)\b/i);
+  // 케이블 종류: CV, XLPE, HIV, FR-CV, FCV(난연 CV) 등. 긴 토큰을 먼저 둬 부분매칭
+  // 방지. FCV/F-CV는 INSULATION_BY_CABLE엔 있으나 파서가 못 잡아 절연 미상으로
+  // 빠지던 커버리지 갭(도메인 심사 수리 중 발각).
+  const cableMatch = text.match(/\b(TFR-CV|FR-CV|F-CV|FCV|CV|XLPE|HFIX|HIV|IV|VV)\b/i);
   if (cableMatch) spec.cableType = cableMatch[1].toUpperCase();
+
+  // 도체 재질: AL/알루미늄 명시 시 Al. 미상이면 undefined — 판정층은 미상을 Cu로
+  // 낙관하지 않고 보수 처리한다(도메인 심사 HIGH: Al을 Cu로 판정해 ~28% 과대평가).
+  if (/\bAL\b|알루미늄|알미늄/i.test(text)) spec.conductor = 'Al';
+  else if (/\bCU\b|구리|동선/i.test(text)) spec.conductor = 'Cu';
 
   // 병렬 다조: "150sq x 2"·"150sq×2"·"2조"·"P2" — 허용전류가 조수배가 되므로
   // 무시하면 옳은 도면을 과전류로 오판(버그 사냥 F5). 단면적 뒤 배수 또는 "N조".
   // "N조"는 조명/조립 등과 구분 위해 조 뒤 한글 배제(\b는 한글에 안 걸림).
-  const parMatch = text.match(/(?:sq|mm2|㎟)\s*[x×*]\s*(\d)/i) || text.match(/(\d)\s*조(?![가-힣])/);
+  // 배수 뒤 C는 코어수(다심)지 병렬이 아니다 — "16sq×4C"를 4조로 오독 금지
+  // (도메인 심사 CRIT: 다심을 병렬로 오독해 허용전류 ×N false-PASS). 단 C가 단어
+  // 경계(코어수 "4C")일 때만 배제하고, 케이블 타입 "CV"의 C(뒤에 V가 이어짐)는
+  // 삼키지 않는다 — `\b`로 한정(재심사 회귀 b: "16SQ×2 CV"의 병렬 2 유실 방지).
+  const parMatch = text.match(/(?:sq|mm2|㎟)\s*[x×*]\s*(\d)(?!\s*C\b)/i) || text.match(/(\d)\s*조(?![가-힣])/);
   if (parMatch) {
     const n = parseInt(parMatch[1], 10);
     if (n >= 2 && n <= 9) spec.parallelCount = n;
@@ -76,17 +89,26 @@ export function parseSpecText(text: string): ParsedSpec {
   const polesMatch = rest.match(/(\d)\s*P\b/i);
   if (polesMatch) spec.poles = `${polesMatch[1]}P`;
   const TRIP_TAIL = String.raw`(?!\d)(?!\s*[Vv])(?!\s*mA)`;
-  let ftMatch = rest.match(/(\d{2,4})\s*AF\s*[/-]\s*(\d{2,4})\s*AT\b/i);
+  // AF/AT 사이 구분자는 슬래시·하이픈·공백 모두 허용 — 표의 별도 하위칸이 공백
+  // 결합돼 "200AF 225AT"로 오면 슬래시 전용 정규식은 AT>AF 오류를 놓친다(도메인 심사 HIGH).
+  let ftMatch = rest.match(/(\d{2,4})\s*AF\s*[/\s-]*(\d{2,4})\s*AT\b/i);
   let ftExplicit = ftMatch !== null; // AF/AT 명시 표기는 타당성 검사 면제
   if (!ftMatch) ftMatch = rest.match(new RegExp(String.raw`\dP\s*[-\s]\s*(\d{2,4})\s*\/\s*(\d{2,4})` + TRIP_TAIL, 'i'));
-  if (!ftMatch && /\b(MCCB|ELCB|ELB|ACB|VCB|MCB|CB|차단기|누전차단기)\b/i.test(text)) {
+  // ASCII 약어는 \b, 한글 "차단기"는 \b가 안 걸리므로 경계 없이 부분매칭(누전/배선용차단기 포함).
+  // NFB(No-Fuse Breaker) 추가 — 국내 실도면 관용 약어(도메인 심사 MED: NFB·한글 라벨 스킵).
+  if (!ftMatch && /\b(?:MCCB|ELCB|ELB|ACB|VCB|MCB|NFB|CB)\b|차단기/i.test(text)) {
     ftMatch = rest.match(new RegExp(String.raw`(\d{2,4})\s*\/\s*(\d{2,4})` + TRIP_TAIL));
   }
   if (ftMatch) {
     const f = parseFloat(ftMatch[1]);
     const t = parseFloat(ftMatch[2]);
-    // 날짜(앞자리 0)·비정격(프레임>6300A MCCB 최대) 배제 — 명시 AF/AT는 예외.
-    const looksDate = /^0\d/.test(ftMatch[1]) || /^0\d/.test(ftMatch[2]);
+    // 날짜 배제: 앞자리 0(04월) + 연/월 쌍("12/2021"·"2021/12"). 4자리 정격(2000AF)은
+    // 연도가 아니므로 보존한다(도메인 심사 HIGH: Q4 날짜를 정격으로 발명).
+    const isYear = (s: string) => /^(?:19|20)\d\d$/.test(s);
+    const isMonth = (s: string) => { const n = Number(s); return s.length <= 2 && n >= 1 && n <= 12; };
+    const looksDate = /^0\d/.test(ftMatch[1]) || /^0\d/.test(ftMatch[2])
+      || (isMonth(ftMatch[1]) && isYear(ftMatch[2]))
+      || (isYear(ftMatch[1]) && isMonth(ftMatch[2]));
     if (ftExplicit || (!looksDate && f <= 6300 && t <= 6300)) {
       spec.frameA = f;
       spec.tripA = t;

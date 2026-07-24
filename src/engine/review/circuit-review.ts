@@ -68,7 +68,7 @@ const DISCLAIMER =
 
 // 도면 케이블 표기 → KEC 절연 매핑 (국내 표기 관례)
 const INSULATION_BY_CABLE: Record<string, InsulationType> = {
-  CV: 'XLPE', FCV: 'XLPE', 'FR-CV': 'XLPE', 'TFR-CV': 'XLPE', XLPE: 'XLPE',
+  CV: 'XLPE', FCV: 'XLPE', 'F-CV': 'XLPE', 'FR-CV': 'XLPE', 'TFR-CV': 'XLPE', XLPE: 'XLPE',
   HIV: 'PVC', IV: 'PVC', VV: 'PVC', HFIX: 'PVC',
 };
 
@@ -87,7 +87,11 @@ function deriveSpec(c: SLDComponent) {
 
 function parseSq(conductorSize?: string): number | null {
   if (!conductorSize) return null;
-  const m = conductorSize.match(/(\d+(?:\.\d+)?)/);
+  // 코어수 토큰(4C·3C×·무공백 "4C16")을 먼저 들어낸다 — "4C 16"의 4(코어)를 굵기로
+  // 오독 금지(도메인 심사 MED). C 뒤가 영문자면(CV 등 케이블 타입) 코어가 아니므로
+  // 보존 — 부정탐색으로 한정(재심사 R2: "4C16" 무공백형도 스트립).
+  const stripped = conductorSize.replace(/\d+\s*C(?![A-Za-z])/gi, ' ');
+  const m = stripped.match(/(\d+(?:\.\d+)?)/);
   if (!m) return null;
   const v = parseFloat(m[1]);
   return Number.isFinite(v) ? v : null;
@@ -107,10 +111,11 @@ function smallestCableFor(
   tripA: number,
   insulation: InsulationType,
   installation: InstallationMethod,
+  conductor: 'Cu' | 'Al' = 'Cu',
 ): { sq: number; ampacity: number } | null {
   for (const size of KEC_CABLE_SIZES) {
     try {
-      const r = getAmpacity({ size, conductor: 'Cu', insulation, installation });
+      const r = getAmpacity({ size, conductor, insulation, installation });
       const amp = r.corrected;
       if (amp >= tripA) return { sq: size, ampacity: amp };
     } catch {
@@ -131,6 +136,7 @@ function judgeCableAmpacity(input: {
   tripA: number;
   sq: number;
   cableType?: string;
+  conductor?: 'Cu' | 'Al';
   parallel: number;
   subject: string;
   componentId?: string;
@@ -149,7 +155,22 @@ function judgeCableAmpacity(input: {
     };
   }
 
-  const insulation = INSULATION_BY_CABLE[(cableType ?? 'CV').toUpperCase()] ?? 'XLPE';
+  // 절연 등급은 케이블 종류에서 온다 — 종류 미기재/미매핑이면 XLPE(최고 허용전류)로
+  // 낙관하지 않고 판정을 보류한다(도메인 심사 CRIT: 미상 XLPE 가정이 false-PASS).
+  const insulation = cableType ? INSULATION_BY_CABLE[cableType.toUpperCase()] : undefined;
+  if (!insulation) {
+    return {
+      rule: 'CABLE-AMPACITY',
+      severity: 'UNKNOWN',
+      subject,
+      ...idField,
+      given: { trip: `${tripA}A`, cable: `${sq}sq ${cableType ?? '(종류 미기재)'}`.trim() },
+      verdict: `케이블 절연 종류 미상(${cableType ?? '미기재'}) — 허용전류 등급 확정 불가로 판정 보류(무발명)`,
+    };
+  }
+  // 도체 재질: 미상이면 국내 관례상 Cu 기본. Al은 명시 시에만(파서가 AL 토큰 추출) —
+  // Al을 Cu로 낙관하면 ~28% 과대평가(도메인 심사 HIGH).
+  const conductor = input.conductor ?? 'Cu';
   // parallelCount는 병렬 케이블 조수이지 집합 회로 수가 아니다. 포설배치·간격·집합
   // 회로 수가 없으면 KEC 집합보정계수를 정할 수 없으므로 단조 허용전류의 조수배는
   // '집합·배치 미반영 명목합계'로만 제시한다. 이 합계 이내는 UNKNOWN, 이 합계조차
@@ -157,9 +178,9 @@ function judgeCableAmpacity(input: {
   let ampacity: number;
   let sourceKey: string;
   try {
-    const r = getAmpacity({ size: sq, conductor: 'Cu', insulation, installation: 'conduit' });
+    const r = getAmpacity({ size: sq, conductor, insulation, installation: 'conduit' });
     ampacity = r.corrected * parallel;
-    sourceKey = `KEC Cu_${insulation}_conduit ${sq}sq${parallel > 1 ? ` ×${parallel}조(집합·배치 미반영 명목합계)` : ''}`;
+    sourceKey = `KEC ${conductor}_${insulation}_conduit ${sq}sq${parallel > 1 ? ` ×${parallel}조(집합·배치 미반영 명목합계)` : ''}`;
   } catch {
     return {
       rule: 'CABLE-AMPACITY',
@@ -176,8 +197,10 @@ function judgeCableAmpacity(input: {
     subject,
     ...idField,
     given: {
+      // 여기 도달 시 cableType은 확정(미상이면 위에서 UNKNOWN 반환) — 죽은
+      // "종류 미기재→XLPE 가정" 라벨 제거(재심사 R5 slop).
       trip: `${tripA}A`,
-      cable: `${sq}sq ${cableType ?? '(종류 미기재→XLPE 가정)'}`.trim(),
+      cable: `${sq}sq ${cableType ?? ''}`.trim(),
     },
     computed: { 허용전류: `${ampacity}A` },
     limit: { value: `${ampacity}A`, source: sourceKey },
@@ -196,7 +219,7 @@ function judgeCableAmpacity(input: {
   // 무발명 시정 제안: 케이블을 트립 견디는 최소 KEC 굵기로 상향(표 역산), 또는
   // 차단기 트립을 케이블 허용전류 이내 최대 표준값으로 하향(정격 사다리).
   const cableProposal: ReviewProposalOption[] = [];
-  const cableUp = smallestCableFor(tripA, insulation, 'conduit');
+  const cableUp = smallestCableFor(tripA, insulation, 'conduit', conductor);
   if (cableUp && cableUp.sq > sq) {
     cableProposal.push({
       action: `케이블을 ${cableUp.sq}sq 이상으로 (허용전류 ${cableUp.ampacity}A ≥ 트립 ${tripA}A)`,
@@ -275,12 +298,16 @@ export function reviewScheduleTables(tables: ScheduleTableLike[]): ReviewReport 
       const cells = row.cells ?? {};
       // 차단기는 REMARK/비고 열 관례(실측 KIMM EE-007: "MCCB 3P 125/50").
       // 열 이름이 갈릴 수 있어 remark가 비면 행 전체를 이어 붙여 재시도한다.
-      const breakerText = cells.remark ?? '';
+      const breakerText = cells.breaker ?? cells.remark ?? '';
       const cableText = cells.cable ?? '';
-      const rowText = Object.values(cells).join(' ');
 
-      const bSpec = parseSpecText(breakerText.trim().length > 0 ? breakerText : rowText);
-      const tripA = bSpec.tripA ?? bSpec.current;
+      // 차단기 정격은 breaker(차단기) 열 우선, 없으면 REMARK/비고 셀에서 읽는다.
+      // remark가 비었을 때 행 전체를 파싱하면 부하전류·수량을 트립으로 발명한다
+      // (도메인 심사 HIGH). 그리고 차단기 키워드가 없으면 단독 전류(current)를
+      // 트립으로 승격하지 않는다(부하명 오독 차단).
+      const bSpec = parseSpecText(breakerText);
+      const hasBreakerKeyword = /\b(?:MCCB|ELCB|ELB|ACB|VCB|MCB|NFB|CB)\b|차단기/i.test(breakerText);
+      const tripA = bSpec.tripA ?? (hasBreakerKeyword ? bSpec.current : undefined);
       if (tripA == null) continue;
       rowsRated += 1;
 
@@ -324,6 +351,7 @@ export function reviewScheduleTables(tables: ScheduleTableLike[]): ReviewReport 
         tripA,
         sq,
         cableType: cSpec.cableType,
+        conductor: cSpec.conductor,
         parallel: cSpec.parallelCount && cSpec.parallelCount >= 2 ? cSpec.parallelCount : 1,
         subject,
       }));
@@ -388,15 +416,19 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   // 케이블 스펙은 연결(conductorSize·cableType)에 결속돼 있다 — 차단기에 붙은
   // 연결 중 스펙 있는 것만 판정. 공사방법은 도면에 안 적히는 관례라 관로(conduit)
   // 가정 — verdict에 명시(사내규정 온보딩 시 교체 지점).
-  const connsByComp = new Map<string, Array<{ sq: number; cableType?: string; parallel: number }>>();
+  const connsByComp = new Map<string, Array<{ sq: number; cableType?: string; conductor?: 'Cu' | 'Al'; parallel: number }>>();
   for (const conn of analysis.connections) {
     const sq = parseSq(conn.conductorSize);
     if (sq == null) continue;
     const parallel = conn.parallelCount && conn.parallelCount >= 2 ? conn.parallelCount : 1;
+    // 도체 재질·절연은 케이블 표기 문자열에서 파싱한다 — "AL-CV"의 AL(도체)·CV(절연)을
+    // 분리해 결선도 경로도 알루미늄을 인식한다(재심사 R1: HIGH3가 표 레일만 수리됐던
+    // 미완 — 결선도 Al 케이블이 Cu로 과대평가되던 false-PASS 위험을 양 레일에 봉인).
+    const cSpec = parseSpecText([conn.cableType, conn.conductorSize].filter(Boolean).join(' '));
     for (const end of [conn.from, conn.to]) {
       if (!end.startsWith('comp_')) continue;
       const arr = connsByComp.get(end) ?? [];
-      arr.push({ sq, cableType: conn.cableType, parallel });
+      arr.push({ sq, cableType: cSpec.cableType ?? conn.cableType, conductor: cSpec.conductor, parallel });
       connsByComp.set(end, arr);
     }
   }
@@ -417,6 +449,7 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       tripA,
       sq: worst.sq,
       cableType: worst.cableType,
+      conductor: worst.conductor,
       parallel: worst.parallel,
       subject: subjectOf(b),
       componentId: b.id,

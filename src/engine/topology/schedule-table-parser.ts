@@ -40,8 +40,16 @@ const HEADER_TOKENS: Array<{ re: RegExp; name: string }> = [
   { re: /외함크기|외형크기/, name: 'enclosure' },
   // "SCHED" 접두로 매칭 — 실발주 도면이 헤더를 "CABLE SCHEDLE"로 오타(U 누락)낸
   // 실측(KIMM EE-007). 도면의 오탈자에 강건해야 데이터를 놓치지 않는다.
-  { re: /CABLE\s*SCHED|케이블\s*규격|전선규격/i, name: 'cable' },
-  { re: /REMARK|비고|차단기/i, name: 'remark' },
+  // 케이블 열 동의어 확장 — "전선/케이블" 단독·"전선 굵기"도 케이블 열이다
+  // (도메인 심사 MED: 동의어 미인식으로 케이블 열 미생성 → 허용전류 검사 전면 스킵).
+  // 단 "전선관"(conduit 관경)·"전선로"는 케이블 굵기가 아니므로 부정탐색으로 배제
+  // (재심사 회귀 f: bare "전선"이 "전선관"을 케이블 열로 오인 → 관경을 굵기로 판정).
+  { re: /CABLE\s*SCHED|케이블\s*규격|케이블|전선\s*규격|전선\s*굵기|전선(?!관|로)|도체\s*규격/i, name: 'cable' },
+  // "차단기"는 비고(REMARK)와 별개 열일 수 있다 — 같은 토큰으로 묶으면 열이 소실돼
+  // 차단기 셀이 드롭된다(도메인 심사 MED). breaker 열을 분리하고, 판정은 breaker를
+  // 우선 읽되 없으면 REMARK(KIMM EE-007 관례: 차단기가 비고칸에 실림)로 폴백한다.
+  { re: /차단기|BREAKER/i, name: 'breaker' },
+  { re: /REMARK|비고/i, name: 'remark' },
 ];
 
 const SCHEDULE_TITLE = /(CABLE\s*SCHED|일람표|부하집계표)/i;

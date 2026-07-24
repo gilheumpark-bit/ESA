@@ -127,3 +127,51 @@ describe('차단기 극수·AF/AT 정격 — 실도면 분전반 일람 표기 (
     expect(s.current).toBe(150);
   });
 });
+
+describe('H7 도메인 심사 반증 회귀 (2026-07-23 fresh-context 2석)', () => {
+  it('다심 "16sq×4C"의 4C는 코어수 — 병렬 4조로 오독하지 않는다(false-PASS 차단)', () => {
+    const s = parseSpecText('CV 16sq×4C');
+    expect(s.conductorSize).toBe(16);
+    expect(s.parallelCount).toBeUndefined();
+  });
+
+  it('진짜 병렬 "16sq×2"·"150sq x 3"은 여전히 조수로 읽는다(회귀 방지)', () => {
+    expect(parseSpecText('CV 16sq×2').parallelCount).toBe(2);
+    expect(parseSpecText('150sq x 3').parallelCount).toBe(3);
+  });
+
+  it('타입 후행 병렬 "16SQ×2 CV"도 2조로 읽는다 — C 배제가 케이블타입 CV를 삼키지 않음 (재심사 회귀 b)', () => {
+    expect(parseSpecText('16SQ×2 CV').parallelCount).toBe(2);
+    expect(parseSpecText('16sq×2CV').parallelCount).toBe(2);
+    expect(parseSpecText('CV 16sq×4C').parallelCount).toBeUndefined(); // 코어 4C는 여전히 배제
+  });
+
+  it('공백 구분 "200AF 225AT"도 프레임·트립을 뽑는다(AT>AF 검출 가능)', () => {
+    const s = parseSpecText('MCCB 3P 200AF 225AT');
+    expect(s.frameA).toBe(200);
+    expect(s.tripA).toBe(225);
+  });
+
+  it('날짜 "12/2021"·"2021/12"를 정격으로 발명하지 않는다(무발명)', () => {
+    expect(parseSpecText('MCCB 3P 12/2021').tripA).toBeUndefined();
+    expect(parseSpecText('MCCB 3P 2021/12').tripA).toBeUndefined();
+  });
+
+  it('4자리 정격(2000AF/1600AT)은 날짜로 오배제하지 않는다', () => {
+    const s = parseSpecText('ACB 2000/1600');
+    expect(s.frameA).toBe(2000);
+    expect(s.tripA).toBe(1600);
+  });
+
+  it('알루미늄 도체를 인식하고 구리와 구분한다(미상은 미상)', () => {
+    expect(parseSpecText('AL-CV 240sq').conductor).toBe('Al');
+    expect(parseSpecText('알루미늄 240sq').conductor).toBe('Al');
+    expect(parseSpecText('CV 240sq').conductor).toBeUndefined();
+  });
+
+  it('NFB·한글 차단기 라벨(극표기 없음)에서도 정격을 뽑는다', () => {
+    expect(parseSpecText('NFB 100/50').tripA).toBe(50);
+    expect(parseSpecText('차단기 100/50').tripA).toBe(50);
+    expect(parseSpecText('배선용차단기 100/50').tripA).toBe(50);
+  });
+});

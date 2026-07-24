@@ -352,4 +352,55 @@ describe('reviewScheduleTables — 케이블 스케줄 표 판정 (H7)', () => {
     expect(r.coverage.breakersRatedParsed).toBe(0);
     expect(r.findings).toHaveLength(0);
   });
+
+  // ── 도메인 심사 반증 회귀 (2026-07-23 fresh-context 2석) ──
+  it('케이블 종류 미기재면 XLPE 낙관 없이 판정 보류 UNKNOWN (CRIT1)', () => {
+    // 기존: 종류 미상 → XLPE(10sq 63A)로 50AT PASS. 수리: 절연 미상 → UNKNOWN(무발명).
+    const r = reviewScheduleTables(rowsOf([{ no: '1', remark: 'MCCB 3P 225/50', cable: '10sq' }]));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('UNKNOWN');
+  });
+
+  it('알루미늄 케이블을 구리로 판정하지 않는다 (HIGH3)', () => {
+    // Al 240sq XLPE ≈362A < 400AT → FAIL. (Cu였으면 461A → WARN으로 위험 강등)
+    const r = reviewScheduleTables(rowsOf([{ no: '1', remark: 'MCCB 3P 400/400', cable: 'AL-CV 240sq' }]));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('FAIL');
+  });
+
+  it('remark 공백(차단기 없음)이면 부하전류를 트립으로 발명하지 않는다 (HIGH6)', () => {
+    const r = reviewScheduleTables(rowsOf([{ from: 'MDB', to: 'EV', cable: 'CV 25sq', load: '40A' }]));
+    expect(r.findings.some((x) => x.rule === 'CABLE-AMPACITY')).toBe(false);
+    expect(r.coverage.breakersRatedParsed).toBe(0);
+  });
+
+  it('다심 "4C 16"의 굵기는 16 — 코어수 4로 오독하지 않는다 (MED7)', () => {
+    // 16sq XLPE=85A, 50AT ≤ 85×0.8=68 → PASS. (4sq로 오독 시 36A → false-FAIL)
+    const r = reviewScheduleTables(rowsOf([{ no: '1', remark: 'MCCB 3P 100/50', cable: 'TFR-CV 4C 16' }]));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('PASS');
+  });
+
+  it('차단기 전용 열(breaker)이 비고(remark)보다 우선한다 (MED8)', () => {
+    const r = reviewScheduleTables(rowsOf([
+      { no: '1', breaker: 'MCCB 3P 225/200', remark: '증설', cable: 'CV 4sq' },
+    ]));
+    const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
+    expect(f?.severity).toBe('FAIL'); // breaker 열의 200AT로 판정(remark '증설' 아님)
+  });
+
+  // ── 재심사 회귀 수리 회귀 (2026-07-23 2차) ──
+  it('결선도 경로도 알루미늄을 구리로 판정하지 않는다 (재심사 R1 — 양 레일 봉인)', () => {
+    // conn.cableType "AL-CV" → 절연 CV(XLPE)·도체 Al 분리. 240sq Al ≈362A < 400AT → FAIL.
+    const conn: SLDConnection = {
+      id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '240sq', cableType: 'AL-CV',
+    };
+    const r = reviewAnalysis(analysisOf(
+      [{ id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '400AF/400AT', position: pos }],
+      [conn],
+    ));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('FAIL');
+  });
+
+  it('무공백 다심 "4C16"의 굵기도 16 — 코어 스트립이 무공백형도 잡는다 (재심사 R2)', () => {
+    const r = reviewScheduleTables(rowsOf([{ no: '1', remark: 'MCCB 3P 100/50', cable: 'TFR-CV 4C16' }]));
+    expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('PASS');
+  });
 });

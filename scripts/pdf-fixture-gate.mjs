@@ -304,5 +304,24 @@ await sleep(800);
     `status ${r.status} skipped ${review?.skipped} findings ${JSON.stringify(findings.map(f => [f.rule, f.severity]))?.slice(0, 160)}`);
 }
 
+// ── 2026-07-23 도메인 심사 수리(CRITICAL false-PASS 차단) 회귀 잠금 R15 ──────
+// R15 — 케이블 종류 미기재 시 XLPE(최고 허용전류) 낙관으로 PASS를 찍던 CRITICAL
+// false-PASS를 라이브로 반증한다. 종류 없는 "10sq"는 절연 등급 확정 불가 →
+// 부합/부적합이 아니라 UNKNOWN(판정 보류)이어야 한다(무발명).
+const scheduleUnknownInsulation =
+  text(100, 760, 'CABLE SCHEDULE (B1F)') + text(300, 760, 'CABLE SCHEDULE (1F)') +
+  text(100, 720, 'NO') + text(180, 720, 'REMARK') + text(300, 720, 'CABLE SCHEDULE') +
+  text(100, 690, '1') + text(180, 690, 'MCCB 3P 225/50') + text(300, 690, '10sq') +
+  stroke(103, 758, 103, 655) + stroke(303, 758, 303, 655);
+await sleep(800);
+{
+  const r = await post('schedule-unknown-insul.pdf', buildPdf(scheduleUnknownInsulation));
+  const findings = r.json?.review?.findings ?? [];
+  const cable = findings.find(f => f.rule === 'CABLE-AMPACITY');
+  check('R15 절연 미상 케이블(10sq)은 XLPE 낙관 PASS가 아니라 UNKNOWN(CRITICAL false-PASS 차단)',
+    r.status === 200 && cable?.severity === 'UNKNOWN',
+    `status ${r.status} cable ${JSON.stringify(cable ? [cable.severity] : 'none')}`);
+}
+
 console.log(failures.length === 0 ? `\nGATE PASS (${totalChecks}/${totalChecks})` : `\nGATE FAIL — ${failures.length}/${totalChecks}건: ${failures.join(', ')}`);
 process.exit(failures.length === 0 ? 0 : 1);
