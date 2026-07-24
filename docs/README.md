@@ -60,6 +60,9 @@
 | [DECISIONS](project/DECISIONS.md) | 현재 정본 | 유지해야 할 구조적 결정과 불변식 |
 | [SLD_V3_TRACEABILITY](project/SLD_V3_TRACEABILITY.md) | 현재 정본 | 설계 §1–15와 생산 코드·검증 연결 |
 | [도면 심사 단계 설계](project/design/2026-07-21-drawing-review-ladder.md) | 설계 참고 | 심사 강도와 역할 분리 |
+| [종합 감사 보고서·수리 설계도](project/design/2026-07-24-full-audit-and-remediation-blueprint.md) | 감사 정본 | 전수 딥 패스 결과, 확정 결함 5·오탐 6, 스코어카드, P0~P2 수리 지도 |
+| [토폴로지 스냅·분류 재설계](project/design/2026-07-24-topology-snap-and-classification-redesign.md) | 설계 확정·실측 대기 | 스냅 허용반경 유도, 기기 분류 어휘 계층, 경로 탐색 비용 |
+| [약점 축 90점 설계](project/design/2026-07-24-weak-axes-to-90-design.md) | 설계 | 라벨 공장(IND 사다리·표본 통계), 게이트 안정화, 환경 동등성 |
 | [HANDOFFS](project/HANDOFFS.md) | 역사 기록 색인 | 작업 시점별 인수인계와 검증 영수증 |
 
 ## 상세 설계와 실행 계획
@@ -71,7 +74,6 @@
 ## 정책·협업 참고
 
 - [CLAUDE.md](../CLAUDE.md): 이 저장소에서 AI가 지켜야 할 제품 경계와 검증 규칙
-- [NOA_RULES_v1.2.md](../NOA_RULES_v1.2.md): 협업 판단 규칙 참고
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md): 커뮤니티 행동 규범
 - [LICENSE](../LICENSE): CC BY-NC 4.0
 - [GitHub PR 양식](../.github/pull_request_template.md)과 [issue 양식](../.github/ISSUE_TEMPLATE/bug_report.md): 기여 시 필요한 재현·검증 정보

@@ -1,13 +1,44 @@
 name: CI
 
+# 두 레인으로 나눈다.
+#  - verify   : 모든 push/PR. 저장소 안에서 끝나는 결정론적 게이트만.
+#  - live-gates: PR·주간 예약·수동 실행. 브라우저 설치와 production 서버 기동이
+#                필요해 run당 분 소모가 큰 게이트를 여기로 모은다.
+# push마다 무거운 레인을 돌리지 않는 것이 Actions 분 관리의 핵심이다.
+
 on:
   push:
-    branches: [main, 'feat/**', 'fix/**', 'docs/**', 'codex/**']
+    branches: [main, 'feat/**', 'fix/**', 'docs/**', 'codex/**', 'claude/**']
   pull_request:
     branches: [main]
+  schedule:
+    # 매주 월요일 03:00 KST (일요일 18:00 UTC)
+    - cron: '0 18 * * 0'
+  workflow_dispatch:
+
+# 같은 ref에 연속 push가 나면 앞선 run을 취소한다. 중복 실행 분을 회수한다.
+# head_ref를 우선 쓰는 이유: PR이 열린 브랜치에 push하면 push 이벤트와
+# pull_request 이벤트가 같은 커밋에 대해 각각 run을 만든다. pull_request의
+# github.ref는 refs/pull/N/merge라 ref만으로 묶으면 두 run이 다른 그룹이 되어
+# 같은 커밋을 두 번 검증한다.
+#
+# 짝은 ref가 아니라 ref_name이어야 한다. push의 github.ref는
+# "refs/heads/<브랜치>"인데 pull_request의 github.head_ref는 접두사 없는
+# "<브랜치>"라, head_ref || ref로는 두 문자열이 여전히 달라 그룹이 갈린다
+# (커밋 b362cb6에서 실측 — run 30114652576/30114655819이 둘 다 떴다).
+# github.ref_name은 push에서 접두사 없는 브랜치명이므로 head_ref와 일치한다.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy' }}
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'dummy' }}
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'dummy' }}
 
 jobs:
-  ci:
+  verify:
+    name: Verify (docs, types, lint, tests, build)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -42,10 +73,32 @@ jobs:
 
       - name: Build
         run: npm run build
-        env:
-          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy' }}
-          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'dummy' }}
-          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'dummy' }}
+
+  live-gates:
+    name: Live gates (server, PDF, UI smoke)
+    needs: verify
+    # push 이벤트에서는 건너뛴다. PR·예약·수동 실행에서만 돈다.
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 잡 사이에는 파일시스템이 공유되지 않으므로 여기서 다시 빌드한다.
+      - name: Build
+        run: npm run build
 
       - name: Live AI calculator receipt gate
         run: npm run gate:chat-live

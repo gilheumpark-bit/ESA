@@ -16,7 +16,7 @@
  * 정확한 값은 케이블 제조사 데이터시트에서 가져와야 하나,
  * 예비 설계 시 아래 근사값을 사용.
  *
- * Reference: IEC 60228, KEC 232.51 해설서
+ * Reference: IEC 60228, KEC 232.52 해설서
  */
 export const CABLE_REACTANCE_DEFAULTS = {
   /** 일반 PVC/XLPE 저압 케이블 (1.5~300mm², 600/1000V) */
@@ -99,7 +99,7 @@ export function getKappaFactor(systemVoltage_V: number): number {
 
 /**
  * 모터 기동 시 허용 전압강하 한도.
- * Reference: KEC 232.51 해설, NEMA MG-1, IEEE Std 141 (Red Book)
+ * Reference: KEC 232.52 해설, NEMA MG-1, IEEE Std 141 (Red Book)
  */
 export const MOTOR_STARTING_VD_LIMITS = {
   /** 일반 분기회로 — 단자 전압 15% 이하 */

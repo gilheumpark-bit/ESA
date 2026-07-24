@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: f966c6e3fb72bb327978f13c9bec601cd064d799
-updatedAt: 2026-07-23T11:04:50.3159278+09:00
-trigger: architecture
-changedDomains: [app, lib, docs, scripts, ci]
+codeBaselineCommit: fef43524ee1d1649a1955feaea1d72a81897f94f
+updatedAt: 2026-07-25T02:40:15+09:00
+trigger: ci
+changedDomains: [docs, scripts, ci]
 ---
 
 # ESA 프로젝트 상태
@@ -60,6 +60,13 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 홈의 일반 질문은 검색 결과와 함께 AI 답변 표면을 자동으로 열고, Studio의 무파일 질문은 검색 스니펫 폴백 대신 실제 `/api/chat`을 호출한다.
 - 채팅 시스템 지침은 서버가 생성해 사용자 질의와 분리한다. 완전한 계산 질의는 ESA 계산기 레지스트리를 먼저 실행하고 계산기 ID·입력·결과 영수증을 모델 답변보다 앞선 SSE 이벤트로 반환한다.
 - Groq·Ollama·LM Studio·온프렘 OpenAI 호환 공급자는 Responses API가 아닌 Chat Completions 모델을 사용한다. `gate:chat-live`가 production 서버→정본 계산기 결과→모델 입력 영수증→로컬 호환 모델 답변 순서를 검증한다.
+- 기준서 원문을 담지 않는 제약 위에서 인용 경로를 정본화했다. 발행기관 16곳의 원문 확보 경로와 허용 조항 72건을 `engine/standards/citation-registry.ts`에 모으고, `createSource`가 영수증에 원문 경로를 자동으로 붙인다. production 인용 126건(고유 71쌍)을 전수 대조하는 계약 테스트로 조항 번호 드리프트를 막는다.
+- 도면 제안 계층의 근거 결박 결함 3건을 수리했다. 차단기 정격 보류가 문서 전역 조건으로 사라지던 것을 기기 결박으로 바꾸고, 종류 미확정 기호의 추측 분류가 SUPPORTED를 만들지 못하게 했으며, 자유 문구 표준 근거가 SUPPORTED를 통과시키던 것을 내부 규칙 식별자 또는 해석 가능한 조항으로 제한했다.
+- 조건이 0개인 조항이 어떤 입력에도 PASS를 내보내던 경로를 `makeBlock`으로 차단했다. `BLOCK` 판정과 헬퍼는 정의돼 있었으나 호출처가 0이었다.
+- 보안 경계와 도면 파서를 하드닝했다(`134fd80`).
+- 표 스케줄 판독을 판정에 결박하고 FLC 미검증을 표기하며 계층 위반을 제거했다(`923d25e`).
+- H7 도메인 심사 결함을 수리했다(`fef4352`). 절연 종류 미기재 시 XLPE 낙관 대신 UNKNOWN, 다심 `16sq×4C`의 코어 수를 병렬 조수로 오독하던 허용전류 ×4, 알루미늄 도체의 Cu 판정(약 28% 과대)을 차단해 안전 방향 false-PASS 2건을 막았다. 공백 포함 `200AF 225AT` 미매칭, 날짜 `12/2021`의 정격 발명, remark 공백 시 부하전류의 트립 승격도 함께 수리하고 회귀 테스트로 잠갔다.
+- CI를 `verify`(모든 push·PR)와 `live-gates`(PR·주간 예약·수동)로 분리하고 같은 ref의 중복 run을 취소하도록 concurrency를 걸었다. 브라우저 설치와 production 서버 기동이 필요한 게이트는 push마다 돌지 않는다.
 
 ## 부분 완료
 
@@ -84,10 +91,25 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
-- 현재 제품 코드 기준선은 `ad7b91c`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- **KEC 232.52의 발행기관 원문 대조가 남아 있다.** 저장소 안에서는 232.52로 통일했으나(기준서 엔진·전문팀·테스트가 이미 232.52였고 계산기 계층만 232.51이었다), 산업통상자원부 공고 원문에서 전압강하 조항 번호를 확인하지는 않았다. 저장소 내 통일과 원문 확인은 다른 것이므로 `citation-registry.ts`의 `UNVERIFIED_AGAINST_ORIGIN`에 구분해 남겼다.
+- **`gate:pdf`가 Linux CI에서 6/17 실패한다(R1/R2/R5·R9·R11·R12·R13·R13b). 실패 표면은 게이트의 합성 fixture에 국한되며, 실도면 경로가 아니다.**
+  - **정정(2026-07-24).** 이 항목은 처음에 "텍스트는 추출되는데 선분이 0개 — 기하 추출 회귀 의심"으로 적혀 있었다. 게이트 실패 하나에서 능력 전체를 일반화한 잘못된 기술이었다. 같은 run에서 **R7 격자 fixture는 결선>0으로 통과**하고, 저장소에 체크인된 실도면 출력이 반증한다: `fixtures/drawings/realworld/results{,-after}/`의 5개 실도면이 각각 선분 149·498·556·588·1987개, 엣지 120개를 기록한다(`bd62fb9`·`f88d9c2`). 기하 추출은 죽어 있지 않다.
+  - **롤백 대상 커밋이 없다.** `docs/VALIDATION_EVIDENCE.md` 65행이 지시하는 전후 차분을 3차 실증(`bd62fb9`) 이후 구간에 대해 수행한 결과, 이 경로의 구성요소가 **전부 무변경**이다 — 선분 추출 로직(`STROKE_PAINTS`·`pushSeg`·`constructPath` 소비), `engine/topology/endpoint-snap.ts`(커밋 0건), 게이트의 `circuit` fixture 정의, R1 기대값(`conf 0.85`, `0f4b682` 이후 무변경), `pdfjs-dist` lockfile 고정 버전(`6.1.200`, 실증 시점과 동일). 그 구간에서 `pdf-vector-parser.ts`를 건드린 유일한 커밋 `134fd80`은 자원 상한 사전 스캔만 추가했고 추출 로직을 바꾸지 않았다.
+  - 따라서 롤백이 아니라 **게이트 fixture와 파이프라인 계약의 불일치**가 남은 가설이다(원장 64행의 "게이트 자체의 결함 의심" 분기). 실패 fixture는 좁다 — `circuit`(4pt 간격 평행 수직선 2개, R1·R11이 사용)과 `rotated`(R12), `table-doc`(R9). 통과하는 `grid`는 끝점이 서로 맞물리는 닫힌 사각형이다.
+  - **게이트 기대값은 건드리지 않았다.** 실행 없이 기대값을 낮추는 것은 검증이 아니라 게이트 약화다. 다음 행동은 `npm ci` 가능한 환경에서 `gate:pdf`를 재현하고, `circuit.pdf`에 대한 파서 출력(`lines.length`, `snap.stats`)을 실측해 파이프라인과 기대값 중 어느 쪽이 틀렸는지 가리는 것이다.
+- **lint 엄격도 불일치는 미해결이다.** `scripts/enforce.ps1`은 `--max-warnings=0`으로 돌리는데 `eslint.config.mjs`는 react-hooks 규칙 4종을 "숨기지 않고 warn으로 남겨 가시화한다"는 이유로 의도적으로 `warn`에 둔다. 두 계약은 현재 경고가 0건일 때만 동시에 참이다. CI에 `--max-warnings=0`을 붙이면 이 4종이 차단 요인이 되므로, lint를 실제로 돌려 경고 수를 확인하기 전까지 CI는 `npm run lint`(비차단)로 둔다. 검증 없이 게이트 강도를 올리지도, 내리지도 않았다.
+- 현재 제품 코드 기준선은 frontmatter의 `codeBaselineCommit`(`fef4352`)이 정본이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
+> 2026-07-24 정정: 아래 exit 0 기록은 모두 **로컬(Windows) 실행 결과**다. 같은 기간
+> GitHub Actions CI는 최근 30 run이 전부 red였고, 실패 지점 이후 단계는 `skipped`였다.
+> 즉 이 저장소의 커밋은 CI에서 기계 검증된 적이 없다. 원인 2건은 아래에 기록했고
+> 이번 배치에서 수리했다.
+
+- **CI 차단 1 — `check:docs`**: `docs/README.md`가 저장소에서 제외된 `NOA_RULES_v1.2.md`를 링크해 exit 1. `f966c6e`가 링크를 다시 넣은 뒤 CI 5단계에서 죽고 tsc·lint·test·build·게이트가 전부 skip됐다. 링크 제거 후 `node scripts/check-docs.mjs` exit 0, `59 markdown files, links and indexes OK` 실측.
+- **CI 차단 2 — `npm test`가 clean install에서 실행 불가**: `jest.config.ts`(TS 설정 파일)는 Jest가 파싱할 때 `ts-node`를 요구하는데 `ts-node`는 package.json·package-lock.json 어디에도 없다(`ts-jest`만 존재). CI job 88758241613이 `Cannot find package 'ts-node'`로 0초 만에 실패했다. 설정을 `jest.config.mjs`로 옮겨 ts-node 요구를 제거했다(테스트 변환은 그대로 ts-jest 담당).
+- 위 두 건의 귀결: 아래 "1,115개"·"1,412개" 테스트 통과 기록은 ts-node가 별도로 존재하던 개발 머신에서만 재현된다. 최신 실측치는 `fef4352` 커밋 기록의 183 스위트·1,463 테스트다.
 - `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
@@ -107,6 +129,11 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 다음 첫 행동
 
+0-감사. 전수 딥 패스(배치 6개, 정밀 약 34,000줄 + 패턴 전수)를 완료하고 결과를 [종합 감사 보고서·수리 설계도](docs/project/design/2026-07-24-full-audit-and-remediation-blueprint.md)에 정본화했다. 확정 결함 5건(DB-001·DB-002·LLM-001·LLM-002·LLM-003), 기각한 오탐 6건, 프로덕션 준비도 7.0/10과 P0~P2 수리 지도가 그 문서에 있다. 상향의 사유는 새 강점 발견이 아니라 미확인 영역이 실제로 깨끗했음을 확인한 것이다.
+0-설계b. 약점 축(정확도 계량 35·게이트 안정성 55·재현성 60)을 90 이상으로 올리는 설계를 [약점 축 90점 설계](docs/project/design/2026-07-24-weak-axes-to-90-design.md)로 확정했다. 핵심은 기존 교정 API·trap 라벨·Ed25519 게이트·벤치 러너를 재사용하는 라벨 공장(IND-1→3 사다리, 실도면 15장·엣지 ≥1,800 표본 통계)이며, IND-3의 인간 판정은 AI로 대체하지 않는다. 점수는 각 단계 산출물이 존재할 때만 오르고 설계 문서 자체는 0점이다.
+0-설계a. 알고리즘 리뷰에서 확인된 3건(스냅 허용반경의 도면 크기 의존, 기기 분류 부분 문자열 매칭, 경로 탐색 비용)의 수리 설계를 [토폴로지 스냅·분류 재설계](docs/project/design/2026-07-24-topology-snap-and-classification-redesign.md)로 확정했다. 반경 후보·결정 규칙·착수 순서(M0→S1→S2→S3)가 문서에 있으며, 판정 입력을 바꾸는 변경이므로 실측 없이 착지하지 않는다.
+0. **`gate:pdf` 6/17 실패에서 파이프라인과 게이트 기대값 중 어느 쪽이 틀렸는지 가린다.** 전후 차분으로 롤백 대상이 없음은 확인했다(위 "보류" 참조). `npm ci` 가능한 환경에서 게이트를 재현하고, 실패 fixture인 `circuit.pdf`(4pt 간격 평행 수직선 2개)에 대한 `lines.length`와 `snap.stats`를 실측해 통과하는 `grid.pdf`(닫힌 사각형)와 대조한다. 파서가 옳으면 게이트 fixture가 실도면을 대표하지 못하는 것이고, 기대값이 옳으면 평행선 스냅 계약을 고친다. 실측 전에는 파서도 기대값도 수정하지 않는다.
+   - 완료 기록: CI `verify` 레인이 2026-07-24 green이 됐다(run 30114111855, job 89550479905). docs·tsc·lint·jest·SLD V3 계약·build 6개 단계가 모두 success다. 다만 lint는 `--max-warnings=0` 없이 돌렸고 ESLint는 경고가 있어도 exit 0이므로, **이 success는 경고 0건을 뜻하지 않는다.** 위 "보류"의 불일치를 종결하려면 lint 로그의 경고 수를 직접 확인해야 한다.
 1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
 2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
 3. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate, AI 공급자 순으로 write→persist→새 세션 read-back을 검증한다.

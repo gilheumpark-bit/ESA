@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $steps = @(
+  @{ Name = 'Documentation contracts'; Command = 'npm'; Arguments = @('run', 'check:docs') },
   @{ Name = 'TypeScript'; Command = 'npx'; Arguments = @('tsc', '--noEmit') },
   @{ Name = 'ESLint'; Command = 'npm'; Arguments = @('run', 'lint', '--', '--max-warnings=0') },
   @{ Name = 'Jest'; Command = 'npm'; Arguments = @('test', '--', '--runInBand') },
