@@ -88,6 +88,10 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
+- **`gate:pdf`가 Linux CI에서 6/17 실패한다 — 신규 적발, 원인 미확정.** CI 차단이 풀리면서 이 게이트가 저장소 역사상 처음으로 CI에서 실행됐고 즉시 실패했다(run 30114111855, job 89551042650). 실패 6건(R1/R2/R5, R9, R11, R12, R13, R13b)의 증상이 하나로 수렴한다: **텍스트는 추출되는데 선분이 0개다**("6 text items, 0 line segments"). 선분 0 → 결선 0 → confidence가 0.85/0.55로 올라가지 못하고 0.3에 머무름 → R13·R13b는 "구조 신뢰 미달"로 판정 자체가 생략됨. 즉 6건은 독립 결함이 아니라 단일 원인의 하류다.
+  - 이 PR의 diff는 9개 파일이며 `engine/topology`·`agent/drawing`·`api/pdf-drawing`을 건드리지 않는다. 회귀가 아니라 그동안 CI가 도달하지 못해 드러나지 않던 상태다.
+  - 로컬(Windows) `gate:pdf` 17/17 기록과 CI 6/17 실패가 공존한다. `ts-node` 건에서 이미 확인했듯 이 저장소의 개발 머신 `node_modules`는 lockfile과 어긋난 적이 있다. `pdfjs-dist`는 lockfile에 `6.1.200`으로 고정돼 있고, `pdf-vector-parser.ts`의 선분 추출은 pdfjs의 `constructPath` 인자 형태(`args[0]`=paintOp, `args[1]`=DrawOPS 인터리브 배열)에 직접 의존한다. **다만 v6.1.200의 실제 인자 형태를 확인하지 못했으므로 이것을 원인으로 확정하지 않는다.**
+  - 도면 기하 파서는 안전 판정의 입력이다. 실행·재현 없이 추측으로 고치지 않는다. 다음 행동은 clean install 환경에서 `gate:pdf`를 재현하고 `page.getOperatorList()`의 실제 `constructPath` 인자를 덤프해 형태를 확인하는 것이다.
 - **lint 엄격도 불일치는 미해결이다.** `scripts/enforce.ps1`은 `--max-warnings=0`으로 돌리는데 `eslint.config.mjs`는 react-hooks 규칙 4종을 "숨기지 않고 warn으로 남겨 가시화한다"는 이유로 의도적으로 `warn`에 둔다. 두 계약은 현재 경고가 0건일 때만 동시에 참이다. CI에 `--max-warnings=0`을 붙이면 이 4종이 차단 요인이 되므로, lint를 실제로 돌려 경고 수를 확인하기 전까지 CI는 `npm run lint`(비차단)로 둔다. 검증 없이 게이트 강도를 올리지도, 내리지도 않았다.
 - 현재 제품 코드 기준선은 frontmatter의 `codeBaselineCommit`(`fef4352`)이 정본이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
@@ -120,7 +124,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 다음 첫 행동
 
-0. CI `verify` 레인이 실제로 green이 되는지 확인한다. 수 주 만에 처음으로 tsc·lint·jest·build가 CI에서 돌아가므로, 그동안 로컬에서만 통과하던 것 중 CI에서 깨지는 항목이 나올 수 있다. 특히 lint 경고 수를 확인해 위 "보류"의 `--max-warnings` 불일치를 종결한다.
+0. **`gate:pdf` Linux 6/17 실패의 원인을 확정한다.** clean install(`npm ci`) 환경에서 재현한 뒤 `getOperatorList()`의 `constructPath` 인자를 실제로 덤프해 `pdf-vector-parser.ts`의 소비 형태와 대조한다. 선분 0이 풀리면 6건이 함께 풀릴 가능성이 높다. 확인 전에는 파서를 수정하지 않는다.
+   - 완료 기록: CI `verify` 레인이 2026-07-24 green이 됐다(run 30114111855, job 89550479905). docs·tsc·lint·jest·SLD V3 계약·build 6개 단계가 모두 success다. 다만 lint는 `--max-warnings=0` 없이 돌렸고 ESLint는 경고가 있어도 exit 0이므로, **이 success는 경고 0건을 뜻하지 않는다.** 위 "보류"의 불일치를 종결하려면 lint 로그의 경고 수를 직접 확인해야 한다.
 1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
 2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
 3. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate, AI 공급자 순으로 write→persist→새 세션 read-back을 검증한다.
