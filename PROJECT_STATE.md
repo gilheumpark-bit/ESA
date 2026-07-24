@@ -92,10 +92,11 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
 - **KEC 232.52의 발행기관 원문 대조가 남아 있다.** 저장소 안에서는 232.52로 통일했으나(기준서 엔진·전문팀·테스트가 이미 232.52였고 계산기 계층만 232.51이었다), 산업통상자원부 공고 원문에서 전압강하 조항 번호를 확인하지는 않았다. 저장소 내 통일과 원문 확인은 다른 것이므로 `citation-registry.ts`의 `UNVERIFIED_AGAINST_ORIGIN`에 구분해 남겼다.
-- **`gate:pdf`가 Linux CI에서 6/17 실패한다 — 신규 적발, 원인 미확정.** CI 차단이 풀리면서 이 게이트가 저장소 역사상 처음으로 CI에서 실행됐고 즉시 실패했다(run 30114111855, job 89551042650). 실패 6건(R1/R2/R5, R9, R11, R12, R13, R13b)의 증상이 하나로 수렴한다: **텍스트는 추출되는데 선분이 0개다**("6 text items, 0 line segments"). 선분 0 → 결선 0 → confidence가 0.85/0.55로 올라가지 못하고 0.3에 머무름 → R13·R13b는 "구조 신뢰 미달"로 판정 자체가 생략됨. 즉 6건은 독립 결함이 아니라 단일 원인의 하류다.
-  - 이 PR의 diff는 9개 파일이며 `engine/topology`·`agent/drawing`·`api/pdf-drawing`을 건드리지 않는다. 회귀가 아니라 그동안 CI가 도달하지 못해 드러나지 않던 상태다.
-  - 로컬(Windows) `gate:pdf` 17/17 기록과 CI 6/17 실패가 공존한다. `ts-node` 건에서 이미 확인했듯 이 저장소의 개발 머신 `node_modules`는 lockfile과 어긋난 적이 있다. `pdfjs-dist`는 lockfile에 `6.1.200`으로 고정돼 있고, `pdf-vector-parser.ts`의 선분 추출은 pdfjs의 `constructPath` 인자 형태(`args[0]`=paintOp, `args[1]`=DrawOPS 인터리브 배열)에 직접 의존한다. **다만 v6.1.200의 실제 인자 형태를 확인하지 못했으므로 이것을 원인으로 확정하지 않는다.**
-  - 도면 기하 파서는 안전 판정의 입력이다. 실행·재현 없이 추측으로 고치지 않는다. 다음 행동은 clean install 환경에서 `gate:pdf`를 재현하고 `page.getOperatorList()`의 실제 `constructPath` 인자를 덤프해 형태를 확인하는 것이다.
+- **`gate:pdf`가 Linux CI에서 6/17 실패한다(R1/R2/R5·R9·R11·R12·R13·R13b). 실패 표면은 게이트의 합성 fixture에 국한되며, 실도면 경로가 아니다.**
+  - **정정(2026-07-24).** 이 항목은 처음에 "텍스트는 추출되는데 선분이 0개 — 기하 추출 회귀 의심"으로 적혀 있었다. 게이트 실패 하나에서 능력 전체를 일반화한 잘못된 기술이었다. 같은 run에서 **R7 격자 fixture는 결선>0으로 통과**하고, 저장소에 체크인된 실도면 출력이 반증한다: `fixtures/drawings/realworld/results{,-after}/`의 5개 실도면이 각각 선분 149·498·556·588·1987개, 엣지 120개를 기록한다(`bd62fb9`·`f88d9c2`). 기하 추출은 죽어 있지 않다.
+  - **롤백 대상 커밋이 없다.** `docs/VALIDATION_EVIDENCE.md` 65행이 지시하는 전후 차분을 3차 실증(`bd62fb9`) 이후 구간에 대해 수행한 결과, 이 경로의 구성요소가 **전부 무변경**이다 — 선분 추출 로직(`STROKE_PAINTS`·`pushSeg`·`constructPath` 소비), `engine/topology/endpoint-snap.ts`(커밋 0건), 게이트의 `circuit` fixture 정의, R1 기대값(`conf 0.85`, `0f4b682` 이후 무변경), `pdfjs-dist` lockfile 고정 버전(`6.1.200`, 실증 시점과 동일). 그 구간에서 `pdf-vector-parser.ts`를 건드린 유일한 커밋 `134fd80`은 자원 상한 사전 스캔만 추가했고 추출 로직을 바꾸지 않았다.
+  - 따라서 롤백이 아니라 **게이트 fixture와 파이프라인 계약의 불일치**가 남은 가설이다(원장 64행의 "게이트 자체의 결함 의심" 분기). 실패 fixture는 좁다 — `circuit`(4pt 간격 평행 수직선 2개, R1·R11이 사용)과 `rotated`(R12), `table-doc`(R9). 통과하는 `grid`는 끝점이 서로 맞물리는 닫힌 사각형이다.
+  - **게이트 기대값은 건드리지 않았다.** 실행 없이 기대값을 낮추는 것은 검증이 아니라 게이트 약화다. 다음 행동은 `npm ci` 가능한 환경에서 `gate:pdf`를 재현하고, `circuit.pdf`에 대한 파서 출력(`lines.length`, `snap.stats`)을 실측해 파이프라인과 기대값 중 어느 쪽이 틀렸는지 가리는 것이다.
 - **lint 엄격도 불일치는 미해결이다.** `scripts/enforce.ps1`은 `--max-warnings=0`으로 돌리는데 `eslint.config.mjs`는 react-hooks 규칙 4종을 "숨기지 않고 warn으로 남겨 가시화한다"는 이유로 의도적으로 `warn`에 둔다. 두 계약은 현재 경고가 0건일 때만 동시에 참이다. CI에 `--max-warnings=0`을 붙이면 이 4종이 차단 요인이 되므로, lint를 실제로 돌려 경고 수를 확인하기 전까지 CI는 `npm run lint`(비차단)로 둔다. 검증 없이 게이트 강도를 올리지도, 내리지도 않았다.
 - 현재 제품 코드 기준선은 frontmatter의 `codeBaselineCommit`(`fef4352`)이 정본이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
@@ -128,7 +129,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 다음 첫 행동
 
-0. **`gate:pdf` Linux 6/17 실패의 원인을 확정한다.** clean install(`npm ci`) 환경에서 재현한 뒤 `getOperatorList()`의 `constructPath` 인자를 실제로 덤프해 `pdf-vector-parser.ts`의 소비 형태와 대조한다. 선분 0이 풀리면 6건이 함께 풀릴 가능성이 높다. 확인 전에는 파서를 수정하지 않는다.
+0. **`gate:pdf` 6/17 실패에서 파이프라인과 게이트 기대값 중 어느 쪽이 틀렸는지 가린다.** 전후 차분으로 롤백 대상이 없음은 확인했다(위 "보류" 참조). `npm ci` 가능한 환경에서 게이트를 재현하고, 실패 fixture인 `circuit.pdf`(4pt 간격 평행 수직선 2개)에 대한 `lines.length`와 `snap.stats`를 실측해 통과하는 `grid.pdf`(닫힌 사각형)와 대조한다. 파서가 옳으면 게이트 fixture가 실도면을 대표하지 못하는 것이고, 기대값이 옳으면 평행선 스냅 계약을 고친다. 실측 전에는 파서도 기대값도 수정하지 않는다.
    - 완료 기록: CI `verify` 레인이 2026-07-24 green이 됐다(run 30114111855, job 89550479905). docs·tsc·lint·jest·SLD V3 계약·build 6개 단계가 모두 success다. 다만 lint는 `--max-warnings=0` 없이 돌렸고 ESLint는 경고가 있어도 exit 0이므로, **이 success는 경고 0건을 뜻하지 않는다.** 위 "보류"의 불일치를 종결하려면 lint 로그의 경고 수를 직접 확인해야 한다.
 1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
 2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
