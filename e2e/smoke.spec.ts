@@ -339,7 +339,13 @@ test.describe('도면 분석', () => {
     await page.goto('/tools/sld');
     await page.locator('input[accept=".dxf"]').setInputFiles('fixtures/drawings/synthetic/L1-01-basic-radial.dxf');
 
-    await expect(page.getByRole('heading', { name: '분석 결과' })).toBeVisible();
+    // 이 단언은 "업로드 → DXF 파싱 → 기기·관계 분석 → 렌더" 왕복 전체를 기다린다.
+    // Playwright 기본 expect 타임아웃 5초는 그 계약에 맞지 않는다 — 로컬(3테스트
+    // 4초)에서는 통과하고 CI 러너에서는 재시도까지 "element(s) not found"로
+    // 떨어졌다(run 30132716468). 파이프라인이 실제로 필요한 시간을 명시하는
+    // 것이지 검사를 무르게 하는 것이 아니다: 결과가 안 나오면 그대로 실패한다.
+    // 뒤따르는 단언들은 같은 렌더 안이라 기본값으로 둔다.
+    await expect(page.getByRole('heading', { name: '분석 결과' })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('인식된 기기 (5개)')).toBeVisible();
     await expect(page.getByText('연결 맵 (4개)')).toBeVisible();
     await expect(page.getByText('MCCB-MAIN', { exact: true }).first()).toBeVisible();
