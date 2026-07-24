@@ -71,7 +71,6 @@
 ## 정책·협업 참고
 
 - [CLAUDE.md](../CLAUDE.md): 이 저장소에서 AI가 지켜야 할 제품 경계와 검증 규칙
-- [NOA_RULES_v1.2.md](../NOA_RULES_v1.2.md): 협업 판단 규칙 참고
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md): 커뮤니티 행동 규범
 - [LICENSE](../LICENSE): CC BY-NC 4.0
 - [GitHub PR 양식](../.github/pull_request_template.md)과 [issue 양식](../.github/ISSUE_TEMPLATE/bug_report.md): 기여 시 필요한 재현·검증 정보

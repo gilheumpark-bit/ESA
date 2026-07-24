@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: f966c6e3fb72bb327978f13c9bec601cd064d799
-updatedAt: 2026-07-23T11:04:50.3159278+09:00
-trigger: architecture
-changedDomains: [app, lib, docs, scripts, ci]
+codeBaselineCommit: fef43524ee1d1649a1955feaea1d72a81897f94f
+updatedAt: 2026-07-25T02:40:15+09:00
+trigger: ci
+changedDomains: [docs, scripts, ci]
 ---
 
 # ESA 프로젝트 상태
@@ -60,6 +60,10 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 홈의 일반 질문은 검색 결과와 함께 AI 답변 표면을 자동으로 열고, Studio의 무파일 질문은 검색 스니펫 폴백 대신 실제 `/api/chat`을 호출한다.
 - 채팅 시스템 지침은 서버가 생성해 사용자 질의와 분리한다. 완전한 계산 질의는 ESA 계산기 레지스트리를 먼저 실행하고 계산기 ID·입력·결과 영수증을 모델 답변보다 앞선 SSE 이벤트로 반환한다.
 - Groq·Ollama·LM Studio·온프렘 OpenAI 호환 공급자는 Responses API가 아닌 Chat Completions 모델을 사용한다. `gate:chat-live`가 production 서버→정본 계산기 결과→모델 입력 영수증→로컬 호환 모델 답변 순서를 검증한다.
+- 보안 경계와 도면 파서를 하드닝했다(`134fd80`).
+- 표 스케줄 판독을 판정에 결박하고 FLC 미검증을 표기하며 계층 위반을 제거했다(`923d25e`).
+- H7 도메인 심사 결함을 수리했다(`fef4352`). 절연 종류 미기재 시 XLPE 낙관 대신 UNKNOWN, 다심 `16sq×4C`의 코어 수를 병렬 조수로 오독하던 허용전류 ×4, 알루미늄 도체의 Cu 판정(약 28% 과대)을 차단해 안전 방향 false-PASS 2건을 막았다. 공백 포함 `200AF 225AT` 미매칭, 날짜 `12/2021`의 정격 발명, remark 공백 시 부하전류의 트립 승격도 함께 수리하고 회귀 테스트로 잠갔다.
+- CI를 `verify`(모든 push·PR)와 `live-gates`(PR·주간 예약·수동)로 분리하고 같은 ref의 중복 run을 취소하도록 concurrency를 걸었다. 브라우저 설치와 production 서버 기동이 필요한 게이트는 push마다 돌지 않는다.
 
 ## 부분 완료
 
@@ -84,10 +88,19 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
-- 현재 제품 코드 기준선은 `ad7b91c`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- **lint 엄격도 불일치는 미해결이다.** `scripts/enforce.ps1`은 `--max-warnings=0`으로 돌리는데 `eslint.config.mjs`는 react-hooks 규칙 4종을 "숨기지 않고 warn으로 남겨 가시화한다"는 이유로 의도적으로 `warn`에 둔다. 두 계약은 현재 경고가 0건일 때만 동시에 참이다. CI에 `--max-warnings=0`을 붙이면 이 4종이 차단 요인이 되므로, lint를 실제로 돌려 경고 수를 확인하기 전까지 CI는 `npm run lint`(비차단)로 둔다. 검증 없이 게이트 강도를 올리지도, 내리지도 않았다.
+- 현재 제품 코드 기준선은 frontmatter의 `codeBaselineCommit`(`fef4352`)이 정본이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
+> 2026-07-24 정정: 아래 exit 0 기록은 모두 **로컬(Windows) 실행 결과**다. 같은 기간
+> GitHub Actions CI는 최근 30 run이 전부 red였고, 실패 지점 이후 단계는 `skipped`였다.
+> 즉 이 저장소의 커밋은 CI에서 기계 검증된 적이 없다. 원인 2건은 아래에 기록했고
+> 이번 배치에서 수리했다.
+
+- **CI 차단 1 — `check:docs`**: `docs/README.md`가 저장소에서 제외된 `NOA_RULES_v1.2.md`를 링크해 exit 1. `f966c6e`가 링크를 다시 넣은 뒤 CI 5단계에서 죽고 tsc·lint·test·build·게이트가 전부 skip됐다. 링크 제거 후 `node scripts/check-docs.mjs` exit 0, `59 markdown files, links and indexes OK` 실측.
+- **CI 차단 2 — `npm test`가 clean install에서 실행 불가**: `jest.config.ts`(TS 설정 파일)는 Jest가 파싱할 때 `ts-node`를 요구하는데 `ts-node`는 package.json·package-lock.json 어디에도 없다(`ts-jest`만 존재). CI job 88758241613이 `Cannot find package 'ts-node'`로 0초 만에 실패했다. 설정을 `jest.config.mjs`로 옮겨 ts-node 요구를 제거했다(테스트 변환은 그대로 ts-jest 담당).
+- 위 두 건의 귀결: 아래 "1,115개"·"1,412개" 테스트 통과 기록은 ts-node가 별도로 존재하던 개발 머신에서만 재현된다. 최신 실측치는 `fef4352` 커밋 기록의 183 스위트·1,463 테스트다.
 - `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
@@ -107,6 +120,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 다음 첫 행동
 
+0. CI `verify` 레인이 실제로 green이 되는지 확인한다. 수 주 만에 처음으로 tsc·lint·jest·build가 CI에서 돌아가므로, 그동안 로컬에서만 통과하던 것 중 CI에서 깨지는 항목이 나올 수 있다. 특히 lint 경고 수를 확인해 위 "보류"의 `--max-warnings` 불일치를 종결한다.
 1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
 2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
 3. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate, AI 공급자 순으로 write→persist→새 세션 read-back을 검증한다.

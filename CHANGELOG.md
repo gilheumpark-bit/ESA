@@ -5,6 +5,8 @@ All notable changes to ESVA are documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **CI가 어떤 커밋도 검증하지 못하던 결함 2건** — (1) `docs/README.md`가 저장소에서 제외된 `NOA_RULES_v1.2.md`를 링크해 `check:docs`가 exit 1이었고, CI 5단계에서 죽어 tsc·lint·test·build·게이트가 전부 `skipped`였다(최근 30 run 연속 red). (2) `jest.config.ts`는 Jest가 파싱할 때 `ts-node`를 요구하는데 `ts-node`가 package.json·package-lock.json 어디에도 없어 clean install 후 `npm test`가 설정 파싱 단계에서 즉시 실패했다. 링크를 제거하고 설정을 `jest.config.mjs`로 옮겨 두 차단을 해소했다. 테스트의 TypeScript 변환은 그대로 `ts-jest`가 담당한다.
+- **부팅 환경변수 검증 미배선** — `lib/env.ts`의 `validateEnv()`가 어디에서도 호출되지 않았다. `instrumentation.ts`의 nodejs 런타임 부팅 경로에 연결했다. 배포를 막지 않고 누락된 키 '이름'만 기록하며 값은 남기지 않는다.
 - **AI 계산 경로** — 홈 일반 질문과 Studio 무파일 질문을 공용 `/api/chat` 경로에 연결했다. 완전한 계산 질문은 정본 계산기 레지스트리를 먼저 실행하고 입력·결과 영수증을 모델과 UI에 전달하며, 불완전한 입력은 임의 계산하지 않는다.
 - **호환 모델 전송 방식** — Groq, Ollama, LM Studio, 온프레미스 OpenAI 호환 공급자를 Responses API가 아닌 Chat Completions 계약으로 호출한다.
 - **채팅 지침 경계** — 클라이언트 `systemPrompt` 신뢰를 제거하고 서버 소유 전기 직무 지침과 사용자 메시지를 분리했다.
@@ -31,6 +33,9 @@ All notable changes to ESVA are documented in this file.
 - **Regression guard** — `calculator-params-contract.test.ts` exercises all 57 calculators through the real form-submit path (value + source), preventing contract drift from returning.
 
 ### Changed
+- **CI를 두 레인으로 분리했다** — `verify`(모든 push·PR: docs·tsc·lint·jest·SLD V3 계약·build)와 `live-gates`(PR·주간 예약·수동 실행: production 서버 기동·`gate:chat-live`·Chromium 설치·`gate:pdf`·Playwright). 브라우저 설치와 서버 기동이 필요한 무거운 게이트가 push마다 돌지 않으므로 Actions 분 소모가 줄고, 같은 ref의 연속 push는 concurrency로 앞선 run을 취소한다.
+- **휴면 대장 등재** — `src/lib` 하위에서 정적·동적 import가 모두 0인 모듈 6건(약 1,450줄: `fetch-url-guard`+`security/index`, `env`의 설정 상수, `api-helpers`, `cache`, `chunker`, `error-messages`)을 `docs/DORMANT_MANIFEST.md`에 사유·활성 조건과 함께 등재했다. 대장의 자체 규칙("여기 없는 휴면 모듈 발견 = 대장 위반") 위반 상태를 해소했다.
+- `scripts/enforce.ps1`에 `check:docs`를 첫 단계로 추가해 Windows 전체 게이트와 CI가 같은 문서 계약을 확인하게 했다.
 - App-wide theme re-mapped to AX: `--color-primary` navy `#1e3a5f`, `--color-accent` amber `#b45309`, warm-paper surfaces, IBM Plex Sans KR body font (light + warm-dark).
 - README, 아키텍처, 사용자·API·평가·기여·보안 문서를 현재 production 배선과 검증 경계 기준으로 재구성했다. 고정 페이지·테스트 수와 외부 근거 없는 경쟁 우위·범용 정확도 주장은 제거했다.
 
