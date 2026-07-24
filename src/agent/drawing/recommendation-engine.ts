@@ -4,6 +4,7 @@
 
 import { KNOWN_CLAUSES, isKnownCitation } from '@engine/standards/citation-registry';
 
+import { INTERNAL_RULE_PREFIX } from './rule-basis';
 import type {
   CalculationLink,
   RecommendationStatus,
@@ -12,9 +13,6 @@ import type {
   SymbolNode,
   UnresolvedItem,
 } from './types-v3';
-
-/** 내부 그래프 규칙 식별자 접두사 — 기준서 조항인 척하지 않는다. */
-const INTERNAL_RULE_PREFIX = 'ESA-SLD-RULE:';
 
 export interface RecommendationInput {
   symbols: SymbolNode[];
