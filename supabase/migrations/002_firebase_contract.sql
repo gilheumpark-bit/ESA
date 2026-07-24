@@ -3,6 +3,13 @@
 -- ============================================================================
 -- Upgrades databases that already ran the original UUID-oriented migration 001.
 -- New installations receive the same target shape directly from 001.
+--
+-- 주의 — 아래 정책의 auth.uid() 는 Supabase Auth 주체다. 이 앱의 주체는 Firebase
+-- UID 이고 DB 접근은 service-role 로 하며 service-role 은 RLS 를 우회한다. 즉 이
+-- 정책들은 현재 앱 트래픽에서 집행되지 않는 심층 방어이고, 실제 경계는 Route
+-- Handler 의 서버측 소유권 검증이다. 정책이 존재한다는 이유로 행 수준 방어가
+-- 켜져 있다고 읽지 말 것. Firebase 주체를 RLS 로 실제 집행하려면
+-- request.jwt.claims 기준으로 다시 써야 한다(SECURITY.md「알려진 공백」).
 
 BEGIN;
 

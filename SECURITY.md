@@ -29,6 +29,7 @@
 - 요청 본문의 `userId`나 디코딩만 한 JWT를 권한 근거로 사용하지 않습니다.
 - 프로젝트, 영수증, 보고서, 알림, 커뮤니티, 현장 기록은 서버 검증 UID와 리소스 소유권 또는 공개 범위를 함께 확인합니다.
 - Supabase service-role 키는 서버 전용이며 `NEXT_PUBLIC_*`로 노출하지 않습니다.
+- Supabase RLS 정책은 `auth.uid()`, 즉 Supabase Auth 주체를 기준으로 작성돼 있습니다. 이 앱의 주체는 Firebase UID이고 DB 접근은 service-role로 하며 service-role은 RLS를 우회합니다. 따라서 현재 앱 트래픽의 실제 경계는 RLS가 아니라 Route Handler의 서버측 소유권 검증입니다. 정책이 존재한다는 이유로 행 수준 방어가 활성화됐다고 주장하지 않습니다.
 
 ### 파일과 도면
 
@@ -65,6 +66,7 @@
 - 외부 AI 공급자별 프롬프트 주입·출력 품질은 실제 모델과 반복 표본으로 계속 검증해야 합니다.
 - Supabase, Stripe, Weaviate, Pinata의 운영 자격증명 왕복은 배포 환경마다 별도 확인해야 합니다.
 - 회사 기밀 도면, 실제 고객 개인정보, 운영 결제 데이터로 자동 QA를 실행하지 않습니다.
+- RLS 정책이 `auth.uid()`에 묶여 있어, 브라우저 Supabase 클라이언트를 추가하면 Firebase 사용자에게는 `auth.uid()`가 NULL이라 own-row 정책이 전면 차단됩니다. 차단은 안전한 방향이지만 원인을 알기 어려운 장애로 나타납니다. Firebase 주체를 RLS로 실제 집행하려면 `request.jwt.claims` 기준으로 정책을 다시 써야 합니다.
 
 ## 배포 전 보안 확인
 

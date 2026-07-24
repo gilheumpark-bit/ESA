@@ -4,6 +4,9 @@
   "private": true,
   "license": "CC-BY-NC-4.0",
   "description": "ESVA - Electrical Search Vertical AI: The Engineer's Search Engine",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "prepare:pdf-worker": "node scripts/prepare-pdf-worker.mjs",
     "predev": "npm run prepare:pdf-worker",

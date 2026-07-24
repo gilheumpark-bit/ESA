@@ -11,7 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [20]
+        # pdfjs-dist@6 은 engines 로 node >=22.13 을 요구한다. Node 20 에서는
+        # 텍스트 추출만 살아남고 기하(선분) 추출이 조용히 0 이 되어 gate:pdf 가
+        # 6/17 로 떨어진다 — 실측 run 30124521173 의 "6 text items, 0 line
+        # segments". 같은 커밋이 Node 24 에서는 17/17 이다(로컬 실측). 코드
+        # 회귀가 아니라 런타임 미달이었으므로 개발 런타임과 버전을 맞춘다.
+        node-version: [24]
 
     steps:
       - uses: actions/checkout@v4

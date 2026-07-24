@@ -140,3 +140,65 @@ describe('LLM Output Filter - Replacement Markers', () => {
     expect(result.filtered).not.toBe(output);
   });
 });
+
+// -- 감사 수리 회귀 (2026-07-25 외부 감사 보고서 검증) ------------------------
+//
+// 셋 다 "옳은 답을 훼손하는" 방향의 결함이었다. 통과 케이스가 전부 출처 태그를
+// 수치 뒤에 두고 있어서 앞에 두는 경우가 한 번도 실행되지 않았던 것이 미검출의
+// 원인이다. 그래서 여기서는 수리가 듣는지와 함께 **차단 강도가 유지되는지**를
+// 같이 잠근다 — 창을 넓히는 수리는 필터를 무력화하는 방향으로 틀리기 쉽다.
+
+describe('LLM Output Filter - 감사 수리 회귀', () => {
+  test('출처 태그가 수치보다 앞에 와도 그 수치의 출처로 인정한다', () => {
+    const output = '[SOURCE: KEC 232.52] 전압강하는 4.14V입니다.';
+    const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
+
+    const result = filterLLMOutput(output, toolCalls);
+    expect(result.passed).toBe(true);
+    expect(result.filtered).toContain('4.14V');
+  });
+
+  test('출처 태그가 수치 뒤에 오는 기존 순서도 그대로 통과한다', () => {
+    const output = '전압강하는 4.14V입니다. [SOURCE: KEC 232.52]';
+    const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
+
+    expect(filterLLMOutput(output, toolCalls).passed).toBe(true);
+  });
+
+  test('창을 양방향으로 넓혀도 출처 없는 수치는 계속 차단한다', () => {
+    const output = '전압강하는 4.14V입니다.';
+    const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
+
+    const result = filterLLMOutput(output, toolCalls);
+    expect(result.passed).toBe(false);
+    expect(result.filtered).not.toContain('4.14V');
+  });
+
+  test('서기 연도는 표준명이 앞서지 않아도 차단하지 않는다', () => {
+    const output = '2021년 개정 내용을 확인하세요.';
+    const toolCalls = [{ name: 'lookup_code_article', result: {} }];
+
+    const result = filterLLMOutput(output, toolCalls);
+    expect(result.passed).toBe(true);
+    expect(result.filtered).toContain('2021년');
+  });
+
+  test('연도 모양이어도 "년"이 뒤따르지 않으면 예외가 아니다', () => {
+    const output = '허용 전류는 2020A입니다.';
+    const toolCalls = [{ name: 'calculate', result: {} }];
+
+    const result = filterLLMOutput(output, toolCalls);
+    expect(result.passed).toBe(false);
+    expect(result.filtered).not.toContain('2020A');
+  });
+
+  test('isClean 도 사용자 입력 인용 수치를 filterLLMOutput 과 같게 판정한다', () => {
+    const output = '입력값은 3상 380V, 50kW입니다.';
+    const trusted = '부하는 3상 380V 50kW입니다.';
+
+    expect(filterLLMOutput(output, [], trusted).passed).toBe(true);
+    expect(isClean(output, [], trusted)).toBe(true);
+    // 인용 근거를 주지 않으면 여전히 거부한다 — 계약을 맞춘 것이지 푼 것이 아니다.
+    expect(isClean(output)).toBe(false);
+  });
+});

@@ -103,12 +103,23 @@ function extractNumbers(
 
     // Check if in an allowed context
     const prefix = output.slice(Math.max(0, pos - 40), pos);
-    const isAllowed = ALLOWED_NUMBER_CONTEXTS.some(re => re.test(prefix));
+    // 서기 연도는 공학 수치가 아니라 달력 참조다. 판별자가 수치 앞이 아니라
+    // 뒤("년")에 있어서 prefix 규칙만으로는 잡히지 않는다 — "KEC 2021"은 표준명이
+    // 앞서 통과하지만 "2021년 개정"은 통과하지 못해 정당한 연도가 [BLOCKED]로
+    // 답을 훼손했다. 4자리 서기 연도 + "년"만 예외로 둔다. "수명 5년"·"30분"
+    // 같은 수량은 그대로 출처를 요구한다.
+    const isCalendarYear = /^(?:19|20)\d\d$/.test(numText)
+      && /^\s*년/.test(output.slice(pos + numText.length, pos + numText.length + 3));
+    const isAllowed = isCalendarYear || ALLOWED_NUMBER_CONTEXTS.some(re => re.test(prefix));
 
-    // Check if a source tag exists within 200 chars after this number
+    // 출처 태그는 수치 앞뒤 어디에 와도 그 수치의 출처다. 프로덕션 프롬프트는
+    // 수치 뒤에 붙이라고 지시하지만(lib/chat-calculation-evidence.ts) 모델이 순서를
+    // 뒤집으면 정당한 출처가 무시돼 옳은 답이 [BLOCKED]로 훼손된다. 같은 파일의
+    // 표준 인용 검사는 이미 양방향(Math.abs ≤ 150)이라 한 파일 안에서 규칙이
+    // 갈려 있었다. 방향만 맞추고 창 크기는 유지한다 — 무출처 수치는 계속 차단된다.
     let hasSource = false;
     for (const sPos of sourcePositions) {
-      if (sPos >= pos && sPos <= pos + 200) {
+      if (Math.abs(sPos - pos) <= 200) {
         hasSource = true;
         break;
       }
@@ -343,10 +354,17 @@ export function applyConfidenceGate(
 /**
  * Quick check whether an LLM output would pass the filter.
  * Cheaper than full filterLLMOutput() — no replacement step.
+ *
+ * trustedInput 을 받는 이유: 이 인자가 없던 동안 isClean() 이 filterLLMOutput()
+ * 보다 엄격했다. 사용자가 질문에 적어 넣은 수치를 그대로 인용한 답을
+ * filterLLMOutput() 은 통과시키는데 isClean() 은 거부해, 같은 출력에 두 함수가
+ * 다른 판정을 냈다. 현재 프로덕션 호출처는 0 이라 실피해는 없었지만(engine/index
+ * 재수출과 테스트뿐) 배선되는 순간 발화할 함정이라 계약을 맞춰 둔다.
  */
 export function isClean(
   output: string,
   toolCalls: Array<{ name: string; result?: unknown }> = [],
+  trustedInput = '',
 ): boolean {
   // Quick probabilistic check
   PROBABILISTIC_PATTERNS.lastIndex = 0;
@@ -361,9 +379,9 @@ export function isClean(
   // Quick unsourced number check
   if (toolCalls.length === 0) {
     NUMBER_PATTERN.lastIndex = 0;
-    const numbers = extractNumbers(output, new Set());
+    const numbers = extractNumbers(output, new Set(), findTrustedNumbers(trustedInput));
     // Filter out small ordinal integers
-    const suspiciousNumbers = numbers.filter(n => !n.isAllowed);
+    const suspiciousNumbers = numbers.filter(n => !n.isAllowed && !n.isTrustedInput);
     if (suspiciousNumbers.length > 0) {
       return false;
     }
