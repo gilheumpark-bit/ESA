@@ -8,7 +8,7 @@
  *   - IEC 60364: 4% general
  *   - JIS (Japan): 2% (100V), 3% (200V), 5% (400V+)
  *
- * Standards: KEC 232.51, NEC 210.19(A) FPN / 215.2(A) FPN, IEC 60364-5-52, JIS C 3307
+ * Standards: KEC 232.52, NEC 210.19(A) FPN / 215.2(A) FPN, IEC 60364-5-52, JIS C 3307
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -41,7 +41,7 @@ function getCountryLimits(voltage: number): CountryLimit[] {
     {
       country: 'Korea (KEC)',
       standard: 'KEC',
-      clause: '232.51',
+      clause: '232.52',
       branchLimit: 3,
       totalLimit: 5,
       note: '간선+분기 합계 5% 이내',
@@ -181,7 +181,7 @@ export function calculateCountryCompareVD(input: CountryCompareVDInput): Detaile
     formula: 'VD = k \\times I \\times L \\times (R\\cos\\varphi + X\\sin\\varphi)',
     steps,
     source: [
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
       createSource('NEC', '210.19(A)', { edition: '2023' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
       createSource('JIS', 'C 3307', { edition: '2020' }),

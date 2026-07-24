@@ -6,7 +6,7 @@
  *   1-phase: e = 2 x I x (L/1000) x (R*cos(phi) + X*sin(phi))
  *   R = rho x 1000 / A   [Ohm/km]
  *
- * KEC 232.51 limit: 3% for branch/feeder
+ * KEC 232.52 limit: 3% for branch/feeder
  * Tolerance: +/- 0.01%
  */
 

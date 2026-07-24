@@ -121,7 +121,7 @@ const MAPPINGS: MappingEntry[] = [
   {
     topic: 'Voltage Drop',
     topic_ko: '전압강하',
-    kec: '232.51',
+    kec: '232.52',
     nec: '210.19(A) FPN',
     iec: '60364-5-52.525',
     jis: 'C 60364-5-52',

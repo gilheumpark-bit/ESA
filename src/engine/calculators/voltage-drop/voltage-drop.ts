@@ -8,7 +8,7 @@
  *   R = resistivity / area   [Ohm/km]
  *   X approximated at 0.08 Ohm/km for typical cables
  *
- * Standards: KEC 232.51 (voltage drop limits)
+ * Standards: KEC 232.52 (voltage drop limits)
  *   - Branch circuits: 3%
  *   - Feeders: 3%
  *   - Total (feeder + branch): 5%
@@ -92,7 +92,7 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
     formula: 'R = \\frac{\\rho \\times 1000}{A}',
     value: round(R, 4),
     unit: '\u03A9/km',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // Step 2: Impedance factor
@@ -118,7 +118,7 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
     formula: formulaStr,
     value: round(e, 2),
     unit: 'V',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // Step 4: Percentage
@@ -139,7 +139,7 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
       ? `Voltage drop ${round(ePct, 2)}% <= ${dropLimitPercent}% limit (OK)`
       : `Voltage drop ${round(ePct, 2)}% EXCEEDS ${dropLimitPercent}% limit`,
     pass ? 'info' : 'error',
-    'KEC 232.51',
+    'KEC 232.52',
   );
 
   return {
@@ -148,7 +148,7 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
     formula: formulaStr,
     steps,
     source: [
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
     ],
     judgment,
     additionalOutputs: {

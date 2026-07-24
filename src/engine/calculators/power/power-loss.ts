@@ -11,7 +11,7 @@
  *   R = resistance per unit length (Ω/km)
  *   L = one-way cable length (km)
  *
- * Standards: KEC 232.51 (전압강하/손실 허용한도), IEC 60287 (cable losses)
+ * Standards: KEC 232.52 (전압강하/손실 허용한도), IEC 60287 (cable losses)
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -89,7 +89,7 @@ export function calculatePowerLoss(input: PowerLossInput): DetailedCalcResult {
       formula: 'Loss\\% = \\frac{P_{loss}}{P_{load}} \\times 100',
       value: round(lossPercent, 2),
       unit: '%',
-      standardRef: 'KEC 232.51',
+      standardRef: 'KEC 232.52',
     });
   }
 
@@ -110,7 +110,7 @@ export function calculatePowerLoss(input: PowerLossInput): DetailedCalcResult {
     steps,
     source: [
       createSource('IEC', '60287', { edition: '2020' }),
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
     ],
     judgment: createJudgment(
       !highLoss,

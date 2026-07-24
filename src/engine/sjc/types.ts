@@ -7,6 +7,8 @@
  *   - Confidence: 0-1 scale indicating reliability of the result
  */
 
+import { citationOrigin } from '@engine/standards/citation-registry';
+
 // ---------------------------------------------------------------------------
 // SourceTag — traces a value back to a specific standard clause
 // ---------------------------------------------------------------------------
@@ -53,12 +55,25 @@ export interface Confidence {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * 출처 태그를 만든다.
+ *
+ * 이 저장소는 기준서 원문 문장을 담지 않으므로(저작권·판본 변경), 영수증이
+ * 내보내는 근거는 조항 번호뿐이다. 사용자가 그 번호를 들고 원문을 확인할 수
+ * 있도록, 호출자가 `url`을 주지 않으면 발행기관의 원문 경로를 자동으로 붙인다.
+ * 호출자가 더 구체적인 링크를 준 경우에는 그것을 그대로 존중한다.
+ */
 export function createSource(
   standard: string,
   clause: string,
   opts?: Partial<Omit<SourceTag, 'standard' | 'clause'>>,
 ): SourceTag {
-  return { standard, clause, ...opts };
+  const tag: SourceTag = { standard, clause, ...opts };
+  if (tag.url === undefined) {
+    const origin = citationOrigin(standard);
+    if (origin) tag.url = origin.url;
+  }
+  return tag;
 }
 
 export function createJudgment(

@@ -5,7 +5,7 @@
  * 새 조항 추가 시 이 파일에 등록만 하면 전체 시스템에서 사용 가능.
  */
 
-import { CodeArticle, Condition, JudgmentResult, makeHold } from './types';
+import { CodeArticle, Condition, JudgmentResult, makeBlock, makeHold } from './types';
 import { isPlaceholderThreshold } from '../evaluator-guard';
 import {
   KEC_232_52_MAIN,
@@ -130,6 +130,18 @@ function evaluateConditionTree(
   article: CodeArticle,
   params: Record<string, number>,
 ): JudgmentResult {
+  // 평가할 조건이 하나도 없는 조항은 아래 루프를 그냥 지나쳐 hasFail=false로
+  // 남고, 근거(notes)도 matchedConditions도 빈 채 PASS가 나간다. 즉 어떤
+  // 입력에도 무조건 적합. 이것이 BLOCK이 정의된 이유("근거 없는 판정")이므로
+  // 자리표시자 검사보다 먼저 차단한다. HOLD가 아니라 BLOCK인 것은, 입력이
+  // 부족한 게 아니라 조항 자체가 판정 근거를 갖고 있지 않기 때문이다.
+  if (article.conditions.length === 0) {
+    return makeBlock(
+      article,
+      '조항에 평가 가능한 조건이 없어 근거 없는 PASS가 된다 — 조항 원문 확인 필요',
+    );
+  }
+
   // 자리표시자 임계값(value:0)을 든 조항은 자동 판정 불가 → 보류.
   // 그대로 비교하면 `>= 0`은 무조건 PASS(위험 통과), `<= 0`은 항상 FAIL(정상 반려)이 된다.
   const placeholders = article.conditions.filter(isPlaceholderThreshold);

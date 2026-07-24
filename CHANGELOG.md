@@ -5,6 +5,8 @@ All notable changes to ESVA are documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- **근거 없는 PASS가 나가던 경로 차단(BLOCK 배선)** — 범용 조건 트리 평가기는 `article.conditions`를 순회해 판정하는데, 조건이 0개면 루프가 한 번도 돌지 않아 `hasFail=false`로 남고 `matchedConditions`·`notes`가 전부 빈 채 **어떤 입력에도 PASS**가 나갔다. `Verdict`에 `BLOCK`("근거 없는 판정")이 정의돼 있고 `makeBlock` 헬퍼까지 만들어져 있었으나 호출처가 0이었다. 자리표시자 임계값(`value: 0`)은 `evaluator-guard`가 이미 HOLD로 막고 있었지만 조건 자체가 없는 경우는 뚫려 있었다. 입력 부족(HOLD)이 아니라 조항이 판정 근거를 갖고 있지 않은 경우이므로 BLOCK으로 차단한다.
+- **전압강하 조항 인용 불일치(9곳)** — 계산기 계층은 `KEC 232.51`, 기준서 엔진·전문팀·전체 테스트는 `KEC 232.52`로 갈라져 있었다. 같은 규칙에 두 번호가 붙어 영수증과 팀 판정이 서로 다른 조항을 가리켰다. 저장소에서 이미 다수인 `232.52`로 정렬했다. 산업통상자원부 공고 원문과의 대조는 아직이며 그 사실을 `UNVERIFIED_AGAINST_ORIGIN`에 남겼다.
 - **CI가 어떤 커밋도 검증하지 못하던 결함 2건** — (1) `docs/README.md`가 저장소에서 제외된 `NOA_RULES_v1.2.md`를 링크해 `check:docs`가 exit 1이었고, CI 5단계에서 죽어 tsc·lint·test·build·게이트가 전부 `skipped`였다(최근 30 run 연속 red). (2) `jest.config.ts`는 Jest가 파싱할 때 `ts-node`를 요구하는데 `ts-node`가 package.json·package-lock.json 어디에도 없어 clean install 후 `npm test`가 설정 파싱 단계에서 즉시 실패했다. 링크를 제거하고 설정을 `jest.config.mjs`로 옮겨 두 차단을 해소했다. 테스트의 TypeScript 변환은 그대로 `ts-jest`가 담당한다.
 - **부팅 환경변수 검증 미배선** — `lib/env.ts`의 `validateEnv()`가 어디에서도 호출되지 않았다. `instrumentation.ts`의 nodejs 런타임 부팅 경로에 연결했다. 배포를 막지 않고 누락된 키 '이름'만 기록하며 값은 남기지 않는다.
 - **AI 계산 경로** — 홈 일반 질문과 Studio 무파일 질문을 공용 `/api/chat` 경로에 연결했다. 완전한 계산 질문은 정본 계산기 레지스트리를 먼저 실행하고 입력·결과 영수증을 모델과 UI에 전달하며, 불완전한 입력은 임의 계산하지 않는다.
@@ -31,6 +33,10 @@ All notable changes to ESVA are documented in this file.
 - **AX design** — `/preview/ax` (thread home + answer + mobile, receipt-as-first-class, governance status bar); AX palette + typography (navy + amber, warm paper, IBM Plex Sans KR / Noto Serif KR / IBM Plex Mono) applied app-wide via the token system.
 - **Observability** — Sentry instrumentation + client/server/edge configs (DSN-gated, no hardcoded secrets); `SECURITY.md`; `/api/analytics`.
 - **Regression guard** — `calculator-params-contract.test.ts` exercises all 57 calculators through the real form-submit path (value + source), preventing contract drift from returning.
+
+### Added
+- **인용 정본 레지스트리와 원문 유도** (`engine/standards/citation-registry.ts`) — 이 저장소는 저작권·판본 변경 때문에 기준서 원문 문장을 담지 않는다. 그래서 제품이 내보내는 근거는 조항 번호 하나뿐이고, 대조할 원문이 내부에 없어 번호가 틀려도 잡히지 않았다. 발행기관 16곳의 원문 확보 경로와 인용 허용 조항 72건을 한 곳에 모았다. `createSource`가 호출자가 링크를 주지 않으면 발행기관 원문 경로를 자동으로 붙이므로, 모든 영수증이 원문 확인 경로를 갖는다. 조항 단위 딥링크가 아니라 발행기관 단위인 것은 유료 표준에 조항별 공개 URL이 없기 때문이며, 없는 링크를 지어내지 않는다.
+- **인용 무결성 계약 테스트** — production 코드의 `createSource` 인용 126건(고유 71쌍)을 전수로 허용 목록과 대조한다. 목록에 없는 조항을 인용하면 실패하므로 조항 번호가 코드 여기저기서 조용히 갈라지는 것을 커밋 시점에 막는다. 이 계약이 없어서 `232.51`이 9곳에 퍼질 때까지 아무도 잡지 못했다.
 
 ### Changed
 - **CI를 두 레인으로 분리했다** — `verify`(모든 push·PR: docs·tsc·lint·jest·SLD V3 계약·build)와 `live-gates`(PR·주간 예약·수동 실행: production 서버 기동·`gate:chat-live`·Chromium 설치·`gate:pdf`·Playwright). 브라우저 설치와 서버 기동이 필요한 무거운 게이트가 push마다 돌지 않으므로 Actions 분 소모가 줄고, 같은 ref의 연속 push는 concurrency로 앞선 run을 취소한다.

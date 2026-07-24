@@ -10,7 +10,7 @@
  * Total: VDtotal = Σ VDi
  * Check: VDtotal% ≤ allowable limit
  *
- * Standards: KEC 232.51 (누적 전압강하), IEC 60364-5-52
+ * Standards: KEC 232.52 (누적 전압강하), IEC 60364-5-52
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -115,7 +115,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
     formula: 'VD_{total}\\% = \\frac{\\sum VD_i}{V} \\times 100',
     value: round(totalPercent, 2),
     unit: '%',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // PART 3 — Result assembly
@@ -130,10 +130,10 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
     formula: 'VD_{total} = \\sum \\sqrt{3} I_i L_i (R_i\\cos\\varphi + X_i\\sin\\varphi)',
     steps,
     source: [
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],
-    judgment: createJudgment(pass, message, pass ? 'info' : 'error', 'KEC 232.51'),
+    judgment: createJudgment(pass, message, pass ? 'info' : 'error', 'KEC 232.52'),
     additionalOutputs: {
       totalDropVolts: { value: round(cumulativeDropV, 2), unit: 'V' },
       totalDropPercent: { value: round(totalPercent, 2), unit: '%' },
