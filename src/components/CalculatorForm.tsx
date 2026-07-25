@@ -106,7 +106,22 @@ function NumberField({
           onChange={(e) => onChange(e.target.value)}
           min={param.min}
           max={param.max}
-          step={param.step ?? 'any'}
+          /**
+           * step 은 값의 유효성 제약이 아니라 스피너 증감폭 의도였는데, HTML5 는
+           * 이것을 검증에 쓴다. 그리고 그 격자의 기준점은 `min` 이다 — min=0.01,
+           * step=0.05 면 유효값이 0.01·0.06·…·0.56·0.61 이 되어 조명률 0.6 이나
+           * 보수율 0.8 같은 표준값이 브라우저에서 거부된다. 거부되면 폼 제출이
+           * **조용히** 막히고(React 검증 전에 차단되므로 오류 문구도 안 뜬다)
+           * 사용자는 "계산하기가 안 먹는다"만 겪는다.
+           *
+           * 실측(2026-07-25): 7개 파라미터가 **자기 기본값부터** 거부돼 단락전류·
+           * 아크플래시·조도·UPS·배터리·제동저항기 6종이 아무것도 건드리지 않고
+           * 눌러도 제출 0회였다.
+           *
+           * 여기서 다루는 값은 전부 연속량이므로 격자에 맞출 이유가 없다. 범위
+           * 제약(min·max)은 그대로 유효하다.
+           */
+          step="any"
           placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}

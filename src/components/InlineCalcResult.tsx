@@ -399,7 +399,7 @@ function MiniField({
           onChange={(e) => onChange(e.target.value)}
           min={param.min}
           max={param.max}
-          step={param.step ?? 'any'}
+          step="any"
           placeholder={param.placeholder ?? `${param.description || param.name} 입력`}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
