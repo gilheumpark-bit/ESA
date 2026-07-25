@@ -9,6 +9,7 @@ import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-leas
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { isCatalogModel } from '@/lib/ai-providers';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 1800;
@@ -33,7 +34,7 @@ function privateJson(body: unknown, init: ResponseInit = {}) {
   return NextResponse.json(body, { ...init, headers });
 }
 
-export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
+async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: string }> }) {
   if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
     return userError('Invalid origin', 403);
   }
@@ -104,3 +105,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ jobId: str
     return privateJson({ success: false, error: { message: '도면 분석을 재개하지 못했습니다.', reference } }, { status: 500 });
   }
 }
+
+export const POST = withRequestLog(POST__impl);

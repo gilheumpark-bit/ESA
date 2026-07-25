@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { CALCULATOR_COUNT } from '@/engine/calculators/count';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const dynamic = 'force-dynamic';
 
@@ -113,8 +114,10 @@ const OPENAPI_SPEC = {
   ],
 };
 
-export async function GET() {
+async function GET__impl() {
   return NextResponse.json(OPENAPI_SPEC, {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
   });
 }
+
+export const GET = withRequestLog(GET__impl);

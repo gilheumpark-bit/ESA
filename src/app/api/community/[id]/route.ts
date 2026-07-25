@@ -15,6 +15,7 @@ import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { getQuestion, getAnswersForQuestion, createAnswer } from '@/lib/community';
 import { getExpertBadge } from '@/lib/expert-verification';
 import { checkContent, checkAnswerQuality } from '@/lib/abuse-prevention';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ const extractUserId = (request: NextRequest): Promise<string | null> =>
 
 // ─── PART 2: GET — Question + Answers ──────────────────────────
 
-export async function GET(
+async function GET__impl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -66,7 +67,7 @@ interface CreateAnswerBody {
   standardRefs?: string[];
 }
 
-export async function POST(
+async function POST__impl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -147,3 +148,6 @@ export async function POST(
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);
+export const POST = withRequestLog(POST__impl);

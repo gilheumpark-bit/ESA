@@ -8,6 +8,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextResponse } from 'next/server';
 import { benchmarkAll, formatBenchmarkReport } from '@/lib/benchmark';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ---------------------------------------------------------------------------
 // Auth check
@@ -31,7 +32,7 @@ function isAdminAuth(request: Request): boolean {
 // GET /api/benchmark
 // ---------------------------------------------------------------------------
 
-export async function GET(request: Request): Promise<NextResponse> {
+async function GET__impl(request: Request): Promise<NextResponse> {
   // Per-route abuse limit.
   const blocked = applyRateLimit(request, 'default');
   if (blocked) {
@@ -79,3 +80,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);

@@ -26,6 +26,7 @@ import {
   type ChatCalculationEvidence,
 } from '@/lib/chat-calculation-evidence';
 import { buildElectricalAssistantPrompt } from '@/lib/electrical-chat';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Types & Constants ──────────────────────────────────
 
@@ -284,7 +285,7 @@ async function buildStreamingResponse(
 
 // ─── PART 5: POST Handler ───────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     // CSRF origin check
     const origin = request.headers.get('origin');
@@ -487,3 +488,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

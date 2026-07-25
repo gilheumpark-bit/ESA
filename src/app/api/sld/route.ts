@@ -17,10 +17,11 @@ import { buildTopologyFromSLD, type TopologyGraph, type ValidationResult } from 
 import { SagaOrchestrator } from '@/lib/saga-transaction';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 
-export async function POST(req: NextRequest) {
+async function POST__impl(req: NextRequest) {
   const timer = createRequestTimer();
 
   try {
@@ -172,3 +173,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

@@ -14,13 +14,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getQuestions, createQuestion, type QuestionListOptions, type QuestionStatus } from '@/lib/community';
 import { checkContent } from '@/lib/abuse-prevention';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
 // Uses shared extractVerifiedUserId from @/lib/auth-helpers
 
 // ─── PART 2: GET — List Questions ──────────────────────────────
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'community');
     if (blocked) return blocked;
@@ -63,7 +64,7 @@ interface CreateQuestionBody {
   calcRefs?: string[];
 }
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     // Auth required
     const userId = await extractVerifiedUserId(request);
@@ -127,3 +128,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);
+export const POST = withRequestLog(POST__impl);

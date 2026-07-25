@@ -15,6 +15,7 @@ import { createSourceLease, isSourceLeaseAvailable, releaseSourceLease } from '@
 import { applyDrawingOwnerCookie, resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
 import { isCatalogModel } from '@/lib/ai-providers';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,7 @@ function hasValidDrawingSignature(kind: 'image' | 'pdf' | 'dxf', bytes: ArrayBuf
   return header.startsWith('AutoCAD Binary DXF') || /(?:^|\r?\n)\s*0\s*\r?\n\s*SECTION(?:\r?\n|$)/i.test(header);
 }
 
-export async function POST(req: NextRequest) {
+async function POST__impl(req: NextRequest) {
   if (!isRequestOriginAllowed(
     req.headers.get('origin'),
     req.url,
@@ -258,7 +259,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
+async function GET__impl(req: NextRequest) {
   const blocked = applyRateLimit(req, 'sld-job');
   if (blocked) return blocked;
   const owner = await resolveDrawingOwner(req, false);
@@ -285,7 +286,7 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function DELETE(req: NextRequest) {
+async function DELETE__impl(req: NextRequest) {
   if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
     return userError('Invalid origin', 403);
   }
@@ -302,3 +303,7 @@ export async function DELETE(req: NextRequest) {
   updateOwnedJob(jobId, owner.ownerId, { sourceLease: undefined });
   return privateJson({ success: true, data: { status: 'CANCELLED' } });
 }
+
+export const GET = withRequestLog(GET__impl);
+export const POST = withRequestLog(POST__impl);
+export const DELETE = withRequestLog(DELETE__impl);

@@ -9,8 +9,9 @@ import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { computeReceiptIntegrity } from '@/lib/receipt-integrity';
 import { loadCalculation } from '@/lib/supabase';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
-export async function GET(
+async function GET__impl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -70,3 +71,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);

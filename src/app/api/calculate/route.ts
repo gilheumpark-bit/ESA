@@ -24,6 +24,7 @@ import { getUserTier, listUserCalculations, saveCalculation } from '@/lib/supaba
 import { sanitizeInput } from '@/lib/security-hardening';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { executeRegisteredCalculator } from '@/lib/calculation-execution';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
@@ -48,7 +49,7 @@ const DIFFICULTY_TO_CALC_DIFFICULTY: Record<string, CalcDifficulty> = {
 
 // ─── PART 5: GET persistent history ────────────────────────────
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   const ip = getClientIp(request.headers);
   const rl = checkRateLimit(ip, 'default');
   if (!rl.allowed) {
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
 
 // ─── PART 6: POST Handler ───────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     // Rate limit
     const ip = getClientIp(request.headers);
@@ -291,3 +292,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);
+export const POST = withRequestLog(POST__impl);

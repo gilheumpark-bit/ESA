@@ -17,6 +17,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase-id-token';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -187,7 +188,7 @@ async function checkAdminRole(uid: string): Promise<boolean> {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   // Per-route abuse limit.
   const blocked = applyRateLimit(request, 'default');
   if (blocked) return blocked;
@@ -226,3 +227,5 @@ export async function GET(request: NextRequest) {
   };
   return NextResponse.json(response);
 }
+
+export const GET = withRequestLog(GET__impl);

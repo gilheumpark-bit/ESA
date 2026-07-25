@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { applyRateLimit, getClientIp } from '@/lib/rate-limit';
 import { saveContactMessage } from '@/lib/contact-store';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 const SUBJECTS = new Set([
   '일반 문의',
@@ -24,7 +25,7 @@ function normalizedText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   const blocked = applyRateLimit(request, 'default');
   if (blocked) return blocked;
 
@@ -69,3 +70,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ data: { id, stored: true } }, { status: 201 });
 }
+
+export const POST = withRequestLog(POST__impl);

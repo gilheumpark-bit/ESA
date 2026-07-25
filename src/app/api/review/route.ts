@@ -11,6 +11,7 @@ import { runCalcPipeline, type PipelineConfig } from '@/agent/pipeline';
 import { queryAmpacity, queryBreakerRating } from '@/engine/standards/kec/kec-table-query';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import type { CalcParams } from '@/engine/topology';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 
@@ -60,7 +61,7 @@ function validateReviewParams(params: ReviewRequestBody['params'] | undefined): 
   return null;
 }
 
-export async function POST(req: NextRequest) {
+async function POST__impl(req: NextRequest) {
   const blocked = applyRateLimit(req, 'calculate');
   if (blocked) return blocked;
 
@@ -189,3 +190,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { apiLog } from '@/lib/api-logger';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // Body cap — analytics beacons should be tiny (event batch ≤ 50 events × ~200 bytes ≈ 10KB).
 // Match `/api/error-report` and `/api/vitals` (both unauthenticated public beacons).
@@ -71,7 +72,7 @@ function sanitizeEvent(raw: RawEvent): IngestedEvent | null {
   return { category, action, label, value, timestamp, sessionId };
 }
 
-export async function POST(req: NextRequest) {
+async function POST__impl(req: NextRequest) {
   // Same-origin guard — unauthenticated public beacon must reject cross-origin.
   const origin = req.headers.get('origin') || req.headers.get('referer') || '';
   const host = req.headers.get('host') || '';
@@ -137,3 +138,5 @@ export async function POST(req: NextRequest) {
 }
 
 // IDENTITY_SEAL: PART-1 | role=analytics ingestion | inputs=event batch | outputs=structured logs
+
+export const POST = withRequestLog(POST__impl);

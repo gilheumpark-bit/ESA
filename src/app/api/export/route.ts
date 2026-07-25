@@ -16,6 +16,7 @@ import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { validateClientReceiptForExport } from '@/lib/calculation-execution';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { NextRequest, NextResponse } from 'next/server';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ---------------------------------------------------------------------------
 // PART 1 -- Types & validation
@@ -74,7 +75,7 @@ async function loadReceipt(receiptId: string, requesterId: string) {
 // PART 3 -- Route handler
 // ---------------------------------------------------------------------------
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+async function POST__impl(req: NextRequest): Promise<NextResponse> {
   try {
     if (!isRequestOriginAllowed(
       req.headers.get('origin'),
@@ -218,3 +219,5 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

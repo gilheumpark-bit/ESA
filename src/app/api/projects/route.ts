@@ -16,6 +16,7 @@ import {
   listUserProjects,
 } from '@/lib/collaboration';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Auth Helper
@@ -27,7 +28,7 @@ import { extractVerifiedUserId } from '@/lib/auth-helpers';
 // PART 2 — GET: List Projects
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
 // PART 3 — POST: Create Project
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     const userId = await extractVerifiedUserId(request);
     if (!userId) {
@@ -90,3 +91,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '프로젝트를 만들지 못했습니다.' }, { status: 500 });
   }
 }
+
+export const GET = withRequestLog(GET__impl);
+export const POST = withRequestLog(POST__impl);

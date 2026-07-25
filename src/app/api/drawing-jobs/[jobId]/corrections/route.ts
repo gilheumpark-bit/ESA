@@ -8,6 +8,7 @@ import { applyDrawingCorrection } from '@/agent/drawing/apply-drawing-correction
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +18,7 @@ function privateJson(body: unknown, init: ResponseInit = {}) {
   return NextResponse.json(body, { ...init, headers });
 }
 
-export async function POST(
+async function POST__impl(
   req: NextRequest,
   ctx: { params: Promise<{ jobId: string }> },
 ) {
@@ -88,3 +89,5 @@ export async function POST(
     },
   });
 }
+
+export const POST = withRequestLog(POST__impl);

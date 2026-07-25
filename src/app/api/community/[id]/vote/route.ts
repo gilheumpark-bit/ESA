@@ -11,6 +11,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { voteQuestion, voteAnswer, type VoteDirection } from '@/lib/community';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ interface VoteBody {
   targetId?: string;
 }
 
-export async function POST(
+async function POST__impl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -90,3 +91,5 @@ export async function POST(
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

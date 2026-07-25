@@ -12,6 +12,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { convert, type UnitType, type ConvertOptions } from '@engine/conversion/unit-conversion';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
@@ -38,7 +39,7 @@ const VALID_UNITS: Set<string> = new Set([
 
 // ─── PART 3: POST Handler ───────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -153,3 +154,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

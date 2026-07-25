@@ -16,6 +16,7 @@ import { CalcValidationError } from '@engine/calculators/types';
 import { generateReceipt } from '@engine/receipt';
 import type { GenerateReceiptOpts } from '@engine/receipt';
 import { executeRegisteredCalculator } from '@/lib/calculation-execution';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Request/Response Types ────────────────────────────
 
@@ -123,7 +124,7 @@ async function executeSingle(
 
 const MAX_BATCH_SIZE = 100;
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     // Auth required for batch
     const userId = await extractUserId(request);
@@ -229,3 +230,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

@@ -15,6 +15,7 @@ import {
   type NotificationType,
 } from '@/lib/notifications';
 import { verifyIdToken } from '@/lib/firebase-id-token';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 const VALID_TYPES: NotificationType[] = [
   'standard_update', 'keyword_news', 'cert_dday', 'calc_complete',
@@ -48,7 +49,7 @@ async function authenticateRequest(
   }
 }
 
-export async function GET(req: NextRequest) {
+async function GET__impl(req: NextRequest) {
   try {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
 
 // ─── POST: 알림 생성 (내부 서버 → 서버 또는 인증된 클라이언트) ─────────────
 
-export async function POST(req: NextRequest) {
+async function POST__impl(req: NextRequest) {
   try {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
@@ -162,7 +163,7 @@ export async function POST(req: NextRequest) {
 
 // ─── PATCH: 읽음 처리 ────────────────────────────────────────────────────────
 
-export async function PATCH(req: NextRequest) {
+async function PATCH__impl(req: NextRequest) {
   try {
     // Rate limiting on PATCH as well
     const blocked = applyRateLimit(req, 'default');
@@ -217,3 +218,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: '알림 상태를 변경하지 못했습니다.' }, { status: 500 });
   }
 }
+
+export const GET = withRequestLog(GET__impl);
+export const POST = withRequestLog(POST__impl);
+export const PATCH = withRequestLog(PATCH__impl);

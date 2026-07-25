@@ -12,6 +12,7 @@ import { computeReceiptIntegrity } from '@/lib/receipt-integrity';
 import { loadCalculation } from '@/lib/supabase';
 import type { Receipt, UnitSystem } from '@/engine/receipt/types';
 import type { DifficultyLevel } from '@/engine/calculators/types';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 const DIFFICULTIES = new Set<DifficultyLevel>(['basic', 'intermediate', 'advanced']);
 
@@ -29,7 +30,7 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-export async function GET(
+async function GET__impl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -129,3 +130,5 @@ export async function GET(
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);

@@ -18,6 +18,7 @@ import type { Receipt } from '@engine/receipt/types';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { isFeatureEnabledServer } from '@/lib/feature-flags';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
 // 티어는 서버 DB에서만 결정한다. 이전 구현은 서명 미검증 atob 파싱으로
@@ -51,7 +52,7 @@ async function resolveUserTier(userId: string): Promise<Tier> {
 
 // ─── PART 2: POST Handler ──────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     if (!isRequestOriginAllowed(
       request.headers.get('origin'),
@@ -222,3 +223,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

@@ -5,8 +5,9 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { createPortalSession } from '@/lib/stripe';
 import { getStripeCustomerId } from '@/lib/supabase';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -60,3 +61,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

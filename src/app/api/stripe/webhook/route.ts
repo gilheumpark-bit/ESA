@@ -6,6 +6,7 @@ import {
   persistSubscriptionEntitlement,
 } from '@/lib/billing-webhook';
 import { createStripeClient } from '@/lib/stripe';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,7 +22,7 @@ function subscriptionIdFromSession(session: Stripe.Checkout.Session): string | n
   return session.subscription?.id ?? null;
 }
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   if (!getBillingStatus().enabled) {
     return NextResponse.json(
       { success: false, error: { code: 'ESVA-2020', message: 'Billing webhook is disabled' } },
@@ -87,3 +88,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

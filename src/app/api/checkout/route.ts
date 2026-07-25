@@ -14,6 +14,7 @@ import { getStripeSession } from '@/lib/stripe';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { getBillingStatus, isBillingPlanKey, type BillingPlanKey } from '@/lib/billing';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
@@ -27,7 +28,7 @@ interface CheckoutRequestBody {
 
 // ─── PART 4: POST Handler ───────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -105,3 +106,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

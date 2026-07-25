@@ -39,6 +39,7 @@ import type {
 } from '@search/types';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { buildStudioAnswer } from '@/search/studio-answer';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: CSRF Origin Check ─────────────────────────────────
 
@@ -68,7 +69,7 @@ const agent = new MainAgent();
 
 // ─── PART 4: POST Handler ───────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   const start = performance.now();
 
   try {
@@ -499,3 +500,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

@@ -12,10 +12,11 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAutocompleteSuggestions } from '@search/autocomplete';
 import type { SupportedLanguage } from '@search/types';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: GET Handler ────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -65,3 +66,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);

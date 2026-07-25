@@ -24,6 +24,7 @@ import {
   generateShareLink,
 } from '@/lib/collaboration';
 import { loadCalculation } from '@/lib/supabase';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Auth Helper
@@ -44,7 +45,7 @@ function getProjectId(request: NextRequest): string {
 // PART 2 — GET: Project Detail
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   try {
     // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'default');
@@ -102,7 +103,7 @@ export async function GET(request: NextRequest) {
 // PART 3 — PATCH: Update Project / Actions
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function PATCH(request: NextRequest) {
+async function PATCH__impl(request: NextRequest) {
   try {
     // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'default');
@@ -191,7 +192,7 @@ export async function PATCH(request: NextRequest) {
 // PART 4 — DELETE: Delete Project
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function DELETE(request: NextRequest) {
+async function DELETE__impl(request: NextRequest) {
   try {
     // Per-route abuse limit.
     const blocked = applyRateLimit(request, 'default');
@@ -216,3 +217,7 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);
+export const PATCH = withRequestLog(PATCH__impl);
+export const DELETE = withRequestLog(DELETE__impl);

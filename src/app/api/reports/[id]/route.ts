@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { loadReport } from '@/lib/report-store';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 const REPORT_ID = /^RPT-[A-Z0-9-]{8,64}$/;
 
-export async function GET(
+async function GET__impl(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -41,3 +42,5 @@ export async function GET(
     { status: 200, headers: { 'Cache-Control': 'private, no-store' } },
   );
 }
+
+export const GET = withRequestLog(GET__impl);

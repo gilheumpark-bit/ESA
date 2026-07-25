@@ -10,10 +10,11 @@ import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { recognizeNameplate, suggestCalculators } from '@/lib/ocr-nameplate';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 
-export async function POST(req: NextRequest) {
+async function POST__impl(req: NextRequest) {
   try {
     if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
       return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
@@ -102,3 +103,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

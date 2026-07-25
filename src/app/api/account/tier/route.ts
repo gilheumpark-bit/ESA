@@ -3,8 +3,9 @@ import { extractVerifiedUser } from '@/lib/auth-helpers';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { ensureUserProfile, getUserTier } from '@/lib/supabase';
 import { claimProjectInvitations } from '@/lib/collaboration';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   const blocked = applyRateLimit(request, 'default');
   if (blocked) return blocked;
 
@@ -23,3 +24,5 @@ export async function GET(request: NextRequest) {
     { headers: { 'Cache-Control': 'private, max-age=60' } },
   );
 }
+
+export const GET = withRequestLog(GET__impl);

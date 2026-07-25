@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { NextRequest } from 'next/server';
 import { getDrawingCalibrationFixture } from '@/lib/drawing-calibration-fixtures';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
-export async function GET(request: NextRequest): Promise<Response> {
+async function GET__impl(request: NextRequest): Promise<Response> {
   if (process.env.NODE_ENV === 'production') {
     return new Response('Not found', { status: 404 });
   }
@@ -23,3 +24,5 @@ export async function GET(request: NextRequest): Promise<Response> {
     return new Response('Fixture unavailable', { status: 404 });
   }
 }
+
+export const GET = withRequestLog(GET__impl);

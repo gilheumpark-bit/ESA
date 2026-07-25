@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { runDueJobs } from '@/crawlers/scheduler';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 /**
  * Vercel Cron에서 호출하는 크롤링 엔드포인트
@@ -20,7 +21,7 @@ import { runDueJobs } from '@/crawlers/scheduler';
  *
  * 인증: Authorization 헤더에 Bearer CRON_SECRET 필요
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
+async function GET__impl(request: NextRequest): Promise<NextResponse> {
   // CRON_SECRET 검증 — fail-closed: reject if secret is not configured
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) {
@@ -77,3 +78,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);

@@ -12,6 +12,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Auth ─────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ interface DashboardResponse {
 
 // ─── PART 3: GET Handler ──────────────────────────────────────
 
-export async function GET(request: NextRequest) {
+async function GET__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -164,3 +165,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withRequestLog(GET__impl);

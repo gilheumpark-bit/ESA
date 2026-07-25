@@ -14,6 +14,7 @@ import {
   type StandardCode,
   type ConversionResult,
 } from '@/lib/standard-converter';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── Validation ───────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ function isValidStandard(s: unknown): s is StandardCode {
 
 // ─── POST Handler ─────────────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
@@ -89,3 +90,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withRequestLog(POST__impl);

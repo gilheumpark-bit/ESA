@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { createHmac } from 'crypto';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Request Types ─────────────────────────────────────
 
@@ -27,7 +28,7 @@ const MAX_COMMENT_LENGTH = 500;
 
 // ─── PART 2: POST Handler ──────────────────────────────────────
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   try {
     // Rate limit (use default profile)
     const ip = getClientIp(request.headers);
@@ -155,3 +156,5 @@ function hashIp(ip: string): string | null {
   if (!secret) return null;
   return createHmac('sha256', secret).update(ip).digest('hex');
 }
+
+export const POST = withRequestLog(POST__impl);

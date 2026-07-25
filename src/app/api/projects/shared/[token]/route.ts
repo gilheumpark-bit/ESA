@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { applyRateLimit, checkRateLimit } from '@/lib/rate-limit';
 import { getProject, validateShareLink } from '@/lib/collaboration';
 import { loadCalculation } from '@/lib/supabase';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
@@ -11,7 +12,7 @@ function extractToken(request: NextRequest): string {
   return new URL(request.url).pathname.split('/').filter(Boolean).at(-1) ?? '';
 }
 
-export async function POST(request: NextRequest) {
+async function POST__impl(request: NextRequest) {
   const blocked = applyRateLimit(request, 'default');
   if (blocked) return blocked;
 
@@ -111,3 +112,5 @@ export async function POST(request: NextRequest) {
     },
   });
 }
+
+export const POST = withRequestLog(POST__impl);

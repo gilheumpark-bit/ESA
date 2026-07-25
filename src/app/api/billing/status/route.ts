@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getBillingStatus } from '@/lib/billing';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+async function GET__impl() {
   const status = getBillingStatus();
   return NextResponse.json(
     {
@@ -16,3 +17,5 @@ export async function GET() {
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }
+
+export const GET = withRequestLog(GET__impl);

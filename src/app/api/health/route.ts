@@ -15,6 +15,7 @@ import { getInspectionItemCount } from '@/data/inspection/inspection-checklist';
 import { getTCCDeviceCount } from '@/data/protection/tcc-data';
 import { getCertCount } from '@/data/certifications/certification-db';
 import { getRateLimitStoreSize } from '@/lib/rate-limit';
+import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -84,7 +85,7 @@ function canViewDetails(req: NextRequest): boolean {
     && timingSafeEqual(expectedBuffer, suppliedBuffer);
 }
 
-export async function GET(req: NextRequest) {
+async function GET__impl(req: NextRequest) {
   const start = Date.now();
 
   const [supabase, weaviate] = await Promise.all([checkSupabase(), checkWeaviate()]);
@@ -126,3 +127,5 @@ export async function GET(req: NextRequest) {
     },
   );
 }
+
+export const GET = withRequestLog(GET__impl);
