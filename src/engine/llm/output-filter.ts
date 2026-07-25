@@ -186,6 +186,28 @@ function findSourcePositions(output: string): Set<number> {
  * @param toolCalls - Array of tool call records from the conversation
  * @returns FilterResult with original, filtered output, and blocked items
  */
+/**
+ * 지운 자리에 남기는 표시. 짧아야 문장이 읽힌다 — 자세한 사유는 답변 끝에
+ * 한 번만 붙인다.
+ */
+const UNVERIFIED = '[미확인]';
+
+const MARKERS: Record<BlockedItem['reason'], string> = {
+  probabilistic: UNVERIFIED,
+  no_source: UNVERIFIED,
+  direct_citation: UNVERIFIED,
+  no_tool_call: UNVERIFIED,
+  insufficient_data: UNVERIFIED,
+};
+
+const REASON_NOTES: Record<BlockedItem['reason'], string> = {
+  probabilistic: '추정 표현',
+  no_source: '출처 없음',
+  direct_citation: '기준 원문 조회 필요',
+  no_tool_call: '계산기 미실행',
+  insufficient_data: '입력 부족',
+};
+
 export function filterLLMOutput(
   output: string,
   toolCalls: Array<{ name: string; result?: unknown }> = [],
@@ -294,17 +316,21 @@ export function filterLLMOutput(
     const before = filtered.slice(0, item.position);
     const after = filtered.slice(item.position + item.text.length);
 
-    // Replace with a warning marker
-    const marker = item.reason === 'probabilistic'
-      ? '[BLOCKED: 확률적 표현 금지 / Probabilistic expression blocked]'
-      : item.reason === 'no_source'
-        ? '[BLOCKED: 출처 없는 수치 / Unsourced number blocked]'
-        : item.reason === 'direct_citation'
-          ? '[BLOCKED: DB 조회 필요 / DB lookup required]'
-          : '[BLOCKED: Tool 호출 필요 / Tool call required]';
-
-    filtered = before + marker + after;
+    filtered = before + MARKERS[item.reason] + after;
   }
+
+  // 제거 사유는 문장 안이 아니라 끝에 한 번만 적는다.
+  //
+  // 이전에는 자리마다 "[BLOCKED: Tool 호출 필요 / Tool call required]" 를 끼워
+  // 넣었다. 값을 지우는 것은 옳지만(영수증 없는 수치는 나가면 안 된다) 그 결과가
+  // "합성 최대수요전력은 **[BLOCKED: Tool 호출 필요 / Tool call required]**입니다"
+  // 처럼 읽을 수 없는 문장이 됐다(실측 2026-07-25/26). 필터는 제 일을 했는데
+  // 사용자에게는 앱이 고장 난 것으로 보인다.
+  const reasons = [...new Set(sortedBlocked.map((item) => REASON_NOTES[item.reason]))];
+  // 안내문에는 마커 리터럴을 넣지 않는다 — 넣으면 본문의 표시와 구분되지 않는다.
+  filtered += `
+
+> 위에서 **미확인**으로 표시된 값은 근거가 없어 앱이 제거한 것입니다 (${reasons.join(', ')}). 정확한 값은 해당 계산기나 기준 원문에서 확인하세요.`;
 
   return {
     original: output,

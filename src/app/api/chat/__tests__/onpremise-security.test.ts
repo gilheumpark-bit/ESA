@@ -93,7 +93,10 @@ describe('POST /api/chat on-premise security boundary', () => {
 
     expect(response.status).toBe(200);
     expect(streamBody).not.toContain('999A');
-    expect(streamBody).toContain('[BLOCKED: Tool 호출 필요');
+    // 지운 자리 표시는 짧게, 사유는 끝에 한 번. 값이 안 나가는 것이 이 테스트의
+    // 본질이고(위의 999A 단언), 표시 문구는 읽히는 형태를 계약으로 잡는다.
+    expect(streamBody).toContain('[미확인]');
+    expect(streamBody).toContain('계산기 미실행');
   });
 
   test('uses server-owned instructions and keeps the user content in a user message', async () => {

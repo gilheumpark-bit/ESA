@@ -121,16 +121,23 @@ describe('LLM Output Filter - Blocked Output', () => {
 // -- Filter Replacement Tests ------------------------------------------------
 
 describe('LLM Output Filter - Replacement Markers', () => {
+  // 마커는 짧아야 문장이 읽힌다. 이전 형태("[BLOCKED: Tool 호출 필요 / Tool call
+  // required]")는 값을 옳게 지우고도 "…는 **[BLOCKED: …]**입니다" 같은 읽을 수
+  // 없는 문장을 남겼다(실측 2026-07-25/26). 사유는 답변 끝에 한 번만 적는다.
   test('overlapping probabilistic and numeric findings produce one intact marker', () => {
     const result = filterLLMOutput('약 32A가 흐릅니다.');
 
-    expect(result.filtered.match(/\[BLOCKED:/g)).toHaveLength(1);
-    expect(result.filtered).not.toContain(']LOCKED');
+    expect(result.filtered.match(/\[미확인\]/g)).toHaveLength(1);
+    // 겹친 검출이 서로의 마커를 잘라 먹으면 마커 안에 마커가 박힌다.
+    expect(result.filtered).not.toMatch(/\[[^\]]*\[미확인\]/);
   });
   test('Blocked probabilistic text gets replacement marker', () => {
     const output = '대략 50A의 전류가 필요합니다.';
     const result = filterLLMOutput(output);
-    expect(result.filtered).toContain('[BLOCKED:');
+    expect(result.filtered).toContain('[미확인]');
+    // 사유는 본문이 아니라 끝의 안내 한 줄에 있다.
+    expect(result.filtered).toContain('추정 표현');
+    expect(result.filtered.split('[미확인]').length - 1).toBe(1);
   });
 
   test('Original output is preserved in result', () => {
