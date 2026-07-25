@@ -13,6 +13,7 @@
     "dev": "next dev --turbopack",
     "prebuild": "npm run prepare:pdf-worker",
     "build": "next build",
+    "postbuild": "node scripts/copy-standalone-assets.mjs",
     "start": "next start",
     "lint": "eslint .",
     "test": "jest",

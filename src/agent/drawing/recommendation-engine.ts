@@ -10,6 +10,7 @@ import type {
   SymbolNode,
   UnresolvedItem,
 } from './types-v3';
+import { hasDeviceClass } from './device-class';
 
 export interface RecommendationInput {
   symbols: SymbolNode[];
@@ -53,12 +54,15 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
   // Power path without breaker
   const sources = confirmed.filter(isSource);
   const loads = confirmed.filter(isLoad);
+  const adjacency = buildAdjacency(input.relations);
+  const byId = new Map(confirmed.map((s) => [s.id, s]));
   for (const src of sources) {
+    const paths = shortestPathsFrom(src.id, adjacency);
     for (const load of loads) {
-      const path = findPath(src.id, load.id, input.relations);
+      const path = paths.get(load.id);
       if (!path) continue;
       const hasProtection = path.some((id) => {
-        const node = confirmed.find((s) => s.id === id);
+        const node = byId.get(id);
         return node ? isProtection(node) : false;
       });
       if (!hasProtection) {
@@ -68,7 +72,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
           problem: `${src.displayId} → ${load.displayId} 경로에 보호기가 확인되지 않습니다.`,
           relatedDisplayIds: [src.displayId, load.displayId],
           evidenceIds: path.flatMap((id) =>
-            confirmed.find((s) => s.id === id)?.evidence.map((e) => e.evidenceId) ?? []),
+            byId.get(id)?.evidence.map((e) => e.evidenceId) ?? []),
           status: supported ? 'SUPPORTED' : 'HOLD',
           recommendedAction: '경로상 차단기·퓨즈 존재 여부와 도면 누락을 재확인하십시오.',
           requiredInputs: supported ? [] : ['전체 관련 구획 판독 완료'],
@@ -197,46 +201,61 @@ function rec(
   };
 }
 
-function findPath(from: string, to: string, relations: RelationEdge[]): string[] | null {
+/**
+ * 확정 결선만으로 인접 리스트를 만든다. 이전에는 (전원, 부하) 조합마다 이걸
+ * 다시 만들었다 — 그래프는 그대로인데 조합 수만큼 재구축했다.
+ */
+function buildAdjacency(relations: RelationEdge[]): Map<string, string[]> {
   const adj = new Map<string, string[]>();
+  const push = (k: string, v: string) => {
+    const list = adj.get(k);
+    if (list) list.push(v);
+    else adj.set(k, [v]);
+  };
   for (const r of relations) {
     if (r.certainty !== 'confirmed') continue;
-    adj.set(r.from, [...(adj.get(r.from) ?? []), r.to]);
-    adj.set(r.to, [...(adj.get(r.to) ?? []), r.from]);
+    push(r.from, r.to);
+    push(r.to, r.from);
   }
-  const q: string[][] = [[from]];
-  const seen = new Set([from]);
-  while (q.length) {
-    const path = q.shift()!;
-    const cur = path[path.length - 1];
-    if (cur === to) return path;
-    for (const n of adj.get(cur) ?? []) {
-      if (seen.has(n)) continue;
-      seen.add(n);
-      q.push([...path, n]);
+  return adj;
+}
+
+/**
+ * 한 출발점에서 도달 가능한 모든 노드까지의 최단 경로를 한 번의 BFS 로 얻는다.
+ *
+ * 이전 구현은 큐에 경로 배열을 통째로 복사해 쌓고(`q.push([...path, n])`),
+ * 부하마다 그래프를 다시 탐색했다. parent 맵으로 바꾸면 노드당 상수 저장이고
+ * 전원당 1회 탐색이면 충분하다. **행동은 같다** — 방문 표시 시점(큐에 넣을 때)과
+ * 이웃 순회 순서가 동일하므로 재구성된 최단 경로가 기존 반환값과 일치한다.
+ * `q.shift()` 도 인덱스 순회로 바꿔 O(n) 이동을 없앴다.
+ */
+function shortestPathsFrom(from: string, adj: Map<string, string[]>): Map<string, string[]> {
+  const parent = new Map<string, string | null>([[from, null]]);
+  const queue: string[] = [from];
+  for (let head = 0; head < queue.length; head += 1) {
+    for (const next of adj.get(queue[head]) ?? []) {
+      if (parent.has(next)) continue;
+      parent.set(next, queue[head]);
+      queue.push(next);
     }
   }
-  return null;
+
+  const paths = new Map<string, string[]>();
+  for (const node of parent.keys()) {
+    const path: string[] = [];
+    for (let cur: string | null | undefined = node; cur != null; cur = parent.get(cur)) {
+      path.unshift(cur);
+    }
+    paths.set(node, path);
+  }
+  return paths;
 }
 
-function isSource(s: SymbolNode): boolean {
-  const t = (s.confirmedType ?? s.typeCandidates[0] ?? '').toLowerCase();
-  return /source|incoming|grid|utility|generator|gen/.test(t);
-}
-
-function isLoad(s: SymbolNode): boolean {
-  const t = (s.confirmedType ?? s.typeCandidates[0] ?? '').toLowerCase();
-  return /load|motor|mcc|panel|feeder/.test(t);
-}
-
-function isProtection(s: SymbolNode): boolean {
-  const t = (s.confirmedType ?? s.typeCandidates[0] ?? '').toLowerCase();
-  return /breaker|vcb|acb|mccb|fuse|cb|rcd/.test(t);
-}
-
-function isBusLike(s: SymbolNode): boolean {
-  const t = (s.confirmedType ?? s.typeCandidates[0] ?? '').toLowerCase();
-  return /bus|bar/.test(t);
-}
+// 분류는 device-class.ts 의 어휘 계층 한 곳에서 결정한다. 판정 지점마다 정규식을
+// 돌리면 규칙이 갈라지고, 앵커 없는 부분 문자열이 무관한 토큰 안쪽에서 걸린다.
+const isSource = (s: SymbolNode) => hasDeviceClass(s, 'source');
+const isLoad = (s: SymbolNode) => hasDeviceClass(s, 'load');
+const isProtection = (s: SymbolNode) => hasDeviceClass(s, 'protection');
+const isBusLike = (s: SymbolNode) => hasDeviceClass(s, 'bus');
 
 export type { RecommendationStatus };
