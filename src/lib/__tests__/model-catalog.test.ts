@@ -1,5 +1,5 @@
 /**
- * Claude 모델 카탈로그 정합 — 목록에 올린 모델이 실제로 쓸 수 있는가.
+ * BYOK 모델 카탈로그 정합 — 목록에 올린 모델이 실제로 쓸 수 있는가.
  *
  * 카탈로그에 모델을 추가하는 것은 절반이다. 나머지 절반은 그 모델로 요청이
  * 실제로 나가는가(샘플링 파라미터 거부)와 비용이 계산되는가(가격표)다. 실측으로
@@ -34,16 +34,28 @@ describe('Claude 카탈로그 — 현행 모델이 빠져 있지 않다', () => 
   });
 });
 
-describe('마지막 1마일 — 카탈로그의 모든 Claude 모델에 가격이 있다', () => {
-  it.each(catalogIds)('%s 가 비용 계산기에 등재돼 있다', (id) => {
-    expect(PRICING).toHaveProperty(id);
-    const pricing = PRICING[id as keyof typeof PRICING];
-    expect(pricing.inputPer1M).toBeGreaterThan(0);
-    expect(pricing.outputPer1M).toBeGreaterThan(0);
-  });
+// 비용 계산기가 다루는 공급자. groq·mistral·ollama 는 의도적으로 제외돼 있어
+// (무료·로컬·자체 과금) 가격 정합을 요구하지 않는다.
+const PRICED_PROVIDERS = ['claude', 'gemini', 'openai'] as const;
+const pricedCatalog = PRICED_PROVIDERS.flatMap((p) =>
+  getModelList(p).map((m) => [p, m] as const),
+);
+
+describe('마지막 1마일 — 카탈로그에 올린 모델은 비용도 계산된다', () => {
+  it.each(pricedCatalog.map(([p, m]) => [p, m.id]))(
+    '%s / %s 가 비용 계산기에 등재돼 있다',
+    (_provider, id) => {
+      // toHaveProperty 를 쓰지 않는다 — 모델 ID 의 점("gemini-3.1-…")을 중첩 경로로
+      // 해석해 항상 실패한다. Claude ID 에는 점이 없어 드러나지 않던 함정이다.
+      expect(Object.keys(PRICING)).toContain(id);
+      const pricing = PRICING[id as keyof typeof PRICING];
+      expect(pricing.inputPer1M).toBeGreaterThan(0);
+      expect(pricing.outputPer1M).toBeGreaterThan(0);
+    },
+  );
 
   it('가격표의 컨텍스트 창이 카탈로그와 일치한다', () => {
-    for (const model of getModelList('claude')) {
+    for (const [, model] of pricedCatalog) {
       const pricing = PRICING[model.id as keyof typeof PRICING];
       expect(pricing.contextWindow).toBe(model.contextWindow);
     }

@@ -38,8 +38,11 @@ export type AIModel =
   | 'claude-sonnet-5'
   | 'claude-haiku-4-5'
   | 'gemini-3.1-pro-preview'
+  | 'gemini-3.6-flash'
   | 'gemini-3.5-flash'
-  | 'gemini-3.1-flash-lite';
+  | 'gemini-3.5-flash-lite'
+  | 'gemini-3.1-flash-lite'
+  | 'gemini-2.5-flash';
 
 export interface TokenCostInput {
   /** AI model identifier */
@@ -161,6 +164,20 @@ export const PRICING: Record<AIModel, ModelPricing> = {
     contextWindow: 1048576,
     longContext: { threshold: 200_000, inputPer1M: 4, outputPer1M: 18 },
   },
+  'gemini-3.6-flash': {
+    name: 'Gemini 3.6 Flash',
+    provider: 'Google',
+    inputPer1M: 1.50,
+    outputPer1M: 7.50,
+    contextWindow: 1048576,
+  },
+  'gemini-3.5-flash-lite': {
+    name: 'Gemini 3.5 Flash-Lite',
+    provider: 'Google',
+    inputPer1M: 0.30,
+    outputPer1M: 2.50,
+    contextWindow: 1048576,
+  },
   'gemini-3.5-flash': {
     name: 'Gemini 3.5 Flash',
     provider: 'Google',
@@ -173,6 +190,14 @@ export const PRICING: Record<AIModel, ModelPricing> = {
     provider: 'Google',
     inputPer1M: 0.25,
     outputPer1M: 1.50,
+    contextWindow: 1048576,
+  },
+  // 카탈로그에 구세대로 남아 있는데 가격이 없어 비용 계산이 안 되던 자리.
+  'gemini-2.5-flash': {
+    name: 'Gemini 2.5 Flash',
+    provider: 'Google',
+    inputPer1M: 0.30,
+    outputPer1M: 2.50,
     contextWindow: 1048576,
   },
 };

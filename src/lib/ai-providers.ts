@@ -48,7 +48,9 @@ export const PROVIDERS: Record<string, AIProvider> = {
     defaultModel: 'gemini-3.5-flash',
     models: [
       { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)', contextWindow: 1_048_576, costTier: 'premium' },
+      { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', contextWindow: 1_048_576, costTier: 'medium' },
       { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', contextWindow: 1_048_576, costTier: 'medium' },
+      { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
       { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
       { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (구세대)', contextWindow: 1_048_576, costTier: 'free' },
     ],
@@ -93,6 +95,8 @@ export const PROVIDERS: Record<string, AIProvider> = {
     models: [
       { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B', contextWindow: 131_072, costTier: 'low' },
       { id: 'openai/gpt-oss-20b', name: 'GPT-OSS 20B', contextWindow: 131_072, costTier: 'free' },
+      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', contextWindow: 131_072, costTier: 'low' },
+      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', contextWindow: 131_072, costTier: 'free' },
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 131_072, costTier: 'low' },
   },
@@ -102,7 +106,8 @@ export const PROVIDERS: Record<string, AIProvider> = {
     defaultModel: 'mistral-small-latest',
     models: [
       { id: 'mistral-large-latest', name: 'Mistral Large', contextWindow: 128_000, costTier: 'high' },
-      { id: 'mistral-small-latest', name: 'Mistral Small', contextWindow: 128_000, costTier: 'low' },
+      // Mistral Small 4(mistral-small-2603)로 갱신되며 컨텍스트가 256k가 됐다.
+      { id: 'mistral-small-latest', name: 'Mistral Small', contextWindow: 256_000, costTier: 'low' },
       { id: 'codestral-latest', name: 'Codestral', contextWindow: 256_000, costTier: 'medium' },
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 128_000, costTier: 'medium' },
