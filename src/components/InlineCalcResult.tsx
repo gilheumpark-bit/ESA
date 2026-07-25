@@ -22,6 +22,7 @@ import {
 import { useCalculator } from '@/hooks/useCalculator';
 import type { DetailedCalcResult, CalcStep } from '@/engine/calculators/types';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
+import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
 
 // =============================================================================
 // PART 1 -- Types & Constants
@@ -35,6 +36,11 @@ interface InlineCalcResultProps {
   missingOptional: ExtendedParamDef[];
   allParams: ExtendedParamDef[];
   canAutoExecute: boolean;
+  /**
+   * 질문에 있었으나 어느 입력인지 확정하지 못한 수치. 비어 있지 않으면 사용자가
+   * 준 값을 흘린 것이므로, 기본값을 접어 두지 말고 펼쳐서 확인받는다.
+   */
+  unreadNumbers?: number[];
   onClose?: () => void;
 }
 
@@ -423,6 +429,7 @@ function MiniForm({
   calculatorName,
   missingRequired,
   missingOptional,
+  unreadNumbers,
   onSubmit,
   isLoading,
   error,
@@ -431,6 +438,7 @@ function MiniForm({
   calculatorName: string;
   missingRequired: ExtendedParamDef[];
   missingOptional: ExtendedParamDef[];
+  unreadNumbers: number[];
   onSubmit: (values: Record<string, unknown>) => void;
   isLoading: boolean;
   error: string | null;
@@ -446,7 +454,8 @@ function MiniForm({
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // 읽지 못한 수치가 있으면 기본값이 그대로 쓰일 위험이 크므로 처음부터 펼친다.
+  const [showAdvanced, setShowAdvanced] = useState(unreadNumbers.length > 0);
 
   const updateValue = useCallback((name: string, val: string) => {
     setValues((prev) => ({ ...prev, [name]: val }));
@@ -530,7 +539,9 @@ function MiniForm({
       </div>
 
       <p className="mb-3 text-xs text-[var(--text-secondary)]">
-        추가 입력이 필요합니다. 아래 항목을 입력해 주세요.
+        {unreadNumbers.length > 0
+          ? `질문의 ${unreadNumbers.join(', ')} 이(가) 어느 입력인지 확정하지 못했습니다. 아래 값을 확인해 주세요.`
+          : '추가 입력이 필요합니다. 아래 항목을 입력해 주세요.'}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -626,19 +637,13 @@ export default function InlineCalcResult({
   missingOptional,
   allParams,
   canAutoExecute,
+  unreadNumbers = [],
   onClose,
 }: InlineCalcResultProps) {
   const { execute, result, isLoading, error, reset } = useCalculator(calculatorId);
-  const [mergedParams, setMergedParams] = useState<Record<string, unknown>>(() => {
-    const initial: Record<string, unknown> = { ...extractedParams };
-    for (const parameter of allParams) {
-      const extended = parameter as ExtendedParamDef;
-      if (initial[parameter.name] === undefined && extended.defaultValue !== undefined) {
-        initial[parameter.name] = extended.defaultValue;
-      }
-    }
-    return initial;
-  });
+  const [mergedParams, setMergedParams] = useState<Record<string, unknown>>(
+    () => coerceCalculatorInput(allParams, extractedParams).input,
+  );
 
   // State A: 자동 실행 (canAutoExecute=true일 때 mount 시 실행)
   useEffect(() => {
@@ -653,25 +658,15 @@ export default function InlineCalcResult({
   // 미니 폼 제출 핸들러
   const handleFormSubmit = useCallback(
     (formValues: Record<string, unknown>) => {
-      // 기본값 병합: extractedParams + formValues + defaults
-      const merged: Record<string, unknown> = { ...extractedParams };
-
-      for (const p of allParams) {
-        const ext = p as ExtendedParamDef;
-        if (merged[p.name] === undefined && ext.defaultValue !== undefined) {
-          merged[p.name] = ext.defaultValue;
-        }
+      // 추출값 위에 폼 입력을 덮고, 나머지는 기본값으로 채운 뒤 타입을 맞춘다.
+      const overridden: Record<string, unknown> = { ...extractedParams };
+      for (const [key, value] of Object.entries(formValues)) {
+        if (value !== undefined) overridden[key] = value;
       }
+      const { input } = coerceCalculatorInput(allParams, overridden);
 
-      // 폼 입력값 덮어쓰기
-      for (const [k, v] of Object.entries(formValues)) {
-        if (v !== undefined) {
-          merged[k] = v;
-        }
-      }
-
-      setMergedParams(merged);
-      execute(merged);
+      setMergedParams(input);
+      execute(input);
     },
     [extractedParams, allParams, execute],
   );
@@ -708,6 +703,7 @@ export default function InlineCalcResult({
       calculatorName={calculatorName}
       missingRequired={missingRequired}
       missingOptional={missingOptional}
+      unreadNumbers={unreadNumbers}
       onSubmit={handleFormSubmit}
       isLoading={isLoading}
       error={error}

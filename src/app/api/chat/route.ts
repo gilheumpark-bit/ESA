@@ -23,6 +23,7 @@ import { filterLLMOutput } from '@/engine/llm/output-filter';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import {
   resolveChatCalculationEvidence,
+  resolveChatCalculationShortfall,
   type ChatCalculationEvidence,
 } from '@/lib/chat-calculation-evidence';
 import { buildElectricalAssistantPrompt } from '@/lib/electrical-chat';
@@ -397,8 +398,13 @@ async function POST__impl(request: NextRequest) {
     const calculationEvidence = lastUser && typeof lastUser.content === 'string'
       ? resolveChatCalculationEvidence(lastUser.content)
       : null;
+    // 영수증이 없으면 모델이 스스로 계산하고 출력 필터가 그 수치를 지워 문장이
+    // 깨진다. 그럴 땐 계산 대신 필요한 입력을 되묻게 한다.
+    const calculationShortfall = !calculationEvidence && lastUser && typeof lastUser.content === 'string'
+      ? resolveChatCalculationShortfall(lastUser.content)
+      : null;
     const responseLanguage = body.language === 'en' ? 'en' : 'ko';
-    const calibratedSystemPrompt = `${buildElectricalAssistantPrompt(responseLanguage)}${calculationEvidence?.promptContext ?? ''}`;
+    const calibratedSystemPrompt = `${buildElectricalAssistantPrompt(responseLanguage)}${calculationEvidence?.promptContext ?? calculationShortfall ?? ''}`;
 
     // Token budget check
     cleanupTokenUsage();

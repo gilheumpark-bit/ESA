@@ -1,6 +1,6 @@
 import { CALCULATOR_REGISTRY } from '@/engine/calculators';
 import type { DetailedCalcResult } from '@/engine/calculators';
-import { analyzeCalcIntent } from '@/lib/calc-intent-bridge';
+import { analyzeCalcIntent, coerceCalculatorInput } from '@/lib/calc-intent-bridge';
 
 export interface ChatCalculationEvidence {
   calculatorId: string;
@@ -11,26 +11,6 @@ export interface ChatCalculationEvidence {
   promptContext: string;
 }
 
-function coerceInput(
-  definitions: ReturnType<typeof analyzeCalcIntent>['allParams'],
-  extracted: Record<string, unknown>,
-): Record<string, unknown> {
-  const input: Record<string, unknown> = {};
-  for (const definition of definitions) {
-    const raw = definition.name in extracted ? extracted[definition.name] : definition.defaultValue;
-    if (raw === undefined) continue;
-    if (definition.type === 'number') {
-      const value = typeof raw === 'number' ? raw : Number(raw);
-      if (!Number.isFinite(value)) throw new Error(`CHAT_CALC_INVALID_NUMBER:${definition.name}`);
-      input[definition.name] = value;
-    } else if (definition.type === 'boolean') {
-      input[definition.name] = Boolean(raw);
-    } else {
-      input[definition.name] = raw;
-    }
-  }
-  return input;
-}
 
 /**
  * 완전한 자연어 계산 입력만 정본 계산기로 실행한다. 파라미터가 빠졌거나
@@ -43,7 +23,8 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
   if (!calculator) return null;
 
   try {
-    const input = coerceInput(intent.allParams, intent.extractedParams);
+    const { input, invalid } = coerceCalculatorInput(intent.allParams, intent.extractedParams);
+    if (invalid.length > 0) return null;
     const calculated = calculator.calculator(input);
     const result = {
       value: calculated.value,
@@ -65,4 +46,28 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
   } catch {
     return null;
   }
+}
+
+/**
+ * 계산 요청인데 정본 계산기를 돌리지 못한 경우의 프롬프트.
+ *
+ * 영수증이 없으면 지금까지는 시스템 프롬프트에 아무것도 붙지 않았고, 모델은
+ * 스스로 계산해 수치를 썼다. 그 수치는 영수증에 없으므로 출력 필터가 전부
+ * 지웠고, 사용자에게는 "합성 최대수요전력은 **[BLOCKED: Tool 호출 필요]**입니다"
+ * 같은 문장만 남았다(실측 2026-07-25). 필터는 제 일을 한 것이고, 빠진 것은
+ * **계산하지 말고 무엇이 필요한지 물으라**는 지시다.
+ */
+export function resolveChatCalculationShortfall(query: string): string | null {
+  const intent = analyzeCalcIntent(query);
+  if (!intent.hasCalcIntent || !intent.calculatorId) return null;
+  if (intent.canAutoExecute && resolveChatCalculationEvidence(query)) return null;
+
+  const needed = [...intent.missingRequired, ...intent.missingOptional]
+    .map((p) => `${p.description}${p.unit ? ` (${p.unit})` : ''}`)
+    .slice(0, 8);
+  const unread = intent.unreadNumbers.length > 0
+    ? `\n질문에 있으나 앱이 어느 입력인지 읽지 못한 수치: ${intent.unreadNumbers.join(', ')} — 각각 무엇의 값인지 확인하세요.`
+    : '';
+
+  return `\n\n계산 요청이지만 검증된 ESA 계산기(${intent.calculatorName ?? intent.calculatorId})를 실행할 입력이 확정되지 않았습니다.\n직접 계산해서 수치를 제시하지 마세요. 대신 필요한 입력을 구체적으로 되물으세요.\n필요한 입력: ${needed.join(', ') || '없음'}${unread}\n일반 원리·공식·판단 기준은 수치 없이 설명해도 됩니다.`;
 }

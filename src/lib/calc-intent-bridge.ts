@@ -39,6 +39,11 @@ export interface CalcIntentResult {
   missingOptional: ExtendedParamDef[];
   /** Full param definition list for the matched calculator */
   allParams: ExtendedParamDef[];
+  /**
+   * 질문에 적혀 있으나 어떤 파라미터로도 읽히지 못한 수치. 비어 있지 않으면
+   * 사용자가 준 값을 흘린 것이므로 기본값으로 계산한 결과를 영수증으로 내지 않는다.
+   */
+  unreadNumbers: number[];
   /** True if all required params are satisfied (extracted or have defaults) */
   canAutoExecute: boolean;
   /** Merged confidence score from both parsers (0-1) */
@@ -54,6 +59,7 @@ const NO_INTENT: CalcIntentResult = {
   missingRequired: [],
   missingOptional: [],
   allParams: [],
+  unreadNumbers: [],
   canAutoExecute: false,
   confidence: 0,
 };
@@ -88,71 +94,101 @@ function detectLang(text: string): string {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Maps intent-parser extractNumericParams() output keys
- * to CALCULATOR_PARAMS field names.
+ * 의도 파서가 뽑은 키를 **그 계산기의** 파라미터명으로 옮긴다.
  *
- * intent-parser key -> CALCULATOR_PARAMS name
+ * 전역 치환표는 쓸 수 없다. 같은 `voltage` 가 voltage-drop 에서는 `voltage`,
+ * short-circuit 에서는 `systemVoltage`, three-phase-power 에서는 `lineVoltage`
+ * 이기 때문이다. 이전 코드는 전역표를 썼고, 그래서 `insulation → insulationType`·
+ * `dropLimitPercent → maxDropPercent` 라는 전역 개명이 정작 그 이름을 그대로
+ * 쓰는 cable-sizing 의 입력을 빼앗아 기본값으로 떨어뜨렸다(실측 2026-07-25 —
+ * 기본값이 우연히 사용자 값과 같아 오래 드러나지 않았다).
  *
- * Keys that already match (voltage, current, length, powerFactor)
- * are passed through unchanged.
+ * 목록에 없는 계산기·키는 이름 그대로 통과한다.
  */
-const PARAM_NAME_MAP: Record<string, string> = {
-  // intent-parser extracts 'cableSize' -> voltage-drop uses 'cableSize' (pass-through)
-  // NOTE: other calculators still use 'crossSection' for cable area
-  // intent-parser extracts 'totalLoad' -> same name in transformer-capacity, max-demand, etc.
-  // (no mapping needed, but listed for documentation)
-  // intent-parser extracts 'transformerKVA' -> CALCULATOR_PARAMS uses 'transformerCapacity'
-  transformerKVA: 'transformerCapacity',
-  // intent-parser extracts 'shortCircuitCurrent' -> same name in breaker-sizing (kA)
-  // intent-parser extracts 'conductor' -> some calcs use 'conductorMaterial', others use 'conductor'
-  // Do NOT remap globally — voltage-drop uses 'conductor' directly
-  // intent-parser extracts 'phase' -> some calcs use 'phases', voltage-drop uses 'phase'
-  // Do NOT remap globally
-  // intent-parser extracts 'insulation' -> maps to 'insulationType'
-  insulation: 'insulationType',
-  // intent-parser extracts 'dropLimitPercent' -> maps to 'maxDropPercent' (solar-cable)
-  dropLimitPercent: 'maxDropPercent',
+const PARAM_ALIASES: Record<string, Record<string, string>> = {
+  'short-circuit': { voltage: 'systemVoltage', transformerKVA: 'transformerCapacity', length: 'cableLength' },
+  'breaker-sizing': { current: 'loadCurrent' },
+  'three-phase-power': { voltage: 'lineVoltage', current: 'lineCurrent' },
+  'ground-resistance': { length: 'rodLength' },
+  'transformer-capacity': { transformerKVA: 'transformerCapacity' },
 };
 
-/**
- * Remap intent-parser param names to CALCULATOR_PARAMS names.
- * Keys not in PARAM_NAME_MAP are passed through unchanged.
- */
+/** Remap intent-parser param names to the target calculator's param names. */
 function mapParamNames(
   extracted: Record<string, unknown>,
+  calculatorId: string,
 ): Record<string, unknown> {
+  const aliases = PARAM_ALIASES[calculatorId] ?? {};
   const mapped: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(extracted)) {
-    const mappedKey = PARAM_NAME_MAP[key] ?? key;
-    mapped[mappedKey] = value;
+    mapped[aliases[key] ?? key] = value;
   }
   return mapped;
 }
 
 /**
- * Map conductor value from intent-parser format to CALCULATOR_PARAMS option value.
- * intent-parser: 'Cu' / 'Al'  ->  CALCULATOR_PARAMS: 'copper' / 'aluminum'
+ * 질문에 적힌 수치 중 추출기가 **하나도 이해하지 못한** 값을 돌려준다.
+ *
+ * 계산기 파라미터는 거의 다 defaultValue 를 갖는다. 폼 UI 에서는 사용자가 그
+ * 기본값을 눈으로 보고 고칠 수 있으니 옳은 설계지만, chat 영수증에서는 사용자가
+ * 기본값을 보지 못한다. 그래서 추출이 실패하면 "사용자가 준 값"이 조용히 버려지고
+ * **기본값으로 계산한 결과가 '검증된 계산기 영수증'으로** 모델에 주입된다.
+ * 실측(2026-07-25): "면적 100제곱미터 … 조명률 0.6 보수율 0.8" 질문에서 추출 0건,
+ * 영수증은 area=50·UF=0.5·MF=0.7 로 계산돼 24EA 를 확인 수치로 제시했다.
+ *
+ * 그래서 읽지 못한 수치가 하나라도 있으면 자동 실행하지 않는다. 판단 기준은
+ * "이 계산기가 그 값을 쓰는가"가 아니라 "추출기가 그 값을 이해했는가"다 —
+ * 차단기 질문의 "3상"처럼 그 계산기의 입력이 아닌 값도 있기 때문이다.
  */
-function normalizeConductorValue(params: Record<string, unknown>): void {
-  if (params.conductorMaterial === 'Cu') {
-    params.conductorMaterial = 'copper';
-  } else if (params.conductorMaterial === 'Al') {
-    params.conductorMaterial = 'aluminum';
+function findUnreadNumbers(query: string, extracted: Record<string, unknown>): number[] {
+  const read = new Set<number>();
+  for (const value of Object.values(extracted)) {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (Number.isFinite(n)) read.add(n);
   }
+  const unread: number[] = [];
+  // 앞 글자가 문자·숫자·점이면 단위의 일부다(mm2 의 2, 232.3.9 의 9).
+  for (const match of query.matchAll(/(?:^|[^0-9A-Za-z가-힣.])(\d+(?:\.\d+)?)/g)) {
+    const n = parseFloat(match[1]);
+    if (!read.has(n) && !unread.includes(n)) unread.push(n);
+  }
+  return unread;
 }
 
 /**
- * Map insulation value from intent-parser format to CALCULATOR_PARAMS option value.
- * intent-parser: 'XLPE' / 'PVC'  ->  already matches CALCULATOR_PARAMS option values.
+ * 추출값·폼 입력을 계산기가 받는 타입으로 맞춘다.
+ *
+ * 의도 파서는 상수를 문자열로 준다(`phase: '3'`). 계산기는 숫자 3을 요구하므로
+ * 변환 없이 넘기면 `phase must be one of [1, 3], got 3` 으로 떨어진다 — chat 은
+ * 자체 변환이 있어 무사했고 홈·검색의 인라인 계산만 깨져 있었다(실측 2026-07-25,
+ * 홈 히어로 예시 "전압강하 검토"가 그 경로다). 같은 변환을 두 벌 두지 않는다.
+ *
+ * 값이 숫자가 아니면 그 이름을 `invalid` 로 돌려준다 — 던지지 않는다. chat 은
+ * 영수증을 포기하고, 폼은 그 항목을 사용자에게 되묻는다.
  */
-function normalizeInsulationValue(params: Record<string, unknown>): void {
-  // intent-parser already returns 'XLPE' or 'PVC', which match
-  // CALCULATOR_PARAMS options — no conversion needed.
-  // This function exists as a documented extension point.
-  const val = params.insulationType;
-  if (typeof val === 'string') {
-    params.insulationType = val.toUpperCase();
+export function coerceCalculatorInput(
+  definitions: ExtendedParamDef[],
+  values: Record<string, unknown>,
+): { input: Record<string, unknown>; invalid: string[] } {
+  const input: Record<string, unknown> = {};
+  const invalid: string[] = [];
+  for (const definition of definitions) {
+    const raw = definition.name in values ? values[definition.name] : definition.defaultValue;
+    if (raw === undefined) continue;
+    if (definition.type === 'number') {
+      const value = typeof raw === 'number' ? raw : Number(raw);
+      if (!Number.isFinite(value)) {
+        invalid.push(definition.name);
+        continue;
+      }
+      input[definition.name] = value;
+    } else if (definition.type === 'boolean') {
+      input[definition.name] = Boolean(raw);
+    } else {
+      input[definition.name] = raw;
+    }
   }
+  return { input, invalid };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -174,27 +210,45 @@ function normalizeInsulationValue(params: Record<string, unknown>): void {
  * @returns CalcIntentResult with extracted params and missing param analysis
  */
 export function analyzeCalcIntent(query: string): CalcIntentResult {
-  // 1. Use parseQuery to detect calculator intent and get suggestedCalculator
+  // 1. 검색 파서(계산기 6종만 제안 가능)와 도메인 의도 파서를 **둘 다** 태운다.
   const parsed = parseQuery(query);
-
-  // 2. Check if intent is 'calculate' and we have a suggested calculator
-  if (parsed.intent !== 'calculate' || !parsed.suggestedCalculator) {
-    return { ...NO_INTENT };
-  }
-
-  // 3. Use parseIntent to extract numeric params from the query. An explicit
-  // engineering keyword such as "전압강하" is more specific than a generic
-  // entity such as "3상" found by the search parser.
   const lang = detectLang(query);
   const intentResult = parseIntent(query, lang);
-  const explicitCalculatorId = intentResult.tool
+
+  // 2. 전기 키워드는 의도 파서가 더 정확히 안다. 명시 도구가 고신뢰로 잡히면
+  //    그것을 정본으로 쓴다.
+  const explicitCalculatorId = intentResult.intent === 'calculate'
+    && intentResult.confidence >= 0.8
+    && intentResult.tool
     ? EXPLICIT_TOOL_CALCULATOR_IDS[intentResult.tool]
     : undefined;
-  const calculatorId = intentResult.intent === 'calculate'
-    && intentResult.confidence >= 0.8
-    && explicitCalculatorId
-    ? explicitCalculatorId
-    : parsed.suggestedCalculator;
+
+  // 3. 게이트 — **의도**는 parseQuery 가 정본, **계산기 이름**은 둘 중 아는 쪽.
+  //
+  // parseQuery 는 질문 형태를 보고 calculate / search / definition / standard_lookup
+  // 을 정확히 가른다. 반면 계산기는 6종(cable-sizing·short-circuit·single/three-
+  // phase-power·transformer-capacity·voltage-drop)밖에 **이름을 대지 못한다**.
+  // 이전 코드는 이 둘을 한 조건에 묶어 "이름을 못 대면 의도도 없다"로 처리했다.
+  // 그래서 "조도 계산"·"최대수요전력 계산"은 의도가 calculate 로 옳게 잡히고도
+  // NO_INTENT 로 떨어졌고, breaker-sizing·ground-resistance 가 통과한 것은 질문에
+  // 검색 파서가 아는 단어가 **우연히** 섞였기 때문이었다(실측 2026-07-25: 매핑
+  // 8종 중 5종만 실행). 도달하지 못하면 모델이 직접 답하려 하고 출력 필터가 그
+  // 수치를 막아, known-answer 로 검증된 계산기를 두고도 사용자는 "[BLOCKED]입니다"
+  // 같은 깨진 문장을 받는다.
+  //
+  // 의도 판정까지 우회하면 안 된다 — 실측(전후 차분)상 "KEC 232.3.9 전압강하 조항
+  // 원문"·"전압강하가 생기는 이유"처럼 키워드만 겹치는 규정·개념 질문 5건이 전부
+  // 계산기로 새어 홈 화면이 검색 대신 계산 패널을 띄웠다. 그 판정은 parseQuery 가
+  // 이미 옳게 하고 있으므로 그대로 존중한다.
+  if (parsed.intent !== 'calculate') {
+    return { ...NO_INTENT };
+  }
+  // 이름은 도메인 파서가 우선한다 — 검색 파서는 "케이블 굵기 선정"을 voltage-drop
+  // 으로 잘못 지목했다(실측). 전기 용어는 의도 파서가 더 정확히 안다.
+  const calculatorId = explicitCalculatorId ?? parsed.suggestedCalculator;
+  if (!calculatorId) {
+    return { ...NO_INTENT };
+  }
 
   // 4. Get the calculator's param definitions from CALCULATOR_PARAMS
   const paramDefs = CALCULATOR_PARAMS[calculatorId];
@@ -204,11 +258,7 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   }
 
   // 5. Map extracted params to the correct param names
-  const mappedParams = mapParamNames(intentResult.extractedParams);
-
-  // Normalize conductor and insulation values
-  normalizeConductorValue(mappedParams);
-  normalizeInsulationValue(mappedParams);
+  const mappedParams = mapParamNames(intentResult.extractedParams, calculatorId);
 
   // 6. Determine which required params are missing
   //    "required" = no defaultValue AND not extracted
@@ -228,8 +278,9 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
     }
   }
 
-  // 7. canAutoExecute = all required params are satisfied
-  const canAutoExecute = missingRequired.length === 0;
+  // 7. canAutoExecute = 필수 입력이 모두 있고, 질문의 수치를 하나도 흘리지 않았을 때만.
+  const unreadNumbers = findUnreadNumbers(query, intentResult.extractedParams);
+  const canAutoExecute = missingRequired.length === 0 && unreadNumbers.length === 0;
 
   // 8. Merge confidence from both parsers
   //    parseQuery doesn't return confidence, so use intent-parser's
@@ -251,6 +302,7 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
     missingRequired,
     missingOptional,
     allParams: paramDefs,
+    unreadNumbers,
     canAutoExecute,
     confidence,
   };

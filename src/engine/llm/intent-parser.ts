@@ -36,6 +36,12 @@ const KO_PATTERNS: IntentPattern[] = [
 
   // Cable sizing
   { pattern: /케이블\s*(?:사이즈|선정|규격)/, tool: 'calculate_cable_sizing', intent: 'calculate', confidence: 0.9 },
+  // "케이블 굵기"는 전선 굵기와 같은 뜻인데 위 패턴은 케이블 뒤에 사이즈/선정/규격이
+  // 바로 와야 해서 "케이블 굵기 선정"이 빠졌다. 실측(2026-07-25)에서 그 질문이
+  // 문장 속 "허용 전압강하 3%"에 밀려 voltage-drop 으로 오라우팅됐다 — 굵기 선정이
+  // 의도이고 전압강하는 제약 조건인데 반대로 읽은 것이다. 굵기 선정은 무엇을
+  // 구하라는 명시 진술이므로 우연히 등장한 전압강하보다 앞선다.
+  { pattern: /케이블\s*굵기/, tool: 'calculate_cable_sizing', intent: 'calculate', confidence: 0.92 },
   { pattern: /전선\s*(?:굵기|크기|뭘로|선정)/, tool: 'calculate_cable_sizing', intent: 'calculate', confidence: 0.85 },
   { pattern: /몇\s*(?:sq|스퀘어|mm)/, tool: 'calculate_cable_sizing', intent: 'calculate', confidence: 0.8 },
 
@@ -221,9 +227,20 @@ function extractNumericParams(query: string): Record<string, unknown> {
   if (/XLPE/i.test(query)) params.insulation = 'XLPE';
   if (/PVC/i.test(query)) params.insulation = 'PVC';
 
-  // Percentage: "3%", "5 %"
-  const pctMatch = query.match(/(\d+(?:\.\d+)?)\s*%/);
-  if (pctMatch) params.dropLimitPercent = parseFloat(pctMatch[1]);
+  // Impedance: "%Z 5%", "임피던스 5%", "5%Z"
+  const impedanceMatch = query.match(/(?:%\s*Z|임피던스|impedance)\s*[:=]?\s*(\d+(?:\.\d+)?)\s*%?/i)
+    ?? query.match(/(\d+(?:\.\d+)?)\s*%\s*(?:Z|임피던스)/i);
+  if (impedanceMatch) params.impedancePercent = parseFloat(impedanceMatch[1]);
+
+  // 전압강하 한도: "허용 전압강하 3%", "3% 이내 전압강하"
+  //
+  // 이전에는 문장의 **첫 퍼센트를 무조건** 전압강하 한도로 읽었다. 그래서
+  // "%Z 5%"(변압기 임피던스)도 "여유율 20%"(변압기 여유율)도 전부 전압강하
+  // 한도가 됐고, 정작 해당 계산기의 impedancePercent·growthMargin 은 기본값으로
+  // 채워졌다(실측 2026-07-25). 퍼센트는 무엇의 퍼센트인지가 값 자체보다 중요하다.
+  const dropMatch = query.match(/(?:전압\s*강하|voltage\s*drop)[^%\d]{0,12}(\d+(?:\.\d+)?)\s*%/i)
+    ?? query.match(/(\d+(?:\.\d+)?)\s*%[^%\d]{0,12}(?:전압\s*강하|voltage\s*drop)/i);
+  if (dropMatch) params.dropLimitPercent = parseFloat(dropMatch[1]);
 
   return params;
 }

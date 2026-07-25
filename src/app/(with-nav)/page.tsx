@@ -113,6 +113,7 @@ export default function HomePage() {
               missingOptional={calcIntent.missingOptional}
               allParams={calcIntent.allParams}
               canAutoExecute={calcIntent.canAutoExecute}
+                  unreadNumbers={calcIntent.unreadNumbers}
               onClose={() => setCalcIntent(null)}
             />
           </div>

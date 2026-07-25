@@ -643,6 +643,7 @@ function SearchPageInner() {
                   missingOptional={calcIntent.missingOptional}
                   allParams={calcIntent.allParams}
                   canAutoExecute={calcIntent.canAutoExecute}
+                  unreadNumbers={calcIntent.unreadNumbers}
                 />
               ) : result.featuredCalculator ? (
                 <FeaturedCalculatorPanel calc={result.featuredCalculator} />
