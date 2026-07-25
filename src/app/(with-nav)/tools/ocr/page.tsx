@@ -79,14 +79,14 @@ const CALC_LABELS: Record<string, string> = {
   'voltage-drop': '전압강하 계산',
   'cable-sizing': '케이블 사이즈 선정',
   'breaker-sizing': '차단기 선정',
-  'motor-starting': '모터 기동전류',
+  'starting-current': '모터 기동전류',
   'motor-load': '모터 부하 계산',
-  'demand-factor': '수용률 계산',
-  'load-calculation': '부하 계산',
-  'transformer-sizing': '변압기 용량',
+  'demand-diversity': '수용률 계산',
+  'max-demand': '부하 계산',
+  'transformer-capacity': '변압기 용량',
   'short-circuit': '단락전류 계산',
   'three-phase-power': '3상 전력 계산',
-  'power-factor-correction': '역률 보상',
+  'reactive-power': '역률 보상',
 };
 
 const PARAM_LABELS: Record<string, string> = {

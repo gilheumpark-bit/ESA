@@ -54,7 +54,15 @@ async function GET__impl(request: NextRequest) {
   const rl = checkRateLimit(ip, 'default');
   if (!rl.allowed) {
     return jsonWithEsa(
-      { success: false, error: { code: 'ESVA-4002', message: 'Rate limit exceeded' } },
+      {
+        success: false,
+        error: {
+          code: 'ESVA-4002',
+          // 이 문구는 계산기 화면에 그대로 렌더된다(useCalculator 가 API message 를
+          // 그대로 error 로 넘긴다). 정상 사용 중에도 뜨는 메시지라 한국어로 쓴다.
+          message: '요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
+        },
+      },
       { status: 429 },
     );
   }
@@ -91,7 +99,7 @@ async function POST__impl(request: NextRequest) {
           success: false,
           error: {
             code: 'ESVA-4002',
-            message: 'Rate limit exceeded',
+            message: '요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.',
             retryAfter: rl.retryAfter,
           },
         },
@@ -145,7 +153,7 @@ async function POST__impl(request: NextRequest) {
     const userId = await extractVerifiedUserId(request);
     const userTier: Tier = userId ? await getUserTier(userId) : 'free';
     const calcDifficulty = DIFFICULTY_TO_CALC_DIFFICULTY[entry.difficulty] ?? 'basic';
-    const access = checkCalcAccess(userTier, calcDifficulty);
+    const access = checkCalcAccess(userTier, calcDifficulty, body.language ?? 'ko');
 
     if (!access.allowed) {
       return jsonWithEsa(

@@ -48,7 +48,7 @@ const POWER_SYSTEM_TERMS: ElectricalTerm[] = [
     synonyms: ['TR', 'Xfmr', '트랜스'],
     category: 'power-system',
     iecRef: '421-01-01',
-    relatedCalc: 'transformer-sizing',
+    relatedCalc: 'transformer-capacity',
   },
   {
     id: 'ps-002',
@@ -118,7 +118,6 @@ const POWER_SYSTEM_TERMS: ElectricalTerm[] = [
     zh: '汇流排',
     synonyms: ['모선', 'Bus bar'],
     category: 'power-system',
-    relatedCalc: 'busbar-sizing',
   },
   {
     id: 'ps-009',
@@ -228,7 +227,7 @@ const POWER_SYSTEM_TERMS: ElectricalTerm[] = [
     zh: '电力电容器',
     synonyms: ['SC', 'Capacitor Bank', '콘덴서'],
     category: 'power-system',
-    relatedCalc: 'power-factor-correction',
+    relatedCalc: 'reactive-power',
   },
   {
     id: 'ps-020',
@@ -302,7 +301,7 @@ const PROTECTION_TERMS: ElectricalTerm[] = [
     synonyms: ['OC', '과부하전류'],
     category: 'protection',
     iecRef: '442-01-19',
-    relatedCalc: 'overcurrent-protection',
+    relatedCalc: 'relay-basic',
   },
   {
     id: 'pr-002',
@@ -427,7 +426,7 @@ const PROTECTION_TERMS: ElectricalTerm[] = [
     zh: '保护配合',
     synonyms: ['Relay Coordination', '계전기협조'],
     category: 'protection',
-    relatedCalc: 'protection-coordination',
+    relatedCalc: 'relay-basic',
   },
   {
     id: 'pr-015',
@@ -545,7 +544,7 @@ const CABLE_WIRE_TERMS: ElectricalTerm[] = [
     synonyms: ['Current Carrying Capacity', '전류용량'],
     category: 'cable-wire',
     iecRef: '826-11-13',
-    relatedCalc: 'ampacity',
+    relatedCalc: 'ampacity-compare',
   },
   {
     id: 'cw-006',
@@ -614,7 +613,6 @@ const CABLE_WIRE_TERMS: ElectricalTerm[] = [
     zh: '线管',
     synonyms: ['Raceway', '금속관', 'EMT', 'IMC'],
     category: 'cable-wire',
-    relatedCalc: 'conduit-fill',
   },
   {
     id: 'cw-013',
@@ -687,7 +685,7 @@ const GROUNDING_TERMS: ElectricalTerm[] = [
     synonyms: ['Earthing', 'GND', '어싱'],
     category: 'grounding',
     iecRef: '826-13-01',
-    relatedCalc: 'grounding',
+    relatedCalc: 'ground-resistance',
   },
   {
     id: 'gr-002',
@@ -698,7 +696,7 @@ const GROUNDING_TERMS: ElectricalTerm[] = [
     synonyms: ['Earth Resistance', '어스저항'],
     category: 'grounding',
     iecRef: '826-13-10',
-    relatedCalc: 'grounding-resistance',
+    relatedCalc: 'ground-resistance',
   },
   {
     id: 'gr-003',
@@ -853,7 +851,7 @@ const RENEWABLE_TERMS: ElectricalTerm[] = [
     zh: '光伏',
     synonyms: ['PV', 'Solar', '솔라'],
     category: 'renewable',
-    relatedCalc: 'pv-sizing',
+    relatedCalc: 'solar-generation',
   },
   {
     id: 'rn-002',
@@ -872,7 +870,7 @@ const RENEWABLE_TERMS: ElectricalTerm[] = [
     zh: '储能系统',
     synonyms: ['ESS', 'BESS', '배터리저장'],
     category: 'renewable',
-    relatedCalc: 'ess-sizing',
+    relatedCalc: 'battery-capacity',
   },
   {
     id: 'rn-004',
@@ -902,7 +900,7 @@ const RENEWABLE_TERMS: ElectricalTerm[] = [
     zh: '电力变换系统',
     synonyms: ['PCS', 'Power Converter'],
     category: 'renewable',
-    relatedCalc: 'pcs-sizing',
+    relatedCalc: 'pcs-capacity',
   },
   {
     id: 'rn-007',
@@ -1001,7 +999,7 @@ const MOTOR_TERMS: ElectricalTerm[] = [
     synonyms: ['모터', 'Electric Motor'],
     category: 'motor',
     iecRef: '411-31-31',
-    relatedCalc: 'motor-sizing',
+    relatedCalc: 'motor-capacity',
   },
   {
     id: 'mt-002',
@@ -1012,7 +1010,7 @@ const MOTOR_TERMS: ElectricalTerm[] = [
     synonyms: ['Inrush Current', 'LRC', 'LRA'],
     category: 'motor',
     iecRef: '411-48-09',
-    relatedCalc: 'motor-starting',
+    relatedCalc: 'starting-current',
   },
   {
     id: 'mt-003',
@@ -1022,7 +1020,7 @@ const MOTOR_TERMS: ElectricalTerm[] = [
     zh: '变频驱动器',
     synonyms: ['VFD', 'VVVF', '인버터 드라이브'],
     category: 'motor',
-    relatedCalc: 'vfd-sizing',
+    relatedCalc: 'inverter-capacity',
   },
   {
     id: 'mt-004',
@@ -1033,7 +1031,7 @@ const MOTOR_TERMS: ElectricalTerm[] = [
     synonyms: ['PF', 'cos phi', 'cosφ'],
     category: 'motor',
     iecRef: '131-11-42',
-    relatedCalc: 'power-factor-correction',
+    relatedCalc: 'reactive-power',
   },
   {
     id: 'mt-005',
@@ -1082,7 +1080,7 @@ const MOTOR_TERMS: ElectricalTerm[] = [
     zh: '星三角启动',
     synonyms: ['Wye-Delta', 'S-D Starting'],
     category: 'motor',
-    relatedCalc: 'motor-starting',
+    relatedCalc: 'starting-current',
   },
   {
     id: 'mt-010',
@@ -1274,7 +1272,6 @@ const MEASUREMENT_TERMS: ElectricalTerm[] = [
     synonyms: ['THD', 'Harmonics', '하모닉'],
     category: 'measurement',
     iecRef: '551-20-01',
-    relatedCalc: 'harmonics',
   },
   {
     id: 'ms-012',

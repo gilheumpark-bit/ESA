@@ -13,6 +13,7 @@
 
 import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
+import { generateSuggestions } from '@/lib/sld-recognition';
 import { snapConnectionEndpoints, formatEndpointId as endpointId } from './endpoint-snap';
 import { parseSpecText, type ParsedSpec } from './spec-text';
 
@@ -529,7 +530,7 @@ export function parseDxfToSLD(
     components,
     connections: snap.connections,
     sourceTexts: texts.map((item) => ({ text: item.text, position: { x: item.x, y: item.y }, confidence: 0.99 })),
-    suggestedCalculations: [],
+    suggestedCalculations: generateSuggestions({ components, connections: snap.connections }),
     confidence: 0.95, // 벡터 파싱은 VLM보다 높은 신뢰도
     rawDescription: `DXF parsed: ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text labels`,
   };

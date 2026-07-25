@@ -443,19 +443,19 @@ export function suggestCalculators(nameplate: NameplateData): string[] {
 
   // 모터 데이터 (rpm, 효율, 역률)
   if (nameplate.rpm || nameplate.efficiency) {
-    suggestions.push('motor-starting');
+    suggestions.push('starting-current');
     suggestions.push('motor-load');
   }
 
   // 전력 데이터로 부하 계산
   if (nameplate.power) {
-    suggestions.push('demand-factor');
-    suggestions.push('load-calculation');
+    suggestions.push('demand-diversity');
+    suggestions.push('max-demand');
   }
 
   // kVA 정격 → 변압기 관련 계산
   if (nameplate.power?.includes('kVA') || nameplate.power?.includes('MVA')) {
-    suggestions.push('transformer-sizing');
+    suggestions.push('transformer-capacity');
     suggestions.push('short-circuit');
   }
 
@@ -466,7 +466,7 @@ export function suggestCalculators(nameplate: NameplateData): string[] {
 
   // 역률 보상
   if (nameplate.powerFactor) {
-    suggestions.push('power-factor-correction');
+    suggestions.push('reactive-power');
   }
 
   return [...new Set(suggestions)];

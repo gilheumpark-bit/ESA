@@ -361,7 +361,15 @@ function stringProperties(value: unknown): Record<string, string> | undefined {
   return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
-function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
+/**
+ * 추출된 기기·연결에서 "확인이 필요한 계산 항목"을 만든다.
+ *
+ * 이미지 AI 경로만 이 함수를 부르고 DXF·PDF 벡터 경로는 `[]` 를 하드코딩하고
+ * 있었다(실측 2026-07-26: 실도면 4건 전부 제안 0건). 규칙은 기기 종류만 보므로
+ * 추출 경로와 무관하다 — 벡터도 같은 것을 써야 한다. 두 벌로 나누면 한쪽만
+ * 고쳐지는 일이 반복된다.
+ */
+export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | 'connections'>): CalcSuggestion[] {
   const suggestions: CalcSuggestion[] = [];
   const { components, connections } = analysis;
 
@@ -379,7 +387,7 @@ function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
     });
 
     suggestions.push({
-      calculatorId: 'transformer-sizing',
+      calculatorId: 'transformer-capacity',
       inputs: { rating: tx.rating, voltage: tx.voltage },
       reason: `변압기 ${tx.label ?? tx.id} 용량 검증`,
       priority: 2,
@@ -435,7 +443,7 @@ function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
   const motors = components.filter(c => c.type === 'motor');
   for (const motor of motors) {
     suggestions.push({
-      calculatorId: 'motor-starting',
+      calculatorId: 'starting-current',
       inputs: {
         power: motor.rating,
         voltage: motor.voltage,
@@ -449,7 +457,7 @@ function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
   const caps = components.filter(c => c.type === 'capacitor');
   if (caps.length > 0) {
     suggestions.push({
-      calculatorId: 'power-factor-correction',
+      calculatorId: 'reactive-power',
       inputs: {
         capacitorRating: caps[0]?.rating,
       },
@@ -462,7 +470,7 @@ function generateSuggestions(analysis: SLDAnalysis): CalcSuggestion[] {
   const loads = components.filter(c => c.type === 'load');
   if (loads.length > 0) {
     suggestions.push({
-      calculatorId: 'demand-factor',
+      calculatorId: 'demand-diversity',
       inputs: {
         totalLoads: loads.length,
         loadRatings: loads.map(l => l.rating).filter(Boolean),
@@ -506,7 +514,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     const loads = components.filter(c => c.type === 'load');
     steps.push({
       step: stepNum++,
-      calculatorId: 'load-calculation',
+      calculatorId: 'max-demand',
       inputs: {
         loads: loads.map(l => ({
           name: l.label,
@@ -524,7 +532,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     txStepNum = stepNum++;
     steps.push({
       step: txStepNum,
-      calculatorId: 'transformer-sizing',
+      calculatorId: 'transformer-capacity',
       inputs: {
         rating: tx.rating,
         primaryVoltage: tx.voltage,
@@ -589,7 +597,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     const motor = components.find(c => c.type === 'motor')!;
     steps.push({
       step: stepNum++,
-      calculatorId: 'motor-starting',
+      calculatorId: 'starting-current',
       inputs: {
         power: motor.rating,
         voltage: motor.voltage,

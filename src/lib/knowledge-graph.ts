@@ -183,7 +183,7 @@ function buildCoreGraph(): KnowledgeGraph {
     ['c-fuse', '퓨즈', 'Fuse'],
     ['c-rcd', '누전차단기', 'RCD/GFCI'],
     ['c-motor', '전동기', 'Motor'],
-    ['c-motor-starting', '전동기 기동', 'Motor Starting'],
+    ['c-starting-current', '전동기 기동', 'Motor Starting'],
     ['c-capacitor', '콘덴서', 'Capacitor'],
     ['c-inductor', '인덕터', 'Inductor'],
     ['c-frequency', '주파수', 'Frequency'],
@@ -250,10 +250,10 @@ function buildCoreGraph(): KnowledgeGraph {
     ['calc-short-circuit', '단락전류 계산기', 'Short Circuit Calculator'],
     ['calc-demand-load', '수요전력 계산기', 'Demand Load Calculator'],
     ['calc-power-factor', '역률 보정 계산기', 'Power Factor Correction Calculator'],
-    ['calc-transformer-sizing', '변압기 용량 계산기', 'Transformer Sizing Calculator'],
+    ['calc-transformer-capacity', '변압기 용량 계산기', 'Transformer Sizing Calculator'],
     ['calc-breaker-sizing', '차단기 선정 계산기', 'Breaker Sizing Calculator'],
     ['calc-grounding', '접지저항 계산기', 'Grounding Resistance Calculator'],
-    ['calc-motor-starting', '전동기 기동 계산기', 'Motor Starting Calculator'],
+    ['calc-starting-current', '전동기 기동 계산기', 'Motor Starting Calculator'],
     ['calc-illumination', '조도 계산기', 'Illumination Calculator'],
     ['calc-conduit-fill', '전선관 충전율 계산기', 'Conduit Fill Calculator'],
     ['calc-arc-flash', '아크 플래시 계산기', 'Arc Flash Calculator'],
@@ -290,7 +290,7 @@ function buildCoreGraph(): KnowledgeGraph {
     ['c-cable-sizing', 'c-insulation', 'RELATED_TO', 0.8],
     ['c-transformer', 'c-power', 'RELATED_TO', 0.85],
     ['c-transformer', 'c-voltage', 'RELATED_TO', 0.9],
-    ['c-motor', 'c-motor-starting', 'RELATED_TO', 0.95],
+    ['c-motor', 'c-starting-current', 'RELATED_TO', 0.95],
     ['c-motor', 'c-current', 'RELATED_TO', 0.85],
     ['c-surge', 'c-spd', 'RELATED_TO', 0.95],
     ['c-surge', 'c-lightning', 'RELATED_TO', 0.9],
@@ -334,10 +334,10 @@ function buildCoreGraph(): KnowledgeGraph {
     ['c-short-circuit', 'calc-short-circuit', 0.99],
     ['c-demand-factor', 'calc-demand-load', 0.95],
     ['c-power-factor', 'calc-power-factor', 0.99],
-    ['c-transformer', 'calc-transformer-sizing', 0.99],
+    ['c-transformer', 'calc-transformer-capacity', 0.99],
     ['c-circuit-breaker', 'calc-breaker-sizing', 0.99],
     ['c-ground-resistance', 'calc-grounding', 0.99],
-    ['c-motor-starting', 'calc-motor-starting', 0.99],
+    ['c-starting-current', 'calc-starting-current', 0.99],
     ['c-illumination', 'calc-illumination', 0.99],
     ['c-conduit', 'calc-conduit-fill', 0.99],
     ['c-arc-flash', 'calc-arc-flash', 0.99],
@@ -364,7 +364,7 @@ function buildCoreGraph(): KnowledgeGraph {
     ['c-harmonics', 's-iec-60364', 0.8],      // 고조파 → IEC 60364
     ['c-arc-flash', 's-nec-240', 0.85],       // 아크플래시 → NEC 240
     ['c-selectivity', 's-kec-232', 0.9],      // 보호협조 → KEC 232
-    ['c-motor-starting', 's-kec-230', 0.9],   // 기동 → KEC 230
+    ['c-starting-current', 's-kec-230', 0.9],   // 기동 → KEC 230
     ['c-frequency', 's-iec-60364', 0.75],     // 주파수 → IEC 60364
     ['c-lightning', 's-kec-140', 0.85],        // 뇌보호 → KEC 140
     ['c-ups', 's-kec-520', 0.8],              // UPS → KEC 520
@@ -410,9 +410,9 @@ function buildCoreGraph(): KnowledgeGraph {
   const requiresEdges: Array<[string, string, number]> = [
     ['calc-cable-sizing', 'calc-voltage-drop', 0.7],
     ['calc-breaker-sizing', 'calc-short-circuit', 0.8],
-    ['calc-transformer-sizing', 'calc-demand-load', 0.75],
-    ['calc-motor-starting', 'calc-voltage-drop', 0.7],    // 전동기 기동 → 전압강하
-    ['calc-motor-starting', 'calc-cable-sizing', 0.65],    // 전동기 기동 → 케이블
+    ['calc-transformer-capacity', 'calc-demand-load', 0.75],
+    ['calc-starting-current', 'calc-voltage-drop', 0.7],    // 전동기 기동 → 전압강하
+    ['calc-starting-current', 'calc-cable-sizing', 0.65],    // 전동기 기동 → 케이블
     ['calc-arc-flash', 'calc-short-circuit', 0.9],         // 아크플래시 → 단락전류
     ['calc-grounding', 'calc-short-circuit', 0.6],         // 접지 → 단락전류
     ['calc-conduit-fill', 'calc-cable-sizing', 0.7],       // 전선관 → 케이블

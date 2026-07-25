@@ -11,6 +11,8 @@
  * 이 파일의 목적이다: **정의에 있는 계산기는 이름을 말하면 닿아야 한다.**
  */
 
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { analyzeCalcIntent } from '../calc-intent-bridge';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '../calculator-params';
 import { matchCalculatorByExactName } from '../calculator-lexicon';
@@ -161,6 +163,54 @@ describe('이름으로 찾은 계산기도 영수증을 낸다', () => {
     const evidence = resolveChatCalculationEvidence(query);
     expect(evidence?.calculatorId).toBe(id);
     expect(Number.isFinite(Number(evidence?.result.value))).toBe(true);
+  });
+});
+
+/**
+ * 코드 어디서든 계산기를 지목하면 그 계산기는 실재해야 한다.
+ *
+ * 실측(2026-07-26): 도면 제안·지식그래프 relatedCalc·모바일/OCR 라벨 표에
+ * `transformer-sizing`·`motor-starting`·`power-factor-correction`·
+ * `demand-factor`·`load-calculation` 다섯 개가 쓰이고 있었는데 전부 레지스트리에
+ * 없는 이름이었다. 눌러도 갈 곳이 없다. 기존 테스트는 오히려 그 죽은 이름을
+ * 기대값으로 박아 두어 초록 안에서 유지시키고 있었다.
+ */
+describe('참조된 계산기 ID 는 전부 실재한다', () => {
+  const SCAN_DIRS = ['src/lib', 'src/engine', 'src/data', 'src/app', 'src/components'];
+  const REFERENCE_KEYS = ['calculatorId', 'relatedCalc', 'calcId'];
+
+  /**
+   * 계산기를 가리키지 않는 값. 팀 검토 리포트를 Excel 로 내보낼 때 영수증
+   * 형식을 재사용하면서 그 자리에 붙이는 합성 식별자다 — 레지스트리에 있어야
+   * 할 이유가 없다.
+   */
+  const NOT_A_CALCULATOR = new Set(['team-review']);
+
+  function walk(dir: string, out: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, out);
+      else if (/\.(ts|tsx)$/.test(entry.name)) out.push(full);
+    }
+    return out;
+  }
+
+  it('레지스트리에 없는 ID 를 가리키는 곳이 없다', () => {
+    const pattern = new RegExp(`(?:${REFERENCE_KEYS.join('|')}):\\s*'([a-z0-9-]+)'`, 'g');
+    const offenders: string[] = [];
+
+    for (const dir of SCAN_DIRS) {
+      for (const file of walk(dir)) {
+        const src = readFileSync(file, 'utf8');
+        for (const match of src.matchAll(pattern)) {
+          const id = match[1];
+          if (NOT_A_CALCULATOR.has(id)) continue;
+          if (!(id in CALCULATOR_PARAMS)) offenders.push(`${file}: ${id}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 });
 

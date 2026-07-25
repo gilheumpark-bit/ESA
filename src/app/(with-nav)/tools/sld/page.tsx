@@ -29,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Square,
+  Calculator,
 } from 'lucide-react';
 import Link from 'next/link';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
@@ -235,6 +236,56 @@ function ConnectionMap({
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 4 — Calculation Chain
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 도면에서 뽑은 "확인이 필요한 계산 항목".
+ *
+ * 페이지 헤더가 약속하는 항목인데 이 필드는 생성만 되고 어디에도 렌더되지
+ * 않았다(실측 2026-07-26: 벡터 파서는 아예 `[]` 하드코딩, 화면에는 렌더 지점
+ * 없음). 추천 계산 순서(calcChain)와는 다른 것이다 — 저쪽은 변압기·부하가
+ * 있어야 만들어지고, 이쪽은 차단기 하나만 있어도 "이 값 확인해보라"를 낸다.
+ */
+function SuggestedCalcs({ suggestions }: { suggestions: SLDAnalysisResult['suggestedCalculations'] }) {
+  if (!suggestions?.length) return null;
+
+  return (
+    <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Calculator size={16} className="text-[var(--color-primary)]" />
+        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+          확인이 필요한 계산 항목 ({suggestions.length}건)
+        </h3>
+      </div>
+      <p className="mb-3 text-xs text-[var(--text-tertiary)]">
+        도면에서 읽은 기기를 근거로 제안합니다. 입력값은 도면 판독값이므로 계산기에서 반드시 확인하세요.
+      </p>
+      <div className="space-y-2">
+        {suggestions.map((s, i) => (
+          <div
+            key={`${s.calculatorId}-${i}`}
+            className="flex items-start justify-between gap-3 rounded-lg bg-[var(--bg-secondary)] px-3 py-2"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-[var(--text-primary)]">{s.reason}</p>
+              <p className="mt-0.5 truncate text-xs text-[var(--text-tertiary)]">
+                {Object.entries(s.inputs)
+                  .filter(([, v]) => v !== undefined && v !== null && v !== '')
+                  .map(([k, v]) => `${k} ${String(v)}`)
+                  .join(' · ') || '입력값 미상 — 계산기에서 직접 입력'}
+              </p>
+            </div>
+            <Link
+              href={`/calc?open=${encodeURIComponent(s.calculatorId)}`}
+              className="shrink-0 rounded-md border border-[var(--border-default)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              계산기 열기
+            </Link>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function CalcChain({ steps }: { steps: CalcChainStep[] }) {
   if (!steps.length) return null;
@@ -1240,6 +1291,7 @@ export default function SLDAnalysisPage() {
 
           <ComponentList components={analysis.components} />
           <ConnectionMap connections={analysis.connections} components={analysis.components} />
+          <SuggestedCalcs suggestions={analysis.suggestedCalculations} />
           <CalcChain steps={calcChain} />
           <ReviewReportPanel review={review} />
         </div>

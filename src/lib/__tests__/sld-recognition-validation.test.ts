@@ -59,7 +59,7 @@ describe('generateCalcChainFromSLD — dependsOn 동적 결박 (버그 사냥 F7
       for (const dep of step.dependsOn ?? []) expect(dep).toBeLessThan(step.step);
     }
     const sc = chain.find((s) => s.calculatorId === 'short-circuit');
-    const tx = chain.find((s) => s.calculatorId === 'transformer-sizing');
+    const tx = chain.find((s) => s.calculatorId === 'transformer-capacity');
     expect(sc?.dependsOn).toEqual([tx!.step]);
   });
 

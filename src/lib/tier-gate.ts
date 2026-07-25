@@ -149,9 +149,41 @@ export function isTierAtLeast(current: Tier, required: Tier): boolean {
 /**
  * Check if a user can access a calculation at a given difficulty.
  */
+/**
+ * 난이도·요금제 이름을 사용자가 읽는 말로 옮긴다.
+ *
+ * 이 문구는 계산기 페이지에 그대로 노출된다. 실측(2026-07-25)에서 한국어
+ * 화면에 "advanced calculations require pro plan or higher" 가 영문 그대로
+ * 떴다 — 요금제 안내는 결제 결정을 좌우하는 문장이라 화면 언어를 따라야 한다.
+ */
+const DIFFICULTY_KO: Record<CalcDifficulty, string> = {
+  basic: '기초',
+  intermediate: '중급',
+  advanced: '고급',
+  expert: '전문가',
+};
+
+const TIER_KO: Record<Tier, string> = {
+  free: '무료',
+  pro: 'Pro',
+  team: 'Team',
+  enterprise: 'Enterprise',
+};
+
+function upgradeReason(
+  difficulty: CalcDifficulty,
+  required: Tier,
+  lang: 'ko' | 'en',
+): string {
+  return lang === 'ko'
+    ? `${DIFFICULTY_KO[difficulty]} 난이도 계산기는 ${TIER_KO[required]} 요금제부터 사용할 수 있습니다.`
+    : `${difficulty} calculations require ${required} plan or higher`;
+}
+
 export function checkCalcAccess(
   tier: Tier,
   calcDifficulty: CalcDifficulty,
+  lang: 'ko' | 'en' = 'ko',
 ): AccessResult {
   if (OPEN_BETA) return { allowed: true };
 
@@ -160,7 +192,7 @@ export function checkCalcAccess(
   if (!isTierAtLeast(tier, requiredTier)) {
     return {
       allowed: false,
-      reason: `${calcDifficulty} calculations require ${requiredTier} plan or higher`,
+      reason: upgradeReason(calcDifficulty, requiredTier, lang),
       requiredTier,
     };
   }
@@ -169,7 +201,7 @@ export function checkCalcAccess(
   if (!limits.advancedCalc && (calcDifficulty === 'advanced' || calcDifficulty === 'expert')) {
     return {
       allowed: false,
-      reason: 'Advanced calculations require Pro plan or higher',
+      reason: upgradeReason(calcDifficulty, 'pro', lang),
       requiredTier: 'pro',
     };
   }

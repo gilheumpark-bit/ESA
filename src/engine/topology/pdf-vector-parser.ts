@@ -11,6 +11,7 @@
  */
 
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
+import { generateSuggestions } from '@/lib/sld-recognition';
 import { snapConnectionEndpoints, formatEndpointId, type SnapAnchor } from './endpoint-snap';
 import { parseSpecText } from './spec-text';
 import { bindScheduleRow } from './schedule-row-binding';
@@ -647,7 +648,7 @@ export async function parsePdfToSLD(
         },
         confidence: 0.99,
       })),
-      suggestedCalculations: [],
+      suggestedCalculations: generateSuggestions({ components, connections: snap.connections }),
       confidence,
       ...(scheduleTables.length > 0 ? { scheduleTables } : {}),
       rawDescription: `PDF vector parsed (page ${pageNumber}): ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text items, ${lines.length} line segments${structureNote}`,
