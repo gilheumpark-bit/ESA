@@ -94,7 +94,30 @@ describe('샘플링 파라미터 — 거부하는 모델에 temperature 를 보�
   });
 });
 
-describe('다른 공급자 카탈로그는 이번 갱신에서 건드리지 않았다', () => {
+describe('수명주기 — 곧 끊길 모델을 선택지로 두지 않는다', () => {
+  // 가격 페이지에는 종료 예고된 모델도 단가가 실려 있어 "살아 있음"과 구분되지
+  // 않는다. 수명주기는 각 공급자의 deprecations 표가 정본이다.
+  it('gemini-2.5-flash 를 제공하지 않는다 — 2026-10-16 종료 예고, 대체는 gemini-3.6-flash', () => {
+    expect(getModelList('gemini').map((m) => m.id)).not.toContain('gemini-2.5-flash');
+  });
+
+  it('이미 종료된 프리뷰 모델을 제공하지 않는다', () => {
+    const gemini = getModelList('gemini').map((m) => m.id);
+    for (const dead of ['gemini-3-pro-preview', 'gemini-3.1-flash-lite-preview', 'gemini-2.0-flash']) {
+      expect(gemini).not.toContain(dead);
+    }
+  });
+
+  it('모든 공급자의 기본 모델이 자기 목록 안에 있다', () => {
+    for (const id of Object.keys(PROVIDERS)) {
+      const list = getModelList(id).map((m) => m.id);
+      if (list.length === 0) continue;
+      expect(list).toContain(getDefaultModel(id));
+    }
+  });
+});
+
+describe('공급자 목록이 비어 있지 않다', () => {
   it('gemini·openai·groq·mistral 항목이 그대로 있다', () => {
     for (const id of ['gemini', 'openai', 'groq', 'mistral']) {
       expect(PROVIDERS[id]?.models.length).toBeGreaterThan(0);

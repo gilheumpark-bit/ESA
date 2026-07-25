@@ -42,17 +42,24 @@ export interface ChatMessage {
 
 export const PROVIDERS: Record<string, AIProvider> = {
   gemini: {
-    // 모델 라인업 2026-07-20 갱신 — 출처: ai.google.dev/gemini-api/docs/pricing (공식)
+    // 모델 라인업 2026-07-25 갱신 — 출처: ai.google.dev/gemini-api/docs/{pricing,models,deprecations}
+    // 가격 페이지만 보면 안 된다. 거기엔 종료 예고된 모델도 단가가 그대로 실려 있어
+    // "살아 있는 모델"과 구분되지 않는다. 수명주기는 deprecations 표가 정본이다.
     id: 'gemini',
     name: 'Google Gemini',
-    defaultModel: 'gemini-3.5-flash',
+    // 3.6 Flash 로 올린다 — 더 새롭고(2026-07-21) 출력 단가도 더 싸다($7.50 vs $9.00).
+    // 비용이 내려가는 방향이라 사용자에게 손해가 없다.
+    defaultModel: 'gemini-3.6-flash',
     models: [
       { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)', contextWindow: 1_048_576, costTier: 'premium' },
       { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', contextWindow: 1_048_576, costTier: 'medium' },
       { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', contextWindow: 1_048_576, costTier: 'medium' },
       { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
-      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (구세대)', contextWindow: 1_048_576, costTier: 'free' },
+      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite (2027-05 종료 예정)', contextWindow: 1_048_576, costTier: 'low' },
+      // gemini-2.5-flash 는 뺐다 — 2026-10-16 종료 예고이고 대체(gemini-3.6-flash)가
+      // 이 목록에 있다. 3개월 뒤 죽는 모델을 고르게 두면 그 사용자는 예고 없이
+      // 끊긴다. 가격표에는 남겨 둔다 — 이미 저장해 둔 사용자의 비용 계산은
+      // 종료 전까지 계속 되어야 한다.
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 1_048_576, costTier: 'low' },
   },
