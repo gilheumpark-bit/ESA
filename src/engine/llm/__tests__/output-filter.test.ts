@@ -209,3 +209,25 @@ describe('LLM Output Filter - 감사 수리 회귀', () => {
     expect(isClean(output)).toBe(false);
   });
 });
+
+// -- Thousand separators -----------------------------------------------------
+
+describe('LLM Output Filter - 천단위 구분자', () => {
+  // "55,000 W" 가 "55"+"000" 으로 쪼개지면 앞자리만 신뢰 목록에 걸려
+  // "55,[미확인]" 이라는 문장이 나간다(실측 2026-07-26).
+  test('쉼표로 끊긴 수치를 한 값으로 읽는다', () => {
+    const result = filterLLMOutput(
+      '정격 출력은 55,000 W 입니다. [SOURCE: ESA_CALCULATOR:starting-current]',
+      [],
+      '55000 W',
+    );
+    expect(result.filtered).not.toContain('55,[미확인]');
+    expect(result.filtered).toContain('55,000');
+  });
+
+  test('사용자가 쉼표로 쓴 값도 같은 값으로 인정한다', () => {
+    const result = filterLLMOutput('부하는 55000 W 입니다.', [], '55,000 W');
+    expect(result.filtered).toContain('55000');
+    expect(result.filtered).not.toContain('[미확인]');
+  });
+});

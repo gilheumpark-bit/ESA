@@ -30,8 +30,13 @@ const PROBABILISTIC_PATTERNS = /(?:약|대략|보통|일반적으로|대체로|�
 /**
  * Number pattern: integers, decimals, percentages, scientific notation.
  * Excludes dates (YYYY-MM-DD), version strings (v1.2.3), and clause refs (232.51).
+ *
+ * \uCC9C\uB2E8\uC704 \uAD6C\uBD84\uC790\uB294 \uD55C \uB369\uC5B4\uB9AC\uB85C \uC77D\uB294\uB2E4. \uC774\uC804\uC5D0\uB294 "55,000 W" \uAC00 "55" \uC640 "000" \uB450
+ * \uD1A0\uD070\uC73C\uB85C \uCABC\uAC1C\uC838, \uC55E\uC790\uB9AC\uB294 \uC0AC\uC6A9\uC790 \uC785\uB825\uC774\uB77C \uD1B5\uACFC\uD558\uACE0 \uB4B7\uC790\uB9AC\uB294 \uADFC\uAC70\uAC00 \uC5C6\uB2E4\uBA70
+ * \uC9C0\uC6CC\uC84C\uB2E4 \u2014 \uC0AC\uC6A9\uC790\uC5D0\uAC8C\uB294 "55,[\uBBF8\uD655\uC778]" \uC774\uB77C\uB294 \uBB38\uC7A5\uC774 \uB098\uAC14\uB2E4(\uC2E4\uCE21 2026-07-26,
+ * \uBAA8\uB378\uC774 55kW \uB97C W \uB85C \uD658\uC0B0\uD55C \uC790\uB9AC). \uC27C\uD45C\uB294 \uC790\uB9BF\uC218 \uD45C\uAE30\uC9C0 \uAC12\uC758 \uACBD\uACC4\uAC00 \uC544\uB2C8\uB2E4.
  */
-const NUMBER_PATTERN = /(?<!\d{4}-\d{2}-)(?<!\d\.)(?<![vV]\d+\.)(?<!\w)(\d+(?:\.\d+)?)\s*(%|[A-Za-z\u03A9]+(?:\/[A-Za-z]+)?)?/g;
+const NUMBER_PATTERN = /(?<!\d{4}-\d{2}-)(?<!\d\.)(?<![vV]\d+\.)(?<!\w)(?<![\d,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(%|[A-Za-z\u03A9]+(?:\/[A-Za-z]+)?)?/g;
 
 /**
  * Source tag pattern: [SOURCE: ...] that the tool system injects.
@@ -138,7 +143,7 @@ function extractNumbers(
       hasSource,
       isAllowed,
       isTrustedInput: trustedNumbers.has(normalizeNumericToken(match[0]))
-        || trustedNumbers.has(match[1]),
+        || trustedNumbers.has(match[1].replace(/,/g, '')),
     });
   }
 
@@ -146,7 +151,8 @@ function extractNumbers(
 }
 
 function normalizeNumericToken(value: string): string {
-  return value.replace(/\s+/g, '').toLowerCase();
+  // 쉼표는 자릿수 표기다 — 신뢰 목록 대조에서 "55,000" 과 "55000" 은 같은 값이다.
+  return value.replace(/\s+/g, '').replace(/,/g, '').toLowerCase();
 }
 
 function findTrustedNumbers(input: string): Set<string> {
@@ -155,7 +161,7 @@ function findTrustedNumbers(input: string): Set<string> {
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(input)) !== null) {
     numbers.add(normalizeNumericToken(match[0]));
-    numbers.add(match[1]);
+    numbers.add(match[1].replace(/,/g, ''));
   }
   return numbers;
 }

@@ -1,6 +1,7 @@
 import { CALCULATOR_REGISTRY } from '@/engine/calculators';
 import type { DetailedCalcResult } from '@/engine/calculators';
 import { analyzeCalcIntent, coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { parseQuery } from '@/search/query-parser';
 
 export interface ChatCalculationEvidence {
   calculatorId: string;
@@ -59,7 +60,17 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
  */
 export function resolveChatCalculationShortfall(query: string): string | null {
   const intent = analyzeCalcIntent(query);
-  if (!intent.hasCalcIntent || !intent.calculatorId) return null;
+
+  // 계산 요청인데 맞는 계산기를 못 찾은 경우도 지시가 필요하다.
+  //
+  // 계산기를 지목하지 못하면 지금까지는 아무 지시도 붙지 않았고, 모델은 스스로
+  // 끝까지 계산했다. 그 수치는 영수증에 없으니 출력 필터가 전부 지웠고 사용자는
+  // "[미확인] ÷ [미확인] ≈ [미확인]" 같은 답을 받았다(실측 2026-07-26, 한 답변에
+  // 6개). 공식과 필요한 입력을 기호로 설명하는 것이 그보다 훨씬 쓸모 있다.
+  if (!intent.calculatorId) {
+    if (parseQuery(query).intent !== 'calculate') return null;
+    return '\n\n계산 요청이지만 이 질문에 맞는 검증된 ESA 계산기를 지목하지 못했습니다.\n수치를 직접 만들어 제시하지 마세요. 대신 ① 적용 공식을 기호로, ② 각 기호에 해당하는 입력값이 무엇인지, ③ 어떤 계산기·기준을 봐야 하는지를 설명하세요.\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.';
+  }
   if (intent.canAutoExecute && resolveChatCalculationEvidence(query)) return null;
 
   const needed = [...intent.missingRequired, ...intent.missingOptional]

@@ -349,6 +349,38 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
     }
   }
 
+  // 6.5 역방향 계산기 차단 — 구해달라는 값을 입력으로 되묻지 않는다.
+  //
+  // 실측(2026-07-26): "3상 380V 55kW 유도전동기의 정격전류는?" 이 three-phase-power
+  // (선간전압·선전류 → 전력)로 갔다. 그 계산기의 필수 입력이 바로 `lineCurrent`,
+  // 즉 사용자가 구해달라는 값이다. 결과적으로 답변이 "계산기 실행을 위해 필요한
+  // 입력인 **선전류(A)** 확인이 필요합니다" 가 됐다 — 묻는 값을 되물은 것이다.
+  //
+  // 필수 입력이 질문의 의문 대상과 겹치면 그 계산기는 이 질문의 역방향이다.
+  // 다른 계산기를 짚을 근거는 없으므로 라우팅을 포기한다 — 그러면 모델이 원리와
+  // 공식으로 답한다(수치는 출력 필터가 계속 막는다).
+  const asksFor = (param: ExtendedParamDef): boolean => {
+    const base = (param.description ?? '').replace(/\s*\([^)]*\)/g, '').trim();
+    // 한국어 합성명사는 머리명사가 뒤에 온다. 파라미터는 "선전류" 라고 부르는데
+    // 사용자는 "정격전류" 라고 묻는다 — 둘 다 전류다. 그래서 뒤 두 글자도 본다.
+    const head = /^[가-힣]{3,}$/.test(base) ? base.slice(-2) : '';
+    const terms = [base, head, param.name].filter((t) => t.length >= 2);
+
+    return terms.some((term) => {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\?\s+/g, '\\s*');
+      // 물음의 대상 자리만 본다: "…전류는?" · "…전류가 얼마" · "…전류 몇 A".
+      // "계산해"·"구해" 같은 동사는 넣지 않는다 — "전압강하 계산해줘" 처럼 정상
+      // 요청에서도 걸려 멀쩡한 라우팅을 막는다.
+      return new RegExp(`${escaped}\\s*(?:은|는|이|가)?\\s*(?:\\?|얼마|몇)`, 'i').test(query);
+    });
+  };
+  // 필수만 보면 놓친다. 실측한 three-phase-power 의 `lineCurrent` 는 기본값이
+  // 있어 missingOptional 로 빠졌는데, 기본값이 있다는 건 오히려 더 나쁘다 —
+  // 사용자가 구해달라는 전류를 임의 값으로 채워 계산할 수 있다는 뜻이다.
+  if ([...missingRequired, ...missingOptional].some(asksFor)) {
+    return { ...NO_INTENT };
+  }
+
   // 7. canAutoExecute = 필수 입력이 모두 있고, 질문의 수치를 하나도 흘리지 않았을 때만.
   const unreadNumbers = findUnreadNumbers(query, mappedParams);
   // 질문에서 읽어낸 값이 하나도 없으면 영수증을 만들지 않는다. 그런 결과는 전부

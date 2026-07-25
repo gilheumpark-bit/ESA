@@ -221,3 +221,29 @@ describe('이름 전체 매칭', () => {
     expect(matchCalculatorByExactName('KEC 232.3.9 전압강하 조항 원문')).toBeUndefined();
   });
 });
+
+describe('구해달라는 값을 입력으로 되묻지 않는다', () => {
+  /**
+   * 실측(2026-07-26): "3상 380V 55kW 유도전동기의 정격전류는?" 이
+   * three-phase-power(선간전압·선전류 → 전력)로 갔다. 그 계산기의 필수 입력이
+   * 바로 사용자가 구해달라는 `lineCurrent` 라, 답변이 "계산기 실행을 위해 필요한
+   * 입력인 **선전류(A)** 확인이 필요합니다" 가 됐다 — 묻는 값을 되물었다.
+   *
+   * 필수 입력이 질문의 의문 대상과 겹치면 그 계산기는 이 질문의 역방향이다.
+   * 대신 짚을 계산기를 아는 것이 아니므로 라우팅을 포기한다.
+   */
+  it.each([
+    '3상 380V 55kW 유도전동기의 정격전류는? 역률 0.85 효율 0.92',
+    '단상 220V 부하의 전류가 얼마인가요?',
+  ])('"%s" — 역방향 계산기로 보내지 않는다', (query) => {
+    expect(analyzeCalcIntent(query).calculatorId).toBeUndefined();
+  });
+
+  it('입력을 다 주고 결과를 묻는 정상 질문은 그대로 계산한다', () => {
+    // 이 질문도 "전압강하는?" 로 끝나지만 voltage-drop 의 필수 입력에
+    // "전압강하" 는 없다 — 가드가 넓게 잡히면 여기서 먼저 깨진다.
+    const intent = analyzeCalcIntent('전압강하 계산: 3상 380V 100A 50m 35mm2 Cu 역률 0.9');
+    expect(intent.calculatorId).toBe('voltage-drop');
+    expect(intent.canAutoExecute).toBe(true);
+  });
+});
