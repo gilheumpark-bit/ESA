@@ -5,9 +5,15 @@
  * 모달리티로 바꿔 넣으면 정답(블라인드 라벨)은 그대로이므로, 벡터 대비 래스터의
  * 성능 저하만 분리해서 측정된다. 새 라벨을 만들 필요가 없다.
  *
- * 사용:
+ * 사용 — 둘 중 하나:
+ *   1) .env.local 에 GOOGLE_GENERATIVE_AI_API_KEY=<키> 한 줄 추가 후
+ *        node --env-file=.env.local scripts/run-scan-tier.mjs
+ *      (키가 gitignore 된 파일에만 있고 셸 히스토리에 안 남는다 — 권장)
+ *   2) 일회성이면
+ *        ESA_VISION_KEY=<키> node scripts/run-scan-tier.mjs
+ *
+ * 래스터가 없으면 먼저:
  *   node scripts/fixtures/rasterize-golden-scan.mjs <pdf> <page> fixtures/drawings/realworld/raster 2
- *   ESA_VISION_KEY=<본인 키> node scripts/run-scan-tier.mjs [http://127.0.0.1:3010]
  *
  * 키는 환경변수로만 받고 어디에도 출력하지 않는다. 로그·영수증에 남는 것은
  * 공급자명과 모델명뿐이다.
@@ -16,13 +22,44 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASE = process.argv[2] ?? 'http://127.0.0.1:3010';
-const KEY = process.env.ESA_VISION_KEY?.trim() ?? '';
-const PROVIDER = process.env.ESA_VISION_PROVIDER?.trim() || 'gemini';
+
+/**
+ * 키 출처 — 앱이 서버 폴백으로 쓰는 이름을 그대로 재사용한다
+ * (api/drawing-jobs/route.ts:49 serverVisionKey). 새 이름을 발명하면 사용자가
+ * .env.local 에 같은 키를 두 번 적게 된다.
+ */
+const KEY_SOURCES = [
+  ['gemini', 'GOOGLE_GENERATIVE_AI_API_KEY'],
+  ['openai', 'OPENAI_API_KEY'],
+  ['claude', 'ANTHROPIC_API_KEY'],
+];
+
+const explicitKey = process.env.ESA_VISION_KEY?.trim() ?? '';
+const explicitProvider = process.env.ESA_VISION_PROVIDER?.trim() ?? '';
+let KEY = explicitKey;
+let PROVIDER = explicitProvider || 'gemini';
+let keyOrigin = explicitKey ? 'ESA_VISION_KEY' : '';
+
+if (!KEY) {
+  const wanted = explicitProvider
+    ? KEY_SOURCES.filter(([p]) => p === explicitProvider)
+    : KEY_SOURCES;
+  for (const [provider, envName] of wanted) {
+    const found = process.env[envName]?.trim();
+    if (found) { KEY = found; PROVIDER = provider; keyOrigin = envName; break; }
+  }
+}
+
 const MODEL = process.env.ESA_VISION_MODEL?.trim() || '';
 
 if (!KEY) {
-  console.error('ESA_VISION_KEY 가 없다. 이 스크립트는 키 값을 저장하거나 출력하지 않는다.');
-  console.error('  예) ESA_VISION_KEY=<키> node scripts/run-scan-tier.mjs');
+  console.error('Vision 키를 찾지 못했다. 이 스크립트는 키 값을 저장하거나 출력하지 않는다.\n');
+  console.error('  방법 1 (권장) — .env.local 에 한 줄 추가하고 그 파일을 읽혀서 실행:');
+  console.error('      GOOGLE_GENERATIVE_AI_API_KEY=<키>');
+  console.error('      node --env-file=.env.local scripts/run-scan-tier.mjs\n');
+  console.error('  방법 2 — 일회성:');
+  console.error('      ESA_VISION_KEY=<키> node scripts/run-scan-tier.mjs\n');
+  console.error(`  찾아본 이름: ESA_VISION_KEY, ${KEY_SOURCES.map(([, n]) => n).join(', ')}`);
   process.exit(2);
 }
 
@@ -96,7 +133,10 @@ async function runOne(file) {
 }
 
 const results = [];
-console.log(`스캔 티어 실증 → ${BASE}/api/sld  (provider=${PROVIDER}${MODEL ? `, model=${MODEL}` : ', model=기본'})\n`);
+console.log(
+  `스캔 티어 실증 → ${BASE}/api/sld  (provider=${PROVIDER}${MODEL ? `, model=${MODEL}` : ', model=기본'}`
+  + `, 키 출처=${keyOrigin})\n`,
+);
 
 for (const spec of PAGES) {
   console.log(`■ p${spec.page} ${spec.tier} — ${spec.sheet}`);
