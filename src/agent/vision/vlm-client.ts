@@ -466,6 +466,25 @@ async function requestOpenAIJson(
   });
 }
 
+/**
+ * 이 Claude 모델이 temperature 를 받는가.
+ *
+ * Anthropic 은 Opus 4.7 이후 세대에서 샘플링 파라미터(temperature·top_p·top_k)를
+ * 제거했다 — 보내면 400 이다. Sonnet 5 는 기본값만 허용하는데 우리가 보내는 0.1 은
+ * 기본값이 아니라 마찬가지로 거부된다.
+ *
+ * 그래서 **받는 모델을 열거**한다. 이전 구현은 거부하는 모델 하나
+ * (`claude-sonnet-5`)만 예외 처리하는 허용목록이라, 같은 카탈로그에 이미 있던
+ * Opus 4.8 을 고르면 temperature 가 실려 400 이 났다. 새 모델이 추가될 때마다
+ * 같은 자리를 고쳐야 하는 구조이기도 하다.
+ *
+ * 열거를 뒤집으면 모르는 모델은 temperature 를 **생략**한다 — 생략은 어느 모델에서도
+ * 유효하지만 전송은 400 을 만들 수 있으므로, 안전한 방향으로 닫힌다.
+ */
+export function claudeAcceptsTemperature(model: string): boolean {
+  return /^claude-(3|haiku-4-5|sonnet-4-[0-6]|opus-4-[0-6])/.test(model);
+}
+
 async function requestClaudeJson(
   imageBase64: string,
   mimeType: string,
@@ -474,9 +493,10 @@ async function requestClaudeJson(
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.claude;
   const model = resolveVlmModel('claude', options.model);
-  const generationControls = model.startsWith('claude-sonnet-5')
-    ? {}
-    : { temperature: options.temperature ?? cfg.defaultTemp };
+
+  const generationControls = claudeAcceptsTemperature(model)
+    ? { temperature: options.temperature ?? cfg.defaultTemp }
+    : {};
   return withRequestScope(options, async (scope) => {
     const response = await fetchWithTimeout(cfg.endpoint, {
       method: 'POST',

@@ -32,6 +32,8 @@ export type AIModel =
   | 'gpt-5.4'
   | 'gpt-5.4-mini'
   | 'gpt-5.4-nano'
+  | 'claude-fable-5'
+  | 'claude-opus-5'
   | 'claude-opus-4-8'
   | 'claude-sonnet-5'
   | 'claude-haiku-4-5'
@@ -65,7 +67,10 @@ interface ModelPricing {
   };
 }
 
-const PRICING: Record<AIModel, ModelPricing> = {
+// export 하는 이유: Record<AIModel, …> 는 "유니온에 있는 모델은 가격이 있다"만
+// 보장한다. 카탈로그(lib/ai-providers)에 올렸지만 유니온에 넣지 않은 모델은 이
+// 타입이 못 잡으므로, 그 교차 정합은 테스트가 본다.
+export const PRICING: Record<AIModel, ModelPricing> = {
   // OpenAI — developers.openai.com/api/docs/pricing (2026-07-20 캡처).
   // GPT-5.6은 272K 입력 초과 시 요청 전체에 2x input / 1.5x output 요율.
   'gpt-5.6-sol': {
@@ -112,6 +117,20 @@ const PRICING: Record<AIModel, ModelPricing> = {
     contextWindow: 400000,
   },
   // Anthropic — 공식 모델 카탈로그 (Sonnet 5는 표준가 기입; 2026-08-31까지 인트로 $2/$10 별도).
+  'claude-fable-5': {
+    name: 'Claude Fable 5',
+    provider: 'Anthropic',
+    inputPer1M: 10.00,
+    outputPer1M: 50.00,
+    contextWindow: 1000000,
+  },
+  'claude-opus-5': {
+    name: 'Claude Opus 5',
+    provider: 'Anthropic',
+    inputPer1M: 5.00,
+    outputPer1M: 25.00,
+    contextWindow: 1000000,
+  },
   'claude-opus-4-8': {
     name: 'Claude Opus 4.8',
     provider: 'Anthropic',

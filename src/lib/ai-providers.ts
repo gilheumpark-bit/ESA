@@ -69,10 +69,17 @@ export const PROVIDERS: Record<string, AIProvider> = {
   claude: {
     id: 'claude',
     name: 'Anthropic Claude',
-    // 2026-07-20 갱신 — 구 claude-*-4-20250514는 2026-06-15 폐기(이미 404 위험).
+    // 2026-07-25 갱신 — 출처: Anthropic 공식 모델 카탈로그. Opus 5 가 현행 주력인데
+    // 목록에 없어 사용자가 고를 수 없었다. 구 claude-*-4-20250514는 2026-06-15 폐기.
+    //
+    // 기본값은 Sonnet 5 로 둔다. Opus 5 가 상위 모델이지만 입력 $5/출력 $25 로 Sonnet 5
+    // 의 $3/$15 보다 비싸고, BYOK 는 사용자 지갑이다 — 기본값을 올리면 비용을 말없이
+    // 올리는 것이라 선택지로만 제공한다.
     defaultModel: 'claude-sonnet-5',
     models: [
-      { id: 'claude-opus-4-8', name: 'Claude Opus 4.8', contextWindow: 1_000_000, costTier: 'premium' },
+      { id: 'claude-fable-5', name: 'Claude Fable 5 (최상위·30일 보존 필요)', contextWindow: 1_000_000, costTier: 'premium' },
+      { id: 'claude-opus-5', name: 'Claude Opus 5', contextWindow: 1_000_000, costTier: 'premium' },
+      { id: 'claude-opus-4-8', name: 'Claude Opus 4.8 (구세대)', contextWindow: 1_000_000, costTier: 'premium' },
       { id: 'claude-sonnet-5', name: 'Claude Sonnet 5', contextWindow: 1_000_000, costTier: 'high' },
       { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', contextWindow: 200_000, costTier: 'low' },
     ],
