@@ -17,6 +17,11 @@
 import { parseQuery } from '@/search/query-parser';
 import { parseIntent } from '@/engine/llm/intent-parser';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
+import {
+  matchCalculatorByExactName,
+  matchCalculatorByName,
+  extractScopedParams,
+} from '@/lib/calculator-lexicon';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -140,15 +145,34 @@ function mapParamNames(
  * "이 계산기가 그 값을 쓰는가"가 아니라 "추출기가 그 값을 이해했는가"다 —
  * 차단기 질문의 "3상"처럼 그 계산기의 입력이 아닌 값도 있기 때문이다.
  */
-function findUnreadNumbers(query: string, extracted: Record<string, unknown>): number[] {
-  const read = new Set<number>();
-  for (const value of Object.values(extracted)) {
+/**
+ * 읽어낸 값 속의 수치를 전부 모은다. 배열형 계산기(부하 목록·구간 목록)는 값이
+ * 항목 안에 들어가므로 겉만 보면 "아무것도 못 읽었다"로 오판한다.
+ */
+function collectNumbers(value: unknown, into: Set<number> = new Set()): Set<number> {
+  if (Array.isArray(value)) {
+    for (const entry of value) collectNumbers(entry, into);
+  } else if (value !== null && typeof value === 'object') {
+    for (const entry of Object.values(value)) collectNumbers(entry, into);
+  } else {
     const n = typeof value === 'number' ? value : Number(value);
-    if (Number.isFinite(n)) read.add(n);
+    if (Number.isFinite(n) && value !== '' && value !== null) into.add(n);
   }
+  return into;
+}
+
+function findUnreadNumbers(query: string, extracted: Record<string, unknown>): number[] {
+  const read = collectNumbers(extracted);
+  // 규격·조항 번호는 입력이 아니다. "IEEE 1584 아크플래시"·"KEC 232.3.9" 의
+  // 숫자를 사용자가 준 값으로 세면 멀쩡한 질문이 되묻기로 떨어진다.
+  const withoutReferences = query.replace(
+    /\b(?:IEEE|IEC|KEC|NEC|KS|EN|BS|JIS|ISO|UL|ANSI)\s*[A-Z]?-?\s*[\d.]+/gi,
+    ' ',
+  );
+
   const unread: number[] = [];
   // 앞 글자가 문자·숫자·점이면 단위의 일부다(mm2 의 2, 232.3.9 의 9).
-  for (const match of query.matchAll(/(?:^|[^0-9A-Za-z가-힣.])(\d+(?:\.\d+)?)/g)) {
+  for (const match of withoutReferences.matchAll(/(?:^|[^0-9A-Za-z가-힣.])(\d+(?:\.\d+)?)/g)) {
     const n = parseFloat(match[1]);
     if (!read.has(n) && !unread.includes(n)) unread.push(n);
   }
@@ -240,12 +264,31 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   // 원문"·"전압강하가 생기는 이유"처럼 키워드만 겹치는 규정·개념 질문 5건이 전부
   // 계산기로 새어 홈 화면이 검색 대신 계산 패널을 띄웠다. 그 판정은 parseQuery 가
   // 이미 옳게 하고 있으므로 그대로 존중한다.
-  if (parsed.intent !== 'calculate') {
-    return { ...NO_INTENT };
-  }
-  // 이름은 도메인 파서가 우선한다 — 검색 파서는 "케이블 굵기 선정"을 voltage-drop
-  // 으로 잘못 지목했다(실측). 전기 용어는 의도 파서가 더 정확히 안다.
-  const calculatorId = explicitCalculatorId ?? parsed.suggestedCalculator;
+  // 계산기 선택 순서.
+  //   ① 이름 전체가 질의에 들어 있으면 그것 — 가장 흔들리지 않는 신호다.
+  //      "케이블 사이징: … 허용 전압강하 3%" 를 의도 파서는 voltage-drop 으로
+  //      짚는다(실측). 사용자가 이름을 통째로 말했으면 그 말을 믿는다.
+  //   ② 의도 파서의 명시 도구 — 실측으로 검증된 8종.
+  //   ③ 검색 파서의 제안 — 6종.
+  //   ④ 이름 토큰 점수 — 나머지를 위한 최하위 폴백.
+  //
+  // 앞의 둘은 합쳐도 10종밖에 이름을 대지 못하는데 계산기는 57종이다. 나머지
+  // 47종은 이 경로가 없으면 어떤 질문으로도 도달할 수 없다.
+  // 이름 전체가 나왔을 때, 그 계산기의 입력을 **수치로** 실제 읽어냈는지가
+  // "계산해달라"와 "그 기준이 어디 있냐"를 가른다. 아래 §6 참조.
+  const namedCalculatorId = matchCalculatorByExactName(query);
+  const namedScopedParams = namedCalculatorId
+    ? extractScopedParams(query, CALCULATOR_PARAMS[namedCalculatorId] ?? [])
+    : {};
+  const openedByName = namedCalculatorId !== undefined
+    && collectNumbers(namedScopedParams).size > 0;
+
+  const calculatorId = (openedByName ? namedCalculatorId : undefined)
+    ?? explicitCalculatorId
+    ?? parsed.suggestedCalculator
+    // 토큰 점수 폴백은 검색 파서가 이미 계산이라고 본 질문에만 쓴다 — 이 매칭은
+    // 비계산 질의 10건 중 7건에 반응할 만큼 헐겁다(실측).
+    ?? (parsed.intent === 'calculate' ? matchCalculatorByName(query) : undefined);
   if (!calculatorId) {
     return { ...NO_INTENT };
   }
@@ -257,8 +300,36 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
     return { ...NO_INTENT };
   }
 
-  // 5. Map extracted params to the correct param names
-  const mappedParams = mapParamNames(intentResult.extractedParams, calculatorId);
+  // 5. 값 읽기 — 계산기가 정해졌으므로 그 계산기의 파라미터 정의를 어휘로 쓸 수
+  //    있다. 전역 패턴(의도 파서 12종)은 하위 호환을 위해 유지하되, 범위를 좁혀
+  //    읽은 값이 더 확실하므로 그쪽이 이긴다.
+  const scopedParams = calculatorId === namedCalculatorId
+    ? namedScopedParams
+    : extractScopedParams(query, paramDefs);
+  const mappedParams = {
+    ...mapParamNames(intentResult.extractedParams, calculatorId),
+    ...scopedParams,
+  };
+
+  // 6. 게이트 — parseQuery 의 의도 판정이 정본이되, 그 분류기가 모르는 계산기가 있다.
+  //
+  // parseQuery 는 "AWG↔mm² 변환"·"피뢰 시스템 설계"·"UPS 용량" 을 search 로,
+  // "허용전류 비교"·"주파수 비교" 를 compare 로 분류한다(실측). 그래서 이름이
+  // 정확히 맞아도 게이트에서 떨어져 11종이 도달 불가였다.
+  //
+  // 그렇다고 이름만으로 열 수는 없다. 같은 실측에서 이름 매칭은 비계산 질의
+  // 10건 중 7건에 반응했다("KEC 전압강하 기준 알려줘" → voltage-drop).
+  //
+  // 둘을 가르는 신호는 데이터에 있었다. 계산 요청은 *수치 입력*을 준다(건물 높이
+  // 30m 폭 20m / 고장전류 10kA 차단시간 0.5s). 조회 질문은 이름만 스치거나
+  // 수치를 줘도 "그 기준이 어느 조항이냐"를 묻는다. 그래서 **이름 전체가 나오고
+  // 그 계산기의 입력을 수치로 읽어냈을 때**만 계산 요청으로 본다.
+  //
+  // 선택지 값(도체 Cu, 등급 IE3)은 증거로 세지 않는다 — "전동기 효율 IE3 등급이
+  // 뭐야"가 옵션 하나 맞았다고 계산기로 새면 안 된다(실측).
+  if (parsed.intent !== 'calculate' && !openedByName) {
+    return { ...NO_INTENT };
+  }
 
   // 6. Determine which required params are missing
   //    "required" = no defaultValue AND not extracted
@@ -279,8 +350,16 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   }
 
   // 7. canAutoExecute = 필수 입력이 모두 있고, 질문의 수치를 하나도 흘리지 않았을 때만.
-  const unreadNumbers = findUnreadNumbers(query, intentResult.extractedParams);
-  const canAutoExecute = missingRequired.length === 0 && unreadNumbers.length === 0;
+  const unreadNumbers = findUnreadNumbers(query, mappedParams);
+  // 질문에서 읽어낸 값이 하나도 없으면 영수증을 만들지 않는다. 그런 결과는 전부
+  // 기본값으로 계산한 것이라 사용자의 계산이 아니다 — "UPS 용량 산정 방법
+  // 설명해줘"처럼 수치가 0개인 질문은 못 읽은 수치도 0이라 위의 가드를 그냥
+  // 통과해 버린다(실측). 파라미터가 전부 defaultValue 를 가진 계산기에서 특히
+  // 위험하다.
+  const readSomething = collectNumbers(mappedParams).size > 0;
+  const canAutoExecute = missingRequired.length === 0
+    && unreadNumbers.length === 0
+    && readSomething;
 
   // 8. Merge confidence from both parsers
   //    parseQuery doesn't return confidence, so use intent-parser's
@@ -288,7 +367,14 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   const baseConfidence = intentResult.confidence;
   const confidence = Math.min(
     1.0,
-    baseConfidence + (parsed.intent === 'calculate' ? 0.05 : 0),
+    // 사용자가 계산기 이름을 통째로 말하고 그 입력까지 줬으면, 어느 계산기인지에
+    // 대한 불확실성은 없다. 의도 파서는 도구 8종만 알아서 나머지 49종에는 낮은
+    // 확신도를 남기는데, 영수증 발행 문턱이 0.8 이라 그것 때문에 정상 라우팅된
+    // 계산기가 결과를 못 내고 있었다(실측: "UPS 용량: 부하 50kW 역률 0.9" —
+    // 계산기는 정상 실행되는데 확신도에서 막힘).
+    openedByName
+      ? Math.max(baseConfidence, 0.9)
+      : baseConfidence + (parsed.intent === 'calculate' ? 0.05 : 0),
   );
 
   // 9. Get calculator display name

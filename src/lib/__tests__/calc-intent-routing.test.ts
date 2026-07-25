@@ -74,14 +74,18 @@ describe('영수증 안전 — 사용자 수치로 계산된 것만 영수증이
   });
 
   /**
-   * 필수 입력이 배열이라 한 문장으로 줄 수 없는 계산기. 라우팅은 되어야 하지만
-   * (무엇을 계산할지는 알아야 한다) 자동 실행은 하지 않고 빠진 것을 알린다.
+   * 목록을 입력으로 받는 계산기. 한 문장은 부하 하나를 말하므로 1항목으로 묶는다
+   * (계약은 `calculator-reach.test.ts`). 다만 이 질문의 "부하율 0.6" 은 max-demand
+   * 의 입력이 아니어서 읽히지 않으므로, 그 값을 흘린 채 계산하지 않는다.
    */
-  it('배열 입력 계산기는 라우팅되되 자동 실행하지 않는다', () => {
+  it('목록형이라도 읽은 값은 항목으로 묶되, 못 읽은 수치가 있으면 실행하지 않는다', () => {
     const intent = analyzeCalcIntent(ROUTES.find((r) => r.id === 'max-demand')!.query);
     expect(intent.calculatorId).toBe('max-demand');
+    expect(intent.extractedParams.loads).toEqual([
+      expect.objectContaining({ ratedPower: 500, demandFactor: 0.7 }),
+    ]);
+    expect(intent.unreadNumbers).toContain(0.6);
     expect(intent.canAutoExecute).toBe(false);
-    expect(intent.missingRequired.map((p) => p.name)).toContain('loads');
   });
 });
 
