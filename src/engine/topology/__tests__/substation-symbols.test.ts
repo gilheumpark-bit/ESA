@@ -153,3 +153,50 @@ describe('어휘 확장 — 오탐 반증', () => {
     }
   });
 });
+
+/**
+ * 출처로 확인한 약호 (2026-07-27).
+ *
+ * 앞선 어휘 측정은 내 기억으로 만든 48 개 목록이었다. 그건 목록 자체가 틀릴 수
+ * 있어서 수변전 약호표를 직접 확인했다.
+ *
+ *   개폐장치 7 종 — 김대호기술사 전기스쿨 (DS·LBS·IS·LS·ASS·COS·ALTS)
+ *   수변전 약호표 — 기술랩 (OCB·GR·WH·VAR·DM 및 ANSI 병기 관례)
+ *
+ * 그 결과 14 개를 더 모르고 있었다. `LDS` 는 두 자료 어디에도 없어 표준 약호가
+ * 아니라고 본다 — 지어내지 않고 넣지 않았다.
+ */
+describe('출처 확인 약호', () => {
+  it.each([
+    ['ALTS', 'switch'],   // 자동부하전환개폐기
+    ['OCB', 'breaker'],   // 유입차단기
+    ['GR', 'relay'],      // 지락계전기
+    ['WH', 'meter'],      // 적산전력량계
+    ['VAR', 'meter'],     // 무효전력계
+    ['DM', 'meter'],      // 최대수요전력계
+  ] as const)('%s → %s', (t, exp) => {
+    expect(detectComponentType(t)).toBe(exp);
+  });
+
+  /**
+   * 국내 도면은 계전기를 `OCR/51`, `GR/51G` 처럼 ANSI 기기번호와 병기한다.
+   * 다만 **맨숫자는 받지 않는다** — 도면의 `51` 은 계전기일 수도, 치수일 수도,
+   * 수량일 수도 있다. 문자 접미가 붙어 모호하지 않은 것만 받는다.
+   */
+  it('ANSI 기기번호 — 모호하지 않은 것만', () => {
+    for (const t of ['51G', '51N', '64', '87', '27R']) {
+      expect(detectComponentType(t)).toBe('relay');
+    }
+    for (const t of ['51', '27', '59']) {
+      expect(detectComponentType(t)).toBe('load');   // 맨숫자는 문맥 없이 못 정한다
+    }
+  });
+
+  it('두 글자 영문 충돌은 점 표기만 받는다', () => {
+    // IS(인터럽터스위치)·LS(선로개폐기)는 영문 is/ls 와 충돌한다.
+    expect(detectComponentType('I.S')).toBe('switch');
+    expect(detectComponentType('L.S')).toBe('switch');
+    expect(detectComponentType('IS')).toBe('load');
+    expect(detectComponentType('LS')).toBe('load');
+  });
+});
