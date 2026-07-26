@@ -15,6 +15,7 @@
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { formatConverted } from '@engine/conversion/unit-conversion';
 import {
   Calculator,
   Clock,
@@ -260,12 +261,18 @@ function GlobalComparisonPanel({ comparison }: { comparison: GlobalComparison })
 // PART 5.5 — Unit Conversion Card (calls /api/convert)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Detect patterns like "10 AWG to mm2", "100 kW to HP" */
-const UNIT_CONVERT_REGEX = /^([\d.]+)\s*(AWG|mm2|kcmil|kW|HP|kVA|V|kV|C|F|ohm|pu)\s+(?:to|→|->)\s*(AWG|mm2|kcmil|kW|HP|kVA|V|kV|C|F|ohm|pu)$/i;
+/**
+ * Detect patterns like "10 AWG to mm2", "100 kW to HP", "4/0 AWG to mm2".
+ *
+ * 굵은 도체는 4/0·000 처럼 숫자가 아닌 규격명으로 쓴다. [\d.]+ 만 받으면
+ * "4/0 AWG to mm2" 는 카드 자체가 안 뜨고, "0000" 은 parseFloat 이 0 으로
+ * 뭉개 107.2mm² 를 53.49mm² 로 답한다(실측 2026-07-26). 규격명을 먼저 매칭한다.
+ */
+const UNIT_CONVERT_REGEX = /^([1-4]\/0|0{2,4}|[\d.]+)\s*(AWG|mm2|kcmil|kW|HP|kVA|V|kV|C|F|ohm|pu)\s+(?:to|→|->)\s*(AWG|mm2|kcmil|kW|HP|kVA|V|kV|C|F|ohm|pu)$/i;
 
 function UnitConversionCard({ query }: { query: string }) {
   const match = query.match(UNIT_CONVERT_REGEX);
-  const [result, setResult] = useState<{ result: number; formula: string; from: { value: number; unit: string }; to: { value: number; unit: string } } | null>(null);
+  const [result, setResult] = useState<{ result: number; formula: string; from: { value: number | string; unit: string }; to: { value: number | string; unit: string } } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -275,8 +282,11 @@ function UnitConversionCard({ query }: { query: string }) {
       const currentMatch = query.match(UNIT_CONVERT_REGEX);
       if (!currentMatch) return;
       const [, valueStr, fromUnit, toUnit] = currentMatch;
-      const value = parseFloat(valueStr);
-      if (!Number.isFinite(value)) return;
+      // AWG 규격명은 원문 그대로 보낸다 — parseFloat 은 "4/0"→4, "0000"→0 으로
+      // 뭉개 다른 굵기를 답한다. 나머지 단위는 지금까지처럼 수치로 읽는다.
+      const isAwgSource = fromUnit.toUpperCase() === 'AWG' && /^(?:[1-4]\/0|0{2,4})$/.test(valueStr);
+      const value: number | string = isAwgSource ? valueStr : parseFloat(valueStr);
+      if (!isAwgSource && !Number.isFinite(value as number)) return;
       setLoading(true);
       setError(null);
       fetch('/api/convert', {
@@ -314,7 +324,8 @@ function UnitConversionCard({ query }: { query: string }) {
       ) : result ? (
         <div>
           <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
-            {result.from.value} {result.from.unit} = {result.to.value} {result.to.unit}
+            {result.from.value} {result.from.unit} ={' '}
+            {typeof result.to.value === 'number' ? formatConverted(result.to.value) : result.to.value} {result.to.unit}
           </p>
           {result.formula && (
             <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">{result.formula}</p>
@@ -599,6 +610,16 @@ function SearchPageInner() {
       {/* Content */}
       <main className="mx-auto max-w-7xl px-4 py-6">
         <h1 className="sr-only">전기공학 검색 결과</h1>
+
+        {/*
+          단위 변환 카드는 문서 검색 결과와 무관하게 뜬다.
+          결과 분기 *안*에 있던 동안은 한 번도 화면에 나온 적이 없다 — 변환 질의는
+          문서가 0건이라 항상 EmptyState 로 빠졌기 때문이다(실측 2026-07-26:
+          8개 변환 패턴 전부 documents:0·featuredCalculator:X·knowledgePanel:X).
+          컴포넌트도 정규식도 /api/convert 도 멀쩡한데 도달 경로만 없었다.
+        */}
+        <UnitConversionCard query={query} />
+
         {isLoading ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             <ResultSkeleton />
@@ -613,7 +634,9 @@ function SearchPageInner() {
             검색어를 입력하세요
           </div>
         ) : result && result.documents.length === 0 && !result.featuredCalculator && !result.knowledgePanel ? (
-          <EmptyState query={query} />
+          // 변환 질의는 문서가 안 잡히는 게 정상이다. 위에 답을 띄워 놓고
+          // 아래에 "검색 결과 없음" 을 붙이면 그 답을 부정하는 것처럼 읽힌다.
+          UNIT_CONVERT_REGEX.test(query.trim()) ? null : <EmptyState query={query} />
         ) : result ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             {/* Main column */}
@@ -629,9 +652,6 @@ function SearchPageInner() {
                   AI에게 물어보기
                 </button>
               </p>
-
-              {/* Unit conversion card (if query matches pattern) */}
-              <UnitConversionCard query={query} />
 
               {/* Featured calculator — inline result if calc intent detected, otherwise link panel */}
               {calcIntent?.hasCalcIntent && calcIntent.calculatorId ? (

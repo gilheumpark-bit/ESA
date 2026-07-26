@@ -11,13 +11,14 @@
 
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
-import { convert, type UnitType, type ConvertOptions } from '@engine/conversion/unit-conversion';
+import { convert, isAwgSize, type UnitType, type ConvertOptions } from '@engine/conversion/unit-conversion';
 import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Request Types ──────────────────────────────────────
 
 interface ConvertRequestBody {
-  value: number;
+  /** AWG 는 "4/0"·"0000" 같은 규격명이라 문자열도 온다. 그 외 단위는 수치만. */
+  value: number | string;
   fromUnit: string;
   toUnit: string;
   options?: {
@@ -46,10 +47,20 @@ async function POST__impl(request: NextRequest) {
 
     const body: ConvertRequestBody = await request.json();
 
-    // Validate value
-    if (typeof body.value !== 'number' || !isFinite(body.value)) {
+    // Validate value — AWG 규격명만 문자열을 허용한다. 아무 문자열이나
+    // 통과시키면 다른 분기가 NaN 을 success:true 로 돌려준다.
+    const awgSize = body.fromUnit === 'AWG' && typeof body.value === 'string' && isAwgSize(body.value);
+    if (!awgSize && (typeof body.value !== 'number' || !isFinite(body.value))) {
       return NextResponse.json(
-        { success: false, error: { code: 'ESVA-4030', message: 'Invalid value: must be a finite number' } },
+        {
+          success: false,
+          error: {
+            code: 'ESVA-4030',
+            message: body.fromUnit === 'AWG'
+              ? 'Invalid value: must be a finite number or a known AWG size (e.g. 12, 1/0, 4/0, 0000)'
+              : 'Invalid value: must be a finite number',
+          },
+        },
         { status: 400 },
       );
     }
@@ -125,8 +136,9 @@ async function POST__impl(request: NextRequest) {
         data: {
           result: result.result,
           formula: result.formula,
+          ...(result.label ? { label: result.label } : {}),
           from: { value: body.value, unit: body.fromUnit },
-          to: { value: result.result, unit: body.toUnit },
+          to: { value: result.label ?? result.result, unit: body.toUnit },
         },
       },
       {

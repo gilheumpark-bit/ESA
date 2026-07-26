@@ -77,6 +77,14 @@ const AWG_REVERSE: Array<{ awg: string; mm2: number }> = (() => {
 })();
 
 /** Also accept "4/0", "3/0", "2/0", "1/0" aliases */
+/** 굵은 규격의 수식상 번수 — 1/0 은 0, 이후 한 단계마다 1씩 내려간다. */
+const ZERO_SERIES_GAUGE: Record<string, number> = {
+  '1/0': 0, '0': 0,
+  '2/0': -1, '00': -1,
+  '3/0': -2, '000': -2,
+  '4/0': -3, '0000': -3,
+};
+
 const AWG_ALIASES: Record<string, string> = {
   '4/0': '0000',
   '3/0': '000',
@@ -140,6 +148,28 @@ const SQFOOT_TO_SQM = 0.09290304;
 // =========================================================================
 // PART 5 — Core Conversion Functions
 // =========================================================================
+
+/**
+ * 화면에 찍을 자릿수.
+ *
+ * 각 분기는 formula 문자열에서만 자릿수를 정하고 result 는 원시값을 준다.
+ * 그래서 같은 카드 안에서 헤드라인이 "134.1021858656296 HP", 그 아래 공식이
+ * "134.1021 HP" 로 갈렸다(실측 2026-07-26). 엔진 raw 는 정밀도를 유지해야
+ * 하므로 자릿수는 표시하는 쪽에서만 다듬는다 — 분기별 자릿수 표를 또 만들면
+ * 그 표가 다시 어긋난다.
+ */
+export function formatConverted(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  if (Number.isInteger(value)) return String(value);
+  const abs = Math.abs(value);
+  const decimals = abs >= 100 ? 2 : abs >= 1 ? 4 : 6;
+  return String(Number(value.toFixed(decimals)));
+}
+
+/** 표에 있는 AWG 규격인가 — 문자열 입력을 받아들일 유일한 근거. */
+export function isAwgSize(raw: string): boolean {
+  return AWG_TABLE.has(AWG_ALIASES[raw] ?? raw);
+}
 
 export function awgToMm2(awg: string): number {
   const normalized = AWG_ALIASES[awg] ?? awg;
@@ -265,6 +295,12 @@ export type UnitType =
 export interface ConvertResult {
   result: number;
   formula: string;
+  /**
+   * 숫자로 다 담기지 않는 결과의 관용 표기. mm²→AWG 의 굵은 규격은 1/0·2/0·
+   * 3/0·4/0 으로 쓰지 12·10 처럼 세지 않는다(수식에서는 각각 0·-1·-2·-3).
+   * 화면은 이 값이 있으면 이것을 보여준다.
+   */
+  label?: string;
 }
 
 export interface ConvertOptions {
@@ -276,20 +312,25 @@ export interface ConvertOptions {
 /**
  * Universal conversion dispatcher.
  *
- * @param value     - numeric input
+ * @param input     - 수치. 단 AWG 는 "4/0"·"0000" 처럼 숫자가 아닌 규격명을 쓰므로
+ *                    문자열도 받는다. 그 외 단위는 문자열이 와도 수치로 읽는다.
  * @param fromUnit  - source unit
  * @param toUnit    - target unit
  * @param opts      - extra parameters needed for certain conversions (pf, base Z)
  * @returns         - { result, formula }
  */
 export function convert(
-  value: number,
+  input: number | string,
   fromUnit: UnitType,
   toUnit: UnitType,
   opts: ConvertOptions = {},
 ): ConvertResult {
+  // 굵은 AWG 규격은 숫자로 뭉개면 안 된다 — Number('0000') 은 0 이 되어
+  // 107.2mm²(4/0) 가 53.49mm²(1/0) 로 바뀐다. 원문은 AWG 분기만 쓴다.
+  const value = typeof input === 'number' ? input : Number(input);
+
   if (fromUnit === toUnit) {
-    return { result: value, formula: `${value} ${fromUnit} = ${value} ${toUnit} (identity)` };
+    return { result: value, formula: `${input} ${fromUnit} = ${input} ${toUnit} (identity)` };
   }
 
   const key = `${fromUnit}->${toUnit}`;
@@ -297,12 +338,23 @@ export function convert(
   switch (key) {
     // AWG ↔ mm²
     case 'AWG->mm2': {
-      const r = awgToMm2(String(value));
-      return { result: r, formula: `AWG ${value} = ${r} mm²` };
+      const r = awgToMm2(String(input));
+      return { result: r, formula: `AWG ${input} = ${r} mm²` };
     }
     case 'mm2->AWG': {
+      // 다른 분기는 전부 **목표 단위의 값**을 돌려주는데 여기만 AWG_TABLE 로
+      // 되돌아가 원 단위(mm²) 값을 돌려주고 있었다. 그 값이 to.unit='AWG' 와
+      // 함께 화면에 찍혀 "53.49 AWG" 라는 없는 규격이 표시됐다(실측 2026-07-26:
+      // 50mm² → 53.49 는 AWG 1/0 의 단면적이다). 굵은 규격의 수식상 번수는
+      // 1/0=0, 2/0=-1, 3/0=-2, 4/0=-3 이다.
       const awg = mm2ToAwg(value);
-      return { result: AWG_TABLE.get(AWG_ALIASES[awg] ?? awg)!, formula: `${value} mm² ≈ AWG ${awg}` };
+      const gauge = ZERO_SERIES_GAUGE[awg] ?? Number(awg);
+      return {
+        result: gauge,
+        // 단위(AWG)는 표시하는 쪽이 붙인다 — 여기 넣으면 "AWG 0 AWG" 가 된다.
+        label: awg,
+        formula: `${value} mm² ≈ AWG ${awg} (${AWG_TABLE.get(AWG_ALIASES[awg] ?? awg)!} mm²)`,
+      };
     }
 
     // kcmil ↔ mm²
