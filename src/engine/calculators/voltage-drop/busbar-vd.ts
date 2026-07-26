@@ -15,7 +15,12 @@
 
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { SQRT3 } from '@engine/constants/physical';
-import { activeDefaults } from '@/engine/calculators/country-defaults';
+import {
+  activeDefaults,
+  resolveVoltageDropLimit,
+  type SupplyLevel,
+  type LoadKind,
+} from '@/engine/calculators/country-defaults';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -48,6 +53,13 @@ export interface BusbarVDInput {
   sections: BusbarSection[];
   /** Total allowable cumulative voltage drop % (default 5%) */
   allowableTotalPercent?: number;
+  /**
+   * 수전 전압 구분 — KEC 232.3.9 설비 유형 A(저압) / B(고압 이상).
+   * loadKind 와 묶어 KEC 표에서 한도를 뽑는다. 안 주면 기존 국가 기본값 그대로다.
+   */
+  supplyLevel?: SupplyLevel;
+  /** 부하 종류 — KEC 232.3.9 는 조명과 기타를 다르게 본다. */
+  loadKind?: LoadKind;
 }
 
 // ── Calculator ──────────────────────────────────────────────────────────────
@@ -67,7 +79,14 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
   }
 
   const { voltage: V, powerFactor: pf } = input;
-  const allowable = input.allowableTotalPercent ?? activeDefaults().vdCombined;
+  const allowable = resolveVoltageDropLimit({
+    explicit: input.allowableTotalPercent,
+    supplyLevel: input.supplyLevel,
+    loadKind: input.loadKind,
+    // KEC 100m 가산은 전체 배선 길이 기준이라 구간 합을 쓴다.
+    wiringLengthM: input.sections.reduce((sum, sec) => sum + sec.length, 0),
+    fallback: activeDefaults().vdCombined,
+  });
   const cosPhi = pf;
   const sinPhi = Math.sqrt(1 - pf * pf);
   const steps: CalcStep[] = [];

@@ -17,7 +17,12 @@
 
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { SQRT3 } from '@engine/constants/physical';
-import { activeDefaults } from '@/engine/calculators/country-defaults';
+import {
+  activeDefaults,
+  resolveVoltageDropLimit,
+  type SupplyLevel,
+  type LoadKind,
+} from '@/engine/calculators/country-defaults';
 import { DEFAULT_MOTOR_STARTING_VD_LIMIT } from '@engine/constants/calc-thresholds';
 import {
   DetailedCalcResult,
@@ -44,6 +49,13 @@ export interface ThreePhaseVDInput {
   powerFactor: number;
   /** Allowable voltage drop % (default 3%) */
   allowableDropPercent?: number;
+  /**
+   * 수전 전압 구분 — KEC 232.3.9 설비 유형 A(저압) / B(고압 이상).
+   * loadKind 와 묶어 KEC 표에서 한도를 뽑는다. 안 주면 기존 국가 기본값 그대로다.
+   */
+  supplyLevel?: SupplyLevel;
+  /** 부하 종류 — KEC 232.3.9 는 조명과 기타를 다르게 본다. */
+  loadKind?: LoadKind;
   /** Motor starting analysis */
   motorStarting?: {
     /** Starting current multiplier (e.g. 6 for DOL) */
@@ -66,7 +78,13 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
   assertRange(input.powerFactor, 0.01, 1.0, 'powerFactor');
 
   const { voltage: V, current: I, length, resistance: R, reactance: X, powerFactor: pf } = input;
-  const allowable = input.allowableDropPercent ?? activeDefaults().vdBranch;
+  const allowable = resolveVoltageDropLimit({
+    explicit: input.allowableDropPercent,
+    supplyLevel: input.supplyLevel,
+    loadKind: input.loadKind,
+    wiringLengthM: input.length,
+    fallback: activeDefaults().vdBranch,
+  });
   const L_km = length / 1000;
   const cosPhi = pf;
   const sinPhi = Math.sqrt(1 - pf * pf);

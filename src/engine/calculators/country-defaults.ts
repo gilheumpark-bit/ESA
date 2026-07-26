@@ -127,3 +127,32 @@ export function kecVoltageDropLimit(
   const adder = Math.min(over * table.lengthAdderPerMeter, table.lengthAdderCap);
   return base + adder;
 }
+
+/**
+ * 전압강하 한도 하나로 모으는 지점.
+ *
+ * 결정 순서는 어느 계산기에서나 같다 — 사용자가 직접 준 값 → KEC 232.3.9 표
+ * (수전 구분을 준 경우) → 국가 기본값. 계산기마다 이 순서를 다시 쓰면 한 곳만
+ * 고쳐지고 나머지가 조용히 어긋난다.
+ */
+export function resolveVoltageDropLimit(opts: {
+  /** 사용자가 명시한 한도 (%) */
+  explicit?: number;
+  supplyLevel?: SupplyLevel;
+  loadKind?: LoadKind;
+  /** 100 m 초과 가산에 쓰는 배선 길이 */
+  wiringLengthM?: number;
+  /** KEC 표를 못 쓸 때의 국가 기본값 */
+  fallback: number;
+}): number {
+  if (opts.explicit !== undefined) return opts.explicit;
+  if (opts.supplyLevel) {
+    const kec = kecVoltageDropLimit({
+      supply: opts.supplyLevel,
+      load: opts.loadKind ?? 'other',
+      wiringLengthM: opts.wiringLengthM,
+    });
+    if (kec !== undefined) return kec;
+  }
+  return opts.fallback;
+}

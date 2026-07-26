@@ -17,7 +17,12 @@
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { createSource, createJudgment } from '@engine/sjc/types';
 import { DEFAULT_REACTANCE_OHM_PER_KM } from '@engine/constants/calc-thresholds';
-import { activeDefaults } from '@/engine/calculators/country-defaults';
+import {
+  activeDefaults,
+  resolveVoltageDropLimit,
+  type SupplyLevel,
+  type LoadKind,
+} from '@/engine/calculators/country-defaults';
 import {
   getIecAmpacity,
   IEC_CABLE_SIZES,
@@ -67,6 +72,13 @@ export interface CableSizingInput {
   phase?: 1 | 3;
   /** Voltage drop limit % (default 3) */
   dropLimitPercent?: number;
+  /**
+   * 수전 전압 구분 — KEC 232.3.9 설비 유형 A(저압) / B(고압 이상).
+   * loadKind 와 묶어 KEC 표에서 한도를 뽑는다. 안 주면 기존 국가 기본값 그대로다.
+   */
+  supplyLevel?: SupplyLevel;
+  /** 부하 종류 — KEC 232.3.9 는 조명과 기타를 다르게 본다. */
+  loadKind?: LoadKind;
 }
 
 // ── Calculator ──────────────────────────────────────────────────────────────
@@ -90,8 +102,15 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     groupCount = 1,
     powerFactor: pf = 0.85,
     phase = 3,
-    dropLimitPercent = activeDefaults().vdBranch,
   } = input;
+
+  const dropLimitPercent = resolveVoltageDropLimit({
+    explicit: input.dropLimitPercent,
+    supplyLevel: input.supplyLevel,
+    loadKind: input.loadKind,
+    wiringLengthM: input.length,
+    fallback: activeDefaults().vdBranch,
+  });
 
   const steps: CalcStep[] = [];
   // PART 2 — Correction factors

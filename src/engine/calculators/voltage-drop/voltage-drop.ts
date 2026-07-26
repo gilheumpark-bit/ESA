@@ -18,7 +18,7 @@ import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physica
 import { createSource, createJudgment } from '@engine/sjc/types';
 import {
   activeDefaults,
-  kecVoltageDropLimit,
+  resolveVoltageDropLimit,
   type SupplyLevel,
   type LoadKind,
 } from '@/engine/calculators/country-defaults';
@@ -91,15 +91,11 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
     loadKind,
   } = input;
 
-  // 한도 결정 순서: 사용자가 직접 준 값 → KEC 232.3.9 표(수전 구분을 준 경우)
-  // → 기존 국가 기본값. KEC 표는 KR 프로파일에만 있고, 없으면 undefined 를
-  // 돌려주므로 자동으로 기존 경로로 떨어진다.
-  const dropLimitPercent =
-    input.dropLimitPercent
-    ?? (supplyLevel
-      ? kecVoltageDropLimit({ supply: supplyLevel, load: loadKind ?? 'other', wiringLengthM: L })
-      : undefined)
-    ?? activeDefaults().vdBranch;
+  const dropLimitPercent = resolveVoltageDropLimit({
+    explicit: input.dropLimitPercent,
+    supplyLevel, loadKind, wiringLengthM: L,
+    fallback: activeDefaults().vdBranch,
+  });
 
   const rho = conductor === 'Cu' ? RESISTIVITY_CU : RESISTIVITY_AL;
   const X = X_input ?? DEFAULT_REACTANCE_OHM_PER_KM;
