@@ -60,3 +60,68 @@ describe('글자 조각 병합', () => {
     expect(mergeGlyphRuns(one)).toEqual(one);
   });
 });
+
+/**
+ * CAD 표제란은 칸을 채우려고 자간을 벌린다. 실측(2026-07-26, KIMM 분전반결선도
+ * 1페이지)의 **같은 라벨 안** 간격은 0.62~4.18em, **다른 라벨과의** 최소 간격은
+ * 5.82em 이었다. 그 사이를 가른다.
+ *
+ * 수리 전 라이브: 한글 53개 중 31개가 1글자 → 수리 후 1개("대", 아래 참조).
+ */
+describe('자간을 벌린 표제란 라벨', () => {
+  /** 간격 g(em)로 벌려 쓴 글자들. */
+  function spaced(text: string, x: number, y: number, f = 3.5, gapEm = 0): PdfTextItem[] {
+    const out: PdfTextItem[] = [];
+    let cursor = x;
+    for (const ch of text) {
+      const w = /[가-힣]/.test(ch) ? f : f * 0.6;
+      out.push({ text: ch, x: cursor, y, width: w, height: f, fontHeight: f, angle: 0 });
+      cursor += w + gapEm * f;
+    }
+    return out;
+  }
+
+  it.each([
+    ['일련번호', 0.62],
+    ['도면번호', 0.63],
+    ['사업명', 1.86],
+    ['도면명', 2.26],
+    ['축척', 2.00],
+    ['주기', 3.74],
+    ['설계', 4.07],
+    ['수정', 4.18],
+  ])('%s (%sem 자간) 를 한 낱말로 잇는다', (word, gapEm) => {
+    const merged = mergeGlyphRuns(spaced(word, 100, 50, 3.5, gapEm as number));
+    expect(merged).toHaveLength(1);
+    expect(merged[0].text).toBe(word);
+  });
+
+  it('한글 낱말 안에는 공백을 넣지 않는다 — "일 련 번 호" 는 어떤 키워드에도 안 걸린다', () => {
+    expect(mergeGlyphRuns(spaced('일련번호', 100, 50, 3.5, 0.62))[0].text).toBe('일련번호');
+  });
+
+  it('5.82em 떨어진 다른 라벨은 잇지 않는다', () => {
+    // 실측에서 가장 가까웠던 라벨 경계("토토"→"승").
+    const a = spaced('토토', 100, 50, 3.5);
+    const b = spaced('승인', 100 + 2 * 3.5 + 5.82 * 3.5, 50, 3.5, 4.07);
+    const merged = mergeGlyphRuns([...a, ...b]);
+    expect(merged.map((m) => m.text)).toEqual(['토토', '승인']);
+  });
+
+  it('이미 낱말인 것끼리는 넓은 임계를 쓰지 않는다', () => {
+    // "한국기계연구원"과 "건축사사무소"는 7.97em 떨어져 있었다. 조각이 아니므로
+    // 좁은 임계가 걸려야 한다 — 넓은 임계를 모두에게 주면 한 덩어리가 된다.
+    const f = 12.9;
+    const a: PdfTextItem = { text: '한국기계연구원', x: 0, y: 50, width: f * 7, height: f, fontHeight: f, angle: 0 };
+    const b: PdfTextItem = { text: '건축사사무소', x: f * 7 + 2 * f, y: 50, width: f * 6, height: f, fontHeight: f, angle: 0 };
+    expect(mergeGlyphRuns([a, b]).map((m) => m.text)).toEqual(['한국기계연구원', '건축사사무소']);
+  });
+
+  it('영문·숫자 사이의 벌어진 자리는 공백으로 남긴다', () => {
+    // 한글과 달리 라틴 문자는 낱말 사이를 띄운다. "MCCB3P" 가 되면 스펙 파서의
+    // 토큰 경계가 무너진다.
+    const a = glyphs('MCCB', 100, 50);
+    const b = glyphs('3P', 100 + 4 * 6 + 3, 50);
+    expect(mergeGlyphRuns([...a, ...b])[0].text).toBe('MCCB 3P');
+  });
+});

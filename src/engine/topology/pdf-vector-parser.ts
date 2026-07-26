@@ -267,11 +267,15 @@ export function mergeGlyphRuns(items: PdfTextItem[]): PdfTextItem[] {
       const glyphWidth = Math.max(run?.fontHeight ?? 0, item.fontHeight)
         * advanceWidth(item.text.slice(0, 1) || 'a');
       const gap = run ? item.x - (run.x + run.width) : Infinity;
+      const limit = glyphWidth * mergeLimitEm(run, item);
 
-      if (run && gap >= -glyphWidth && gap <= glyphWidth * 0.6) {
+      if (run && gap >= -glyphWidth && gap <= limit) {
         // 원래 떨어져 있던 자리는 공백으로 남긴다 — "MCCB 3P" 가 "MCCB3P" 가 되면
-        // 스펙 파서의 토큰 경계가 무너진다.
-        run.text += (gap > glyphWidth * 0.2 ? ' ' : '') + item.text;
+        // 스펙 파서의 토큰 경계가 무너진다. 다만 한글·한자·가나끼리는 낱말 안에
+        // 공백을 쓰지 않는다 — 자간을 벌린 "일 련 번 호" 로 만들면 어떤 키워드
+        // 매칭에도 걸리지 않아 병합한 의미가 없다.
+        const bothCjk = isCjk(lastChar(run.text)) && isCjk(item.text.slice(0, 1));
+        run.text += (!bothCjk && gap > glyphWidth * 0.2 ? ' ' : '') + item.text;
         run.width = item.x + item.width - run.x;
         run.height = Math.max(run.height, item.height);
         continue;
@@ -282,6 +286,44 @@ export function mergeGlyphRuns(items: PdfTextItem[]): PdfTextItem[] {
   }
 
   return merged;
+}
+
+function lastChar(text: string): string {
+  return text.slice(-1);
+}
+
+/** 한글·한자·가나 — 낱말 안에 공백을 쓰지 않는 문자. */
+function isCjk(ch: string): boolean {
+  return /[぀-ヿ㐀-䶿一-鿿가-힯]/.test(ch);
+}
+
+/**
+ * 이 자리에서 몇 em 까지 한 낱말로 볼 것인가.
+ *
+ * CAD 표제란은 칸을 채우려고 자간을 벌린다. 실측(2026-07-26, KIMM 분전반결선도
+ * 1페이지)에서 **같은 라벨 안**의 간격은 0.62~4.18em 이었다.
+ *
+ *   일련번호·도면번호 0.62em · 임중훈·박란신 1.06em · 사업명 1.86em
+ *   축척 2.00em · 도면명 2.26em · 주기 3.74em · 설계·승인 4.07em · 수정 4.18em
+ *
+ * **다른 라벨과의** 최소 간격은 5.82em("토토"→"승") 이었고 나머지는 7em 이상,
+ * 대개 20~190em 이다. 그래서 4.5em 을 경계로 둔다 — 위로 7%, 아래로 23% 여유.
+ *
+ * 다만 이 넓은 임계는 **글자 조각**에만 쓴다. 양쪽이 이미 여러 글자면 낱말이
+ * 끝난 것이라 좁게 본다 — 그러지 않으면 "한국기계연구원"과 "건축사사무소"가
+ * 7.97em 떨어져 있는데도 한 덩어리가 된다.
+ *
+ * 한계: 간격만으로는 못 가르는 자리가 남는다. 같은 도면의 "대"→"표 :" 는 7.00em
+ * 인데 "대표"가 맞다. 붙이려면 5.82em 인 "토토"→"승" 도 함께 붙어 버리므로
+ * 여기서는 붙이지 않는다 — 없는 낱말을 만드는 쪽이 더 나쁘다.
+ */
+const FRAGMENT_MERGE_EM = 4.5;
+const WORD_MERGE_EM = 0.6;
+
+function mergeLimitEm(run: PdfTextItem | undefined, item: PdfTextItem): number {
+  if (!run) return WORD_MERGE_EM;
+  const fragment = [...run.text.trim()].length === 1 || [...item.text.trim()].length === 1;
+  return fragment ? FRAGMENT_MERGE_EM : WORD_MERGE_EM;
 }
 
 function lineLength(seg: PdfLineSegment): number {
