@@ -295,11 +295,21 @@ function splitPrefix(unit: string): { base: string; factor: number } | undefined
   for (const base of PREFIXABLE_BASE) {
     if (unit.toUpperCase() === base) return { base, factor: 1 };
     if (unit.length === base.length + 1 && unit.slice(1).toUpperCase() === base) {
-      const factor = SI_PREFIX[unit[0]];
+      const factor = SI_PREFIX[normalizePrefix(unit[0])];
       if (factor !== undefined) return { base, factor };
     }
   }
   return undefined;
+}
+
+/**
+ * 도면은 대문자로 쓴다 — "22.9KV" · "500KW" · "TR 1000KVA" 가 CAD 의 보통
+ * 표기다. SI 상 킬로는 소문자 k 지만 대문자 K 를 쓰는 접두어는 없으므로
+ * K→k 는 모호하지 않다. 반면 m(밀리)와 M(메가)는 6자리 차이라 그대로 둔다
+ * (실측 2026-07-26: 이 구분이 없으면 누전차단기 15mA 가 15,000,000A 가 된다).
+ */
+function normalizePrefix(ch: string): string {
+  return ch === 'K' ? 'k' : ch;
 }
 
 /**

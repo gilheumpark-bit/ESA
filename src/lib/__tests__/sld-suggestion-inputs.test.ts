@@ -180,3 +180,35 @@ describe('도면 체인이 계산기에 넘기는 입력', () => {
     expect(demand?.inputs.loads).toEqual([{ name: 'L-1', ratedPower: 300 }]);
   });
 });
+
+/**
+ * 도면은 대문자로 쓴다.
+ *
+ * CAD 텍스트는 "22.9KV" · "500KW" · "TR 1000KVA" 처럼 전부 대문자인 것이 보통이다
+ * (이 리포의 gate 픽스처도 `TR 1000KVA` 다). 그런데 접두어를 소문자로만 받고
+ * 있어서 22.9KV·500KW·0.5KA 가 전부 미인식이었다(적대 검증 2026-07-26).
+ *
+ * SI 상 킬로는 소문자 k 지만 **대문자 K 를 쓰는 접두어는 없다** — 그래서
+ * K→k 는 모호하지 않다. 반면 m(밀리)와 M(메가)는 6자리 차이라 끝까지 가른다.
+ */
+describe('대문자 접두어', () => {
+  const param = (id: string, name: string) => CALCULATOR_PARAMS[id]!.find((p) => p.name === name)!;
+
+  it.each([
+    ['short-circuit', 'systemVoltage', '22.9KV', 22900],
+    ['short-circuit', 'systemVoltage', '22.9kV', 22900],
+    ['transformer-capacity', 'totalLoad', '500KW', 500],
+    ['breaker-sizing', 'loadCurrent', '0.5KA', 500],
+    ['short-circuit', 'transformerCapacity', '10MVA', 10000],
+  ])('%s.%s ← %s', (id, name, raw, expected) => {
+    expect(parseMeasuredValue(param(id as string, name as string), raw)).toBe(expected);
+  });
+
+  it('밀리와 메가는 대문자 허용 뒤에도 갈린다', () => {
+    const current = param('breaker-sizing', 'loadCurrent');
+    expect(parseMeasuredValue(current, '15mA')).toBe(0.015);
+    expect(parseMeasuredValue(current, '15MA')).toBe(15000000);
+    // 이 둘이 같아지면 누전차단기 정격감도전류가 6자리 틀린다.
+    expect(parseMeasuredValue(current, '15mA')).not.toBe(parseMeasuredValue(current, '15MA'));
+  });
+});
