@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Scale } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: '이용약관 | ESA',
+  title: '이용약관 · ESVA',
   description: 'ESVA 서비스 이용약관',
 };
 

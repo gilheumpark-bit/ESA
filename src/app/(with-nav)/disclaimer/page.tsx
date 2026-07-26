@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { AlertTriangle } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: '면책조항 | ESA',
+  title: '면책조항 · ESVA',
   description: 'ESVA 면책조항',
 };
 

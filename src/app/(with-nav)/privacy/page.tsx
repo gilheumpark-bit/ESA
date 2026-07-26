@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { Shield } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: '개인정보처리방침 | ESA',
+  title: '개인정보처리방침 · ESVA',
   description: 'ESVA 개인정보처리방침',
 };
 
