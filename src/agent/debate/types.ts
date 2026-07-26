@@ -31,7 +31,7 @@ export interface NumericalEvidence {
 /** 토론에서 참조되는 기준서 근거 */
 export interface RegulatoryEvidence {
   standard: string;       // "KEC"
-  clause: string;         // "232.52"
+  clause: string;         // "232.3.9"
   edition: string;        // "2021"
   requirement: string;    // "분기회로 전압강하 ≤ 3%"
   judgment: 'PASS' | 'FAIL';

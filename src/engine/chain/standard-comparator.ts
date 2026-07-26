@@ -153,7 +153,7 @@ export function compareAmpacity(
  */
 export function compareVoltageDropLimits(): ComparisonReport {
   const entries: ComparisonEntry[] = [
-    { standard: 'KEC', country: 'KR', vdLimit: 5, clause: 'KEC 232.52', note: '간선+분기 합계 5% 이하 (간선 3%, 분기 2%)' },
+    { standard: 'KEC', country: 'KR', vdLimit: 5, clause: 'KEC 232.3.9', note: '인입구~기기 기준 — 저압수전 조명 3%·기타 5% (고압이상 수전 6%·8%)' },
     { standard: 'NEC', country: 'US', vdLimit: 5, clause: 'NEC 210.19 FPN', note: 'Informational Note: 분기 3%, 간선+분기 5% 권장 (법적 강제 아님)' },
     { standard: 'IEC', country: 'INT', vdLimit: 4, clause: 'IEC 60364-5-52', note: '조명 3%, 기타 5% (일부 국가 4% 적용)' },
   ];
@@ -178,10 +178,10 @@ export function compareDesign(params: {
   const entries: ComparisonEntry[] = [];
 
   // KEC 판정
-  const kecVD = evaluateStandard('KR', 'KEC-232.52-COMBINED', { voltageDropPercent: params.voltageDropPercent });
+  const kecVD = evaluateStandard('KR', 'KEC-232.3.9-COMBINED', { voltageDropPercent: params.voltageDropPercent });
   entries.push({
     standard: 'KEC', country: 'KR',
-    judgment: kecVD, clause: 'KEC 232.52',
+    judgment: kecVD, clause: 'KEC 232.3.9',
     note: `전압강하 ${params.voltageDropPercent}% → ${kecVD.judgment}`,
   });
 

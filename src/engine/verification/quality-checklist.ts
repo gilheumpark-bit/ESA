@@ -221,7 +221,7 @@ const CHECKS: QualityCheck[] = [
   {
     id: 'CC-001', domain: 'code-compliance', severity: 'critical',
     title: '전압강하 기준 준수',
-    description: 'KEC 232.52 전압강하 허용치를 초과하지 않아야 합니다.',
+    description: 'KEC 232.3.9 전압강하 허용치를 초과하지 않아야 합니다.',
     check: (p) => {
       const vd = num(p['voltageDropPercent']);
       const limit = num(p['vdLimit']);

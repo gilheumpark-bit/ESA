@@ -2,7 +2,7 @@
  * KEC DSL Condition Tree Tests
  *
  * Tests the executable code representation of KEC standard articles.
- * Covers voltage drop (232.52), breaker sizing (212.3), grounding (142.5).
+ * Covers voltage drop (232.3.9), breaker sizing (212.3), grounding (142.5).
  *
  * Tolerance: exact match for judgments (PASS/FAIL/HOLD)
  */
@@ -13,9 +13,9 @@ import { evaluateBreakerKEC, findMinBreakerRating, STANDARD_BREAKER_RATINGS } fr
 import { evaluateGroundingKEC } from '../kec/kec-142';
 import { evaluateCondition } from '../kec/types';
 
-// -- Voltage Drop Tests (KEC 232.52) ----------------------------------------
+// -- Voltage Drop Tests (KEC 232.3.9) ----------------------------------------
 
-describe('KEC 232.52 Voltage Drop Judgment', () => {
+describe('KEC 232.3.9 Voltage Drop Judgment', () => {
   test('2.99% voltage drop -- PASS for main circuit (boundary)', () => {
     const result = evaluateVoltageDropKEC(2.99, 'main');
     expect(result.judgment).toBe('PASS');

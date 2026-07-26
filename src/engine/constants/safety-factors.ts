@@ -98,11 +98,22 @@ const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
     standard: 'KEC',
     version: '2021',
     unitSystem: 'SI',
+    /**
+     * KEC 232.3.9 「수용가 설비에서의 전압강하」 — 인입구에서 기기까지의 값이다.
+     * 원문 확인 2026-07-26: 저압으로 수전하는 설비는 조명 3% · 기타 5%,
+     * 고압 이상으로 수전하는 설비는 조명 6% · 기타 8%. 배선 길이가 100m 를
+     * 넘으면 m 당 0.005% 를 더할 수 있으나 그 가산은 0.5% 를 넘지 못한다.
+     *
+     * 아래 branch/feeder 는 KEC 가 쓰는 구분(조명/기타)이 아니라 간선·분기
+     * 구분이고, 기타 부하에 5% 가 아니라 3% 를 적용한다 — 규정보다 **엄격한**
+     * 쪽이라 그대로 두되, 완화 여부는 개발자 판단 사항으로 남긴다.
+     * 고압 이상 수전(6%/8%) 구분은 아직 없다.
+     */
     voltageDropLimits: {
-      branch: 3.0,       // KEC 232.52
-      feeder: 3.0,       // KEC 232.52
-      combined: 5.0,     // KEC 232.52 합산
-      lighting: 3.0,
+      branch: 3.0,
+      feeder: 3.0,
+      combined: 5.0,     // KEC 232.3.9 기타 부하 5% 와 일치
+      lighting: 3.0,     // KEC 232.3.9 조명 3% 와 일치
     },
     breakerFactors: {
       continuousLoad: 1.25,   // KEC 212.3

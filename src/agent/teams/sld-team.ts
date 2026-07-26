@@ -510,11 +510,11 @@ async function runCalculations(
           formula: 'VD = (√3 × I × L × R) / V × 100',
           compliant: null,
           note: '부하전류(I) 미추출 — 가정값 사용 금지. 토폴로지·명판 전류 입력 후 재계산.',
-          standardRef: 'KEC 232.52',
+          standardRef: 'KEC 232.3.9',
         });
         standards.push({
           standard: 'KEC',
-          clause: '232.52',
+          clause: '232.3.9',
           title: '전압강하',
           judgment: 'HOLD',
           note: `${conn.from}→${conn.to}: 전류 미상, 판정 보류`,
@@ -537,12 +537,12 @@ async function runCalculations(
         note: assumed
           ? `참고 추정(I=${currentA}A 미검증). 정밀 계산기 경로 필요.`
           : `I=${currentA}A, 한도 ${limit}%`,
-        standardRef: 'KEC 232.52',
+        standardRef: 'KEC 232.3.9',
       });
 
       standards.push({
         standard: 'KEC',
-        clause: '232.52',
+        clause: '232.3.9',
         title: '전압강하',
         judgment: compliant === null ? 'HOLD' : compliant ? 'PASS' : 'FAIL',
         note: `${vd.toFixed(2)}% (허용: ${limit}%)`,
@@ -555,7 +555,7 @@ async function runCalculations(
           title: '전압강하 기준 초과',
           description: `${conn.from} → ${conn.to} 구간 전압강하 ${vd.toFixed(2)}% > 허용 ${limit}%`,
           location: `${conn.from} → ${conn.to}`,
-          standardRef: 'KEC 232.52',
+          standardRef: 'KEC 232.3.9',
           suggestedFix: '케이블 굵기 증가 또는 배전반 위치 변경 검토',
         });
       }

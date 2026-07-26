@@ -71,7 +71,7 @@ describe('registry — ESA/NER 라우팅', () => {
   });
 
   test('evaluateStandard: KEC 라우팅 회귀 없음 (KR 기본 경로는 여전히 KEC)', () => {
-    const result = evaluateStandard('KR', 'KEC-232.52-MAIN', { voltageDropPercent: 2 });
+    const result = evaluateStandard('KR', 'KEC-232.3.9-MAIN', { voltageDropPercent: 2 });
     expect(result.article.id.startsWith('KEC')).toBe(true);
     expect(['PASS', 'HOLD', 'FAIL', 'BLOCK']).toContain(result.judgment);
   });
@@ -99,7 +99,7 @@ const baseClaim: ReceiptClaim = {
   result: { value: 2.4, unit: '%', source: [] } as unknown as CalcResult,
   steps: [{ step: 1, title: '전압강하', formula: 'e = (17.8*L*I)/(1000*A)', value: 2.4, unit: '%' }],
   formulaUsed: 'e = (17.8*L*I)/(1000*A)',
-  standardsUsed: ['KEC 232.52'],
+  standardsUsed: ['KEC 232.3.9'],
   engineVersion: '1.0.0',
 };
 

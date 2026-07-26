@@ -90,7 +90,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'bus', to: 'breaker_mccb', mandatory: true },
       { from: 'breaker_mccb', to: 'panel_dist', mandatory: false },
     ],
-    standards: ['KEC 212.3', 'KEC 232.52', 'KEC 232.31'],
+    standards: ['KEC 212.3', 'KEC 232.3.9', 'KEC 232.31'],
   },
 
   // === 전등 설비 (Lighting) ===
@@ -113,7 +113,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'breaker_mcb', to: 'light', mandatory: true, typicalCable: 'HIV 2.5sq × 3C' },
       { from: 'switch_wall', to: 'light', mandatory: true },
     ],
-    standards: ['KEC 232.52', 'KEC 234.1', '소방법 시행령 별표1'],
+    standards: ['KEC 232.3.9', 'KEC 234.1', '소방법 시행령 별표1'],
   },
 
   // === 동력 설비 (Motor Power) ===
@@ -136,7 +136,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'breaker_mccb', to: 'contactor', mandatory: true },
       { from: 'contactor', to: 'motor', mandatory: true, typicalCable: 'XLPE 3C' },
     ],
-    standards: ['KEC 212.3', 'KEC 232.52', 'KEC 341.1'],
+    standards: ['KEC 212.3', 'KEC 232.3.9', 'KEC 341.1'],
   },
 
   // === 소방 설비 (Fire Protection) ===

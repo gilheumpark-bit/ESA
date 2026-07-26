@@ -291,8 +291,8 @@ export const ESVA_TOOLS: ESATool[] = [
 
   {
     name: 'query_voltage_drop_judgment',
-    description: 'KEC 232.52 전압강하 기준 적합/부적합을 판정합니다.',
-    descriptionEn: 'Judge voltage drop compliance per KEC 232.52. Returns PASS/FAIL verdict.',
+    description: 'KEC 232.3.9 전압강하 기준 적합/부적합을 판정합니다.',
+    descriptionEn: 'Judge voltage drop compliance per KEC 232.3.9. Returns PASS/FAIL verdict.',
     parameters: Object.fromEntries([
       numParam('voltageDropPercent', '전압강하율', 'Voltage drop percentage', '%'),
       enumParam('circuitType', '회로 유형', 'Circuit type', ['main', 'branch', 'combined'], false),

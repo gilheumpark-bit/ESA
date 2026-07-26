@@ -32,7 +32,7 @@ const WIRING: CodeArticle[] = [
 
   nec('210.19', '210.19', '분기회로 전선 크기 — 허용전류 ≥ 부하', [
     { param: 'conductorAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '전선 허용전류 ≥ 비연속부하 + 연속부하×1.25' },
-  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 분기회로 전선' }]),
+  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 분기회로 전선' }]),
 
   nec('210.52', '210.52', '주거 콘센트 배치 기준', [
     { param: 'wallSpaceFt', operator: '<=', value: 6, unit: 'ft', result: 'PASS', note: '벽면: 어느 지점에서든 6ft 이내 콘센트' },
@@ -49,7 +49,7 @@ const WIRING: CodeArticle[] = [
 
   nec('215.2', '215.2', '간선 전선 크기 — 허용전류 기준', [
     { param: 'feederAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '간선 허용전류 ≥ 비연속부하 + 연속부하×1.25' },
-  ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 간선 전압강하' }]),
+  ], [{ articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 간선 전압강하' }]),
 
   nec('220.12', '220.12', '용도별 조명 부하 단위', [
     { param: 'lightingLoadVAperSqFt', operator: '>=', value: 3.5, unit: 'VA/ft²', result: 'PASS', note: '사무실 3.5, 주거 3, 상가 2.25 VA/ft²' },
@@ -177,12 +177,12 @@ const MOTORS: CodeArticle[] = [
 const VOLTAGE_DROP: CodeArticle[] = [
   nec('VD-BRANCH', '210.19(A) IN', '분기회로 전압강하 권고 ≤3%', [
     { param: 'voltageDropPercent', operator: '<=', value: 3, unit: '%', result: 'PASS', note: '분기회로 전압강하 ≤3% (권고, 의무 아님)' },
-  ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 분기 전압강하 ≤3% (의무)' }]),
+  ], [{ articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 분기 전압강하 ≤3% (의무)' }]),
 
   nec('VD-FEEDER', '215.2(A)(4) IN', '간선 전압강하 권고 ≤3%, 합산 ≤5%', [
     { param: 'voltageDropPercent', operator: '<=', value: 3, unit: '%', result: 'PASS', note: '간선 ≤3%, 간선+분기 합산 ≤5% (권고)' },
     { param: 'totalVoltageDropPercent', operator: '<=', value: 5, unit: '%', result: 'PASS', note: '합산 전압강하 ≤5%' },
-  ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 합산 ≤5% (의무)' }]),
+  ], [{ articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 합산 ≤5% (의무)' }]),
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -29,7 +29,7 @@ const PROBABILISTIC_PATTERNS = /(?:약|대략|보통|일반적으로|대체로|�
 
 /**
  * Number pattern: integers, decimals, percentages, scientific notation.
- * Excludes dates (YYYY-MM-DD), version strings (v1.2.3), and clause refs (232.52).
+ * Excludes dates (YYYY-MM-DD), version strings (v1.2.3), and clause refs (232.3.9).
  *
  * \uCC9C\uB2E8\uC704 \uAD6C\uBD84\uC790\uB294 \uD55C \uB369\uC5B4\uB9AC\uB85C \uC77D\uB294\uB2E4. \uC774\uC804\uC5D0\uB294 "55,000 W" \uAC00 "55" \uC640 "000" \uB450
  * \uD1A0\uD070\uC73C\uB85C \uCABC\uAC1C\uC838, \uC55E\uC790\uB9AC\uB294 \uC0AC\uC6A9\uC790 \uC785\uB825\uC774\uB77C \uD1B5\uACFC\uD558\uACE0 \uB4B7\uC790\uB9AC\uB294 \uADFC\uAC70\uAC00 \uC5C6\uB2E4\uBA70
@@ -54,7 +54,7 @@ const STANDARD_CITATION_PATTERN = /\b(KEC|NEC|IEC|JIS|GB|VDE|AS\/NZS|KEPIC|IEEE|
  *   - Inside tool result markers [RESULT: ...]
  *   - Dates (2021, 2023 etc. when preceded by standard name)
  *   - Version strings (v0.1.0)
- *   - Clause references (232.52 after KEC/NEC/etc.)
+ *   - Clause references (232.3.9 after KEC/NEC/etc.)
  *   - Step ordinals (Step 1, Step 2, ...)
  */
 const ALLOWED_NUMBER_CONTEXTS = [

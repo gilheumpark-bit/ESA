@@ -249,7 +249,7 @@ export interface VerificationMarking {
   id: string;
   severity: MarkingSeverity;
   componentId?: string;       // 도면 요소 ID
-  location: string;           // "TR-001 → MCC-001 구간" or "KEC 232.52"
+  location: string;           // "TR-001 → MCC-001 구간" or "KEC 232.3.9"
   message: string;
   detail?: string;
   standardRef?: string;

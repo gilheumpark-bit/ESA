@@ -187,9 +187,9 @@ export function queryVoltageDrop(
   circuitType: 'main' | 'branch' | 'combined' = 'combined',
 ): JudgmentResult | null {
   const articleMap: Record<string, string> = {
-    main: 'KEC-232.52-MAIN',
-    branch: 'KEC-232.52-BRANCH',
-    combined: 'KEC-232.52-COMBINED',
+    main: 'KEC-232.3.9-MAIN',
+    branch: 'KEC-232.3.9-BRANCH',
+    combined: 'KEC-232.3.9-COMBINED',
   };
 
   const articleId = articleMap[circuitType];
@@ -290,7 +290,7 @@ export function executeQuery(query: StructuredQuery): QueryResult {
         const p = query.params as { voltageDropPercent: number; circuitType?: 'main' | 'branch' | 'combined' };
         const result = queryVoltageDrop(p.voltageDropPercent, p.circuitType);
         if (!result) return failResult('voltage_drop', '전압강하 판정 조항을 찾을 수 없습니다.');
-        return { type: 'voltage_drop', success: true, data: result, source: { standard: 'KEC', clause: '232.52', edition: '2021' } };
+        return { type: 'voltage_drop', success: true, data: result, source: { standard: 'KEC', clause: '232.3.9', edition: '2021' } };
       }
 
       case 'nec_ampacity': {

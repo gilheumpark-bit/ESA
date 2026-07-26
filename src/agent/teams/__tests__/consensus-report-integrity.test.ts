@@ -49,7 +49,7 @@ describe('consensus report integrity', () => {
           value: 2.4,
           unit: '%',
           compliant: true,
-          standardRef: 'KEC 232.52',
+          standardRef: 'KEC 232.3.9',
         }],
       }],
     });

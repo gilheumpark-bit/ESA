@@ -71,7 +71,7 @@ const SELECTION: CodeArticle[] = [
 
   iec('525.1', '525.1', '전압강하 권고 기준', [
     { param: 'voltageDropPercent', operator: '<=', value: 4, unit: '%', result: 'PASS', note: '조명 ≤3%, 기타 ≤5% (권고)' },
-  ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 전압강하' }, { articleId: 'NEC-VD-BRANCH', relation: 'equivalent', note: 'NEC 전압강하' }]),
+  ], [{ articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 전압강하' }, { articleId: 'NEC-VD-BRANCH', relation: 'equivalent', note: 'NEC 전압강하' }]),
 
   iec('533.1', '533.1', '개폐기 선정 — 차단용량', [
     { param: 'breakingCapacity_kA', operator: '>=', value: 0, unit: 'kA', result: 'PASS', note: '차단용량 ≥ 설치점 예상 단락전류' },

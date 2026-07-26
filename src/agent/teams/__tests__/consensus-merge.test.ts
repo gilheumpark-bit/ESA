@@ -49,12 +49,12 @@ describe('consensus 병합 — 같은 조항 키의 최악 판정 보존', () =>
       sessionId: 't', projectName: 't', projectType: 't',
       teamResults: [
         sldResult([
-          { standard: 'KEC', clause: '232.52', title: '전압강하', judgment: 'FAIL', note: 'A→B 위반' },
-          { standard: 'KEC', clause: '232.52', title: '전압강하', judgment: 'PASS', note: 'B→C 적합' },
+          { standard: 'KEC', clause: '232.3.9', title: '전압강하', judgment: 'FAIL', note: 'A→B 위반' },
+          { standard: 'KEC', clause: '232.3.9', title: '전압강하', judgment: 'PASS', note: 'B→C 적합' },
         ]),
       ],
     });
-    const merged = (teamResult.standards ?? []).filter((s) => s.clause === '232.52');
+    const merged = (teamResult.standards ?? []).filter((s) => s.clause === '232.3.9');
     expect(merged).toHaveLength(1);
     expect(merged[0].judgment).toBe('FAIL');
   });
@@ -78,8 +78,8 @@ describe('consensus 병합 — 같은 조항 키의 최악 판정 보존', () =>
       sessionId: 't', projectName: 't', projectType: 't',
       teamResults: [
         sldResult([
-          { standard: 'KEC', clause: '232.52', title: 'VD', judgment: 'PASS', note: '' },
-          { standard: '사내규정', clause: '232.52', title: 'VD', judgment: 'FAIL', note: '' },
+          { standard: 'KEC', clause: '232.3.9', title: 'VD', judgment: 'PASS', note: '' },
+          { standard: '사내규정', clause: '232.3.9', title: 'VD', judgment: 'FAIL', note: '' },
         ]),
       ],
     });

@@ -36,7 +36,7 @@ export function buildCalculatorGauge(
     unit: '%',
     limit: 3,
     label: '전압강하',
-    standardRef: 'KEC 232.52',
+    standardRef: 'KEC 232.3.9',
     direction: 'below',
   };
 }

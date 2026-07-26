@@ -43,11 +43,11 @@ export const SOIL_RESISTIVITY = {
 
 /** 전압강하 허용 기준 (%) */
 export const VOLTAGE_DROP_LIMITS = {
-  /** KEC 232.52 분기회로 */
+  /** KEC 232.3.9 분기회로 */
   KEC_BRANCH: 3.0,
-  /** KEC 232.52 간선 */
+  /** KEC 232.3.9 간선 */
   KEC_FEEDER: 3.0,
-  /** KEC 232.52 합산 (간선+분기) */
+  /** KEC 232.3.9 합산 (간선+분기) */
   KEC_COMBINED: 5.0,
   /** NEC 210.19 분기 (권고) */
   NEC_BRANCH: 3.0,

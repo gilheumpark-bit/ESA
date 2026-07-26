@@ -33,12 +33,12 @@ describe('Query Parser - Entity Extraction', () => {
     expect(powerEntity!.unit).toBe('kW');
   });
 
-  test('"KEC 232.52" extracts standard reference entity', () => {
-    const result = parseQuery('KEC 232.52 전압강하 기준');
+  test('"KEC 232.3.9" extracts standard reference entity', () => {
+    const result = parseQuery('KEC 232.3.9 전압강하 기준');
     const stdRef = result.entities.find(e => e.type === 'standard_ref');
     expect(stdRef).toBeDefined();
     expect(stdRef!.clause).toContain('KEC');
-    expect(stdRef!.clause).toContain('232.52');
+    expect(stdRef!.clause).toContain('232.3.9');
   });
 
   test('"25mm2 XLPE" extracts cable size entity', () => {
@@ -151,8 +151,8 @@ describe('Query Parser - Calculator Suggestion', () => {
 // -- Standard Reference Suggestion Tests ------------------------------------
 
 describe('Query Parser - Standard Suggestion', () => {
-  test('"KEC 232.52" suggests standard reference', () => {
-    const result = parseQuery('KEC 232.52');
+  test('"KEC 232.3.9" suggests standard reference', () => {
+    const result = parseQuery('KEC 232.3.9');
     expect(result.suggestedStandard).toBeDefined();
     expect(result.suggestedStandard).toContain('KEC');
   });

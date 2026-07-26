@@ -32,7 +32,7 @@ describe('Input Classification', () => {
   });
 
   test('No file → text_query', () => {
-    expect(classifyInput(undefined, undefined, 'KEC 232.52')).toBe('text_query');
+    expect(classifyInput(undefined, undefined, 'KEC 232.3.9')).toBe('text_query');
   });
 
   test('a drawing that explicitly spans SLD and layout → mixed', () => {
@@ -140,7 +140,7 @@ describe('Consensus Team', () => {
         confidence: 0.9,
         durationMs: 100,
         calculations: [
-          { id: 'c1', calculatorId: 'vd', label: 'VD', value: 4.5, unit: '%', compliant: false, standardRef: 'KEC 232.52' },
+          { id: 'c1', calculatorId: 'vd', label: 'VD', value: 4.5, unit: '%', compliant: false, standardRef: 'KEC 232.3.9' },
         ],
         violations: [
           { id: 'v1', severity: 'critical', title: 'VD exceeded', description: '4.5% > 3%' },

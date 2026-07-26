@@ -53,13 +53,13 @@ export interface RelatedClause {
 }
 
 export interface CodeArticle {
-  /** 고유 식별자 (예: "KEC-232.52", "KEC-212.3") */
+  /** 고유 식별자 (예: "KEC-232.3.9", "KEC-212.3") */
   id: string;
   /** 국가 코드 (예: "KR", "US", "JP") */
   country: string;
   /** 기준서명 (예: "KEC", "NEC", "IEC 60364") */
   standard: string;
-  /** 조항 번호 (예: "232.52", "212.3") */
+  /** 조항 번호 (예: "232.3.9", "212.3") */
   article: string;
   /** 조항 제목 */
   title: string;

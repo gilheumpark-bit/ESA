@@ -5,8 +5,8 @@
  * 현재 KEC(한국) 지원. NEC(미국), IEC(국제), JIS(일본)로 확장 가능한 구조.
  *
  * 사용법:
- *   getCodeArticle('KR', 'KEC', '232.52')  → CodeArticle | null
- *   evaluateStandard('KR', 'KEC-232.52-MAIN', params) → JudgmentResult
+ *   getCodeArticle('KR', 'KEC', '232.3.9')  → CodeArticle | null
+ *   evaluateStandard('KR', 'KEC-232.3.9-MAIN', params) → JudgmentResult
  */
 
 import {
@@ -119,7 +119,7 @@ function proseToCodeArticle(
  *
  * @param country - 국가 코드 (예: 'KR')
  * @param standard - 기준서명 (예: 'KEC')
- * @param article - 조항 번호 (예: '232.52')
+ * @param article - 조항 번호 (예: '232.3.9')
  * @returns CodeArticle | null — 조항을 찾지 못하면 null
  */
 export function getCodeArticle(
@@ -173,7 +173,7 @@ export function getCodeArticle(
  * 국가 기준서의 조항을 평가한다.
  *
  * @param country - 국가 코드
- * @param articleId - 조항 식별자 (예: "KEC-232.52-MAIN")
+ * @param articleId - 조항 식별자 (예: "KEC-232.3.9-MAIN")
  * @param params - 평가 파라미터
  * @returns JudgmentResult
  */

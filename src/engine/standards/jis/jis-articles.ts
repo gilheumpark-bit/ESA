@@ -37,7 +37,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 전압강하
   ['JIS-525.1', jis('525.1', '525.1', '전압강하 — 간선 3%, 분기 3%, 합산 5%', [
     { param: 'voltageDropPercent', operator: '<=', value: 3, unit: '%', result: 'PASS', note: '간선 ≤3%, 분기 ≤3%, 합산 ≤5% (전기설비기술기준 해석 제57조)' },
-  ], [{ articleId: 'KEC-232.52', relation: 'equivalent', note: 'KEC 전압강하' }, { articleId: 'NEC-VD-BRANCH', relation: 'equivalent', note: 'NEC 전압강하' }])],
+  ], [{ articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 전압강하' }, { articleId: 'NEC-VD-BRANCH', relation: 'equivalent', note: 'NEC 전압강하' }])],
 
   // 허용전류 — JIS C 3005 기반 (30°C 기준, 설치방법별)
   ['JIS-523.1', jis('523.1', '523.1', '허용전류 — JIS C 3005 설치방법별', [

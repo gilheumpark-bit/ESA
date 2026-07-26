@@ -265,12 +265,12 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
             value: vdPercent,
             unit: '%',
             compliant: vdSuccess,
-            standardRef: 'KEC 232.52',
+            standardRef: 'KEC 232.3.9',
           });
           const vdVerdict = vdResult?.judgment ?? 'HOLD';
           standards.push({
             standard: 'KEC',
-            clause: '232.52',
+            clause: '232.3.9',
             title: '전압강하 기준',
             judgment: vdVerdict,
           });
@@ -281,7 +281,7 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
               severity: 'critical',
               title: '전압강하 기준 초과',
               description: `전압강하 ${vdPercent}% > 허용 기준`,
-              standardRef: 'KEC 232.52',
+              standardRef: 'KEC 232.3.9',
               suggestedFix: '케이블 굵기 증가 또는 배전 경로 단축',
             });
           }

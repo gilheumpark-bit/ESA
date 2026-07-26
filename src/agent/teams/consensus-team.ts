@@ -82,7 +82,7 @@ function mergeTeamResults(teamResults: TeamResult[]): MergedResults {
         // 종전에는 먼저 온 행이 무조건 이겨서, 같은 조항이 인스턴스마다 다른
         // 판정을 낼 때(변압기 2대 중 1대만 위반 등) 뒤에 온 FAIL이 병합표에서
         // 사라지고 hasFail 판정까지 놓쳤다 — 독립 심사가 실행 재현으로 발각.
-        // KEC 232.52(결선마다 같은 clause) 등 기존 행도 같은 결함이었다.
+        // KEC 232.3.9(결선마다 같은 clause) 등 기존 행도 같은 결함이었다.
         // 병합표는 "조항별 최악 상태" 요약이고, 인스턴스 전량은 각 팀 결과에
         // 원본대로 남는다.
         const key = `${std.standard}-${std.clause}`;

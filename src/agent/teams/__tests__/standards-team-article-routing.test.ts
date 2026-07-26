@@ -38,7 +38,7 @@ describe('TEAM-STD article routing', () => {
     });
 
     expect(result.standards).toEqual(expect.arrayContaining([
-      expect.objectContaining({ standard: 'KEC', clause: '232.52', judgment: 'FAIL' }),
+      expect.objectContaining({ standard: 'KEC', clause: '232.3.9', judgment: 'FAIL' }),
     ]));
     expect(result.calculations).toEqual(expect.arrayContaining([
       expect.objectContaining({ calculatorId: 'voltage-drop-judgment', compliant: false }),

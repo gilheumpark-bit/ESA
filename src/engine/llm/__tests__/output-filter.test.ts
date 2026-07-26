@@ -38,7 +38,7 @@ describe('LLM Output Filter - Clean Output', () => {
     expect(result.filtered).not.toContain('75A');
   });
   test('Clean output with tool calls -- passes', () => {
-    const output = 'The voltage drop is 2.8%. [SOURCE: KEC 232.52]';
+    const output = 'The voltage drop is 2.8%. [SOURCE: KEC 232.3.9]';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 2.8 } }];
 
     const result = filterLLMOutput(output, toolCalls);
@@ -46,8 +46,8 @@ describe('LLM Output Filter - Clean Output', () => {
     expect(result.blocked.length).toBe(0);
   });
 
-  test('KEC 232.52 citation with tool call and source tag -- PASS', () => {
-    const output = 'KEC 232.52 기준, 전압강하는 2.8%입니다. [SOURCE: KEC 232.52]';
+  test('KEC 232.3.9 citation with tool call and source tag -- PASS', () => {
+    const output = 'KEC 232.3.9 기준, 전압강하는 2.8%입니다. [SOURCE: KEC 232.3.9]';
     const toolCalls = [{ name: 'lookup_code_article', result: {} }];
 
     const result = filterLLMOutput(output, toolCalls);
@@ -63,7 +63,7 @@ describe('LLM Output Filter - Clean Output', () => {
   });
 
   test('isClean returns true for clean output with tool calls', () => {
-    const output = 'The result is shown above. [SOURCE: KEC 232.52]';
+    const output = 'The result is shown above. [SOURCE: KEC 232.3.9]';
     const toolCalls = [{ name: 'calculate_voltage_drop' }];
     expect(isClean(output, toolCalls)).toBe(true);
   });
@@ -112,7 +112,7 @@ describe('LLM Output Filter - Blocked Output', () => {
   });
 
   test('Standard citation without lookup tool call -- BLOCK', () => {
-    const output = 'KEC 232.52에 따르면 3% 이하여야 합니다.';
+    const output = 'KEC 232.3.9에 따르면 3% 이하여야 합니다.';
     const result = filterLLMOutput(output, []);
     expect(result.passed).toBe(false);
   });
@@ -157,7 +157,7 @@ describe('LLM Output Filter - Replacement Markers', () => {
 
 describe('LLM Output Filter - 감사 수리 회귀', () => {
   test('출처 태그가 수치보다 앞에 와도 그 수치의 출처로 인정한다', () => {
-    const output = '[SOURCE: KEC 232.52] 전압강하는 4.14V입니다.';
+    const output = '[SOURCE: KEC 232.3.9] 전압강하는 4.14V입니다.';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
 
     const result = filterLLMOutput(output, toolCalls);
@@ -166,7 +166,7 @@ describe('LLM Output Filter - 감사 수리 회귀', () => {
   });
 
   test('출처 태그가 수치 뒤에 오는 기존 순서도 그대로 통과한다', () => {
-    const output = '전압강하는 4.14V입니다. [SOURCE: KEC 232.52]';
+    const output = '전압강하는 4.14V입니다. [SOURCE: KEC 232.3.9]';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
 
     expect(filterLLMOutput(output, toolCalls).passed).toBe(true);

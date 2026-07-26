@@ -14,7 +14,7 @@ const makeTeamResult = (teamId: string, calcs: { id: string; value: number }[]):
     unit: '%',
     compliant: true,
   })),
-  standards: [{ standard: 'KEC', clause: '232.52', title: 'VD', judgment: 'PASS' as const }],
+  standards: [{ standard: 'KEC', clause: '232.3.9', title: 'VD', judgment: 'PASS' as const }],
 });
 
 describe('detectDisagreements', () => {

@@ -72,17 +72,17 @@ type KecEvaluator = (params: Record<string, number>) => JudgmentResult;
 /**
  * articleId별 평가 함수 매핑.
  * params 키:
- *   - KEC-232.52-*: { voltageDropPercent }
+ *   - KEC-232.3.9-*: { voltageDropPercent }
  *   - KEC-212.3:    { breakerRating, loadCurrent, wireAmpacity }
  *   - KEC-142.5-*:  { resistance }
  */
 const KEC_EVALUATORS: Map<string, KecEvaluator> = new Map([
   // 전압강하 — 간선
-  ['KEC-232.52-MAIN', (p) => evaluateVoltageDropKEC(p.voltageDropPercent, 'main')],
+  ['KEC-232.3.9-MAIN', (p) => evaluateVoltageDropKEC(p.voltageDropPercent, 'main')],
   // 전압강하 — 분기
-  ['KEC-232.52-BRANCH', (p) => evaluateVoltageDropKEC(p.voltageDropPercent, 'branch')],
+  ['KEC-232.3.9-BRANCH', (p) => evaluateVoltageDropKEC(p.voltageDropPercent, 'branch')],
   // 전압강하 — 합산
-  ['KEC-232.52-COMBINED', (p) => evaluateVoltageDropKEC(p.voltageDropPercent, 'combined')],
+  ['KEC-232.3.9-COMBINED', (p) => evaluateVoltageDropKEC(p.voltageDropPercent, 'combined')],
   // 차단기 선정
   ['KEC-212.3', (p) => evaluateBreakerKEC(p.breakerRating, p.loadCurrent, p.wireAmpacity)],
   // 접지 — A/B/C/D종
@@ -99,7 +99,7 @@ const KEC_EVALUATORS: Map<string, KecEvaluator> = new Map([
 /**
  * KEC 조항 ID로 기준 평가를 실행한다.
  *
- * @param articleId - 조항 식별자 (예: "KEC-232.52-MAIN", "KEC-212.3")
+ * @param articleId - 조항 식별자 (예: "KEC-232.3.9-MAIN", "KEC-212.3")
  * @param params - 평가에 필요한 파라미터 맵
  * @returns JudgmentResult
  * @throws Error - 등록되지 않은 articleId

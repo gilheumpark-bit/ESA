@@ -51,7 +51,7 @@ const OPENAPI_SPEC = {
         tags: ['Search'],
         requestBody: {
           content: { 'application/json': { schema: { type: 'object', required: ['query'], properties: {
-            query: { type: 'string', maxLength: 500, example: 'KEC 232.52 전압강하' },
+            query: { type: 'string', maxLength: 500, example: 'KEC 232.3.9 전압강하' },
             countryCode: { type: 'string', enum: ['KR', 'US', 'JP', 'INT'], default: 'KR' },
           } } } },
         },

@@ -275,7 +275,7 @@ export function getAmpacity(opts: AmpacityOptions): AmpacityResult {
     ampacity: baseAmpacity,
     corrected: Math.round(corrected * 100) / 100,
     factors,
-    source: createSource('KEC', '232.3', {
+    source: createSource('KEC', '232.5', {
       edition: '2021',
       verifiedAt: '2024-12-01',
     }),
