@@ -491,12 +491,45 @@ const MAPPINGS: MappingEntry[] = [
 function findMapping(standard: StandardCode, clause: string): MappingEntry | undefined {
   const stdKey = standard.toLowerCase() as 'kec' | 'nec' | 'iec' | 'jis';
 
-  return MAPPINGS.find((m) => {
+  // 조항 번호는 점으로 끊어 읽는 계층 식별자다. 문자열로만 보면 두 가지가 깨진다.
+  //
+  // ① 마디 중간에서 잘린 접두사가 하위로 인정됐다. 232.52 가 232.5 의 하위가
+  //    되는데 실제로는 232.51 의 형제다 — "KEC 232.52 → NEC" 가 240.1(단락보호)을
+  //    82% 일치로 돌려줬다(실측 2026-07-26). 표 순서상 232.5 가 232.51 보다 앞이라
+  //    먼저 걸린 것이다.
+  // ② 배열에서 먼저 나온 행이 이겼다. NEC 240.1(단락보호)은 제 행이 있는데도
+  //    앞줄의 240(과전류 보호)에 가려 한 번도 나오지 않았다(실측).
+  //
+  // 그래서 정확 일치를 먼저 찾고, 없으면 **가장 긴** 상위 조항을 고른다.
+  return findMappings(standard, clause)[0];
+}
+
+/**
+ * 같은 조항에 걸리는 주제를 전부 돌려준다.
+ *
+ * 한 조항이 여러 주제를 덮는 경우가 실제로 있다 — IEC 60364-5-52 는 배선방식
+ * 전반이라 허용전류와 전압강하에 함께 걸리고, JIS C 60364-5-52 도 같다.
+ * 앞줄 하나만 말없이 고르면 사용자는 나머지가 있다는 것조차 모른다.
+ */
+function findMappings(standard: StandardCode, clause: string): MappingEntry[] {
+  const stdKey = standard.toLowerCase() as 'kec' | 'nec' | 'iec' | 'jis';
+
+  const exact = MAPPINGS.filter((m) => m[stdKey] === clause);
+  if (exact.length > 0) return exact;
+
+  let bestLength = 0;
+  let best: MappingEntry[] = [];
+  for (const m of MAPPINGS) {
     const mappedClause = m[stdKey];
-    if (!mappedClause) return false;
-    // 정확 일치 또는 접두사 일치
-    return mappedClause === clause || clause.startsWith(mappedClause);
-  });
+    if (!mappedClause || !clause.startsWith(`${mappedClause}.`)) continue;
+    if (mappedClause.length > bestLength) {
+      bestLength = mappedClause.length;
+      best = [m];
+    } else if (mappedClause.length === bestLength) {
+      best.push(m);
+    }
+  }
+  return best;
 }
 
 function getClauseFromMapping(mapping: MappingEntry, standard: StandardCode): string | undefined {
@@ -538,7 +571,8 @@ export function convertStandard(opts: ConvertOptions): ConversionResult {
     };
   }
 
-  const mapping = findMapping(fromStandard, fromClause);
+  const candidates = findMappings(fromStandard, fromClause);
+  const mapping = candidates[0];
   if (!mapping) {
     return {
       toClause: '',
@@ -571,6 +605,11 @@ export function convertStandard(opts: ConvertOptions): ConversionResult {
     confidence,
     notes: [
       `Topic: ${mapping.topic} (${mapping.topic_ko})`,
+      // 조항 하나가 여러 주제를 덮으면 그 사실을 말한다. 앞줄 하나만 골라
+      // 보여주면 나머지가 있다는 것조차 알 수 없다.
+      ...(candidates.length > 1
+        ? [`이 조항은 ${candidates.length}개 주제에 걸칩니다: ${candidates.map((c) => c.topic_ko).join(', ')} — 목적에 맞는 쪽을 확인하세요.`]
+        : []),
       ...mapping.notes,
     ],
     differences: mapping.differences,
