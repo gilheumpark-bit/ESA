@@ -332,9 +332,16 @@ export default function CalculatorPage({
 
       {/* Content */}
       <main className="mx-auto max-w-4xl px-4 py-6">
+        {/* 그리드 자식에 min-w-0 이 필요하다.
+            그리드 아이템의 기본값은 min-width:auto 라 트랙이 콘텐츠의 min-content
+            까지 늘어난다. 결과 카드의 수식(KaTeX)이 좁은 화면에서 6400px 폭으로
+            렌더돼 트랙을 밀었고, 폼 열까지 함께 늘어나 375px 화면의 문서 폭이
+            6498px 이 됐다(실측 2026-07-26, 계산 결과가 뜬 뒤에만 발생).
+            수식 컨테이너에는 이미 overflow-x-auto 가 있었지만, 트랙이 먼저
+            늘어나면 그 스크롤은 발동하지 않는다. */}
         <div className="grid gap-6 lg:grid-cols-[400px_1fr]">
           {/* Left: Form */}
-          <div>
+          <div className="min-w-0">
             <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
               <h2 className="mb-4 text-base font-semibold text-[var(--text-primary)]">
                 입력값
@@ -369,7 +376,7 @@ export default function CalculatorPage({
           </div>
 
           {/* Right: Result */}
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             {/* DAG 진행 표시 */}
             <CalcProgressDAG
               currentStage={isLoading ? 'calculate' : receipt ? 'done' : 'idle'}
