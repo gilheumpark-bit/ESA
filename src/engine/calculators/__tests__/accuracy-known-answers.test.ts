@@ -18,6 +18,7 @@ function run(id: string, input: Record<string, unknown>) {
   const r = entry.calculator(input as never) as {
     value: number;
     steps?: Array<{ step: number; value: number }>;
+    judgment?: { pass: boolean; message: string };
     additionalOutputs?: Record<string, { value: number }>;
   };
   const extra: Record<string, number> = {};
@@ -31,7 +32,14 @@ function run(id: string, input: Record<string, unknown>) {
     if (!s) throw new Error(`${id}: step ${n} 없음`);
     return s.value;
   };
-  return { value: r.value as number, extra, step };
+  // 판정(PASS/FAIL)은 숫자와 별개 축이다. 숫자가 다 맞아도 부등호가 뒤집히면
+  // 도구가 거짓말을 한다 — 차단용량이 모자란 차단기를 합격시키는 식으로.
+  // 실측 2026-07-26: 안전 판정 10 곳 중 6 곳이 뒤집혀도 스위트가 초록이었다.
+  const verdict = () => {
+    if (!r.judgment) throw new Error(`${id}: judgment 없음`);
+    return r.judgment.pass;
+  };
+  return { value: r.value as number, extra, step, verdict };
 }
 
 /** relative tolerance (default 1%) — catches wrong formulas, tolerates rounding */
@@ -453,5 +461,75 @@ describe('transformer / renewable', () => {
     close(value, 0.8333);
     close(extra.speedChange, -16.67, 0.02);
     close(extra.coreFluxChange, 20, 0.02);
+  });
+});
+
+/**
+ * 판정 방향 — 숫자와 별개 축이다.
+ *
+ * 합격 조건의 부등호를 뒤집는 변이를 안전 직결 판정 열 곳에 넣어 보니 여섯 곳이
+ * 통과했다(실측 2026-07-26). 차단용량이 사고전류보다 작은 차단기를 합격시키고,
+ * 접촉전압이 안전한계를 넘어도 합격시키는 상태가 1,956 개 테스트를 뚫었다.
+ * 숫자만 보는 케이스로는 이 축이 잡히지 않는다 — 판정 자체를 봐야 한다.
+ *
+ * 각 항목은 합격·불합격 양방향을 잠근다. 한쪽만 있으면 뒤집힌 부등호가 그
+ * 방향에서만 우연히 맞을 수 있다.
+ */
+describe('판정 방향', () => {
+  describe('breaker-sizing', () => {
+    it('정상 선정은 합격', () => {
+      expect(run('breaker-sizing', { loadCurrent: 100, shortCircuitCurrent: 10, voltage: 380, cableAmpacity: 150 }).verdict()).toBe(true);
+    });
+    it('차단용량이 사고전류에 못 미치면 불합격 — 표준 최대 100kA < 120kA', () => {
+      expect(run('breaker-sizing', { loadCurrent: 100, shortCircuitCurrent: 120, voltage: 380, cableAmpacity: 2000 }).verdict()).toBe(false);
+    });
+    it('정격이 부하전류에 못 미치면 불합격 — MCCB 최대 800A < 1000A', () => {
+      expect(run('breaker-sizing', { loadCurrent: 1000, shortCircuitCurrent: 10, voltage: 380, cableAmpacity: 2000 }).verdict()).toBe(false);
+    });
+  });
+
+  describe('earth-fault', () => {
+    // Vph = 380/√3 = 219.39 V, Vt = Ig·Zg, 한계 50 V (KEC 142)
+    it('접촉전압 36.57V 는 50V 한계 이내 — 합격', () => {
+      const r = run('earth-fault', { systemVoltage: 380, groundingType: 'solid', groundImpedance: 0.1, sourceImpedance: 0.5 });
+      close(r.extra.touchVoltage, 36.57);
+      expect(r.verdict()).toBe(true);
+    });
+    it('접촉전압 109.70V 는 50V 한계 초과 — 불합격', () => {
+      const r = run('earth-fault', { systemVoltage: 380, groundingType: 'solid', groundImpedance: 0.5, sourceImpedance: 0.5 });
+      close(r.extra.touchVoltage, 109.7);
+      expect(r.verdict()).toBe(false);
+    });
+  });
+
+  describe('ground-conductor', () => {
+    it('선정 단면적이 최소치 이상이면 합격', () => {
+      expect(run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'PVC' }).verdict()).toBe(true);
+    });
+    it('최소치가 표준 최대(300mm²)를 넘으면 불합격 — 50000/143 = 349.65', () => {
+      const r = run('ground-conductor', { faultCurrent: 50000, clearingTime: 1, conductor: 'Cu', insulation: 'PVC' });
+      close(r.value, 349.65);
+      expect(r.verdict()).toBe(false);
+    });
+  });
+
+  describe('transformer-efficiency', () => {
+    it('99.3% 는 95% 기준 이상 — 합격', () => {
+      expect(run('transformer-efficiency', { capacity: 500, noLoadLoss: 500, loadLoss: 3000, loadRatio: 0.75, powerFactor: 0.85 }).verdict()).toBe(true);
+    });
+    // Pout = 100·0.85·0.75·1000 = 63,750 W, 손실 = 5000 + 10000·0.75² = 10,625 W
+    it('85.71% 는 95% 기준 미만 — 불합격', () => {
+      const r = run('transformer-efficiency', { capacity: 100, noLoadLoss: 5000, loadLoss: 10000, loadRatio: 0.75, powerFactor: 0.85 });
+      close(r.value, 85.71);
+      expect(r.verdict()).toBe(false);
+    });
+  });
+
+  // 기동배수는 최대가 DOL 7 배이고 전압강하 = 배수 × 2 이므로 상한이 14% 다.
+  // 한계는 15% — 즉 이 판정은 **어떤 입력으로도 불합격이 나오지 않는다**.
+  // 잠금은 합격 방향만 걸 수 있다. 도달 불가 자체는 별도 안건이다.
+  it('starting-current DOL 14% 는 15% 한계 이내 — 합격', () => {
+    const r = run('starting-current', { ratedPower: 11, voltage: 380, efficiency: 0.9, powerFactor: 0.85, startingMethod: 'DOL' });
+    expect(r.verdict()).toBe(true);
   });
 });
