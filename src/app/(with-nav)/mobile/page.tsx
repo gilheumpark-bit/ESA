@@ -365,20 +365,32 @@ function CameraButton() {
       formData.append('model', resolveSelectedModel('openai'));
       formData.append('apiKey', apiKey);
 
-      const res = await fetch('/api/ocr', { method: 'POST', body: formData });
-      const json = await res.json();
+      // 촬영이 끝난 뒤의 실패는 카메라 문제가 아니다. 같은 try 안에 두면
+      // 네트워크가 끊겼을 때도 "카메라 접근 권한이 필요합니다" 가 떠서,
+      // 사용자가 엉뚱한 곳(권한 설정)을 고치러 간다.
+      let json: { error?: string; data?: NameplateResult['data']; suggestedCalculators?: string[] };
+      let ok: boolean;
+      try {
+        const res = await fetch('/api/ocr', { method: 'POST', body: formData });
+        ok = res.ok;
+        json = await res.json();
+      } catch {
+        setError('서버에 연결하지 못했습니다. 연결 상태를 확인하고 다시 시도하세요.');
+        setStatus('error');
+        return;
+      }
 
-      if (!res.ok || json.error) {
+      if (!ok || json.error) {
         setError(json.error ?? 'OCR 처리에 실패했습니다.');
         setStatus('error');
         return;
       }
 
-      setResult({ data: json.data, suggestedCalculators: json.suggestedCalculators ?? [] });
+      setResult({ data: json.data as NameplateResult['data'], suggestedCalculators: json.suggestedCalculators ?? [] });
       setStatus('done');
     } catch {
       stopCamera();
-      setError('카메라 접근 권한이 필요합니다.');
+      setError('카메라를 열지 못했습니다. 브라우저의 카메라 권한을 확인하세요.');
       setStatus('error');
     }
   };
