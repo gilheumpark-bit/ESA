@@ -564,12 +564,18 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     steps.push({
       step: stepNum++,
       calculatorId: 'max-demand',
+      // 항목 스키마는 name·ratedPower(kW)·demandFactor 다. 도면의 정격 표기를
+      // kW 로 옮기지 못하면 그 부하는 넣지 않는다.
       inputs: {
-        loads: loads.map(l => ({
-          name: l.label,
-          rating: l.rating,
-          voltage: l.voltage,
-        })),
+        loads: loads
+          .map((l) => ({
+            name: l.label ?? l.id,
+            ratedPower: parseMeasuredValue(
+              { name: 'ratedPower', type: 'number', unit: 'kW', description: '정격 용량' },
+              l.rating,
+            ),
+          }))
+          .filter((l): l is { name: string; ratedPower: number } => l.ratedPower !== undefined),
       },
       description: '부하 계산 - 총 수전 용량 산정',
     });
@@ -582,13 +588,11 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     steps.push({
       step: txStepNum,
       calculatorId: 'transformer-capacity',
-      inputs: {
-        rating: tx.rating,
-        primaryVoltage: tx.voltage,
-        systemType: analysis.systemType,
-      },
+      // 이 계산기는 **부하**로 필요 용량을 구한다. 도면의 변압기 명판 용량은
+      // 입력이 아니라 결과와 비교할 값이라 싣지 않는다(사유 문구에 적는다).
+      inputs: {},
       dependsOn: hasLoads ? [1] : undefined,
-      description: `변압기 용량 검증 (${tx.label ?? tx.rating ?? '?'})`,
+      description: `변압기 용량 검증 (도면 명판 ${tx.rating ?? '?'})`,
     });
   }
 
@@ -599,10 +603,10 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     steps.push({
       step: scStepNum,
       calculatorId: 'short-circuit',
-      inputs: {
-        transformerRating: tx.rating,
-        voltage: analysis.systemVoltage,
-      },
+      inputs: measured('short-circuit', {
+        transformerCapacity: tx.rating,
+        systemVoltage: analysis.systemVoltage,
+      }),
       dependsOn: txStepNum !== undefined ? [txStepNum] : undefined,
       description: '단락전류 계산 - 차단기 선정 근거',
     });
@@ -615,11 +619,11 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     steps.push({
       step: stepNum++,
       calculatorId: 'cable-sizing',
-      inputs: {
+      inputs: measured('cable-sizing', {
         current: toComp?.current,
         length: cable.length,
         voltage: analysis.systemVoltage,
-      },
+      }),
       dependsOn: scStepNum !== undefined ? [scStepNum] : undefined,
       description: '케이블 사이즈 선정',
     });
@@ -631,11 +635,11 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     steps.push({
       step: stepNum++,
       calculatorId: 'voltage-drop',
-      inputs: {
+      inputs: measured('voltage-drop', {
         length: cable.length,
-        cableType: cable.cableType,
-        conductorSize: cable.conductorSize,
-      },
+        cableSize: cable.conductorSize,
+        voltage: analysis.systemVoltage,
+      }),
       dependsOn: [stepNum - 2],
       description: '전압강하 검토',
     });
@@ -647,10 +651,10 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
     steps.push({
       step: stepNum++,
       calculatorId: 'starting-current',
-      inputs: {
-        power: motor.rating,
+      inputs: measured('starting-current', {
+        ratedPower: motor.rating,
         voltage: motor.voltage,
-      },
+      }),
       description: `모터 기동전류 계산 (${motor.label ?? motor.rating ?? '?'})`,
     });
   }

@@ -7,7 +7,7 @@
  * 실측(2026-07-26): 제안·체인 12개 조합 중 cable-sizing 하나만 이름이 맞았다.
  * 오류가 나지 않아 "앱이 못 읽었나" 로만 보인다.
  */
-import { generateSuggestions } from '../sld-recognition';
+import { generateSuggestions, generateCalcChainFromSLD } from '../sld-recognition';
 import { CALCULATOR_PARAMS } from '../calculator-params';
 import { parseMeasuredValue } from '../calculator-lexicon';
 
@@ -117,5 +117,66 @@ describe('제안 중복', () => {
       connections: [],
     } as unknown as Parameters<typeof generateSuggestions>[0];
     expect(generateSuggestions(distinct)).toHaveLength(2);
+  });
+});
+
+/**
+ * 체인도 같은 계약을 지킨다.
+ *
+ * 앞 수리(ddb54c4)는 제안만 고치고 체인 생성기를 빠뜨렸다. 라이브로 확인하니
+ * 체인은 여전히 `rating`·`transformerRating` 을 보내고 있었다(실측 2026-07-26,
+ * gate 픽스처 circuit.pdf → 2단계 전부 없는 이름). 측정해 놓고 반경을 다
+ * 돌지 않은 것이라, 여기서 제안과 같은 케이스로 잠근다.
+ */
+describe('도면 체인이 계산기에 넘기는 입력', () => {
+  const CHAIN_ANALYSIS = {
+    systemType: '3P4W',
+    systemVoltage: '380V',
+    components: [
+      { id: 'tx1', type: 'transformer', label: 'TR-1', rating: '1000kVA', voltage: '22.9kV' },
+      { id: 'l1', type: 'load', label: 'L-1', rating: '300kW' },
+      { id: 'm1', type: 'motor', label: 'M-1', rating: '30kW', voltage: '380V' },
+      { id: 'cb1', type: 'breaker', label: 'MCCB-1', current: '250A' },
+    ],
+    connections: [{ from: 'tx1', to: 'cb1', length: '50m', conductorSize: '95mm2' }],
+  } as unknown as Parameters<typeof generateCalcChainFromSLD>[0];
+
+  const chain = generateCalcChainFromSLD(CHAIN_ANALYSIS);
+
+  it('체인이 생성된다', () => {
+    expect(chain.length).toBeGreaterThan(0);
+  });
+
+  it.each(generateCalcChainFromSLD(CHAIN_ANALYSIS).map((s) => [`step${s.step}:${s.calculatorId}`, s] as const))(
+    '%s — 그 계산기에 없는 입력 이름을 싣지 않는다',
+    (_label, step) => {
+      const own = new Set((CALCULATOR_PARAMS[step.calculatorId] ?? []).map((p) => p.name));
+      expect(Object.keys(step.inputs).filter((k) => !own.has(k))).toEqual([]);
+    },
+  );
+
+  it.each(generateCalcChainFromSLD(CHAIN_ANALYSIS).map((s) => [`step${s.step}:${s.calculatorId}`, s] as const))(
+    '%s — 값이 폼이 읽을 수 있는 형이다',
+    (_label, step) => {
+      for (const [name, value] of Object.entries(step.inputs)) {
+        const def = (CALCULATOR_PARAMS[step.calculatorId] ?? []).find((p) => p.name === name)!;
+        if (def.type !== 'number') continue;
+        expect(typeof value).toBe('number');
+      }
+    },
+  );
+
+  it('단위를 파라미터 단위로 옮긴다', () => {
+    const sc = chain.find((s) => s.calculatorId === 'short-circuit');
+    expect(sc?.inputs.transformerCapacity).toBe(1000);
+    expect(sc?.inputs.systemVoltage).toBe(380);
+
+    const motor = chain.find((s) => s.calculatorId === 'starting-current');
+    expect(motor?.inputs.ratedPower).toBe(30);
+  });
+
+  it('목록형 항목도 계산기 스키마대로 넘긴다', () => {
+    const demand = chain.find((s) => s.calculatorId === 'max-demand');
+    expect(demand?.inputs.loads).toEqual([{ name: 'L-1', ratedPower: 300 }]);
   });
 });
