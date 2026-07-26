@@ -7,6 +7,7 @@
  */
 
 import ExcelJS from 'exceljs';
+import { CALCULATOR_NAMES } from '@/lib/calculator-params';
 
 interface ExportOptions {
   liveFormulas?: boolean;
@@ -69,7 +70,9 @@ export async function generateReceiptExcel(
   // 제목 행
   ws1.mergeCells('A1:D1');
   const titleCell = ws1.getCell('A1');
-  titleCell.value = `ESVA 계산서 — ${neutralizeSpreadsheetText(receipt.calcId || 'N/A')}`;
+  // 원시 ID 대신 정본 이름 — 받는 사람이 읽는 문서다(실측 2026-07-26: "voltage-drop").
+  const calcLabel = CALCULATOR_NAMES[receipt.calcId]?.name ?? receipt.calcId ?? 'N/A';
+  titleCell.value = `ESVA 계산서 — ${neutralizeSpreadsheetText(calcLabel)}`;
   titleCell.font = { bold: true, size: 14, color: { argb: 'FF1E40AF' } };
   titleCell.alignment = { horizontal: 'center' };
 

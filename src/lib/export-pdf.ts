@@ -11,6 +11,7 @@
 
 import type { Receipt } from '@/engine/receipt/types';
 import { buildPdfData } from '@/engine/receipt/export-pdf';
+import { CALCULATOR_NAMES } from '@/lib/calculator-params';
 import type { DisclaimerLang } from '@/engine/receipt/disclaimer';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +25,7 @@ const LABEL: Record<Lang, {
   country: string;
   standard: string;
   difficulty: string;
+  calculator: string;
   engine: string;
   formula: string;
   inputs: string;
@@ -47,7 +49,7 @@ const LABEL: Record<Lang, {
   no: string;
 }> = {
   ko: {
-    meta: '계산 정보', country: '국가', standard: '규격', difficulty: '난이도',
+    meta: '계산 정보', calculator: '계산기', country: '국가', standard: '규격', difficulty: '난이도',
     engine: '엔진 버전', formula: '적용 공식', inputs: '입력 파라미터',
     param: '파라미터', value: '값', unit: '단위', steps: '계산 과정',
     step: '단계', title: '항목', result: '계산 결과', warnings: '경고',
@@ -56,7 +58,7 @@ const LABEL: Record<Lang, {
     stdVersion: '규격 버전', stdCurrent: '현행 확인 상태', yes: '확인됨', no: '미확인',
   },
   en: {
-    meta: 'Calculation Info', country: 'Country', standard: 'Standard',
+    meta: 'Calculation Info', calculator: 'Calculator', country: 'Country', standard: 'Standard',
     difficulty: 'Difficulty', engine: 'Engine Version', formula: 'Formula Applied',
     inputs: 'Input Parameters', param: 'Parameter', value: 'Value', unit: 'Unit',
     steps: 'Step-by-Step Calculation', step: 'Step', title: 'Title',
@@ -66,7 +68,7 @@ const LABEL: Record<Lang, {
     stdCurrent: 'Standard Currency', yes: 'Verified current', no: 'Unverified',
   },
   ja: {
-    meta: '計算情報', country: '国', standard: '規格', difficulty: '難易度',
+    meta: '計算情報', calculator: '計算機', country: '国', standard: '規格', difficulty: '難易度',
     engine: 'エンジンバージョン', formula: '適用公式', inputs: '入力パラメータ',
     param: 'パラメータ', value: '値', unit: '単位', steps: '計算過程',
     step: 'ステップ', title: '項目', result: '計算結果', warnings: '警告',
@@ -75,7 +77,7 @@ const LABEL: Record<Lang, {
     stdVersion: '規格バージョン', stdCurrent: '現行確認状態', yes: '確認済み', no: '未確認',
   },
   zh: {
-    meta: '计算信息', country: '国家', standard: '标准', difficulty: '难度',
+    meta: '计算信息', calculator: '计算器', country: '国家', standard: '标准', difficulty: '难度',
     engine: '引擎版本', formula: '应用公式', inputs: '输入参数',
     param: '参数', value: '值', unit: '单位', steps: '计算过程',
     step: '步骤', title: '项目', result: '计算结果', warnings: '警告',
@@ -102,7 +104,13 @@ function buildReceiptHtml(receipt: Receipt, lang: Lang): string {
   const L = LABEL[lang] ?? LABEL.en;
 
   // --- Meta table rows
+  //
+  // 계산기 이름이 문서 어디에도 없었다(실측 2026-07-26). 머리말은 "ESVA 계산서 /
+  // 전기 설계 자동 계산 결과" 로 고정이고 메타 표는 국가·규격·단위계·난이도·
+  // 엔진 버전만 실었다 — 전압강하 계산서와 조도 계산서가 머리말만 보면 구별되지
+  // 않는다. 보관·공유되는 문서라 무엇을 계산한 것인지가 먼저 보여야 한다.
   const metaRows = [
+    [L.calculator, CALCULATOR_NAMES[data.meta.calcId]?.name ?? data.meta.calcId],
     [L.country, data.meta.countryCode],
     [L.standard, data.meta.standard],
     [L.stdVersion, data.meta.standardVersion],

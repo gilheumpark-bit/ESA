@@ -331,3 +331,23 @@ describe('분야 카탈로그가 화면마다 갈리지 않는다', () => {
     expect(covered.size).toBe(57);
   });
 });
+
+describe('내보낸 문서가 무엇을 계산한 것인지 밝힌다', () => {
+  /**
+   * 실측(2026-07-26): 인쇄용 계산서 어디에도 계산기 이름이 없었다. 머리말은
+   * "ESVA 계산서 / 전기 설계 자동 계산 결과" 로 고정이고 메타 표는 국가·규격·
+   * 단위계·난이도·엔진 버전만 실어서, 전압강하 계산서와 조도 계산서가 머리말만
+   * 보면 구별되지 않았다. Excel 은 넣긴 했지만 원시 ID("voltage-drop")였다.
+   * 보관·공유되는 문서라 무엇을 계산한 것인지가 먼저 보여야 한다.
+   */
+  it('인쇄 문서가 계산기 이름을 메타에 싣는다', () => {
+    const src = readFileSync('src/lib/export-pdf.ts', 'utf8');
+    expect(src).toContain('[L.calculator, CALCULATOR_NAMES[data.meta.calcId]?.name');
+  });
+
+  it('Excel 제목이 원시 ID 가 아니라 정본 이름을 쓴다', () => {
+    const src = readFileSync('src/lib/export-excel.ts', 'utf8');
+    expect(src).toContain('CALCULATOR_NAMES[receipt.calcId]?.name');
+    expect(src).not.toContain('neutralizeSpreadsheetText(receipt.calcId');
+  });
+});
