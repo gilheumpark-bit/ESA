@@ -7,12 +7,12 @@
  *     where Is = starting current multiplier × rated current
  *     and cosφs = starting power factor (typically 0.2-0.4)
  *
- * KEC 232.51 limits:
+ * KEC 232.52 limits:
  *   - General branch circuit: 3%
  *   - Feeder + branch total: 5%
  *   - Motor starting: 15% at terminals (momentary)
  *
- * Standards: KEC 232.51, IEC 60364-5-52, NEMA MG-1
+ * Standards: KEC 232.52, IEC 60364-5-52, NEMA MG-1
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -92,7 +92,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
     formula: 'VD = \\sqrt{3} \\times I \\times L \\times z_{eff}',
     value: round(vdSteady, 2),
     unit: 'V',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // Step 3: Percentage
@@ -103,7 +103,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
     formula: 'VD\\% = \\frac{VD}{V} \\times 100',
     value: round(vdPercent, 2),
     unit: '%',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // Step 4: Receiving end voltage
@@ -157,7 +157,7 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
       formula: 'VD_s\\% = \\frac{VD_s}{V} \\times 100',
       value: round(vdStartPercent, 2),
       unit: '%',
-      standardRef: 'KEC 232.51',
+      standardRef: 'KEC 232.52',
     });
 
     startingPass = vdStartPercent <= allowableStart;
@@ -180,10 +180,10 @@ export function calculateThreePhaseVD(input: ThreePhaseVDInput): DetailedCalcRes
     formula: 'VD = \\sqrt{3} \\times I \\times L \\times (R\\cos\\varphi + X\\sin\\varphi)',
     steps,
     source: [
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],
-    judgment: createJudgment(overallPass, message, severity, 'KEC 232.51'),
+    judgment: createJudgment(overallPass, message, severity, 'KEC 232.52'),
     additionalOutputs: {
       steadyStateDropVolts: { value: round(vdSteady, 2), unit: 'V' },
       steadyStateDropPercent: { value: round(vdPercent, 2), unit: '%' },

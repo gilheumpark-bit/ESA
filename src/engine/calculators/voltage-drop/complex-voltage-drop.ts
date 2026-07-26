@@ -8,7 +8,7 @@
  * Where R and X are per-unit-length resistance and reactance (Ω/km).
  * Supports multi-section cable runs with cumulative voltage drop.
  *
- * Standards: KEC 232.51 (전압강하 허용), IEC 60364-5-52 (케이블 임피던스)
+ * Standards: KEC 232.52 (전압강하 허용), IEC 60364-5-52 (케이블 임피던스)
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -128,7 +128,7 @@ export function calculateComplexVoltageDrop(input: ComplexVoltageDropInput): Det
     formula: 'VD\\% = \\frac{e_{total}}{V} \\times 100',
     value: round(dropPercent, 2),
     unit: '%',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // PART 3 — Result assembly
@@ -144,10 +144,10 @@ export function calculateComplexVoltageDrop(input: ComplexVoltageDropInput): Det
     formula: 'e = k \\times I \\times L \\times (R\\cos\\varphi + X\\sin\\varphi)',
     steps,
     source: [
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],
-    judgment: createJudgment(pass, message, severity, 'KEC 232.51'),
+    judgment: createJudgment(pass, message, severity, 'KEC 232.52'),
     additionalOutputs: {
       totalDropVolts: { value: round(totalDropV, 2), unit: 'V' },
       dropPercent: { value: round(dropPercent, 2), unit: '%' },

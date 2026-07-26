@@ -3,7 +3,7 @@
  *
  * Determines minimum cable size that satisfies BOTH:
  *   1. Ampacity (current-carrying capacity after derating)
- *   2. Voltage drop limit (KEC 232.51)
+ *   2. Voltage drop limit (KEC 232.52)
  *
  * Method:
  *   - Look up base ampacity from KEC tables
@@ -11,7 +11,7 @@
  *   - Check voltage drop with calculateVoltageDrop
  *   - Select smallest size that passes both criteria
  *
- * Standards: KEC 232.3, KEC 232.51, IEC 60364-5-52
+ * Standards: KEC 232.3, KEC 232.52, IEC 60364-5-52
  */
 
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
@@ -230,7 +230,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     formula: 'e\\% \\leq ' + dropLimitPercent + '\\%',
     value: vdPct,
     unit: '%',
-    standardRef: 'KEC 232.51',
+    standardRef: 'KEC 232.52',
   });
 
   // PART 4 — Judgment
@@ -258,7 +258,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     steps,
     source: [
       createSource('KEC', '232.3', { edition: '2021' }),
-      createSource('KEC', '232.51', { edition: '2021' }),
+      createSource('KEC', '232.52', { edition: '2021' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],
     judgment,
