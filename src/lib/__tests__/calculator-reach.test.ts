@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { analyzeCalcIntent } from '../calc-intent-bridge';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '../calculator-params';
 import { matchCalculatorByExactName } from '../calculator-lexicon';
+import { CALCULATOR_CATALOG, CALC_CATEGORY_LABELS } from '../calculator-catalog';
 import { resolveChatCalculationEvidence } from '../chat-calculation-evidence';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
@@ -290,5 +291,30 @@ describe('화면마다 계산기 이름이 갈리지 않는다', () => {
       const name = CALCULATOR_NAMES[id].name;
       expect(matchCalculatorByExactName(`${name}: 전압 380V 전류 100A`)).toBe(id);
     }
+  });
+});
+
+describe('분야 카탈로그가 화면마다 갈리지 않는다', () => {
+  /**
+   * 실측(2026-07-26): 분야 표가 /calc 안에만 있었고 계산 기록은 10종짜리 자체
+   * 표를 들고 있었다. 나머지 47종은 분야가 'other' 로 빠졌고, 필터 목록에는
+   * 12개 분야 중 7개만 있어 조명·전동기·수변전·글로벌 계산은 어느 필터에도
+   * 걸리지 않았다.
+   */
+  it('카탈로그가 57종 전부의 분야를 안다', () => {
+    const missing = Object.keys(CALCULATOR_PARAMS).filter((id) => !CALCULATOR_CATALOG[id]);
+    expect(missing).toEqual([]);
+  });
+
+  it('카탈로그의 분야가 전부 라벨을 가진다', () => {
+    const unlabeled = [...new Set(Object.values(CALCULATOR_CATALOG).map((c) => c.category))]
+      .filter((c) => !CALC_CATEGORY_LABELS[c]);
+    expect(unlabeled).toEqual([]);
+  });
+
+  it('계산 기록이 자체 분야표가 아니라 카탈로그를 본다', () => {
+    const src = readFileSync('src/app/(with-nav)/history/page.tsx', 'utf8');
+    expect(src).toContain('CALCULATOR_CATALOG[receipt.calcId]?.category');
+    expect(src).toContain('CALC_CATEGORY_LABELS');
   });
 });

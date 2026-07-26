@@ -22,6 +22,7 @@ import {
 import type { Receipt } from '@/engine/receipt/types';
 import { EmptyHistory } from '@/components/EmptyState';
 import { CALCULATOR_NAMES } from '@/lib/calculator-params';
+import { CALCULATOR_CATALOG, CALC_CATEGORY_LABELS } from '@/lib/calculator-catalog';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
@@ -38,35 +39,11 @@ interface HistoryEntry {
   judgment: 'pass' | 'fail' | 'none';
 }
 
-/**
- * 카테고리 필터용 분류. 이름은 여기서 읽지 않는다 — `CALCULATOR_NAMES` 가 정본이다.
- *
- * 이 표가 이름까지 들고 있었는데 10종밖에 없어서, 나머지 47종은 계산 기록에
- * 영문 ID 그대로 찍혔다(실측 2026-07-26: "illuminance", "ups-capacity" …).
- * 손으로 유지하는 표는 계산기가 늘 때마다 이렇게 벌어진다.
- */
-const CALC_CATEGORIES: Record<string, { name: string; category: string }> = {
-  'single-phase-power': { name: '단상 전력', category: 'power' },
-  'three-phase-power': { name: '3상 전력', category: 'power' },
-  'voltage-drop': { name: '전압 강하', category: 'voltage-drop' },
-  'transformer-capacity': { name: '변압기 용량', category: 'transformer' },
-  'cable-sizing': { name: '케이블 사이징', category: 'cable' },
-  'short-circuit': { name: '단락 전류', category: 'protection' },
-  'breaker-sizing': { name: '차단기 선정', category: 'protection' },
-  'ground-resistance': { name: '접지 저항', category: 'grounding' },
-  'solar-generation': { name: '태양광 발전량', category: 'renewable' },
-  'battery-capacity': { name: '배터리 용량', category: 'renewable' },
-};
-
+/** 분야 필터 — 카탈로그에 있는 분야를 그대로 쓴다. 손으로 추리면 조명·전동기처럼
+    통째로 빠지는 분야가 생긴다(실측 2026-07-26: 12개 중 7개만 있었다). */
 const CATEGORIES = [
   { value: '', label: '전체 카테고리' },
-  { value: 'power', label: '전력' },
-  { value: 'voltage-drop', label: '전압강하' },
-  { value: 'transformer', label: '변압기' },
-  { value: 'cable', label: '케이블' },
-  { value: 'protection', label: '보호' },
-  { value: 'grounding', label: '접지' },
-  { value: 'renewable', label: '신재생' },
+  ...Object.entries(CALC_CATEGORY_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
 const STORAGE_PREFIX = 'esa-receipt-';
@@ -77,15 +54,14 @@ const INDEX_KEY = 'esa-receipt-index';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function receiptToEntry(receipt: Receipt): HistoryEntry {
-  const meta = CALC_CATEGORIES[receipt.calcId];
   const firstInputKey = Object.keys(receipt.inputs)[0] ?? '';
   const firstInputVal = receipt.inputs[firstInputKey];
 
   return {
     id: receipt.id,
     calcId: receipt.calcId,
-    calcName: CALCULATOR_NAMES[receipt.calcId]?.name ?? meta?.name ?? receipt.calcId,
-    category: meta?.category ?? 'other',
+    calcName: CALCULATOR_NAMES[receipt.calcId]?.name ?? receipt.calcId,
+    category: CALCULATOR_CATALOG[receipt.calcId]?.category ?? 'other',
     date: receipt.calculatedAt,
     keyInput: firstInputVal != null ? `${firstInputKey}: ${String(firstInputVal)}` : '-',
     keyResult: receipt.result
