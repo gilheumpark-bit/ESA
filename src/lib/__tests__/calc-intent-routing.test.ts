@@ -206,3 +206,38 @@ describe('추출 범위', () => {
     expect(intent.unreadNumbers).toEqual(expect.arrayContaining([10, 8, 2.7]));
   });
 });
+
+/**
+ * 영수증은 질문에서 읽은 값과 앱이 채운 기본값을 섞어 하나의 input 으로 넘긴다.
+ * 폼 UI 라면 사용자가 기본값을 눈으로 보지만 chat 에서는 보이지 않는다.
+ *
+ * 가정은 답을 크게 흔든다 — "케이블 100m 전류 60A 전압 380V 단면적 35mm2" 는
+ * 상수·도체·역률이 없어 phase=3·Cu·pf=0.85 로 채워진다. 단상이면 같은 조건에서
+ * 4.79V 가 아니라 5.53V 다(실측 2026-07-26). 조도는 더하다 — 사용자가 준 값은
+ * 둘인데 결과를 정하는 광속·조명률·보수율·소비전력 넷이 전부 기본값이다.
+ */
+describe('영수증의 가정 표시', () => {
+  it('질문에서 읽지 않은 입력을 가정으로 분리한다', () => {
+    const ev = resolveChatCalculationEvidence('전압강하 계산 케이블 100m 전류 60A 전압 380V 단면적 35mm2');
+    expect(ev).not.toBeNull();
+    expect(ev!.assumed.join(' ')).toContain('상수');
+    expect(ev!.assumed.join(' ')).toContain('역률');
+    // 질문이 준 값은 가정이 아니다.
+    expect(ev!.assumed.join(' ')).not.toContain('전선 길이');
+    expect(ev!.assumed.join(' ')).not.toContain('부하 전류');
+  });
+
+  it('가정을 프롬프트에 실어 답변이 밝히게 한다', () => {
+    const ev = resolveChatCalculationEvidence('조도 계산 면적 80m2 목표조도 500lx');
+    expect(ev!.assumed.length).toBeGreaterThan(0);
+    expect(ev!.promptContext).toContain('질문에 없어 앱이 채운 입력');
+    expect(ev!.promptContext).toContain('가정으로 명시');
+  });
+
+  it('가정이 없으면 군말을 붙이지 않는다', () => {
+    const ev = resolveChatCalculationEvidence('전압강하 계산 케이블 100m 전류 60A 전압 380V 단면적 35mm2 단상 알루미늄 역률 0.9');
+    if (ev && ev.assumed.length === 0) {
+      expect(ev.promptContext).not.toContain('질문에 없어 앱이 채운 입력');
+    }
+  });
+});

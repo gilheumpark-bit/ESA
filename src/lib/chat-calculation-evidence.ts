@@ -8,6 +8,8 @@ export interface ChatCalculationEvidence {
   calculatorName: string;
   input: Record<string, unknown>;
   result: Pick<DetailedCalcResult, 'value' | 'unit' | 'formula' | 'steps' | 'additionalOutputs' | 'judgment'>;
+  /** 질문에 없어 앱이 기본값으로 채운 입력. 답변에서 가정으로 밝혀야 한다. */
+  assumed: string[];
   trustedText: string;
   promptContext: string;
 }
@@ -35,6 +37,21 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
       additionalOutputs: calculated.additionalOutputs,
       judgment: calculated.judgment,
     };
+    // 질문에서 읽은 값과 앱이 채운 기본값을 갈라 둔다.
+    //
+    // 영수증은 둘을 섞어 하나의 input 으로 넘기는데, chat 에서는 사용자가 폼을
+    // 보지 못해 무엇이 가정인지 알 수 없다. 가정은 답을 크게 흔든다 — 실측
+    // 2026-07-26: "케이블 100m 전류 60A 전압 380V 단면적 35mm2" 는 상수·도체·
+    // 역률이 없어 phase=3·Cu·pf=0.85 로 채워졌고, 단상이면 같은 조건에서
+    // 4.79V 가 아니라 5.53V 다(15% 차이).
+    const readFromQuestion = new Set(Object.keys(intent.extractedParams));
+    const assumed = Object.entries(input)
+      .filter(([name]) => !readFromQuestion.has(name))
+      .map(([name, value]) => {
+        const def = intent.allParams.find((p) => p.name === name);
+        return `${def?.description ?? name}=${String(value)}${def?.unit ? ` ${def.unit}` : ''}`;
+      });
+
     const trustedText = JSON.stringify({ calculatorId: calculator.id, input, result });
     return {
       calculatorId: calculator.id,
@@ -42,7 +59,12 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
       input,
       result,
       trustedText,
-      promptContext: `\n\n검증된 ESA 계산기 영수증:\n${trustedText}\n위 영수증의 입력과 결과만 [확인] 수치로 사용하세요. 계산 결과 뒤에 [SOURCE: ESA_CALCULATOR:${calculator.id}]를 붙이고, 영수증에 없는 수치나 새로운 반올림 수치를 만들지 마세요. 역산은 영수증 단계가 일치한다고 문자로 확인하고 별도 수치를 재계산하지 마세요. judgment는 앱에 설정된 계산기 기준에 대한 판정으로 명시하되 법적 적합 인증으로 표현하지 마세요. 계산기 source에 포함된 규정 조항은 원문 조회가 아니므로 직접 인용하지 마세요.`,
+      assumed,
+      promptContext: `\n\n검증된 ESA 계산기 영수증:\n${trustedText}${
+        assumed.length > 0
+          ? `\n질문에 없어 앱이 채운 입력: ${assumed.join(', ')} — 답변에서 이 값들을 가정으로 명시하고, 조건이 다르면 결과가 달라진다고 알리세요.`
+          : ''
+      }\n위 영수증의 입력과 결과만 [확인] 수치로 사용하세요. 계산 결과 뒤에 [SOURCE: ESA_CALCULATOR:${calculator.id}]를 붙이고, 영수증에 없는 수치나 새로운 반올림 수치를 만들지 마세요. 역산은 영수증 단계가 일치한다고 문자로 확인하고 별도 수치를 재계산하지 마세요. judgment는 앱에 설정된 계산기 기준에 대한 판정으로 명시하되 법적 적합 인증으로 표현하지 마세요. 계산기 source에 포함된 규정 조항은 원문 조회가 아니므로 직접 인용하지 마세요.`,
     };
   } catch {
     return null;
