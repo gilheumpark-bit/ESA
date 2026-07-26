@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import type { DifficultyLevel } from '@/engine/calculators/types';
 import { CALCULATOR_NAMES } from '@/lib/calculator-params';
+import { CALCULATOR_CATALOG } from '@/lib/calculator-catalog';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Category Metadata
@@ -58,6 +59,26 @@ const DIFFICULTY_CONFIG: Record<DifficultyLevel, { label: string; color: string 
 };
 
 
+/**
+ * 그 분야에 속한 계산기 목록을 카탈로그에서 만든다.
+ *
+ * 이 페이지가 57종의 이름·분야·난이도를 통째로 인라인으로 들고 있었다. 같은
+ * 표가 계산 기록에도 따로 있었고(10종), 그 사이가 벌어져 나머지 47종은 분야가
+ * 'other' 로 빠졌다(실측 2026-07-26). 이름은 CALCULATOR_NAMES, 분야·난이도는
+ * CALCULATOR_CATALOG 가 정본이다 — 화면은 그것을 읽기만 한다.
+ */
+function calculatorsIn(category: string): CategoryMeta['calculators'] {
+  return Object.entries(CALCULATOR_CATALOG)
+    .filter(([, meta]) => meta.category === category)
+    .map(([id, meta]) => ({
+      id,
+      name: CALCULATOR_NAMES[id]?.name ?? id,
+      nameEn: CALCULATOR_NAMES[id]?.nameEn ?? id,
+      difficulty: meta.difficulty as DifficultyLevel,
+      category,
+    }));
+}
+
 /** Map engine categories to display categories */
 function buildCategories(): CategoryMeta[] {
   // Static category definitions with mapped calculators.
@@ -73,15 +94,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Zap,
       description: '단상/3상 전력, 역률, 피상전력 계산',
       color: 'from-blue-500 to-blue-600',
-      calculators: [
-        { id: 'single-phase-power', name: '단상 전력 계산', nameEn: 'Single-Phase Power', difficulty: 'basic', category: 'power' },
-        { id: 'three-phase-power', name: '3상 전력 계산', nameEn: 'Three-Phase Power', difficulty: 'basic', category: 'power' },
-        { id: 'power-factor', name: '역률 계산', nameEn: 'Power Factor', difficulty: 'basic', category: 'power' },
-        { id: 'reactive-power', name: '무효전력 보상 계산', nameEn: 'Reactive Power Compensation', difficulty: 'intermediate', category: 'power' },
-        { id: 'demand-diversity', name: '수용률/부등률 계산', nameEn: 'Demand & Diversity Factor', difficulty: 'intermediate', category: 'power' },
-        { id: 'max-demand', name: '최대수요전력 계산', nameEn: 'Maximum Demand', difficulty: 'intermediate', category: 'power' },
-        { id: 'power-loss', name: '전력 손실 계산', nameEn: 'Power Loss', difficulty: 'advanced', category: 'power' },
-      ],
+      calculators: calculatorsIn('power'),
     },
     {
       id: 'voltage-drop',
@@ -90,13 +103,7 @@ function buildCategories(): CategoryMeta[] {
       icon: ArrowDownUp,
       description: '전압강하율, 케이블 길이별 전압 손실',
       color: 'from-amber-500 to-amber-600',
-      calculators: [
-        { id: 'voltage-drop', name: '전압 강하 계산', nameEn: 'Voltage Drop', difficulty: 'intermediate', category: 'voltage-drop' },
-        { id: 'three-phase-vd', name: '3상 전압강하', nameEn: 'Three-Phase VD', difficulty: 'intermediate', category: 'voltage-drop' },
-        { id: 'complex-voltage-drop', name: '임피던스 기반 전압강하', nameEn: 'Complex VD', difficulty: 'advanced', category: 'voltage-drop' },
-        { id: 'busbar-vd', name: '부스바 전압강하', nameEn: 'Busbar VD', difficulty: 'advanced', category: 'voltage-drop' },
-        { id: 'country-compare-vd', name: '국가별 전압강하 비교', nameEn: 'Country Compare VD', difficulty: 'advanced', category: 'voltage-drop' },
-      ],
+      calculators: calculatorsIn('voltage-drop'),
     },
     {
       id: 'cable',
@@ -105,12 +112,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Cable,
       description: '허용전류, 케이블 선정, 보정계수',
       color: 'from-orange-500 to-orange-600',
-      calculators: [
-        { id: 'cable-sizing', name: '케이블 사이징', nameEn: 'Cable Sizing', difficulty: 'advanced', category: 'cable' },
-        { id: 'awg-converter', name: 'AWG↔mm² 변환', nameEn: 'AWG Converter', difficulty: 'basic', category: 'cable' },
-        { id: 'ampacity-compare', name: '허용전류 비교', nameEn: 'Ampacity Compare', difficulty: 'intermediate', category: 'cable' },
-        { id: 'cable-impedance', name: '케이블 임피던스', nameEn: 'Cable Impedance', difficulty: 'intermediate', category: 'cable' },
-      ],
+      calculators: calculatorsIn('cable'),
     },
     {
       id: 'transformer',
@@ -119,14 +121,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Gauge,
       description: '변압기 용량 선정, 부하 계산',
       color: 'from-purple-500 to-purple-600',
-      calculators: [
-        { id: 'transformer-capacity', name: '변압기 용량 선정', nameEn: 'Transformer Capacity', difficulty: 'intermediate', category: 'transformer' },
-        { id: 'transformer-loss', name: '변압기 손실', nameEn: 'Transformer Loss', difficulty: 'intermediate', category: 'transformer' },
-        { id: 'transformer-efficiency', name: '변압기 효율', nameEn: 'Transformer Efficiency', difficulty: 'intermediate', category: 'transformer' },
-        { id: 'impedance-voltage', name: '임피던스 전압', nameEn: 'Impedance Voltage', difficulty: 'intermediate', category: 'transformer' },
-        { id: 'inrush-current', name: '돌입전류', nameEn: 'Inrush Current', difficulty: 'advanced', category: 'transformer' },
-        { id: 'parallel-operation', name: '병렬운전', nameEn: 'Parallel Operation', difficulty: 'advanced', category: 'transformer' },
-      ],
+      calculators: calculatorsIn('transformer'),
     },
     {
       id: 'protection',
@@ -135,14 +130,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Shield,
       description: '단락전류, 차단기 선정, 보호 협조',
       color: 'from-red-500 to-red-600',
-      calculators: [
-        { id: 'short-circuit', name: '단락 전류 계산', nameEn: 'Short-Circuit Current', difficulty: 'advanced', category: 'protection' },
-        { id: 'breaker-sizing', name: '차단기 선정', nameEn: 'Breaker Sizing', difficulty: 'intermediate', category: 'protection' },
-        { id: 'earth-fault', name: '지락 전류', nameEn: 'Earth Fault', difficulty: 'advanced', category: 'protection' },
-        { id: 'rcd-sizing', name: '누전차단기 선정', nameEn: 'RCD Sizing', difficulty: 'intermediate', category: 'protection' },
-        { id: 'relay-basic', name: '과전류 계전기', nameEn: 'Overcurrent Relay', difficulty: 'advanced', category: 'protection' },
-        { id: 'arc-flash', name: '아크 플래시 (IEEE 1584)', nameEn: 'Arc Flash', difficulty: 'advanced', category: 'protection' },
-      ],
+      calculators: calculatorsIn('protection'),
     },
     {
       id: 'grounding',
@@ -151,12 +139,7 @@ function buildCategories(): CategoryMeta[] {
       icon: CircleDot,
       description: '접지저항, 접지봉 설계, 등전위 본딩',
       color: 'from-emerald-500 to-emerald-600',
-      calculators: [
-        { id: 'ground-resistance', name: '접지 저항 계산', nameEn: 'Ground Resistance', difficulty: 'intermediate', category: 'grounding' },
-        { id: 'ground-conductor', name: '접지 도체', nameEn: 'Grounding Conductor', difficulty: 'intermediate', category: 'grounding' },
-        { id: 'equipotential-bonding', name: '등전위 본딩', nameEn: 'Equipotential Bonding', difficulty: 'advanced', category: 'grounding' },
-        { id: 'lightning-protection', name: '피뢰 시스템', nameEn: 'Lightning Protection', difficulty: 'advanced', category: 'grounding' },
-      ],
+      calculators: calculatorsIn('grounding'),
     },
     {
       id: 'motor',
@@ -165,14 +148,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Cog,
       description: '전동기 기동, 역률 보상, 인버터',
       color: 'from-slate-500 to-slate-600',
-      calculators: [
-        { id: 'motor-capacity', name: '전동기 용량', nameEn: 'Motor Capacity', difficulty: 'intermediate', category: 'motor' },
-        { id: 'starting-current', name: '기동전류', nameEn: 'Starting Current', difficulty: 'intermediate', category: 'motor' },
-        { id: 'motor-efficiency', name: '전동기 효율', nameEn: 'Motor Efficiency', difficulty: 'intermediate', category: 'motor' },
-        { id: 'inverter-capacity', name: '인버터 용량', nameEn: 'Inverter Capacity', difficulty: 'intermediate', category: 'motor' },
-        { id: 'motor-pf-correction', name: '역률 보상', nameEn: 'Motor PF Correction', difficulty: 'advanced', category: 'motor' },
-        { id: 'braking-resistor', name: '제동 저항기', nameEn: 'Braking Resistor', difficulty: 'advanced', category: 'motor' },
-      ],
+      calculators: calculatorsIn('motor'),
     },
     {
       id: 'renewable',
@@ -181,13 +157,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Sun,
       description: '태양광, 풍력, ESS 용량 계산',
       color: 'from-yellow-500 to-yellow-600',
-      calculators: [
-        { id: 'solar-generation', name: '태양광 발전량 계산', nameEn: 'Solar PV Generation', difficulty: 'basic', category: 'renewable' },
-        { id: 'battery-capacity', name: '배터리 용량 계산', nameEn: 'Battery Capacity (ESS)', difficulty: 'basic', category: 'renewable' },
-        { id: 'solar-cable', name: '태양광 DC 케이블', nameEn: 'Solar Cable', difficulty: 'intermediate', category: 'renewable' },
-        { id: 'pcs-capacity', name: 'PCS 용량', nameEn: 'PCS Capacity', difficulty: 'intermediate', category: 'renewable' },
-        { id: 'grid-connect', name: '계통 연계', nameEn: 'Grid Connection', difficulty: 'intermediate', category: 'renewable' },
-      ],
+      calculators: calculatorsIn('renewable'),
     },
     {
       id: 'substation',
@@ -196,12 +166,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Building,
       description: '수변전 설비 설계, 부하 분석',
       color: 'from-indigo-500 to-indigo-600',
-      calculators: [
-        { id: 'substation-capacity', name: '수변전 용량', nameEn: 'Substation Capacity', difficulty: 'intermediate', category: 'substation' },
-        { id: 'ct-sizing', name: 'CT 선정', nameEn: 'CT Sizing', difficulty: 'intermediate', category: 'substation' },
-        { id: 'vt-sizing', name: 'VT 선정', nameEn: 'VT Sizing', difficulty: 'intermediate', category: 'substation' },
-        { id: 'surge-arrester', name: '피뢰기 선정', nameEn: 'Surge Arrester', difficulty: 'intermediate', category: 'substation' },
-      ],
+      calculators: calculatorsIn('substation'),
     },
     {
       id: 'lighting',
@@ -210,12 +175,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Lightbulb,
       description: '조도 계산, 조명 설계',
       color: 'from-cyan-500 to-cyan-600',
-      calculators: [
-        { id: 'illuminance', name: '조도 계산', nameEn: 'Illuminance', difficulty: 'basic', category: 'lighting' },
-        { id: 'energy-saving', name: '에너지 절감', nameEn: 'Energy Saving', difficulty: 'basic', category: 'lighting' },
-        { id: 'ups-capacity', name: 'UPS 용량', nameEn: 'UPS Capacity', difficulty: 'intermediate', category: 'lighting' },
-        { id: 'emergency-generator', name: '비상 발전기', nameEn: 'Emergency Generator', difficulty: 'intermediate', category: 'lighting' },
-      ],
+      calculators: calculatorsIn('lighting'),
     },
     {
       id: 'global',
@@ -224,13 +184,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Globe,
       description: 'NEC/IEC/IEEE 기준별 비교',
       color: 'from-teal-500 to-teal-600',
-      calculators: [
-        { id: 'temp-correction', name: '온도 보정', nameEn: 'Temp Correction', difficulty: 'basic', category: 'global' },
-        { id: 'ampacity-global-compare', name: '글로벌 허용전류', nameEn: 'Global Ampacity', difficulty: 'intermediate', category: 'global' },
-        { id: 'awg-converter-full', name: '통합 변환', nameEn: 'Full Converter', difficulty: 'basic', category: 'global' },
-        { id: 'frequency-compare', name: '주파수 비교', nameEn: 'Frequency Compare', difficulty: 'basic', category: 'global' },
-        { id: 'nec-load-calc', name: 'NEC 부하 계산', nameEn: 'NEC Load Calc', difficulty: 'intermediate', category: 'global' },
-      ],
+      calculators: calculatorsIn('global'),
     },
     {
       id: 'ai',
@@ -239,9 +193,7 @@ function buildCategories(): CategoryMeta[] {
       icon: Brain,
       description: 'AI 기반 설계 최적화, 자동 검증',
       color: 'from-pink-500 to-pink-600',
-      calculators: [
-        { id: 'token-cost', name: '토큰 비용', nameEn: 'Token Cost', difficulty: 'basic', category: 'ai' },
-      ],
+      calculators: calculatorsIn('ai'),
     },
   ];
 
@@ -332,26 +284,9 @@ function CategoryCard({ category }: { category: CategoryMeta }) {
 
 export default function CalcHubPage() {
   const [filter, setFilter] = useState('');
-  /**
-   * 계산기 이름은 CALCULATOR_NAMES 가 정본이다. 아래 표는 분야·난이도·아이콘만
-   * 들고 있으면 되는데 이름까지 들고 있었고, 그 사이가 10건 벌어져 있었다
-   * (실측 2026-07-26: 정본 "아크플래시 위험도 (IEEE 1584)" ↔ 이 표
-   * "아크 플래시 (IEEE 1584)", "변압기 손실 계산" ↔ "변압기 손실" 등).
-   *
-   * 표기만의 문제가 아니다 — 챗의 이름 매칭이 정본 이름을 쓰므로, 사용자가 이
-   * 목록에서 이름을 복사해 물으면 계산기를 못 찾았다.
-   */
-  const categories = useMemo(
-    () => buildCategories().map((category) => ({
-      ...category,
-      calculators: category.calculators.map((calc) => ({
-        ...calc,
-        name: CALCULATOR_NAMES[calc.id]?.name ?? calc.name,
-        nameEn: CALCULATOR_NAMES[calc.id]?.nameEn ?? calc.nameEn,
-      })),
-    })),
-    [],
-  );
+  // 이름·분야·난이도는 calculatorsIn 이 정본(CALCULATOR_NAMES·CALCULATOR_CATALOG)
+  // 에서 채운다. 이 화면은 아이콘·색·설명 같은 표현만 들고 있다.
+  const categories = useMemo(() => buildCategories(), []);
 
   const filteredCategories = useMemo(() => {
     if (!filter.trim()) return categories;

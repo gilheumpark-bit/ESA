@@ -266,7 +266,7 @@ describe('화면에 계산기 이름을 영문 ID 로 노출하지 않는다', (
   it.each([
     ['src/app/(with-nav)/history/page.tsx', 'CALCULATOR_NAMES[receipt.calcId]?.name'],
     ['src/components/ReceiptCard.tsx', 'CALCULATOR_NAMES[receipt.calcId]?.name'],
-    ['src/app/(with-nav)/calc/page.tsx', 'CALCULATOR_NAMES[calc.id]?.name'],
+    ['src/app/(with-nav)/calc/page.tsx', 'CALCULATOR_NAMES[id]?.name'],
   ])('%s 는 정본에서 이름을 읽는다', (path, marker) => {
     expect(readFileSync(path, 'utf8')).toContain(marker);
   });
@@ -283,7 +283,7 @@ describe('화면마다 계산기 이름이 갈리지 않는다', () => {
    */
   it('/calc 목록이 정본 이름으로 렌더된다', () => {
     const src = readFileSync('src/app/(with-nav)/calc/page.tsx', 'utf8');
-    expect(src).toContain('CALCULATOR_NAMES[calc.id]?.name');
+    expect(src).toContain('CALCULATOR_NAMES[id]?.name');
   });
 
   it('목록에 적힌 이름으로 물으면 그 계산기에 닿는다', () => {
@@ -316,5 +316,18 @@ describe('분야 카탈로그가 화면마다 갈리지 않는다', () => {
     const src = readFileSync('src/app/(with-nav)/history/page.tsx', 'utf8');
     expect(src).toContain('CALCULATOR_CATALOG[receipt.calcId]?.category');
     expect(src).toContain('CALC_CATEGORY_LABELS');
+  });
+
+  it('/calc 도 인라인 표가 아니라 카탈로그에서 목록을 만든다', () => {
+    const src = readFileSync('src/app/(with-nav)/calc/page.tsx', 'utf8');
+    expect(src).toContain('CALCULATOR_CATALOG');
+    // 계산기 57행을 다시 인라인으로 적으면 여기서 걸린다.
+    expect(src).not.toMatch(/\{ id: '[a-z0-9-]+', name: '[^']+', nameEn: '[^']+', difficulty:/);
+  });
+
+  it('카탈로그로 만든 목록이 57종을 빠짐없이 덮는다', () => {
+    const covered = new Set(Object.keys(CALCULATOR_CATALOG));
+    expect(Object.keys(CALCULATOR_PARAMS).filter((id) => !covered.has(id))).toEqual([]);
+    expect(covered.size).toBe(57);
   });
 });
