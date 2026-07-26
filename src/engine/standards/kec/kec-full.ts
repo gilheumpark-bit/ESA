@@ -113,7 +113,7 @@ export const KEC_130_4 = buildArticle('KEC-130.4', '130.4', '특별저압 — �
 
 // ─── PART 3: KEC 210 — 배선일반 ───────────────────────────────
 
-export const KEC_210_1 = buildArticle('KEC-210.1', '210.1', '배선의 사용전선 — 최소 단면적', [
+export const KEC_210_1 = buildArticle('KEC-231.3.1', '231.3.1', '저압 옥내배선의 사용전선', [
   cond('crossSection', '>=', 1.5, 'mm²', '옥내배선 최소 단면적 1.5mm² 이상'),
 ]);
 
@@ -167,11 +167,11 @@ export const KEC_230_1 = buildArticle('KEC-230.1', '230.1', '절연전선 최소
   cond('crossSection', '>=', 1.5, 'mm²', '옥내 절연전선 최소 1.5mm²'),
 ]);
 
-export const KEC_230_2 = buildArticle('KEC-230.2', '230.2', '절연전선 최소 굵기 — 옥외', [
+export const KEC_230_2 = buildArticle('KEC-222.5', '222.5', '저압 가공전선의 굵기 및 종류', [
   cond('crossSection', '>=', 2.5, 'mm²', '옥외 절연전선 최소 2.5mm²'),
 ]);
 
-export const KEC_230_3 = buildArticle('KEC-230.3', '230.3', '케이블 절연 내전압 — 저압', [
+export const KEC_230_3 = buildArticle('KEC-132', '132', '전로의 절연저항 및 절연내력', [
   cond('insulationVoltage', '>=', 1000, 'V', '저압 케이블 절연내전압 1000V 이상'),
 ]);
 
@@ -186,7 +186,7 @@ export const KEC_232_1 = buildArticle('KEC-232.1', '232.1', '전선 허용전류
 ], [
   { articleId: 'KEC-232.2', relation: 'reference', note: '주위온도 40°C 초과 시 보정계수 적용' },
   { articleId: 'KEC-232.3', relation: 'reference', note: '3회로 초과 시 그룹 보정 적용' },
-  { articleId: 'KEC-240.1', relation: 'reference', note: '과전류 보호장치와 협조' },
+  { articleId: 'KEC-212.3.4', relation: 'reference', note: '과전류 보호장치의 특성과 협조' },
   { articleId: 'NEC-310.16', relation: 'equivalent', note: 'NEC Table 310.16 허용전류표와 등가' },
 ]);
 
@@ -226,16 +226,16 @@ export const KEC_234_3 = buildArticle('KEC-234.3', '234.3', '비상조명 — �
 
 // ─── PART 9: KEC 240 — 보호 ───────────────────────────────────
 
-export const KEC_240_1 = buildArticle('KEC-240.1', '240.1', '과전류 보호 — 차단기 정격', [
+export const KEC_240_1 = buildArticle('KEC-212.3.4', '212.3.4', '보호장치의 특성', [
   cond('breakerRating', '>=', 0, 'A', '과전류 보호 차단기 설치'),
   cond('breakerRating', '<=', 0, 'A', '차단기 정격 ≤ 전선 허용전류'),
 ], [
   { articleId: 'KEC-232.1', relation: 'reference', note: '전선 허용전류와 차단기 정격 협조' },
-  { articleId: 'KEC-240.5', relation: 'reference', note: '단락전류 차단용량 확인' },
+  { articleId: 'KEC-212.5.5', relation: 'reference', note: '단락보호장치의 특성 — 차단용량 확인' },
   { articleId: 'NEC-240.4', relation: 'equivalent', note: 'NEC 240.4 과전류보호와 등가' },
 ]);
 
-export const KEC_240_2 = buildArticle('KEC-240.2', '240.2', '지락 보호 — 감도전류 30mA', [
+export const KEC_240_2 = buildArticle('KEC-211.2.4', '211.2.4', '누전차단기의 시설', [
   cond('rcdSensitivity', '<=', 30, 'mA', '인체보호용 누전차단기 감도전류 30mA 이하'),
 ]);
 
@@ -247,7 +247,7 @@ export const KEC_240_4 = buildArticle('KEC-153.1.4', '153.1.4', '서지보호장
   cond('spdRating', '>=', 0, 'kA', 'SPD(서지보호장치) 설치'),
 ]);
 
-export const KEC_240_5 = buildArticle('KEC-240.5', '240.5', '단락전류 차단용량', [
+export const KEC_240_5 = buildArticle('KEC-212.5.5', '212.5.5', '단락보호장치의 특성', [
   cond('breakingCapacity', '>=', 0, 'kA', '차단기 차단용량 ≥ 예상 단락전류'),
 ]);
 
@@ -307,7 +307,7 @@ export const KEC_410_3 = buildArticle('KEC-143.3', '143.3', '등전위본딩 도
   cond('crossSection', '>=', 6, 'mm²', '등전위 본딩 도체 6mm² 이상'),
 ]);
 
-export const KEC_410_4 = buildArticle('KEC-142.2', '142.2', '접지극의 시설 및 접지저항', [
+export const KEC_410_4 = buildArticle('KEC-410.4', '410.4', '접지저항 — 공통접지', [
   cond('resistance', '<=', 10, 'ohm', '공통접지 접지저항 10 ohm 이하'),
 ]);
 

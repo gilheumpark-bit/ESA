@@ -129,7 +129,7 @@ const LOW_VOLTAGE: CodeArticle[] = [
   ]),
 
   // 230 전선
-  kec('230.1', '230.1', '전선의 종류 — 사용 구분', [
+  kec('231.3.2', '231.3.2', '중성선의 단면적', [
     { param: 'wireTypeValid', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'HIV/XLPE/FR 등 용도별 전선 선정' },
   ]),
   kec('231.1', '231.1', '전선의 최소 굵기', [
@@ -167,7 +167,7 @@ const LOW_VOLTAGE: CodeArticle[] = [
   ]),
 
   // 240 보호 협조
-  kec('240.1', '240.1', '보호 협조 — 일반 원칙', [
+  kec('212.4.1', '212.4.1', '도체와 과부하 보호장치 사이의 협조', [
     { param: 'protectionCoordination', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '상위-하위 보호장치 간 선택성 확보' },
   ]),
   kec('240.2', '240.2', '직렬 보호 (Back-up)', [
