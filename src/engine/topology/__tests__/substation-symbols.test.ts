@@ -99,3 +99,57 @@ describe('한글 키워드', () => {
     expect(detectComponentType('온도계기록장치')).not.toBe('meter');
   });
 });
+
+/**
+ * 어휘를 늘린 뒤 오탐이 생기지 않았는가.
+ *
+ * 2026-07-27 어휘 전수 측정에서 48 개 중 25 개를 모르고 있었다(전부 조용히
+ * `load` 로 흡수). 21 개를 보강해 44/48 로 올렸는데, 짧은 약호를 늘리면
+ * 엉뚱한 곳에서 튀는 것이 진짜 위험이다. 늘린 만큼 반증도 늘린다.
+ */
+describe('어휘 확장 — 오탐 반증', () => {
+  it.each([
+    // 긴 약호가 짧은 약호에 먹히지 않는다
+    ['MCC-1', 'panel'],        // MC(전자접촉기) 에 먹히면 안 된다
+    ['MCCB 4P', 'breaker'],    // MC 에 먹히면 안 된다
+    ['MCB', 'breaker'],
+    ['MOF', 'meter'],
+  ] as const)('%s → %s', (text, expected) => {
+    expect(detectComponentType(text)).toBe(expected);
+  });
+
+  it('표제가 설비로 승격되지 않는다 — SC(진상콘덴서)가 SCHEDULE 에서 튀면 안 된다', () => {
+    // 기대는 "capacitor 가 아니다" 이지 특정 타입이 아니다. 영문 CABLE 은 사전에
+    // 없어 기본값 load 로 떨어지는데, 표제가 부품이 안 되는 것 자체는 옳다.
+    for (const title of ['CABLE SCHEDULE', 'LOAD SCHEDULE', 'PANEL SCHEDULE']) {
+      expect(detectComponentType(title)).not.toBe('capacitor');
+    }
+  });
+
+  it('의도적으로 넣지 않은 충돌 약호는 여전히 모른다 — 지어내지 않는다', () => {
+    // PF 는 전력퓨즈이자 역률계다. 실도면(세종 p1) 계기반이 `V A W PF F` 였다.
+    // 문맥 없이 어느 쪽으로 넣어도 다른 쪽이 틀린다.
+    expect(detectComponentType('PF')).toBe('load');
+    // AS/VS/OS 는 영문 as/vs/os 와 충돌한다. 점 표기만 받는다.
+    expect(detectComponentType('AS')).toBe('load');
+    expect(detectComponentType('A.S')).toBe('meter');
+  });
+
+  it('MCC 결선도의 기본 구성을 안다 — 이걸 모르면 그 도면은 못 읽는다', () => {
+    expect(detectComponentType('MC')).toBe('switch');    // 전자접촉기
+    expect(detectComponentType('THR')).toBe('relay');    // 열동형과전류계전기
+    expect(detectComponentType('INV')).toBe('motor');    // 인버터
+  });
+
+  it('계기용 변성기 계열을 안다 — 벡터 경로와 비전 경로가 같은 규칙을 쓴다', () => {
+    for (const t of ['ZCT', 'MOF', 'GPT', 'VT', 'PTT', 'CTT']) {
+      expect(detectComponentType(t)).toBe('meter');
+    }
+  });
+
+  it('수전설비 보호 계전기를 안다', () => {
+    for (const t of ['UVR', 'OCGR', 'SGR', 'DGR']) {
+      expect(detectComponentType(t)).toBe('relay');
+    }
+  });
+});

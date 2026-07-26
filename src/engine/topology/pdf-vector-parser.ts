@@ -155,7 +155,14 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   { pattern: new RegExp(`\\b(TR|TRANSFORMER|XFMR)\\b|${ko('변압기')}`, 'i'), type: 'transformer' },
   // ELB·ELCB·MCB·누전차단기 추가(2026-07-21): KIMM 실발주 골든 파일럿에서 ELB 20대가
   // 키워드 부재로 통째 미검출(검출 54/74 실측)된 공백 수리. DXF 파서 사전과 동기.
-  { pattern: new RegExp(`\\b(CB|ACB|VCB|MCCB|MCB|ELB|ELCB|BREAKER)\\b|${ko('누전차단기', '차단기')}`, 'i'), type: 'breaker' },
+  // GCB(가스차단기)·LF(한류퓨즈) 추가(2026-07-27 어휘 전수 측정). 퓨즈는 차단기와
+  // 다른 기기지만 보호 기능이 같고 이 어휘에 fuse 타입이 없다 — 별도 타입을
+  // 만들 근거가 아직 없어 breaker 로 둔다.
+  //
+  // `PF`(전력퓨즈)는 넣지 않았다. 계기반의 `PF`(역률계)와 같은 글자다 —
+  // 실도면(세종 p1)의 계기반이 `V A W PF F` 였다. 문맥 없이 어느 쪽으로 넣어도
+  // 다른 쪽이 틀린다.
+  { pattern: new RegExp(`\\b(CB|ACB|VCB|MCCB|MCB|ELB|ELCB|GCB|LF|BREAKER)\\b|${ko('누전차단기', '차단기', '한류퓨즈')}`, 'i'), type: 'breaker' },
   { pattern: new RegExp(`\\b(M|MOTOR)\\b|${ko('전동기', '모터')}`, 'i'), type: 'motor' },
   // 단독 'G'는 제외 — 국내 분전반 도면에서 단독 G는 접지 표기가 관례라,
   // 실도면 18페이지 전 장에 발전기 2대가 검출되는 오탐을 만들었다(라이브
@@ -169,15 +176,32 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   // 캘리브레이션에서 나와 수전 개폐기 계열이 통째로 비어 있었다.
   // 도면은 약어에 점을 찍는다 — 실물 표기가 `L.B.S`, `A.S.S` 다. 점 없는
   // 패턴만 두면 정작 실도면에서 안 잡힌다(실측: 점 표기 4 건 전부 load 로 떨어짐).
-  { pattern: new RegExp(`\\b(SW|DS|L\\.?B\\.?S|A\\.?S\\.?S|COS|SWITCH)\\b|${ko('자동고장구분개폐기', '부하개폐기', '개폐기')}`, 'i'), type: 'switch' },
+  // AISS·OS·ATS·MC·MS 추가(2026-07-27 어휘 전수 측정 — 48 개 중 25 개를 모르고
+  // 있었고 전부 조용히 `load` 로 흡수됐다). MC(전자접촉기)·MS(전자개폐기)는 MCC
+  // 결선도의 기본 구성인데 통째로 빠져 있었다.
+  //
+  // `OS`(유입개폐기)는 영문 os 와 충돌한다. 주석 문장 게이트(isProseText)가
+  // 문장을 먼저 걸러 주지만 위험이 0 은 아니라 점 표기까지만 받는다.
+  { pattern: new RegExp(`\\b(SW|DS|L\\.?B\\.?S|A\\.?I\\.?S\\.?S|A\\.?S\\.?S|COS|ATS|M\\.?C|M\\.?S|SWITCH)\\b|${ko('자동고장구분개폐기', '기중부하개폐기', '부하개폐기', '전자접촉기', '전자개폐기', '자동절체', '개폐기')}`, 'i'), type: 'switch' },
   // 피뢰기는 개폐기가 아니라 보호기기다. 타입이 없어 switch 로 뭉개지면
   // KEC 153.1.4(서지보호장치) 검토 대상에서 빠진다. 표기는 `L.A` 가 실물이다.
   { pattern: new RegExp(`\\b(L\\.?A|S\\.?A|SPD)\\b|${ko('피뢰기', '서지흡수기', '서지보호')}`, 'i'), type: 'arrester' },
   // DWHM/WHM(전력량계) 추가(2026-07-21 3차 실증): EE-038 분전반 4면의 DWHM 계량
   // 4대가 키워드 부재로 전량 미검출된 공백 수리.
-  { pattern: new RegExp(`\\b(CT|PT|METER|DWHM|WHM)\\b|${ko('계기', '전력량계')}`, 'i'), type: 'meter' },
+  // 계기용 변성기 계열 보강(2026-07-27): 12 개 중 8 개를 모르고 있었다 —
+  // 이 분야가 가장 나빴다. ZCT 는 비전 프롬프트에는 넣었는데 여기 벡터 사전에는
+  // 빠져 있어 두 경로가 어긋나 있었다. 시험단자(PTT·CTT)도 도면에 늘 있다.
+  //
+  // `AS`(전류계전환개폐기)·`VS`(전압계전환개폐기)는 영문 as/vs 와 충돌해
+  // 넣지 않았다. 점 표기(`A.S`)만 받는다.
+  { pattern: new RegExp(`\\b(C\\.?T|P\\.?T|V\\.?T|Z\\.?C\\.?T|M\\.?O\\.?F|G\\.?P\\.?T|PTT|CTT|A\\.S|V\\.S|METER|DWHM|WHM)\\b|${ko('계기', '전력량계', '변성기', '영상변류기', '변류기')}`, 'i'), type: 'meter' },
   { pattern: /\b(UPS)\b/i, type: 'ups' },
-  { pattern: new RegExp(`\\b(OCR|OVR|RELAY)\\b|${ko('계전기')}`, 'i'), type: 'relay' },
+  // 지락·부족전압 계전기 추가. OCGR·SGR·DGR 은 수전설비 보호의 기본인데 빠져 있었다.
+  { pattern: new RegExp(`\\b(OCR|OVR|UVR|OCGR|SGR|DGR|THR|RELAY)\\b|${ko('계전기')}`, 'i'), type: 'relay' },
+  // 진상콘덴서·직렬리액터는 짝으로 다닌다. 어휘에 reactor 타입이 없어 capacitor 로 둔다.
+  { pattern: new RegExp(`\\b(S\\.?C|S\\.?R)\\b|${ko('진상콘덴서', '직렬리액터')}`, 'i'), type: 'capacitor' },
+  { pattern: new RegExp(`\\b(INV|INVERTER)\\b|${ko('인버터')}`, 'i'), type: 'motor' },
+  { pattern: new RegExp(`\\b(C\\.?H)\\b|${ko('케이블헤드', '케이블')}`, 'i'), type: 'cable' },
 ];
 
 interface TypeDetection {
