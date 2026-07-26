@@ -100,3 +100,35 @@ export const CALCULATOR_CATALOG: Record<string, { category: CalcCategoryId; diff
   'nec-load-calc': { category: 'global', difficulty: 'intermediate' },
   'token-cost': { category: 'ai', difficulty: 'basic' },
 };
+
+/**
+ * 계산기 상세 링크. 분야 구간은 이 카탈로그에서만 나온다.
+ *
+ * 화면 세 곳(community/[id]·mobile·tools/sld)이 11~12줄짜리 분야 지도를 각자
+ * 손으로 들고 `?? 'power'` 로 폴백하고 있었다. 담긴 항목은 맞았지만 57종 중
+ * 11~12종뿐이라, 나머지 45종은 전부 'power' 로 링크돼 빵부스러기에 엉뚱한
+ * 분야가 찍혔다(실측 2026-07-26: /calc/power/illuminance 가 200 으로 열리고
+ * 빵부스러기는 "power").
+ *
+ * params 를 주면 쿼리로 실어 보낸다. 상세 페이지가 그 값으로 폼을 미리 채우므로
+ * (page.tsx 의 urlDefaults), 도면·명판에서 읽은 값을 사용자가 다시 타이핑하지
+ * 않아도 된다.
+ */
+export function calculatorHref(
+  calculatorId: string,
+  params?: Record<string, unknown>,
+): string {
+  const category = CALCULATOR_CATALOG[calculatorId]?.category ?? 'power';
+  const base = `/calc/${category}/${calculatorId}`;
+  if (!params) return base;
+
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') continue;
+    // 객체·배열은 쿼리로 실어도 상세 페이지가 못 읽는다(숫자·문자열만 읽는다).
+    if (typeof value === 'object') continue;
+    query.set(key, String(value));
+  }
+  const search = query.toString();
+  return search ? `${base}?${search}` : base;
+}

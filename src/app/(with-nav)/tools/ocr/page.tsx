@@ -12,6 +12,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
+import { calculatorHref } from '@/lib/calculator-catalog';
 import {
   Camera,
   Upload,
@@ -61,19 +62,6 @@ interface OCRResponse {
   error?: string;
 }
 
-const CALC_CATEGORY_MAP: Record<string, string> = {
-  'voltage-drop': 'voltage-drop',
-  'cable-sizing': 'cable',
-  'ground-resistance': 'grounding',
-  'single-phase-power': 'power',
-  'three-phase-power': 'power',
-  'short-circuit': 'protection',
-  'breaker-sizing': 'protection',
-  'transformer-capacity': 'transformer',
-  'solar-generation': 'renewable',
-  'battery-capacity': 'renewable',
-  'motor-capacity': 'motor',
-};
 
 const CALC_LABELS: Record<string, string> = {
   'voltage-drop': '전압강하 계산',
@@ -338,7 +326,7 @@ function OCRResults({
             {suggestedCalcs.map(calcId => (
               <Link
                 key={calcId}
-                href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}?${buildCalcParams(result, calcId)}`}
+                href={calculatorHref(calcId, buildCalcParams(result, calcId))}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-primary)] bg-[var(--color-primary)]/5 px-3 py-2 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)] hover:text-white"
               >
                 <Zap size={12} />
@@ -353,17 +341,18 @@ function OCRResults({
   );
 }
 
-function buildCalcParams(result: NameplateResult, calcId: string): string {
-  const params = new URLSearchParams();
-  if (result.voltage) params.set('voltage', result.voltage);
-  if (result.current) params.set('current', result.current);
-  if (result.power) params.set('power', result.power);
-  if (result.powerFactor) params.set('powerFactor', result.powerFactor);
-  if (result.phase) params.set('phase', result.phase);
-  if (result.frequency) params.set('frequency', result.frequency);
-  params.set('source', 'ocr');
-  params.set('calc', calcId);
-  return params.toString();
+/** 명판에서 읽은 값 — 계산기 폼을 미리 채운다. 빈 값은 calculatorHref 가 뺀다. */
+function buildCalcParams(result: NameplateResult, calcId: string): Record<string, unknown> {
+  return {
+    voltage: result.voltage,
+    current: result.current,
+    power: result.power,
+    powerFactor: result.powerFactor,
+    phase: result.phase,
+    frequency: result.frequency,
+    source: 'ocr',
+    calc: calcId,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

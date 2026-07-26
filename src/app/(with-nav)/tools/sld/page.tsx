@@ -13,6 +13,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { calculatorHref } from '@/lib/calculator-catalog';
 import { useRouter } from 'next/navigation';
 import {
   Upload,
@@ -95,19 +96,6 @@ interface SLDAnalysisResult {
   rawDescription: string;
 }
 
-const CALC_CATEGORY_MAP: Record<string, string> = {
-  'voltage-drop': 'voltage-drop',
-  'cable-sizing': 'cable',
-  'ground-resistance': 'grounding',
-  'single-phase-power': 'power',
-  'three-phase-power': 'power',
-  'short-circuit': 'protection',
-  'breaker-sizing': 'protection',
-  'transformer-capacity': 'transformer',
-  'solar-generation': 'renewable',
-  'battery-capacity': 'renewable',
-  'motor-capacity': 'motor',
-};
 
 const COMPONENT_ICONS: Record<string, string> = {
   transformer: 'TX',
@@ -275,7 +263,10 @@ function SuggestedCalcs({ suggestions }: { suggestions: SLDAnalysisResult['sugge
               </p>
             </div>
             <Link
-              href={`/calc?open=${encodeURIComponent(s.calculatorId)}`}
+              // 도면에서 읽은 입력을 함께 보낸다. 예전에는 계산기 목록으로만
+              // 보내면서 그 값을 버렸고, 목록 페이지엔 그 질의를 읽는 코드조차
+              // 없어서 사용자가 계산기를 직접 찾아 다시 타이핑해야 했다.
+              href={calculatorHref(s.calculatorId, s.inputs)}
               className="shrink-0 rounded-md border border-[var(--border-default)] px-2 py-1 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--bg-tertiary)]"
             >
               계산기 열기
@@ -320,7 +311,7 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
 
             {/* Run button */}
             <Link
-              href={`/calc/${CALC_CATEGORY_MAP[step.calculatorId] ?? 'power'}/${step.calculatorId}?source=sld`}
+              href={calculatorHref(step.calculatorId, { ...step.inputs, source: 'sld' })}
               className="flex shrink-0 items-center gap-1 rounded-lg border border-[var(--color-primary)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)] hover:text-white"
             >
               <PlayCircle size={12} />

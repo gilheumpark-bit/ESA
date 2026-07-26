@@ -15,6 +15,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useSyncExternalStore } from 'react';
+import { calculatorHref } from '@/lib/calculator-catalog';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -41,19 +42,6 @@ import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
 // PART 1 — Types and Constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CALC_CATEGORY_MAP: Record<string, string> = {
-  'voltage-drop': 'voltage-drop',
-  'cable-sizing': 'cable',
-  'ground-resistance': 'grounding',
-  'single-phase-power': 'power',
-  'three-phase-power': 'power',
-  'short-circuit': 'protection',
-  'breaker-sizing': 'protection',
-  'transformer-capacity': 'transformer',
-  'solar-generation': 'renewable',
-  'battery-capacity': 'renewable',
-  'motor-capacity': 'motor',
-};
 
 // OCR 추천 계산기 id → 표시 라벨 (서버는 string[] 만 반환). tools/ocr 와 동일 관례.
 const CALC_LABELS: Record<string, string> = {
@@ -427,7 +415,7 @@ function CameraButton() {
               {result.suggestedCalculators.map((calcId) => (
                 <Link
                   key={calcId}
-                  href={`/calc/${CALC_CATEGORY_MAP[calcId] ?? 'power'}/${calcId}`}
+                  href={calculatorHref(calcId)}
                   className="flex items-center gap-1 rounded-lg border border-blue-200 bg-[var(--bg-primary)] px-3 py-1.5 text-xs font-medium text-blue-700 active:scale-95 dark:border-blue-800 dark:text-blue-300"
                 >
                   <Calculator className="h-3.5 w-3.5" />
