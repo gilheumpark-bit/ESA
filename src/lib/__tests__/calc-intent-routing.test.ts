@@ -340,6 +340,27 @@ describe('업계 표준 용어 라우팅', () => {
     expect(analyzeCalcIntent(query).calculatorId).toBeUndefined();
   });
 
+  it.each([
+    // 용어집과 계산기가 같은 것을 다른 표준 표기로 부르는 경우.
+    ['ct-sizing', '변류기 1차 200A 2차 5A'],
+    ['ct-sizing', '1차 200A 2차 5A CT 선정'],
+    ['vt-sizing', 'VT 22900V 2차 110V 선정'],
+  ])('%s — 약어 표기로도 도달한다', (id, query) => {
+    expect(analyzeCalcIntent(query).calculatorId).toBe(id);
+  });
+
+  it.each([
+    // 규격 약어는 조회 질문에 훨씬 자주 나온다. 여기서 새면 규정 검색이 계산이 된다.
+    'NEC 250 접지 규정 알려줘',
+    'NEC 2023 개정 내용',
+    'NEC 310.16 표 값 알려줘',
+    '미국 NEC 와 KEC 차이 200V 기준',
+    'CT 결선 방법',
+    '변류기 원리',
+  ])('규격·기기 약어가 스친 "%s" 는 계산기를 열지 않는다', (query) => {
+    expect(analyzeCalcIntent(query).calculatorId).toBeUndefined();
+  });
+
   it('용어는 검색 파서 제안을 앞지르지 않는다', () => {
     // 이 질문은 cable-sizing 인데 "허용 전압강하 3%" 라는 용어를 품고 있다.
     // 용어를 앞에 두면 전압강하로 샌다 — 용어는 낱말 하나만 보기 때문이다.

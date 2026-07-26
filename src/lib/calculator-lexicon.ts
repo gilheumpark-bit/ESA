@@ -184,10 +184,16 @@ const STANDARD_TERM_INDEX: Array<{ term: string; id: string }> = (() => {
 
     let id = entry.relatedCalc;
     if (!id || !CALCULATOR_NAMES[id]) {
-      if (paramWordCount(entry.ko) >= 3) continue;
-      const candidates = namedBy(entry.ko);
-      if (candidates.length !== 1) continue;
-      id = candidates[0];
+      // 용어와 계산기가 같은 것을 다른 표준 표기로 부르기도 한다 — 용어집은
+      // "변류기", 계산기는 "CT 선정" 이다. 그래서 한국어로 못 이으면 약어·영문
+      // 표기로도 본다. 규칙은 같다: 정확히 한 계산기에만 걸릴 때.
+      const surfacesForLink = [entry.ko, ...entry.synonyms, entry.en];
+      id = surfacesForLink
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 2 && paramWordCount(t) < 3)
+        .map((t) => namedBy(t))
+        .find((hits) => hits.length === 1)?.[0];
+      if (!id) continue;
     }
 
     for (const term of surfaces) {
