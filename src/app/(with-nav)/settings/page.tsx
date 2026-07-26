@@ -11,7 +11,6 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, type UserTier } from '@/contexts/AuthContext';
 import {
@@ -303,28 +302,30 @@ function PlanSection({ tier }: { tier: UserTier }) {
 // =============================================================================
 
 export default function SettingsPage() {
-  const router = useRouter();
   const { user, tier, loading: authLoading } = useAuth();
   const { language, country, setLanguage, setCountry, loaded } = useSettings();
 
-  // 비인증 사용자 → /login 리다이렉트
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login');
-    }
-  }, [authLoading, user, router]);
+  // 로그인 없이도 바꿀 수 있어야 하는 설정이 있다.
+  //
+  // 앱은 "로그인 없이도 계산기를 사용할 수 있습니다"라고 안내하고 실제로 57종이
+  // 다 돈다. 그런데 이 화면 전체가 /login 으로 리다이렉트됐고, 그 안에 **계산
+  // 기준 국가/표준**과 답변 언어가 들어 있었다(실측 2026-07-26). 계산 요청은
+  // countryCode 를 실어 보내므로(useCalculator) 비로그인 사용자는 KEC 고정이었다
+  // — 미국·일본 기준으로 계산할 방법이 없었다.
+  //
+  // 계정에 매인 항목(프로필·요금제·대시보드)만 로그인을 요구하고, 기기에
+  // 저장되는 설정(언어·기준 국가·BYOK 키·온프렘)은 그대로 연다.
 
-  // 로딩 중
-  if (authLoading || !loaded) {
+  // 기기 설정은 인증 상태를 기다리지 않는다. 인증 확인이 끝나지 않는 배포
+  // (Firebase 미구성 등)에서 authLoading 이 계속 true 로 남아 화면 전체가
+  // 스피너에 갇혔다(실측 2026-07-26). 계정 카드만 인증 결과를 기다린다.
+  if (!loaded) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
       </div>
     );
   }
-
-  // 리다이렉트 대기
-  if (!user) return null;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -333,7 +334,29 @@ export default function SettingsPage() {
       </h1>
 
       <div className="flex flex-col gap-6">
-        <ProfileSection email={user.email ?? 'unknown'} tier={tier} />
+        {authLoading
+          ? (
+            <SectionCard title="계정">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">로그인 상태 확인 중…</p>
+            </SectionCard>
+          )
+          : user
+          ? <ProfileSection email={user.email ?? 'unknown'} tier={tier} />
+          : (
+            <SectionCard title="계정">
+              <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+                로그인하면 계산 이력이 기기 밖에도 저장되고 팀과 공유할 수 있습니다.
+                아래 설정은 로그인 없이도 이 브라우저에 저장됩니다.
+              </p>
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              >
+                로그인
+                <span aria-hidden="true">&rarr;</span>
+              </Link>
+            </SectionCard>
+          )}
         <LanguageSection current={language} onChange={setLanguage} />
         <CountrySection current={country} onChange={setCountry} />
         <BYOKSection />
@@ -350,7 +373,7 @@ export default function SettingsPage() {
             <span aria-hidden="true">&rarr;</span>
           </Link>
         </SectionCard>
-        <PlanSection tier={tier} />
+        {!authLoading && user && <PlanSection tier={tier} />}
 
         {/* Quick links */}
         <SectionCard title="바로가기">

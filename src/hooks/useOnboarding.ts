@@ -33,7 +33,12 @@ export function useOnboarding(): UseOnboardingReturn {
 
   // Check localStorage on mount
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    // rAF 는 탭이 보이지 않으면 발화하지 않는다 — 배경 탭에서 연 화면은 온보딩
+    // 판단 자체가 일어나지 않는다(useSettings 의 같은 결함과 동일 원인,
+    // 실측 2026-07-26). 마이크로태스크는 가시성과 무관하게 돈다.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
       try {
         const completed = localStorage.getItem(STORAGE_KEY);
         if (!completed) setShouldShow(true);
@@ -41,7 +46,7 @@ export function useOnboarding(): UseOnboardingReturn {
         // localStorage unavailable — don't show onboarding to avoid broken state
       }
     });
-    return () => cancelAnimationFrame(frame);
+    return () => { cancelled = true; };
   }, []);
 
   const markCompleted = useCallback(() => {

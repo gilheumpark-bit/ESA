@@ -137,7 +137,14 @@ export function useSettings(): UseSettingsReturn {
 
   // Load on mount + subscribe to same-page and cross-tab updates
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    // 저장값 읽기를 requestAnimationFrame 뒤로 미루면 안 된다. rAF 는 탭이
+    // 보이지 않으면 발화하지 않으므로, 배경 탭에서 연 화면은 loaded 가 영영
+    // false 로 남아 스피너에 갇힌다(실측 2026-07-26: /settings 가 그 상태였다).
+    // 마이크로태스크는 탭 가시성과 무관하게 즉시 돈다 — 하이드레이션 뒤 한 박자
+    // 미루는 원래 의도는 그대로 지키면서 배경 탭에서도 깨어난다.
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
       setSettings(loadSettings());
       setLoaded(true);
     });
@@ -151,7 +158,7 @@ export function useSettings(): UseSettingsReturn {
     window.addEventListener('storage', onStorage);
 
     return () => {
-      cancelAnimationFrame(frame);
+      cancelled = true;
       settingsListeners.delete(listener);
       window.removeEventListener('storage', onStorage);
     };
