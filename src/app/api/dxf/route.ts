@@ -26,14 +26,14 @@ async function handlePost(req: NextRequest) {
   // 피처 플래그 확인
   if (!isFeatureEnabled('DRAWING_PARSER')) {
     return NextResponse.json(
-      { error: 'DXF parsing is not enabled. Enable DRAWING_PARSER feature flag.' },
+      { error: '이 배포에서는 DXF 도면 파싱이 꺼져 있습니다. 관리자에게 DRAWING_PARSER 기능 플래그 활성화를 요청하세요.' },
       { status: 403 },
     );
   }
 
   try {
     if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
-      return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
+      return NextResponse.json({ error: '허용되지 않은 요청 출처입니다.' }, { status: 403 });
     }
     const blocked = applyRateLimit(req, 'dxf');
     if (blocked) return blocked;
@@ -58,15 +58,15 @@ async function handlePost(req: NextRequest) {
     const dxfFile = dxfPart.file;
 
     if (!dxfFile) {
-      return NextResponse.json({ error: 'No DXF file provided.' }, { status: 400 });
+      return NextResponse.json({ error: 'DXF 파일이 없습니다. file 필드에 .dxf 파일을 첨부하세요.' }, { status: 400 });
     }
 
     if (!dxfFile.name.toLowerCase().endsWith('.dxf')) {
-      return NextResponse.json({ error: 'Only .dxf files are accepted.' }, { status: 400 });
+      return NextResponse.json({ error: '.dxf 파일만 업로드할 수 있습니다.' }, { status: 400 });
     }
 
     if (dxfFile.size > DXF_FILE_MAX_BYTES) {
-      return NextResponse.json({ error: 'File too large (max 16MB).' }, { status: 413 });
+      return NextResponse.json({ error: '파일이 너무 큽니다 (최대 16MB).' }, { status: 413 });
     }
 
     const dxfContent = await dxfFile.text();

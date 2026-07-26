@@ -25,12 +25,12 @@ async function handlePost(req: NextRequest) {
   const timer = createRequestTimer();
 
   if (!isFeatureEnabled('DRAWING_PARSER')) {
-    return NextResponse.json({ error: 'PDF drawing parser not enabled.' }, { status: 403 });
+    return NextResponse.json({ error: '이 배포에서는 PDF 도면 파싱이 꺼져 있습니다. 관리자에게 DRAWING_PARSER 기능 플래그 활성화를 요청하세요.' }, { status: 403 });
   }
 
   try {
     if (!isRequestOriginAllowed(req.headers.get('origin'), req.url, undefined, req.headers.get('host'), req.headers.get('x-forwarded-proto'))) {
-      return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
+      return NextResponse.json({ error: '허용되지 않은 요청 출처입니다.' }, { status: 403 });
     }
     const blocked = applyRateLimit(req, 'dxf');
     if (blocked) return blocked;
@@ -54,21 +54,21 @@ async function handlePost(req: NextRequest) {
     const pdfFile = pdfPart.file;
 
     if (!pdfFile) {
-      return NextResponse.json({ error: 'No PDF file provided.' }, { status: 400 });
+      return NextResponse.json({ error: 'PDF 파일이 없습니다. file 필드에 .pdf 파일을 첨부하세요.' }, { status: 400 });
     }
 
     if (!pdfFile.name.toLowerCase().endsWith('.pdf')) {
-      return NextResponse.json({ error: 'Only .pdf files are accepted.' }, { status: 400 });
+      return NextResponse.json({ error: '.pdf 파일만 업로드할 수 있습니다.' }, { status: 400 });
     }
 
     if (pdfFile.size > PDF_FILE_MAX_BYTES) {
-      return NextResponse.json({ error: 'File too large (max 32MB).' }, { status: 413 });
+      return NextResponse.json({ error: '파일이 너무 큽니다 (최대 32MB).' }, { status: 413 });
     }
 
     const pagePart = formData.get('page');
     const pageNumber = pagePart == null || pagePart === '' ? 1 : Number(pagePart);
     if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > 10_000) {
-      return NextResponse.json({ error: 'page must be an integer between 1 and 10000.' }, { status: 400 });
+      return NextResponse.json({ error: '페이지 번호는 1 이상 10000 이하의 정수여야 합니다.' }, { status: 400 });
     }
     const pdfBytes = await pdfFile.arrayBuffer();
 
@@ -84,8 +84,19 @@ async function handlePost(req: NextRequest) {
         level: 'warn', event: 'pdf-drawing-parse', route: '/api/pdf-drawing',
         error: analysis.rawDescription, durationMs: timer.elapsed(),
       });
+      // 실측(2026-07-26): 실교보재 5건 중 2건이 1페이지가 스캔 이미지라 여기로
+      // 떨어졌다. 거부 자체는 옳다(선분 0개로 결선을 지어내면 안 된다). 다만
+      // 무엇을 하라는 말이 없어 사용자는 막다른 길에 선다 — 같은 파일을 이미지
+      // AI 탭에 넣으면 판독되는 경우가 대부분이다.
+      const scanned = /기하\(선분\) 0/.test(analysis.rawDescription ?? '');
       return NextResponse.json(
-        { error: 'PDF를 읽을 수 없습니다. 파일이 손상됐거나, 해당 페이지가 없거나, 스캔/이미지 도면(벡터 정보 없음)입니다.', detail: analysis.rawDescription },
+        {
+          error: scanned
+            ? '이 페이지에는 벡터 정보가 없습니다(스캔·이미지 도면). 결선을 지어내지 않기 위해 벡터 판독을 중단했습니다. 같은 파일을 "이미지 AI 분석" 탭에 넣으면 판독할 수 있습니다 — BYOK 키가 필요합니다.'
+            : 'PDF를 읽을 수 없습니다. 파일이 손상됐거나 해당 페이지가 없습니다. 여러 장이라면 도면이 있는 페이지 번호를 지정해 보세요.',
+          detail: analysis.rawDescription,
+          nextStep: scanned ? 'image-ai' : 'check-page',
+        },
         { status: 400 },
       );
     }
