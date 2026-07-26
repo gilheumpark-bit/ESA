@@ -79,7 +79,7 @@ const SELECTION: CodeArticle[] = [
 
   iec('534.1', '534.1', 'SPD 선정 및 적용', [
     { param: 'spdInstalled', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '뇌서지 위험 시 SPD 설치 (위험도 평가 per IEC 62305)' },
-  ], [{ articleId: 'KEC-534.1', relation: 'equivalent', note: 'KEC SPD' }]),
+  ], [{ articleId: 'KEC-153.1.4', relation: 'equivalent', note: 'KEC 153.1.4 서지보호장치 시설' }]),
 
   iec('543.1', '543.1', '보호 도체 단면적', [
     { param: 'protectiveConductorSize', operator: '>=', value: 0, unit: 'mm²', result: 'PASS', note: '상도체 ≤16mm²: 동일, 16~35: 16mm², >35: 상도체의 1/2' },

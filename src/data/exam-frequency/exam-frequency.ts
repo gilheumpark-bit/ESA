@@ -33,7 +33,7 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   // === 고빈도 (high) — 2~3회에 1번 ===
   { articleId: 'KEC-311.1', articleTitle: '수변전 설비', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['변압기 용량 산정', '단락전류'], examSubject: '전력공학', studyTip: '수전 설비 구성 순서(MOF→DS→VCB→TR) 암기.' },
   { articleId: 'KEC-341.1', articleTitle: '전동기 분기회로', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['전동기 전선 산정', '기동 전류'], examSubject: '전기기기', studyTip: '정격전류×1.25 이상. FLC 테이블 참조.' },
-  { articleId: 'KEC-340.1', articleTitle: '역률 개선', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['콘덴서 용량 계산', '역률 개선'], examSubject: '전력공학', studyTip: 'Qc = P(tanθ1 - tanθ2) 공식.' },
+  { articleId: 'KEC-351.5', articleTitle: '조상설비의 보호장치', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['콘덴서 용량 계산', '역률 개선'], examSubject: '전력공학', studyTip: 'Qc = P(tanθ1 - tanθ2) 공식.' },
   { articleId: 'KEC-212.4', articleTitle: '누전차단기', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['감도전류 선정'], examSubject: '전기설비기술기준', studyTip: '30mA/0.03s. 설치 의무 장소 암기.' },
   { articleId: 'KEC-220.1', articleTitle: '부하 산정', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['수용률', '부등률', '부하율'], examSubject: '전력공학', studyTip: '수용률/부등률/부하율 정의 + 공식.' },
   { articleId: 'KEC-501.1', articleTitle: '태양광 발전', frequencyLast10: 4, importance: 'high', commonCalcTypes: ['PV 발전량', '인버터 용량'], examSubject: '전기설비기술기준', studyTip: '최근 출제 급증. 계통연계 기준 중요.' },
@@ -46,11 +46,11 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   // 적혀 있던 "전선관 충전율 / 3선 이상 40%" 는 NEC Chapter 9 Table 1 값이었다.
   // 수험생이 이 줄을 외우면 시험에서 틀린다 — 시험 데이터라 더 위험하다.
   { articleId: 'KEC-232.31', articleTitle: '금속덕트공사 — 덕트 내 전선 단면적', frequencyLast10: 3, importance: 'medium', commonCalcTypes: ['충전율 계산'], examSubject: '전기공사', studyTip: '덕트 내부 단면적의 20% 이하. 전광표시장치·제어회로 배선만이면 50%. 전선관 충전율(내선규정 32%/48%)과 혼동 주의.' },
-  { articleId: 'KEC-520.1', articleTitle: 'ESS', frequencyLast10: 2, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '최근 출제 증가 추세. BMS/PCS 기본 개념.' },
+  { articleId: 'KEC-511.2', articleTitle: '전기저장장치의 시설', frequencyLast10: 2, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '최근 출제 증가 추세. BMS/PCS 기본 개념.' },
 
   // === 저빈도 (low) — 간헐적 ===
   { articleId: 'KEC-250.1', articleTitle: '욕실 구역 구분', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준' },
-  { articleId: 'KEC-260.1', articleTitle: '전기차 충전', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준', studyTip: '향후 출제 증가 예상.' },
+  { articleId: 'KEC-241.17', articleTitle: '전기자동차 전원설비', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준', studyTip: '향후 출제 증가 예상.' },
   { articleId: 'KEC-143.1', articleTitle: '피뢰 시스템', frequencyLast10: 2, importance: 'low', examSubject: '전기설비기술기준' },
 ];
 

@@ -214,11 +214,11 @@ const WIRING_METHODS: CodeArticle[] = [
 
   nec('625.40', '625.40', '전기차 충전기 분기회로', [
     { param: 'evBranchCircuit', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: 'Level 2: 전용 분기회로 40A, 전선 ≥ 50A 허용전류' },
-  ], [{ articleId: 'KEC-260.1', relation: 'equivalent', note: 'KEC EV 충전' }, { articleId: 'JIS-722.1', relation: 'equivalent', note: 'JIS EV 충전' }]),
+  ], [{ articleId: 'KEC-241.17', relation: 'equivalent', note: 'KEC 241.17 전기자동차 전원설비' }, { articleId: 'JIS-722.1', relation: 'equivalent', note: 'JIS EV 충전' }]),
 
   nec('700.12', '700.12', '비상 전원 — 자동 전환', [
     { param: 'emergencyTransferTime', operator: '<=', value: 10, unit: 's', result: 'PASS', note: '비상 전원: 10초 이내 자동 절환' },
-  ], [{ articleId: 'KEC-700.1', relation: 'equivalent', note: 'KEC 비상전원' }]),
+  ], [{ articleId: 'KEC-244', relation: 'equivalent', note: 'KEC 244 비상용 예비전원설비' }]),
 
   nec('701.12', '701.12', '예비 전원 — 자동 전환', [
     { param: 'standbyTransferTime', operator: '<=', value: 60, unit: 's', result: 'PASS', note: '예비 전원: 60초 이내 자동 절환' },

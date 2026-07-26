@@ -31,7 +31,7 @@ const COMMON: CodeArticle[] = [
   ]),
 
   // 120 용어
-  kec('120.1', '120.1', '용어 정의 — 전기설비 관련 용어', [
+  kec('112', '112', '용어 정의', [
     { param: 'termDefined', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'KEC에서 정의한 용어를 사용해야 함' },
   ]),
 
@@ -53,7 +53,7 @@ const COMMON: CodeArticle[] = [
   ], [{ articleId: 'IEC-534.1', relation: 'equivalent', note: 'IEC SPD 적용' }]),
 
   // 140 접지
-  kec('140.1', '140.1', '접지 시스템 종류 — TN/TT/IT', [
+  kec('141', '141', '접지시스템의 구분 및 종류', [
     { param: 'groundingSystemType', operator: '>=', value: 1, unit: 'enum', result: 'PASS', note: 'TN-S/TN-C/TN-C-S/TT/IT 중 선택' },
   ], [{ articleId: 'IEC-411.1', relation: 'equivalent', note: 'IEC 접지 계통' }]),
   kec('141.1', '141.1', '보호 접지 — 노출도전부 접지', [
@@ -82,10 +82,10 @@ const COMMON: CodeArticle[] = [
 
 const LOW_VOLTAGE: CodeArticle[] = [
   // 210 배선 일반
-  kec('210.1', '210.1', '전선의 식별 — 색상 구분', [
+  kec('121.2', '121.2', '전선의 식별', [
     { param: 'wireColorCode', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'L1=갈색, L2=흑색, L3=회색, N=청색, PE=녹황' },
   ]),
-  kec('210.2', '210.2', '전선의 접속 — 접속 방법', [
+  kec('123', '123', '전선의 접속', [
     { param: 'connectionMethod', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '압착/납땜/커넥터 접속. 테이핑만은 금지' },
   ]),
 
@@ -187,12 +187,12 @@ const LOW_VOLTAGE: CodeArticle[] = [
   kec('250.4', '250.4', '옥외 설비', [
     { param: 'outdoorInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '방수/방습 조치, IP44 이상' },
   ]),
-  kec('250.5', '250.5', '의료 장소 설비', [
+  kec('242.10', '242.10', '의료장소', [
     { param: 'medicalLocation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'Group 1/2 구분, IT 계통 적용 (Group 2)' },
   ], [{ articleId: 'IEC-710.1', relation: 'equivalent', note: 'IEC 의료시설' }]),
 
   // 260 전기차
-  kec('260.1', '260.1', '전기차 충전 설비', [
+  kec('241.17', '241.17', '전기자동차 전원설비', [
     { param: 'evChargingCircuit', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '전용 분기회로, RCD 30mA, Type A+DC 6mA' },
   ], [{ articleId: 'NEC-625.40', relation: 'equivalent', note: 'NEC EV 충전' }, { articleId: 'IEC-722.1', relation: 'equivalent', note: 'IEC EV 충전' }]),
 ];
@@ -229,10 +229,10 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('322.1', '322.1', '지중 전선로 — 매설 기준', [
     { param: 'undergroundCable', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '매설 깊이: 일반 0.6m, 차도 1.2m' },
   ], [{ articleId: 'NEC-300.5', relation: 'equivalent', note: 'NEC 매설 깊이' }]),
-  kec('330.1', '330.1', '보호 계전기 — 설치 기준', [
+  kec('351.4', '351.4', '특고압용 변압기의 보호장치', [
     { param: 'protectiveRelay', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'OCR/OCGR/UVR/OVR/DGR 설치 기준' },
   ]),
-  kec('340.1', '340.1', '전력용 콘덴서 — 역률 개선', [
+  kec('351.5', '351.5', '조상설비의 보호장치', [
     { param: 'powerCapacitor', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '역률 0.9 이상 유지, 방전 코일 설치' },
   ]),
   kec('341.1', '341.1', '전동기 — 분기회로 전선', [
@@ -257,13 +257,13 @@ const HIGH_VOLTAGE: CodeArticle[] = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const RAILWAY: CodeArticle[] = [
-  kec('410.1', '410.1', '전기철도 — 전차선로', [
+  kec('431', '431', '전차선로의 일반사항', [
     { param: 'catenarySystem', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '가공전차선 DC 1500V / AC 25kV 시설 기준' },
   ]),
-  kec('420.1', '420.1', '전기철도 — 변전설비', [
+  kec('411', '411', '전기방식의 일반사항', [
     { param: 'railwaySubstation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '정류기/변압기/보호장치 시설 기준' },
   ]),
-  kec('430.1', '430.1', '전기철도 — 귀선/접지', [
+  kec('431.5', '431.5', '귀선로', [
     { param: 'returnCircuit', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '레일 귀선, 누설전류 방지, 매설 금속체 보호' },
   ]),
 ];
@@ -291,19 +291,19 @@ const DISTRIBUTED: CodeArticle[] = [
   kec('502.1', '502.1', '풍력 발전 — 시설 기준', [
     { param: 'windTurbine', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '풍력 발전기 접지/보호/계통연계' },
   ]),
-  kec('510.1', '510.1', '연료전지 — 시설 기준', [
+  kec('542', '542', '연료전지설비의 시설', [
     { param: 'fuelCell', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '연료전지 발전설비 안전/보호/접지' },
   ]),
-  kec('520.1', '520.1', 'ESS — 에너지저장장치 일반', [
+  kec('511.2', '511.2', '전기저장장치의 시설', [
     { param: 'essInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'ESS 축전지실/환기/소방/BMS/PCS' },
   ]),
-  kec('520.2', '520.2', 'ESS — 축전지 시설', [
+  kec('512.1', '512.1', '리튬계·나트륨계 이차전지의 시설', [
     { param: 'batteryRoom', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '축전지실: 환기/방폭/온도관리/화재감시' },
   ], [{ articleId: 'NEC-480.9', relation: 'equivalent', note: 'NEC 배터리실' }]),
-  kec('520.3', '520.3', 'ESS — PCS/인버터', [
+  kec('512.1.4', '512.1.4', '제어, 감시 및 보호장치 등', [
     { param: 'essPCS', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'PCS 효율/보호/계통연계/단독운전방지' },
   ]),
-  kec('530.1', '530.1', '전기차 충전인프라', [
+  kec('241.17.3', '241.17.3', '전기자동차의 충전장치 시설', [
     { param: 'evInfrastructure', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '급속/완속 충전기 시설 기준' },
   ]),
 ];

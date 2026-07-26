@@ -60,7 +60,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
     { param: 'wiringMethod', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속관/합성수지관/금속가요관/케이블 배선' },
   ])],
   ['JIS-521.2', jis('521.2', '521.2', '전선관 충전율 — ≤32%', [
-    { param: 'conduitFillPercent', operator: '<=', value: 32, unit: '%', result: 'PASS', note: '일본 기준 충전율 ≤32% (3선 이상). 참고: KEC 40%, NEC 40%, IEC 40% — 일본이 가장 엄격' },
+    { param: 'conduitFillPercent', operator: '<=', value: 32, unit: '%', result: 'PASS', note: '일본 기준 충전율 ≤32% (3선 이상). 참고: NEC Ch.9 Table 1 은 3선 이상 40%. 한국은 KEC 가 아니라 내선규정 2225-5 소관으로 32%(굵기 상이)/48%(동일 굵기)라 일본과 같은 수준이다 — "일본이 가장 엄격"은 사실이 아니었다.' },
   // "일본 32% vs 한국 40%" 로 적혀 있었으나 32% 는 한국 내선규정 2225-5 값이기도
   // 하다. KEC 는 전선관 충전율을 규정하지 않고, 232.31 은 금속덕트(20%)다.
   ], [{ articleId: 'KEC-232.31', relation: 'reference', note: 'KEC 232.31 은 금속덕트 20%. 한국 전선관 충전율은 내선규정 2225-5 의 32%(굵기 상이)/48%(동일 굵기)' }])],
@@ -78,7 +78,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 전기차
   ['JIS-722.1', jis('722.1', '722.1', '전기차 충전 — CHAdeMO/Type 1', [
     { param: 'evCharging', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '일본: CHAdeMO 급속충전 + Type 1 완속충전' },
-  ], [{ articleId: 'KEC-260.1', relation: 'equivalent', note: 'KEC EV 충전' }])],
+  ], [{ articleId: 'KEC-241.17', relation: 'equivalent', note: 'KEC 241.17 전기자동차 전원설비' }])],
 
   // 전압/주파수
   ['JIS-VOLTAGE', jis('VOLTAGE', '100/200V', '일본 표준 전압 — 100V/200V, 50/60Hz', [
@@ -95,7 +95,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 절연저항
   ['JIS-612.1', jis('612.1', '612.1', '절연저항 — 최소 기준', [
     { param: 'insulationResistance_MOhm', operator: '>=', value: 0.5, unit: 'MΩ', result: 'PASS', note: '300V 이하: 0.3MΩ, 300V 초과: 0.4MΩ (대지전압), 사용전압 600V 이하: 0.5MΩ (JIS C 1302)' },
-  ], [{ articleId: 'KEC-612.1', relation: 'equivalent', note: 'KEC 절연저항 기준' }])],
+  ], [{ articleId: 'KEC-132', relation: 'equivalent', note: 'KEC 132 전로의 절연저항 및 절연내력' }])],
 
   // 내진 설계
   ['JIS-SEISMIC', jis('SEISMIC', 'C 0920', '내진 설계 — 전기설비 내진', [

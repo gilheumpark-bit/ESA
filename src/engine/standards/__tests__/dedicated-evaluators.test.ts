@@ -163,7 +163,9 @@ describe('공식형 조항 안전 HOLD 잠금 (검증 전까지 PASS/FAIL 금지
     ['US', 'NEC-240.4'],   // ocpdRating ≤ 전선 허용전류
     ['US', 'NEC-430.6'],   // motorFLC = NEC 표 값
     ['INT', 'IEC-543.1'],  // protectiveConductorSize 공식
-    ['KR', 'KEC-340.1'],
+    // 전에 'KEC-340.1' 이었다. KEC 에 340 번대는 없고(341/342/343), 역률 개선용
+    // 콘덴서는 351.5 조상설비의 보호장치다 — 현행 전문 확인 2026-07-26.
+    ['KR', 'KEC-351.5'],
   ];
 
   test.each(FORMULA_ARTICLES)('%s %s 는 임의 입력에도 PASS/FAIL 하지 않는다 (HOLD)', (country, id) => {

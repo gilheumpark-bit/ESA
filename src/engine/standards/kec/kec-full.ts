@@ -243,7 +243,7 @@ export const KEC_240_3 = buildArticle('KEC-240.3', '240.3', '지락 보호 — �
   cond('rcdTripTime', '<=', 0.03, 's', '누전차단기 동작시간 0.03초 이하'),
 ]);
 
-export const KEC_240_4 = buildArticle('KEC-240.4', '240.4', '과전압 보호 — SPD 설치', [
+export const KEC_240_4 = buildArticle('KEC-153.1.4', '153.1.4', '서지보호장치 시설', [
   cond('spdRating', '>=', 0, 'kA', 'SPD(서지보호장치) 설치'),
 ]);
 
@@ -303,11 +303,11 @@ export const KEC_410_2 = buildArticle('KEC-410.2', '410.2', '접지선 — 기�
   cond('crossSection', '>=', 6, 'mm²', '접지선 기계적 보호 미적용 시 6mm² 이상'),
 ]);
 
-export const KEC_410_3 = buildArticle('KEC-410.3', '410.3', '등전위 본딩 — 도체 단면적', [
+export const KEC_410_3 = buildArticle('KEC-143.3', '143.3', '등전위본딩 도체', [
   cond('crossSection', '>=', 6, 'mm²', '등전위 본딩 도체 6mm² 이상'),
 ]);
 
-export const KEC_410_4 = buildArticle('KEC-410.4', '410.4', '접지저항 — 공통접지', [
+export const KEC_410_4 = buildArticle('KEC-142.2', '142.2', '접지극의 시설 및 접지저항', [
   cond('resistance', '<=', 10, 'ohm', '공통접지 접지저항 10 ohm 이하'),
 ]);
 
