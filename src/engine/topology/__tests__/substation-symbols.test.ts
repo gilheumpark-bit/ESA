@@ -137,7 +137,9 @@ describe('어휘 확장 — 오탐 반증', () => {
 
   it('MCC 결선도의 기본 구성을 안다 — 이걸 모르면 그 도면은 못 읽는다', () => {
     expect(detectComponentType('MC')).toBe('switch');    // 전자접촉기
-    expect(detectComponentType('THR')).toBe('relay');    // 열동형과전류계전기
+    // THR — ANSI 49. 교재 기구번호표는 "회전기 온도계전기" 로 싣는다.
+    // 앞 커밋에서 "열동형과전류계전기" 로 적었는데 출처와 다르다(2026-07-27 정정).
+    expect(detectComponentType('THR')).toBe('relay');
     expect(detectComponentType('INV')).toBe('motor');    // 인버터
   });
 
@@ -198,5 +200,63 @@ describe('출처 확인 약호', () => {
     expect(detectComponentType('L.S')).toBe('switch');
     expect(detectComponentType('IS')).toBe('load');
     expect(detectComponentType('LS')).toBe('load');
+  });
+});
+
+/**
+ * ANSI 자동제어기구 번호 — 출처 전표 대조 (2026-07-27).
+ *
+ * 앞 커밋에서는 내 추측으로 51G·51N·64·87 만 넣었다. 전기기사 실기 교재의
+ * 「수변전설비 자동제어기구 번호」 표를 확인하니 범위가 더 넓었고, 무엇보다
+ * **52 는 계전기가 아니라 차단기**였다. 추측으로 채운 목록은 이렇게 틀린다.
+ *
+ *   27 UVR 부족전압 · 37 UCR 부족전류(37A·37D) · 49 THR 회전기 온도
+ *   50 GR 단락/지락선택(50G) · 51 OCR 과전류(51G·51N·51V)
+ *   52 CB 교류 차단기 · 59 OVR 과전압 · 64 OVGR 지락과전압
+ *   67 DGR 지락방향 · 87 DCR 전류차동(87-B·87-G·87-T)
+ */
+describe('ANSI 기구번호 전표', () => {
+  it.each([
+    ['27R', 'relay'], ['37A', 'relay'], ['37D', 'relay'],
+    ['50G', 'relay'], ['51G', 'relay'], ['51N', 'relay'], ['51V', 'relay'],
+    ['64', 'relay'], ['67G', 'relay'],
+    ['87', 'relay'], ['87-B', 'relay'], ['87-T', 'relay'],
+    ['UCR', 'relay'], ['OVGR', 'relay'], ['DCR', 'relay'],
+  ] as const)('%s → %s', (t, exp) => {
+    expect(detectComponentType(t)).toBe(exp);
+  });
+
+  it('52 는 계전기가 아니라 차단기다 — 번호대만 보고 relay 로 넣으면 틀린다', () => {
+    expect(detectComponentType('52')).toBe('breaker');
+    expect(detectComponentType('52A')).toBe('breaker');
+  });
+
+  it('맨숫자는 여전히 받지 않는다 — 치수·수량과 구분할 수 없다', () => {
+    for (const t of ['51', '27', '59', '37', '50']) {
+      expect(detectComponentType(t)).toBe('load');
+    }
+  });
+});
+
+/**
+ * 교재 약호표에서 추가로 확인한 기기 (2026-07-27).
+ *
+ * 교재는 "COS 와 PF 의 심벌은 같은 것을 사용한다" 고 명시한다 — 그림으로도
+ * 구분이 안 된다는 뜻이라, PF 를 텍스트로 단정하지 않은 판단의 근거가 된다.
+ * 게다가 같은 교재의 계측기 표에 역률계(Power factor meter)가 실려 있어
+ * `PF` 는 실제로 두 뜻을 다 갖는다.
+ */
+describe('교재 약호표 추가분', () => {
+  it.each([
+    ['Sh.R', 'capacitor'],   // 분로리액터 — 페란티 현상 방지
+    ['T.C', 'meter'],        // 트립코일
+    ['TC', 'meter'],
+    ['Hz', 'meter'],         // 주파수계
+  ] as const)('%s → %s', (t, exp) => {
+    expect(detectComponentType(t)).toBe(exp);
+  });
+
+  it('DC 는 넣지 않았다 — 방전코일이자 직류다', () => {
+    expect(detectComponentType('DC')).toBe('load');
   });
 });

@@ -162,7 +162,9 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   // `PF`(전력퓨즈)는 넣지 않았다. 계기반의 `PF`(역률계)와 같은 글자다 —
   // 실도면(세종 p1)의 계기반이 `V A W PF F` 였다. 문맥 없이 어느 쪽으로 넣어도
   // 다른 쪽이 틀린다.
-  { pattern: new RegExp(`\\b(CB|OCB|ACB|VCB|MCCB|MCB|ELB|ELCB|GCB|LF|BREAKER)\\b|${ko('누전차단기', '차단기', '한류퓨즈')}`, 'i'), type: 'breaker' },
+  // ANSI 52 = 교류 차단기. 계전기 번호대에 섞여 있지만 차단기다(출처 확인
+  // 2026-07-27 교재 기구번호표). 여기 없으면 `52` 가 계전기로 새거나 load 로 떨어진다.
+  { pattern: new RegExp(`\\b(CB|OCB|ACB|VCB|MCCB|MCB|ELB|ELCB|GCB|LF|52[A-Z]?|BREAKER)\\b|${ko('누전차단기', '차단기', '한류퓨즈')}`, 'i'), type: 'breaker' },
   { pattern: new RegExp(`\\b(M|MOTOR)\\b|${ko('전동기', '모터')}`, 'i'), type: 'motor' },
   // 단독 'G'는 제외 — 국내 분전반 도면에서 단독 G는 접지 표기가 관례라,
   // 실도면 18페이지 전 장에 발전기 2대가 검출되는 오탐을 만들었다(라이브
@@ -198,7 +200,7 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   // `AS`(전류계전환개폐기)·`VS`(전압계전환개폐기)는 영문 as/vs 와 충돌해
   // 넣지 않았다. 점 표기(`A.S`)만 받는다.
   // WH(적산전력량계)·VAR(무효전력계)·DM(최대수요전력계) 추가(출처 확인 2026-07-27).
-  { pattern: new RegExp(`\\b(C\\.?T|P\\.?T|V\\.?T|Z\\.?C\\.?T|M\\.?O\\.?F|G\\.?P\\.?T|PTT|CTT|A\\.S|V\\.S|WH|VAR|DM|METER|DWHM|WHM)\\b|${ko('계기', '전력량계', '무효전력계', '최대수요전력계', '변성기', '영상변류기', '변류기')}`, 'i'), type: 'meter' },
+  { pattern: new RegExp(`\\b(C\\.?T|P\\.?T|V\\.?T|Z\\.?C\\.?T|M\\.?O\\.?F|G\\.?P\\.?T|PTT|CTT|A\\.S|V\\.S|WH|VAR|DM|Hz|T\\.?C|METER|DWHM|WHM)\\b|${ko('계기', '전력량계', '무효전력계', '최대수요전력계', '주파수계', '역률계', '트립코일', '변성기', '영상변류기', '변류기')}`, 'i'), type: 'meter' },
   { pattern: /\b(UPS)\b/i, type: 'ups' },
   // 지락·부족전압 계전기 추가. OCGR·SGR·DGR 은 수전설비 보호의 기본인데 빠져 있었다.
   // GR(지락계전기) 추가. ANSI 기기번호도 함께 받는다 — 국내 도면은 계전기를
@@ -208,9 +210,24 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   // 다만 **맨숫자는 받지 않는다.** 도면의 `51` 은 계전기일 수도 치수일 수도
   // 수량일 수도 있다. 문자 접미가 붙어 모호하지 않은 것(51G·51N·67G·64·87)과
   // `OCR/51` 처럼 약호에 붙은 형태만 받는다.
-  { pattern: new RegExp(`\\b(OCR|OVR|UVR|OCGR|SGR|DGR|GR|THR|RELAY)\\b|\\b(?:5[01]|27|59|67)[GNR]\\b|\\b(?:64|87)\\b|${ko('계전기', '지락계전기')}`, 'i'), type: 'relay' },
+  // ANSI 기구번호 — 출처 확인 2026-07-27 (전기기사 실기 교재 수변전설비
+  // 「자동제어기구 번호」 표). 앞 커밋에서는 내 추측으로 51G/51N/64/87 만 넣었는데
+  // 실제 표를 보니 범위가 더 넓고 **52 는 계전기가 아니라 차단기**였다.
+  //
+  //   27 UVR 부족전압   37 UCR 부족전류(37A·37D)   49 THR 회전기 온도
+  //   50 GR 단락/지락선택(50G)   51 OCR 과전류(51G·51N·51V)
+  //   52 CB 교류 차단기 ← breaker 로 간다   59 OVR 과전압
+  //   64 OVGR 지락과전압   67 DGR 지락방향   87 DCR 전류차동(87-B·87-G·87-T)
+  //
+  // 맨숫자(27·51·59)는 여전히 받지 않는다 — 도면의 `51` 은 치수일 수도 수량일
+  // 수도 있다. 문자 접미가 붙거나 하이픈 첨자가 붙은 것만 받는다.
+  { pattern: new RegExp(`\\b(OCR|OVR|UVR|UCR|OCGR|OVGR|SGR|DGR|DCR|GR|THR|RELAY)\\b|\\b(?:37|5[01]|27|59|67)[A-Z]\\b|\\b(?:64|87)(?:-[A-Z])?\\b|${ko('계전기', '지락계전기', '차동계전기')}`, 'i'), type: 'relay' },
   // 진상콘덴서·직렬리액터는 짝으로 다닌다. 어휘에 reactor 타입이 없어 capacitor 로 둔다.
-  { pattern: new RegExp(`\\b(S\\.?C|S\\.?R)\\b|${ko('진상콘덴서', '직렬리액터')}`, 'i'), type: 'capacitor' },
+  // Sh.R(분로리액터) 추가 — 페란티 현상 방지용. 어휘에 reactor 타입이 없어
+  // 직렬리액터와 함께 capacitor 로 둔다(콘덴서 부속설비라 실무상 짝으로 다닌다).
+  //
+  // 방전코일 `DC` 는 넣지 않았다 — 직류(Direct Current)와 같은 글자다.
+  { pattern: new RegExp(`\\b(S\\.?C|S\\.?R|Sh\\.?R)\\b|${ko('진상콘덴서', '직렬리액터', '분로리액터', '방전코일')}`, 'i'), type: 'capacitor' },
   { pattern: new RegExp(`\\b(INV|INVERTER)\\b|${ko('인버터')}`, 'i'), type: 'motor' },
   { pattern: new RegExp(`\\b(C\\.?H)\\b|${ko('케이블헤드', '케이블')}`, 'i'), type: 'cable' },
 ];
