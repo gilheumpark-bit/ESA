@@ -247,3 +247,23 @@ describe('구해달라는 값을 입력으로 되묻지 않는다', () => {
     expect(intent.canAutoExecute).toBe(true);
   });
 });
+
+describe('화면에 계산기 이름을 영문 ID 로 노출하지 않는다', () => {
+  /**
+   * 실측(2026-07-26): 계산 기록(/history)이 자체 이름표를 손으로 들고 있었는데
+   * 10종밖에 없어서 나머지 47종이 "illuminance" 처럼 영문 ID 그대로 찍혔다.
+   * 이름의 정본은 CALCULATOR_NAMES 하나뿐이어야 한다.
+   */
+  it('정본 이름표가 57종 전부를 한국어로 덮는다', () => {
+    const missing = Object.keys(CALCULATOR_PARAMS).filter((id) => {
+      const name = CALCULATOR_NAMES[id]?.name;
+      return !name || !/[가-힣]/.test(name);
+    });
+    expect(missing).toEqual([]);
+  });
+
+  it('/history 는 자체 이름표가 아니라 정본에서 이름을 읽는다', () => {
+    const src = readFileSync('src/app/(with-nav)/history/page.tsx', 'utf8');
+    expect(src).toContain("CALCULATOR_NAMES[receipt.calcId]?.name");
+  });
+});

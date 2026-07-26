@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import type { Receipt } from '@/engine/receipt/types';
 import { EmptyHistory } from '@/components/EmptyState';
+import { CALCULATOR_NAMES } from '@/lib/calculator-params';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
@@ -37,7 +38,14 @@ interface HistoryEntry {
   judgment: 'pass' | 'fail' | 'none';
 }
 
-const CALC_DISPLAY_NAMES: Record<string, { name: string; category: string }> = {
+/**
+ * 카테고리 필터용 분류. 이름은 여기서 읽지 않는다 — `CALCULATOR_NAMES` 가 정본이다.
+ *
+ * 이 표가 이름까지 들고 있었는데 10종밖에 없어서, 나머지 47종은 계산 기록에
+ * 영문 ID 그대로 찍혔다(실측 2026-07-26: "illuminance", "ups-capacity" …).
+ * 손으로 유지하는 표는 계산기가 늘 때마다 이렇게 벌어진다.
+ */
+const CALC_CATEGORIES: Record<string, { name: string; category: string }> = {
   'single-phase-power': { name: '단상 전력', category: 'power' },
   'three-phase-power': { name: '3상 전력', category: 'power' },
   'voltage-drop': { name: '전압 강하', category: 'voltage-drop' },
@@ -69,14 +77,14 @@ const INDEX_KEY = 'esa-receipt-index';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function receiptToEntry(receipt: Receipt): HistoryEntry {
-  const meta = CALC_DISPLAY_NAMES[receipt.calcId];
+  const meta = CALC_CATEGORIES[receipt.calcId];
   const firstInputKey = Object.keys(receipt.inputs)[0] ?? '';
   const firstInputVal = receipt.inputs[firstInputKey];
 
   return {
     id: receipt.id,
     calcId: receipt.calcId,
-    calcName: meta?.name ?? receipt.calcId,
+    calcName: CALCULATOR_NAMES[receipt.calcId]?.name ?? meta?.name ?? receipt.calcId,
     category: meta?.category ?? 'other',
     date: receipt.calculatedAt,
     keyInput: firstInputVal != null ? `${firstInputKey}: ${String(firstInputVal)}` : '-',
