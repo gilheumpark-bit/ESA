@@ -306,10 +306,25 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   const scopedParams = calculatorId === namedCalculatorId
     ? namedScopedParams
     : extractScopedParams(query, paramDefs);
-  const mappedParams = {
-    ...mapParamNames(intentResult.extractedParams, calculatorId),
-    ...scopedParams,
-  };
+  // 전역 파서는 계산기를 모른 채 12종 패턴으로 읽는다. 그 결과에는 이 계산기에
+  // 없는 파라미터가 섞여 들어온다 — 그리고 그게 "값을 읽었다"로 세어졌다.
+  //
+  // 실측(2026-07-26): "조도 계산 케이블 길이 10m" → mappedParams {length:10}.
+  // illuminance 에 length 는 없다. 그런데 unreadNumbers 는 10 을 읽은 것으로
+  // 치고 비었고, readSomething 은 true 가 됐다 → canAutoExecute:true →
+  // area=50·UF=0.5·MF=0.7 전부 기본값으로 만든 결과가 "검증된 영수증" 이 됐다.
+  // "가로 10m 세로 8m" 질문에서도 10 만 미확인 목록에서 빠져, 읽지도 않은 값을
+  // 읽은 것처럼 보고했다.
+  //
+  // 이 계산기가 실제로 가진 파라미터만 남긴다. 남지 못한 수치는 그대로
+  // unreadNumbers 로 드러나 자동 실행을 막는다.
+  const paramNames = new Set(paramDefs.map((p) => p.name));
+  const mappedParams = Object.fromEntries(
+    Object.entries({
+      ...mapParamNames(intentResult.extractedParams, calculatorId),
+      ...scopedParams,
+    }).filter(([name]) => paramNames.has(name)),
+  );
 
   // 6. 게이트 — parseQuery 의 의도 판정이 정본이되, 그 분류기가 모르는 계산기가 있다.
   //

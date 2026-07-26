@@ -29,10 +29,34 @@ describe('단위 변환 카드 도달 경로', () => {
   });
 
   it('빈 결과 분기가 변환 질의를 EmptyState 로 덮지 않는다', () => {
+    expect(source).toContain('const hasQueryAnswer');
+    expect(source.match(/const hasQueryAnswer[\s\S]{0,200}/)?.[0]).toContain('UNIT_CONVERT_REGEX.test');
+  });
+});
+
+/**
+ * 같은 부류의 형제 결함. 인라인 계산기도 질의에서 바로 답이 나오는데
+ * "문서 0건" 만 보고 EmptyState 로 덮였다 — 실측 2026-07-26:
+ * "조도 계산 사무실 가로 10m 세로 8m 높이 2.7m" 는 illuminance 를 확신도
+ * 0.95 로 찾아놓고 화면엔 검색 팁만 나왔다(서버 featuredCalculator 는 X).
+ */
+describe('인라인 계산기 도달 경로', () => {
+  it('EmptyState 조건이 calcIntent 를 고려한다', () => {
+    const cond = source.match(/const hasQueryAnswer[\s\S]{0,300}?;/)?.[0] ?? '';
+    expect(cond).toContain('calcIntent');
+    expect(cond).toContain('calculatorId');
+  });
+
+  it('EmptyState 는 nothingToShow 하나로만 갈린다 — 조건이 흩어지면 또 어긋난다', () => {
+    expect(source.match(/<EmptyState query=\{query\} \/>/g)).toHaveLength(1);
     const empty = source.indexOf('<EmptyState query={query} />');
-    expect(empty).toBeGreaterThan(-1);
-    // EmptyState 직전에 변환 질의 예외가 있어야 한다.
-    expect(source.slice(Math.max(0, empty - 400), empty)).toContain('UNIT_CONVERT_REGEX.test');
+    expect(source.slice(Math.max(0, empty - 120), empty)).toContain('nothingToShow');
+  });
+
+  it('nothingToShow 가 질의 기반 답을 배제한다', () => {
+    const decl = source.match(/const nothingToShow[\s\S]{0,300}?;/)?.[0] ?? '';
+    expect(decl).toContain('!hasQueryAnswer');
+    expect(decl).toContain('documents.length === 0');
   });
 });
 

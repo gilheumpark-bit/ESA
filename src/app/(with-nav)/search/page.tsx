@@ -512,7 +512,19 @@ function SearchPageInner() {
 
   const calcIntent = query ? analyzeCalcIntent(query) : null;
 
+  /**
+   * 질의만으로 답이 나오는 표면 — 문서 검색 결과와 무관하다.
+   *
+   * 단위 변환 카드와 인라인 계산기는 질의를 직접 읽어 답을 만든다. 그런데
+   * "문서 0건"만 보고 EmptyState 로 덮으면 답을 만들어 놓고 "검색 결과 없음"
+   * 을 띄우게 된다(실측 2026-07-26: "조도 계산 사무실 가로 10m 세로 8m 높이
+   * 2.7m" → illuminance 를 확신도 0.95 로 찾아놓고 화면은 검색 팁만).
+   */
+  const hasQueryAnswer = UNIT_CONVERT_REGEX.test(query.trim())
+    || Boolean(calcIntent?.hasCalcIntent && calcIntent.calculatorId);
+
   const [result, setResult] = useState<SearchResult | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(answerRequested);
@@ -586,6 +598,13 @@ function SearchPageInner() {
     };
   }, [query]);
 
+  /** 정말 보여줄 게 하나도 없을 때만 EmptyState 다. */
+  const nothingToShow = result !== null
+    && result.documents.length === 0
+    && !result.featuredCalculator
+    && !result.knowledgePanel
+    && !hasQueryAnswer;
+
   return (
     <div className="min-h-screen bg-[var(--bg-secondary)]">
       {/* Top bar */}
@@ -633,10 +652,8 @@ function SearchPageInner() {
           <div className="py-16 text-center text-[var(--text-tertiary)]">
             검색어를 입력하세요
           </div>
-        ) : result && result.documents.length === 0 && !result.featuredCalculator && !result.knowledgePanel ? (
-          // 변환 질의는 문서가 안 잡히는 게 정상이다. 위에 답을 띄워 놓고
-          // 아래에 "검색 결과 없음" 을 붙이면 그 답을 부정하는 것처럼 읽힌다.
-          UNIT_CONVERT_REGEX.test(query.trim()) ? null : <EmptyState query={query} />
+        ) : nothingToShow ? (
+          <EmptyState query={query} />
         ) : result ? (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             {/* Main column */}

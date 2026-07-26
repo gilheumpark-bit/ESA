@@ -19,6 +19,7 @@
 import { analyzeCalcIntent, coerceCalculatorInput } from '../calc-intent-bridge';
 import { resolveChatCalculationEvidence } from '../chat-calculation-evidence';
 import { CALCULATOR_REGISTRY } from '@/engine/calculators';
+import { CALCULATOR_PARAMS } from '../calculator-params';
 
 /** 각 질문은 해당 계산기의 필수 입력을 모두 담도록 썼다. */
 const ROUTES: Array<{ id: string; query: string }> = [
@@ -155,5 +156,53 @@ describe('퍼센트는 무엇의 퍼센트인지로 읽는다', () => {
       '케이블 굵기 선정: 3상 380V 부하 100A 긍장 50m 허용 전압강하 3% 구리 도체',
     );
     expect(evidence?.input.dropLimitPercent).toBe(3);
+  });
+});
+
+/**
+ * 추출은 그 계산기가 가진 파라미터 안에서만 일어난다.
+ *
+ * 전역 의도 파서는 계산기를 모른 채 12종 패턴으로 읽는다. 그 결과를 그대로
+ * 넘기면 이 계산기에 없는 파라미터가 섞여 들어오고, 그게 "값을 읽었다"로
+ * 세어진다 — 실측(2026-07-26): "조도 계산 케이블 길이 10m" 이
+ * {length:10} 을 얻어 unreadNumbers 는 비고 readSomething 은 true 가 됐다.
+ * illuminance 에 length 는 없으므로 그 영수증은 area=50·UF=0.5·MF=0.7,
+ * 즉 **전부 기본값**으로 계산된 것이 "검증된 계산기 영수증" 으로 나갔다.
+ *
+ * 1745개 스위트가 전부 green 인 채로 통과했다. 사례가 아니라 불변식을 잠근다.
+ */
+describe('추출 범위', () => {
+  const PROBES = [
+    '조도 계산 케이블 길이 10m',
+    '조도 계산 전압 380V',
+    '조도 계산 사무실 가로 10m 세로 8m 높이 2.7m',
+    'UPS 용량 계산 케이블 100m',
+    '전압강하 계산 케이블 100m 전류 60A 전압 380V 단면적 35mm2',
+    '조도 계산 면적 80m2 목표조도 500lx',
+    '접지저항 계산 봉 길이 2.4m',
+    '단락전류 계산: 변압기 1000kVA 380V %Z 5%',
+    ...ROUTES.map((r) => r.query),
+  ];
+
+  it.each(PROBES)('%s — 그 계산기에 없는 파라미터는 남지 않는다', (query) => {
+    const intent = analyzeCalcIntent(query);
+    if (!intent.calculatorId) return;
+    const own = new Set((CALCULATOR_PARAMS[intent.calculatorId] ?? []).map((p) => p.name));
+    const alien = Object.keys(intent.extractedParams).filter((k) => !own.has(k));
+    expect(alien).toEqual([]);
+  });
+
+  it('없는 파라미터 하나로 자동 실행이 열리지 않는다', () => {
+    const intent = analyzeCalcIntent('조도 계산 케이블 길이 10m');
+    expect(intent.calculatorId).toBe('illuminance');
+    expect(intent.canAutoExecute).toBe(false);
+    // 읽지 못한 수치는 숨기지 않고 그대로 드러낸다.
+    expect(intent.unreadNumbers).toContain(10);
+    expect(resolveChatCalculationEvidence('조도 계산 케이블 길이 10m')).toBeNull();
+  });
+
+  it('읽지 못한 수치를 미확인 목록에서 빠뜨리지 않는다', () => {
+    const intent = analyzeCalcIntent('조도 계산 사무실 가로 10m 세로 8m 높이 2.7m');
+    expect(intent.unreadNumbers).toEqual(expect.arrayContaining([10, 8, 2.7]));
   });
 });
