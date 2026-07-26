@@ -338,6 +338,28 @@ function acceptValue(param: ExtendedParamDef, raw: string, unitToken: string): n
   return value;
 }
 
+/**
+ * 도면·명판에서 읽은 표기("250A"·"22.9kV"·"500kVA")를 그 파라미터의 단위로 옮긴다.
+ *
+ * 판독값은 단위가 붙은 문자열이라 그대로 폼에 넘기면 Number("250A") = NaN 으로
+ * 버려진다 — 도면이 값을 읽어 화면에 보여주고도 계산기 폼은 비어 있던 이유다
+ * (실측 2026-07-26). 단위가 없으면 숫자만 읽고, 옮길 수 없는 단위면 undefined —
+ * 추측해서 넣지 않는다.
+ */
+export function parseMeasuredValue(
+  param: ExtendedParamDef,
+  raw: unknown,
+): number | undefined {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined;
+  if (typeof raw !== 'string') return undefined;
+
+  // 단위 표기에도 숫자가 들어간다(mm2·m2·kWh). 앞의 수치 그룹이 먼저 먹으므로
+  // 숫자를 허용해도 값과 섞이지 않는다. 도면은 ㎟·㎡·℃ 같은 합자도 쓴다.
+  const match = /^\s*(-?\d+(?:\.\d+)?)\s*([A-Za-z\u2100-\u214f\u3300-\u33ffΩ°µ%/²·0-9]*)\s*$/.exec(raw);
+  if (!match) return undefined;
+  return acceptValue(param, match[1], match[2] ?? '');
+}
+
 /** 단위 표기 흔들림 — 정의된 단위 하나에 대해 질문에서 나올 수 있는 표기들. */
 const UNIT_ALIASES: Record<string, string[]> = {
   '°C': ['°C', '℃', '도', 'C'],

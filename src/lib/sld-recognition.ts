@@ -9,6 +9,9 @@
  * PART 3: Calculation chain generation
  */
 
+import { CALCULATOR_PARAMS } from '@/lib/calculator-params';
+import { parseMeasuredValue } from '@/lib/calculator-lexicon';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -369,6 +372,32 @@ function stringProperties(value: unknown): Record<string, string> | undefined {
  * 추출 경로와 무관하다 — 벡터도 같은 것을 써야 한다. 두 벌로 나누면 한쪽만
  * 고쳐지는 일이 반복된다.
  */
+/**
+ * 도면에서 읽은 값을 그 계산기의 파라미터 이름·단위로 옮긴다.
+ *
+ * 판독값은 "250A"·"22.9kV" 처럼 단위가 붙은 문자열이라 그대로 넘기면 폼이
+ * Number("250A") = NaN 으로 버린다. 이름도 계산기가 쓰는 것과 달랐다 —
+ * 실측(2026-07-26): 제안·체인 12개 조합 중 cable-sizing 하나만 이름이 맞았고
+ * 나머지는 대부분/전부 무시됐다. 오류가 안 나서 "앱이 못 읽었나" 로만 보인다.
+ *
+ * 옮기지 못한 값은 넣지 않는다 — 빈 칸이 잘못 채워진 칸보다 낫다.
+ */
+function measured(
+  calculatorId: string,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const defs = CALCULATOR_PARAMS[calculatorId] ?? [];
+  const out: Record<string, unknown> = {};
+  for (const [name, raw] of Object.entries(values)) {
+    if (raw === undefined || raw === null || raw === '') continue;
+    const def = defs.find((d) => d.name === name);
+    if (!def) continue;
+    const value = parseMeasuredValue(def, raw);
+    if (value !== undefined) out[name] = value;
+  }
+  return out;
+}
+
 export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | 'connections'>): CalcSuggestion[] {
   const suggestions: CalcSuggestion[] = [];
   const { components, connections } = analysis;
@@ -378,18 +407,21 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
   for (const tx of transformers) {
     suggestions.push({
       calculatorId: 'short-circuit',
-      inputs: {
-        transformerRating: tx.rating,
-        primaryVoltage: tx.voltage,
-      },
+      inputs: measured('short-circuit', {
+        transformerCapacity: tx.rating,
+        systemVoltage: tx.voltage,
+      }),
       reason: `변압기 ${tx.label ?? tx.id} 단락전류 계산`,
       priority: 1,
     });
 
     suggestions.push({
       calculatorId: 'transformer-capacity',
-      inputs: { rating: tx.rating, voltage: tx.voltage },
-      reason: `변압기 ${tx.label ?? tx.id} 용량 검증`,
+      // 이 계산기는 **부하**로 필요한 용량을 구한다. 도면의 변압기 명판 용량은
+      // 그 입력이 아니라 비교 대상이라 실어 보내지 않는다 — 넣으면 사용자가
+      // 준 값처럼 보이면서 정작 폼은 못 읽는다.
+      inputs: {},
+      reason: `변압기 ${tx.label ?? tx.id} 용량 검증 (도면 명판 ${tx.rating ?? '?'})`,
       priority: 2,
     });
   }
@@ -402,24 +434,23 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
 
     suggestions.push({
       calculatorId: 'voltage-drop',
-      inputs: {
-        cableType: cable.cableType,
+      inputs: measured('voltage-drop', {
         length: cable.length,
-        conductorSize: cable.conductorSize,
+        cableSize: cable.conductorSize,
         voltage: fromComp?.voltage ?? toComp?.voltage,
         current: toComp?.current,
-      },
+      }),
       reason: `${fromComp?.label ?? cable.from} → ${toComp?.label ?? cable.to} 전압강하`,
       priority: 1,
     });
 
     suggestions.push({
       calculatorId: 'cable-sizing',
-      inputs: {
+      inputs: measured('cable-sizing', {
         current: toComp?.current,
         length: cable.length,
         voltage: fromComp?.voltage,
-      },
+      }),
       reason: `${fromComp?.label ?? cable.from} → ${toComp?.label ?? cable.to} 케이블 사이즈 선정`,
       priority: 2,
     });
@@ -430,10 +461,10 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
   for (const brk of breakers) {
     suggestions.push({
       calculatorId: 'breaker-sizing',
-      inputs: {
-        current: brk.current ?? brk.rating,
+      inputs: measured('breaker-sizing', {
+        loadCurrent: brk.current ?? brk.rating,
         voltage: brk.voltage,
-      },
+      }),
       reason: `차단기 ${brk.label ?? brk.id} 선정 검증`,
       priority: 2,
     });
@@ -444,10 +475,10 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
   for (const motor of motors) {
     suggestions.push({
       calculatorId: 'starting-current',
-      inputs: {
-        power: motor.rating,
+      inputs: measured('starting-current', {
+        ratedPower: motor.rating,
         voltage: motor.voltage,
-      },
+      }),
       reason: `모터 ${motor.label ?? motor.id} 기동전류 계산`,
       priority: 1,
     });
@@ -458,10 +489,10 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
   if (caps.length > 0) {
     suggestions.push({
       calculatorId: 'reactive-power',
-      inputs: {
-        capacitorRating: caps[0]?.rating,
-      },
-      reason: '역률보상 계산',
+      // 이 계산기의 입력은 유효전력·현재 역률·목표 역률이다. 도면의 콘덴서
+      // 용량은 결과와 비교할 값이지 입력이 아니다.
+      inputs: {},
+      reason: `역률보상 계산 (도면 콘덴서 ${caps[0]?.rating ?? '?'})`,
       priority: 3,
     });
   }
@@ -471,17 +502,35 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
   if (loads.length > 0) {
     suggestions.push({
       calculatorId: 'demand-diversity',
+      // 이 계산기는 개별 최대수요 목록(kW)을 받는다. 도면의 정격 표기는 단위가
+      // 제각각이라 그대로 목록으로 넘기지 않고, 읽어낸 kW 만 싣는다.
       inputs: {
-        totalLoads: loads.length,
-        loadRatings: loads.map(l => l.rating).filter(Boolean),
+        individualMaxDemands: loads
+          .map((l) => parseMeasuredValue(
+            { name: 'value', type: 'number', unit: 'kW', description: '최대수요' },
+            l.rating,
+          ))
+          .filter((v): v is number => v !== undefined)
+          .map((value) => ({ value })),
       },
       reason: `${loads.length}개 부하 수용률 계산`,
       priority: 2,
     });
   }
 
+  // 같은 계산기·같은 사유·같은 입력이면 한 줄이다. 같은 라벨의 기기가 두 번
+  // 읽히면 사용자에게는 똑같은 줄이 두 개 보이고 건수만 부풀었다(실측
+  // 2026-07-26: "확인이 필요한 계산 항목 (3건)" 중 2건이 완전히 같은 줄).
+  const seen = new Set<string>();
+  const unique = suggestions.filter((s) => {
+    const key = `${s.calculatorId}|${s.reason}|${JSON.stringify(s.inputs)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   // Sort by priority
-  return suggestions.sort((a, b) => a.priority - b.priority);
+  return unique.sort((a, b) => a.priority - b.priority);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
