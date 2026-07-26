@@ -147,9 +147,16 @@ const LOW_VOLTAGE: CodeArticle[] = [
   kec('232.4', '232.4', '특수 장소 허용전류', [
     { param: 'specialLocationFactor', operator: '<=', value: 1.0, unit: '', result: 'PASS', note: '위험장소/고온장소 추가 감소계수' },
   ]),
-  kec('232.31', '232.31', '전선관 선정 — 충전율', [
-    { param: 'conduitFillPercent', operator: '<=', value: 40, unit: '%', result: 'PASS', note: '3선 이상: ≤40% 충전율 (전선 단면적 합 / 관 내단면적)' },
-  ], [{ articleId: 'NEC-300.17', relation: 'equivalent', note: 'NEC 도관 충전율' }]),
+  // 원문 확인 2026-07-26: 232.31 은 전선관이 아니라 **금속덕트공사**이고 한도는
+  // 20% 다(표시장치·제어회로 배선만이면 50%). 여기 있던 "전선관 충전율 40%" 는
+  // 조항·출처·값이 전부 달랐다 — 40% 는 NEC Chapter 9 Table 1 값이고, 한국의
+  // 전선관 충전율은 KEC 가 아니라 내선규정 2225-5(32%/48%) 소관이다.
+  // 전선관 공사(232.11 합성수지관·232.12 금속관·232.13 가요전선관)에는 KEC 가
+  // 충전율을 규정하지 않는다.
+  kec('232.31', '232.31', '금속덕트공사 — 덕트 내 전선 단면적', [
+    { param: 'ductFillPercent', operator: '<=', value: 20, unit: '%', result: 'PASS', note: '덕트 내부 단면적의 20% 이하 (전선 절연피복 포함 단면적 합)' },
+    { param: 'ductFillPercentControlOnly', operator: '<=', value: 50, unit: '%', result: 'PASS', note: '전광표시장치·제어회로 배선만인 경우 50% 이하' },
+  ], [{ articleId: 'NEC-376.22', relation: 'reference', note: 'NEC 금속 wireway 충전율 20%' }]),
 
   // 234 조명
   kec('234.1', '234.1', '조명 설비 — 조도 기준', [

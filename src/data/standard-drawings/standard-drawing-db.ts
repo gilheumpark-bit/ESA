@@ -90,7 +90,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'bus', to: 'breaker_mccb', mandatory: true },
       { from: 'breaker_mccb', to: 'panel_dist', mandatory: false },
     ],
-    standards: ['KEC 212.3', 'KEC 232.3.9', 'KEC 232.31'],
+    standards: ['KEC 212.3', 'KEC 232.3.9', 'KEC 232.12'],
   },
 
   // === 전등 설비 (Lighting) ===

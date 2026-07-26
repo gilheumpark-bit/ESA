@@ -16,7 +16,12 @@
 
 import { SQRT3, RESISTIVITY_CU, RESISTIVITY_AL } from '@engine/constants/physical';
 import { createSource, createJudgment } from '@engine/sjc/types';
-import { activeDefaults } from '@/engine/calculators/country-defaults';
+import {
+  activeDefaults,
+  kecVoltageDropLimit,
+  type SupplyLevel,
+  type LoadKind,
+} from '@/engine/calculators/country-defaults';
 import { DEFAULT_REACTANCE_OHM_PER_KM } from '@engine/constants/calc-thresholds';
 import {
   DetailedCalcResult,
@@ -51,6 +56,14 @@ export interface VoltageDropInput {
   reactance?: number;
   /** Voltage drop limit in percent (default 3) */
   dropLimitPercent?: number;
+  /**
+   * 수전 전압 구분 — KEC 232.3.9 설비 유형 A(저압) / B(고압 이상).
+   * 주면 loadKind 와 묶어 KEC 표에서 한도를 뽑는다. 22.9kV·154kV 로 수전하는
+   * 설비를 저압 3% 로 재단하면 멀쩡한 설계가 불합격으로 나온다.
+   */
+  supplyLevel?: SupplyLevel;
+  /** 부하 종류 — KEC 232.3.9 는 조명과 기타를 다르게 본다. */
+  loadKind?: LoadKind;
 }
 
 // ── Calculator ──────────────────────────────────────────────────────────────
@@ -74,8 +87,19 @@ export function calculateVoltageDrop(input: VoltageDropInput): DetailedCalcResul
     powerFactor: pf,
     phase,
     reactance: X_input,
-    dropLimitPercent = activeDefaults().vdBranch,
+    supplyLevel,
+    loadKind,
   } = input;
+
+  // 한도 결정 순서: 사용자가 직접 준 값 → KEC 232.3.9 표(수전 구분을 준 경우)
+  // → 기존 국가 기본값. KEC 표는 KR 프로파일에만 있고, 없으면 undefined 를
+  // 돌려주므로 자동으로 기존 경로로 떨어진다.
+  const dropLimitPercent =
+    input.dropLimitPercent
+    ?? (supplyLevel
+      ? kecVoltageDropLimit({ supply: supplyLevel, load: loadKind ?? 'other', wiringLengthM: L })
+      : undefined)
+    ?? activeDefaults().vdBranch;
 
   const rho = conductor === 'Cu' ? RESISTIVITY_CU : RESISTIVITY_AL;
   const X = X_input ?? DEFAULT_REACTANCE_OHM_PER_KM;

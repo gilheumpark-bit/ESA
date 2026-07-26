@@ -36,6 +36,21 @@ export interface SafetyFactorProfile {
     feeder: number;
     combined: number;
     lighting?: number;
+    /**
+     * KEC 232.3.9 원 모델. 위 branch/feeder 는 NEC 식 간선·분기 구분이지만
+     * KEC 는 **수전 전압(저압/고압 이상) × 부하 종류(조명/기타)** 로 가른다.
+     * 두 축이 다르므로 겹쳐 쓰지 않고 나란히 둔다.
+     */
+    kec232_3_9?: {
+      /** 저압으로 수전하는 경우 */
+      lowVoltageSupply: { lighting: number; other: number };
+      /** 고압 이상으로 수전하는 경우 */
+      highVoltageSupply: { lighting: number; other: number };
+      /** 배선 100 m 초과분에 대한 m 당 가산 (%) */
+      lengthAdderPerMeter: number;
+      /** 그 가산의 상한 (%) */
+      lengthAdderCap: number;
+    };
   };
 
   /** 차단기 선정 배율 */
@@ -52,9 +67,19 @@ export interface SafetyFactorProfile {
 
   /** 전선관 충전율 (%) */
   conduitFill: {
+    /** NEC Chapter 9 Table 1 — 전선 본수 축 */
     single: number;
     two: number;
     threeOrMore: number;
+    /**
+     * 내선규정 2225-5 (한국) — 축이 다르다. 전선 본수가 아니라 굵기가 같은지·
+     * 인출이 쉬운지로 가른다. KEC 는 전선관 충전율을 규정하지 않으므로 한국
+     * 기준을 인용하려면 여기를 써야 한다.
+     */
+    naeseon?: {
+      mixedSize: number;
+      sameSizeEasyPull: number;
+    };
   };
 
   /** 접지 저항 한도 (Ω) */
@@ -104,16 +129,22 @@ const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
      * 고압 이상으로 수전하는 설비는 조명 6% · 기타 8%. 배선 길이가 100m 를
      * 넘으면 m 당 0.005% 를 더할 수 있으나 그 가산은 0.5% 를 넘지 못한다.
      *
-     * 아래 branch/feeder 는 KEC 가 쓰는 구분(조명/기타)이 아니라 간선·분기
-     * 구분이고, 기타 부하에 5% 가 아니라 3% 를 적용한다 — 규정보다 **엄격한**
-     * 쪽이라 그대로 두되, 완화 여부는 개발자 판단 사항으로 남긴다.
-     * 고압 이상 수전(6%/8%) 구분은 아직 없다.
+     * branch/feeder 는 KEC 의 구분이 아니라 NEC 식 간선·분기 축이다. 규정보다
+     * 엄격한 쪽(기타 부하에 5% 대신 3%)이라 기존 호출부 호환을 위해 남기되,
+     * KEC 원 모델은 아래 kec232_3_9 에 그대로 싣는다 — 축이 다른 두 기준을
+     * 한 필드에 뭉개면 어느 쪽도 맞지 않는다.
      */
     voltageDropLimits: {
       branch: 3.0,
       feeder: 3.0,
-      combined: 5.0,     // KEC 232.3.9 기타 부하 5% 와 일치
-      lighting: 3.0,     // KEC 232.3.9 조명 3% 와 일치
+      combined: 5.0,     // KEC 232.3.9 저압수전·기타 5% 와 일치
+      lighting: 3.0,     // KEC 232.3.9 저압수전·조명 3% 와 일치
+      kec232_3_9: {
+        lowVoltageSupply:  { lighting: 3, other: 5 },
+        highVoltageSupply: { lighting: 6, other: 8 },
+        lengthAdderPerMeter: 0.005,
+        lengthAdderCap: 0.5,
+      },
     },
     breakerFactors: {
       continuousLoad: 1.25,   // KEC 212.3
@@ -121,10 +152,27 @@ const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
       motorOverloadHigh: 1.15,
       motorOverloadLow: 1.25,
     },
+    /**
+     * 아래 53/31/40 은 **NEC Chapter 9 Table 1** 값이다. 전에 `KEC 232.12` 로
+     * 달려 있었으나 원문 확인 결과(2026-07-26) KEC 는 전선관 공사(232.11 합성수지관·
+     * 232.12 금속관·232.13 가요전선관)에 충전율을 규정하지 않는다. 232.31 은
+     * 전선관이 아니라 금속덕트공사(20%)다.
+     *
+     * 한국의 전선관 충전율은 내선규정 2225-5 소관이며 축이 다르다 — 전선 본수가
+     * 아니라 **굵기가 같은지·인출이 쉬운지**로 가른다(32% / 48%). 그 값을 아래
+     * naeseon 에 그대로 싣되, 기존 호출부가 쓰는 NEC 형 필드는 건드리지 않는다.
+     * 어느 쪽을 KR 기본으로 삼을지는 계산 결과가 바뀌는 문제라 별도 결정이다.
+     */
     conduitFill: {
-      single: 0.53,      // KEC 232.12
-      two: 0.31,
-      threeOrMore: 0.40,
+      single: 0.53,      // NEC Ch.9 Table 1 — 전선 1본
+      two: 0.31,         // NEC Ch.9 Table 1 — 2본
+      threeOrMore: 0.40, // NEC Ch.9 Table 1 — 3본 이상
+      naeseon: {
+        /** 내선규정 2225-5 — 굵기가 다른 절연전선을 같은 관에 넣는 경우 */
+        mixedSize: 0.32,
+        /** 내선규정 2225-5 — 같은 굵기·굴곡이 적어 인출이 쉬운 경우 */
+        sameSizeEasyPull: 0.48,
+      },
     },
     groundingResistance: {
       general: 100,       // KEC 142.2 제3종

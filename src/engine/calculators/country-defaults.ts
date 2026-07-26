@@ -90,3 +90,40 @@ export function getActiveCountry(): CountryCode {
 export function activeDefaults(): CalcDefaults {
   return getCalcDefaults(_activeCountry);
 }
+
+/** 수전 전압 구분 — KEC 232.3.9 의 설비 유형 A(저압) / B(고압 이상). */
+export type SupplyLevel = 'low' | 'high';
+/** 부하 종류 — KEC 232.3.9 가 조명과 기타를 다르게 본다. */
+export type LoadKind = 'lighting' | 'other';
+
+/**
+ * KEC 232.3.9 「수용가 설비에서의 전압강하」 한도를 돌려준다.
+ *
+ * 인입구에서 기기까지의 값이며 수전 전압과 부하 종류로 갈린다(원문 확인
+ * 2026-07-26). 배선이 100 m 를 넘으면 넘은 부분에 대해 m 당 0.005% 를 더할 수
+ * 있으나 그 가산은 0.5% 를 넘지 못한다.
+ *
+ *   저압으로 수전     조명 3% / 기타 5%
+ *   고압 이상으로 수전 조명 6% / 기타 8%
+ *
+ * 고압 이상 구분이 없으면 22.9kV·154kV 수전 설비를 저압 기준으로 재단해
+ * 멀쩡한 설계를 불합격으로 몬다 — 이 도구가 변전소에서 쓰이므로 실제 문제다.
+ *
+ * KR 이 아닌 국가 프로파일에는 이 표가 없다. 그때는 undefined 를 돌려주고
+ * 호출부가 기존 branch/feeder 기준을 쓰게 한다 — 없는 근거를 지어내지 않는다.
+ */
+export function kecVoltageDropLimit(
+  opts: { supply: SupplyLevel; load: LoadKind; wiringLengthM?: number },
+  country: CountryCode = _activeCountry,
+): number | undefined {
+  const table = getSafetyProfile(country).voltageDropLimits.kec232_3_9;
+  if (!table) return undefined;
+
+  const base = opts.supply === 'high'
+    ? table.highVoltageSupply[opts.load]
+    : table.lowVoltageSupply[opts.load];
+
+  const over = Math.max(0, (opts.wiringLengthM ?? 0) - 100);
+  const adder = Math.min(over * table.lengthAdderPerMeter, table.lengthAdderCap);
+  return base + adder;
+}

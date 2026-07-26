@@ -400,8 +400,11 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     for (const route of routes) {
       if (route.cableSpec) {
         standards.push({
+          // 232.31 은 금속덕트공사다(원문 확인 2026-07-26). 전선관 공사는
+          // 232.11 합성수지관·232.12 금속관·232.13 가요전선관이고, 충전율은
+          // KEC 가 아니라 내선규정 2225-5 소관이다.
           standard: 'KEC',
-          clause: '232.31',
+          clause: '232.12',
           title: '전선관 산정 보류',
           judgment: 'HOLD',
           note: `${route.from}→${route.to}: ${route.cableSpec} 표기는 추출했지만 제조사 외경·실제 본수·시공 조건이 없어 호칭을 산정하지 않음`,
@@ -443,7 +446,7 @@ export async function executeLayoutTeam(input: TeamInput): Promise<TeamResult> {
     // 통계 요약
     standards.push({
       standard: 'KEC',
-      clause: '232.31',
+      clause: '232.12',
       title: '배선 경로·전선관 검토',
       judgment: 'HOLD',
       note: routes.length === 0

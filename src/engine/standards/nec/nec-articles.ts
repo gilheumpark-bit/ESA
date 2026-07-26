@@ -196,7 +196,9 @@ const WIRING_METHODS: CodeArticle[] = [
 
   nec('300.17', '300.17', '도관 내 전선 수 제한', [
     { param: 'conduitFillPercent', operator: '<=', value: 40, unit: '%', result: 'PASS', note: '3선 이상: ≤40% 충전율' },
-  ], [{ articleId: 'KEC-232.31', relation: 'equivalent', note: 'KEC 충전율 40%' }, { articleId: 'JIS-521.2', relation: 'reference', note: 'JIS 충전율 32%' }]),
+  // 40% 는 이 NEC 표의 값이지 KEC 값이 아니다(원문 확인 2026-07-26). KEC 232.31 은
+  // 금속덕트 20% 이므로 equivalent 가 아니라 reference 로 낮춘다.
+  ], [{ articleId: 'KEC-232.31', relation: 'reference', note: 'KEC 232.31 은 금속덕트 20%. 한국 전선관은 내선규정 2225-5 (32%/48%)' }, { articleId: 'JIS-521.2', relation: 'reference', note: 'JIS 충전율 32%' }]),
 
   nec('408.36', '408.36', '분전반 과전류보호 최대 수', [
     { param: 'panelCircuitCount', operator: '<=', value: 42, unit: 'ea', result: 'PASS', note: '분전반 당 최대 42회로 (2023 기준)' },

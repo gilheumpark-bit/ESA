@@ -61,7 +61,9 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   ])],
   ['JIS-521.2', jis('521.2', '521.2', '전선관 충전율 — ≤32%', [
     { param: 'conduitFillPercent', operator: '<=', value: 32, unit: '%', result: 'PASS', note: '일본 기준 충전율 ≤32% (3선 이상). 참고: KEC 40%, NEC 40%, IEC 40% — 일본이 가장 엄격' },
-  ], [{ articleId: 'KEC-232.31', relation: 'reference', note: 'KEC 충전율 40%와 차이 (일본 32% vs 한국 40%)' }])],
+  // "일본 32% vs 한국 40%" 로 적혀 있었으나 32% 는 한국 내선규정 2225-5 값이기도
+  // 하다. KEC 는 전선관 충전율을 규정하지 않고, 232.31 은 금속덕트(20%)다.
+  ], [{ articleId: 'KEC-232.31', relation: 'reference', note: 'KEC 232.31 은 금속덕트 20%. 한국 전선관 충전율은 내선규정 2225-5 의 32%(굵기 상이)/48%(동일 굵기)' }])],
 
   // 특수 장소
   ['JIS-701.1', jis('701.1', '701.1', '욕실 — 구역 구분', [

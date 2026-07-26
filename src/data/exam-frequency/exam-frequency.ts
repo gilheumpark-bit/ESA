@@ -42,7 +42,10 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-234.1', articleTitle: '조도 계산', frequencyLast10: 3, importance: 'medium', commonCalcTypes: ['조도 산출', '광속법'], examSubject: '전기응용', studyTip: 'F = E×A / (U×M) 공식.' },
   { articleId: 'KEC-131.1', articleTitle: '감전 보호', frequencyLast10: 3, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '직접/간접 접촉 보호 방법 구분.' },
   { articleId: 'KEC-211.2', articleTitle: '금속관 배선', frequencyLast10: 3, importance: 'medium', examSubject: '전기공사', studyTip: '관 내경과 전선 수 관계. 실기 자주 출제.' },
-  { articleId: 'KEC-232.31', articleTitle: '전선관 충전율', frequencyLast10: 3, importance: 'medium', commonCalcTypes: ['충전율 계산'], examSubject: '전기공사', studyTip: '3선 이상 40% 이하.' },
+  // 원문 확인 2026-07-26: 232.31 은 금속덕트공사이고 한도는 20% 다. 전에 여기
+  // 적혀 있던 "전선관 충전율 / 3선 이상 40%" 는 NEC Chapter 9 Table 1 값이었다.
+  // 수험생이 이 줄을 외우면 시험에서 틀린다 — 시험 데이터라 더 위험하다.
+  { articleId: 'KEC-232.31', articleTitle: '금속덕트공사 — 덕트 내 전선 단면적', frequencyLast10: 3, importance: 'medium', commonCalcTypes: ['충전율 계산'], examSubject: '전기공사', studyTip: '덕트 내부 단면적의 20% 이하. 전광표시장치·제어회로 배선만이면 50%. 전선관 충전율(내선규정 32%/48%)과 혼동 주의.' },
   { articleId: 'KEC-520.1', articleTitle: 'ESS', frequencyLast10: 2, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '최근 출제 증가 추세. BMS/PCS 기본 개념.' },
 
   // === 저빈도 (low) — 간헐적 ===
