@@ -130,6 +130,34 @@ export interface SLDAnalysisOptions {
  */
 const PROMPT_TYPE_ENUM = SLD_COMPONENT_TYPES.join('|');
 
+/**
+ * 계기용 변성기(PT/CT/MOF/ZCT)를 전력 변압기로 낸 것을 되돌린다.
+ *
+ * 실측 2026-07-27: 저압 배전반 실도면의 `P.T x 3 (MOLD) 380V/190V` 가
+ * `transformer` 로 나왔다. 물리적으로 변압기가 맞으니 모델이 틀렸다고만 할 수
+ * 없다 — 다만 이 앱에서 `transformer` 는 **전력 변압기**를 뜻하고, 변압기 용량·
+ * 단락전류 계산의 입력이 된다. 그 도면에 전력 변압기는 0 인데 1 로 세어지면
+ * 하류 계산이 통째로 어긋난다.
+ *
+ * 사전(pdf-vector-parser)은 이미 `PT|CT → meter` 로 본다. 비전 경로만 달랐다.
+ * 프롬프트로도 지시하되 모델 변덕에 맡기지 않고 여기서 결정적으로 되돌린다.
+ *
+ * 조용히 고치지는 않는다 — 보정했다는 사실을 warnings 로 남긴다. 그래야 모델이
+ * 계속 틀리고 있다는 것이 보인다.
+ */
+const INSTRUMENT_TRANSFORMER = /\b(P\.?T|C\.?T|Z\.?C\.?T|M\.?O\.?F|VT)\b|계기용|변성기|영상변류기/i;
+
+function normalizeInstrumentTransformer(
+  type: SLDComponentType,
+  label: string,
+  hits: string[],
+): SLDComponentType {
+  if (type !== 'transformer' || !label) return type;
+  if (!INSTRUMENT_TRANSFORMER.test(label)) return type;
+  hits.push(label.slice(0, 60));
+  return 'meter';
+}
+
 const SLD_SYSTEM_PROMPT = `You are an expert electrical engineer analyzing Single Line Diagrams (SLD).
 Analyze the SLD image and extract:
 1. All components (transformers, breakers, cables, buses, generators, motors, capacitors, loads, etc.)
@@ -166,6 +194,7 @@ Return ONLY valid JSON with this structure:
   "rawDescription": "brief text description of the SLD"
 }
 - Use "arrester" for lightning/surge arresters (LA, SA, SPD, 피뢰기, 서지흡수기) — they are protective devices, not switches
+- "transformer" means POWER transformers only. Instrument transformers (PT, VT, CT, ZCT, MOF, 계기용 변성기) are "meter" — they feed measurement, not load
 - Position x/y must be numeric values from 0 to 100 relative to the current image
 - Include length only when a numeric value and unit are explicitly printed on the drawing
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
@@ -285,6 +314,8 @@ export function parseSLDResponse(text: string): SLDAnalysis {
 
     const ids = new Set<string>();
     const components: SLDComponent[] = [];
+    /** 계기용 변성기를 전력 변압기로 낸 건수 — 보정 사실을 경고로 남긴다. */
+    const instrumentTransformerHits: string[] = [];
     for (const row of data.components.slice(0, 2_000)) {
       if (!row || typeof row !== 'object') continue;
       const component = row as Record<string, unknown>;
@@ -299,9 +330,11 @@ export function parseSLDResponse(text: string): SLDAnalysis {
           x == null || y == null || x < 0 || x > 100 || y < 0 || y > 100) continue;
       ids.add(id);
       const properties = stringProperties(component.properties);
+      const label = boundedText(component.label, 256) ?? '';
+      const normalizedType = normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits);
       components.push({
         id,
-        type: type as SLDComponentType,
+        type: normalizedType,
         position: { x, y },
         ...optionalTextField('label', component.label),
         ...optionalTextField('rating', component.rating),
@@ -345,9 +378,15 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       confidence: components.length > 0
         ? Math.max(0, Math.min(partialRecovery ? 0.5 : 1, rawConfidence))
         : 0,
-      ...(partialRecovery ? {
-        partial: true,
-        warnings: ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'],
+      ...(partialRecovery ? { partial: true } : {}),
+      ...((partialRecovery || instrumentTransformerHits.length) ? {
+        warnings: [
+          ...(partialRecovery ? ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'] : []),
+          // 조용히 고치면 모델이 계속 틀린 채로 남고 아무도 모른다.
+          ...instrumentTransformerHits.map(
+            (label) => `INSTRUMENT_TRANSFORMER_RECLASSIFIED: "${label}" 을(를) transformer → meter 로 보정`,
+          ),
+        ],
       } : {}),
       rawDescription: boundedText(data.rawDescription, 2_000) ?? '',
     };
