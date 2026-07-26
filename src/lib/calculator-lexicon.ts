@@ -166,6 +166,18 @@ export function matchCalculatorByName(query: string): string | undefined {
 const NUMBER = '(-?\\d+(?:\\.\\d+)?)';
 
 /**
+ * 추출 결과. 읽어낸 값과 **질문에 적힌 그대로의 숫자**를 함께 돌려준다.
+ *
+ * 단위 환산이 있으면 둘이 달라진다 — "22.9kV" 는 값 22900 으로 읽히지만 질문에
+ * 적힌 숫자는 22.9 다. 값만 보고 "읽은 숫자"를 판정하면 환산된 값이 전부
+ * 미확인으로 남아 자동 실행이 막힌다.
+ */
+export interface ScopedExtraction {
+  values: Record<string, unknown>;
+  readNumbers: number[];
+}
+
+/**
  * 읽은 숫자를 파라미터 정의에 비추어 받아들일지 정한다. 못 받아들이면 undefined —
  * 그러면 그 수치는 "읽지 못한 값"으로 남아 가드가 되묻게 한다.
  *
@@ -176,12 +188,60 @@ const NUMBER = '(-?\\d+(?:\\.\\d+)?)';
  *     를 20 으로 읽어 0~1 범위의 growthMargin 에 넣자 계산기가 예외를 던졌다.
  *     범위를 아는데도 넘겨서 던지게 두는 것은 결함이다.
  */
+/**
+ * SI 접두어. **대소문자를 가린다** — `/i` 로 뭉뚱그리면 "누전차단기 15mA"(밀리)가
+ * 15,000,000A 가 된다. 길이(m·km)는 넣지 않는다: mm·mm²·m² 와 섞인다.
+ */
+const SI_PREFIX: Record<string, number> = { G: 1e9, M: 1e6, k: 1e3, m: 1e-3 };
+
+/** 접두어를 붙일 수 있는 전기 단위. 긴 것부터 봐야 kVA 가 V+A 로 쪼개지지 않는다. */
+const PREFIXABLE_BASE = ['VA', 'Wh', 'V', 'A', 'W'] as const;
+
+/**
+ * "kVA" → { base:'VA', factor:1e3 }. 접두어만 대소문자를 가리고 본체는 가리지
+ * 않는다 — 현장은 "22.9kv" 라고도 쓰지만 "mA" 와 "MA" 는 6자리 다른 값이다.
+ */
+function splitPrefix(unit: string): { base: string; factor: number } | undefined {
+  for (const base of PREFIXABLE_BASE) {
+    if (unit.toUpperCase() === base) return { base, factor: 1 };
+    if (unit.length === base.length + 1 && unit.slice(1).toUpperCase() === base) {
+      const factor = SI_PREFIX[unit[0]];
+      if (factor !== undefined) return { base, factor };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 질문에 적힌 단위를 파라미터 단위로 옮기는 배율. 옮길 수 없으면 undefined —
+ * 그러면 그 수치는 "읽지 못한 값"으로 남는다(추측하지 않는다).
+ *
+ * 수배전 현장 표기가 파라미터 단위와 다른 자릿수인 것이 기본이다. 계통은
+ * 22.9kV·154kV 로 쓰는데 파라미터는 V 고, 변압기는 10MVA 로 쓰는데 파라미터는
+ * kVA 다. 실측(2026-07-26): "단락전류 계산 22.9kV 10MVA" 에서 추출 0건.
+ */
+function unitScale(paramUnit: string, unitToken: string): number | undefined {
+  if (!unitToken) return 1;
+  if (unitAliases(paramUnit).some((a) => a.toLowerCase() === unitToken.toLowerCase())) return 1;
+
+  const target = splitPrefix(paramUnit);
+  const written = splitPrefix(unitToken);
+  if (!target || !written || target.base !== written.base) return undefined;
+  return written.factor / target.factor;
+}
+
 function acceptValue(param: ExtendedParamDef, raw: string, unitToken: string): number | undefined {
   let value = parseFloat(raw);
   if (!Number.isFinite(value)) return undefined;
 
   const isFraction = !param.unit && param.max !== undefined && param.max <= 1;
   if (isFraction && unitToken === '%') value /= 100;
+  else if (param.unit) {
+    const scale = unitScale(param.unit, unitToken);
+    if (scale === undefined) return undefined;
+    // 부동소수 잔재를 남기지 않는다 — 22.9 × 1000 은 22900 이어야 한다.
+    if (scale !== 1) value = Number((value * scale).toPrecision(12));
+  }
 
   if (param.min !== undefined && value < param.min) return undefined;
   if (param.max !== undefined && value > param.max) return undefined;
@@ -226,6 +286,23 @@ function unitAliases(unit: string): string[] {
 }
 
 /**
+ * 정규식이 잡아야 할 표기 — 선언 단위의 별칭 + 같은 본체의 접두어 표기.
+ *
+ * 접두어 표기를 넣지 않으면 "22.9kV" 는 매칭 자체가 안 된다(V 앞에 k 가 있어
+ * `\s*(V|볼트)` 가 실패한다). 어느 배율인지는 acceptValue 가 대소문자를 가려
+ * 정한다 — 여기서는 후보만 넓힌다.
+ *
+ * 긴 표기부터 놓는다. 'V' 가 앞에 오면 교대에서 먼저 걸려 'kV' 를 못 잡는다.
+ */
+function unitAliasesForMatch(unit: string): string[] {
+  const aliases = unitAliases(unit);
+  const decomposed = splitPrefix(unit);
+  if (!decomposed) return aliases;
+  const prefixed = Object.keys(SI_PREFIX).map((p) => `${p}${decomposed.base}`);
+  return [...new Set([...prefixed, ...aliases])].sort((a, b) => b.length - a.length);
+}
+
+/**
  * 그 계산기 안에서 **단 하나의 파라미터만** 쓰는 단위를 찾는다.
  * 그런 단위는 "3000lm" 만으로 어느 파라미터인지 확정된다.
  */
@@ -255,9 +332,12 @@ function uniqueUnitOwners(params: ExtendedParamDef[]): Map<string, string> {
 export function extractScopedParams(
   query: string,
   params: ExtendedParamDef[],
-): Record<string, unknown> {
+): ScopedExtraction {
   const found: Record<string, unknown> = {};
   const consumed: Array<[number, number]> = [];
+  // 질문에 **적힌 그대로의** 숫자. 단위 환산이 있으면 읽어낸 값과 달라지므로
+  // (22.9kV → 22900), "무엇을 읽었나" 는 값이 아니라 이 목록으로 판단해야 한다.
+  const readNumbers: number[] = [];
 
   const overlaps = (start: number, end: number): boolean =>
     consumed.some(([s, e]) => start < e && s < end);
@@ -271,7 +351,7 @@ export function extractScopedParams(
   for (const { param, term } of byDescription) {
     if (param.name in found) continue;
     // 단위 없는 비율 파라미터(역률·수용률·여유율)도 질문에서는 "%"로 쓰인다.
-    const units = [...unitAliases(param.unit ?? ''), ...(param.unit ? [] : ['%'])]
+    const units = [...unitAliasesForMatch(param.unit ?? ''), ...(param.unit ? [] : ['%'])]
       .map(escapeRegExp)
       .join('|');
     const unitPart = units ? `\\s*(${units})?` : '()';
@@ -285,13 +365,14 @@ export function extractScopedParams(
     const accepted = acceptValue(param, match[1] ?? '', match[2] ?? '');
     if (accepted === undefined) continue;
     found[param.name] = accepted;
+    readNumbers.push(parseFloat(match[1] ?? ''));
     consumed.push([match.index, match.index + match[0].length]);
   }
 
   // ② 유일 단위 기반
   for (const [unit, paramName] of uniqueUnitOwners(params)) {
     if (paramName in found) continue;
-    const units = unitAliases(unit).map(escapeRegExp).join('|');
+    const units = unitAliasesForMatch(unit).map(escapeRegExp).join('|');
     if (!units) continue;
     const pattern = new RegExp(`${NUMBER}\\s*(${units})(?![A-Za-z가-힣])`, 'i');
     const match = pattern.exec(query);
@@ -302,6 +383,7 @@ export function extractScopedParams(
     const accepted = acceptValue(param, match[1] ?? '', match[2] ?? '');
     if (accepted === undefined) continue;
     found[paramName] = accepted;
+    readNumbers.push(parseFloat(match[1] ?? ''));
     consumed.push([match.index, match.index + match[0].length]);
   }
 
@@ -314,8 +396,10 @@ export function extractScopedParams(
   // 기본값으로 채워 넣으면 그것이야말로 사용자의 계산이 아니다).
   for (const param of params) {
     if (param.type !== 'array' || !param.itemSchema || param.name in found) continue;
-    const item = extractScopedParams(query, param.itemSchema);
+    const nested = extractScopedParams(query, param.itemSchema);
+    const item = nested.values;
     if (Object.values(item).every((value) => typeof value !== 'number')) continue;
+    readNumbers.push(...nested.readNumbers);
 
     // 항목의 나머지 칸은 최상위 파라미터와 같은 규칙으로 채운다 — 스키마가
     // 선언한 기본값만 쓰고, 기본값이 없는 칸이 비면 목록을 만들지 않는다.
@@ -356,7 +440,7 @@ export function extractScopedParams(
     }
   }
 
-  return found;
+  return { values: found, readNumbers };
 }
 
 /** 이름 인덱스에 등재된 계산기 수 — 커버리지 확인용. */

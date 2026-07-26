@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { recognizeNameplate, suggestCalculators } from '@/lib/ocr-nameplate';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { withRequestLog } from '@/lib/api/with-request-log';
+import { checkRasterImage } from '@/lib/image-signature';
 
 export const runtime = 'nodejs';
 
@@ -80,7 +81,15 @@ async function POST__impl(req: NextRequest) {
       );
     }
 
-    const blob = new Blob([await imageFile.arrayBuffer()], { type: imageFile.type });
+    // 선언된 MIME 은 클라이언트가 붙인 문자열이다. 바이트로 다시 본다 —
+    // 통과시키면 그 다음이 비전 LLM 호출이라 사용자 BYOK 요금을 쓴다.
+    const bytes = new Uint8Array(await imageFile.arrayBuffer());
+    const signature = checkRasterImage(bytes);
+    if (!signature.ok) {
+      return NextResponse.json({ error: signature.message, code: 'ESA-4002' }, { status: 400 });
+    }
+
+    const blob = new Blob([bytes], { type: signature.type });
 
     const nameplateData = await recognizeNameplate(blob, {
       provider,

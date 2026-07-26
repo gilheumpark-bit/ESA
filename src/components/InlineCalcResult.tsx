@@ -538,11 +538,28 @@ function MiniForm({
         )}
       </div>
 
-      <p className="mb-3 text-xs text-[var(--text-secondary)]">
-        {unreadNumbers.length > 0
-          ? `질문의 ${unreadNumbers.join(', ')} 이(가) 어느 입력인지 확정하지 못했습니다. 아래 값을 확인해 주세요.`
-          : '추가 입력이 필요합니다. 아래 항목을 입력해 주세요.'}
-      </p>
+      {/*
+        실행이 막혀서 이 폼으로 내려온 경우에는 "추가 입력이 필요합니다" 가
+        거짓말이 된다. 실측(2026-07-26): "단락전류 계산: 변압기 10MVA 22.9kV
+        %Z 5%" 는 입력을 전부 읽어 자동 실행까지 갔는데 등급 게이트에 막혔고,
+        화면은 "추가 입력이 필요합니다" 를 먼저 띄웠다 — 사용자는 칸을 채우고
+        같은 벽에 다시 부딪힌다. 막힌 이유가 있으면 그것이 첫 줄이다.
+      */}
+      {/* 막힌 이유는 칸을 채우기 전에 읽혀야 한다 — 그래서 폼 위에 둔다. */}
+      {error && (
+        <div className="mb-3 flex items-center gap-1.5 rounded-lg border border-[var(--color-error)] bg-red-50 px-2.5 py-1.5 text-xs text-[var(--color-error)] dark:bg-red-900/20">
+          <AlertCircle size={14} className="shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {!error && (
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">
+          {unreadNumbers.length > 0
+            ? `질문의 ${unreadNumbers.join(', ')} 이(가) 어느 입력인지 확정하지 못했습니다. 아래 값을 확인해 주세요.`
+            : '추가 입력이 필요합니다. 아래 항목을 입력해 주세요.'}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* 필수 파라미터 */}
@@ -586,14 +603,6 @@ function MiniForm({
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {/* API 에러 */}
-        {error && (
-          <div className="flex items-center gap-1.5 rounded-lg border border-[var(--color-error)] bg-red-50 px-2.5 py-1.5 text-xs text-[var(--color-error)] dark:bg-red-900/20">
-            <AlertCircle size={14} className="shrink-0" />
-            {error}
           </div>
         )}
 

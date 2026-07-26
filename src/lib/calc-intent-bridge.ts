@@ -21,6 +21,7 @@ import {
   matchCalculatorByExactName,
   matchCalculatorByName,
   extractScopedParams,
+  type ScopedExtraction,
 } from '@/lib/calculator-lexicon';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
@@ -161,8 +162,13 @@ function collectNumbers(value: unknown, into: Set<number> = new Set()): Set<numb
   return into;
 }
 
-function findUnreadNumbers(query: string, extracted: Record<string, unknown>): number[] {
+function findUnreadNumbers(
+  query: string,
+  extracted: Record<string, unknown>,
+  alsoRead: number[] = [],
+): number[] {
   const read = collectNumbers(extracted);
+  for (const n of alsoRead) read.add(n);
   // 규격·조항 번호는 입력이 아니다. "IEEE 1584 아크플래시"·"KEC 232.3.9" 의
   // 숫자를 사용자가 준 값으로 세면 멀쩡한 질문이 되묻기로 떨어진다.
   const withoutReferences = query.replace(
@@ -277,11 +283,11 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   // 이름 전체가 나왔을 때, 그 계산기의 입력을 **수치로** 실제 읽어냈는지가
   // "계산해달라"와 "그 기준이 어디 있냐"를 가른다. 아래 §6 참조.
   const namedCalculatorId = matchCalculatorByExactName(query);
-  const namedScopedParams = namedCalculatorId
+  const namedScoped: ScopedExtraction = namedCalculatorId
     ? extractScopedParams(query, CALCULATOR_PARAMS[namedCalculatorId] ?? [])
-    : {};
+    : { values: {}, readNumbers: [] };
   const openedByName = namedCalculatorId !== undefined
-    && collectNumbers(namedScopedParams).size > 0;
+    && collectNumbers(namedScoped.values).size > 0;
 
   const calculatorId = (openedByName ? namedCalculatorId : undefined)
     ?? explicitCalculatorId
@@ -303,8 +309,8 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   // 5. 값 읽기 — 계산기가 정해졌으므로 그 계산기의 파라미터 정의를 어휘로 쓸 수
   //    있다. 전역 패턴(의도 파서 12종)은 하위 호환을 위해 유지하되, 범위를 좁혀
   //    읽은 값이 더 확실하므로 그쪽이 이긴다.
-  const scopedParams = calculatorId === namedCalculatorId
-    ? namedScopedParams
+  const scoped = calculatorId === namedCalculatorId
+    ? namedScoped
     : extractScopedParams(query, paramDefs);
   // 전역 파서는 계산기를 모른 채 12종 패턴으로 읽는다. 그 결과에는 이 계산기에
   // 없는 파라미터가 섞여 들어온다 — 그리고 그게 "값을 읽었다"로 세어졌다.
@@ -322,7 +328,7 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   const mappedParams = Object.fromEntries(
     Object.entries({
       ...mapParamNames(intentResult.extractedParams, calculatorId),
-      ...scopedParams,
+      ...scoped.values,
     }).filter(([name]) => paramNames.has(name)),
   );
 
@@ -397,7 +403,10 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   }
 
   // 7. canAutoExecute = 필수 입력이 모두 있고, 질문의 수치를 하나도 흘리지 않았을 때만.
-  const unreadNumbers = findUnreadNumbers(query, mappedParams);
+  // 단위 환산이 있으면 읽어낸 값이 질문의 숫자와 다르다(22.9kV → 22900). 그래서
+  // 값 대조만으로는 22.9 가 미확인으로 남아 자동 실행이 막힌다 — 추출기가
+  // 실제로 소비한 원문 숫자를 함께 넘긴다.
+  const unreadNumbers = findUnreadNumbers(query, mappedParams, scoped.readNumbers);
   // 질문에서 읽어낸 값이 하나도 없으면 영수증을 만들지 않는다. 그런 결과는 전부
   // 기본값으로 계산한 것이라 사용자의 계산이 아니다 — "UPS 용량 산정 방법
   // 설명해줘"처럼 수치가 0개인 질문은 못 읽은 수치도 0이라 위의 가드를 그냥

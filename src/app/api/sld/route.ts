@@ -18,6 +18,7 @@ import { SagaOrchestrator } from '@/lib/saga-transaction';
 import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { withRequestLog } from '@/lib/api/with-request-log';
+import { checkRasterImage } from '@/lib/image-signature';
 
 export const runtime = 'nodejs';
 
@@ -72,7 +73,14 @@ async function POST__impl(req: NextRequest) {
       return NextResponse.json({ error: 'Image too large (max 20MB).' }, { status: 400 });
     }
 
-    const blob = new Blob([await imageFile.arrayBuffer()], { type: imageFile.type });
+    // 선언된 MIME 은 클라이언트가 붙인 문자열이다. 바이트로 다시 본다.
+    const bytes = new Uint8Array(await imageFile.arrayBuffer());
+    const signature = checkRasterImage(bytes);
+    if (!signature.ok) {
+      return NextResponse.json({ error: signature.message, code: 'ESA-4002' }, { status: 400 });
+    }
+
+    const blob = new Blob([bytes], { type: signature.type });
 
     // Saga: VLM 분석 → 토폴로지 변환 → 검증 (3단계 원자적 실행)
     let analysis: SLDAnalysis | null = null;

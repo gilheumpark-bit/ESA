@@ -241,3 +241,65 @@ describe('영수증의 가정 표시', () => {
     }
   });
 });
+
+/**
+ * 수배전·변전소 표기의 자릿수.
+ *
+ * 계통은 22.9kV·154kV 로, 변압기는 10MVA 로 쓴다. 파라미터 단위는 V·kVA 라
+ * 그대로는 세 자리씩 어긋난다 — 실측(2026-07-26): "단락전류 계산 22.9kV 10MVA"
+ * 에서 추출 0건이었다(안전하게 거부하긴 했으나 쓸 수가 없었다).
+ *
+ * 접두어는 **대소문자를 가려야 한다**. `/i` 로 뭉뚱그리면 "15mA"(밀리암페어,
+ * 누전차단기 정격감도전류의 표기)가 15,000,000A 가 된다.
+ */
+describe('SI 접두어 환산', () => {
+  const read = (q: string) => analyzeCalcIntent(q).extractedParams as Record<string, number>;
+
+  it('kV 를 V 로 옮긴다 — 22.9kV·154kV', () => {
+    expect(read('전압강하 계산 22.9kV 전류 200A 케이블 500m 단면적 240mm2').voltage).toBe(22900);
+    expect(read('전압강하 계산 154kV 전류 500A 케이블 2000m 단면적 400mm2').voltage).toBe(154000);
+  });
+
+  it('MVA 를 kVA 로, MW 를 kW 로 옮긴다', () => {
+    expect(read('단락전류 계산: 변압기 10MVA 22.9kV %Z 5%').transformerCapacity).toBe(10000);
+    expect(read('변압기 용량 산정 부하 3MW 역률 0.9 수용률 0.8 여유율 20%').totalLoad).toBe(3000);
+  });
+
+  it('kA 를 A 로 옮긴다', () => {
+    expect(read('전압강하 계산 전압 380V 전류 0.5kA 케이블 10m 단면적 240mm2').current).toBe(500);
+  });
+
+  it('밀리와 메가를 가른다 — 이걸 뭉개면 6자리가 틀린다', () => {
+    expect(read('전압강하 계산 전압 380V 전류 15mA 케이블 10m 단면적 2.5mm2').current).toBe(0.015);
+    expect(read('전압강하 계산 전압 380V 전류 15MA 케이블 10m 단면적 2.5mm2').current).toBe(15000000);
+  });
+
+  it('환산한 값도 "읽은 수치"로 세어 자동 실행을 막지 않는다', () => {
+    // 값(22900)과 질문의 숫자(22.9)가 다르므로, 값 대조만 하면 22.9 가 미확인으로
+    // 남아 멀쩡한 질문이 되묻기로 떨어진다.
+    const intent = analyzeCalcIntent('단락전류 계산: 변압기 10MVA 22.9kV %Z 5%');
+    expect(intent.unreadNumbers).toEqual([]);
+    expect(intent.canAutoExecute).toBe(true);
+  });
+
+  it('환산 결과가 계산기까지 그대로 흘러간다', () => {
+    const ev = resolveChatCalculationEvidence('단락전류 계산: 변압기 10MVA 22.9kV %Z 5%');
+    expect(ev?.input.systemVoltage).toBe(22900);
+    expect(ev?.input.transformerCapacity).toBe(10000);
+  });
+
+  it('옮길 수 없는 단위는 추측하지 않는다', () => {
+    // lx 는 전기 단위계로 환산할 대상이 아니다 — 조도 파라미터에만 붙는다.
+    expect(read('전압강하 계산 전압 380V 전류 60A 케이블 100m 단면적 35mm2 500lx').cableSize).toBe(35);
+    expect(analyzeCalcIntent('전압강하 계산 전압 380V 전류 60A 케이블 100m 단면적 35mm2 500lx').unreadNumbers)
+      .toContain(500);
+  });
+
+  it('IEEE 1584 적용 범위 밖은 여전히 거부한다', () => {
+    // arc-flash 는 208~15000V 에서만 유효한 모델이다. 환산이 된다고 해서
+    // 154kV 를 받아들이면 안 된다.
+    const intent = analyzeCalcIntent('아크 플래시 계산 154kV 단락전류 20kA 차단시간 0.2s 이격거리 600mm');
+    expect(intent.extractedParams.voltage_V).toBeUndefined();
+    expect(intent.canAutoExecute).toBe(false);
+  });
+});

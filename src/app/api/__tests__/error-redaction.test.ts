@@ -24,6 +24,17 @@ jest.mock('@/lib/sld-recognition', () => ({
 }));
 
 const SECRET = 'super-secret-provider-diagnostic:/internal/path';
+
+/**
+ * 비전 라우트는 선언된 MIME 이 아니라 바이트로 형식을 판정한다. 그래서 이
+ * 픽스처는 진짜 PNG 머리(89 50 4E 47 0D 0A 1A 0A)여야 한다 — 텍스트에
+ * `image/png` 만 달면 공급자 호출 전에 400 으로 막혀 이 테스트가 검증하려는
+ * "공급자 오류가 새지 않는가" 경로에 도달하지 못한다.
+ */
+const pngFile = (name: string) =>
+  new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], name, {
+    type: 'image/png',
+  });
 const requestKey = ['test', 'provider', 'key'].join('-');
 
 function multipartRequest(path: string, field: string, file: File, extras: Record<string, string> = {}): NextRequest {
@@ -70,7 +81,7 @@ describe('public drawing API error redaction', () => {
     const request = multipartRequest(
       '/api/ocr',
       'image',
-      new File(['image'], 'plate.png', { type: 'image/png' }),
+      pngFile('plate.png'),
       { apiKey: requestKey, provider: 'openai' },
     );
 
@@ -86,7 +97,7 @@ describe('public drawing API error redaction', () => {
     const request = multipartRequest(
       '/api/sld',
       'image',
-      new File(['image'], 'diagram.png', { type: 'image/png' }),
+      pngFile('diagram.png'),
       { apiKey: requestKey, provider: 'openai' },
     );
 
