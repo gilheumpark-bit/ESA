@@ -25,6 +25,7 @@ import {
 import LaTeX from '@/components/LaTeX';
 import type { Receipt } from '@/engine/receipt/types';
 import type { CalcStep } from '@/engine/calculators/types';
+import { CALCULATOR_NAMES } from '@/lib/calculator-params';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Helpers
@@ -163,7 +164,10 @@ function CompactCard({ receipt, className }: { receipt: Receipt; className: stri
       <div className="mb-2 flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-            {receipt.calcId}
+            {/* 영수증에는 계산기 ID 가 저장된다. 사람이 읽는 자리에는 정본 이름을
+                쓴다 — 계산 기록(/history)에서 고친 것과 같은 결함이 여기에도
+                있었다(실측 2026-07-26: 영수증 머리말에 "illuminance"). */}
+            {CALCULATOR_NAMES[receipt.calcId]?.name ?? receipt.calcId}
           </h3>
           <span className="text-xs text-[var(--text-tertiary)]">
             {receipt.appliedStandard} | {formatDate(receipt.calculatedAt)}
@@ -228,7 +232,7 @@ function FullCard({ receipt, className }: { receipt: Receipt; className: string 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-[var(--text-primary)]">
-            {receipt.calcId}
+            {CALCULATOR_NAMES[receipt.calcId]?.name ?? receipt.calcId}
           </h2>
           <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
             <span className="flex items-center gap-1">

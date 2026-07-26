@@ -262,9 +262,12 @@ describe('화면에 계산기 이름을 영문 ID 로 노출하지 않는다', (
     expect(missing).toEqual([]);
   });
 
-  it('/history 는 자체 이름표가 아니라 정본에서 이름을 읽는다', () => {
-    const src = readFileSync('src/app/(with-nav)/history/page.tsx', 'utf8');
-    expect(src).toContain("CALCULATOR_NAMES[receipt.calcId]?.name");
+  it.each([
+    ['src/app/(with-nav)/history/page.tsx', 'CALCULATOR_NAMES[receipt.calcId]?.name'],
+    ['src/components/ReceiptCard.tsx', 'CALCULATOR_NAMES[receipt.calcId]?.name'],
+    ['src/app/(with-nav)/calc/page.tsx', 'CALCULATOR_NAMES[calc.id]?.name'],
+  ])('%s 는 정본에서 이름을 읽는다', (path, marker) => {
+    expect(readFileSync(path, 'utf8')).toContain(marker);
   });
 });
 
