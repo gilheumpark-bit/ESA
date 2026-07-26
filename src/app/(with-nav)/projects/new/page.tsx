@@ -64,7 +64,7 @@ export default function NewProjectPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-8">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Project Name */}
           <div>
@@ -125,7 +125,7 @@ export default function NewProjectPage() {
             </button>
           </div>
         </form>
-      </main>
+      </div>
     </div>
   );
 }

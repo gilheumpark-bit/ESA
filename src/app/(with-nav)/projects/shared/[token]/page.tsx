@@ -75,7 +75,7 @@ export default function SharedProjectPage() {
 
   if (!project) {
     return (
-      <main className="mx-auto max-w-md px-4 py-20">
+      <div className="mx-auto max-w-md px-4 py-20">
         <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm">
           <Lock className="mx-auto h-9 w-9 text-gray-400" />
           <h1 className="mt-3 text-lg font-semibold text-gray-900">
@@ -105,12 +105,12 @@ export default function SharedProjectPage() {
             <ArrowLeft className="h-4 w-4" /> 홈으로
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
         <Eye className="mr-2 inline h-4 w-4" /> 읽기 전용 공유 보기입니다. 멤버 정보와 원본 입력값은 공개되지 않습니다.
       </div>
@@ -146,6 +146,6 @@ export default function SharedProjectPage() {
           </ul>
         )}
       </section>
-    </main>
+    </div>
   );
 }

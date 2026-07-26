@@ -331,7 +331,7 @@ export default function CalculatorPage({
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-4xl px-4 py-6">
+      <div className="mx-auto max-w-4xl px-4 py-6">
         {/* 그리드 자식에 min-w-0 이 필요하다.
             그리드 아이템의 기본값은 min-width:auto 라 트랙이 콘텐츠의 min-content
             까지 늘어난다. 결과 카드의 수식(KaTeX)이 좁은 화면에서 6400px 폭으로
@@ -429,7 +429,7 @@ export default function CalculatorPage({
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

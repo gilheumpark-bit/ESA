@@ -94,7 +94,7 @@ export default function GlossaryPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Controls */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           {/* Search */}
@@ -192,7 +192,7 @@ export default function GlossaryPage() {
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

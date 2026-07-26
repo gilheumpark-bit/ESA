@@ -63,7 +63,7 @@ export default function DisclaimerPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         {/* Warning banner */}
         <div className="mb-8 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700 dark:bg-amber-950">
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -83,7 +83,7 @@ export default function DisclaimerPage() {
             </section>
           ))}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

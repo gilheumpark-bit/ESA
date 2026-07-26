@@ -102,7 +102,7 @@ export default function CommunityAskPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-8">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Title */}
           <div>
@@ -183,7 +183,7 @@ export default function CommunityAskPage() {
             </button>
           </div>
         </form>
-      </main>
+      </div>
     </div>
   );
 }

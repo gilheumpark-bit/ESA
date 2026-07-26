@@ -261,7 +261,7 @@ export default function HistoryPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Filters */}
         <div className="mb-6 flex flex-wrap items-end gap-3">
           {/* Search */}
@@ -408,7 +408,7 @@ export default function HistoryPage() {
             {filtered.length}건의 기록
           </p>
         )}
-      </main>
+      </div>
     </div>
   );
 }

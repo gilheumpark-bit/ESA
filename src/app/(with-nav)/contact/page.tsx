@@ -123,7 +123,7 @@ export default function ContactPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-8">
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Name */}
           <div>
@@ -224,7 +224,7 @@ export default function ContactPage() {
             {status === 'submitting' ? '전송 중...' : '문의 보내기'}
           </button>
         </form>
-      </main>
+      </div>
     </div>
   );
 }

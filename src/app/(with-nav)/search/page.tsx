@@ -627,7 +627,7 @@ function SearchPageInner() {
       </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         <h1 className="sr-only">전기공학 검색 결과</h1>
 
         {/*
@@ -717,7 +717,7 @@ function SearchPageInner() {
         {showChat && query.trim() && (
           <AIChatPanel query={query} onClose={() => setShowChat(false)} />
         )}
-      </main>
+      </div>
     </div>
   );
 }

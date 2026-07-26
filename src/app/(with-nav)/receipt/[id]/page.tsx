@@ -372,7 +372,7 @@ export default function ReceiptPage({
 
   return (
     <div className="min-h-screen bg-[var(--bg-secondary)]">
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         <ReceiptHeader
           receipt={receipt}
           onShare={handleShare}
@@ -384,7 +384,7 @@ export default function ReceiptPage({
         <IntegrityPanel receipt={receipt} />
 
         {isFeatureEnabled('RECEIPT_NOTARIZE') && <TimestampRegistrationButton receiptId={id} />}
-      </main>
+      </div>
     </div>
   );
 }

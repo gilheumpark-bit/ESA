@@ -328,7 +328,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto max-w-2xl px-4 py-10">
       <h1 className="mb-8 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
         Settings
       </h1>
@@ -386,6 +386,6 @@ export default function SettingsPage() {
           </div>
         </SectionCard>
       </div>
-    </main>
+    </div>
   );
 }

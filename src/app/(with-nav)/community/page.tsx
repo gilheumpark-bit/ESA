@@ -49,6 +49,8 @@ function useQuestions(opts: {
   const [questions, setQuestions] = useState<QuestionSummary[]>([]);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,7 @@ function useQuestions(opts: {
       if (opts.tags.length > 0) params.set('tags', opts.tags.join(','));
       if (opts.search) params.set('search', opts.search);
 
+      setError(null);
       fetch(`/api/community?${params.toString()}`)
         .then((res) => res.json())
         .then((json) => {
@@ -67,10 +70,19 @@ function useQuestions(opts: {
           if (json.success) {
             setQuestions(json.data.data ?? []);
             setTotalPages(json.data.totalPages ?? 1);
+            return;
           }
+          // 실패를 삼키면 화면은 "아직 질문이 없습니다" 가 된다 — 서버가
+          // 죽었는데 질문이 없다고 말하고, 실패할 게 뻔한 "첫 질문을
+          // 남겨보세요" 를 권하게 된다(실측 2026-07-26: /api/community 가
+          // 500 ESVA-7050 인데 화면은 빈 목록).
+          setQuestions([]);
+          setError(json.error?.message ?? '질문 목록을 불러오지 못했습니다.');
         })
         .catch(() => {
-          if (!cancelled) setQuestions([]);
+          if (cancelled) return;
+          setQuestions([]);
+          setError('질문 목록을 불러오지 못했습니다. 연결을 확인해 주세요.');
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -78,9 +90,9 @@ function useQuestions(opts: {
     }, 0);
 
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [opts.sort, opts.tags, opts.search, opts.page]);
+  }, [opts.sort, opts.tags, opts.search, opts.page, retry]);
 
-  return { questions, totalPages, loading };
+  return { questions, totalPages, loading, error, reload: () => setRetry((n) => n + 1) };
 }
 
 // ─── PART 3: Filter Bar ───────────────────────────────────────
@@ -245,7 +257,7 @@ export default function CommunityPage() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
-  const { questions, totalPages, loading } = useQuestions({
+  const { questions, totalPages, loading, error, reload } = useQuestions({
     sort,
     tags: selectedTags,
     search,
@@ -270,7 +282,7 @@ export default function CommunityPage() {
   }, []);
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-8">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
@@ -309,6 +321,17 @@ export default function CommunityPage() {
               <div key={i} className="h-28 animate-pulse rounded-lg bg-[var(--bg-secondary)]" />
             ))}
           </div>
+        ) : error ? (
+          <div className="rounded-lg border border-[var(--color-error)] bg-red-50 p-6 text-center dark:bg-red-900/20">
+            <p className="text-sm text-[var(--color-error)]">{error}</p>
+            <button
+              type="button"
+              onClick={reload}
+              className="mt-3 text-sm text-[var(--color-primary)] hover:underline"
+            >
+              다시 시도
+            </button>
+          </div>
         ) : questions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-[var(--border-default)] p-12 text-center">
             <MessageSquare className="mx-auto h-8 w-8 text-[var(--text-tertiary)]" />
@@ -345,7 +368,7 @@ export default function CommunityPage() {
           </button>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

@@ -587,7 +587,7 @@ export default function MobileFieldPage() {
         </div>
       </header>
 
-      <main className="px-4 py-5 space-y-6 max-w-lg mx-auto">
+      <div className="px-4 py-5 space-y-6 max-w-lg mx-auto">
         {/* Offline Banner */}
         {!isOnline && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800">
@@ -624,7 +624,7 @@ export default function MobileFieldPage() {
           </h2>
           <RecentCalculations results={recentResults} />
         </section>
-      </main>
+      </div>
     </div>
   );
 }

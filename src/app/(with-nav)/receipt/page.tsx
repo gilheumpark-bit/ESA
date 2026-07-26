@@ -104,7 +104,7 @@ export default function ReceiptListPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         {calcs.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-primary)] py-20">
             <Inbox size={48} className="mb-3 text-[var(--text-tertiary)]" />
@@ -128,7 +128,7 @@ export default function ReceiptListPage() {
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

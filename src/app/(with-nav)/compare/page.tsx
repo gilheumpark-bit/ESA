@@ -367,7 +367,7 @@ export default function ComparePage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Calculator selector + actions */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <label htmlFor="compare-calculator" className="sr-only">계산기 선택</label>
@@ -469,7 +469,7 @@ export default function ComparePage() {
             </table>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

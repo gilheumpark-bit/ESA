@@ -67,7 +67,7 @@ export default function TermsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         <div className="space-y-8">
           {SECTIONS.map((section) => (
             <section key={section.title}>
@@ -80,7 +80,7 @@ export default function TermsPage() {
             </section>
           ))}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

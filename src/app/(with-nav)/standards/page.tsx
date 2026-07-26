@@ -596,7 +596,7 @@ export default function StandardsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
           이 화면은 저장소에 명시된 판본 스냅샷을 탐색합니다. 2026년 KEC 개정, NEC 2026 및 IEC 60364 파트별 최신 개정이 자동 반영되는 서비스가 아니므로 설계·시공 전 공인 원문을 확인하세요.
         </div>
@@ -669,7 +669,7 @@ export default function StandardsPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

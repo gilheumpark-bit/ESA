@@ -340,31 +340,31 @@ export default function QuestionDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto max-w-4xl px-4 py-8">
         <div className="space-y-4">
           <div className="h-8 w-3/4 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
           <div className="h-40 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
           <div className="h-32 animate-pulse rounded-lg bg-gray-100 dark:bg-gray-800" />
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error || !question) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-8">
+      <div className="mx-auto max-w-4xl px-4 py-8">
         <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950">
           <p className="text-[var(--color-error)]">{error ?? 'Question not found'}</p>
           <Link href="/community" className="mt-4 inline-block text-sm text-blue-600 hover:underline">
             커뮤니티로 돌아가기
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-8">
       {/* Back link */}
       <Link
         href="/community"
@@ -473,7 +473,7 @@ export default function QuestionDetailPage() {
 
       {/* Answer form */}
       <AnswerForm questionId={question.id} onSubmitted={refetch} />
-    </main>
+    </div>
   );
 }
 

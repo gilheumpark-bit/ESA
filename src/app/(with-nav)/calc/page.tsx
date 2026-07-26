@@ -339,7 +339,7 @@ export default function CalcHubPage() {
       </header>
 
       {/* Grid */}
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <div className="mx-auto max-w-7xl px-4 py-6">
         {filteredCategories.length === 0 ? (
           <div className="py-16 text-center text-[var(--text-tertiary)]">
             &ldquo;{filter}&rdquo;에 해당하는 계산기가 없습니다
@@ -351,7 +351,7 @@ export default function CalcHubPage() {
             ))}
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
