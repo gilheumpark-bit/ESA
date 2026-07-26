@@ -2,6 +2,9 @@ import { receiptLoadErrorMessage, safeReceiptLoadError } from '../receipt-load-e
 
 describe('receiptLoadErrorMessage', () => {
   test.each([
+    // 400 은 주소가 잘못된 것이지 서비스 장애가 아니다. 기본 문구로 흘리면
+    // "잠시 후 다시 시도하세요" 가 되는데 다시 시도해도 안 된다.
+    [400, '영수증 주소가 올바르지 않습니다. 링크를 다시 확인하세요.'],
     [401, '로그인이 필요합니다.'],
     [403, '이 영수증을 볼 권한이 없습니다.'],
     [404, '영수증을 찾을 수 없습니다.'],
@@ -22,7 +25,13 @@ describe('receiptLoadErrorMessage', () => {
   });
 
   test('preserves messages produced by the HTTP status mapper', () => {
-    const notFound = receiptLoadErrorMessage(404);
-    expect(safeReceiptLoadError(new Error(notFound))).toBe(notFound);
+    for (const status of [400, 401, 403, 404]) {
+      const message = receiptLoadErrorMessage(status);
+      expect(safeReceiptLoadError(new Error(message))).toBe(message);
+    }
+  });
+
+  test('잘못된 주소를 재시도하라고 안내하지 않는다', () => {
+    expect(receiptLoadErrorMessage(400)).not.toMatch(/다시 시도/);
   });
 });
