@@ -117,6 +117,12 @@ describe('substation / load', () => {
     const { extra } = run('nec-load-calc', { occupancyType: 'office', area: 1000, smallApplianceCircuits: 0, laundryCircuits: 0, hvacLoad: 0, serviceVoltage: 208, phases: 3 });
     close(extra.serviceSize, 108.25);
   });
+  // 창고 3 VA/m² × 8000 = 24,000 VA (상업용 수요율 100%), 240V 1상 → 정확히 100 A.
+  test('nec-load-calc 경계: 24,000VA/240V = 100.0A → 100A 인입 (125 아님)', () => {
+    const { extra } = run('nec-load-calc', { occupancyType: 'warehouse', area: 8000, smallApplianceCircuits: 0, laundryCircuits: 0, hvacLoad: 0, serviceVoltage: 240, phases: 1 });
+    close(extra.serviceSize, 100);
+    expect(extra.selectedService).toBe(100);
+  });
   test('nec-load-calc 1상 대조: 같은 부하·같은 전압이면 √3 배인 187.5 A', () => {
     const { extra } = run('nec-load-calc', { occupancyType: 'office', area: 1000, smallApplianceCircuits: 0, laundryCircuits: 0, hvacLoad: 0, serviceVoltage: 208, phases: 1 });
     close(extra.serviceSize, 187.5);
@@ -124,6 +130,13 @@ describe('substation / load', () => {
 });
 
 describe('motor', () => {
+  // 직선 부하는 P=(F·v)/(η·1000) 이고 여기엔 효율이 다시 곱해지지 않는다.
+  // 15000N × 0.9m/s / (0.9·1000) = 정확히 15 kW = 표준 규격 그 자체.
+  test('motor-capacity 경계: 입력 15.0kW → 15kW 전동기 (18.5 아님)', () => {
+    const { value, extra } = run('motor-capacity', { loadType: 'linear', torqueOrForce: 15000, speedOrVelocity: 0.9, efficiency: 0.9, voltage: 380, powerFactor: 0.85 });
+    close(value, 15);
+    expect(extra.motorPower).toBe(15);
+  });
   test('motor-capacity: P=T·n/9550/η=(100·1800/9550)/0.9=20.94 kW; I(22kW)=43.69A', () => {
     const { value, extra } = run('motor-capacity', { loadType: 'rotary', torqueOrForce: 100, speedOrVelocity: 1800, efficiency: 0.9, voltage: 380, powerFactor: 0.85 });
     close(value, 20.9424);
@@ -273,6 +286,12 @@ describe('cable / ampacity', () => {
   //   PVC Cu:  3535.53/143 = 24.72 → 25    (was 15.64/16 with the wrong k=226)
   //   XLPE Cu: 3535.53/176 = 20.09 → 25
   //   PVC Al:  3535.53/95  = 37.22 → 50
+  // A = I√t/k. Cu/PVC 는 k=143 이므로 I=2288A, t=1s 면 2288/143 = 정확히 16 mm².
+  test('ground-conductor 경계: Amin 16.0 mm² → 16 mm² 선정 (25 아님)', () => {
+    const { value, extra } = run('ground-conductor', { faultCurrent: 2288, clearingTime: 1, conductor: 'Cu', insulation: 'PVC' });
+    close(value, 16);
+    expect(extra.selectedSize).toBe(16);
+  });
   test('ground-conductor PVC Cu (default): 3535.53/143=24.72 mm² → select 25 (IEC 60364-5-54)', () => {
     const { value, extra } = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu' });
     close(value, 24.72, 0.02);
@@ -335,6 +354,15 @@ describe('protection', () => {
     close(step(1), 13221.3);
     close(value, 208.18, 0.01);
   });
+  // 규격 선정은 `find(s => s >= x)` — 값이 표준값과 **정확히 일치**할 때만 경계가
+  // 드러난다. 기존 케이스는 전부 중간값이라 `>=` 를 `>` 로 바꿔도 여섯 곳 중
+  // 다섯이 초록이었다(실측 2026-07-26). 딱 맞는 규격이 있으면 그것을 골라야지
+  // 한 단계 큰 것을 집으면 과설계다. 아래는 전부 경계에 정확히 떨어지는 입력이다.
+  test('vt-sizing 경계: 부담 15+12+3=30VA → 30VA VT (50 아님)', () => {
+    const { extra } = run('vt-sizing', { systemVoltage: 22900, secondaryVoltage: 110, meterBurden: 15, relayBurden: 12, wireBurden: 3, accuracyClass: '0.5', connectionType: 'line-to-line' });
+    close(extra.totalBurden, 30);
+    expect(extra.selectedVT).toBe(30);
+  });
   test('vt-sizing L-G 154kV: 1차=154000/√3=88912V; 비 1400', () => {
     const { value, step } = run('vt-sizing', { systemVoltage: 154000, secondaryVoltage: 110, meterBurden: 15, relayBurden: 10, wireBurden: 2, accuracyClass: '0.5', connectionType: 'line-to-ground' });
     close(step(1), 88911.9);
@@ -353,6 +381,13 @@ describe('protection', () => {
   test('lightning-protection LPL III sphere: rolling radius 45 m (IEC 62305)', () => {
     const { value } = run('lightning-protection', { buildingHeight: 20, lplClass: 'III', method: 'sphere' });
     expect(value).toBe(45);
+  });
+  // PE 50 → 절반 25 → 상한 25 에 정확히 걸린다. 상한값 자체가 표준 규격이므로
+  // 경계가 틀리면 불필요하게 35 로 올라간다.
+  test('equipotential-bonding 경계: 상한 25 mm² 정확히 → 25 선정 (35 아님)', () => {
+    const { value, extra } = run('equipotential-bonding', { largestPE: 50 });
+    close(value, 25);
+    expect(extra.selectedBonding).toBe(25);
   });
   test('equipotential-bonding: max(0.5·16,6)=8 mm² → select 10 (IEC 60364-5-54, PE only)', () => {
     const { value, extra } = run('equipotential-bonding', { largestPE: 16 });
