@@ -14,6 +14,9 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { calculatorHref } from '@/lib/calculator-catalog';
+import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
+import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { readStoredCountry } from '@/hooks/useSettings';
 import { useRouter } from 'next/navigation';
 import {
   Upload,
@@ -278,17 +281,114 @@ function SuggestedCalcs({ suggestions }: { suggestions: SLDAnalysisResult['sugge
   );
 }
 
+/** 한 단계의 실행 결과. 못 돌린 이유도 값과 같은 자리에 남긴다. */
+interface ChainRun {
+  status: 'ok' | 'blocked' | 'error';
+  value?: string;
+  note?: string;
+}
+
+/**
+ * 순서만 보여주던 체인을 실제로 돌린다.
+ *
+ * 지금까지 이 패널은 "추천 계산 순서"를 나열하고 단계마다 계산기를 여는 링크만
+ * 줬다. 여섯 단계면 여섯 번 열어 여섯 번 입력해야 한다. 도면에서 읽은 값은
+ * 이미 있으므로 그대로 돌려서 보여준다.
+ *
+ * 값을 채우는 방식은 폼과 같다 — 기본값을 **클라이언트에서 채워 보낸다**.
+ * /api/calculate 가 대신 채우게 하면 영수증에는 사용자가 준 적 없는 값이
+ * 조용히 들어간다. 필수 입력이 비면 돌리지 않고 그 사실을 적는다.
+ */
+function useChainRunner(steps: CalcChainStep[]) {
+  const [runs, setRuns] = useState<Record<number, ChainRun>>({});
+  const [running, setRunning] = useState(false);
+
+  const runAll = useCallback(async () => {
+    setRunning(true);
+    setRuns({});
+    const country = readStoredCountry();
+
+    for (const step of steps) {
+      const defs = CALCULATOR_PARAMS[step.calculatorId] ?? [];
+      const { input, invalid } = coerceCalculatorInput(defs, step.inputs as Record<string, unknown>);
+      const missing = defs
+        .filter((d) => d.defaultValue === undefined && input[d.name] === undefined)
+        .map((d) => d.description ?? d.name);
+
+      if (invalid.length > 0 || missing.length > 0) {
+        setRuns((prev) => ({
+          ...prev,
+          [step.step]: {
+            status: 'blocked',
+            note: missing.length > 0
+              ? `도면에서 못 읽은 입력: ${missing.join(', ')}`
+              : `값을 숫자로 읽지 못했습니다: ${invalid.join(', ')}`,
+          },
+        }));
+        continue;
+      }
+
+      try {
+        const res = await fetch('/api/calculate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ calculatorId: step.calculatorId, inputs: input, countryCode: country }),
+        });
+        const body = await res.json();
+        const data = body.data ?? body;
+        if (!res.ok || !data.result) {
+          setRuns((prev) => ({
+            ...prev,
+            [step.step]: { status: 'error', note: body.error?.message ?? `실행 실패 (${res.status})` },
+          }));
+          continue;
+        }
+        setRuns((prev) => ({
+          ...prev,
+          [step.step]: {
+            status: 'ok',
+            value: `${data.result.value}${data.result.unit ?? ''}`,
+            note: data.result.judgment?.message,
+          },
+        }));
+      } catch {
+        setRuns((prev) => ({ ...prev, [step.step]: { status: 'error', note: '서버에 연결하지 못했습니다.' } }));
+      }
+    }
+
+    setRunning(false);
+  }, [steps]);
+
+  return { runs, running, runAll };
+}
+
 function CalcChain({ steps }: { steps: CalcChainStep[] }) {
+  const { runs, running, runAll } = useChainRunner(steps);
+
   if (!steps.length) return null;
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <GitBranch size={16} className="text-[var(--color-primary)]" />
-        <h3 className="text-sm font-semibold text-[var(--text-primary)]">
-          추천 계산 순서
-        </h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <GitBranch size={16} className="text-[var(--color-primary)]" />
+          <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+            추천 계산 순서
+          </h3>
+        </div>
+        <button
+          type="button"
+          onClick={runAll}
+          disabled={running}
+          className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-60"
+        >
+          <PlayCircle size={13} />
+          {running ? '실행 중…' : '전체 실행'}
+        </button>
       </div>
+      <p className="mb-3 text-xs text-[var(--text-tertiary)]">
+        도면에서 읽은 값으로 돌립니다. 판독값이므로 결과는 계산기에서 다시 확인하세요.
+      </p>
       <div className="space-y-3">
         {steps.map((step, idx) => (
           <div key={step.step} className="flex items-start gap-3">
@@ -305,6 +405,24 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
               {step.dependsOn && step.dependsOn.length > 0 && (
                 <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
                   Step {step.dependsOn.join(', ')} 완료 후 실행
+                </p>
+              )}
+              {runs[step.step] && (
+                <p
+                  className={`mt-1 text-xs ${
+                    runs[step.step].status === 'ok'
+                      ? 'font-semibold text-[var(--text-primary)]'
+                      : 'text-[var(--color-error)]'
+                  }`}
+                >
+                  {runs[step.step].status === 'ok'
+                    ? `${CALCULATOR_NAMES[step.calculatorId]?.name ?? step.calculatorId} = ${runs[step.step].value}`
+                    : runs[step.step].note}
+                  {runs[step.step].status === 'ok' && runs[step.step].note && (
+                    <span className="ml-1.5 font-normal text-[var(--text-tertiary)]">
+                      {runs[step.step].note}
+                    </span>
+                  )}
                 </p>
               )}
             </div>
