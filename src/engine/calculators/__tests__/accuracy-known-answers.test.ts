@@ -106,6 +106,17 @@ describe('substation / load', () => {
     const { value } = run('nec-load-calc', { occupancyType: 'dwelling', area: 100, smallApplianceCircuits: 2, laundryCircuits: 1, hvacLoad: 0, serviceVoltage: 240, phases: 1 });
     close(value, 4680);
   });
+  // 3상 인입은 I = VA/(V·√3) 로 갈라진다. 위 케이스가 phases:1 뿐이라 이 분기는
+  // 아무도 밟지 않았고, √3 이 틀려도 스위트가 초록이었다(실측 2026-07-26).
+  // office 1000m² = 39 VA/m² × 1000 = 39,000 VA, 상업용은 수요율 100%.
+  test('nec-load-calc 3상 office: 39,000VA / (208·√3) = 108.25 A', () => {
+    const { extra } = run('nec-load-calc', { occupancyType: 'office', area: 1000, smallApplianceCircuits: 0, laundryCircuits: 0, hvacLoad: 0, serviceVoltage: 208, phases: 3 });
+    close(extra.serviceSize, 108.25);
+  });
+  test('nec-load-calc 1상 대조: 같은 부하·같은 전압이면 √3 배인 187.5 A', () => {
+    const { extra } = run('nec-load-calc', { occupancyType: 'office', area: 1000, smallApplianceCircuits: 0, laundryCircuits: 0, hvacLoad: 0, serviceVoltage: 208, phases: 1 });
+    close(extra.serviceSize, 187.5);
+  });
 });
 
 describe('motor', () => {
@@ -128,6 +139,8 @@ describe('motor', () => {
     const { value, extra } = run('inverter-capacity', { motorPower: 100, motorVoltage: 380, powerFactor: 0.85, efficiency: 0.9, safetyFactor: 1.25 });
     close(value, 200);
     close(extra.requiredCapacity, 163.4);
+    // I = S/(√3·V) = 163399/(1.732·380). 이 줄이 없으면 3상 계수가 틀려도 초록이다.
+    close(extra.ratedCurrent, 248.26);
   });
   test('braking-resistor: R=Vdc²/P=700²/10000=49 Ω', () => {
     const { value } = run('braking-resistor', { dcBusVoltage: 700, brakingPower: 10, brakingTime: 5, dutyCycle: 10 });
@@ -358,12 +371,27 @@ describe('transformer / renewable', () => {
     close(extra.ratedCurrent, 759.67, 0.01);
   });
   test('pcs-capacity: P=100·0.5=50kW; Ppcs=50/0.95=52.63 kW', () => {
-    const { value } = run('pcs-capacity', { batteryCapacity: 100, maxChargeRate: 0.5, maxDischargeRate: 0.5, efficiency: 0.95, gridVoltage: 380 });
+    const { value, extra } = run('pcs-capacity', { batteryCapacity: 100, maxChargeRate: 0.5, maxDischargeRate: 0.5, efficiency: 0.95, gridVoltage: 380 });
     close(value, 52.63);
+    close(extra.chargeCurrent, 75.97);   // 50000/(1.732·380)
+  });
+  // 충·방전율을 다르게 준다. 같은 값이면 두 전류가 뒤바뀌어도 통과한다.
+  test('pcs-capacity 비대칭 0.5C/1.0C: Ich=151.93A, Idis=303.87A, Ppcs=210.53kW', () => {
+    const { value, extra } = run('pcs-capacity', { batteryCapacity: 200, maxChargeRate: 0.5, maxDischargeRate: 1.0, efficiency: 0.95, gridVoltage: 380 });
+    close(value, 210.53);
+    close(extra.chargeCurrent, 151.93);
+    close(extra.dischargeCurrent, 303.87);
   });
   test('grid-connect: maxExport=min(100,100)=100 kW', () => {
-    const { value } = run('grid-connect', { pvCapacity: 100, batteryCapacity: 0, gridVoltage: 380, contractDemand: 100 });
+    const { value, step } = run('grid-connect', { pvCapacity: 100, batteryCapacity: 0, gridVoltage: 380, contractDemand: 100 });
     close(value, 100);
+    close(step(3), 151.93);   // I = 100000/(1.732·380) — 저압 380V 연계
+  });
+  // 100kW 초과는 22.9kV 고압 연계로 갈린다. 저압 케이스만으로는 이 분기가 안 밟힌다.
+  test('grid-connect 고압 500kW: 22.9kV 연계, I=500000/(1.732·22900)=12.61A', () => {
+    const { value, step } = run('grid-connect', { pvCapacity: 500, batteryCapacity: 0, gridVoltage: 380, contractDemand: 1000 });
+    close(value, 500);
+    close(step(3), 12.61);
   });
   test('frequency-compare motor 60→50Hz: ratio 0.833, speed −16.67%, flux +20%', () => {
     const { value, extra } = run('frequency-compare', { equipmentType: 'motor', ratedPower: 100, ratedFreq: 60, targetFreq: 50, motorPoles: 4 });
