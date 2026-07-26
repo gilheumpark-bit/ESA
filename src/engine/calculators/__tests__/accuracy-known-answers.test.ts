@@ -147,8 +147,14 @@ describe('motor', () => {
     close(extra.ratedCurrent, 248.26);
   });
   test('braking-resistor: R=Vdc²/P=700²/10000=49 Ω', () => {
-    const { value } = run('braking-resistor', { dcBusVoltage: 700, brakingPower: 10, brakingTime: 5, dutyCycle: 10 });
+    const { value, extra } = run('braking-resistor', { dcBusVoltage: 700, brakingPower: 10, brakingTime: 5, dutyCycle: 10 });
     close(value, 49);
+    // 저항값은 듀티사이클 이전 값이라 그것만 보면 dutyCycle/100 이 틀려도 초록이다
+    // (실측 2026-07-26: /100→/10 변이 무검출). 정작 저항기를 그 값으로 사는
+    // 연속 정격이 여기 걸려 있다.
+    close(extra.peakPower, 10);        // Vdc²/R = 490000/49 = 10 kW
+    close(extra.energy, 50);           // 10kW × 5s = 50 kJ
+    close(extra.resistorRating, 1);    // 10kW × (10/100) = 1 kW
   });
   // 고정손/가변손 모델. IE3 11kW 정격 η=0.921(표) →
   //   ratedLoss = (1−0.921)/0.921 = 0.085776 pu, fixed = 0.4×= 0.034310, var = 0.6×= 0.051466
