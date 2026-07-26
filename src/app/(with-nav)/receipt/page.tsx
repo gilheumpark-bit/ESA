@@ -68,7 +68,9 @@ export default function ReceiptListPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    document.title = '계산 이력 | ESA';
+    // 제목은 layout.tsx 의 metadata 가 댄다. 여기서 다시 쓰면 그 값을 덮어
+    // 옛 표기("계산 이력 | ESA")로 되돌린다 — SSR 제목만 확인하면 안 보이고,
+    // 화면을 띄운 뒤 탭을 봐야 드러난다(실측 2026-07-26).
     const timer = window.setTimeout(() => {
       setCalcs(loadRecentCalcs());
       setLoaded(true);

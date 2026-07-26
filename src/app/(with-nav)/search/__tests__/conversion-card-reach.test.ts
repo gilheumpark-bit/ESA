@@ -9,7 +9,7 @@
  * 등록돼 있다는 것과 발화한다는 것은 다르다. 여기서 잠그는 것은 "카드가
  * 조건 분기보다 먼저 그려지는가" — 결과 유무와 무관한 자리에 있는가다.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const PAGE = join(process.cwd(), 'src/app/(with-nav)/search/page.tsx');
@@ -90,5 +90,24 @@ describe('변환 질의 패턴', () => {
     for (const q of ['KEC 140', '전압강하 계산', 'AWG 표', '12 AWG', 'to mm2']) {
       expect(regex.test(q)).toBe(false);
     }
+  });
+});
+
+/**
+ * 제목을 런타임에 덮어쓰지 않는다.
+ *
+ * layout.tsx 의 metadata 로 27쪽 제목을 갈랐는데, /receipt 는 마운트 시
+ * `document.title = '계산 이력 | ESA'` 로 다시 썼다. SSR 제목만 보면 새 제목이
+ * 나오고 화면을 띄운 뒤 탭을 봐야 옛 표기가 드러난다(실측 2026-07-26) —
+ * 폐기한 브랜드 표기가 그 경로로 되살아났다.
+ */
+describe('제목 런타임 덮어쓰기', () => {
+  const pages = readdirSync(join(process.cwd(), 'src/app'), { recursive: true, encoding: 'utf-8' })
+    .filter((p) => p.endsWith('page.tsx'))
+    .map((p) => join(process.cwd(), 'src/app', p));
+
+  it('page.tsx 가 document.title 을 쓰지 않는다', () => {
+    const offenders = pages.filter((p) => /document\.title\s*=/.test(readFileSync(p, 'utf-8')));
+    expect(offenders.map((p) => p.replace(process.cwd(), ''))).toEqual([]);
   });
 });

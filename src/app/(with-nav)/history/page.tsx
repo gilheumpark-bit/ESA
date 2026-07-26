@@ -174,6 +174,12 @@ export default function HistoryPage() {
   const [judgmentFilter, setJudgmentFilter] = useState<'' | 'pass' | 'fail'>('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  /**
+   * 비로그인이면 이 목록은 sessionStorage 뿐이다 — 탭을 닫으면 사라진다.
+   * 화면은 "계산 기록" 이라 부르고 CSV 내보내기까지 주면서 그 사실을 말하지
+   * 않았다(실측 2026-07-26). 사라질 기록을 영구 기록처럼 보여주면 안 된다.
+   */
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -189,6 +195,7 @@ export default function HistoryPage() {
         // AuthContext는 hook이라 여기서 직접 사용 불가 — Firebase getCurrentUser 경유.
         const { getCurrentUser } = await import('@/lib/firebase');
         const user = await getCurrentUser();
+        setSignedIn(Boolean(user));
         if (user) {
           const supaReceipts = await loadSupabaseReceipts();
           if (supaReceipts.length > 0) {
@@ -202,6 +209,7 @@ export default function HistoryPage() {
         }
       } catch (err) {
         // Firebase/Supabase 미설정 시 sessionStorage만 사용
+        setSignedIn(false);
         console.warn('[ESVA] History Supabase load failed:', err instanceof Error ? err.message : err);
       }
     }
@@ -258,6 +266,15 @@ export default function HistoryPage() {
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Calculation History
           </p>
+          {signedIn === false && (
+            <p className="mt-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+              지금 이 기록은 <strong>브라우저 탭을 닫으면 사라집니다</strong>.{' '}
+              <Link href="/login" className="text-[var(--color-primary)] hover:underline">
+                로그인
+              </Link>
+              하면 계정에 영구 보관됩니다. 남겨야 할 기록은 CSV 로 먼저 내려받으세요.
+            </p>
+          )}
         </div>
       </header>
 
