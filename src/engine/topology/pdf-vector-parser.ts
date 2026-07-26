@@ -22,7 +22,7 @@ import { pdfjsNodeDocumentOptions } from './pdfjs-assets';
 // PART 1 — Types
 // =========================================================================
 
-interface PdfTextItem {
+export interface PdfTextItem {
   text: string;
   x: number;
   y: number;
@@ -210,6 +210,80 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }): number 
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 }
 
+/**
+ * 글자 폭 합(em 배수). 한글·한자·가나는 전각이라 라틴 문자의 약 두 배다.
+ *
+ * 폭을 라틴 기준(0.6em)으로만 잡으면 한글 텍스트의 오른쪽 끝이 실제보다 짧게
+ * 계산되고, 그러면 다음 글자와의 간격이 실제보다 넓어 보여 같은 낱말인데도
+ * 안 붙는다(실측 2026-07-26: "일련번호" 네 글자가 각각 따로).
+ */
+function advanceWidth(text: string): number {
+  let em = 0;
+  for (const ch of text) {
+    // 한글 음절·자모, CJK 통합한자, 가나, 전각 기호.
+    em += /[가-힯ᄀ-ᇿ㄰-㆏一-鿿぀-ヿ＀-｠]/.test(ch)
+      ? 1
+      : 0.6;
+  }
+  return em;
+}
+
+/**
+ * 같은 줄에서 붙어 나온 글자 조각을 한 낱말로 합친다.
+ *
+ * pdfjs 는 CAD PDF 의 한글을 글자 단위로 내보내는 경우가 있다. 실측(2026-07-26,
+ * KIMM 분전반결선도): 한글 텍스트 55개 중 33개가 1글자였고 "사"/"업"/"명" 이
+ * 같은 y(92.57)에 x 간격 0.94 로 나란히 놓여 있었다. 이대로면 "사업명"·"도면명"
+ * 같은 한글 라벨이 어떤 키워드 매칭에도 걸리지 않는다 — 국내 도면에서 라벨
+ * 판독이 통째로 죽는다.
+ *
+ * 임계는 매직넘버가 아니라 그 글자 자신의 높이에서 뽑는다. 같은 회전각, 같은
+ * 기준선(높이의 30% 이내), 그리고 앞 글자의 오른쪽 끝과 다음 글자 왼쪽 사이가
+ * 한 글자 폭의 절반 이내일 때만 잇는다. 표의 옆 칸처럼 떨어져 있으면 안 붙는다.
+ */
+export function mergeGlyphRuns(items: PdfTextItem[]): PdfTextItem[] {
+  if (items.length < 2) return items;
+
+  // 먼저 줄로 묶는다. y 로만 정렬해 이어 붙이면 다른 열의 글자가 사이에 끼어
+  // 사슬이 끊긴다 — 같은 시각적 줄이라도 y 가 소수점에서 갈리기 때문이다
+  // (실측 2026-07-26: 이 정렬 때문에 kimm 도면의 33개가 하나도 안 붙었다).
+  const lines: PdfTextItem[][] = [];
+  for (const item of [...items].sort((a, b) => a.y - b.y)) {
+    const line = lines[lines.length - 1];
+    const head = line?.[0];
+    const sameLine = head !== undefined
+      && (head.angle ?? 0) === (item.angle ?? 0)
+      && Math.abs(head.y - item.y) <= Math.max(head.fontHeight, item.fontHeight) * 0.3;
+    if (sameLine) line.push(item);
+    else lines.push([item]);
+  }
+
+  const merged: PdfTextItem[] = [];
+  for (const line of lines) {
+    let run: PdfTextItem | undefined;
+    for (const item of line.sort((a, b) => a.x - b.x)) {
+      // 한 글자 폭도 전각/반각을 따라간다. 전각을 반각 기준으로 재면 임계가
+      // 절반이 되어 같은 낱말이 안 붙는다(실측: "일련번호" 네 글자).
+      const glyphWidth = Math.max(run?.fontHeight ?? 0, item.fontHeight)
+        * advanceWidth(item.text.slice(0, 1) || 'a');
+      const gap = run ? item.x - (run.x + run.width) : Infinity;
+
+      if (run && gap >= -glyphWidth && gap <= glyphWidth * 0.6) {
+        // 원래 떨어져 있던 자리는 공백으로 남긴다 — "MCCB 3P" 가 "MCCB3P" 가 되면
+        // 스펙 파서의 토큰 경계가 무너진다.
+        run.text += (gap > glyphWidth * 0.2 ? ' ' : '') + item.text;
+        run.width = item.x + item.width - run.x;
+        run.height = Math.max(run.height, item.height);
+        continue;
+      }
+      run = { ...item };
+      merged.push(run);
+    }
+  }
+
+  return merged;
+}
+
 function lineLength(seg: PdfLineSegment): number {
   return Math.sqrt((seg.x2 - seg.x1) ** 2 + (seg.y2 - seg.y1) ** 2);
 }
@@ -285,7 +359,7 @@ export async function parsePdfToSLD(
     if (textContent.items.length > maxTextItems) {
       return pdfResourceLimit(`text items ${textContent.items.length} > ${maxTextItems}`);
     }
-    const texts: PdfTextItem[] = textContent.items
+    const rawTexts: PdfTextItem[] = textContent.items
     .filter((item): item is typeof item & { str: string; transform: number[] } =>
       'str' in item && typeof (item as { str?: unknown }).str === 'string')
     .map((item) => {
@@ -298,13 +372,15 @@ export async function parsePdfToSLD(
         text: item.str,
         x: tx[4],
         y: viewport.height - tx[5], // PDF Y축 반전
-        width: Math.abs(tx[0]) * item.str.length * 0.6,
+        width: Math.abs(tx[0]) * advanceWidth(item.str),
         height: Math.abs(tx[3]),
         fontHeight: Math.abs(tx[3]),
         angle,
       };
     })
     .filter(t => t.text.trim().length > 0);
+
+  const texts = mergeGlyphRuns(rawTexts);
 
   // 연산자 스트림에서 선분 추출.
   //
