@@ -9,8 +9,10 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { FolderPlus, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { FolderPlus, Loader2, LogIn } from 'lucide-react';
 import { authenticatedFetch } from '@/lib/client-auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Form State & Submission
@@ -24,10 +26,35 @@ type SubmitStatus = 'idle' | 'submitting' | 'error';
 
 export default function NewProjectPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // 비로그인 사용자에게 **먼저** 안내한다. 이 화면은 인증이 필요한데도 폼을
+  // 그대로 열어 두고, 이름·설명을 다 채워 "프로젝트 생성" 을 누른 뒤에야
+  // 거부했다(실측 2026-07-26). 같은 성격의 /community/ask 는 이미 사전에
+  // 막고 있어 그 방식에 맞춘다 — 쓰고 나서 버리게 하지 않는다.
+  if (!authLoading && !user) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-4 text-center">
+        <LogIn size={48} className="mb-4 text-[var(--color-primary)]" />
+        <h1 className="text-xl font-bold text-[var(--text-primary)]">로그인이 필요합니다</h1>
+        <p className="mt-2 text-sm text-[var(--text-secondary)]">
+          프로젝트를 만들려면 먼저 로그인해 주세요.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Link href="/login" className="rounded-lg bg-[var(--color-primary)] px-6 py-2 text-sm font-medium text-white transition-colors hover:opacity-90">
+            로그인
+          </Link>
+          <Link href="/projects" className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-5 py-2 text-sm font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--bg-tertiary)]">
+            목록으로
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
