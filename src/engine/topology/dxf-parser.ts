@@ -74,7 +74,16 @@ const BLOCK_SYMBOL_MAP: Record<string, SLDComponentType> = {
   // 기타
   'bus': 'bus', 'busbar': 'bus',
   'cap': 'capacitor', 'capacitor': 'capacitor',
-  'sw': 'switch', 'switch': 'switch', 'ds': 'switch', 'ats': 'switch',
+  'sw': 'switch',
+  // 수전 개폐기 계열 추가(2026-07-27): 22.9kV 실도면의 LBS 가 사전에 없었다.
+  'lbs': 'switch',
+  'ass': 'switch',
+  'cos': 'switch',
+  // 피뢰기 — 개폐기가 아니라 보호기기. 타입이 없어 그동안 표현 자체가 불가능했다.
+  'la': 'arrester',
+  'sa': 'arrester',
+  'spd': 'arrester',
+  'arrester': 'arrester', 'switch': 'switch', 'ds': 'switch', 'ats': 'switch',
   'ct': 'meter', 'pt': 'meter', 'meter': 'meter',
   'ups': 'ups',
   'relay': 'relay', 'ocr': 'relay', 'ovr': 'relay',
@@ -96,7 +105,8 @@ const SYMBOL_KEYS_BY_LENGTH = Object.keys(BLOCK_SYMBOL_MAP).sort((a, b) => b.len
  * 그래서 이름을 토큰으로 끊고 단계적으로 좁힌다. 1글자 키는 **완전한 토큰일 때만**
  * 유효하다("M-1"은 모터, "MCC-1"은 모터가 아니다).
  */
-function resolveBlockType(blockName: string): SLDComponentType {
+/** DXF 블록명 → 기기 종류. 사전 공백이 곧 미검출이라 단독 검사 대상이다. */
+export function resolveBlockType(blockName: string): SLDComponentType {
   const lower = blockName.toLowerCase();
   const tokens = lower.split(/[^a-z]+/).filter(Boolean);
 

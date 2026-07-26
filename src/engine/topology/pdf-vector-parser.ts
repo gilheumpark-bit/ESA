@@ -133,25 +133,51 @@ async function boundedPdfWork<T>(
 // PART 2 — 심볼 키워드 매핑
 // =========================================================================
 
+/**
+ * 한글 키워드는 `\b` 로 감싸면 **절대 매칭되지 않는다.**
+ *
+ * JS 의 `\b` 는 `[A-Za-z0-9_]` 경계라 한글 앞뒤에서는 성립하지 않는다. 실측
+ * 2026-07-27: `/\b(변압기)\b/.test('변압기')` = false. 이 사전의 한글 키
+ * 12 개(변압기·차단기·전동기·발전기·분전반·모선·콘덴서·개폐기·계기·계전기·
+ * 누전차단기·피뢰기)가 전부 죽어 있었다 — 한국 전기설비 도구인데 한글 라벨
+ * 도면에서 기기를 하나도 못 잡는 상태였다.
+ *
+ * 영문 약어는 `\b` 가 필요하다(LAMP 의 LA 를 피뢰기로 잡으면 안 된다). 그래서
+ * 두 갈래를 나눠 쓴다 — 영문은 `\b`, 한글은 앞뒤가 한글이 아닌지로 본다.
+ */
+const HANGUL = '가-힣';
+/** 한글 토큰 경계 — 앞뒤가 한글이 아니면 독립 토큰으로 본다. */
+function ko(...words: string[]): string {
+  return `(?<![${HANGUL}])(?:${words.join('|')})(?![${HANGUL}])`;
+}
+
 const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
-  { pattern: /\b(TR|변압기|TRANSFORMER|XFMR)\b/i, type: 'transformer' },
+  { pattern: new RegExp(`\\b(TR|TRANSFORMER|XFMR)\\b|${ko('변압기')}`, 'i'), type: 'transformer' },
   // ELB·ELCB·MCB·누전차단기 추가(2026-07-21): KIMM 실발주 골든 파일럿에서 ELB 20대가
   // 키워드 부재로 통째 미검출(검출 54/74 실측)된 공백 수리. DXF 파서 사전과 동기.
-  { pattern: /\b(CB|ACB|VCB|MCCB|MCB|ELB|ELCB|차단기|누전차단기|BREAKER)\b/i, type: 'breaker' },
-  { pattern: /\b(M|MOTOR|전동기|모터)\b/i, type: 'motor' },
+  { pattern: new RegExp(`\\b(CB|ACB|VCB|MCCB|MCB|ELB|ELCB|BREAKER)\\b|${ko('누전차단기', '차단기')}`, 'i'), type: 'breaker' },
+  { pattern: new RegExp(`\\b(M|MOTOR)\\b|${ko('전동기', '모터')}`, 'i'), type: 'motor' },
   // 단독 'G'는 제외 — 국내 분전반 도면에서 단독 G는 접지 표기가 관례라,
   // 실도면 18페이지 전 장에 발전기 2대가 검출되는 오탐을 만들었다(라이브
   // 실측 발각 · DXF 파서 단일문자 그림자 결함의 동종).
-  { pattern: /\b(GEN|GENERATOR|발전기)\b/i, type: 'generator' },
-  { pattern: /\b(MCC|분전반|DB|DP|PANEL|SWGR)\b/i, type: 'panel' },
-  { pattern: /\b(BUS|BUSBAR|모선)\b/i, type: 'bus' },
-  { pattern: /\b(CAP|CAPACITOR|콘덴서)\b/i, type: 'capacitor' },
-  { pattern: /\b(SW|DS|SWITCH|개폐기)\b/i, type: 'switch' },
+  { pattern: new RegExp(`\\b(GEN|GENERATOR)\\b|${ko('발전기')}`, 'i'), type: 'generator' },
+  { pattern: new RegExp(`\\b(MCC|DB|DP|PANEL|SWGR)\\b|${ko('분전반', '수배전반')}`, 'i'), type: 'panel' },
+  { pattern: new RegExp(`\\b(BUS|BUSBAR)\\b|${ko('모선')}`, 'i'), type: 'bus' },
+  { pattern: new RegExp(`\\b(CAP|CAPACITOR)\\b|${ko('콘덴서')}`, 'i'), type: 'capacitor' },
+  // LBS·ASS·COS 추가(2026-07-27): 22.9kV 수전 실도면에서 `L.B.S 24kV 3P 1250A`
+  // 가 사전에 없어 벡터 경로로는 검출되지 않았다. 기존 사전은 KIMM 분전반(저압)
+  // 캘리브레이션에서 나와 수전 개폐기 계열이 통째로 비어 있었다.
+  // 도면은 약어에 점을 찍는다 — 실물 표기가 `L.B.S`, `A.S.S` 다. 점 없는
+  // 패턴만 두면 정작 실도면에서 안 잡힌다(실측: 점 표기 4 건 전부 load 로 떨어짐).
+  { pattern: new RegExp(`\\b(SW|DS|L\\.?B\\.?S|A\\.?S\\.?S|COS|SWITCH)\\b|${ko('자동고장구분개폐기', '부하개폐기', '개폐기')}`, 'i'), type: 'switch' },
+  // 피뢰기는 개폐기가 아니라 보호기기다. 타입이 없어 switch 로 뭉개지면
+  // KEC 153.1.4(서지보호장치) 검토 대상에서 빠진다. 표기는 `L.A` 가 실물이다.
+  { pattern: new RegExp(`\\b(L\\.?A|S\\.?A|SPD)\\b|${ko('피뢰기', '서지흡수기', '서지보호')}`, 'i'), type: 'arrester' },
   // DWHM/WHM(전력량계) 추가(2026-07-21 3차 실증): EE-038 분전반 4면의 DWHM 계량
   // 4대가 키워드 부재로 전량 미검출된 공백 수리.
-  { pattern: /\b(CT|PT|METER|DWHM|WHM|계기)\b/i, type: 'meter' },
+  { pattern: new RegExp(`\\b(CT|PT|METER|DWHM|WHM)\\b|${ko('계기', '전력량계')}`, 'i'), type: 'meter' },
   { pattern: /\b(UPS)\b/i, type: 'ups' },
-  { pattern: /\b(OCR|OVR|RELAY|계전기)\b/i, type: 'relay' },
+  { pattern: new RegExp(`\\b(OCR|OVR|RELAY)\\b|${ko('계전기')}`, 'i'), type: 'relay' },
 ];
 
 interface TypeDetection {
@@ -178,7 +204,8 @@ function detectComponentTypeEx(text: string): TypeDetection {
   return { type: 'load', weak: false };
 }
 
-function detectComponentType(text: string): SLDComponentType {
+/** 텍스트 한 조각의 기기 종류 판정 — 사전 공백이 곧 미검출이라 단독 검사 대상이다. */
+export function detectComponentType(text: string): SLDComponentType {
   return detectComponentTypeEx(text).type;
 }
 

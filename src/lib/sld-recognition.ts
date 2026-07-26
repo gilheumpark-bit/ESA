@@ -16,21 +16,40 @@ import { parseMeasuredValue } from '@/lib/calculator-lexicon';
 // PART 1 — Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type SLDComponentType =
-  | 'transformer'
-  | 'breaker'
-  | 'cable'
-  | 'bus'
-  | 'generator'
-  | 'motor'
-  | 'capacitor'
-  | 'load'
-  | 'switch'
-  | 'relay'
-  | 'meter'
-  | 'panel'
-  | 'ups'
-  | 'mcc';
+/**
+ * 도면에서 뽑을 수 있는 기기 종류 — **정본은 이 배열 하나다.**
+ *
+ * 전에는 이 어휘가 네 곳에 손으로 복제돼 있었다(여기 유니온 · custom-rules 의
+ * 문자열 Set · pdf-vector-parser 의 정규식 사전 · dxf-parser 의 블록맵).
+ * 한 곳만 늘리면 나머지가 조용히 어긋난다. 타입은 이 배열에서 파생시키고,
+ * 런타임 검증이 필요한 쪽은 배열을 그대로 가져다 쓴다.
+ *
+ * `arrester` 추가(2026-07-27): 22.9kV 수전 실도면(삼선결선도)을 파이프라인에
+ * 넣었더니 `L.A x3 18kV 5kA` 를 `switch` 로 분류했다. 모델 잘못이 아니라
+ * **넣을 자리가 없었다** — 피뢰기가 어휘에 아예 없었다. 수전설비에서 피뢰기는
+ * 필수 보호기기이고 KEC 153.1.4(서지보호장치) 대상인데 모델링이 불가능했다.
+ * 기존 어휘는 KIMM 분전반(저압) 캘리브레이션에서 나와 수전설비 기기가 비어 있다.
+ */
+export const SLD_COMPONENT_TYPES = [
+  'transformer',
+  'breaker',
+  'cable',
+  'bus',
+  'generator',
+  'motor',
+  'capacitor',
+  'load',
+  'switch',
+  'relay',
+  'meter',
+  'panel',
+  'ups',
+  'mcc',
+  /** 피뢰기·서지흡수기·SPD (LA / SA / SPD) */
+  'arrester',
+] as const;
+
+export type SLDComponentType = (typeof SLD_COMPONENT_TYPES)[number];
 
 export interface SLDComponent {
   id: string;
@@ -101,6 +120,16 @@ export interface SLDAnalysisOptions {
 // PART 2 — Vision LLM SLD Analysis
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 프롬프트가 모델에게 허용하는 타입 목록. **정본 배열에서 만든다.**
+ *
+ * 전에는 여기 문자열로 박혀 있었고 `arrester` 가 없었다. 그래서 22.9kV 실도면의
+ * `L.A x3 18kV 5kA` 를 모델이 `switch` 로 냈다 — 모델이 틀린 게 아니라 **낼 수
+ * 있는 목록에 없다고 우리가 알려준 것**이다. 유니온에만 타입을 더하고 이 줄을
+ * 두면 그 타입은 영원히 나오지 않는다.
+ */
+const PROMPT_TYPE_ENUM = SLD_COMPONENT_TYPES.join('|');
+
 const SLD_SYSTEM_PROMPT = `You are an expert electrical engineer analyzing Single Line Diagrams (SLD).
 Analyze the SLD image and extract:
 1. All components (transformers, breakers, cables, buses, generators, motors, capacitors, loads, etc.)
@@ -112,7 +141,7 @@ Return ONLY valid JSON with this structure:
   "components": [
     {
       "id": "comp_1",
-      "type": "transformer|breaker|cable|bus|generator|motor|capacitor|load|switch|relay|meter|panel|ups|mcc",
+      "type": "${PROMPT_TYPE_ENUM}",
       "label": "string or null",
       "rating": "string or null (e.g. 1000kVA, 100A)",
       "voltage": "string or null (e.g. 22.9kV, 380V)",
@@ -136,6 +165,7 @@ Return ONLY valid JSON with this structure:
   "confidence": 0.0-1.0,
   "rawDescription": "brief text description of the SLD"
 }
+- Use "arrester" for lightning/surge arresters (LA, SA, SPD, 피뢰기, 서지흡수기) — they are protective devices, not switches
 - Position x/y must be numeric values from 0 to 100 relative to the current image
 - Include length only when a numeric value and unit are explicitly printed on the drawing
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
@@ -265,7 +295,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         : undefined;
       const x = finiteNumber(position?.x);
       const y = finiteNumber(position?.y);
-      if (!id || ids.has(id) || !type || !SLD_COMPONENT_TYPES.has(type as SLDComponentType) ||
+      if (!id || ids.has(id) || !type || !SLD_COMPONENT_TYPE_SET.has(type as SLDComponentType) ||
           x == null || y == null || x < 0 || x > 100 || y < 0 || y > 100) continue;
       ids.add(id);
       const properties = stringProperties(component.properties);
@@ -332,10 +362,14 @@ export function parseSLDResponse(text: string): SLDAnalysis {
   }
 }
 
-const SLD_COMPONENT_TYPES = new Set<SLDComponentType>([
-  'transformer', 'breaker', 'cable', 'bus', 'generator', 'motor', 'capacitor',
-  'load', 'switch', 'relay', 'meter', 'panel', 'ups', 'mcc',
-]);
+/**
+ * 런타임 검증용 집합. 정본 배열에서 만든다.
+ *
+ * 전에는 같은 파일 안에서 어휘를 한 번 더 손으로 나열했다. 유니온에만 타입을
+ * 더하면 이 가드가 그 타입을 모르고 `continue` 로 조용히 버린다 — 화면에는
+ * 그 기기가 아예 없던 것처럼 보인다.
+ */
+const SLD_COMPONENT_TYPE_SET: ReadonlySet<SLDComponentType> = new Set(SLD_COMPONENT_TYPES);
 
 function boundedText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') return undefined;

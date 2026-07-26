@@ -18,6 +18,7 @@ import type { Condition } from './kec/types';
 import { evaluateCondition } from './kec/types';
 import { isPlaceholderThreshold } from './evaluator-guard';
 import { parseSpecText } from '@/engine/topology/spec-text';
+import { SLD_COMPONENT_TYPES } from '@/lib/sld-recognition';
 
 // =========================================================================
 // PART 1 — 타입
@@ -108,11 +109,14 @@ const KNOWN_PARAMS: Record<RuleScope, readonly string[]> = {
   global: GLOBAL_PARAMS, // + 사용자 제공 param — 린트에서 경고만, 오류 아님
 };
 
-/** 도면 추출이 낼 수 있는 컴포넌트 타입 (sld-recognition SLDComponentType과 동일 어휘) */
-const KNOWN_COMPONENT_TYPES = new Set([
-  'transformer', 'breaker', 'cable', 'bus', 'generator', 'motor',
-  'capacitor', 'load', 'switch', 'relay', 'meter', 'panel', 'ups', 'mcc',
-]);
+/**
+ * 도면 추출이 낼 수 있는 컴포넌트 타입.
+ *
+ * 전에는 sld-recognition 의 유니온을 손으로 베껴 뒀는데, 한쪽만 늘리면 다른
+ * 쪽이 조용히 어긋난다(실측: `arrester` 추가 때 여기가 빠질 뻔했다).
+ * 정본 배열을 그대로 가져다 쓴다.
+ */
+const KNOWN_COMPONENT_TYPES: ReadonlySet<string> = new Set(SLD_COMPONENT_TYPES);
 
 // =========================================================================
 // PART 3 — 린트 (로드 시 fail-closed)
