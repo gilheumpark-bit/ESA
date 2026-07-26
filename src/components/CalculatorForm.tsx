@@ -10,6 +10,8 @@
  */
 
 import { useState, useCallback, useId, type FormEvent } from 'react';
+import { useSettings } from '@/hooks/useSettings';
+import { getSafetyProfile } from '@engine/constants/safety-factors';
 import { Calculator, Loader2, AlertCircle, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { ParamDef } from '@/engine/standards/types';
 
@@ -66,12 +68,48 @@ interface FieldError {
 // PART 2 — Field Renderers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function FieldLabel({ param, htmlFor }: { param: ExtendedParamDef; htmlFor?: string }) {
+/**
+ * 화면에 적는 단위는 **엔진이 실제로 그렇게 읽을 단위**여야 한다.
+ *
+ * 계산 실행기는 국가 프로파일이 Imperial 이면 입력을 피트·°F·HP 로 간주해
+ * SI 로 환산한다(engine/conversion/imperial-adapter). 그런데 이 폼은 항상
+ * 정의된 SI 라벨을 그대로 보여줬다. 그래서 국가를 USA(NEC)로 둔 사용자가
+ * "전선 길이 (편도)(m)" 를 보고 50 을 넣으면 엔진은 50 ft = 15.24 m 로 계산했다.
+ *
+ * 실측(2026-07-26): 같은 입력(380V 100A 50 35mm² Cu 3상 0.9)의 전압강하가
+ * KR/JP/INT 4.14V ↔ US 1.26V. 3.286배 = 1/0.3048 — 정확히 피트 해석이다.
+ * 게다가 과소평가라 실제로는 한도를 넘는 회로가 PASS 로 나온다.
+ *
+ * 변환 대상은 어댑터와 같은 목록을 따른다 — 한쪽만 늘리면 다시 어긋난다.
+ */
+function displayUnit(unit: string | undefined, imperial: boolean): string | undefined {
+  if (!unit || !imperial) return unit;
+  switch (unit) {
+    case 'm': return 'ft';
+    case '°C': return '°F';
+    case 'kW': return 'HP';
+    default: return unit;
+  }
+}
+
+/**
+ * 이 브라우저의 기준 국가가 Imperial 프로파일인가.
+ *
+ * 계산 실행기가 국가 프로파일에서 단위계를 정하므로(engine/constants/
+ * safety-factors), 화면도 같은 출처를 봐야 라벨과 해석이 어긋나지 않는다.
+ */
+function useImperialUnits(): boolean {
+  const { country } = useSettings();
+  return getSafetyProfile(country as Parameters<typeof getSafetyProfile>[0]).unitSystem === 'Imperial';
+}
+
+function FieldLabel({ param, htmlFor, imperial = false }: { param: ExtendedParamDef; htmlFor?: string; imperial?: boolean }) {
+  const unit = displayUnit(param.unit, imperial);
   const content = (
     <>
       {param.description || param.name}
-      {param.unit && (
-        <span className="ml-1 font-normal text-[var(--text-tertiary)]">({param.unit})</span>
+      {unit && (
+        <span className="ml-1 font-normal text-[var(--text-tertiary)]">({unit})</span>
       )}
     </>
   );
@@ -94,10 +132,11 @@ function NumberField({
 }: {
   param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean; inputId: string;
 }) {
+  const imperial = useImperialUnits();
   const errorId = `${inputId}-error`;
   return (
     <div>
-      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} />}
+      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} imperial={imperial} />}
       <div className="relative">
         <input
           id={inputId}
@@ -127,9 +166,9 @@ function NumberField({
           aria-describedby={error ? errorId : undefined}
           className={`${INPUT_CLS(error)} pr-12`}
         />
-        {param.unit && (
+        {displayUnit(param.unit, imperial) && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--text-tertiary)]">
-            {param.unit}
+            {displayUnit(param.unit, imperial)}
           </span>
         )}
       </div>
@@ -147,10 +186,11 @@ function TextField({
 }: {
   param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean; inputId: string;
 }) {
+  const imperial = useImperialUnits();
   const errorId = `${inputId}-error`;
   return (
     <div>
-      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} />}
+      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} imperial={imperial} />}
       <input
         id={inputId}
         type="text"
@@ -175,10 +215,11 @@ function SelectField({
 }: {
   param: ExtendedParamDef; value: string; onChange: (val: string) => void; error?: string; hideLabel?: boolean; inputId: string;
 }) {
+  const imperial = useImperialUnits();
   const errorId = `${inputId}-error`;
   return (
     <div>
-      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} />}
+      {!hideLabel && <FieldLabel param={param} htmlFor={inputId} imperial={imperial} />}
       <select
         id={inputId}
         value={value}
@@ -249,6 +290,7 @@ function ArrayField({
 }: {
   param: ExtendedParamDef; rows: ArrayRow[]; onChange: (rows: ArrayRow[]) => void; error?: string; inputId: string;
 }) {
+  const imperial = useImperialUnits();
   const schema = param.itemSchema ?? [];
   const minItems = param.minItems ?? 1;
 
@@ -259,7 +301,7 @@ function ArrayField({
 
   return (
     <div>
-      <FieldLabel param={param} />
+      <FieldLabel param={param} imperial={imperial} />
       <div className="space-y-2">
         {rows.map((row, i) => (
           <div key={i} className="rounded-lg border border-[var(--border-default)] p-3">
