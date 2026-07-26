@@ -54,7 +54,12 @@ async function resolveBrowserChatTransport(): Promise<ChatTransport> {
     await visionByok.getFirstAvailableVisionKey(),
   );
   return {
-    fetcher: fetch,
+    // 맨 `fetch` 를 객체 속성에 담으면 `transport.fetcher(...)` 로 부를 때
+    // this 가 transport 가 되어 브라우저가 거부한다 —
+    // "Failed to execute 'fetch' on 'Window': Illegal invocation".
+    // 그 문자열이 그대로 답변 자리에 찍혔다(실측 2026-07-26, /tools/studio).
+    // 서버 경유 게이트(gate:chat-live)는 이 경로를 타지 않아 초록이었다.
+    fetcher: (input, init) => fetch(input, init),
     providerBody: browserByok ?? {
       provider: 'openai',
       model: process.env.NEXT_PUBLIC_DEFAULT_CHAT_MODEL || getDefaultModel('openai'),
