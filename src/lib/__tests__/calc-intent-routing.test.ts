@@ -303,3 +303,47 @@ describe('SI 접두어 환산', () => {
     expect(intent.canAutoExecute).toBe(false);
   });
 });
+
+/**
+ * 업계 표준 용어로도 계산기에 닿는다.
+ *
+ * 현장은 계산기 이름으로 말하지 않는다 — "역률 보상 계산"이 아니라 콘덴서,
+ * "에너지저장장치"가 아니라 배터리, "누전차단기 선정"이 아니라 ELCB 다.
+ * 이건 말버릇이 아니라 업계 표준 용어라 어휘로 삼아도 흔들리지 않는다.
+ *
+ * 어휘의 정본은 손으로 쓴 동의어표가 아니라 이 리포의 IEC 60050 용어집
+ * (151개, /glossary 가 쓰는 그 표)이다. 링크가 빠진 항목은 이름이 겹치는
+ * 계산기가 정확히 하나일 때만 잇는다 — "전압"은 6종, "전류"는 7종에 걸려
+ * 어느 쪽도 아니다(실측 2026-07-26).
+ */
+describe('업계 표준 용어 라우팅', () => {
+  it.each([
+    ['reactive-power', '역률 0.8에서 0.95로 올리려면 콘덴서 몇 kVA'],
+    ['rcd-sizing', 'ELCB 정격감도전류 30mA 선정'],
+    ['battery-capacity', '배터리 48V 200Ah 용량'],
+    ['surge-arrester', '피뢰기 22.9kV 정격 선정'],
+    ['inverter-capacity', '인버터 용량 100kW 태양광'],
+  ])('%s — 표준 용어로 도달한다', (id, query) => {
+    expect(analyzeCalcIntent(query).calculatorId).toBe(id);
+  });
+
+  it.each([
+    '변압기가 뭐야',
+    '콘덴서 원리 설명해줘',
+    'ELCB와 ELB 차이',
+    '배터리 종류 알려줘',
+    '피뢰기 설치 위치 규정',
+    '태양광 발전 원리',
+    // 용어도 맞고 수치도 있지만 조항을 묻는 질문 — 여기서 새면 조회가 계산이 된다.
+    '접지저항 10Ω 기준은 어느 조항에 있어?',
+  ])('용어만 스친 "%s" 는 계산기를 열지 않는다', (query) => {
+    expect(analyzeCalcIntent(query).calculatorId).toBeUndefined();
+  });
+
+  it('용어는 검색 파서 제안을 앞지르지 않는다', () => {
+    // 이 질문은 cable-sizing 인데 "허용 전압강하 3%" 라는 용어를 품고 있다.
+    // 용어를 앞에 두면 전압강하로 샌다 — 용어는 낱말 하나만 보기 때문이다.
+    expect(analyzeCalcIntent('케이블 굵기 선정: 3상 380V 부하 100A 긍장 50m 허용 전압강하 3% 구리 도체').calculatorId)
+      .toBe('cable-sizing');
+  });
+});

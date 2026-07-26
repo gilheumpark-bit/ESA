@@ -15,6 +15,7 @@
  */
 
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
+import { ELECTRICAL_TERMS } from '@/data/iec-60050/electrical-terms';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -129,6 +130,89 @@ export function matchCalculatorByExactName(query: string): string | undefined {
     const needle = normalize(name);
     if (needle.length < 4 || !haystack.includes(needle)) continue;
     if (!best || needle.length > best.length) best = { id, length: needle.length };
+  }
+  return best?.id;
+}
+
+/**
+ * 업계 표준 용어 → 계산기.
+ *
+ * 현장은 계산기 이름으로 말하지 않는다. "역률 보상"이 아니라 **콘덴서**,
+ * "에너지저장장치"가 아니라 **배터리**, "누전차단기 선정"이 아니라 그냥
+ * **ELCB** 라고 쓴다. 이건 사람마다 다른 말버릇이 아니라 업계 표준 용어라
+ * 어휘로 삼아도 흔들리지 않는다.
+ *
+ * 그래서 동의어표를 새로 쓰지 않는다 — 이 리포엔 이미 IEC 60050 용어집이
+ * 151개 항목으로 한국어·영어·약어를 들고 있고(`/glossary` 가 쓰는 그 표),
+ * 그중 23개는 `relatedCalc` 로 계산기까지 가리킨다. 그 표를 그대로 어휘로 쓴다.
+ *
+ * 링크가 빠진 항목은 **이름이 겹치는 계산기가 정확히 하나일 때만** 잇는다.
+ * "누전차단기"는 rcd-sizing 하나뿐이라 이을 수 있지만, "전압"은 6종·"전류"는
+ * 7종·"전력"은 5종에 걸려 어느 쪽도 아니다(실측 2026-07-26).
+ *
+ * 파라미터 설명에 흔히 쓰이는 낱말도 뺀다. "도체"는 이름상 ground-conductor
+ * 하나에 걸리지만 여러 계산기의 입력 설명("도체 재질")이라 "구리 도체"라는
+ * 흔한 표현이 접지도체 계산으로 새게 된다.
+ *
+ * 이 매칭만으로 계산기를 열지 않는다 — 호출부가 **그 계산기의 입력을 수치로
+ * 읽어냈는지**를 함께 본다(§6). "변압기가 뭐야"는 용어가 맞아도 열리지 않는다.
+ */
+const STANDARD_TERM_INDEX: Array<{ term: string; id: string }> = (() => {
+  const calculatorIds = Object.keys(CALCULATOR_PARAMS).filter((id) => CALCULATOR_NAMES[id]);
+
+  /** 그 낱말을 입력 설명으로 쓰는 계산기 수. 3종 이상이면 입력 어휘로 본다. */
+  const paramWordCount = (term: string): number => {
+    const needle = normalize(term);
+    return calculatorIds.filter((id) => (CALCULATOR_PARAMS[id] ?? [])
+      .some((param) => normalize(param.description ?? '').includes(needle))).length;
+  };
+
+  /** 이름에 그 낱말을 품은 계산기. 정확히 하나일 때만 쓸 수 있다. */
+  const namedBy = (term: string): string[] => {
+    const needle = normalize(term);
+    return calculatorIds.filter((id) => normalize(CALCULATOR_NAMES[id].name).includes(needle));
+  };
+
+  const index: Array<{ term: string; id: string }> = [];
+  const seen = new Set<string>();
+
+  for (const entry of ELECTRICAL_TERMS) {
+    const surfaces = [entry.ko, entry.en, ...entry.synonyms]
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2);
+    if (surfaces.length === 0) continue;
+
+    let id = entry.relatedCalc;
+    if (!id || !CALCULATOR_NAMES[id]) {
+      if (paramWordCount(entry.ko) >= 3) continue;
+      const candidates = namedBy(entry.ko);
+      if (candidates.length !== 1) continue;
+      id = candidates[0];
+    }
+
+    for (const term of surfaces) {
+      const key = normalize(term);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      index.push({ term: key, id });
+    }
+  }
+
+  // 긴 표기부터 본다 — "과전류계전기"가 "계전기"에 먼저 먹히면 안 된다.
+  return index.sort((a, b) => b.term.length - a.term.length);
+})();
+
+/**
+ * 질의에 나온 업계 표준 용어로 계산기를 고른다. 서로 다른 계산기를 가리키는
+ * 용어가 함께 나오면 확정하지 않는다 — 애매하면 고르지 않는 쪽이 안전하다.
+ */
+export function matchCalculatorByStandardTerm(query: string): string | undefined {
+  const haystack = normalize(query);
+  let best: { id: string; length: number } | undefined;
+  for (const { term, id } of STANDARD_TERM_INDEX) {
+    if (!haystack.includes(term)) continue;
+    if (!best) best = { id, length: term.length };
+    else if (best.id !== id && term.length === best.length) return undefined;
   }
   return best?.id;
 }

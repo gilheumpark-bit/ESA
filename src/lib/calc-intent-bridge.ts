@@ -19,6 +19,7 @@ import { parseIntent } from '@/engine/llm/intent-parser';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import {
   matchCalculatorByExactName,
+  matchCalculatorByStandardTerm,
   matchCalculatorByName,
   extractScopedParams,
   type ScopedExtraction,
@@ -282,16 +283,30 @@ export function analyzeCalcIntent(query: string): CalcIntentResult {
   // 47종은 이 경로가 없으면 어떤 질문으로도 도달할 수 없다.
   // 이름 전체가 나왔을 때, 그 계산기의 입력을 **수치로** 실제 읽어냈는지가
   // "계산해달라"와 "그 기준이 어디 있냐"를 가른다. 아래 §6 참조.
-  const namedCalculatorId = matchCalculatorByExactName(query);
+  // 이름 전체가 없어도 업계 표준 용어가 그 계산기를 가리킨다. 현장은
+  // "역률 보상 계산"이 아니라 "콘덴서", "에너지저장장치"가 아니라 "배터리"라고
+  // 쓴다 — IEC 60050 용어집이 그 표기를 이미 들고 있다(§calculator-lexicon).
+  // 어느 쪽으로 짚었든 아래 openedByName 이 **입력을 수치로 읽었는지**를
+  // 함께 보므로, 용어만 스친 조회 질문은 그대로 막힌다.
+  const exactNameId = matchCalculatorByExactName(query);
+  // 표준 용어는 **검색 파서가 계산이라고 본 질의에서만** 쓴다. 그러지 않으면
+  // "접지저항 10Ω 기준은 어느 조항에 있어?" 처럼 용어도 맞고 수치도 있는
+  // 조회 질문이 계산기를 연다(실측 2026-07-26).
+  const termId = parsed.intent === 'calculate' ? matchCalculatorByStandardTerm(query) : undefined;
+  const namedCalculatorId = exactNameId ?? termId;
   const namedScoped: ScopedExtraction = namedCalculatorId
     ? extractScopedParams(query, CALCULATOR_PARAMS[namedCalculatorId] ?? [])
     : { values: {}, readNumbers: [] };
   const openedByName = namedCalculatorId !== undefined
     && collectNumbers(namedScoped.values).size > 0;
 
-  const calculatorId = (openedByName ? namedCalculatorId : undefined)
+  // 순위: 이름 전체 > 명시 > 검색 파서 제안 > 표준 용어 > 토큰 점수.
+  // 표준 용어를 파서 제안보다 앞에 두면 "케이블 굵기 선정 … 허용 전압강하 3%"
+  // 가 전압강하로 샌다 — 용어는 질문 전체가 아니라 낱말 하나만 본다(실측).
+  const calculatorId = (openedByName ? exactNameId : undefined)
     ?? explicitCalculatorId
     ?? parsed.suggestedCalculator
+    ?? (openedByName ? termId : undefined)
     // 토큰 점수 폴백은 검색 파서가 이미 계산이라고 본 질문에만 쓴다 — 이 매칭은
     // 비계산 질의 10건 중 7건에 반응할 만큼 헐겁다(실측).
     ?? (parsed.intent === 'calculate' ? matchCalculatorByName(query) : undefined);
