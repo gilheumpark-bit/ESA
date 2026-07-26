@@ -32,7 +32,7 @@ const WIRING: CodeArticle[] = [
 
   nec('210.19', '210.19', '분기회로 전선 크기 — 허용전류 ≥ 부하', [
     { param: 'conductorAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '전선 허용전류 ≥ 비연속부하 + 연속부하×1.25' },
-  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.3.9', relation: 'equivalent', note: 'KEC 분기회로 전선' }]),
+  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 허용전류' }]),
 
   nec('210.52', '210.52', '주거 콘센트 배치 기준', [
     { param: 'wallSpaceFt', operator: '<=', value: 6, unit: 'ft', result: 'PASS', note: '벽면: 어느 지점에서든 6ft 이내 콘센트' },
