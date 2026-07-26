@@ -12,6 +12,7 @@
 import { useState, useCallback, useId, type FormEvent } from 'react';
 import { useSettings } from '@/hooks/useSettings';
 import { getSafetyProfile } from '@engine/constants/safety-factors';
+import { IMPERIAL_LENGTH_KEYS, IMPERIAL_TEMP_KEYS } from '@engine/conversion/imperial-adapter';
 import { Calculator, Loader2, AlertCircle, ChevronDown, Plus, Trash2 } from 'lucide-react';
 import type { ParamDef } from '@/engine/standards/types';
 
@@ -71,25 +72,30 @@ interface FieldError {
 /**
  * 화면에 적는 단위는 **엔진이 실제로 그렇게 읽을 단위**여야 한다.
  *
- * 계산 실행기는 국가 프로파일이 Imperial 이면 입력을 피트·°F·HP 로 간주해
- * SI 로 환산한다(engine/conversion/imperial-adapter). 그런데 이 폼은 항상
- * 정의된 SI 라벨을 그대로 보여줬다. 그래서 국가를 USA(NEC)로 둔 사용자가
- * "전선 길이 (편도)(m)" 를 보고 50 을 넣으면 엔진은 50 ft = 15.24 m 로 계산했다.
+ * 계산 실행기는 국가 프로파일이 Imperial 이면 입력을 피트·°F 로 간주해 SI 로
+ * 환산한다(engine/conversion/imperial-adapter). 그런데 이 폼은 항상 정의된 SI
+ * 라벨을 그대로 보여줬다. 그래서 국가를 USA(NEC)로 둔 사용자가 "전선 길이
+ * (편도)(m)" 를 보고 50 을 넣으면 엔진은 50 ft = 15.24 m 로 계산했다.
  *
  * 실측(2026-07-26): 같은 입력(380V 100A 50 35mm² Cu 3상 0.9)의 전압강하가
- * KR/JP/INT 4.14V ↔ US 1.26V. 3.286배 = 1/0.3048 — 정확히 피트 해석이다.
- * 게다가 과소평가라 실제로는 한도를 넘는 회로가 PASS 로 나온다.
+ * KR/JP/INT 4.14V ↔ US 1.26V. 3.286배 = 1/0.3048 — 정확히 피트 해석이고,
+ * 과소평가라 실제로는 한도를 넘는 회로가 PASS 로 나온다.
  *
- * 변환 대상은 어댑터와 같은 목록을 따른다 — 한쪽만 늘리면 다시 어긋난다.
+ * 판단 기준은 **단위 문자열이 아니라 파라미터 이름**이다. 어댑터는 이름으로
+ * 골라 변환하므로, 단위가 'm' 이라도 그 목록에 없으면 변환되지 않는다. 그런
+ * 칸의 라벨을 ft 로 바꾸면 사용자가 피트로 넣고 엔진이 미터로 읽는 **반대
+ * 방향** 오류가 난다 — 실측상 단위 'm' 13개 중 4개(rodLength·spacing·
+ * buildingHeight·leadLength)와 '°C' 7개 중 3개가 그 경우였다.
+ *
+ * 전력(kW→HP)은 어댑터가 `_powerUnit === 'HP'` 일 때만 변환하는데 폼은 그 값을
+ * 보내지 않는다 — 그래서 여기서도 바꾸지 않는다.
  */
-function displayUnit(unit: string | undefined, imperial: boolean): string | undefined {
+function displayUnit(param: ExtendedParamDef, imperial: boolean): string | undefined {
+  const unit = param.unit;
   if (!unit || !imperial) return unit;
-  switch (unit) {
-    case 'm': return 'ft';
-    case '°C': return '°F';
-    case 'kW': return 'HP';
-    default: return unit;
-  }
+  if (unit === 'm' && (IMPERIAL_LENGTH_KEYS as readonly string[]).includes(param.name)) return 'ft';
+  if (unit === '°C' && (IMPERIAL_TEMP_KEYS as readonly string[]).includes(param.name)) return '°F';
+  return unit;
 }
 
 /**
@@ -104,7 +110,7 @@ function useImperialUnits(): boolean {
 }
 
 function FieldLabel({ param, htmlFor, imperial = false }: { param: ExtendedParamDef; htmlFor?: string; imperial?: boolean }) {
-  const unit = displayUnit(param.unit, imperial);
+  const unit = displayUnit(param, imperial);
   const content = (
     <>
       {param.description || param.name}
@@ -166,9 +172,9 @@ function NumberField({
           aria-describedby={error ? errorId : undefined}
           className={`${INPUT_CLS(error)} pr-12`}
         />
-        {displayUnit(param.unit, imperial) && (
+        {displayUnit(param, imperial) && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--text-tertiary)]">
-            {displayUnit(param.unit, imperial)}
+            {displayUnit(param, imperial)}
           </span>
         )}
       </div>

@@ -29,20 +29,36 @@ describe('단위 라벨과 엔진 해석', () => {
     expect(converted.length).toBe(50);
   });
 
-  it('폼이 Imperial 일 때 단위 라벨을 바꿔 표시한다', () => {
+  it('폼이 어댑터와 같은 목록을 보고 라벨을 바꾼다', () => {
     const src = readFileSync('src/components/CalculatorForm.tsx', 'utf8');
-    // 어댑터가 변환하는 세 단위를 화면도 같이 바꿔야 한다.
-    expect(src).toContain("case 'm': return 'ft';");
-    expect(src).toContain("case '°C': return '°F';");
-    expect(src).toContain("case 'kW': return 'HP';");
-    // 단위계 판단은 엔진 프로파일에서 온다 — 화면에 목록을 또 만들지 않는다.
+    // 단위 문자열이 아니라 파라미터 이름으로 고른다 — 목록은 어댑터에서 가져온다.
+    expect(src).toContain('IMPERIAL_LENGTH_KEYS');
+    expect(src).toContain('IMPERIAL_TEMP_KEYS');
+    // 단위계 판단도 엔진 프로파일에서 온다 — 화면에 국가 목록을 또 만들지 않는다.
     expect(src).toContain('getSafetyProfile');
+    // 전력은 어댑터가 _powerUnit 플래그가 있을 때만 변환하므로 라벨을 바꾸지 않는다.
+    expect(src).not.toContain("return 'HP'");
   });
 
-  it('어댑터가 변환하는 입력 키가 늘면 라벨 매핑도 같이 봐야 한다', () => {
-    // 이 목록이 바뀌면 displayUnit 도 다시 보라는 신호다.
-    const adapter = readFileSync('src/engine/conversion/imperial-adapter.ts', 'utf8');
-    expect(adapter).toContain("['length', 'distance', 'cableLength', 'totalLength_m']");
-    expect(adapter).toContain("['ambientTemp', 'temperature', 'temp']");
+  /**
+   * 라벨만 바꾸면 **반대 방향** 오류가 난다. 단위가 'm' 이라도 어댑터의 변환
+   * 목록에 없는 파라미터는 SI 로 읽히므로, 그 칸을 ft 로 적으면 사용자가
+   * 피트를 넣고 엔진이 미터로 계산한다. 실측(2026-07-26): 단위 'm' 13개 중
+   * 4개(rodLength·spacing·buildingHeight·leadLength), '°C' 7개 중 3개가
+   * 그 경우였다.
+   */
+  it('변환하지 않는 파라미터는 SI 라벨을 유지해야 한다', () => {
+    const notConverted = [
+      { name: 'rodLength', unit: 'm' },
+      { name: 'spacing', unit: 'm' },
+      { name: 'buildingHeight', unit: 'm' },
+      { name: 'leadLength', unit: 'm' },
+      { name: 'referenceTemp', unit: '°C' },
+    ];
+    for (const p of notConverted) {
+      const { converted } = convertInputsToSI({ [p.name]: 50 }, 'Imperial');
+      // 어댑터가 손대지 않는다는 사실 자체를 고정한다 — 여기가 바뀌면 라벨도 봐야 한다.
+      expect(converted[p.name]).toBe(50);
+    }
   });
 });

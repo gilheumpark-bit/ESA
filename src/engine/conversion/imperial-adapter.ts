@@ -27,6 +27,22 @@ export type UnitSystem = 'SI' | 'Imperial';
 // PART 1 — 입력 변환 (Imperial → SI)
 // ---------------------------------------------------------------------------
 
+/**
+ * Imperial 입력을 SI 로 되돌릴 때 실제로 건드리는 파라미터 이름.
+ *
+ * 화면 라벨(CalculatorForm)이 같은 목록을 봐야 한다. 단위 문자열('m')만 보고
+ * 라벨을 바꾸면, 여기 없는 파라미터는 라벨만 ft 로 바뀌고 엔진은 미터로 읽어
+ * **반대 방향** 오류가 난다 — 실측(2026-07-26)상 단위 'm' 13개 중 4개
+ * (rodLength·spacing·buildingHeight·leadLength)가 그 상태였다.
+ */
+export const IMPERIAL_LENGTH_KEYS = ['length', 'distance', 'cableLength', 'totalLength_m'] as const;
+export const IMPERIAL_TEMP_KEYS = ['ambientTemp', 'temperature', 'temp'] as const;
+/**
+ * 전력은 `_powerUnit === 'HP'` 일 때만 변환한다. 폼은 그 값을 보내지 않으므로
+ * 현재 경로에서는 항상 kW 그대로다 — 라벨을 HP 로 바꾸면 안 된다.
+ */
+export const IMPERIAL_POWER_KEYS = ['power', 'motorPower', 'loadPower_kW', 'power_kW'] as const;
+
 /** Imperial 입력 파라미터를 SI로 변환 */
 export function convertInputsToSI(
   inputs: Record<string, unknown>,
@@ -40,7 +56,7 @@ export function convertInputsToSI(
   const conversions: string[] = [];
 
   // 길이: ft → m
-  for (const key of ['length', 'distance', 'cableLength', 'totalLength_m']) {
+  for (const key of IMPERIAL_LENGTH_KEYS) {
     if (typeof converted[key] === 'number') {
       const original = converted[key] as number;
       converted[key] = footToMeter(original);
@@ -49,7 +65,7 @@ export function convertInputsToSI(
   }
 
   // 전력: HP → kW
-  for (const key of ['power', 'motorPower', 'loadPower_kW', 'power_kW']) {
+  for (const key of IMPERIAL_POWER_KEYS) {
     if (typeof converted[key] === 'number' && inputs['_powerUnit'] === 'HP') {
       const original = converted[key] as number;
       converted[key] = hpToKw(original);
@@ -58,7 +74,7 @@ export function convertInputsToSI(
   }
 
   // 온도: °F → °C
-  for (const key of ['ambientTemp', 'temperature', 'temp']) {
+  for (const key of IMPERIAL_TEMP_KEYS) {
     if (typeof converted[key] === 'number') {
       const original = converted[key] as number;
       converted[key] = fahrenheitToCelsius(original);
