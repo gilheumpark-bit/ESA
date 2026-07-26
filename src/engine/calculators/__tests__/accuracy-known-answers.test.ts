@@ -87,6 +87,10 @@ describe('lighting / energy', () => {
     const { value, extra } = run('ups-capacity', { loadPower: 10, loadPF: 0.8, backupMinutes: 15, inputVoltage: 380, batteryVoltage: 384, efficiency: 0.95, safetyFactor: 1.25, depthOfDischarge: 0.8, cellVoltage: 12 });
     close(value, 16.45);
     expect(extra.batteryCount).toBe(32);
+    // Ah = (16447·15)/(384·0.95·0.8·60) = 246711/17510 = 14.09.
+    // 위 두 줄은 kVA→VA 환산 이전 값이라, 이 줄이 없으면 배터리 뱅크가 10 배
+    // 틀려도 초록이다(실측 2026-07-26: ×1000→×100 변이 무검출).
+    close(extra.batteryAh, 14.09);
   });
   test('emergency-generator: 100/0.8·1.25=156.25→select 200 kVA', () => {
     const { value } = run('emergency-generator', { emergencyLoads: [{ name: 'a', kW: 100, pf: 0.8, isMotor: false }], safetyFactor: 1.25, requiredRuntime: 8 });
@@ -219,6 +223,16 @@ describe('cable / ampacity', () => {
     const { value, extra } = run('awg-converter-full', { value: 10, fromUnit: 'awg' });
     close(value, 5.261, 0.01);
     close(extra.kcmil, 10.38, 0.02);
+  });
+  // 위 케이스는 AWG 입력 방향뿐이다. kcmil 입력 분기(kcmil = 천 circular mil,
+  // d[mil] = √(kcmil×1000))는 아무도 밟지 않아 ×1000 이 틀려도 초록이었다.
+  // unit-conversion 스위트의 kcmilToMm2() 는 다른 모듈의 다른 함수라 안 덮는다.
+  // 250 kcmil: d = √250000 = 500 mil = 12.7 mm, A = π/4·12.7² = 126.68 mm²
+  // (업계 표준표의 250 kcmil = 126.7 mm² 와 일치).
+  test('awg-converter-full kcmil 입력: 250 kcmil → 126.68 mm²', () => {
+    const { value, extra } = run('awg-converter-full', { value: 250, fromUnit: 'kcmil' });
+    close(value, 126.68, 0.01);
+    close(extra.kcmil, 250);
   });
   // NEC/IEC는 KEC×배율 추정이 아니라 각 표준 실표에서 온다.
   // NEC: 25mm² → 보수 하향 스냅 4 AWG(21.15mm²) @90°C = 95A (NEC 310.16)
