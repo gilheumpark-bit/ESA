@@ -29,6 +29,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { DifficultyLevel } from '@/engine/calculators/types';
+import { CALCULATOR_NAMES } from '@/lib/calculator-params';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Category Metadata
@@ -331,7 +332,26 @@ function CategoryCard({ category }: { category: CategoryMeta }) {
 
 export default function CalcHubPage() {
   const [filter, setFilter] = useState('');
-  const categories = useMemo(() => buildCategories(), []);
+  /**
+   * 계산기 이름은 CALCULATOR_NAMES 가 정본이다. 아래 표는 분야·난이도·아이콘만
+   * 들고 있으면 되는데 이름까지 들고 있었고, 그 사이가 10건 벌어져 있었다
+   * (실측 2026-07-26: 정본 "아크플래시 위험도 (IEEE 1584)" ↔ 이 표
+   * "아크 플래시 (IEEE 1584)", "변압기 손실 계산" ↔ "변압기 손실" 등).
+   *
+   * 표기만의 문제가 아니다 — 챗의 이름 매칭이 정본 이름을 쓰므로, 사용자가 이
+   * 목록에서 이름을 복사해 물으면 계산기를 못 찾았다.
+   */
+  const categories = useMemo(
+    () => buildCategories().map((category) => ({
+      ...category,
+      calculators: category.calculators.map((calc) => ({
+        ...calc,
+        name: CALCULATOR_NAMES[calc.id]?.name ?? calc.name,
+        nameEn: CALCULATOR_NAMES[calc.id]?.nameEn ?? calc.nameEn,
+      })),
+    })),
+    [],
+  );
 
   const filteredCategories = useMemo(() => {
     if (!filter.trim()) return categories;

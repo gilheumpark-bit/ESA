@@ -267,3 +267,25 @@ describe('화면에 계산기 이름을 영문 ID 로 노출하지 않는다', (
     expect(src).toContain("CALCULATOR_NAMES[receipt.calcId]?.name");
   });
 });
+
+describe('화면마다 계산기 이름이 갈리지 않는다', () => {
+  /**
+   * 실측(2026-07-26): /calc 목록이 자체 이름 문자열을 들고 있어 정본과 10건
+   * 어긋나 있었다 — 정본 "아크플래시 위험도 (IEEE 1584)" ↔ 목록 "아크 플래시
+   * (IEEE 1584)", "변압기 손실 계산" ↔ "변압기 손실" 등.
+   *
+   * 표기만의 문제가 아니다. 챗의 이름 매칭(matchCalculatorByExactName)이 정본
+   * 이름을 쓰므로, 사용자가 이 목록에서 이름을 복사해 물으면 계산기를 못 찾았다.
+   */
+  it('/calc 목록이 정본 이름으로 렌더된다', () => {
+    const src = readFileSync('src/app/(with-nav)/calc/page.tsx', 'utf8');
+    expect(src).toContain('CALCULATOR_NAMES[calc.id]?.name');
+  });
+
+  it('목록에 적힌 이름으로 물으면 그 계산기에 닿는다', () => {
+    for (const id of ['arc-flash', 'transformer-loss', 'starting-current']) {
+      const name = CALCULATOR_NAMES[id].name;
+      expect(matchCalculatorByExactName(`${name}: 전압 380V 전류 100A`)).toBe(id);
+    }
+  });
+});
