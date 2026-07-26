@@ -17,13 +17,21 @@ function run(id: string, input: Record<string, unknown>) {
   if (!entry) throw new Error(`calculator not registered: ${id}`);
   const r = entry.calculator(input as never) as {
     value: number;
+    steps?: Array<{ step: number; value: number }>;
     additionalOutputs?: Record<string, { value: number }>;
   };
   const extra: Record<string, number> = {};
   if (r.additionalOutputs) {
     for (const [k, v] of Object.entries(r.additionalOutputs)) extra[k] = v.value;
   }
-  return { value: r.value as number, extra };
+  // 중간 단계 값이 화면에 보이는데 additionalOutputs 에는 없는 계산기가 있다
+  // (vt-sizing 1차 전압). 그 값이 틀려도 최종값이 맞으면 여기서 못 잡는다.
+  const step = (n: number) => {
+    const s = r.steps?.find((x) => x.step === n);
+    if (!s) throw new Error(`${id}: step ${n} 없음`);
+    return s.value;
+  };
+  return { value: r.value as number, extra, step };
 }
 
 /** relative tolerance (default 1%) — catches wrong formulas, tolerates rounding */
@@ -284,6 +292,20 @@ describe('protection', () => {
     const { value, extra } = run('vt-sizing', { systemVoltage: 22900, secondaryVoltage: 110, meterBurden: 15, relayBurden: 10, wireBurden: 2, accuracyClass: '0.5', connectionType: 'line-to-line' });
     close(value, 208.18, 0.01);
     close(extra.totalBurden, 27);
+  });
+  // L-G(Y결선) VT 는 1·2차를 함께 √3 으로 나눠 `22900/√3 : 110/√3` 으로 규격한다.
+  // 그래서 **변성비는 L-L 과 같다** — √3 이 약분되는 것이 정상이다. 뒤집으면,
+  // 변성비만 보는 검사는 이 분기의 √3 이 틀려도 영원히 초록이다(실측 2026-07-26:
+  // √3→√2 변이가 무검출). 화면에 나오는 1차 상전압을 같이 잠근다.
+  test('vt-sizing L-G 22.9kV: 1차=22900/√3=13221V; 비는 L-L 과 같은 208.18', () => {
+    const { value, step } = run('vt-sizing', { systemVoltage: 22900, secondaryVoltage: 110, meterBurden: 15, relayBurden: 10, wireBurden: 2, accuracyClass: '0.5', connectionType: 'line-to-ground' });
+    close(step(1), 13221.3);
+    close(value, 208.18, 0.01);
+  });
+  test('vt-sizing L-G 154kV: 1차=154000/√3=88912V; 비 1400', () => {
+    const { value, step } = run('vt-sizing', { systemVoltage: 154000, secondaryVoltage: 110, meterBurden: 15, relayBurden: 10, wireBurden: 2, accuracyClass: '0.5', connectionType: 'line-to-ground' });
+    close(step(1), 88911.9);
+    close(value, 1400, 0.01);
   });
   test('relay-basic SI: Ip=1.3·100=130A; IEC t=TDS·0.14/(M^0.02−1)≈0.3s', () => {
     const { value, extra } = run('relay-basic', { loadCurrent: 100, faultCurrent: 2000, ctRatio: 200, curveType: 'SI' });
