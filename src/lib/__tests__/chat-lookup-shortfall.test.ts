@@ -1,5 +1,6 @@
 import { resolveChatCalculationEvidence, resolveChatCalculationShortfall } from '@/lib/chat-calculation-evidence';
 import { filterLLMOutput } from '@engine/llm/output-filter';
+import { CALCULATOR_REGISTRY } from '@/engine/calculators';
 
 /**
  * 표에서 수치를 꺼내는 질문에 **지시가 붙는지** 본다.
@@ -72,6 +73,46 @@ describe('표 조회 질문 — 수치 발명 차단 지시', () => {
     const q = '전압 380V, 전류 100A, 길이 50m, 케이블 35sq 전압강하 계산해줘';
     expect(resolveChatCalculationEvidence(q)).not.toBeNull();
     expect(resolveChatCalculationShortfall(q)).toBeNull();
+  });
+});
+
+/**
+ * 계산기 이름을 대라고 시키면서 목록을 안 주면 지어낸다.
+ *
+ * 시스템 프롬프트는 "실행할 계산기" 를 대라고 하는데 계산기 이름을 하나도
+ * 싣지 않는다(실측 2026-07-28: 프롬프트에 계산기명 0). 없는 기능을
+ * 안내받은 사용자는 앱을 뒤지다 못 찾는다.
+ */
+describe('계산기 이름표', () => {
+  const roster = (q: string) => resolveChatCalculationShortfall(q) ?? '';
+
+  it('이름을 대라고 요구하는 두 경로에 실재 계산기 목록이 실린다', () => {
+    for (const q of ['케이블 35sq 허용전류 알려줘', '22.9kV 500kVA 변압기 2차 전류가 얼마인가요?']) {
+      const out = roster(q);
+      expect(out).toContain('앱에 있는 계산기:');
+      // 실재하는 id 가 실제로 들어 있어야 한다 — 빈 목록이면 의미 없다.
+      expect(out).toContain('voltage-drop(');
+      expect(out).toContain('ampacity-compare(');
+      expect(out).toContain('지어내지 마세요');
+    }
+  });
+
+  it('목록은 레지스트리에서 나온다 — 손으로 적으면 갈린다', () => {
+    const out = roster('케이블 35sq 허용전류 알려줘');
+    const listed = [...out.matchAll(/([a-z0-9-]+)\(/g)].map((m) => m[1]);
+    const ids = [...CALCULATOR_REGISTRY.keys()];
+    expect(listed.length).toBeGreaterThanOrEqual(ids.length);
+    expect(ids.filter((id) => !listed.includes(id))).toEqual([]);
+  });
+
+  /**
+   * 계산기가 이미 지목된 되묻기에는 목록을 싣지 않는다 — 모델이 고를 일이
+   * 없는데 840 여 토큰을 매번 태우면 낭비다.
+   */
+  it('계산기가 지목된 되묻기에는 목록을 싣지 않는다', () => {
+    const out = roster('전압강하 계산해줘');
+    expect(out).toContain('필요한 입력');
+    expect(out).not.toContain('앱에 있는 계산기:');
   });
 });
 

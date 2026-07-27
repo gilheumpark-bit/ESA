@@ -107,7 +107,12 @@ describe('image quality profiling', () => {
     expect(noisyBlurredProfile.blurry).toBe(true);
     expect(lowContrastProfile).toMatchObject({ lowContrast: true, blurry: false, warnings: ['LOW_CONTRAST'] });
     expect(noiseProfile).toMatchObject({ lowContrast: true, blurry: false, warnings: ['LOW_CONTRAST'] });
-  });
+    // 이 케이스만 sharp 로 6 장을 만들어 동시에 프로파일한다. 단독 실행이
+    // 4.5 초라 jest 기본 5 초에 붙어 있었고, 빌드와 같이 돌리면 넘겼다
+    // (실측 2026-07-28: 전체 스위트에서 1 회 실패, 격리 재실행 2 회 통과).
+    // 느린 게 결함은 아니니 임계만 넉넉히 준다 — 무시된 flaky 는 나중에
+    // 진짜 회귀를 가린다.
+  }, 30_000);
 
   it('uses EXIF orientation when reporting image dimensions', async () => {
     const rotated = await sharp({

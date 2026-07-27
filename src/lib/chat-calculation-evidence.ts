@@ -109,6 +109,26 @@ function asksForTableValue(query: string): boolean {
   return UNIT_BEARING_NUMBER.test(query) || TABLE_VALUE_TERMS.some((term) => query.includes(term));
 }
 
+/**
+ * 앱에 실제로 있는 계산기 이름표.
+ *
+ * 시스템 프롬프트는 모델에게 "실행할 계산기" 를 대라고 시키는데 **계산기
+ * 이름을 하나도 알려 주지 않는다**(실측 2026-07-28: 프롬프트에 계산기명 0).
+ * 모르는 목록에서 이름을 대라고 하면 지어낸다. 없는 기능을 안내받은
+ * 사용자는 앱을 뒤지다 못 찾는다.
+ *
+ * 레지스트리에서 뽑으므로 계산기를 추가하면 목록도 함께 는다. 붙이는 곳은
+ * **되묻기 경로뿐** 이다 — 평상시 답변에는 이 840 여 토큰을 싣지 않는다.
+ * 계산기 이름을 대라고 요구하는 자리가 거기뿐이기 때문이다.
+ */
+function calculatorRoster(): string {
+  const names = [...CALCULATOR_REGISTRY.values()]
+    .map((entry) => `${entry.id}(${entry.name})`)
+    .join(' · ');
+  return `\n앱에 있는 계산기: ${names}`
+    + '\n계산기를 안내할 때는 이 목록의 이름만 쓰세요. 목록에 없으면 "해당 계산기는 없습니다" 라고 하고 지어내지 마세요.';
+}
+
 const LOOKUP_SHORTFALL = '\n\n이 질문은 표·규정에서 수치를 꺼내는 조회이고, 검증된 ESA 계산기 영수증이 없습니다.'
   + '\n기억에 있는 표 값(허용전류·굵기·보정계수·이격거리 등)을 수치로 적지 마세요 — 출력 검증이 그런 수치를 지웁니다.'
   + '\n대신 ① 어떤 표·조항을 봐야 하는지, ② 그 표를 읽으려면 무엇이 확정돼야 하는지(도체·절연·포설방식·주위온도·회로 수 등),'
@@ -135,9 +155,10 @@ export function resolveChatCalculationShortfall(query: string): string | null {
   // 6개). 공식과 필요한 입력을 기호로 설명하는 것이 그보다 훨씬 쓸모 있다.
   if (!intent.calculatorId) {
     if (parseQuery(query).intent === 'calculate') {
-      return '\n\n계산 요청이지만 이 질문에 맞는 검증된 ESA 계산기를 지목하지 못했습니다.\n수치를 직접 만들어 제시하지 마세요. 대신 ① 적용 공식을 기호로, ② 각 기호에 해당하는 입력값이 무엇인지, ③ 어떤 계산기·기준을 봐야 하는지를 설명하세요.\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.';
+      return '\n\n계산 요청이지만 이 질문에 맞는 검증된 ESA 계산기를 지목하지 못했습니다.\n수치를 직접 만들어 제시하지 마세요. 대신 ① 적용 공식을 기호로, ② 각 기호에 해당하는 입력값이 무엇인지, ③ 어떤 계산기·기준을 봐야 하는지를 설명하세요.\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.'
+        + calculatorRoster();
     }
-    return asksForTableValue(query) ? LOOKUP_SHORTFALL : null;
+    return asksForTableValue(query) ? LOOKUP_SHORTFALL + calculatorRoster() : null;
   }
   if (intent.canAutoExecute && resolveChatCalculationEvidence(query)) return null;
 
