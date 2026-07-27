@@ -168,6 +168,27 @@ async function compareStandards(
   }
 }
 
+/**
+ * 비교 결과를 사용자 문구 한 줄로 옮긴다.
+ *
+ * **판정 못 낸 기준을 반드시 함께 말한다.** HOLD 를 부적합에서 빼고 나면
+ * "적합" 이 뜨는데, 실제로는 한 기준이 판정 자체를 못 냈을 수 있다.
+ * 그 사실을 숨기면 수리가 오히려 낙관을 만든다.
+ *
+ * (NEC 210.19 가 자리표시자 조항이라 지금도 늘 보류로 나온다.)
+ */
+function describeComparison(result: unknown): string {
+  if (!result || typeof result !== 'object' || !('universallyCompliant' in result)) {
+    return '비교 완료';
+  }
+  const r = result as { universallyCompliant: boolean; undetermined?: string[] };
+  const base = r.universallyCompliant ? '판정된 기준 모두 적합' : '일부 기준 부적합';
+  const held = r.undetermined ?? [];
+  return held.length
+    ? `${base} — 다만 ${held.join('·')} 는 판정 보류(부분 결과)`
+    : base;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 4 — Team Result Assembly
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -334,9 +355,7 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
             id: 'rec-compare',
             category: 'safety',
             title: '다국가 기준 비교 결과',
-            description: 'universallyCompliant' in compResult
-              ? `${(compResult as { universallyCompliant: boolean }).universallyCompliant ? '전 기준 적합' : '일부 기준 부적합'}`
-              : '비교 완료',
+            description: describeComparison(compResult),
             impact: 'high',
           });
         }
