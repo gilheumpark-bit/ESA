@@ -22,9 +22,11 @@ describe('PF — 전력퓨즈 vs 역률계', () => {
   });
 
   it('퓨즈 정격이 붙으면 전력퓨즈다', () => {
-    expect(detectComponentType('PF 100A')).toBe('breaker');
-    expect(detectComponentType('P.F 200A')).toBe('breaker');
-    expect(detectComponentType('PF 전력퓨즈')).toBe('breaker');
+    // `fuse` 타입 신설 전에는 breaker 로 갔다(2026-07-27 정정).
+    // 퓨즈는 차단기와 다른 기기다 — 재투입이 안 되고 교체해야 한다.
+    expect(detectComponentType('PF 100A')).toBe('fuse');
+    expect(detectComponentType('P.F 200A')).toBe('fuse');
+    expect(detectComponentType('PF 전력퓨즈')).toBe('fuse');
   });
 
   it('단서가 없으면 어느 쪽으로도 밀지 않는다', () => {

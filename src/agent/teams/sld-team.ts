@@ -34,6 +34,7 @@ import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
 import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { calculateVoltageDrop } from '@/engine/calculators/voltage-drop/voltage-drop';
 import { parseSpecText } from '@/engine/topology/spec-text';
+import type { SLDComponentType } from '@/lib/sld-recognition';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Vision Split + Parsing
@@ -440,7 +441,12 @@ async function buildTopology(
   for (const c of components) {
     graph.addNode({
       id: c.id,
-      type: c.type as 'transformer' | 'breaker' | 'cable' | 'bus' | 'generator' | 'motor' | 'load' | 'switch' | 'panel',
+      // 전에는 9 종만 나열한 좁은 캐스트였다. 그래프 노드는 전체 어휘를 받으므로
+      // 런타임 버그는 아니었지만, 읽는 사람에게 "여기 오는 건 이 9 종뿐" 이라고
+      // 거짓말한다. arrester·ground·lamp·fuse 를 더할 때마다 이 줄이 조용히
+      // 뒤처졌고, 이 타입으로 분기하는 코드가 생기면 그때 신규 타입을 놓친다.
+      // 정본 유니온을 그대로 쓴다 — 어휘가 늘어도 따라올 필요가 없다.
+      type: c.type as SLDComponentType,
       label: c.label,
       rating: c.rating,
       position: c.position ?? { x: 0, y: 0 },

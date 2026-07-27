@@ -164,7 +164,8 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   // 다른 쪽이 틀린다.
   // ANSI 52 = 교류 차단기. 계전기 번호대에 섞여 있지만 차단기다(출처 확인
   // 2026-07-27 교재 기구번호표). 여기 없으면 `52` 가 계전기로 새거나 load 로 떨어진다.
-  { pattern: new RegExp(`\\b(CB|OCB|ACB|VCB|MCCB|MCB|ELB|ELCB|GCB|LF|52[A-Z]?|BREAKER)\\b|${ko('누전차단기', '차단기', '한류퓨즈')}`, 'i'), type: 'breaker' },
+  // LF(한류퓨즈)를 뺐다 — 퓨즈는 차단기와 다른 기기이고 `fuse` 타입이 생겼다(2026-07-27).
+  { pattern: new RegExp(`\\b(CB|OCB|ACB|VCB|MCCB|MCB|ELB|ELCB|GCB|52[A-Z]?|BREAKER)\\b|${ko('누전차단기', '차단기')}`, 'i'), type: 'breaker' },
   { pattern: new RegExp(`\\b(M|MOTOR)\\b|${ko('전동기', '모터')}`, 'i'), type: 'motor' },
   // 단독 'G'는 제외 — 국내 분전반 도면에서 단독 G는 접지 표기가 관례라,
   // 실도면 18페이지 전 장에 발전기 2대가 검출되는 오탐을 만들었다(라이브
@@ -230,6 +231,16 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   { pattern: new RegExp(`\\b(S\\.?C|S\\.?R|Sh\\.?R)\\b|${ko('진상콘덴서', '직렬리액터', '분로리액터', '방전코일')}`, 'i'), type: 'capacitor' },
   { pattern: new RegExp(`\\b(INV|INVERTER)\\b|${ko('인버터')}`, 'i'), type: 'motor' },
   { pattern: new RegExp(`\\b(C\\.?H)\\b|${ko('케이블헤드', '케이블')}`, 'i'), type: 'cable' },
+  // ── 아래 셋은 타입 신설(2026-07-27). IEC 60617 분류에는 있는데 이 어휘에만
+  //    없던 자리라, 그동안 load·breaker 에 얹혀 있었다.
+  //
+  // 접지 — 모든 도면에 있다. 단독 `E`·`G` 는 넣지 않는다: 실도면 18 페이지 전 장에
+  // 발전기 2 대를 만들어 낸 단일문자 오탐과 같은 함정이다(사전 위쪽 주석 참조).
+  { pattern: new RegExp(`\\b(GND|EARTH|PE|FG)\\b|\\bE\\d+\\b|${ko('접지', '접지선', '등전위')}`, 'i'), type: 'ground' },
+  // 표시등 — 분전반 회로마다 붙는다. RL(적)·GL(녹)·YL(황)·WL(백)·PL(파일럿).
+  { pattern: new RegExp(`\\b([RGYWO]L|PL|LAMP|PILOT)\\b|${ko('표시등', '파일럿램프', '경보등')}`, 'i'), type: 'lamp' },
+  // 퓨즈 — 차단기와 다른 기기다. LF(한류)·PF(전력)는 위 PF 판별을 통과한 것만 온다.
+  { pattern: new RegExp(`\\b(LF|FUSE|F\\.?U)\\b|${ko('퓨즈', '한류퓨즈', '전력퓨즈')}`, 'i'), type: 'fuse' },
 ];
 
 interface TypeDetection {
@@ -268,7 +279,7 @@ function disambiguatePowerFactor(text: string): SLDComponentType | undefined {
   const rest = text.replace(/\bP\.?F\b/gi, ' ');
   if (METER_PANEL_NEIGHBORS.test(rest)) return 'meter';
   // 퓨즈 쪽 근거(정격·차단 표기)가 있으면 전력퓨즈.
-  if (/\b\d+\s*(A|kA|AF|AT)\b/i.test(rest) || /퓨즈|FUSE/i.test(text)) return 'breaker';
+  if (/\b\d+\s*(A|kA|AF|AT)\b/i.test(rest) || /퓨즈|FUSE/i.test(text)) return 'fuse';
   return undefined;
 }
 

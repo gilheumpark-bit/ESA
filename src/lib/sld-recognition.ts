@@ -47,6 +47,16 @@ export const SLD_COMPONENT_TYPES = [
   'mcc',
   /** 피뢰기·서지흡수기·SPD (LA / SA / SPD) */
   'arrester',
+  /**
+   * 아래 셋은 IEC 60617 분류에는 있는데 이 어휘에만 없던 자리다(2026-07-27).
+   * 실도면 근거가 있고, 없으면 갈 곳이 없어 엉뚱한 타입에 얹힌다.
+   */
+  /** 접지 (E / GND / 접지) — 삼성 22.9kV 도면 `E1`, 세종 배전반 SPD 접지. 모든 도면에 있다 */
+  'ground',
+  /** 표시등·신호 (PL / RL / GL / 파일럿램프) — 세종 p6 분전반 각 회로마다 */
+  'lamp',
+  /** 퓨즈 (PF / LF / FUSE) — 차단기와 다른 기기다. 그동안 breaker 에 얹혀 있었다 */
+  'fuse',
 ] as const;
 
 export type SLDComponentType = (typeof SLD_COMPONENT_TYPES)[number];

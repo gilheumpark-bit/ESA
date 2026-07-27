@@ -260,3 +260,36 @@ describe('교재 약호표 추가분', () => {
     expect(detectComponentType('DC')).toBe('load');
   });
 });
+
+/**
+ * 타입 신설 3 종 — 접지·표시등·퓨즈 (2026-07-27).
+ *
+ * IEC 60617 분류에는 있는데 이 어휘에만 없던 자리다. 없으면 갈 곳이 없어
+ * 엉뚱한 타입에 얹힌다 — 접지·표시등은 `load` 로, 퓨즈는 `breaker` 로 갔다.
+ *
+ * 퓨즈를 차단기와 같이 두면 안 되는 이유: 퓨즈는 재투입이 안 되고 교체해야 한다.
+ * 보호 협조 검토에서 둘은 다른 기기다.
+ */
+describe('신설 타입 — 접지·표시등·퓨즈', () => {
+  it.each([
+    ['E1', 'ground'], ['GND', 'ground'], ['PE', 'ground'],
+    ['접지', 'ground'], ['등전위', 'ground'],
+    ['PL', 'lamp'], ['RL', 'lamp'], ['GL', 'lamp'],
+    ['표시등', 'lamp'], ['파일럿램프', 'lamp'],
+    ['LF', 'fuse'], ['FUSE', 'fuse'], ['퓨즈', 'fuse'],
+  ] as const)('%s → %s', (t, exp) => {
+    expect(detectComponentType(t)).toBe(exp);
+  });
+
+  it('단독 E·G 는 접지로 보지 않는다 — 단일문자 오탐의 전례가 있다', () => {
+    // 실도면 18 페이지 전 장에 발전기 2 대를 만들어 낸 단독 `G` 와 같은 함정이다.
+    expect(detectComponentType('E')).toBe('load');
+    expect(detectComponentType('G')).toBe('load');
+  });
+
+  it('차단기는 여전히 차단기다 — 퓨즈 분리가 차단기를 건드리지 않았다', () => {
+    for (const t of ['MCCB 4P', 'VCB', 'ACB', 'ELB', '52A']) {
+      expect(detectComponentType(t)).toBe('breaker');
+    }
+  });
+});
