@@ -68,7 +68,7 @@ const CALC_LABELS: Record<string, string> = {
   'cable-sizing': '케이블 사이즈 선정',
   'breaker-sizing': '차단기 선정',
   'starting-current': '모터 기동전류',
-  'motor-load': '모터 부하 계산',
+  'motor-capacity': '전동기 용량 계산',
   'demand-diversity': '수용률 계산',
   'max-demand': '부하 계산',
   'transformer-capacity': '변압기 용량',

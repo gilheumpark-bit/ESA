@@ -444,7 +444,12 @@ export function suggestCalculators(nameplate: NameplateData): string[] {
   // 모터 데이터 (rpm, 효율, 역률)
   if (nameplate.rpm || nameplate.efficiency) {
     suggestions.push('starting-current');
-    suggestions.push('motor-load');
+    // `motor-load` 라는 계산기는 없다(2026-07-28 실측). 그 id 로 추천하면
+    // 화면 칩이 원본 id 를 그대로 찍고, 링크는 /calc/power/motor-load 로 가
+    // **"계산기를 찾을 수 없습니다"** 가 뜬다 — 모터 명판을 스캔한 사용자가
+    // 받는 추천이 빈 페이지로 갔다. 명판 데이터로 할 수 있는 실제 계산은
+    // 전동기 용량 산정이다.
+    suggestions.push('motor-capacity');
   }
 
   // 전력 데이터로 부하 계산

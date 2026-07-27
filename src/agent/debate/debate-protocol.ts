@@ -358,7 +358,10 @@ const CALC_TO_PARAM: Record<string, string> = {
   'busbar-vd': 'voltageDropPercent',
   'complex-voltage-drop': 'voltageDropPercent',
   'cable-sizing': 'current_A',
-  'ampacity': 'current_A',
+  // `ampacity` 라는 계산기는 없다 — 실제 id 는 아래 둘이다. 그 키는
+  // 영원히 안 걸려, 위 주석이 말한 "명시적 매핑" 이 죽어 있었다(2026-07-28).
+  'ampacity-compare': 'current_A',
+  'ampacity-global-compare': 'current_A',
   'short-circuit': 'current_A',
   'three-phase-power': 'power_W',
   'single-phase-power': 'power_W',
