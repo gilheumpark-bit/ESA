@@ -64,6 +64,12 @@ export const SLD_COMPONENT_TYPES = [
    * 반대가 되고, 인입선이 최대수요 목록에 들어간다.
    */
   'source',
+  /**
+   * 타 도면·타 반 참조 주석 (`FROM SV-VCS#1 PT LINE`, `TO SV-TIE LBS PANEL`).
+   * 도면에 적힌 정보라 버리지 않되 기기 대수에는 넣지 않는다.
+   * 2026-07-28 실측: 인출선 주석 둘이 `meter` 로 승격돼 계기가 2 → 4 가 됐다.
+   */
+  'annotation',
 ] as const;
 
 export type SLDComponentType = (typeof SLD_COMPONENT_TYPES)[number];
@@ -192,6 +198,19 @@ function normalizeInstrumentTransformer(
  */
 const INCOMING_SOURCE = /INCOM(?:ING|ER)|UTILITY|KEPCO|수전|인입|한전|FROM\s*:/i;
 
+function normalizeIncomingSource(
+  type: SLDComponentType,
+  label: string,
+  description: string,
+  hits: string[],
+): SLDComponentType {
+  if (type !== 'load') return type;
+  const haystack = `${label} ${description}`;
+  if (!INCOMING_SOURCE.test(haystack)) return type;
+  hits.push((label || description).slice(0, 60));
+  return 'source';
+}
+
 /**
  * 라벨에 묶여 적힌 대수를 읽는다 (`LA x 3` → 3).
  *
@@ -210,20 +229,59 @@ function parseMultiplicity(label: string): number | undefined {
   return Number.isInteger(n) && n >= 1 && n <= 999 ? n : undefined;
 }
 
-function normalizeIncomingSource(
+/**
+ * 타 도면 참조 주석을 기기에서 뺀다.
+ *
+ * `FROM …` / `TO …` 로 시작하고 정격·전압·전류가 하나도 안 적힌 것은
+ * 인출선이 어디서 오고 어디로 가는지 적은 주석이다. 같은 도면에서도
+ * 실행에 따라 `properties.source` 로 잡히기도 하고 부품으로 승격되기도
+ * 해서 프롬프트로만은 못 막는다.
+ *
+ * 자기 심볼로 그려지는 기기(차단기·개폐기·변압기·피뢰기 …)는 행선지
+ * 주석이 라벨에 붙어도 기기다. 그래서 라벨만 있고 심볼 실체가 모호한
+ * 셋(meter·load·panel)에만 적용한다.
+ */
+const CROSS_REFERENCE = /^\s*(?:FROM|TO)\b/i;
+const CROSS_REFERENCE_TYPES = new Set<SLDComponentType>(['meter', 'load', 'panel']);
+
+function normalizeCrossReference(
   type: SLDComponentType,
   label: string,
-  description: string,
+  hasSpec: boolean,
   hits: string[],
 ): SLDComponentType {
-  if (type !== 'load') return type;
-  const haystack = `${label} ${description}`;
-  if (!INCOMING_SOURCE.test(haystack)) return type;
-  hits.push((label || description).slice(0, 60));
-  return 'source';
+  if (hasSpec || !CROSS_REFERENCE_TYPES.has(type)) return type;
+  if (!CROSS_REFERENCE.test(label)) return type;
+  hits.push(label.slice(0, 60));
+  return 'annotation';
 }
 
-const SLD_SYSTEM_PROMPT = `You are an expert electrical engineer analyzing Single Line Diagrams (SLD).
+/**
+ * 피뢰기를 라벨로 확정한다.
+ *
+ * 같은 이미지를 5 회 돌렸더니 `LA x 3` 의 타입이 `arrester` 4 회·`load`
+ * 1 회로 갈렸다(2026-07-28). 어휘를 넓히고 프롬프트에 규칙을 넣어도 실행
+ * 간 변동은 남는다. 피뢰기는 KEC 341.13(시설)·341.14(접지) 대상이라
+ * 0 으로 세어지면 그 판정이 통째로 빠진다.
+ *
+ * `\bL\.?A\b` 는 `L.B.S`·`LBS#1` 에는 안 걸리지만 `LA-3 분전반` 같은
+ * 반 번호에는 걸린다. 그래서 뒤에 하이픈+숫자가 붙은 것은 제외한다.
+ */
+const ARRESTER_LABEL = /\bL\.?A\b(?!\s*[-–]\s*\d)|피뢰기|Lightning\s+Arrester|Surge\s+Arrester/i;
+const ARRESTER_FROM_TYPES = new Set<SLDComponentType>(['load', 'switch', 'panel']);
+
+function normalizeArrester(
+  type: SLDComponentType,
+  label: string,
+  hits: string[],
+): SLDComponentType {
+  if (!ARRESTER_FROM_TYPES.has(type) || !label) return type;
+  if (!ARRESTER_LABEL.test(label)) return type;
+  hits.push(label.slice(0, 60));
+  return 'arrester';
+}
+
+const SLD_SYSTEM_PROMPT =`You are an expert electrical engineer analyzing Single Line Diagrams (SLD).
 Analyze the SLD image and extract:
 1. All components (transformers, breakers, cables, buses, generators, motors, capacitors, loads, etc.)
 2. All connections between components
@@ -262,6 +320,7 @@ Return ONLY valid JSON with this structure:
 - "transformer" means POWER transformers only. Instrument transformers (PT, VT, CT, ZCT, MOF, 계기용 변성기) are "meter" — they feed measurement, not load
 - Use "source" for the incoming supply point (INCOMING LINE, INCOMER, 수전점, 인입, 한전/KEPCO supply, utility feed, a "FROM : ..." note naming an upstream substation). It is where power ENTERS the drawing. Never type it as "load" — that inverts the direction of the whole diagram
 - A component group printed with a multiplicity marker ("LA x 3", "P.T x 3", "3EA", "3개") is that many physical devices. Keep the marker in "label" verbatim so the count is not lost
+- A cross-reference note ("FROM SV-VCS#1 PT LINE", "TO SV-TIE LBS PANEL") tells you where a line comes from or goes to on ANOTHER sheet. It is not a device on this sheet — attach it to the device it annotates via "properties", or type it "annotation". Never emit it as a meter, load, or panel
 - A voltage printed on a CABLE or BUS is its INSULATION CLASS, not the operating voltage (e.g. "600V 3P4W" on a bus of a 380V system). Never report it as systemVoltage. Take systemVoltage from the incoming-line note or from the PT ratio; if neither is present, omit systemVoltage rather than guessing
 - Position x/y must be numeric values from 0 to 100 relative to the current image
 - Include length only when a numeric value and unit are explicitly printed on the drawing
@@ -388,6 +447,10 @@ export function parseSLDResponse(text: string): SLDAnalysis {
     const instrumentTransformerHits: string[] = [];
     /** 수전점을 부하로 낸 건수 — 보정 사실을 경고로 남긴다. */
     const incomingSourceHits: string[] = [];
+    /** 참조 주석을 기기로 낸 건수. */
+    const crossReferenceHits: string[] = [];
+    /** 피뢰기를 다른 타입으로 낸 건수. */
+    const arresterHits: string[] = [];
     for (const row of data.components.slice(0, 2_000)) {
       if (!row || typeof row !== 'object') continue;
       const component = row as Record<string, unknown>;
@@ -404,11 +467,21 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       const properties = stringProperties(component.properties);
       const label = boundedText(component.label, 256) ?? '';
       const quantity = parseMultiplicity(label);
-      const normalizedType = normalizeIncomingSource(
-        normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits),
+      // 수전점 보정이 먼저다 — `FROM : … INCOMING LINE` 은 참조 주석이 아니라 전원이다.
+      const normalizedType = normalizeCrossReference(
+        normalizeArrester(
+          normalizeIncomingSource(
+            normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits),
+            label,
+            properties ? Object.values(properties).join(' ') : '',
+            incomingSourceHits,
+          ),
+          label,
+          arresterHits,
+        ),
         label,
-        properties ? Object.values(properties).join(' ') : '',
-        incomingSourceHits,
+        Boolean(component.rating || component.voltage || component.current),
+        crossReferenceHits,
       );
       components.push({
         id,
@@ -479,7 +552,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ? Math.max(0, Math.min(partialRecovery ? 0.5 : 1, rawConfidence))
         : 0,
       ...(partialRecovery ? { partial: true } : {}),
-      ...((partialRecovery || instrumentTransformerHits.length || incomingSourceHits.length || insulationClassSuspect) ? {
+      ...((partialRecovery || instrumentTransformerHits.length || incomingSourceHits.length || crossReferenceHits.length || arresterHits.length || insulationClassSuspect) ? {
         warnings: [
           ...(partialRecovery ? ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'] : []),
           ...(insulationClassSuspect ? [
@@ -491,6 +564,12 @@ export function parseSLDResponse(text: string): SLDAnalysis {
           ),
           ...incomingSourceHits.map(
             (label) => `INCOMING_SOURCE_RECLASSIFIED: "${label}" 을(를) load → source(수전점) 로 보정`,
+          ),
+          ...crossReferenceHits.map(
+            (label) => `CROSS_REFERENCE_NOTE: "${label}" 은(는) 타 도면 참조 주석이라 기기에서 제외`,
+          ),
+          ...arresterHits.map(
+            (label) => `ARRESTER_RECLASSIFIED: "${label}" 을(를) 피뢰기로 보정`,
           ),
         ],
       } : {}),
