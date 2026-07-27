@@ -117,6 +117,18 @@ function collectFiles(dir: string, out: string[] = []): string[] {
 /** 조항을 **정의**하는 자리 — 번호·조문번호·표제가 붙어 있다. */
 const DEFINITION = /(?:buildArticle\('KEC-|kec\(')([\d.]+)'\s*,\s*'[\d.]+'\s*,\s*'([^']*)'/g;
 
+/**
+ * 규격 브라우저 카탈로그(`data/standards/standard-refs.ts`)의 KEC 항목.
+ *
+ * `KEC_ARTICLES` 와 **별도 데이터**라 위 DEFINITION 정규식이 못 잡는다.
+ * 그래서 조항 번호 게이트도 표제 게이트도 이 파일을 통째로 지나쳤고,
+ * 12 건 중 10 건이 틀린 채로 살아 있었다 — 410 을 "전기 수용가설비 —
+ * 옥내배선" 으로 띄우고 있었는데 KEC 410 편은 **전기철도**다.
+ *
+ * 게이트가 데이터 하나를 안 보면 그만큼이 통째로 사각이다(§2.2).
+ */
+const CATALOG_ENTRY = /clause:\s*'([\d.]+)',\s*\n\s*title_ko:\s*'([^']*)'/g;
+
 /** 조항을 **인용**하는 자리 전부 — 정의뿐 아니라 상호참조·시험데이터도 센다. */
 const CITATION = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-)([\d.]+)'/g;
 
@@ -206,6 +218,29 @@ describe('KEC 조항 표제 정합', () => {
     ];
     const dropped = moved.filter(([id, frag]) => !KEC_ARTICLES.get(id)?.title.includes(frag));
     expect(dropped).toEqual([]);
+  });
+
+  it('규격 브라우저 카탈로그의 KEC 항목도 번호와 표제가 맞다', () => {
+    const src = readFileSync(join(REPO, 'src', 'data', 'standards', 'standard-refs.ts'), 'utf8');
+    const kecBlock = src.slice(
+      src.indexOf('const KEC_REFS: StandardRef[] = ['),
+      src.indexOf('\n];', src.indexOf('const KEC_REFS: StandardRef[] = [')),
+    );
+    const entries = [...kecBlock.matchAll(CATALOG_ENTRY)];
+
+    // 정규식이 아무것도 못 잡으면 빈 목록으로 통과한다 — 그게 이 파일이
+    // 오래 사각이었던 이유다.
+    expect(entries.length).toBeGreaterThan(10);
+
+    const violations = entries
+      .map(([, num, title]) => {
+        const official = OFFICIAL.get(num);
+        if (!official) return `${num} "${title}" — 현행에 없는 번호`;
+        if (!sameTopic(title, official)) return `${num} "${title}" ≠ 현행 "${official}"`;
+        return null;
+      })
+      .filter(Boolean);
+    expect(violations).toEqual([]);
   });
 
   it('선언 목록이 실제로 남아 있는 것만 담는다 — 고친 뒤 지우지 않으면 썩는다', () => {

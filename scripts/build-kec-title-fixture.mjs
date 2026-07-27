@@ -58,6 +58,16 @@ for (const f of walk(join(REPO, 'src'))) {
   for (const m of readFileSync(f, 'utf8').matchAll(CITE)) cited.add(m[1]);
 }
 
+// 규격 브라우저 카탈로그의 KEC 항목. `KEC_ARTICLES` 와 별도 데이터라 위
+// 정규식이 못 잡는다 — 그래서 오래 사각이었고 12 건 중 10 건이 틀려 있었다.
+const REFS = join(REPO, 'src', 'data', 'standards', 'standard-refs.ts');
+const refsSrc = readFileSync(REFS, 'utf8');
+const kecBlock = refsSrc.slice(
+  refsSrc.indexOf('const KEC_REFS: StandardRef[] = ['),
+  refsSrc.indexOf('\n];', refsSrc.indexOf('const KEC_REFS: StandardRef[] = [')),
+);
+for (const m of kecBlock.matchAll(/clause:\s*'([\d.]+)'/g)) cited.add(m[1]);
+
 const rows = [...cited].sort().filter((c) => official.has(c));
 const missing = [...cited].sort().filter((c) => !official.has(c));
 
