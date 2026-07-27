@@ -38,6 +38,16 @@ export interface ChecklistEntry {
 // PART 1 — 점검 항목
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// 점검 항목의 `legalBasis` 는 점검 결과에 **법적 근거로 붙는 자리**다.
+// 2026-07-27 전수 정정 — KEC 를 근거로 댄 9 건이 전부 틀렸다:
+//   접지저항 142.3 ↔ 접지선 142.2 가 서로 바뀌어 있었다
+//     (현행 142.2 접지극·접지저항 / 142.3 접지도체·보호도체)
+//   등전위본딩 142.4 → 143.2 (142.4 는 전기수용가 접지)
+//   누전차단기 212.4 → 211.2.4 (212.4 는 과부하전류 보호)
+//   절연저항 612.3 → 132 (612 는 KEC 에 없는 번호)
+//   조도 234.1 → KS A 3011. 조도는 KEC 소관이 아니다 — criteria 는 이미
+//     "KS A 3011 기준 이상" 이라고 적어 두고 근거만 KEC 로 달고 있었다
+//   PV 501.1 → 522.2 · 인버터 501.3 → 522.3 · ESS 520.1 → 512.1.4
 export const INSPECTION_ITEMS: InspectionItem[] = [
   // 수변전 설비
   { id: 'INS-001', category: '수변전', item: '변압기 절연유 온도', method: '온도계 확인', criteria: '≤95°C (최고 유온)', frequency: 'monthly', legalBasis: '전기안전관리법 시행규칙 별표13', severity: 'critical' },
@@ -48,18 +58,18 @@ export const INSPECTION_ITEMS: InspectionItem[] = [
   { id: 'INS-006', category: '수변전', item: '보호 계전기 정정값', method: '정정표 대조', criteria: '설정값 일치', frequency: 'annual', legalBasis: '전기안전관리법 시행규칙 별표13', severity: 'critical' },
 
   // 접지
-  { id: 'INS-010', category: '접지', item: '접지 저항 측정', method: '접지저항계', criteria: 'KEC 142.3~5 기준 이하', frequency: 'annual', legalBasis: 'KEC 142.3', severity: 'critical' },
-  { id: 'INS-011', category: '접지', item: '접지선 연결 상태', method: '육안/토크렌치', criteria: '단선/풀림 없음', frequency: 'semi-annual', legalBasis: 'KEC 142.2', severity: 'critical' },
-  { id: 'INS-012', category: '접지', item: '등전위 본딩', method: '연속성 시험', criteria: '0.1Ω 이하', frequency: 'annual', legalBasis: 'KEC 142.4', severity: 'major' },
+  { id: 'INS-010', category: '접지', item: '접지 저항 측정', method: '접지저항계', criteria: 'KEC 142.2 기준 이하', frequency: 'annual', legalBasis: 'KEC 142.2', severity: 'critical' },
+  { id: 'INS-011', category: '접지', item: '접지선 연결 상태', method: '육안/토크렌치', criteria: '단선/풀림 없음', frequency: 'semi-annual', legalBasis: 'KEC 142.3', severity: 'critical' },
+  { id: 'INS-012', category: '접지', item: '등전위 본딩', method: '연속성 시험', criteria: '0.1Ω 이하', frequency: 'annual', legalBasis: 'KEC 143.2', severity: 'major' },
 
   // 배전반/분전반
   { id: 'INS-020', category: '배전반', item: '배전반 내부 청소', method: '육안/청소', criteria: '먼지/이물 없음', frequency: 'semi-annual', legalBasis: '전기안전관리법 시행규칙', severity: 'minor' },
   { id: 'INS-021', category: '배전반', item: '차단기 열화 상태', method: '적외선 열화상', criteria: '이상 온도 없음 (ΔT ≤ 10K)', frequency: 'annual', legalBasis: '전기안전관리법 시행규칙', severity: 'critical' },
   { id: 'INS-022', category: '배전반', item: '모선 접속부 볼트', method: '토크렌치', criteria: '정격 토크', frequency: 'annual', legalBasis: '전기안전관리법 시행규칙', severity: 'major' },
-  { id: 'INS-023', category: '배전반', item: '누전차단기 테스트', method: '테스트 버튼', criteria: '동작 정상', frequency: 'monthly', legalBasis: 'KEC 212.4', severity: 'critical' },
+  { id: 'INS-023', category: '배전반', item: '누전차단기 테스트', method: '테스트 버튼', criteria: '동작 정상', frequency: 'monthly', legalBasis: 'KEC 211.2.4', severity: 'critical' },
 
   // 절연
-  { id: 'INS-030', category: '절연', item: '절연 저항 측정', method: '메가(절연저항계)', criteria: '≥1MΩ (저압)', frequency: 'annual', legalBasis: 'KEC 612.3 / IEC 612.3', severity: 'critical' },
+  { id: 'INS-030', category: '절연', item: '절연 저항 측정', method: '메가(절연저항계)', criteria: '≥1MΩ (저압)', frequency: 'annual', legalBasis: 'KEC 132 / IEC 60364-6', severity: 'critical' },
   { id: 'INS-031', category: '절연', item: '전선 피복 상태', method: '육안', criteria: '균열/변색 없음', frequency: 'semi-annual', legalBasis: '전기안전관리법', severity: 'major' },
 
   // 비상 전원
@@ -69,12 +79,12 @@ export const INSPECTION_ITEMS: InspectionItem[] = [
 
   // 조명/안전
   { id: 'INS-050', category: '조명', item: '비상등/유도등 점등', method: '육안/정전 시험', criteria: '전등 점등, 90분 유지', frequency: 'monthly', legalBasis: '소방시설법 시행령', severity: 'critical' },
-  { id: 'INS-051', category: '조명', item: '조도 측정', method: '조도계', criteria: 'KS A 3011 기준 이상', frequency: 'annual', legalBasis: 'KEC 234.1', severity: 'minor' },
+  { id: 'INS-051', category: '조명', item: '조도 측정', method: '조도계', criteria: 'KS A 3011 기준 이상', frequency: 'annual', legalBasis: 'KS A 3011 (KEC 소관 아님)', severity: 'minor' },
 
   // 태양광/ESS
-  { id: 'INS-060', category: '신재생', item: 'PV 모듈 절연 저항', method: '메가', criteria: '≥1MΩ', frequency: 'annual', legalBasis: 'KEC 501.1', severity: 'critical' },
-  { id: 'INS-061', category: '신재생', item: 'ESS BMS 상태', method: '모니터링 확인', criteria: 'SOC/SOH 정상', frequency: 'monthly', legalBasis: 'KEC 520.1', severity: 'critical' },
-  { id: 'INS-062', category: '신재생', item: '인버터 동작 상태', method: '모니터링', criteria: '출력/효율 정상', frequency: 'monthly', legalBasis: 'KEC 501.3', severity: 'major' },
+  { id: 'INS-060', category: '신재생', item: 'PV 모듈 절연 저항', method: '메가', criteria: '≥1MΩ', frequency: 'annual', legalBasis: 'KEC 522.2', severity: 'critical' },
+  { id: 'INS-061', category: '신재생', item: 'ESS BMS 상태', method: '모니터링 확인', criteria: 'SOC/SOH 정상', frequency: 'monthly', legalBasis: 'KEC 512.1.4', severity: 'critical' },
+  { id: 'INS-062', category: '신재생', item: '인버터 동작 상태', method: '모니터링', criteria: '출력/효율 정상', frequency: 'monthly', legalBasis: 'KEC 522.3', severity: 'major' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

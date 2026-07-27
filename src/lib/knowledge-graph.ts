@@ -220,13 +220,20 @@ function buildCoreGraph(): KnowledgeGraph {
   // === STANDARDS (15+) ===
   const standards: Array<[string, string, string, Record<string, string>?]> = [
     ['s-kec', '한국전기설비기술기준', 'KEC (Korean Electrical Code)', { country: 'KR', year: '2021' }],
-    ['s-kec-140', 'KEC 140조 접지', 'KEC Clause 140 Grounding', { parent: 's-kec' }],
-    ['s-kec-210', 'KEC 210조 계량설비', 'KEC Clause 210 Metering', { parent: 's-kec' }],
-    ['s-kec-220', 'KEC 220조 분전반', 'KEC Clause 220 Distribution', { parent: 's-kec' }],
-    ['s-kec-230', 'KEC 230조 전동기', 'KEC Clause 230 Motors', { parent: 's-kec' }],
-    ['s-kec-232', 'KEC 232조 보호장치', 'KEC Clause 232 Protection', { parent: 's-kec' }],
-    ['s-kec-310', 'KEC 310조 변압기', 'KEC Clause 310 Transformers', { parent: 's-kec' }],
-    ['s-kec-520', 'KEC 520조 태양광', 'KEC Clause 520 PV Systems', { parent: 's-kec' }],
+    // 2026-07-27 전면 정정. 7 노드가 전부 틀려 있었다 — 140·210·220·230·310·520
+    // 은 KEC 에 없는 번호이고, 232 는 보호장치가 아니라 **배선설비**다.
+    // 이 그래프는 개념 → 규격 연결의 정본이라 검색·추천이 여기를 따라간다.
+    ['s-kec-132', 'KEC 132 전로의 절연저항 및 절연내력', 'KEC 132 Insulation Resistance and Dielectric Strength', { parent: 's-kec' }],
+    ['s-kec-142', 'KEC 142 접지시스템의 시설', 'KEC 142 Earthing System Installation', { parent: 's-kec' }],
+    ['s-kec-143', 'KEC 143 감전보호용 등전위본딩', 'KEC 143 Equipotential Bonding', { parent: 's-kec' }],
+    ['s-kec-151', 'KEC 151 피뢰시스템', 'KEC 151 Lightning Protection', { parent: 's-kec' }],
+    ['s-kec-211', 'KEC 211 감전에 대한 보호', 'KEC 211 Protection Against Electric Shock', { parent: 's-kec' }],
+    ['s-kec-212', 'KEC 212 과전류에 대한 보호', 'KEC 212 Protection Against Overcurrent', { parent: 's-kec' }],
+    ['s-kec-232', 'KEC 232 배선설비', 'KEC 232 Wiring Systems', { parent: 's-kec' }],
+    ['s-kec-341', 'KEC 341 기계 및 기구', 'KEC 341 Machines and Apparatus', { parent: 's-kec' }],
+    ['s-kec-351', 'KEC 351 발전소·변전소·개폐소', 'KEC 351 Power Stations and Substations', { parent: 's-kec' }],
+    ['s-kec-511', 'KEC 511 전기저장장치', 'KEC 511 Energy Storage Systems', { parent: 's-kec' }],
+    ['s-kec-522', 'KEC 522 태양광설비의 시설', 'KEC 522 Photovoltaic Installations', { parent: 's-kec' }],
     ['s-nec', 'NEC (미국전기규정)', 'NEC (National Electrical Code)', { country: 'US', year: '2023' }],
     ['s-nec-210', 'NEC Article 210 분기회로', 'NEC Article 210 Branch Circuits', { parent: 's-nec' }],
     ['s-nec-240', 'NEC Article 240 과전류보호', 'NEC Article 240 Overcurrent', { parent: 's-nec' }],
@@ -312,16 +319,16 @@ function buildCoreGraph(): KnowledgeGraph {
   // 개념 → 규격 관계 (GOVERNED_BY)
   const governedByEdges: Array<[string, string, number]> = [
     ['c-voltage-drop', 's-kec-232', 0.95],
-    ['c-grounding', 's-kec-140', 0.95],
+    ['c-grounding', 's-kec-142', 0.95],
     ['c-grounding', 's-nec-250', 0.95],
     ['c-overcurrent', 's-kec-232', 0.9],
     ['c-overcurrent', 's-nec-240', 0.9],
     ['c-cable-sizing', 's-kec-232', 0.9],
     ['c-cable-sizing', 's-nec-310', 0.9],
-    ['c-transformer', 's-kec-310', 0.95],
-    ['c-motor', 's-kec-230', 0.95],
-    ['c-panelboard', 's-kec-220', 0.9],
-    ['c-pv', 's-kec-520', 0.95],
+    ['c-transformer', 's-kec-341', 0.95],
+    ['c-motor', 's-kec-212', 0.95],
+    ['c-panelboard', 's-kec-232', 0.9],
+    ['c-pv', 's-kec-522', 0.95],
     ['c-ampacity', 's-nec-310', 0.95],
     ['c-ampacity', 's-iec-60364', 0.85],
     ['c-short-circuit', 's-iec-60364', 0.85],
@@ -349,26 +356,26 @@ function buildCoreGraph(): KnowledgeGraph {
   // 개념 → 규격 관계 추가 (GOVERNED_BY — 교차참조 강화)
   const governedByEdges2: Array<[string, string, number]> = [
     // KEC 세부 조항 매핑
-    ['c-ampacity', 's-kec-232', 0.95],       // 허용전류 → KEC 232
-    ['c-insulation', 's-kec-232', 0.8],       // 절연 → KEC 232
-    ['c-conductor', 's-kec-232', 0.85],       // 도체 → KEC 232
-    ['c-circuit-breaker', 's-kec-232', 0.9],  // 차단기 → KEC 232
-    ['c-fuse', 's-kec-232', 0.85],            // 퓨즈 → KEC 232
-    ['c-surge', 's-kec-140', 0.8],            // 서지 → KEC 140 접지
-    ['c-spd', 's-kec-140', 0.85],             // SPD → KEC 140
-    ['c-rcd', 's-kec-232', 0.9],              // RCD → KEC 232
-    ['c-demand-factor', 's-kec-220', 0.9],    // 수요율 → KEC 220
-    ['c-switchgear', 's-kec-310', 0.9],       // 수배전 → KEC 310
-    ['c-ess', 's-kec-520', 0.85],             // ESS → KEC 520
-    ['c-emergency-power', 's-kec-220', 0.8],  // 비상전원 → KEC 220
+    ['c-ampacity', 's-kec-232', 0.95],       // 허용전류 → KEC 232.5 (배선설비 하위)
+    ['c-insulation', 's-kec-132', 0.9],       // 절연 → KEC 132 전로의 절연저항 및 절연내력
+    ['c-conductor', 's-kec-232', 0.85],       // 도체 → KEC 232 배선설비
+    ['c-circuit-breaker', 's-kec-212', 0.9],  // 차단기 → KEC 212 과전류 보호
+    ['c-fuse', 's-kec-212', 0.85],            // 퓨즈 → KEC 212 과전류 보호
+    ['c-surge', 's-kec-151', 0.8],            // 서지 → KEC 151 피뢰시스템
+    ['c-spd', 's-kec-151', 0.85],             // SPD → KEC 151 피뢰시스템(153.1.4 서지보호장치)
+    ['c-rcd', 's-kec-211', 0.9],              // RCD → KEC 211.2.4 누전차단기의 시설
+    // 수용률·부등률은 KEC 소관이 아니다(NEC 220 / 내선규정) — 연결을 뺐다
+    ['c-switchgear', 's-kec-351', 0.9],       // 수배전 → KEC 351.7 배전반의 시설
+    ['c-ess', 's-kec-511', 0.85],             // ESS → KEC 511 전기저장장치
+    ['c-emergency-power', 's-kec-351', 0.8],  // 비상전원 → KEC 351.3 발전기 등의 보호장치
     ['c-harmonics', 's-iec-60364', 0.8],      // 고조파 → IEC 60364
     ['c-arc-flash', 's-nec-240', 0.85],       // 아크플래시 → NEC 240
-    ['c-selectivity', 's-kec-232', 0.9],      // 보호협조 → KEC 232
-    ['c-starting-current', 's-kec-230', 0.9],   // 기동 → KEC 230
+    ['c-selectivity', 's-kec-212', 0.9],      // 보호협조 → KEC 212.7 과부하·단락 보호의 협조
+    ['c-starting-current', 's-kec-212', 0.9],   // 기동 → KEC 212.6.3 전동기 보호용 과전류보호장치
     ['c-frequency', 's-iec-60364', 0.75],     // 주파수 → IEC 60364
-    ['c-lightning', 's-kec-140', 0.85],        // 뇌보호 → KEC 140
-    ['c-ups', 's-kec-520', 0.8],              // UPS → KEC 520
-    ['c-generator', 's-kec-310', 0.85],       // 발전기 → KEC 310
+    ['c-lightning', 's-kec-151', 0.85],        // 뇌보호 → KEC 151 피뢰시스템
+    ['c-ups', 's-kec-511', 0.8],              // UPS → KEC 511 전기저장장치
+    ['c-generator', 's-kec-351', 0.85],       // 발전기 → KEC 351.3 발전기 등의 보호장치
     // NEC 세부 매핑
     ['c-voltage-drop', 's-nec-210', 0.85],    // 전압강하 → NEC 210
     ['c-circuit-breaker', 's-nec-240', 0.9],  // 차단기 → NEC 240
@@ -380,19 +387,19 @@ function buildCoreGraph(): KnowledgeGraph {
   // 규격 간 등가 관계 (EQUIVALENT_TO — KEC↔NEC↔IEC 다국가 매핑)
   const equivalentEdges: Array<[string, string, number]> = [
     // KEC ↔ NEC
-    ['s-kec-140', 's-nec-250', 0.85],     // 접지
+    ['s-kec-142', 's-nec-250', 0.85],     // 접지
     ['s-kec-232', 's-nec-240', 0.8],      // 보호/과전류
     ['s-kec-232', 's-nec-310', 0.8],      // 허용전류/도체
-    ['s-kec-220', 's-nec-210', 0.8],      // 분전/분기회로
-    ['s-kec-230', 's-nec-310', 0.75],     // 전동기/도체
-    ['s-kec-310', 's-nec-310', 0.7],      // 변압기/도체
-    ['s-kec-520', 's-nec-310', 0.65],     // 태양광/도체
+    ['s-kec-232', 's-nec-210', 0.8],      // 배선설비/분기회로
+    ['s-kec-212', 's-nec-310', 0.75],     // 전동기 보호/도체
+    ['s-kec-341', 's-nec-310', 0.7],      // 기계기구/도체
+    ['s-kec-522', 's-nec-310', 0.65],     // 태양광/도체
     // KEC ↔ IEC
     ['s-kec', 's-iec-60364', 0.9],         // 전체 기준 등가
-    ['s-kec-140', 's-iec-60364', 0.85],    // 접지
+    ['s-kec-142', 's-iec-60364', 0.85],    // 접지
     ['s-kec-232', 's-iec-60364', 0.85],    // 보호
-    ['s-kec-310', 's-iec-61936', 0.8],     // 고압설비
-    ['s-kec-520', 's-iec-60364', 0.75],    // 태양광
+    ['s-kec-351', 's-iec-61936', 0.8],     // 고압설비
+    ['s-kec-522', 's-iec-60364', 0.75],    // 태양광
     // NEC ↔ IEC
     ['s-nec-310', 's-iec-60364', 0.8],     // 도체/설비
     ['s-nec-240', 's-iec-60364', 0.8],     // 과전류보호
