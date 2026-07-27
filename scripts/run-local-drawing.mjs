@@ -187,6 +187,43 @@ const BASE = process.argv[3] ?? 'http://127.0.0.1:3010';
  * 새 실행이 아니므로 영수증을 지우지도, 키를 요구하지도 않는다.
  */
 const REPLAY = process.argv.includes('--replay');
+
+/**
+ * 계통전압 대조 — 표기 흔들림(공백·대소문자·Ø/φ)만 걷어내고 견준다.
+ *
+ * **빈 값은 통과가 아니다.** 빈 문자열은 모든 문자열의 부분열이라
+ * `want.includes('')` 가 참이 된다 — 아예 못 읽은 것이 OK 로 찍히고 있었다
+ * (재생 모드로 sejong 을 다시 돌려 발각, 2026-07-28).
+ */
+function voltageVerdict(got, want) {
+  const norm = (s) => String(s).replace(/\s+/g, '').toUpperCase().replace(/[ØΦ]/g, 'P');
+  const g = norm(got);
+  const w = norm(want);
+  if (g.length === 0) return '미검출';
+  return (g === w || g.includes(w) || w.includes(g)) ? 'OK  ' : '불일치';
+}
+
+/**
+ * 대조 헬퍼가 알려진 케이스를 못 맞히면 **보고 자체를 거부한다.**
+ *
+ * 이 스크립트는 jest 밖에 있어(roots=src) 아무 테스트도 안 덮는다. 그런데
+ * 여기서 나온 숫자가 곧 "AI 가 도면을 얼마나 맞혔나" 로 읽힌다 — 대조가
+ * 틀리면 없는 성적이 생긴다. 실제로 빈 값을 OK 로 찍고 있었다.
+ * 매 실행 0ms 짜리 자기 반증을 붙여 그 재발을 막는다.
+ */
+for (const [got, want, expected] of [
+  ['380V 3P4W', '380V 3Ø4W', 'OK  '],
+  ['22.9kV', '22.9kV', 'OK  '],
+  ['22.9kV / 3-phase 4-wire', '22.9kV', 'OK  '],
+  ['', '600V 3Ø4W 60Hz', '미검출'],
+  ['380V', '600V 3Ø4W 60Hz', '불일치'],
+]) {
+  const actual = voltageVerdict(got, want);
+  if (actual !== expected) {
+    console.error(`대조 헬퍼 자기검사 실패: voltageVerdict("${got}","${want}") = ${actual}, 기대 ${expected}`);
+    process.exit(3);
+  }
+}
 const spec = LABELS[which];
 if (!spec) {
   console.error(`알 수 없는 라벨키: ${which}. 가능: ${Object.keys(LABELS).join(', ')}`);
@@ -330,15 +367,7 @@ if (res.status !== 200) {
   if (spec.label.systemVoltage != null) {
     const got = String(data?.systemVoltage ?? '');
     const want = String(spec.label.systemVoltage);
-    // 표기 흔들림(공백·대소문자·Ø/φ)을 걷어내고 숫자+단위가 겹치는지 본다.
-    const norm = (s) => s.replace(/\s+/g, '').toUpperCase().replace(/[ØΦ]/g, 'P');
-    // **빈 값은 통과가 아니다.** 빈 문자열은 모든 문자열의 부분열이라
-    // `want.includes('')` 가 참이 된다 — 계통전압을 아예 못 읽었는데 OK 로
-    // 찍히고 있었다(재생 모드로 sejong 을 다시 돌려 발각, 2026-07-28).
-    const g = norm(got);
-    const w = norm(want);
-    const ok = g.length > 0 && (g === w || g.includes(w) || w.includes(g));
-    const mark = g.length === 0 ? '미검출' : ok ? 'OK  ' : '불일치';
+    const mark = voltageVerdict(got, want);
     console.log(`   ${mark} ${'계통전압'.padEnd(14)} 결과 ${got || '-'}    라벨 ${want}`);
   }
 
