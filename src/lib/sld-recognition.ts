@@ -57,6 +57,13 @@ export const SLD_COMPONENT_TYPES = [
   'lamp',
   /** 퓨즈 (PF / LF / FUSE) — 차단기와 다른 기기다. 그동안 breaker 에 얹혀 있었다 */
   'fuse',
+  /**
+   * 수전점·인입 (INCOMING / 수전 / 한전 인입 / UTILITY) — 도면의 전원이다.
+   * 자리가 없어 `load` 에 얹히고 있었다(2026-07-28 실측: 22.9kV LBS 패널의
+   * `154S/S INCOMING LINE`). 부하와 전원이 뒤바뀌면 상류/하류가 통째로
+   * 반대가 되고, 인입선이 최대수요 목록에 들어간다.
+   */
+  'source',
 ] as const;
 
 export type SLDComponentType = (typeof SLD_COMPONENT_TYPES)[number];
@@ -70,6 +77,11 @@ export interface SLDComponent {
   current?: string;
   position: { x: number; y: number };
   properties?: Record<string, string>;
+  /**
+   * 라벨에 대수가 묶여 적힌 경우의 물리 대수 (`LA x 3` → 3).
+   * 표기가 없으면 붙이지 않는다 — 1 로 채우면 추정이 사실처럼 보인다.
+   */
+  quantity?: number;
 }
 
 export interface SLDConnection {
@@ -168,6 +180,49 @@ function normalizeInstrumentTransformer(
   return 'meter';
 }
 
+/**
+ * 수전점을 부하로 낸 것을 되돌린다.
+ *
+ * 방향이 뒤집히는 오류라 라벨 오기 이상이다 — `hasLoads` 가 최대수요·수용률
+ * 계산으로 라우팅하는데 거기 인입선이 들어간다.
+ *
+ * `FROM :` 은 단선도에서 "여기서 온다" 를 뜻하는 관용 표기라 강한 신호다.
+ * 다만 계기 인출선(`FROM SV-VCS#1 PT LINE`)에도 붙으므로 `load` 로 낸
+ * 것에만 적용한다 — 과잉 보정하면 진짜 부하가 사라진다.
+ */
+const INCOMING_SOURCE = /INCOM(?:ING|ER)|UTILITY|KEPCO|수전|인입|한전|FROM\s*:/i;
+
+/**
+ * 라벨에 묶여 적힌 대수를 읽는다 (`LA x 3` → 3).
+ *
+ * 삼상 회로의 LA·CT·PT 는 상별 3 개를 두고 도면엔 `x 3` 로 한 번만 적는다.
+ * 이걸 못 읽으면 대수가 1/3 로 집계된다(2026-07-28 실측: 피뢰기 라벨 3 vs 결과 1).
+ *
+ * 극수(`3P`)·상수(`3φ`)·정격(`1250A`)·단면적(`325sq`)은 대수가 아니다.
+ * 그래서 곱셈 기호나 명시적 수량 단위(EA·개)가 붙은 것만 인정한다.
+ */
+const MULTIPLIER = /(?:^|[\s(\[])[x×]\s*(\d{1,3})(?![\d.])/i;
+const COUNT_UNIT = /(\d{1,3})\s*(?:EA\b|개)/i;
+
+function parseMultiplicity(label: string): number | undefined {
+  if (!label) return undefined;
+  const n = Number(MULTIPLIER.exec(label)?.[1] ?? COUNT_UNIT.exec(label)?.[1]);
+  return Number.isInteger(n) && n >= 1 && n <= 999 ? n : undefined;
+}
+
+function normalizeIncomingSource(
+  type: SLDComponentType,
+  label: string,
+  description: string,
+  hits: string[],
+): SLDComponentType {
+  if (type !== 'load') return type;
+  const haystack = `${label} ${description}`;
+  if (!INCOMING_SOURCE.test(haystack)) return type;
+  hits.push((label || description).slice(0, 60));
+  return 'source';
+}
+
 const SLD_SYSTEM_PROMPT = `You are an expert electrical engineer analyzing Single Line Diagrams (SLD).
 Analyze the SLD image and extract:
 1. All components (transformers, breakers, cables, buses, generators, motors, capacitors, loads, etc.)
@@ -205,6 +260,8 @@ Return ONLY valid JSON with this structure:
 }
 - Use "arrester" for lightning/surge arresters (LA, SA, SPD, 피뢰기, 서지흡수기) — they are protective devices, not switches
 - "transformer" means POWER transformers only. Instrument transformers (PT, VT, CT, ZCT, MOF, 계기용 변성기) are "meter" — they feed measurement, not load
+- Use "source" for the incoming supply point (INCOMING LINE, INCOMER, 수전점, 인입, 한전/KEPCO supply, utility feed, a "FROM : ..." note naming an upstream substation). It is where power ENTERS the drawing. Never type it as "load" — that inverts the direction of the whole diagram
+- A component group printed with a multiplicity marker ("LA x 3", "P.T x 3", "3EA", "3개") is that many physical devices. Keep the marker in "label" verbatim so the count is not lost
 - A voltage printed on a CABLE or BUS is its INSULATION CLASS, not the operating voltage (e.g. "600V 3P4W" on a bus of a 380V system). Never report it as systemVoltage. Take systemVoltage from the incoming-line note or from the PT ratio; if neither is present, omit systemVoltage rather than guessing
 - Position x/y must be numeric values from 0 to 100 relative to the current image
 - Include length only when a numeric value and unit are explicitly printed on the drawing
@@ -329,6 +386,8 @@ export function parseSLDResponse(text: string): SLDAnalysis {
     const components: SLDComponent[] = [];
     /** 계기용 변성기를 전력 변압기로 낸 건수 — 보정 사실을 경고로 남긴다. */
     const instrumentTransformerHits: string[] = [];
+    /** 수전점을 부하로 낸 건수 — 보정 사실을 경고로 남긴다. */
+    const incomingSourceHits: string[] = [];
     for (const row of data.components.slice(0, 2_000)) {
       if (!row || typeof row !== 'object') continue;
       const component = row as Record<string, unknown>;
@@ -344,7 +403,13 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       ids.add(id);
       const properties = stringProperties(component.properties);
       const label = boundedText(component.label, 256) ?? '';
-      const normalizedType = normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits);
+      const quantity = parseMultiplicity(label);
+      const normalizedType = normalizeIncomingSource(
+        normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits),
+        label,
+        properties ? Object.values(properties).join(' ') : '',
+        incomingSourceHits,
+      );
       components.push({
         id,
         type: normalizedType,
@@ -354,6 +419,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ...optionalTextField('voltage', component.voltage),
         ...optionalTextField('current', component.current),
         ...(properties ? { properties } : {}),
+        ...(quantity ? { quantity } : {}),
       });
     }
 
@@ -413,7 +479,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ? Math.max(0, Math.min(partialRecovery ? 0.5 : 1, rawConfidence))
         : 0,
       ...(partialRecovery ? { partial: true } : {}),
-      ...((partialRecovery || instrumentTransformerHits.length || insulationClassSuspect) ? {
+      ...((partialRecovery || instrumentTransformerHits.length || incomingSourceHits.length || insulationClassSuspect) ? {
         warnings: [
           ...(partialRecovery ? ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'] : []),
           ...(insulationClassSuspect ? [
@@ -422,6 +488,9 @@ export function parseSLDResponse(text: string): SLDAnalysis {
           // 조용히 고치면 모델이 계속 틀린 채로 남고 아무도 모른다.
           ...instrumentTransformerHits.map(
             (label) => `INSTRUMENT_TRANSFORMER_RECLASSIFIED: "${label}" 을(를) transformer → meter 로 보정`,
+          ),
+          ...incomingSourceHits.map(
+            (label) => `INCOMING_SOURCE_RECLASSIFIED: "${label}" 을(를) load → source(수전점) 로 보정`,
           ),
         ],
       } : {}),

@@ -55,7 +55,10 @@ const SOURCE_BUS_LABELS = new Set(['SOURCE BUS', 'UTILITY BUS', 'INCOMER BUS', '
 //   ASS         : 상위 재폐로기 무전압 구간에서 개방되는 구분개폐기로
 //                 고장전류 차단 능력이 없다 → 제외(switching)
 const PROTECTION_TYPES = new Set(['breaker_acb', 'breaker_vcb', 'breaker_mccb', 'breaker_elcb', 'breaker_mcb', 'breaker_gcb', 'breaker_ocb', 'fuse', 'cutout_switch', 'afci']);
-const PROTECTION_LABELS = new Set(['ACB', 'VCB', 'MCCB', 'ELCB', 'ELB', 'RCD', 'GFCI', 'MCB', 'CB', 'FUSE', 'PF', 'POWER FUSE', 'RELAY', 'AFCI']);
+// 'RELAY' 는 뺀다 — 보호계전기는 고장을 검출해 차단기에 지령을 보낼 뿐
+// 스스로 고장전류를 차단하지 않는다. 계전기가 source→load 경로에 올라와
+// 있으면 보호 확인이 아니라 확인 필요(HOLD)가 맞다.
+const PROTECTION_LABELS = new Set(['ACB', 'VCB', 'MCCB', 'ELCB', 'ELB', 'RCD', 'GFCI', 'MCB', 'CB', 'GCB', 'OCB', 'COS', 'FUSE', 'PF', 'POWER FUSE', 'AFCI']);
 const LOAD_TYPES = new Set(['load_general', 'motor', 'light', 'outlet', 'hvac', 'ev_charger']);
 const LOAD_LABELS = new Set(['LOAD', 'MOTOR', 'LIGHT', 'LAMP', 'OUTLET', 'RECEPTACLE', 'HVAC', 'AHU', 'EV', 'CHARGER', 'EVSE', '부하', '전동기', '조명', '콘센트']);
 const GROUND_TYPES = new Set(['ground_rod']);
