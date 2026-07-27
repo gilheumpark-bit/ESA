@@ -44,6 +44,20 @@ const LABELS = {
     what: '저압 배전반 단선도 · 600V 3Ø4W 600A · 분기 10',
     label: {
       sheetType: 'single-line',
+      /**
+       * 도면 표제에 인쇄된 문자열 그대로다. **이것이 운전전압이라는 뜻은
+       * 아니다** — 파이프라인은 이 값을 systemVoltage 로 내지 않고 비운다
+       * (2026-07-28 재생 대조에서 `미검출` 로 확인).
+       *
+       * 그게 지시대로 동작한 것이다. 프롬프트에 "모선·케이블에 인쇄된 전압은
+       * 절연등급이지 운전전압이 아니다(예: 380V 계통의 모선에 찍힌
+       * 600V 3P4W)" 라는 규칙이 있고, 한국 저압 배전반은 통상 절연 600V·
+       * 운전 380/220V 다.
+       *
+       * 즉 **라벨과 앱 규칙이 충돌하는 자리**다. 어느 쪽이 맞는지는 원도면의
+       * 운전전압 표기를 다시 봐야 확정된다 — 값을 결과에 맞춰 고치면 닫힌
+       * 순환이므로 그대로 두고 충돌 사실만 적는다.
+       */
       systemVoltage: '600V 3Ø4W 60Hz',
       busRating: '600A',
       transformers: 0,      // P.T 는 계기용 변성기 — 사전상 meter 계열
@@ -162,6 +176,17 @@ const LABELS = {
 
 const which = process.argv[2] ?? 'threeline';
 const BASE = process.argv[3] ?? 'http://127.0.0.1:3010';
+
+/**
+ * `--replay` — 공급자를 부르지 않고 **저장된 영수증으로 대조만 다시 돌린다.**
+ *
+ * 대조 로직을 고쳐도 공급자가 스로틀이면 확인할 방법이 없었다(2026-07-28:
+ * Gemini 수요 급증으로 연속 503). 그래서 인식 결과와 대조 로직을 분리한다 —
+ * 인식은 API 가 필요하지만 **대조는 필요 없다.**
+ *
+ * 새 실행이 아니므로 영수증을 지우지도, 키를 요구하지도 않는다.
+ */
+const REPLAY = process.argv.includes('--replay');
 const spec = LABELS[which];
 if (!spec) {
   console.error(`알 수 없는 라벨키: ${which}. 가능: ${Object.keys(LABELS).join(', ')}`);
@@ -182,17 +207,21 @@ if (!KEY) {
     if (found) { KEY = found; PROVIDER = provider; keyOrigin = envName; break; }
   }
 }
-if (!KEY) {
+if (!KEY && !REPLAY) {
   console.error('Vision 키 없음. node --env-file=<파일> 로 넘겨라. 값은 출력하지 않는다.');
   process.exit(2);
 }
-if (!existsSync(spec.file)) { console.error(`이미지 없음: ${spec.file}`); process.exit(2); }
+if (!REPLAY && !existsSync(spec.file)) { console.error(`이미지 없음: ${spec.file}`); process.exit(2); }
 
 // 이전 실행의 영수증을 먼저 지운다. 공급자가 503 이면 영수증이 안 써지는데,
 // 낡은 것이 남아 있으면 그걸 이번 결과로 읽게 된다 — 실제로 그렇게 프롬프트
 // 수정 효과를 잘못 판정할 뻔했다(2026-07-27). 없으면 "이번에 안 돌았음" 이다.
 const RECEIPT = `test-results/local-drawing-${which}.json`;
-rmSync(RECEIPT, { force: true });
+if (!REPLAY) rmSync(RECEIPT, { force: true });
+if (REPLAY && !existsSync(RECEIPT)) {
+  console.error(`재생할 영수증이 없다: ${RECEIPT} — 먼저 --replay 없이 한 번 돌려라.`);
+  process.exit(2);
+}
 
 const form = new FormData();
 form.append('image', new Blob([readFileSync(spec.file)], { type: spec.mime }), spec.file.split('/').pop());
@@ -208,11 +237,30 @@ for (const [k, v] of Object.entries(spec.label)) console.log(`   ${k.padEnd(24)}
 console.log('');
 
 const started = Date.now();
-const res = await fetch(`${BASE}/api/sld`, { method: 'POST', headers: { Origin: BASE }, body: form });
-const text = await res.text();
+let res;
 let payload;
-try { payload = JSON.parse(text); } catch { payload = { parseError: text.slice(0, 300) }; }
-const ms = Date.now() - started;
+let ms;
+if (REPLAY) {
+  const saved = JSON.parse(readFileSync(RECEIPT, 'utf8'));
+  res = { status: 200 };
+  ms = saved.ms ?? 0;
+  // 영수증은 인식 결과를 평면으로 저장한다 — API 응답 모양으로 되돌린다.
+  payload = {
+    data: {
+      components: saved.components ?? [],
+      connections: saved.connections ?? [],
+      systemVoltage: saved.systemVoltage ?? undefined,
+      systemType: saved.systemType ?? undefined,
+      confidence: saved.confidence ?? undefined,
+    },
+  };
+  console.log(`재생 모드 — 저장된 영수증으로 대조만 다시 돌린다 (공급자 호출 없음)\n`);
+} else {
+  res = await fetch(`${BASE}/api/sld`, { method: 'POST', headers: { Origin: BASE }, body: form });
+  const text = await res.text();
+  try { payload = JSON.parse(text); } catch { payload = { parseError: text.slice(0, 300) }; }
+  ms = Date.now() - started;
+}
 
 if (res.status !== 200) {
   console.log(`HTTP ${res.status} (${(ms / 1000).toFixed(1)}s) — ${String(payload?.error ?? payload?.parseError ?? '').slice(0, 300)}`);
@@ -284,8 +332,14 @@ if (res.status !== 200) {
     const want = String(spec.label.systemVoltage);
     // 표기 흔들림(공백·대소문자·Ø/φ)을 걷어내고 숫자+단위가 겹치는지 본다.
     const norm = (s) => s.replace(/\s+/g, '').toUpperCase().replace(/[ØΦ]/g, 'P');
-    const ok = norm(got) === norm(want) || norm(got).includes(norm(want)) || norm(want).includes(norm(got));
-    console.log(`   ${ok ? 'OK  ' : '불일치'} ${'계통전압'.padEnd(14)} 결과 ${got || '-'}    라벨 ${want}`);
+    // **빈 값은 통과가 아니다.** 빈 문자열은 모든 문자열의 부분열이라
+    // `want.includes('')` 가 참이 된다 — 계통전압을 아예 못 읽었는데 OK 로
+    // 찍히고 있었다(재생 모드로 sejong 을 다시 돌려 발각, 2026-07-28).
+    const g = norm(got);
+    const w = norm(want);
+    const ok = g.length > 0 && (g === w || g.includes(w) || w.includes(g));
+    const mark = g.length === 0 ? '미검출' : ok ? 'OK  ' : '불일치';
+    console.log(`   ${mark} ${'계통전압'.padEnd(14)} 결과 ${got || '-'}    라벨 ${want}`);
   }
 
   // 대조하지 못하는 라벨은 **침묵하지 않고 적는다.** SLD 어휘가 ZCT·PT·SPD 를
