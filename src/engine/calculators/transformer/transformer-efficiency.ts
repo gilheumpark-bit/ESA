@@ -88,13 +88,20 @@ export function calculateTransformerEfficiency(input: TransformerEfficiencyInput
     unit: '',
   });
 
-  // Step 5: 최적 부하율 대비 연간 에너지 절감 추정
-  // 현재 부하율 vs 최적 부하율의 손실 차이 × 8760h
+  // Step 5: 최적 부하율 대비 연간 손실 **차이** (절감이 아니다)
+  //
+  // k_opt = √(Pfe/Pcu) 는 **효율**이 최대인 부하율이지 총손실이 최소인
+  // 부하율이 아니다(총손실 최소는 무부하다). 그래서 현재 부하율이 k_opt
+  // 보다 낮으면 최적으로 옮길 때 총손실이 **늘어난다** — 이 값이 음수가 된다.
+  //
+  // 전에는 이름이 `annualEnergySaving` 이라 음수가 나오면 "절감이 마이너스"
+  // 로 읽혔다(2026-07-28 실측 −2.11 kWh). 부호가 뜻을 갖도록 이름을 사실에
+  // 맞춘다: 양수 = 최적으로 옮기면 줄어드는 손실, 음수 = 오히려 늘어남.
   const lossAtOptimal = Pfe + Pcu * optimalLoadRatio * optimalLoadRatio;
   const annualSaving = (totalLoss - lossAtOptimal) * 8760 / 1000;
   steps.push({
     step: 5,
-    title: 'Estimate annual energy saving vs optimal loading',
+    title: '최적 부하율 대비 연간 손실 차이 (음수 = 현재가 총손실이 더 적음)',
     formula: 'E_{saving} = (P_{loss,current} - P_{loss,optimal}) \\times 8760 / 1000',
     value: round(annualSaving, 2),
     unit: 'kWh',
@@ -119,7 +126,7 @@ export function calculateTransformerEfficiency(input: TransformerEfficiencyInput
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'warning'),
     additionalOutputs: {
       optimalLoadRatio: { value: round(optimalLoadRatio, 4), unit: '', formula: 'k_{opt} = \\sqrt{P_{fe}/P_{cu}}' },
-      annualEnergySaving: { value: round(annualSaving, 2), unit: 'kWh' },
+      annualLossDeltaVsOptimal: { value: round(annualSaving, 2), unit: 'kWh' },
     },
   };
 }

@@ -246,8 +246,11 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
   ],
   'transformer-efficiency': [
     { name: 'capacity', type: 'number', unit: 'kVA', description: '용량', min: 1 },
-    { name: 'noLoadLoss', type: 'number', unit: 'W', description: '무부하 손실', min: 0 },
-    { name: 'loadLoss', type: 'number', unit: 'W', description: '부하 손실', min: 0 },
+    // 계산기는 `assertPositive` 다 — min: 0 이면 폼이 0 을 받아 놓고
+    // 계산에서 던진다(2026-07-28 실측). 변압기는 항상 손실이 있으므로
+    // 0 은 물리적으로도 입력값이 아니다.
+    { name: 'noLoadLoss', type: 'number', unit: 'W', description: '무부하 손실', min: 0.1 },
+    { name: 'loadLoss', type: 'number', unit: 'W', description: '부하 손실', min: 0.1 },
     { name: 'loadRatio', type: 'number', unit: '', description: '부하율', min: 0.01, max: 1, defaultValue: 0.75, step: 0.01 },
     { name: 'powerFactor', type: 'number', unit: '', description: '역률', min: 0.1, max: 1, defaultValue: 0.85, step: 0.01 },
   ],
