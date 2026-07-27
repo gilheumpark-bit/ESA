@@ -46,14 +46,20 @@ describe('계산기 간 일치', () => {
     expect(a.unit).toBe('%');
     expect(b.unit).toBe('%');
 
+    // `additionalOutputs` 의 value 는 문자열·null 도 될 수 있는 타입이라
+    // 숫자임을 먼저 못박는다 — 값이 없어 undefined 인데 그냥 통과하면
+    // 이 검사가 공허해진다.
     const aVolts = a.additionalOutputs?.steadyStateDropVolts?.value;
     const bVolts = b.additionalOutputs?.totalDropVolts?.value;
-    expect(aVolts).toBeCloseTo(expectedVolts, 1);
-    expect(bVolts).toBeCloseTo(expectedVolts, 1);
+    expect(typeof aVolts).toBe('number');
+    expect(typeof bVolts).toBe('number');
+
+    expect(aVolts as number).toBeCloseTo(expectedVolts, 1);
+    expect(bVolts as number).toBeCloseTo(expectedVolts, 1);
 
     // 서로도 같아야 한다 — 각자 손계산에 가까워도 서로 다르면 갈라진 것이다.
-    expect(a.value).toBeCloseTo(b.value, 2);
-    expect(aVolts).toBeCloseTo(bVolts as number, 2);
+    expect(a.value as number).toBeCloseTo(b.value as number, 2);
+    expect(aVolts as number).toBeCloseTo(bVolts as number, 2);
   });
 
   it('구간을 쪼개도 합이 같다 — complex-voltage-drop 의 다구간 합산', () => {
@@ -68,7 +74,7 @@ describe('계산기 간 일치', () => {
         { length: 100, resistance: 0.524, reactance: 0.086 },
       ],
     });
-    expect(split.value).toBeCloseTo(one.value, 2);
+    expect(split.value as number).toBeCloseTo(one.value as number, 2);
   });
 
   it('3상 전력은 같은 조건에서 단상의 √3 배다 — 정의라 판본과 무관하다', () => {
@@ -80,7 +86,7 @@ describe('계산기 간 일치', () => {
     // 결함은 아니지만, 같은 양을 다르게 부르는 자리라 여기 적어 둔다.
     const one = calculateSinglePhasePower({ voltage: V, current: I, powerFactor: pf });
     const three = calculateThreePhasePower({ lineVoltage: V, lineCurrent: I, powerFactor: pf });
-    expect(three.value / one.value).toBeCloseTo(SQRT3, 4);
+    expect((three.value as number) / (one.value as number)).toBeCloseTo(SQRT3, 4);
   });
 
   it('전압강하는 전류·길이에 비례한다 — 2 배면 2 배다', () => {
@@ -90,11 +96,11 @@ describe('계산기 간 일치', () => {
     };
     const x1 = calculateVoltageDrop({ ...base, current: 50 });
     const x2 = calculateVoltageDrop({ ...base, current: 100 });
-    expect(x2.value / x1.value).toBeCloseTo(2, 3);
+    expect((x2.value as number) / (x1.value as number)).toBeCloseTo(2, 3);
 
     const l1 = calculateVoltageDrop({ ...base, current: 50 });
     const l2 = calculateVoltageDrop({ ...base, current: 50, length: 200 });
-    expect(l2.value / l1.value).toBeCloseTo(2, 3);
+    expect((l2.value as number) / (l1.value as number)).toBeCloseTo(2, 3);
   });
 
   it('전압강하는 단면적에 반비례한다 — 저항 성분이 지배할 때', () => {
@@ -105,6 +111,6 @@ describe('계산기 간 일치', () => {
     // pf=1 이면 리액턴스 항이 빠져 순수 저항이라 정확히 반비례여야 한다.
     const small = calculateVoltageDrop({ ...base, cableSize: 25 });
     const big = calculateVoltageDrop({ ...base, cableSize: 50 });
-    expect(small.value / big.value).toBeCloseTo(2, 2);
+    expect((small.value as number) / (big.value as number)).toBeCloseTo(2, 2);
   });
 });
