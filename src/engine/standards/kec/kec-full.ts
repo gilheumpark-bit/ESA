@@ -48,8 +48,8 @@ function buildArticle(
     title,
     conditions,
     relatedClauses,
-    effectiveDate: '2021-01-01',
-    version: '2021',
+    effectiveDate: '2026-01-05',
+    version: '조항번호 2026.1.5 대조',
   };
 }
 

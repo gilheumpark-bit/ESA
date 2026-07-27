@@ -14,7 +14,7 @@
 import type { CodeArticle, Condition } from './types';
 
 function kec(id: string, article: string, title: string, conditions: Condition[], related?: CodeArticle['relatedClauses']): CodeArticle {
-  return { id: `KEC-${id}`, country: 'KR', standard: 'KEC', article, title, conditions, relatedClauses: related, effectiveDate: '2021-01-01', version: '2021' };
+  return { id: `KEC-${id}`, country: 'KR', standard: 'KEC', article, title, conditions, relatedClauses: related, effectiveDate: '2026-01-05', version: '조항번호 2026.1.5 대조' };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

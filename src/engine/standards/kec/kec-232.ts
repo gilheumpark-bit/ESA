@@ -67,8 +67,8 @@ export const KEC_232_52_MAIN: CodeArticle = {
     { articleId: 'KEC-232.5.2', relation: 'reference', note: '허용전류 기본값 참조' },
     { articleId: 'NEC-210.19', relation: 'equivalent', note: 'NEC 분기회로 도체 기준과 등가' },
   ],
-  effectiveDate: '2021-01-01',
-  version: '2021',
+  effectiveDate: '2026-01-05',
+  version: '조항번호 2026.1.5 대조',
 };
 
 /** KEC 232.3.9 조항 — 분기 */
@@ -79,8 +79,8 @@ export const KEC_232_52_BRANCH: CodeArticle = {
   article: '232.3.9',
   title: '저압 옥내배선의 전압강하 — 분기회로',
   conditions: [CONDITION_BRANCH],
-  effectiveDate: '2021-01-01',
-  version: '2021',
+  effectiveDate: '2026-01-05',
+  version: '조항번호 2026.1.5 대조',
 };
 
 /** KEC 232.3.9 조항 — 합산 */
@@ -92,8 +92,8 @@ export const KEC_232_52_COMBINED: CodeArticle = {
   article: '232.3.9',
   title: '저압 옥내배선의 전압강하 — 간선+분기 합산',
   conditions: [CONDITION_COMBINED],
-  effectiveDate: '2021-01-01',
-  version: '2021',
+  effectiveDate: '2026-01-05',
+  version: '조항번호 2026.1.5 대조',
 };
 
 // ---------------------------------------------------------------------------

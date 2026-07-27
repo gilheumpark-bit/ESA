@@ -73,8 +73,8 @@ function buildGroundingArticle(type: GroundingType): CodeArticle {
     article: '142.5',
     title: `접지공사의 종류 — ${GROUNDING_NAMES[type]}`,
     conditions: [buildGroundingCondition(type)],
-    effectiveDate: '2021-01-01',
-    version: '2021',
+    effectiveDate: '2026-01-05',
+    version: '조항번호 2026.1.5 대조',
   };
 }
 

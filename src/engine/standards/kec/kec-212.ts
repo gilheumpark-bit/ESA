@@ -59,8 +59,8 @@ export const KEC_212_3: CodeArticle = {
   article: '212.3',
   title: '과전류차단기의 시설',
   conditions: [CONDITION_125_RULE, CONDITION_WIRE_PROTECTION],
-  effectiveDate: '2021-01-01',
-  version: '2021',
+  effectiveDate: '2026-01-05',
+  version: '조항번호 2026.1.5 대조',
 };
 
 // ---------------------------------------------------------------------------
