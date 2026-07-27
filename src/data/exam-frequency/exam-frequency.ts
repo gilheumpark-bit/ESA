@@ -31,8 +31,8 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-142.5', articleTitle: '접지 시스템 (TN/TT/IT)', frequencyLast10: 7, importance: 'essential', commonCalcTypes: ['접지 계통 구분', '감전 보호'], examSubject: '전기설비기술기준', studyTip: 'TN-S/TN-C-S/TT/IT 각 특징과 적용 장소.' },
 
   // === 고빈도 (high) — 2~3회에 1번 ===
-  { articleId: 'KEC-311.1', articleTitle: '수변전 설비', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['변압기 용량 산정', '단락전류'], examSubject: '전력공학', studyTip: '수전 설비 구성 순서(MOF→DS→VCB→TR) 암기.' },
-  { articleId: 'KEC-341.1', articleTitle: '전동기 분기회로', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['전동기 전선 산정', '기동 전류'], examSubject: '전기기기', studyTip: '정격전류×1.25 이상. FLC 테이블 참조.' },
+  { articleId: 'KEC-351', articleTitle: '발전소, 변전소, 개폐소 등의 전기설비', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['변압기 용량 산정', '단락전류'], examSubject: '전력공학', studyTip: '수전 설비 구성 순서(MOF→DS→VCB→TR) 암기.' },
+  { articleId: 'KEC-212.6.3', articleTitle: '저압전로 중의 전동기 보호용 과전류보호장치의 시설', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['전동기 전선 산정', '기동 전류'], examSubject: '전기기기', studyTip: '정격전류×1.25 이상. FLC 테이블 참조.' },
   { articleId: 'KEC-351.5', articleTitle: '조상설비의 보호장치', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['콘덴서 용량 계산', '역률 개선'], examSubject: '전력공학', studyTip: 'Qc = P(tanθ1 - tanθ2) 공식.' },
   { articleId: 'KEC-212.4', articleTitle: '누전차단기', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['감도전류 선정'], examSubject: '전기설비기술기준', studyTip: '30mA/0.03s. 설치 의무 장소 암기.' },
   { articleId: 'KEC-220.1', articleTitle: '부하 산정', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['수용률', '부등률', '부하율'], examSubject: '전력공학', studyTip: '수용률/부등률/부하율 정의 + 공식.' },

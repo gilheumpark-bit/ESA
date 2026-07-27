@@ -147,7 +147,7 @@ const MOTORS: CodeArticle[] = [
 
   nec('430.22', '430.22', '전동기 분기회로 전선 — ≥125% FLC', [
     { param: 'branchConductorAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '분기 전선 허용전류 ≥ FLC × 1.25' },
-  ], [{ articleId: 'KEC-341.1', relation: 'equivalent', note: 'KEC 전동기 분기회로' }]),
+  ], [{ articleId: 'KEC-212.6.3', relation: 'equivalent', note: 'KEC 전동기 보호용 과전류보호장치' }]),
 
   nec('430.24', '430.24', '다중 전동기 회로 전선 크기', [
     { param: 'multiMotorConductor', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '최대 FLC×1.25 + 나머지 FLC 합' },

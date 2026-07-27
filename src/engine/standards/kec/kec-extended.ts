@@ -146,7 +146,8 @@ const LOW_VOLTAGE: CodeArticle[] = [
   kec('231.3.2', '231.3.2', '중성선의 단면적', [
     { param: 'wireTypeValid', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'HIV/XLPE/FR 등 용도별 전선 선정' },
   ]),
-  kec('231.1', '231.1', '전선의 최소 굵기', [
+  // 현행 231.1 은 공통사항이다. 전선 굵기는 231.3 이다(2026-07-27 재번호).
+  kec('231.3', '231.3', '저압 옥내배선의 사용전선 및 중성선의 굵기', [
     { param: 'minWireSize_mm2', operator: '>=', value: 1.5, unit: 'mm²', result: 'PASS', note: '조명회로 최소 1.5mm², 콘센트 최소 2.5mm²' },
   ]),
   // 허용전류는 232.5 다 — `232.1~232.4` 로 등록돼 있었다(현행 232.1 적용범위 /
@@ -226,10 +227,12 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('310.2', '310.2', '수전 전압 — 22.9kV', [
     { param: 'receptionVoltage_kV', operator: '<=', value: 22.9, unit: 'kV', result: 'PASS', note: '일반 수전: 22.9kV, 대수요: 154kV' },
   ]),
-  kec('311.1', '311.1', '변전소 — 시설 기준', [
+  // 311.x 는 현행에서 절연수준·기본보호·고장보호다. 변전소 설비는 351,
+  // 특고압 변압기 시설 장소는 341.1 이다(2026-07-27 재번호).
+  kec('351', '351', '발전소, 변전소, 개폐소 등의 전기설비', [
     { param: 'substationRequirements', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '변전소 위치/환기/소방/접지/울타리 기준' },
   ]),
-  kec('311.2', '311.2', '변압기 — 설치 기준', [
+  kec('341.1', '341.1', '특고압용 변압기의 시설 장소', [
     { param: 'transformerInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '이격거리, 환기, 방유제, 소화설비' },
   ]),
   kec('312.1', '312.1', '개폐장치 — 차단기/단로기', [
@@ -241,11 +244,12 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('320.1', '320.1', '고압 케이블 — 시설 기준', [
     { param: 'hvCableInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '고압 케이블 포설/접속/종단/시험' },
   ]),
-  kec('321.1', '321.1', '가공 전선로 — 시설 기준', [
+  // 현행 321 은 없다. 가공전선로는 332, 지중전선로는 223.1 이다(2026-07-27).
+  kec('332', '332', '가공전선로', [
     { param: 'overheadLine', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '지지물, 가선, 이격거리, 지상고' },
   ]),
-  kec('322.1', '322.1', '지중 전선로 — 매설 기준', [
-    { param: 'undergroundCable', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '매설 깊이: 일반 0.6m, 차도 1.2m' },
+  kec('223.1', '223.1', '지중전선로의 시설', [
+    { param: 'undergroundCable', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '매설 깊이: 일반 0.6m, 중량물 압력 우려 장소 1.2m (원문 표 미확보 — 재확인 필요)' },
   ], [{ articleId: 'NEC-300.5', relation: 'equivalent', note: 'NEC 매설 깊이' }]),
   kec('351.4', '351.4', '특고압용 변압기의 보호장치', [
     { param: 'protectiveRelay', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'OCR/OCGR/UVR/OVR/DGR 설치 기준' },
@@ -253,16 +257,20 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('351.5', '351.5', '조상설비의 보호장치', [
     { param: 'powerCapacitor', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '역률 0.9 이상 유지, 방전 코일 설치' },
   ]),
-  kec('341.1', '341.1', '전동기 — 분기회로 전선', [
+  // 현행 341.1/341.2 는 특고압 변압기 조항이다. 저압 전동기 보호는 212.6.3
+  // 하나로 모았다(2026-07-27 재번호).
+  kec('212.6.3', '212.6.3', '저압전로 중의 전동기 보호용 과전류보호장치의 시설', [
     { param: 'motorBranchConductor', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '전동기 분기 전선: 정격전류 × 1.25 이상' },
-  ], [{ articleId: 'NEC-430.22', relation: 'equivalent', note: 'NEC 전동기 전선' }]),
-  kec('341.2', '341.2', '전동기 — 과부하 보호', [
     { param: 'motorOverloadProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '열동계전기/전자식 과부하 계전기 설치' },
-  ], [{ articleId: 'NEC-430.32', relation: 'equivalent', note: 'NEC 과부하 계전기' }]),
+  ], [
+    { articleId: 'NEC-430.22', relation: 'equivalent', note: 'NEC 전동기 전선' },
+    { articleId: 'NEC-430.32', relation: 'equivalent', note: 'NEC 과부하 계전기' },
+  ]),
   kec('350.1', '350.1', '수변전 설비 — 보호 계전 방식', [
     { param: 'protectionScheme', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '비율차동/거리/방향/과전류 계전 방식 선정' },
   ]),
-  kec('351.1', '351.1', '수배전반 — 시설 기준', [
+  // 현행 351.1 은 발전소 등의 울타리·담이다. 배전반 시설은 351.7 이다.
+  kec('351.7', '351.7', '배전반의 시설', [
     { param: 'switchboardInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '폐쇄형/개방형, 이격, 조작통로, 표시' },
   ]),
   kec('360.1', '360.1', '전력구/관로 — 시설 기준', [
