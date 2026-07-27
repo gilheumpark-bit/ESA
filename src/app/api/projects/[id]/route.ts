@@ -14,6 +14,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { classifyCollabError } from '@/lib/collaboration-error';
 import {
   getProject,
   updateProject,
@@ -178,12 +179,14 @@ async function PATCH__impl(request: NextRequest) {
       }
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('Insufficient permissions') ? 403 : 500;
+    // 호출자 잘못을 500 으로 뭉개지 않는다. 협업 계층은 "남의 영수증이다"
+    // "멤버가 아니다" 같은 것도 Error 로 던지는데, 여기서 `Insufficient
+    // permissions` 하나만 403 으로 옮기고 나머지를 500 으로 냈다.
+    const mapped = classifyCollabError(err);
     console.error('[ESVA Project PATCH]', err);
     return NextResponse.json(
-      { error: status === 403 ? '프로젝트를 변경할 권한이 없습니다.' : '프로젝트를 변경하지 못했습니다.' },
-      { status },
+      { error: mapped?.message ?? '프로젝트를 변경하지 못했습니다.' },
+      { status: mapped?.status ?? 500 },
     );
   }
 }
@@ -208,12 +211,11 @@ async function DELETE__impl(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    const status = message.includes('not a member') || message.includes('Insufficient') ? 403 : 500;
+    const mapped = classifyCollabError(err);
     console.error('[ESVA Project DELETE]', err);
     return NextResponse.json(
-      { error: status === 403 ? '프로젝트를 삭제할 권한이 없습니다.' : '프로젝트를 삭제하지 못했습니다.' },
-      { status },
+      { error: mapped?.message ?? '프로젝트를 삭제하지 못했습니다.' },
+      { status: mapped?.status ?? 500 },
     );
   }
 }
