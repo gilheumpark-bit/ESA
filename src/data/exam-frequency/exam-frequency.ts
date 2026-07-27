@@ -35,7 +35,8 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-212.6.3', articleTitle: '저압전로 중의 전동기 보호용 과전류보호장치의 시설', frequencyLast10: 6, importance: 'high', commonCalcTypes: ['전동기 전선 산정', '기동 전류'], examSubject: '전기기기', studyTip: '정격전류×1.25 이상. FLC 테이블 참조.' },
   { articleId: 'KEC-351.5', articleTitle: '조상설비의 보호장치', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['콘덴서 용량 계산', '역률 개선'], examSubject: '전력공학', studyTip: 'Qc = P(tanθ1 - tanθ2) 공식.' },
   { articleId: 'KEC-212.4', articleTitle: '누전차단기', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['감도전류 선정'], examSubject: '전기설비기술기준', studyTip: '30mA/0.03s. 설치 의무 장소 암기.' },
-  { articleId: 'KEC-220.1', articleTitle: '부하 산정', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['수용률', '부등률', '부하율'], examSubject: '전력공학', studyTip: '수용률/부등률/부하율 정의 + 공식.' },
+  // 부하 산정(KEC-220.1)을 뺐다 2026-07-27. 전력공학에 출제되지만 220 대는
+  // KEC 에 없다 — NEC Article 220 개념이고 한국은 내선규정 소관이다.
   { articleId: 'KEC-522.2', articleTitle: '태양광설비의 시설기준', frequencyLast10: 4, importance: 'high', commonCalcTypes: ['PV 발전량', '인버터 용량'], examSubject: '전기설비기술기준', studyTip: '최근 출제 급증. 계통연계 기준 중요.' },
 
   // === 중빈도 (medium) — 3~5회에 1번 ===

@@ -129,16 +129,9 @@ const LOW_VOLTAGE: CodeArticle[] = [
     { param: 'shortCircuitBreaker', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '차단용량 ≥ 설치점 예상 단락전류' },
   ], [{ articleId: 'IEC-434.1', relation: 'equivalent', note: 'IEC 단락 보호' }]),
 
-  // 220 부하 산정
-  kec('220.1', '220.1', '부하의 산정 — 일반 원칙', [
-    { param: 'loadCalculated', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '수용률, 부등률, 부하율 적용' },
-  ]),
-  kec('220.2', '220.2', '주택 부하 산정', [
-    { param: 'dwellingLoadVA_m2', operator: '>=', value: 30, unit: 'VA/m²', result: 'PASS', note: '주택 조명+콘센트: 30VA/m² 이상' },
-  ]),
-  kec('220.3', '220.3', '상업용 건물 부하 산정', [
-    { param: 'commercialLoadVA_m2', operator: '>=', value: 40, unit: 'VA/m²', result: 'PASS', note: '사무실: 40VA/m², 상가: 50VA/m²' },
-  ]),
+  // 220 부하 산정 3건을 뺐다 2026-07-27 — **220 대는 KEC 에 없다.**
+  // NEC Article 220 개념이고 한국은 내선규정 소관이다.
+  // 뺀 값: 주택 30VA/m² · 사무실 40VA/m² · 상가 50VA/m² · 수용률/부등률/부하율
 
   // 230 전선
   kec('231.3.2', '231.3.2', '중성선의 단면적', [
@@ -189,9 +182,9 @@ const LOW_VOLTAGE: CodeArticle[] = [
   kec('212.4.1', '212.4.1', '도체와 과부하 보호장치 사이의 협조', [
     { param: 'protectionCoordination', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '상위-하위 보호장치 간 선택성 확보' },
   ]),
-  kec('240.2', '240.2', '직렬 보호 (Back-up)', [
-    { param: 'backupProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '하위 차단기 부족한 차단용량을 상위가 보완' },
-  ]),
+  // 240.2 직렬 보호(Back-up)를 kec-full 의 212.5.5 단락보호장치의 특성으로
+  // 합쳤다 2026-07-27 — 현행 240 대는 KEC 에 없고, 하위 차단용량을 상위가
+  // 보완하는 허용은 단락보호장치 특성 조항 소관이다.
 
   // 250 특수 설비
   // 욕실(250.1)·수영장(250.2)·사우나(250.3)·옥외(250.4)를 여기서 뺐다(2026-07-27).
@@ -219,12 +212,9 @@ const LOW_VOLTAGE: CodeArticle[] = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const HIGH_VOLTAGE: CodeArticle[] = [
-  kec('310.1', '310.1', '수전 설비 — 일반 요건', [
-    { param: 'receptionEquipment', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '한전 수전점: MOF+DS+VCB+TR 구성' },
-  ]),
-  kec('310.2', '310.2', '수전 전압 — 22.9kV', [
-    { param: 'receptionVoltage_kV', operator: '<=', value: 22.9, unit: 'kV', result: 'PASS', note: '일반 수전: 22.9kV, 대수요: 154kV' },
-  ]),
+  // 310.1 수전설비 구성(MOF+DS+VCB+TR)·310.2 수전전압(22.9kV/154kV)을 뺐다
+  // 2026-07-27. **310 대는 KEC 에 없고** 수전점 구성과 공급전압은 한전
+  // 전기공급약관 소관이다. KEC 는 수용가 설비 쪽만 규정한다.
   // 311.x 는 현행에서 절연수준·기본보호·고장보호다. 변전소 설비는 351,
   // 특고압 변압기 시설 장소는 341.1 이다(2026-07-27 재번호).
   kec('351', '351', '발전소, 변전소, 개폐소 등의 전기설비', [
@@ -233,7 +223,8 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('341.1', '341.1', '특고압용 변압기의 시설 장소', [
     { param: 'transformerInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '이격거리, 환기, 방유제, 소화설비' },
   ]),
-  kec('312.1', '312.1', '개폐장치 — 차단기/단로기', [
+  // 현행 312 는 없다. 개폐기 시설은 341.9 다(2026-07-27 재번호).
+  kec('341.9', '341.9', '개폐기의 시설', [
     { param: 'switchgearInstalled', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'VCB/ACB/DS/LBS 설치 기준' },
   ]),
   kec('313.1', '313.1', '모선 — 부스바 시설', [
