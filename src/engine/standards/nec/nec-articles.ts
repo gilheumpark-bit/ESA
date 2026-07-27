@@ -210,7 +210,7 @@ const WIRING_METHODS: CodeArticle[] = [
 
   nec('690.12', '690.12', '태양광 긴급차단장치', [
     { param: 'pvRapidShutdown', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '옥상 PV: 30초 이내 80V 이하 긴급차단 필수' },
-  ], [{ articleId: 'KEC-501.1', relation: 'equivalent', note: 'KEC 태양광 안전' }, { articleId: 'IEC-712.1', relation: 'equivalent', note: 'IEC PV 안전' }]),
+  ], [{ articleId: 'KEC-522.2', relation: 'equivalent', note: 'KEC 태양광설비의 시설기준' }, { articleId: 'IEC-712.1', relation: 'equivalent', note: 'IEC PV 안전' }]),
 
   nec('625.40', '625.40', '전기차 충전기 분기회로', [
     { param: 'evBranchCircuit', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: 'Level 2: 전용 분기회로 40A, 전선 ≥ 50A 허용전류' },

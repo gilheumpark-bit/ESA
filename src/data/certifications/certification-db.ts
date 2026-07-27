@@ -213,7 +213,7 @@ const KOREA_CERTS: Certification[] = [
     organizationUrl: 'https://www.q-net.or.kr',
     subjects: [
       { name: '신재생에너지 기초', type: 'written', relatedArticles: ['KEC-500', 'KEC-501'] },
-      { name: '태양광발전 설계 및 시공', type: 'written', relatedArticles: ['KEC-501.1', 'KEC-501.2', 'KEC-501.3'] },
+      { name: '태양광발전 설계 및 시공', type: 'written', relatedArticles: ['KEC-522.2', 'KEC-522.1', 'KEC-522.3'] },
       { name: '태양광발전 운영 및 유지보수', type: 'written' },
       { name: '태양광발전 실무 (실기)', type: 'practical', relatedArticles: ['KEC-501'] },
     ],

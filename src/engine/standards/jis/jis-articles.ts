@@ -18,7 +18,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 감전 보호
   ['JIS-411.1', jis('411.1', '411.1', '감전 보호 — 접촉전압 제한', [
     { param: 'touchVoltage', operator: '<=', value: 50, unit: 'V', result: 'PASS', note: '접촉전압 ≤50V (건조), ≤25V (습윤)' },
-  ], [{ articleId: 'IEC-411.1', relation: 'equivalent', note: 'IEC 감전 보호' }, { articleId: 'KEC-131.1', relation: 'equivalent', note: 'KEC 감전 보호' }])],
+  ], [{ articleId: 'IEC-411.1', relation: 'equivalent', note: 'IEC 감전 보호' }, { articleId: 'KEC-113.2', relation: 'equivalent', note: 'KEC 감전에 대한 보호' }])],
 
   // 접지
   ['JIS-542.1', jis('542.1', '542.1', '접지 — D종 접지공사 (100Ω 이하)', [
@@ -48,7 +48,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 과전류 보호
   ['JIS-432.1', jis('432.1', '432.1', '과전류 보호 — 차단기 선정', [
     { param: 'overcurrentProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '정격전류 ≤ 전선 허용전류, 차단용량 ≥ 단락전류' },
-  ], [{ articleId: 'KEC-212.1', relation: 'equivalent', note: 'KEC 과전류 보호' }])],
+  ], [{ articleId: 'KEC-212.4', relation: 'equivalent', note: 'KEC 과부하전류에 대한 보호' }])],
 
   // 누전차단기
   ['JIS-RCD', jis('RCD', '531.2', '누전차단기 — 30mA/0.1s', [
@@ -75,7 +75,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 태양광
   ['JIS-712.1', jis('712.1', '712.1', '태양광 발전 — 시설 기준', [
     { param: 'pvInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'PV 모듈 접지/절연/보호장치 (JIS C 8955)' },
-  ], [{ articleId: 'KEC-501.1', relation: 'equivalent', note: 'KEC 태양광' }])],
+  ], [{ articleId: 'KEC-522.2', relation: 'equivalent', note: 'KEC 태양광설비의 시설기준' }])],
 
   // 전기차
   ['JIS-722.1', jis('722.1', '722.1', '전기차 충전 — CHAdeMO/Type 1', [

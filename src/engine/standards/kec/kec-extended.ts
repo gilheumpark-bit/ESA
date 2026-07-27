@@ -26,29 +26,31 @@ const COMMON: CodeArticle[] = [
   kec('111.1', '111.1', '적용 범위 — 전기설비의 설치·유지에 적용', [
     { param: 'voltageClass', operator: '>=', value: 0, unit: 'V', result: 'PASS', note: '전압/주파수 무관 전체 전기설비 적용' },
   ]),
-  kec('112.1', '112.1', '전압의 구분 — 저압/고압/특고압', [
+  // 120 용어 — 전압 구분도 여기다. `112.1` 은 없는 번호였다(112 는 하위가 없다).
+  kec('112', '112', '용어 정의', [
+    { param: 'termDefined', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'KEC에서 정의한 용어를 사용해야 함' },
     { param: 'voltage_V', operator: '<=', value: 1000, unit: 'V', result: 'PASS', note: '교류 1000V 이하 = 저압, 1000V 초과 7000V 이하 = 고압, 7000V 초과 = 특고압' },
   ]),
 
-  // 120 용어
-  kec('112', '112', '용어 정의', [
-    { param: 'termDefined', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'KEC에서 정의한 용어를 사용해야 함' },
+  // 113 안전을 위한 보호 — 재번호 2026-07-27.
+  //
+  // 감전·열·과전류·과전압 보호를 `131.1/132.1/133.1/134.1` 로 달고 있었다.
+  // 현행에서 그 자리는 전부 **절연내력** 조항이다 —
+  //   131 전로의 절연 원칙 · 132 전로의 절연저항 및 절연내력 ·
+  //   133 회전기 및 정류기의 절연내력 · 134 연료전지 및 태양전지 모듈의 절연내력
+  // 안전 보호 원칙은 113 이다. 게다가 131.1 등은 하위 번호 자체가 없어서,
+  // 상위(131)가 실재한다는 이유로 번호 게이트를 빠져나가고 있었다.
+  kec('113.2', '113.2', '감전에 대한 보호', [
+    { param: 'directContactProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '충전부 절연/격리/장벽 설치 필수(기본보호)' },
+    { param: 'indirectContactProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '접지+자동차단/이중절연/SELV/등전위본딩(고장보호)' },
   ]),
-
-  // 130 안전원칙
-  kec('131.1', '131.1', '감전 보호 — 직접접촉 보호', [
-    { param: 'directContactProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '충전부 절연/격리/장벽 설치 필수' },
-  ]),
-  kec('131.2', '131.2', '감전 보호 — 간접접촉 보호', [
-    { param: 'indirectContactProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '접지+자동차단/이중절연/SELV/등전위본딩' },
-  ]),
-  kec('132.1', '132.1', '열적 영향 보호 — 화재/화상 방지', [
+  kec('113.3', '113.3', '열 영향에 대한 보호', [
     { param: 'thermalProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '전기설비의 열적 영향으로 화재/화상 방지' },
   ]),
-  kec('133.1', '133.1', '과전류 보호', [
+  kec('113.4', '113.4', '과전류에 대한 보호', [
     { param: 'overcurrentProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '과부하 및 단락전류에 대한 보호장치 설치' },
   ]),
-  kec('134.1', '134.1', '과전압 보호 — 뇌서지/개폐서지', [
+  kec('113.6', '113.6', '전압외란 및 전자기 장애에 대한 대책', [
     { param: 'overvoltageProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '뇌서지 및 개폐서지 보호(SPD)' },
   ], [{ articleId: 'IEC-534.1', relation: 'equivalent', note: 'IEC SPD 적용' }]),
 
@@ -56,7 +58,8 @@ const COMMON: CodeArticle[] = [
   kec('141', '141', '접지시스템의 구분 및 종류', [
     { param: 'groundingSystemType', operator: '>=', value: 1, unit: 'enum', result: 'PASS', note: 'TN-S/TN-C/TN-C-S/TT/IT 중 선택' },
   ], [{ articleId: 'IEC-411.1', relation: 'equivalent', note: 'IEC 접지 계통' }]),
-  kec('141.1', '141.1', '보호 접지 — 노출도전부 접지', [
+  // `141.1` 도 없는 번호였다. 노출도전부(금속 외함) 접지는 142.7 이다.
+  kec('142.7', '142.7', '기계기구의 철대 및 외함의 접지', [
     { param: 'protectiveGrounding', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속 외함 등 노출도전부 접지 필수' },
   ]),
   // 접지 계열 재번호 2026-07-27. 142.2 와 142.3 이 **서로 바뀌어** 있었다 —
@@ -114,16 +117,19 @@ const LOW_VOLTAGE: CodeArticle[] = [
     { param: 'busDuct', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '버스 덕트 시설 기준' },
   ]),
 
-  // 212 보호장치
-  kec('212.1', '212.1', '과부하 보호 — 과부하 차단기', [
+  // 212 보호장치 — 재번호 2026-07-27.
+  //
+  // 현행 212.1 은 일반사항, 212.2 는 회로의 특성에 따른 요구사항이고
+  // 과부하는 **212.4**, 단락은 **212.5** 다. 세 자리가 한 칸씩 밀려 있었다.
+  //
+  // 누전차단기는 212.4 가 아니라 211.2.4 다(전원의 자동차단에 의한 보호대책).
+  // 그 조항은 kec-full 이 이미 갖고 있어 조건을 그쪽으로 합쳤다.
+  kec('212.4', '212.4', '과부하전류에 대한 보호', [
     { param: 'overloadBreaker', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'Ib ≤ In ≤ Iz, I2 ≤ 1.45×Iz' },
   ], [{ articleId: 'IEC-431.1', relation: 'equivalent', note: 'IEC 과부하 보호' }]),
-  kec('212.2', '212.2', '단락 보호 — 단락 차단기', [
+  kec('212.5', '212.5', '단락전류에 대한 보호', [
     { param: 'shortCircuitBreaker', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '차단용량 ≥ 설치점 예상 단락전류' },
   ], [{ articleId: 'IEC-434.1', relation: 'equivalent', note: 'IEC 단락 보호' }]),
-  kec('212.4', '212.4', '누전 차단기 — 지락 보호', [
-    { param: 'rcdInstalled', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속제 외함 기기: 정격감도전류 30mA 이하 누전차단기' },
-  ], [{ articleId: 'NEC-210.8', relation: 'equivalent', note: 'NEC GFCI 보호' }]),
 
   // 220 부하 산정
   kec('220.1', '220.1', '부하의 산정 — 일반 원칙', [
@@ -281,22 +287,25 @@ const RAILWAY: CodeArticle[] = [
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const DISTRIBUTED: CodeArticle[] = [
-  kec('500.1', '500.1', '분산형전원 — 일반 요건', [
+  // 분산형전원 재번호 2026-07-27. 500.1·501.4·502.1 은 아예 없는 번호였고
+  // 501.x·502.x 는 남의 자리였다 — 현행 501 은 일반사항(501.1 목적),
+  // 502 는 **용어의 정의**다. 태양광은 521/522, 풍력은 532/533 다.
+  //
+  //   500.1 분산형전원 일반  → 503   분산형전원 계통 연계설비의 시설
+  //   501.1 모듈 시설        → 522.2 태양광설비의 시설기준
+  //   501.2 DC 배선          → 522.1 간선의 시설기준
+  //   501.3 인버터 ┐
+  //   501.4 긴급차단 ┘       → 522.3 제어 및 보호장치 등
+  //   502.1 풍력             → 532   육상 풍력발전설비
+  kec('503', '503', '분산형전원 계통 연계설비의 시설', [
     { param: 'distributedGeneration', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '태양광/풍력/연료전지/ESS 설치 공통 기준' },
   ]),
-  kec('501.1', '501.1', '태양광 발전 — 모듈 시설', [
-    { param: 'pvModuleInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'PV 모듈 어레이 지지/접지/절연/표시' },
-  ], [{ articleId: 'IEC-712.1', relation: 'equivalent', note: 'IEC 태양광' }]),
-  kec('501.2', '501.2', '태양광 발전 — DC 배선', [
+  // 522.2 모듈 시설 · 522.3 인버터/긴급차단은 kec-full 이 같은 번호를 갖고
+  // 있어(구 502.x) 조건을 그쪽으로 합쳤다. 여기 남기면 통째로 버려진다.
+  kec('522.1', '522.1', '간선의 시설기준', [
     { param: 'pvDCWiring', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'DC 케이블 내후성/내열성, 커넥터 접속' },
   ]),
-  kec('501.3', '501.3', '태양광 발전 — 인버터', [
-    { param: 'pvInverter', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '계통연계 인버터: 단독운전방지/전력품질/보호' },
-  ]),
-  kec('501.4', '501.4', '태양광 발전 — 긴급차단', [
-    { param: 'pvRapidShutdown', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '옥상 PV: 긴급차단장치 설치 (소방 안전)' },
-  ], [{ articleId: 'NEC-690.12', relation: 'equivalent', note: 'NEC PV 긴급차단' }]),
-  kec('502.1', '502.1', '풍력 발전 — 시설 기준', [
+  kec('532', '532', '육상 풍력발전설비', [
     { param: 'windTurbine', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '풍력 발전기 접지/보호/계통연계' },
   ]),
   kec('542', '542', '연료전지설비의 시설', [

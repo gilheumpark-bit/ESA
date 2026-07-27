@@ -257,6 +257,11 @@ export const KEC_240_1 = buildArticle('KEC-212.3.4', '212.3.4', '보호장치의
 
 export const KEC_240_2 = buildArticle('KEC-211.2.4', '211.2.4', '누전차단기의 시설', [
   cond('rcdSensitivity', '<=', 30, 'mA', '인체보호용 누전차단기 감도전류 30mA 이하'),
+  // kec-extended 가 `212.4` 로 갖고 있던 조건. 212.4 는 과부하전류 보호이고
+  // 누전차단기는 여기다 — 옮기며 합쳤다(2026-07-27).
+  cond('rcdInstalled', '==', 1, 'bool', '금속제 외함 기기: 정격감도전류 30mA 이하 누전차단기'),
+], [
+  { articleId: 'NEC-210.8', relation: 'equivalent', note: 'NEC GFCI 보호' },
 ]);
 
 export const KEC_240_3 = buildArticle('KEC-240.3', '240.3', '지락 보호 — 동작시간 0.03초', [
@@ -335,22 +340,32 @@ export const KEC_410_5 = buildArticle('KEC-410.5', '410.5', '접지극 — 봉�
   cond('rodLength', '>=', 900, 'mm', '접지봉 최소 길이 900mm'),
 ]);
 
-// ─── PART 14: KEC 502 — 신재생 ─────────────────────────────────
+// ─── PART 14: KEC 521/522 — 태양광설비 ────────────────────────
+//
+// `502.1~502.4` 로 등록돼 있었다. 현행 502 는 **용어의 정의**이고 502.1 부터는
+// 아예 없는 번호다 — 상위(502)가 실재해서 번호 게이트를 빠져나갔다.
+// 태양광은 521 일반사항 / 522 태양광설비의 시설이다. 2026-07-27 재번호.
 
-export const KEC_502_1 = buildArticle('KEC-502.1', '502.1', '태양광 — 모듈 직렬 최대 전압', [
+export const KEC_521_3 = buildArticle('KEC-521.3', '521.3', '옥내전로의 대지전압 제한', [
   cond('pvMaxVoltage', '<=', 1000, 'V', '저압 태양광 직렬 최대 전압 1000V 이하'),
 ]);
 
-export const KEC_502_2 = buildArticle('KEC-502.2', '502.2', '태양광 — 인버터 효율', [
+// 아래 둘은 kec-extended 가 `501.x` 로 갖고 있던 조건까지 합친 것이다.
+// 두 파일에 같은 번호를 두면 등록부가 kec-full 만 남겨서 나머지가 죽는다.
+export const KEC_522_2 = buildArticle('KEC-522.2', '522.2', '태양광설비의 시설기준', [
   cond('inverterEfficiency', '>=', 95, '%', '태양광 인버터 효율 95% 이상 권장'),
-]);
-
-export const KEC_502_3 = buildArticle('KEC-502.3', '502.3', '태양광 — 역전력 보호', [
-  cond('reverseCurrentProtection', '>=', 1, '', '역전력 보호장치 설치 (1=있음)'),
-]);
-
-export const KEC_502_4 = buildArticle('KEC-502.4', '502.4', '태양광 — 접지 저항', [
   cond('resistance', '<=', 10, 'ohm', '태양광 시스템 접지저항 10 ohm 이하'),
+  cond('pvModuleInstallation', '==', 1, 'bool', 'PV 모듈 어레이 지지/접지/절연/표시'),
+], [
+  { articleId: 'IEC-712.1', relation: 'equivalent', note: 'IEC 태양광' },
+]);
+
+export const KEC_522_3 = buildArticle('KEC-522.3', '522.3', '제어 및 보호장치 등', [
+  cond('reverseCurrentProtection', '>=', 1, '', '역전력 보호장치 설치 (1=있음)'),
+  cond('pvInverter', '==', 1, 'bool', '계통연계 인버터: 단독운전방지/전력품질/보호'),
+  cond('pvRapidShutdown', '==', 1, 'bool', '옥상 PV: 긴급차단장치 설치 (소방 안전)'),
+], [
+  { articleId: 'NEC-690.12', relation: 'equivalent', note: 'NEC PV 긴급차단' },
 ]);
 
 // ─── PART 15: KEC 520 — ESS ────────────────────────────────────
@@ -404,7 +419,7 @@ const ALL_EXTENDED_ARTICLES: CodeArticle[] = [
   // 410 접지일반
   KEC_410_1, KEC_410_2, KEC_410_3, KEC_410_4, KEC_410_5,
   // 502 신재생
-  KEC_502_1, KEC_502_2, KEC_502_3, KEC_502_4,
+  KEC_521_3, KEC_522_2, KEC_522_3,
   // 520 ESS
   KEC_520_1, KEC_520_2, KEC_520_3, KEC_520_4, KEC_520_5,
 ];

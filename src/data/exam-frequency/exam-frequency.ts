@@ -36,11 +36,11 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-351.5', articleTitle: '조상설비의 보호장치', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['콘덴서 용량 계산', '역률 개선'], examSubject: '전력공학', studyTip: 'Qc = P(tanθ1 - tanθ2) 공식.' },
   { articleId: 'KEC-212.4', articleTitle: '누전차단기', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['감도전류 선정'], examSubject: '전기설비기술기준', studyTip: '30mA/0.03s. 설치 의무 장소 암기.' },
   { articleId: 'KEC-220.1', articleTitle: '부하 산정', frequencyLast10: 5, importance: 'high', commonCalcTypes: ['수용률', '부등률', '부하율'], examSubject: '전력공학', studyTip: '수용률/부등률/부하율 정의 + 공식.' },
-  { articleId: 'KEC-501.1', articleTitle: '태양광 발전', frequencyLast10: 4, importance: 'high', commonCalcTypes: ['PV 발전량', '인버터 용량'], examSubject: '전기설비기술기준', studyTip: '최근 출제 급증. 계통연계 기준 중요.' },
+  { articleId: 'KEC-522.2', articleTitle: '태양광설비의 시설기준', frequencyLast10: 4, importance: 'high', commonCalcTypes: ['PV 발전량', '인버터 용량'], examSubject: '전기설비기술기준', studyTip: '최근 출제 급증. 계통연계 기준 중요.' },
 
   // === 중빈도 (medium) — 3~5회에 1번 ===
   { articleId: 'KEC-234.1', articleTitle: '조도 계산', frequencyLast10: 3, importance: 'medium', commonCalcTypes: ['조도 산출', '광속법'], examSubject: '전기응용', studyTip: 'F = E×A / (U×M) 공식.' },
-  { articleId: 'KEC-131.1', articleTitle: '감전 보호', frequencyLast10: 3, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '직접/간접 접촉 보호 방법 구분.' },
+  { articleId: 'KEC-113.2', articleTitle: '감전에 대한 보호', frequencyLast10: 3, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '직접/간접 접촉 보호 방법 구분.' },
   { articleId: 'KEC-232.12', articleTitle: '금속관공사', frequencyLast10: 3, importance: 'medium', examSubject: '전기공사', studyTip: '관 내경과 전선 수 관계. 실기 자주 출제.' },
   // 원문 확인 2026-07-26: 232.31 은 금속덕트공사이고 한도는 20% 다. 전에 여기
   // 적혀 있던 "전선관 충전율 / 3선 이상 40%" 는 NEC Chapter 9 Table 1 값이었다.

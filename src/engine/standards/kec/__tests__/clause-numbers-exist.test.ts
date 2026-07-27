@@ -72,15 +72,16 @@ function collectFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** 상위 조항이 있으면 실재로 본다 — 232.5.1 은 232.5 의 하위다. */
+/**
+ * 픽스처에 그 번호가 있어야 실재로 본다.
+ *
+ * 처음엔 "상위 조항이 있으면 실재"로 느슨하게 뒀다. 픽스처가 말단까지 다
+ * 담고 있으니 그 규칙이 도울 일은 없고, **없는 하위 번호만 통과시켰다** —
+ * 502.1~502.4 태양광이 그렇게 빠져나갔다(현행 502 는 용어의 정의이고
+ * 502.1 부터는 없다). 실측 11 건이 이 구멍으로만 통과하고 있었다.
+ */
 function exists(clause: string): boolean {
-  if (OFFICIAL.has(clause)) return true;
-  const parts = clause.split('.');
-  while (parts.length > 1) {
-    parts.pop();
-    if (OFFICIAL.has(parts.join('.'))) return true;
-  }
-  return false;
+  return OFFICIAL.has(clause);
 }
 
 describe('KEC 조항 번호 실재 확인', () => {
@@ -163,7 +164,7 @@ describe('조항 번호 중복 정의', () => {
     '234.1', '234.2',
     '311.1', '311.2',
     '341.1', '341.2',
-    '351.1', '502.1',
+    '351.1',   // 502.1 은 2026-07-27 에 532 육상 풍력발전설비로 옮기며 해소
   ]);
 
   it('선언한 것 외에는 같은 조항 번호를 두 번 정의하지 않는다', () => {
