@@ -39,7 +39,14 @@ const OPENAPI_SPEC = {
         requestBody: {
           content: { 'application/json': { schema: { type: 'object', required: ['calculatorId', 'inputs'], properties: {
             calculatorId: { type: 'string', example: 'voltage-drop' },
-            inputs: { type: 'object', example: { voltage: 380, current: 100, length: 50, cableSize: 35 } },
+            // 예제는 **그대로 쳐서 200 이 나와야 한다.** 전에는
+            // conductor·phase·powerFactor 가 빠져 422 였다(2026-07-28 실측).
+            // 이 API 는 선언된 defaultValue 를 채워 주지 않는다 — 계산 입력을
+            // 조용히 가정하지 않는 것이 이 앱의 방침이라, 문서 쪽을 맞춘다.
+            inputs: {
+              type: 'object',
+              example: { voltage: 380, current: 100, length: 50, cableSize: 35, conductor: 'Cu', phase: 3, powerFactor: 0.85 },
+            },
           } } } },
         },
         responses: { 200: { description: '계산 결과 + 영수증' }, 400: { description: '입력 오류' }, 404: { description: '계산기 미발견' } },
@@ -94,13 +101,88 @@ const OPENAPI_SPEC = {
       },
     },
     '/sld': {
-      post: { summary: 'SLD 도면 분석 (VLM)', tags: ['Drawing'], responses: { 200: { description: '토폴로지 + 계산 체인' } } },
+      post: {
+        summary: 'SLD 도면 분석 (VLM)',
+        tags: ['Drawing'],
+        description: 'BYOK — 키는 요청마다 받고 저장하지 않습니다.',
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['image', 'provider', 'apiKey'],
+                properties: {
+                  image: { type: 'string', format: 'binary', description: '도면 이미지 (PNG/JPG/WEBP, 최대 20MB)' },
+                  provider: { type: 'string', enum: ['gemini', 'openai', 'claude'] },
+                  apiKey: { type: 'string', description: 'BYOK 키' },
+                  model: { type: 'string', description: '생략 시 공급자 기본 모델' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: '토폴로지 + 계산 체인' },
+          400: { description: '이미지 누락·형식 불일치·크기 초과' },
+          401: { description: 'API 키 누락' },
+          503: { description: 'AI 공급자 일시 응답 불가' },
+        },
+      },
     },
     '/dxf': {
-      post: { summary: 'DXF 벡터 파싱', tags: ['Drawing'], responses: { 200: { description: 'SLD 컴포넌트 + 연결' } } },
+      post: {
+        summary: 'DXF 벡터 파싱',
+        tags: ['Drawing'],
+        // JSON 이 아니라 multipart 다. 그게 안 적혀 있어 문서만 보고는
+        // 400 을 받게 돼 있었다(2026-07-28).
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file'],
+                properties: { file: { type: 'string', format: 'binary', description: '.dxf 파일 (최대 16MB)' } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'SLD 컴포넌트 + 연결' },
+          400: { description: 'multipart 가 아니거나 .dxf 가 아니거나 16MB 초과' },
+        },
+      },
     },
     '/export': {
-      post: { summary: '영수증 내보내기 (PDF/Excel/CSV)', tags: ['Export'], responses: { 200: { description: '파일 다운로드' } } },
+      post: {
+        summary: '영수증 내보내기 (PDF/Excel/CSV)',
+        tags: ['Export'],
+        // 요청 본문이 아예 안 적혀 있었다(2026-07-28). 문서만 보고는 무엇을
+        // 보내야 하는지 알 수 없었고, 빈 본문을 보내면 500 이 났다.
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['receiptId', 'format'],
+                properties: {
+                  receiptId: { type: 'string', description: '내보낼 영수증 ID' },
+                  format: { type: 'string', enum: ['pdf', 'excel', 'csv'] },
+                  lang: { type: 'string', enum: ['ko', 'en'] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: '파일 다운로드' },
+          400: { description: '본문이 JSON 이 아니거나 receiptId·format 누락' },
+          401: { description: '인증 필요' },
+          404: { description: '영수증 없음' },
+        },
+      },
     },
   },
   tags: [

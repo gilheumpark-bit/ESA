@@ -94,7 +94,17 @@ async function POST__impl(req: NextRequest) {
   try {
     const owner = await resolveDrawingOwner(req, true);
     if (!owner) return userError('작업 세션을 만들 수 없습니다.', 401);
-    const form = await req.formData();
+    // multipart 가 아닌 본문(JSON 등)은 호출자 잘못이다. formData() 가
+    // 던지게 두면 바깥 catch 가 500 으로 뭉갠다 — pdf-drawing 과 같은 규범.
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return privateJson(
+        { success: false, error: { message: '요청 본문을 읽지 못했습니다 — multipart/form-data(file 필드에 도면 파일)인지 확인하세요.' } },
+        { status: 400 },
+      );
+    }
     const filePart = getFormFile(form, 'file');
     if (!filePart.ok) {
       return privateJson({ success: false, error: { message: filePart.message } }, { status: 400 });

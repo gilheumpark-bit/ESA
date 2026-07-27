@@ -99,7 +99,16 @@ async function POST__impl(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const body = (await req.json()) as Partial<ExportRequestBody>;
+    const raw = await req.json().catch(() => null);
+    // 깨진 JSON·빈 본문은 호출자 잘못이다. 아래 필드 검증은 이미 400 을
+    // 내는데, 파싱 실패만 바깥 catch 로 새어 500 이 되고 있었다.
+    if (!raw || typeof raw !== 'object') {
+      return NextResponse.json(
+        { error: 'ESVA-5011: Request body must be valid JSON' },
+        { status: 400 },
+      );
+    }
+    const body = raw as Partial<ExportRequestBody>;
 
     // --- Validation ---
     if (!body.receiptId && !body.receipt) {

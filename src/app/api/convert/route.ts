@@ -45,7 +45,16 @@ async function POST__impl(request: NextRequest) {
     const blocked = applyRateLimit(request, 'default');
     if (blocked) return blocked;
 
-    const body: ConvertRequestBody = await request.json();
+    const raw = await request.json().catch(() => null);
+    // 깨진 JSON·빈 본문은 호출자 잘못이다. 던지게 두면 바깥 catch 가
+    // 500 으로 뭉개 "우리 잘못" 으로 보고된다(§ 정직 거부).
+    if (!raw || typeof raw !== 'object') {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-4030', message: 'Request body must be valid JSON' } },
+        { status: 400 },
+      );
+    }
+    const body = raw as ConvertRequestBody;
 
     // Validate value — AWG 규격명만 문자열을 허용한다. 아무 문자열이나
     // 통과시키면 다른 분기가 NaN 을 success:true 로 돌려준다.

@@ -199,12 +199,13 @@ export const POST = withApiHandler(
       return ctx.error('ESA-4002', '요청 크기가 허용 범위를 초과했습니다.', 413);
     }
 
-    const body = await request.json() as {
-      provider?: unknown;
-      apiKey?: unknown;
-      action?: unknown;
-      model?: unknown;
-    };
+    const raw = await request.json().catch(() => null);
+    // 깨진 JSON·빈 본문은 호출자 잘못이다. 던지게 두면 바깥 catch 가
+    // 500 으로 뭉개 "우리 잘못" 으로 보고된다.
+    if (!raw || typeof raw !== 'object') {
+      return ctx.error('ESA-4002', '요청 본문이 올바른 JSON 이 아닙니다.', 400);
+    }
+    const body = raw as { provider?: unknown; apiKey?: unknown; action?: unknown; model?: unknown };
     if (!isCloudProvider(body.provider)) {
       return ctx.error('ESA-4003', '지원하지 않는 클라우드 공급자입니다.', 400);
     }

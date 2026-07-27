@@ -92,7 +92,14 @@ export const POST = withApiHandler(
 
     // Multipart: 도면 파일 + 메타데이터
     if (contentType.includes('multipart/form-data')) {
-      const formData = await req.formData();
+      // multipart 를 선언했는데 본문이 아니면 호출자 잘못이다. 던지게 두면
+      // 바깥 catch 가 500 으로 뭉갠다 — pdf-drawing 과 같은 규범.
+      let formData: FormData;
+      try {
+        formData = await req.formData();
+      } catch {
+        return ctx.error('ESVA-4401', '요청 본문을 읽지 못했습니다 — multipart/form-data 인지 확인하세요.', 400);
+      }
       const filePart = getFormFile(formData, 'file');
       if (!filePart.ok) {
         return ctx.error('ESVA-4400', filePart.message, 400);
@@ -188,7 +195,11 @@ export const POST = withApiHandler(
         ruleWarnings = lint.warnings;
       }
     } else {
-      const body = await req.json();
+      const raw = await req.json().catch(() => null);
+      if (!raw || typeof raw !== 'object') {
+        return ctx.error('ESVA-4402', 'Request body must be valid JSON', 400);
+      }
+      const body = raw as Record<string, any>;
       query = body.query ? ctx.sanitize(body.query) : undefined;
       projectName = body.projectName ?? projectName;
       projectType = body.projectType ?? projectType;

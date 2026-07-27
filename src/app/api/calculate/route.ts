@@ -111,7 +111,16 @@ async function POST__impl(request: NextRequest) {
     }
 
     // Parse body + sanitize
-    const body: CalculateRequestBody = await request.json();
+    const raw = await request.json().catch(() => null);
+    // 깨진 JSON·빈 본문은 호출자 잘못이다. 던지게 두면 바깥 catch 가
+    // 500 으로 뭉개 "우리 잘못" 으로 보고된다(§ 정직 거부).
+    if (!raw || typeof raw !== 'object') {
+      return jsonWithEsa(
+        { success: false, error: { code: 'ESVA-4002', message: 'Request body must be valid JSON' } },
+        { status: 400 },
+      );
+    }
+    const body = raw as CalculateRequestBody;
     if (body.calculatorId && typeof body.calculatorId === 'string') {
       body.calculatorId = sanitizeInput(body.calculatorId);
     }

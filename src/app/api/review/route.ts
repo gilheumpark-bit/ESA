@@ -68,7 +68,16 @@ async function POST__impl(req: NextRequest) {
   const timer = createRequestTimer();
 
   try {
-    const body: ReviewRequestBody = await req.json();
+    const raw = await req.json().catch(() => null);
+    // 깨진 JSON·빈 본문은 호출자 잘못이다. 던지게 두면 바깥 catch 가
+    // 500 으로 뭉개 "우리 잘못" 으로 보고된다.
+    if (!raw || typeof raw !== 'object') {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-4000', message: 'Request body must be valid JSON' } },
+        { status: 400 },
+      );
+    }
+    const body = raw as ReviewRequestBody;
     const p = body.params;
 
     const validationError = validateReviewParams(p);
