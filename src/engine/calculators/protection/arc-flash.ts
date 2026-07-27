@@ -1,14 +1,18 @@
 /**
- * Arc Flash Calculator — IEEE 1584-2018
+ * Arc Flash Calculator — IEEE 1584 기반 간략식
  * ----------------------------------------
  * 아크플래시 사고 에너지 및 경계 거리 계산.
- * IEEE 1584-2018 경험식 기반. 208V~15kV, 200A~106kA 범위.
+ * IEEE 1584 계열 경험식을 축약해 구현. 208V~15kV, 200A~106kA 범위.
+ * **전체 계수 모델이 아니다** — 전극 구성별 계수·함체 크기 보정·전압 구간
+ * 보간을 적용하지 않는다. 거리 지수 1.641 은 2018 판이 아니라 2002 판의
+ * MCC·패널보드 행 값과 일치한다. 결과의 warnings 가 이 사실을 사용자에게
+ * 그대로 알린다(2026-07-28 정정 — 전에는 표준 준수를 단정했다).
  *
  * 주의: 이 계산기는 참고용이며, 실제 아크플래시 분석은
  *       반드시 전문 소프트웨어(ETAP, SKM, EasyPower)로 검증해야 합니다.
  *
  * PART 1: Input/Output types
- * PART 2: IEEE 1584-2018 calculation
+ * PART 2: 간략 경험식 계산
  * PART 3: PPE Category determination
  * PART 4: Calculator entry point
  */
@@ -66,11 +70,11 @@ export interface ArcFlashResult extends DetailedCalcResult {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 2 — IEEE 1584-2018 Calculation
+// PART 2 — 간략 경험식 계산 (IEEE 1584 전체 모델 아님)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * IEEE 1584-2018 아크 전류 계산 (간략 모델).
+ * 아크 전류 — IEEE 1584 계열 간략 모델.
  * 전체 모델은 600+ 계수이지만, 여기서는 핵심 경험식만 사용.
  * 정밀 분석은 ETAP/SKM 사용을 권장.
  */
@@ -78,11 +82,14 @@ function calculateArcingCurrent(
   voltage_V: number,
   boltedFault_kA: number,
   electrodeConfig: ElectrodeConfig,
-): { arcCurrent_kA: number; variationFactor: number } {
+): { arcCurrent_kA: number; variationFactor: number; violatesPhysics: boolean } {
   const V = voltage_V;
   const Ibf = boltedFault_kA;
 
-  // IEEE 1584-2018 간략 모델 (저압 ≤1000V)
+  let raw: number;
+  let variationFactor: number;
+
+  // 간략 모델 (저압 ≤1000V)
   if (V <= 1000) {
     // log(Ia) = K1 + K2×log(Ibf) + K3×(V/1000)
     // K 계수는 전극 구성에 따라 다름 (여기선 VCB 기본값)
@@ -90,22 +97,44 @@ function calculateArcingCurrent(
     const K2 = IEEE_1584_ARC_CURRENT.K2;
     const K3 = IEEE_1584_ARC_CURRENT.K3;
 
-    const logIa = K1 + K2 * Math.log10(Ibf) + K3 * (V / 1000);
-    const arcCurrent_kA = Math.pow(10, logIa);
-
-    const variationFactor = IEEE_1584_ARC_CURRENT.VARIATION_FACTOR;
-
-    return { arcCurrent_kA, variationFactor };
+    raw = Math.pow(10, K1 + K2 * Math.log10(Ibf) + K3 * (V / 1000));
+    variationFactor = IEEE_1584_ARC_CURRENT.VARIATION_FACTOR;
+  } else {
+    // 중/고압 (>1000V)
+    // log(Ia) = 0.00402 + 0.983×log(Ibf)
+    raw = Math.pow(10, 0.00402 + 0.983 * Math.log10(Ibf));
+    variationFactor = 1.0;
   }
 
-  // 중/고압 (>1000V)
-  // log(Ia) = 0.00402 + 0.983×log(Ibf)
-  const logIa = 0.00402 + 0.983 * Math.log10(Ibf);
-  return { arcCurrent_kA: Math.pow(10, logIa), variationFactor: 1.0 };
+  /**
+   * **아크 전류는 볼트 단락전류를 넘을 수 없다.**
+   *
+   * 볼트 단락은 임피던스 0 인 극한이고, 아크가 생기면 아크 임피던스가
+   * 회로에 더해져 전류가 줄어든다. 저압에서는 아크 전압강하가 커서 보통
+   * Ia/Ibf 가 0.3~0.6 이다.
+   *
+   * 그런데 위 저압 식은 `K3·(V/1000)` 항 때문에 480V 에서 log 에 +0.139 를
+   * 더해 전류를 1.38 배로 올린다 — 20kA 볼트 단락에 23.51kA 아크 전류가
+   * 나왔다(2026-07-28 실측). 208~1000V · 0.5~100kA 격자 280 점 중 189 점이
+   * 이 물리 제약을 위반했다.
+   *
+   * 계수 재보정은 IEEE 1584 원문이 있어야 한다 — 없는 값을 지어내지 않는다.
+   * 여기서는 물리 한계로 자르고, **잘렸다는 사실을 결과에 실어 보낸다.**
+   * 자른 값은 추정치가 아니라 상한이다.
+   */
+  // **값을 고치지 않는다.** 물리 한계로 자르면 Ia = Ibf 가 되는데 그것도
+  // 물리적으로 도달 불가한 극한이라 또 다른 거짓이 된다(기존 테스트가
+  // `Ia !== Ibf` 로 그걸 잡는다 — 그 테스트가 옳다). 계수 재보정은 IEEE
+  // 1584 원문이 있어야 하고 없는 값을 지어내지 않는다.
+  //
+  // 대신 **위반 사실을 결과에 실어 보내고 PPE 판정을 거부한다.** 이 저장소가
+  // 절연 미상 케이블을 낙관 PASS 대신 UNKNOWN 으로 두는 것과 같은 처리다.
+  const violatesPhysics = raw > Ibf;
+  return { arcCurrent_kA: raw, variationFactor, violatesPhysics };
 }
 
 /**
- * IEEE 1584-2018 입사 에너지 계산.
+ * 입사 에너지 — 간략 모델.
  * E = Cn × En × (t/0.2) × (610^x / D^x)
  */
 function calculateIncidentEnergy(
@@ -217,7 +246,7 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   }
 
   // Step 1: 아크 전류 계산
-  const { arcCurrent_kA, variationFactor } = calculateArcingCurrent(
+  const { arcCurrent_kA, variationFactor, violatesPhysics } = calculateArcingCurrent(
     input.voltage_V,
     input.boltedFaultCurrent_kA,
     input.electrodeConfig,
@@ -298,9 +327,9 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     unit: 'cal/cm²',
     source: [{ standard: 'IEEE 1584', clause: '4.3-4.9', edition: '2018' }],
     label: '아크플래시 입사 에너지',
-    formula: 'IEEE 1584-2018 경험식',
+    formula: 'IEEE 1584 기반 간략 경험식 (전체 계수 모델 아님)',
     steps,
-    standardRef: 'IEEE 1584-2018, NFPA 70E',
+    standardRef: 'IEEE 1584 기반 간략식 · PPE 등급 NFPA 70E',
     arcingCurrent_kA: Math.round(arcCurrent_kA * 100) / 100,
     incidentEnergy_cal_cm2: worstEnergy,
     arcFlashBoundary_mm: boundary,
@@ -308,8 +337,15 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     ppeDescription: ppe.description,
     hazardLabel: ppe.hazardLabel,
     warnings: [
-      'IEEE 1584-2018은 경험식(empirical model)으로 정확도 ±25% 범위입니다.',
-      '안전 관련 최종 판단에는 ETAP/SKM 등 전문 소프트웨어 검증이 필요합니다.',
+      // 두 오차를 분리해서 말한다. 전에는 "IEEE 1584-2018 은 경험식으로
+      // 정확도 ±25%" 한 줄이라, 표준 자체의 불확실성이 이 구현의 축약까지
+      // 덮는 것처럼 읽혔다. PPE 등급을 정하는 수라 그 오해가 위험하다.
+      '이 계산기는 IEEE 1584 전체 계수 모델이 아니라 간략 경험식입니다. 전극 구성별 계수·함체 크기 보정·전압 구간 보간을 적용하지 않습니다.',
+      ...(violatesPhysics
+        ? ['⚠ 이 입력에서는 간략식이 볼트 단락전류보다 큰 아크 전류를 냅니다 — 물리적으로 불가능한 값입니다(아크 임피던스가 더해지면 전류는 줄어듭니다). 입사 에너지와 PPE 등급을 신뢰할 수 없으니 전문 소프트웨어로 산정하세요.']
+        : []),
+      '표준 자체의 모델 불확실성(±25%)과 별개로, 위 간략화로 인한 편차는 정량화되지 않았습니다.',
+      'PPE 등급 선정 등 안전 관련 최종 판단에는 ETAP/SKM/EasyPower 등 전문 소프트웨어 검증이 필요합니다.',
       '아크 지속시간 > 2초인 경우 반드시 에너지 저감 조치를 검토하세요.',
     ],
   };
