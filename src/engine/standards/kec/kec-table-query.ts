@@ -167,8 +167,8 @@ export function queryBreakerRating(
     maxAllowed: wireAmpacity,
     source: {
       standard: 'KEC',
-      clause: '212.3',
-      edition: '2021',
+      clause: '212.4.1',
+      edition: '조항번호 2026.1.5 대조',
       verifiedAt: '2024-12-01',
     },
   };
@@ -290,7 +290,7 @@ export function executeQuery(query: StructuredQuery): QueryResult {
         const p = query.params as { voltageDropPercent: number; circuitType?: 'main' | 'branch' | 'combined' };
         const result = queryVoltageDrop(p.voltageDropPercent, p.circuitType);
         if (!result) return failResult('voltage_drop', '전압강하 판정 조항을 찾을 수 없습니다.');
-        return { type: 'voltage_drop', success: true, data: result, source: { standard: 'KEC', clause: '232.3.9', edition: '2021' } };
+        return { type: 'voltage_drop', success: true, data: result, source: { standard: 'KEC', clause: '232.3.9', edition: '조항번호 2026.1.5 대조' } };
       }
 
       case 'nec_ampacity': {

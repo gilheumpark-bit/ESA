@@ -585,11 +585,11 @@ async function runCalculations(
         unit: 'A',
         compliant: null,
         note: '도면 표기 전사 — 부하전류·허용전류·차단용량 검증 없음. 수동 검증 필요.',
-        standardRef: 'KEC 212.3',
+        standardRef: 'KEC 212.4.1',
       });
       standards.push({
         standard: 'KEC',
-        clause: '212.3',
+        clause: '212.4.1',
         title: '차단기 정격',
         judgment: 'HOLD',
         note: `${br.label}: 표기 ${rating}A — 적합성 미판정`,

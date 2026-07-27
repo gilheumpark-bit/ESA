@@ -84,7 +84,6 @@ export function calculateReactivePower(input: ReactivePowerInput): DetailedCalcR
     formula: 'Q_c = P \\times (\\tan\\varphi_1 - \\tan\\varphi_2)',
     value: round(Qc, 2),
     unit: 'kvar',
-    standardRef: 'KEC 232',
   });
 
   // Step 4: Current reactive power

@@ -338,11 +338,11 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
               unit: 'A',
               compliant: null,
               note: `부하 ${loadCurrent}A 기준 추천 ${brResult.recommended}A — 전선 허용전류·차단용량 교차검증 전 HOLD.`,
-              standardRef: 'KEC 212.3',
+              standardRef: 'KEC 212.4.1',
             });
             standards.push({
               standard: 'KEC',
-              clause: '212.3',
+              clause: '212.4.1',
               title: '차단기 정격',
               judgment: 'HOLD',
               note: `추천 ${brResult.recommended}A (부하 ${loadCurrent}A) — 교차검증 필요`,

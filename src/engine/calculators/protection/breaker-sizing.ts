@@ -77,7 +77,7 @@ export function calculateBreakerSizing(input: BreakerSizingInput): DetailedCalcR
     formula: 'I_n \\geq I_b',
     value: round(Ib, 2),
     unit: 'A',
-    standardRef: 'KEC 212.3',
+    standardRef: 'KEC 212.4.1',
   });
 
   // Step 2: Select standard rating (next size up)
@@ -111,7 +111,7 @@ export function calculateBreakerSizing(input: BreakerSizingInput): DetailedCalcR
       formula: 'I_b \\leq I_n \\leq I_z',
       value: Iz,
       unit: 'A',
-      standardRef: 'KEC 212.3',
+      standardRef: 'KEC 212.4.1',
     });
   }
 

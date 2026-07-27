@@ -103,7 +103,6 @@ export function calculateMotorPFCorrection(input: MotorPFCorrectionInput): Detai
     formula: `Q_c \\leq Q_{noload} \\approx ${round(noLoadKvar, 2)} \\text{ kvar}`,
     value: round(noLoadKvar, 2),
     unit: 'kvar',
-    standardRef: 'KEC 232',
   });
 
   // PART 3 -- Result assembly

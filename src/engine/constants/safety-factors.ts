@@ -55,7 +55,17 @@ export interface SafetyFactorProfile {
 
   /** 차단기 선정 배율 */
   breakerFactors: {
-    /** 연속부하 배율 (KEC 212.3 / NEC 240.4) */
+    /**
+     * 연속부하 배율.
+     *
+     * **KEC 근거가 아니다**(2026-07-28 정정). 전에 `KEC 212.3 / NEC 240.4`
+     * 라고 적혀 있었는데 둘 다 아니다 — KEC 는 연속부하 배율 대신
+     * `Ib ≤ In ≤ Iz`(212.4.1) 협조로 규정하고, 전문 색인 표제에 "연속" 이
+     * 한 건도 없다. 1.25 는 NEC 의 연속부하 125% 규정에서 온 값이다.
+     *
+     * 정확한 NEC 조항 번호는 원문 대조 전이라 달지 않는다 — 틀린 번호를
+     * 다느니 번호를 안 다는 편이 낫다.
+     */
     continuousLoad: number;
     /** 전동기 분기회로 최대 배율 (NEC 430.52) */
     motorBranchMax: number;
@@ -147,7 +157,7 @@ const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
       },
     },
     breakerFactors: {
-      continuousLoad: 1.25,   // KEC 212.3
+      continuousLoad: 1.25,   // NEC 연속부하 125% (KEC 근거 아님 — 위 주석)
       motorBranchMax: 2.50,
       motorOverloadHigh: 1.15,
       motorOverloadLow: 1.25,
@@ -174,10 +184,23 @@ const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
         sameSizeEasyPull: 0.48,
       },
     },
+    /**
+     * general·special 은 구 「전기설비기술기준의 판단기준」 값이고 KEC 가
+     * 아니다 — 100Ω·10Ω 은 폐지된 종별 체계에서 온 수치다(구 판단기준).
+     * KEC 2021 이 그 체계를 폐지했고 현행에는 이런 일괄 저항값이 없다.
+     * 142.2 「접지극의 시설 및 접지저항」은 계통·용도에 따라 요구를 건다.
+     * 전에는 이 두 줄이 KEC 조항을 근거로 달고 있었다(2026-07-28 정정 · KEC 아님).
+     *
+     * 값은 남긴다. 현장 도면·기존 성적서에 그 표기가 아직 있어서 읽어야
+     * 한다. 다만 KEC 근거로 제시하지 않는다.
+     *
+     * `lightning` 도 `KEC 142.7` 이라고 달려 있었는데 142.7 은 「기계기구의
+     * 철대 및 외함의 접지」다. 피뢰기 접지는 341.14 다.
+     */
     groundingResistance: {
-      general: 100,       // KEC 142.2 제3종
-      special: 10,        // KEC 142.2 제1종/특별3종
-      lightning: 10,      // KEC 142.7
+      general: 100,       // 구 판단기준 종별 접지 (KEC 아님)
+      special: 10,        // 구 판단기준 종별 접지 (KEC 아님)
+      lightning: 10,      // KEC 341.14 피뢰기의 접지 — 고압·특고압 10Ω 이하 (근거 등급 E2)
     },
     cableDerating: {
       pvcFactor: 0.87,

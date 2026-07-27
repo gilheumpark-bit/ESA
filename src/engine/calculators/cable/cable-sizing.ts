@@ -143,7 +143,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     formula: 'K_t = \\sqrt{\\frac{\\theta_{max} - \\theta_{amb}}{\\theta_{max} - 30}}',
     value: Kt,
     unit: '-',
-    standardRef: 'KEC 232.3',
+    standardRef: 'KEC 232.5.2',
   });
 
   const Kg = correctionProbe.factors.find((factor) => factor.type === 'grouping')?.factor ?? 1;
@@ -240,7 +240,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     formula: 'I_{base} \\geq I_{req}',
     value: selectedSize,
     unit: 'mm\u00B2',
-    standardRef: 'KEC 232.3',
+    standardRef: 'KEC 232.5.2',
   });
 
   steps.push({

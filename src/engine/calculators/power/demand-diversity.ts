@@ -75,7 +75,6 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
     formula: 'F_{div} = \\frac{\\sum P_{max,i}}{P_{combined}}',
     value: round(diversityFactor, 4),
     unit: '',
-    standardRef: 'KEC 232.2',
   });
 
   // Step 3: Demand factor (수용률)
@@ -86,7 +85,6 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
     formula: 'D_f = \\frac{P_{combined}}{P_{installed}}',
     value: round(demandFactor, 4),
     unit: '',
-    standardRef: 'KEC 232.2',
   });
 
   // Step 4: Load factor (부하율) — 평균수요 / 최대수요. 평균수요가 있을 때만.
@@ -99,7 +97,6 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
       formula: 'L_f = \\frac{P_{avg}}{P_{combined}}',
       value: round(loadFactor, 4),
       unit: '',
-      standardRef: 'KEC 232.2',
     });
   }
 

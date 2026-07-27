@@ -88,7 +88,6 @@ export function calculateMaxDemand(input: MaxDemandInput): DetailedCalcResult {
     formula: 'MD = \\frac{\\sum (P_i \\times D_i)}{F_{div}}',
     value: round(maxDemand, 2),
     unit: 'kW',
-    standardRef: 'KEC 232.2',
   });
 
   // Step 4: Overall demand factor
