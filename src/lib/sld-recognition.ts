@@ -195,6 +195,7 @@ Return ONLY valid JSON with this structure:
 }
 - Use "arrester" for lightning/surge arresters (LA, SA, SPD, 피뢰기, 서지흡수기) — they are protective devices, not switches
 - "transformer" means POWER transformers only. Instrument transformers (PT, VT, CT, ZCT, MOF, 계기용 변성기) are "meter" — they feed measurement, not load
+- A voltage printed on a CABLE or BUS is its INSULATION CLASS, not the operating voltage (e.g. "600V 3P4W" on a bus of a 380V system). Never report it as systemVoltage. Take systemVoltage from the incoming-line note or from the PT ratio; if neither is present, omit systemVoltage rather than guessing
 - Position x/y must be numeric values from 0 to 100 relative to the current image
 - Include length only when a numeric value and unit are explicitly printed on the drawing
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
@@ -368,6 +369,27 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       });
     }
 
+    /**
+     * 케이블·모선에 적힌 전압은 **절연등급**이지 계통전압이 아니다.
+     *
+     * 실측 2026-07-27: 저압 배전반 실도면의 모선이 `600V 3Ø4W 60Hz 600A` 인데
+     * 실제 계통은 380V 였다(PT 가 380V/190V). 600V 는 절연 등급이다. 이걸
+     * 계통전압으로 잡으면 전압강하·단락전류의 기준값이 통째로 어긋난다.
+     *
+     * 사람도 틀리는 자리다 — 내가 이 도면의 라벨을 만들 때 정확히 이 오독을 했다.
+     * 그래서 조용히 넘기지 않고 경고로 남긴다. 값을 지우지는 않는다: 22.9kV
+     * 계통처럼 케이블 정격과 계통전압이 실제로 같은 경우가 있어, 같다는 사실만으로
+     * 틀렸다고 단정할 수 없다.
+     */
+    const declaredVoltage = boundedText(data.systemVoltage, 64) ?? '';
+    const insulationClassSuspect = declaredVoltage
+      && components.some(
+        (c) => (c.type === 'cable' || c.type === 'bus')
+          && [c.voltage, c.rating].some((v) => v && v.replace(/\s/g, '') === declaredVoltage.replace(/\s/g, '')),
+      )
+      // PT(계기용 변압기)가 있으면 계통전압의 독립 근거가 따로 있다는 뜻이다.
+      && !components.some((c) => c.type === 'meter' && /P\.?T|VT|변성기/i.test(c.label ?? ''));
+
     const rawConfidence = finiteNumber(data.confidence) ?? 0.5;
     return {
       components,
@@ -379,9 +401,12 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ? Math.max(0, Math.min(partialRecovery ? 0.5 : 1, rawConfidence))
         : 0,
       ...(partialRecovery ? { partial: true } : {}),
-      ...((partialRecovery || instrumentTransformerHits.length) ? {
+      ...((partialRecovery || instrumentTransformerHits.length || insulationClassSuspect) ? {
         warnings: [
           ...(partialRecovery ? ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'] : []),
+          ...(insulationClassSuspect ? [
+            `SYSTEM_VOLTAGE_MAY_BE_INSULATION_CLASS: 계통전압 "${declaredVoltage}" 이(가) 케이블·모선 표기와 같습니다 — 절연등급일 수 있으니 확인하세요`,
+          ] : []),
           // 조용히 고치면 모델이 계속 틀린 채로 남고 아무도 모른다.
           ...instrumentTransformerHits.map(
             (label) => `INSTRUMENT_TRANSFORMER_RECLASSIFIED: "${label}" 을(를) transformer → meter 로 보정`,

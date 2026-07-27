@@ -245,7 +245,37 @@ interface TypeDetection {
   weak: boolean;
 }
 
+/**
+ * `PF` 는 전력퓨즈이자 역률계다 — 글자로도 그림으로도 안 갈린다.
+ *
+ * 교재가 "COS 와 PF 의 심벌은 같은 것을 사용한다" 고 명시하고, 같은 교재의
+ * 계측기 표에 역률계(Power factor meter)가 실려 있다. 그래서 앞 커밋까지는
+ * 아예 넣지 않고 `load` 로 두었다.
+ *
+ * 현장 판별 규칙(2026-07-27 확인): **심볼이 함께 있으면 전력퓨즈, 없으면 역률계.**
+ * 텍스트만 보는 이 경로에서는 심볼 유무를 직접 못 보므로 계기반 문맥을 대리
+ * 신호로 쓴다 — 실도면(세종 p1)의 계기반이 `V A W PF F` 처럼 계기 글자가
+ * 늘어선 형태였다. 다른 계기 글자와 함께 나오면 역률계로 본다.
+ *
+ * 판별이 안 되면 `undefined` 를 돌려 기존 경로(사전)로 넘긴다 — 애매한 것을
+ * 어느 한쪽으로 밀어붙이지 않는다.
+ */
+const METER_PANEL_NEIGHBORS = /\b(V|A|W|Hz|VAR|WH|DM)\b/;
+
+function disambiguatePowerFactor(text: string): SLDComponentType | undefined {
+  if (!/\bP\.?F\b/i.test(text)) return undefined;
+  // 계기 글자가 같이 있으면 계기반이다 → 역률계.
+  const rest = text.replace(/\bP\.?F\b/gi, ' ');
+  if (METER_PANEL_NEIGHBORS.test(rest)) return 'meter';
+  // 퓨즈 쪽 근거(정격·차단 표기)가 있으면 전력퓨즈.
+  if (/\b\d+\s*(A|kA|AF|AT)\b/i.test(rest) || /퓨즈|FUSE/i.test(text)) return 'breaker';
+  return undefined;
+}
+
 function detectComponentTypeEx(text: string): TypeDetection {
+  const pf = disambiguatePowerFactor(text);
+  if (pf) return { type: pf, weak: false };
+
   for (const { pattern, type } of SYMBOL_KEYWORDS) {
     const match = text.match(pattern);
     if (match) {
