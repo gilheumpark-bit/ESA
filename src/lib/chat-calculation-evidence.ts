@@ -72,6 +72,50 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
 }
 
 /**
+ * 표·규정에서 **수치를 꺼내 오는** 질문인가.
+ *
+ * `parseQuery` 는 "케이블 35sq 허용전류 알려줘" 를 `calculate` 가 아니라
+ * `search` 로 분류한다 — 맞는 분류다. 사용자는 계산을 시키는 게 아니라
+ * 표 값을 묻고 있다. 문제는 그 뒤다: 계산기도 안 걸리고 `calculate` 도
+ * 아니니 **아무 지시도 안 붙고**, 모델이 기억에서 수치를 써 내면 출력
+ * 필터가 전부 [미확인] 으로 지운다.
+ *
+ * 실측 2026-07-28, 이 앱 사용자가 실제로 물을 세 문장:
+ *   "케이블 35sq 허용전류 알려줘"
+ *     → "허용전류는 관로 포설 기준 **[미확인]**입니다. 주위온도 **[미확인]**도"
+ *   "100AF 차단기에 4sq 케이블 써도 되나요?"
+ *     → "최소 **[미확인]** 이상을 권장합니다"
+ *   "MCCB 225AT에 맞는 케이블 굵기는?"
+ *     → "CV 동도체 관로 기준 **[미확인]([미확인])**를 권장합니다"
+ * 필터는 제 일을 했다. 빠진 것은 **쓰기 전에 알려 주는 지시**다.
+ *
+ * 판별은 좁게 잡는다 — **단위가 붙은 수치**가 있거나, 답이 표에서 나오는
+ * 값 이름이 있을 때만.
+ *
+ * 그냥 "숫자가 있으면" 으로 잡았더니 `KEC 232.5 조항이 뭔가요` 가 걸렸다
+ * (조항 번호도 숫자다). 기존 잠금이 그걸 잡아냈다 — 과잉 지시는 답을
+ * 망친다는 결정이 이미 테스트에 박혀 있었다. 조항 번호·날짜·모델명에는
+ * 단위가 안 붙는다는 것이 두 부류를 가르는 실제 차이다.
+ */
+const TABLE_VALUE_TERMS = [
+  '허용전류', '굵기', '단면적', '정격', '접지저항', '절연저항', '이격거리',
+  '이격', '용량', '차단용량', '보정계수', '수용률', '부하율',
+];
+
+/** `35sq` · `100AF` · `380V` · `50m` 처럼 단위가 바로 붙은 수치. */
+const UNIT_BEARING_NUMBER = /\d+(?:\.\d+)?\s*(?:sq|mm2|mm²|㎟|kVA|kVAR|kV|kW|AF|AT|A|V|W|m|Ω|ohm|%)\b/i;
+
+function asksForTableValue(query: string): boolean {
+  return UNIT_BEARING_NUMBER.test(query) || TABLE_VALUE_TERMS.some((term) => query.includes(term));
+}
+
+const LOOKUP_SHORTFALL = '\n\n이 질문은 표·규정에서 수치를 꺼내는 조회이고, 검증된 ESA 계산기 영수증이 없습니다.'
+  + '\n기억에 있는 표 값(허용전류·굵기·보정계수·이격거리 등)을 수치로 적지 마세요 — 출력 검증이 그런 수치를 지웁니다.'
+  + '\n대신 ① 어떤 표·조항을 봐야 하는지, ② 그 표를 읽으려면 무엇이 확정돼야 하는지(도체·절연·포설방식·주위온도·회로 수 등),'
+  + ' ③ 앱의 어느 계산기·검토 기능이 그 답을 내는지를 알려 주세요.'
+  + '\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.';
+
+/**
  * 계산 요청인데 정본 계산기를 돌리지 못한 경우의 프롬프트.
  *
  * 영수증이 없으면 지금까지는 시스템 프롬프트에 아무것도 붙지 않았고, 모델은
@@ -90,8 +134,10 @@ export function resolveChatCalculationShortfall(query: string): string | null {
   // "[미확인] ÷ [미확인] ≈ [미확인]" 같은 답을 받았다(실측 2026-07-26, 한 답변에
   // 6개). 공식과 필요한 입력을 기호로 설명하는 것이 그보다 훨씬 쓸모 있다.
   if (!intent.calculatorId) {
-    if (parseQuery(query).intent !== 'calculate') return null;
-    return '\n\n계산 요청이지만 이 질문에 맞는 검증된 ESA 계산기를 지목하지 못했습니다.\n수치를 직접 만들어 제시하지 마세요. 대신 ① 적용 공식을 기호로, ② 각 기호에 해당하는 입력값이 무엇인지, ③ 어떤 계산기·기준을 봐야 하는지를 설명하세요.\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.';
+    if (parseQuery(query).intent === 'calculate') {
+      return '\n\n계산 요청이지만 이 질문에 맞는 검증된 ESA 계산기를 지목하지 못했습니다.\n수치를 직접 만들어 제시하지 마세요. 대신 ① 적용 공식을 기호로, ② 각 기호에 해당하는 입력값이 무엇인지, ③ 어떤 계산기·기준을 봐야 하는지를 설명하세요.\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.';
+    }
+    return asksForTableValue(query) ? LOOKUP_SHORTFALL : null;
   }
   if (intent.canAutoExecute && resolveChatCalculationEvidence(query)) return null;
 
