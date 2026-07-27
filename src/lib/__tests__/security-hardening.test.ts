@@ -72,12 +72,12 @@ describe('isAllowedMimeType', () => {
 
 describe('maskSecret', () => {
   it('앞 4 자만 남기고 가린다', () => {
-    expect(maskSecret('sk-proj-ABCDEFGHIJKLMNOP')).toBe(`sk-p${'•'.repeat(20)}`);
+    expect(maskSecret('tk-demo-ABCDEFGHIJKLMNOP')).toBe(`tk-d${'•'.repeat(20)}`);
   });
 
   it('가림 길이를 20 으로 묶어 실제 길이를 흘리지 않는다', () => {
-    const short = maskSecret('AIza' + 'x'.repeat(30));
-    const long = maskSecret('AIza' + 'x'.repeat(200));
+    const short = maskSecret('demo' + 'x'.repeat(30));
+    const long = maskSecret('demo' + 'x'.repeat(200));
     expect(short).toBe(long);
   });
 
