@@ -53,7 +53,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 누전차단기
   ['JIS-RCD', jis('RCD', '531.2', '누전차단기 — 30mA/0.1s', [
     { param: 'rcdRating_mA', operator: '<=', value: 30, unit: 'mA', result: 'PASS', note: '누전차단기 감도전류 30mA, 동작시간 0.1s 이내' },
-  ], [{ articleId: 'KEC-212.4', relation: 'equivalent', note: 'KEC 누전차단기' }])],
+  ], [{ articleId: 'KEC-211.2.4', relation: 'equivalent', note: 'KEC 211.2.4 누전차단기의 시설' }])],
 
   // 배선
   ['JIS-521.1', jis('521.1', '521.1', '배선 방법 — 전선관/케이블', [

@@ -192,7 +192,7 @@ const VOLTAGE_DROP: CodeArticle[] = [
 const WIRING_METHODS: CodeArticle[] = [
   nec('300.5', '300.5', '지중 매설 깊이 (Table 300.5)', [
     { param: 'burialDepthIn', operator: '>=', value: 24, unit: 'in', result: 'PASS', note: '직매: 24in, RMC: 6in, PVC: 18in (일반 조건)' },
-  ], [{ articleId: 'KEC-232.31', relation: 'equivalent', note: 'KEC 매설 깊이' }]),
+  ], [{ articleId: 'KEC-223.1', relation: 'equivalent', note: 'KEC 223.1 지중전선로의 시설 (매설 깊이). 고압·특고압은 334.1 로 따로 있다' }]),
 
   nec('300.17', '300.17', '도관 내 전선 수 제한', [
     { param: 'conduitFillPercent', operator: '<=', value: 40, unit: '%', result: 'PASS', note: '3선 이상: ≤40% 충전율' },
