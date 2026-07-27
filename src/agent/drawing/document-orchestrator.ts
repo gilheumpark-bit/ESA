@@ -37,6 +37,7 @@ import {
 } from './evidence-deduplicator';
 import { canReusePage, createJob, getJob, getOwnedJob, updateJob, type DrawingJobRecord } from './drawing-job-store';
 import { surveyPageKind } from './page-classifier';
+import { OCR_STANDARD_TERMS } from './ocr-standard-terms';
 import { adjudicateOcr } from './ocr-adjudicator';
 import { buildRecommendations } from './recommendation-engine';
 import { extractRatedValues } from './rated-value-extractor';
@@ -949,7 +950,7 @@ function adjudicateTextSeeds(textSeeds: RawTextSeed[], unresolved: UnresolvedIte
       readings: seed.readings ?? [],
       adjacentSymbolTypes: seed.adjacentSymbolTypes,
       legendTerms: seed.legendTerms,
-      standardTerms: ['PT', 'PPT', 'VCB', 'VGB', 'TR', 'ACB', 'MCCB', 'CT', 'ATS', 'UPS'],
+      standardTerms: OCR_STANDARD_TERMS,
     });
     const directVectorText = seed.readings?.length === 0 && seed.candidates?.length === 1;
     const certainty = directVectorText || result.status === 'CONFIRMED_BY_MAJORITY_AND_CONTEXT'
