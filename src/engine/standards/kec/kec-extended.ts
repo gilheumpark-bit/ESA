@@ -175,18 +175,16 @@ const LOW_VOLTAGE: CodeArticle[] = [
   ]),
 
   // 250 특수 설비
-  kec('250.1', '250.1', '욕실 설비 — 구역 구분', [
-    { param: 'bathroomZone', operator: '>=', value: 0, unit: 'zone', result: 'PASS', note: 'Zone 0/1/2/3 구분, Zone별 설비 제한' },
-  ]),
-  kec('250.2', '250.2', '수영장 설비', [
-    { param: 'swimmingPoolSafety', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '수중조명 SELV 12V, Zone 0/1/2 구분' },
-  ]),
-  kec('250.3', '250.3', '사우나 설비', [
-    { param: 'saunaWiring', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '내열 전선 사용, 온도 제한' },
-  ]),
-  kec('250.4', '250.4', '옥외 설비', [
-    { param: 'outdoorInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '방수/방습 조치, IP44 이상' },
-  ]),
+  // 욕실(250.1)·수영장(250.2)·사우나(250.3)·옥외(250.4)를 여기서 뺐다(2026-07-27).
+  //
+  // KEC 현행 전문의 「242 특수 장소」를 전수 확인했더니 방전등·분진·가스·위험물·
+  // 화약류·전시회·터널·야영지·마리나·의료장소·엘리베이터뿐이고 욕실·수영장·
+  // 사우나가 없다. 애초에 KEC 가 채택하지 않은 IEC 개념을 KEC 조항 번호로
+  // 제시하고 있었다 — 감리·검사에서 근거를 댈 수 없는 인용이다.
+  //
+  // 욕실·수영장·사우나는 IEC 60364-7-701/702/703 으로 옮겼다(iec-articles.ts).
+  // 옥외(IP44)는 특정 조항이 아니라 외부영향 일반(KEC 231.2.2 / IEC 512)에
+  // 걸리는 사항이라 별도 조항으로 두지 않고 뺐다 — 지어낼 자리가 아니다.
   kec('242.10', '242.10', '의료장소', [
     { param: 'medicalLocation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'Group 1/2 구분, IT 계통 적용 (Group 2)' },
   ], [{ articleId: 'IEC-710.1', relation: 'equivalent', note: 'IEC 의료시설' }]),

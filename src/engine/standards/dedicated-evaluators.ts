@@ -298,7 +298,9 @@ export const DEDICATED_EVALUATORS: Map<
   ['IEC-523.1', (p) => withArticle(getIECArticle('IEC-523.1'), (a) => evaluateAmpacity(a, p))],
   // 분류·적용범위 조항 — pass/fail 대상 아님, 정확한 사유로 HOLD
   ['KEC-111.1', () => withArticle(getKECArticle('KEC-111.1'), evaluateInformational)],
-  ['KEC-250.1', () => withArticle(getKECArticle('KEC-250.1'), evaluateInformational)],
+  // `KEC-250.1`(욕실) 등록을 뺐다 — 그 조항은 KEC 에 없다(현행 전문 242
+  // 특수장소 전수 확인 2026-07-27). 욕실은 IEC 60364-7-701 로 옮겼다.
+  ['IEC-701.1', () => withArticle(getIECArticle('IEC-701.1'), evaluateInformational)],
   ['JIS-701.1', () => withArticle(getJISArticle('JIS-701.1'), evaluateInformational)],
 ]);
 

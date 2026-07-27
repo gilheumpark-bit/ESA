@@ -108,14 +108,17 @@ describe('허용전류 전용 평가기 (NEC-310.16 / IEC-523.1)', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 분류·적용범위 조항 (2단계) — 애초에 pass/fail 대상이 아님
 //
-// KEC-111.1 "전압 무관 전체 적용"(적용범위), KEC-250.1·JIS-701.1
-// "욕실 Zone 0/1/2/3"(구역 분류)는 임계값 비교 조항이 아니다.
+// KEC-111.1 "전압 무관 전체 적용"(적용범위), IEC-701.1·JIS-701.1
+// "욕실 Zone 0/1/2"(구역 분류)는 임계값 비교 조항이 아니다.
 // `bathroomZone >= 0`은 어떤 Zone이든 참이라 pass/fail이 성립하지 않는다.
 // 자리표시자 가드가 HOLD시키지만 사유가 "임계값 누락"처럼 보여 부정확하다.
 // 이 조항들은 어떤 입력에도 PASS/FAIL을 만들지 않고, 정확한 사유의 HOLD여야 한다.
+//
+// 욕실은 `KEC-250.1` 로 등록돼 있었다. KEC 현행 전문의 242 특수장소를 전수
+// 확인했더니 욕실 조항이 없어서 IEC 60364-7-701 로 옮겼다(2026-07-27).
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('분류·적용범위 조항 (KEC-111.1 / KEC-250.1 / JIS-701.1)', () => {
+describe('분류·적용범위 조항 (KEC-111.1 / IEC-701.1 / JIS-701.1)', () => {
   test('KEC-111.1 적용범위는 어떤 입력에도 PASS/FAIL 하지 않는다', () => {
     for (const v of [0, 220, 100000]) {
       const r = evaluateStandard('KR', 'KEC-111.1', { voltageClass: v });
@@ -123,10 +126,15 @@ describe('분류·적용범위 조항 (KEC-111.1 / KEC-250.1 / JIS-701.1)', () =
     }
   });
 
-  test('KEC-250.1 욕실 Zone은 분류 안내이며 pass/fail 아님', () => {
+  test('IEC-701.1 욕실 Zone은 분류 안내이며 pass/fail 아님', () => {
     for (const z of [0, 1, 2, 3]) {
-      expect(evaluateStandard('KR', 'KEC-250.1', { bathroomZone: z }).judgment).toBe('HOLD');
+      expect(evaluateStandard('INT', 'IEC-701.1', { bathroomZone: z }).judgment).toBe('HOLD');
     }
+  });
+
+  test('KEC-250.1 은 더 이상 조항으로 존재하지 않는다 — 되살아나면 빨개진다', async () => {
+    const { KEC_ARTICLES } = await import('@/engine/standards/kec');
+    expect(KEC_ARTICLES.has('KEC-250.1')).toBe(false);
   });
 
   test('JIS-701.1 욕실 Zone도 동일', () => {

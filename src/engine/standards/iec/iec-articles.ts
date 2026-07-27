@@ -140,6 +140,24 @@ const SPECIAL: CodeArticle[] = [
   iec('753.1', '753.1', '난방 케이블/매트 설비', [
     { param: 'heatingCableRCD', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '바닥 난방: RCD ≤30mA + 금속 차폐층 접지' },
   ]),
+
+  // 아래 셋은 `KEC-250.1~250.3` 으로 등록돼 있던 것을 옮겼다(2026-07-27).
+  //
+  // KEC 현행 전문의 「242 특수 장소」를 전수 확인했더니 방전등·분진·가스·위험물·
+  // 화약류·전시회·터널·야영지·마리나·의료장소·엘리베이터뿐이고 **욕실·수영장·
+  // 사우나가 없다.** 즉 KEC 가 별도 조항으로 채택하지 않은 IEC 개념이었다.
+  // 없는 조항 번호를 KEC 로 제시하면 감리·검사에서 근거를 댈 수 없다.
+  iec('701.1', '701.1', '욕실·샤워 장소 — 구역 구분', [
+    { param: 'bathroomZone', operator: '>=', value: 0, unit: 'zone', result: 'PASS', note: 'Zone 0/1/2 구분, Zone 별 설비·IP 등급 제한' },
+  ]),
+
+  iec('702.1', '702.1', '수영장·분수 설비', [
+    { param: 'swimmingPoolSafety', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '수중조명 SELV 12V, Zone 0/1/2 구분' },
+  ]),
+
+  iec('703.1', '703.1', '사우나 — 히터가 있는 실·캐빈', [
+    { param: 'saunaWiring', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '내열 전선, 구역별 온도 제한. 샤워가 함께 있으면 701 도 적용' },
+  ]),
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

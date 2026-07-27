@@ -49,7 +49,10 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-511.2', articleTitle: '전기저장장치의 시설', frequencyLast10: 2, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '최근 출제 증가 추세. BMS/PCS 기본 개념.' },
 
   // === 저빈도 (low) — 간헐적 ===
-  { articleId: 'KEC-250.1', articleTitle: '욕실 구역 구분', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준' },
+  // `KEC-250.1 욕실 구역 구분` 을 뺐다(2026-07-27). KEC 현행 전문의 242 특수장소를
+  // 전수 확인했더니 욕실 조항이 없다 — IEC 60364-7-701 개념이다. 없는 조항을
+  // 시험 빈도표에 두면 수험생이 존재하지 않는 번호를 외운다.
+  { articleId: 'KEC-242.10', articleTitle: '의료장소', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준', studyTip: '의료장소별 계통접지·비상전원. 특수장소 중 실제로 KEC 에 있는 조항이다.' },
   { articleId: 'KEC-241.17', articleTitle: '전기자동차 전원설비', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준', studyTip: '향후 출제 증가 예상.' },
   { articleId: 'KEC-143.1', articleTitle: '피뢰 시스템', frequencyLast10: 2, importance: 'low', examSubject: '전기설비기술기준' },
 ];

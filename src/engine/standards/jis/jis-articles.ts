@@ -68,7 +68,9 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 특수 장소
   ['JIS-701.1', jis('701.1', '701.1', '욕실 — 구역 구분', [
     { param: 'bathroomZone', operator: '>=', value: 0, unit: 'zone', result: 'PASS', note: 'Zone 0/1/2/3 (IEC와 동일)' },
-  ], [{ articleId: 'KEC-250.1', relation: 'equivalent', note: 'KEC 욕실 구역' }])],
+    // `KEC-250.1` 을 동등으로 가리키고 있었으나 그 조항은 KEC 에 없다
+    // (현행 전문 242 특수장소 전수 확인 2026-07-27). IEC 로 바로잡는다.
+  ], [{ articleId: 'IEC-701.1', relation: 'equivalent', note: 'IEC 60364-7-701 욕실·샤워 구역' }])],
 
   // 태양광
   ['JIS-712.1', jis('712.1', '712.1', '태양광 발전 — 시설 기준', [
