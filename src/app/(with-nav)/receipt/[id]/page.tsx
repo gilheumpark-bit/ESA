@@ -31,6 +31,9 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getCachedReceipt } from '@/lib/receipt-cache';
 import { receiptLoadErrorMessage, safeReceiptLoadError } from '@/lib/receipt-load-error';
 
+/** 서버가 재계산으로 붙여 주는 판정. 응답에 늘 있지만 구 캐시 대비 optional. */
+type ReceiptWithIntegrity = Receipt & { integrity?: 'VALID' | 'TAMPERED' | 'UNVERIFIABLE' };
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Skeleton & Error States
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,8 +141,43 @@ function ReceiptHeader({
 // PART 3 — Integrity Verification
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function IntegrityPanel({ receipt }: { receipt: Receipt }) {
+/**
+ * 서버는 저장된 열로 해시를 다시 만들어 봉인 당시 값과 대조한다
+ * (`computeReceiptIntegrity` → `/api/receipt/[id]` 응답의 `integrity`).
+ * 그 판정이 화면까지 오지 못하고 있었다 — **변조된 영수증이 정상과 똑같이
+ * 보였다**(2026-07-28 실측: 응답에는 있고 읽는 코드가 없었다).
+ *
+ * `UNVERIFIABLE` 을 경고로 칠하지 않는다. 구 영수증은 봉인에 들어간 열이
+ * 저장돼 있지 않을 수 있고, 그건 변조가 아니라 확인 불가다.
+ */
+const VERDICT_VIEW = {
+  VALID: {
+    icon: ShieldCheck,
+    tone: 'text-emerald-700 dark:text-emerald-300',
+    box: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20',
+    title: '재계산 일치',
+    body: '저장된 내용으로 해시를 다시 만들었더니 봉인 당시 값과 같습니다.',
+  },
+  TAMPERED: {
+    icon: ShieldAlert,
+    tone: 'text-red-700 dark:text-red-300',
+    box: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20',
+    title: '재계산 불일치',
+    body: '저장된 내용으로 다시 만든 해시가 봉인 당시 값과 다릅니다. 계산 내용이 바뀌었거나 저장 과정에서 값이 달라진 것입니다 — 원본을 확인하십시오.',
+  },
+  UNVERIFIABLE: {
+    icon: Shield,
+    tone: 'text-[var(--text-secondary)]',
+    box: 'border-[var(--border-default)] bg-[var(--bg-secondary)]',
+    title: '확인 불가',
+    body: '봉인에 들어간 항목 중 일부가 저장돼 있지 않아 해시를 다시 만들 수 없습니다. 변조 판정이 아닙니다.',
+  },
+} as const;
+
+function IntegrityPanel({ receipt }: { receipt: ReceiptWithIntegrity }) {
   const [hashCopied, setHashCopied] = useState(false);
+  const verdict = receipt.integrity ? VERDICT_VIEW[receipt.integrity] : null;
+  const VerdictIcon = verdict?.icon;
 
   const copyHash = async () => {
     try {
@@ -159,6 +197,20 @@ function IntegrityPanel({ receipt }: { receipt: Receipt }) {
       </h3>
 
       <div className="space-y-3">
+        {verdict && VerdictIcon && (
+          <div
+            data-testid="integrity-verdict"
+            data-verdict={receipt.integrity}
+            className={`flex gap-2 rounded-lg border p-3 ${verdict.box}`}
+          >
+            <VerdictIcon size={16} className={`mt-0.5 shrink-0 ${verdict.tone}`} />
+            <div className="min-w-0">
+              <span className={`block text-xs font-semibold ${verdict.tone}`}>{verdict.title}</span>
+              <span className="block text-[11px] leading-relaxed text-[var(--text-secondary)]">{verdict.body}</span>
+            </div>
+          </div>
+        )}
+
         {/* Hash */}
         <div className="flex items-center gap-2 rounded-lg bg-[var(--bg-secondary)] px-3 py-2">
           <Shield size={14} className="shrink-0 text-[var(--text-tertiary)]" />
@@ -324,7 +376,7 @@ export default function ReceiptPage({
 }) {
   const { id } = use(params);
 
-  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptWithIntegrity | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
