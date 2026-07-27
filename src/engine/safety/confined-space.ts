@@ -135,7 +135,7 @@ const RAIN_CHECK_ITEMS: Omit<SafetyCheckItem, 'isMissing'>[] = [
     category: '우천 전기 안전',
     title: '임시 배선 절연 상태 전수 확인',
     description: '빗물 침투로 절연 열화 가능. 메가(절연저항계)로 전선 절연 확인.',
-    regulation: 'KEC 112.1조',
+    regulation: 'KEC 112 (용어 정의)',
     riskLevel: 'high',
     alternative: '메가 없으면 육안으로 피복 손상 부위 점검. 의심 구간은 테이핑 후 작업.',
   },

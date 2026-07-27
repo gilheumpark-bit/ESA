@@ -11,7 +11,7 @@
  * 전압 기준으로 산정한다. 두 전압을 분리 입력한다(systemVoltage=수전 HV,
  * secondaryVoltage=저압 모선).
  *
- * Standards: KEC 300 (Substation Design), IEC 60076
+ * Standards: KEC 351 (발전소·변전소·개폐소 등의 전기설비), IEC 60076
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';

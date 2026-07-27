@@ -103,11 +103,11 @@ const KOREA_CERTS: Certification[] = [
     organization: '한국산업인력공단',
     organizationUrl: 'https://www.q-net.or.kr',
     subjects: [
-      { name: '전력공학', type: 'written', relatedArticles: ['KEC-310', 'KEC-320', 'KEC-340'] },
+      { name: '전력공학', type: 'written', relatedArticles: ['KEC-331', 'KEC-334', 'KEC-351'] },
       { name: '전기기기', type: 'written', relatedArticles: ['KEC-341', 'KEC-351'] },
       { name: '회로이론 및 제어공학', type: 'written' },
       { name: '전기설비기술기준 및 판단기준', type: 'written', relatedArticles: ['KEC-전체'] },
-      { name: '전기설비설계 및 관리 (실기)', type: 'practical', relatedArticles: ['KEC-212', 'KEC-232', 'KEC-311'] },
+      { name: '전기설비설계 및 관리 (실기)', type: 'practical', relatedArticles: ['KEC-212', 'KEC-232', 'KEC-341'] },
     ],
     eligibility: '관련학과 4년제 졸업, 또는 산업기사+1년 실무, 또는 실무 4년',
     passCriteria: '필기 과목당 40점 이상 + 평균 60점, 실기 60점 이상',
@@ -126,11 +126,11 @@ const KOREA_CERTS: Certification[] = [
     organization: '한국산업인력공단',
     organizationUrl: 'https://www.q-net.or.kr',
     subjects: [
-      { name: '전기응용 및 공사재료', type: 'written', relatedArticles: ['KEC-230', 'KEC-211'] },
+      { name: '전기응용 및 공사재료', type: 'written', relatedArticles: ['KEC-232', 'KEC-233'] },
       { name: '전기설비기술기준 및 판단기준', type: 'written', relatedArticles: ['KEC-전체'] },
       { name: '전기기기', type: 'written' },
-      { name: '송배전공학', type: 'written', relatedArticles: ['KEC-320', 'KEC-321'] },
-      { name: '전기공사 시공 (실기)', type: 'practical', relatedArticles: ['KEC-211', 'KEC-232', 'KEC-250'] },
+      { name: '송배전공학', type: 'written', relatedArticles: ['KEC-331', 'KEC-334'] },
+      { name: '전기공사 시공 (실기)', type: 'practical', relatedArticles: ['KEC-211', 'KEC-232', 'KEC-241'] },
     ],
     eligibility: '관련학과 4년제 졸업, 또는 산업기사+1년 실무',
     passCriteria: '필기 과목당 40점 이상 + 평균 60점, 실기 60점 이상',
@@ -150,7 +150,7 @@ const KOREA_CERTS: Certification[] = [
     organizationUrl: 'https://www.q-net.or.kr',
     subjects: [
       { name: '전기자기학', type: 'written' },
-      { name: '전력공학', type: 'written', relatedArticles: ['KEC-310', 'KEC-320'] },
+      { name: '전력공학', type: 'written', relatedArticles: ['KEC-331', 'KEC-351'] },
       { name: '전기기기', type: 'written' },
       { name: '회로이론', type: 'written' },
       { name: '전기설비 (실기)', type: 'practical', relatedArticles: ['KEC-212', 'KEC-232'] },
@@ -171,7 +171,7 @@ const KOREA_CERTS: Certification[] = [
     organization: '한국산업인력공단',
     organizationUrl: 'https://www.q-net.or.kr',
     subjects: [
-      { name: '전기이론, 전기기기, 전기설비', type: 'written', relatedArticles: ['KEC-210', 'KEC-211', 'KEC-212'] },
+      { name: '전기이론, 전기기기, 전기설비', type: 'written', relatedArticles: ['KEC-231', 'KEC-211', 'KEC-212'] },
       { name: '전기설비 작업 (실기)', type: 'practical' },
     ],
     eligibility: '제한 없음',
@@ -202,7 +202,7 @@ const KOREA_CERTS: Certification[] = [
     passCriteria: '필기 과목당 40점 + 평균 60점, 실기 60점',
     examFrequency: '연 3회',
     examFormat: '필기 객관식 + 실기 필답형',
-    relatedStandards: ['소방시설법', 'KEC-234'],
+    relatedStandards: ['소방시설법 NFPC 303/304'],
     infoUrl: 'https://www.q-net.or.kr/crf005.do?id=crf00505&gSite=Q&gId=',
   },
   {
@@ -214,7 +214,7 @@ const KOREA_CERTS: Certification[] = [
     organization: '한국산업인력공단',
     organizationUrl: 'https://www.q-net.or.kr',
     subjects: [
-      { name: '신재생에너지 기초', type: 'written', relatedArticles: ['KEC-500', 'KEC-501'] },
+      { name: '신재생에너지 기초', type: 'written', relatedArticles: ['KEC-501', 'KEC-503'] },
       { name: '태양광발전 설계 및 시공', type: 'written', relatedArticles: ['KEC-522.2', 'KEC-522.1', 'KEC-522.3'] },
       { name: '태양광발전 운영 및 유지보수', type: 'written' },
       { name: '태양광발전 실무 (실기)', type: 'practical', relatedArticles: ['KEC-501'] },
@@ -509,6 +509,9 @@ const INTL_CERTS: Certification[] = [
 // PART 5 — Lookup Functions
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// 과목별 `relatedArticles` 는 수험생이 따라가는 조항 목록이다.
+// 2026-07-27 정정 — 210·230·250·310·311·320·321·340·500 은 KEC 에 없는
+// 번호였고, 234(조명설비)를 비상조명 근거로 걸고 있었다(소방시설법 소관).
 export const ALL_CERTIFICATIONS = [...KOREA_CERTS, ...US_CERTS, ...JP_CERTS, ...INTL_CERTS];
 
 /** 국가별 자격증 목록 */

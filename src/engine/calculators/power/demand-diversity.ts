@@ -9,7 +9,7 @@
  * 부하율은 평균전력(averageDemand)이 주어질 때만 산출한다 — 설비용량만으로는
  * 계산할 수 없다(수용률과 다른 값). 입력이 없으면 부하율은 출력하지 않는다.
  *
- * Standards: KEC 130, KEC 232.2 (수용률/부등률 정의)
+ * Standards: 내선규정 / NEC 220 (수용률·부등률). KEC 는 부하 산정을 규정하지 않는다.
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';

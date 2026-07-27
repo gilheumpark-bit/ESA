@@ -493,7 +493,7 @@ function EmptyState({ query }: { query: string }) {
         <ul className="list-disc space-y-1 pl-5">
           <li>다른 키워드나 약어를 사용해 보세요 (예: MCCB, VD, PF)</li>
           <li>영어 또는 한국어로 검색해 보세요</li>
-          <li>기준 번호로 직접 검색하세요 (예: KEC 140, NEC 250)</li>
+          <li>기준 번호로 직접 검색하세요 (예: KEC 142, NEC 250)</li>
           <li>계산기를 직접 찾아보세요: <Link href="/calc" className="text-[var(--color-primary)] hover:underline">/calc</Link></li>
         </ul>
       </div>

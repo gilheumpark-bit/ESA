@@ -178,7 +178,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'breaker_mccb', to: 'rcd', mandatory: true },
       { from: 'rcd', to: 'ev_charger', mandatory: true, typicalCable: 'XLPE 3C+E' },
     ],
-    standards: ['KEC 722', 'IEC 61851', 'KEC 142.5'],
+    standards: ['KEC 241.17', 'IEC 61851', 'KEC 142.5'],
   },
 
   // === 태양광 발전 (Solar PV) ===
@@ -202,7 +202,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'pv_combiner', to: 'pv_inverter', mandatory: true, typicalCable: 'XLPE 2C DC' },
       { from: 'pv_inverter', to: 'breaker_mccb', mandatory: true, typicalCable: 'XLPE 3C AC' },
     ],
-    standards: ['KEC 501', 'KEC 690', 'IEC 62548'],
+    standards: ['KEC 522', 'NEC 690', 'IEC 62548'],
   },
 
   // === UPS/비상전원 (Emergency Power) ===
@@ -226,7 +226,7 @@ export const STANDARD_DRAWINGS: StandardDrawingTemplate[] = [
       { from: 'panel_emergency', to: 'ups', mandatory: true },
       { from: 'ups', to: 'battery_bank', mandatory: true },
     ],
-    standards: ['KEC 700', 'KEC 701', 'NFPA 110'],
+    standards: ['NEC 700', 'NEC 701', 'NFPA 110'],
   },
 
   // === 고압 배전반 (MV Switchgear) ===

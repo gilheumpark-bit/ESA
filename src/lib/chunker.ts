@@ -112,7 +112,7 @@ export function extractClauseRefs(text: string): string[] {
 
 /**
  * Check if a position falls inside a clause reference.
- * Used to avoid splitting in the middle of "KEC 232.1.2".
+ * Used to avoid splitting in the middle of "KEC 232.5.2".
  */
 function isInsideClauseRef(text: string, position: number): boolean {
   for (const pattern of CLAUSE_REF_PATTERNS) {

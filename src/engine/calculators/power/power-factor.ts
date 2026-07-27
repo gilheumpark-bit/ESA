@@ -7,7 +7,7 @@
  *   Q = sqrt(S^2 - P^2)
  *   phi = arccos(pf)
  *
- * Standards: KEC 130 (전력계통 기본), KEC 232 (역률 권장)
+ * Standards: 한전 전기공급약관(역률 기준). KEC 는 역률 목표치를 규정하지 않는다.
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -62,7 +62,7 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
       formula: '\\cos\\varphi = \\frac{P}{S}',
       value: round(pf, 4),
       unit: '',
-      standardRef: 'KEC 130',
+      standardRef: '한전 전기공급약관',
     });
 
     // Step 2: Phase angle
@@ -135,7 +135,7 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
       formula: '\\cos\\varphi = \\frac{P}{S} = \\frac{P}{\\sqrt{P^2 + Q^2}}',
       value: round(pf, 4),
       unit: '',
-      standardRef: 'KEC 130',
+      standardRef: '한전 전기공급약관',
     });
 
     // Step 3: Phase angle

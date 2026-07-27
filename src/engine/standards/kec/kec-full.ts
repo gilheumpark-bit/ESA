@@ -4,20 +4,20 @@
  * 전기설비기술기준(KEC) 주요 조항을 실행 가능한 Condition Tree로 확장.
  *
  * PART 1: Imports & helpers
- * PART 2: KEC 130 — 전압구분
- * PART 3: KEC 210 — 배선일반
- * PART 4: KEC 211 — 배선방법
- * PART 5: KEC 220 — 부하산정
- * PART 6: KEC 230 — 전선/케이블
- * PART 7: KEC 232 — 허용전류 확장
- * PART 8: KEC 234 — 조명
- * PART 9: KEC 240 — 보호
- * PART 10: KEC 311 — 수변전
- * PART 11: KEC 341 — 변압기
- * PART 12: KEC 351 — 수변전설비
- * PART 13: KEC 410 — 접지일반
- * PART 14: KEC 502 — 신재생
- * PART 15: KEC 520 — ESS
+ * PART 2: (구 130 전압구분 — 걷어냄. 112 용어 정의가 덮는다)
+ * PART 3: KEC 231.3.1 — 저압 옥내배선의 사용전선
+ * PART 4: KEC 232 — 배선설비(공사방법)
+ * PART 5: (구 220 부하산정 — 걷어냄. KEC 소관 아님)
+ * PART 6: KEC 222.5 / 132 — 가공전선·절연저항
+ * PART 7: KEC 232.5 — 허용전류
+ * PART 8: (구 234 조명 — 걷어냄. KEC 소관 아님)
+ * PART 9: KEC 211.2.4 / 212.5.5 — 누전차단기·단락보호
+ * PART 10: (구 311 수변전 치수 — 걷어냄. KEC 소관 아님)
+ * PART 11: (구 341 변압기 사양 — 걷어냄. KS C 4306 소관)
+ * PART 12: (구 351 수변전실 치수 — 걷어냄. 내선규정 소관)
+ * PART 13: KEC 142 — 접지시스템의 시설
+ * PART 14: KEC 521/522 — 태양광설비
+ * PART 15: KEC 511/512 — 전기저장장치
  * PART 16: Registry & evaluator export
  */
 
@@ -103,7 +103,7 @@ function simpleEval(
 // 을 걸고 있어서, 한 조항에 모으면 `simpleEval` 이 전부 만족을 요구해 사실상
 // `≤50` 이 된다. 애초에 pass/fail 조항이 아니라 분류 안내다.
 
-// ─── PART 3: KEC 210 — 배선일반 ───────────────────────────────
+// ─── PART 3: KEC 231.3.1 — 저압 옥내배선의 사용전선 ───────────
 
 export const KEC_210_1 = buildArticle('KEC-231.3.1', '231.3.1', '저압 옥내배선의 사용전선', [
   cond('crossSection', '>=', 1.5, 'mm²', '옥내배선 최소 단면적 1.5mm² 이상'),
@@ -153,7 +153,7 @@ export const KEC_232_10 = buildArticle('KEC-232.10', '232.10', '전선관시스�
 //
 // loadDensity·demandFactor 는 계산기 쪽에 따로 있다 — 이 조항이 먹이지 않는다.
 
-// ─── PART 6: KEC 230 — 전선/케이블 ────────────────────────────
+// ─── PART 6: KEC 222.5 / 132 — 가공전선·절연저항 ──────────────
 
 // 230.1 옥내 절연전선 1.5mm² 도 231.3.1 과 같은 값의 중복이라 뺐다.
 
@@ -225,7 +225,7 @@ export const KEC_232_5_4 = buildArticle('KEC-232.5.4', '232.5.4', '통전도체�
 // 두느니 빼고 어디 있는지만 남긴다. 셋 다 소비처가 0 이었다 —
 // branchLoad·emergencyLux·emergencyDuration 을 읽는 코드가 없다.
 
-// ─── PART 9: KEC 240 — 보호 ───────────────────────────────────
+// ─── PART 9: KEC 211.2.4 / 212.5.5 — 누전차단기·단락보호 ─────────
 
 export const KEC_240_1 = buildArticle('KEC-212.3.4', '212.3.4', '보호장치의 특성', [
   cond('breakerRating', '>=', 0, 'A', '과전류 보호 차단기 설치'),

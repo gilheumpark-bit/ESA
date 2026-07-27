@@ -7,7 +7,7 @@
  *   Total burden:  VA_total = VA_relay + VA_lead + VA_contact
  *   Margin:        margin = (VA_rated - VA_total) / VA_rated x 100  [%]
  *
- * Standards: KEC 340 (계기용 변성기), IEC 61869-2
+ * Standards: KEC 341.4 (특고압용 기계기구의 시설), IEC 61869-2
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';

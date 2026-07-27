@@ -6,7 +6,7 @@
  *   Apparent Power:  S = V x I                       [VA]
  *   Reactive Power:  Q = V x I x sin(phi)           [var]
  *
- * Standards: KEC 130 (Power System Fundamentals)
+ * Standards: 전력공학 일반. 단상 전력 공식은 특정 규정 조항이 아니다.
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';

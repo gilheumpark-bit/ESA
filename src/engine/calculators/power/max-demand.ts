@@ -9,7 +9,7 @@
  *   Di = demand factor of each load (0-1)
  *   diversityFactor = ratio accounting for non-simultaneous operation
  *
- * Standards: KEC 130 (전력계통 기본), KEC 232.2 (수용률/부등률)
+ * Standards: 내선규정 / NEC 220 (수용률·부등률). KEC 는 부하 산정을 규정하지 않는다.
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';

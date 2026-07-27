@@ -6,7 +6,7 @@
  *   Apparent Power:  S = sqrt(3) x V_L x I_L               [VA]
  *   Reactive Power:  Q = sqrt(3) x V_L x I_L x sin(phi)    [var]
  *
- * Standards: KEC 130 (Power System Fundamentals)
+ * Standards: 전력공학 일반. 삼상 전력 공식은 특정 규정 조항이 아니다.
  */
 
 import { SQRT3 } from '@engine/constants/physical';

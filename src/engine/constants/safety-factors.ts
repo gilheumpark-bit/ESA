@@ -184,8 +184,8 @@ const PROFILES: Record<ProfiledCountry, SafetyFactorProfile> = {
       aluminumFactor: 0.78,
       baseAmbientTemp: 30,
     },
-    emergencyTransferTime: 40,  // KEC 353.1 (40초 이내)
-    minInsulationResistance: 0.1, // KEC 134.2 (저압 0.1MΩ)
+    emergencyTransferTime: 40,  // 소방시설법 NFPC 602 (비상전원 전환 40초 이내). KEC 조항이 아니다.
+    minInsulationResistance: 1.0, // KEC 132 (500V 이하 1.0MΩ). 구 판단기준의 0.1MΩ 을 쓰고 있었다 — 통과 방향으로 틀린 값이다.
     rcdSensitivity: 30,         // KEC 232.81 (30mA)
   },
 
