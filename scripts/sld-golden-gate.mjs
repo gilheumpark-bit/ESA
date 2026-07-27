@@ -354,4 +354,34 @@ const receipt = verified95
 await mkdir(dirname(receiptPath), { recursive: true });
 await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
 
+/**
+ * **왜 실패했는지 말한다.**
+ *
+ * 종전에는 영수증만 쓰고 `exit 1` 이라 운영자도 CI 로그도 원인을 알 수
+ * 없었다(2026-07-28 실측: 출력 0 줄). 게이트가 침묵하면 사람은 그 게이트를
+ * 끄거나 무시하게 된다 — 방어는 발화해야 유효하다.
+ *
+ * 실패 코드는 대부분 환경 부재다(서명키·예측 산출·실판정 데이터셋). 그 경우
+ * "코드가 나빠졌다" 가 아니라 "잴 재료가 없다" 이므로 구분해서 적는다.
+ */
+const SETUP_FAILURES = new Set([
+  'ATTESTATION_KEY_MISSING',
+  'NO_PREDICTION_DATA',
+  'MANIFEST_NOT_CLAIM_ELIGIBLE',
+  'NO_REAL_ADJUDICATED_DATASET',
+]);
+const setup = uniqueFailures.filter((f) => SETUP_FAILURES.has(f) || f.startsWith('PREDICTION_MISSING:'));
+const quality = uniqueFailures.filter((f) => !setup.includes(f));
+
+console.log(`sld-golden-gate: verified95=${verified95} · 데이터셋 ${rows.length}/${expectedDatasets.length} · 영수증 ${relative(root, receiptPath)}`);
+if (quality.length) {
+  console.log('  품질 실패 (코드/모델 문제):');
+  for (const f of quality) console.log(`    - ${f}`);
+}
+if (setup.length) {
+  console.log('  환경 부재 (잴 재료가 없음 — 코드 회귀 아님):');
+  for (const f of setup) console.log(`    - ${f}`);
+}
+if (!uniqueFailures.length) console.log('  실패 없음');
+
 if (mode === 'enforce' && !verified95) process.exitCode = 1;
