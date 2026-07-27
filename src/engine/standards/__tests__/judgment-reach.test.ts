@@ -118,4 +118,33 @@ describe('조항의 판정 도달', () => {
     // 줄어들면 배선이 끊긴 것이다.
     expect(reachable).toBe(12);
   });
+
+  /**
+   * 자리표시자 임계값(`>= 0` 처럼 아무 값이나 통과하는 것)을 가진 조항 수.
+   *
+   * 이런 조항은 `holdIfPlaceholder` 가 **거짓 PASS 대신 HOLD** 로 막는다 —
+   * 설계대로다. 다만 그만큼은 자동 판정이 안 된다는 뜻이라 수를 적어 둔다.
+   * 임계값을 실제 값으로 채우면 이 수가 줄고, 새 조항을 자리표시자로 넣으면
+   * 늘어난다. 둘 다 눈에 띄어야 한다.
+   *
+   * 실측 2026-07-27: KEC 7 / NEC 12 / IEC 5 / JIS 2 = 26
+   */
+  it('자리표시자 조항 수가 선언과 같다 — 늘면 자동 판정이 그만큼 줄어든다', async () => {
+    const [{ KEC_ARTICLES }, { isPlaceholderThreshold }, nec, iec, jis] = await Promise.all([
+      import('@/engine/standards/kec'),
+      import('@/engine/standards/evaluator-guard'),
+      import('@/engine/standards/nec/nec-articles'),
+      import('@/engine/standards/iec/iec-articles'),
+      import('@/engine/standards/jis/jis-articles'),
+    ]);
+    const count = (m: Map<string, { conditions: { operator: string; value: number }[] }>) =>
+      [...m.values()].filter((a) => a.conditions.some(isPlaceholderThreshold)).length;
+
+    expect({
+      KEC: count(KEC_ARTICLES),
+      NEC: count(nec.NEC_ARTICLES_FULL),
+      IEC: count(iec.IEC_ARTICLES),
+      JIS: count(jis.JIS_ARTICLES),
+    }).toEqual({ KEC: 7, NEC: 12, IEC: 5, JIS: 2 });
+  });
 });
