@@ -64,7 +64,7 @@ export const KEC_232_52_MAIN: CodeArticle = {
   relatedClauses: [
     { articleId: 'KEC-232.3.9-BRANCH', relation: 'reference', note: '분기회로 전압강하도 함께 검토' },
     { articleId: 'KEC-232.3.9-COMBINED', relation: 'reference', note: '간선+분기 합산 5% 기준' },
-    { articleId: 'KEC-232.1', relation: 'reference', note: '허용전류 기본값 참조' },
+    { articleId: 'KEC-232.5.2', relation: 'reference', note: '허용전류 기본값 참조' },
     { articleId: 'NEC-210.19', relation: 'equivalent', note: 'NEC 분기회로 도체 기준과 등가' },
   ],
   effectiveDate: '2021-01-01',

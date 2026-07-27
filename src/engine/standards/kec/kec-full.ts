@@ -125,21 +125,31 @@ export const KEC_210_3 = buildArticle('KEC-210.3', '210.3', '배선의 사용전
   cond('crossSection', '>=', 2.5, 'mm²', '동력 분기회로 최소 2.5mm²'),
 ]);
 
-// ─── PART 4: KEC 211 — 배선방법 ───────────────────────────────
+// ─── PART 4: KEC 232 — 배선설비(공사방법) ─────────────────────
+//
+// 이 넷은 `211.1~211.4` 로 등록돼 있었다. 현행 211 은 **감전에 대한 보호**고
+// 공사방법은 232 다(232.11 합성수지관 · 232.12 금속관 · 232.41 케이블트레이 ·
+// 232.10 전선관시스템). 번호가 실재해서 실재 게이트는 통과했고, 표제 정합
+// 게이트를 붙이고서야 드러났다. 2026-07-27 재번호.
+//
+// kec-extended 도 같은 공사종류를 각자 정의하고 있어서 조건을 여기로 합쳤다 —
+// 등록부의 `if (!has)` 때문에 두 곳에 두면 kec-extended 쪽이 통째로 버려진다.
 
-export const KEC_211_1 = buildArticle('KEC-211.1', '211.1', '합성수지관 배선 — 관 굵기', [
+export const KEC_232_11 = buildArticle('KEC-232.11', '232.11', '합성수지관공사', [
   cond('conduitFillRatio', '<=', 48, '%', '전선 점유율 48% 이하 (합성수지관)'),
+  cond('pvcConduit', '==', 1, 'bool', 'CD관/PF관 사용. 콘크리트 매입 시 CD관 사용'),
 ]);
 
-export const KEC_211_2 = buildArticle('KEC-211.2', '211.2', '금속관 배선 — 관 굵기', [
+export const KEC_232_12 = buildArticle('KEC-232.12', '232.12', '금속관공사', [
   cond('conduitFillRatio', '<=', 48, '%', '전선 점유율 48% 이하 (금속관)'),
+  cond('metalConduit', '==', 1, 'bool', '금속관 내 절연전선 사용, 관 내경에 맞는 전선 수'),
 ]);
 
-export const KEC_211_3 = buildArticle('KEC-211.3', '211.3', '케이블 트레이 — 충전율', [
+export const KEC_232_41 = buildArticle('KEC-232.41', '232.41', '케이블트레이공사', [
   cond('trayFillRatio', '<=', 50, '%', '케이블 트레이 충전율 50% 이하'),
 ]);
 
-export const KEC_211_4 = buildArticle('KEC-211.4', '211.4', '전선관 굴곡 — 최대 굴곡 수', [
+export const KEC_232_10 = buildArticle('KEC-232.10', '232.10', '전선관시스템', [
   cond('bendCount', '<=', 4, '개', '전선관 1구간 굴곡 4개 이하'),
 ]);
 
@@ -179,35 +189,45 @@ export const KEC_230_4 = buildArticle('KEC-230.4', '230.4', '접지선 최소 �
   cond('crossSection', '>=', 2.5, 'mm²', '접지선 최소 단면적 2.5mm²'),
 ]);
 
-// ─── PART 7: KEC 232 — 허용전류 확장 ──────────────────────────
+// ─── PART 7: KEC 232.5 — 허용전류 ─────────────────────────────
+//
+// `232.1~232.4` 로 등록돼 있었다. 현행에서 그 자리는 232.1 적용범위 /
+// 232.2 배선설비 공사의 종류 / 232.3 배선설비 적용 시 고려사항 /
+// 232.4 외부영향이고, 허용전류는 **232.5** 다. 2026-07-27 재번호.
+//
+// 232.5 는 하위가 있어서 원래의 구분을 그대로 옮길 수 있었다:
+//   232.5.2 허용전류의 결정 · 232.5.3 복수회로로 포설된 그룹 · 232.5.4 통전도체의 수
 
-export const KEC_232_1 = buildArticle('KEC-232.1', '232.1', '전선 허용전류 — 설계전류 이상', [
+export const KEC_232_5_2 = buildArticle('KEC-232.5.2', '232.5.2', '허용전류의 결정', [
   cond('ampacity', '>=', 0, 'A', '허용전류 ≥ 설계전류'),
+  // 40°C 로 적혀 있었다. 기준은 **30°C** 다 — 이 리포의 허용전류표가 그렇고
+  // (`data/ampacity-tables/kec-ampacity.ts`: "30°C ambient", 기본값 30),
+  // kec-extended 도 30°C 로 갖고 있었다. 등록부가 kec-full 만 남기니 틀린
+  // 40°C 가 live 였다.
+  //
+  // 방향이 위험한 쪽이다. 30~40°C 구간을 "보정 불요"로 통과시키면 허용전류를
+  // 과대평가한다 — 계산기는 30°C 부터 감소계수를 먹이는데 판정층만 안 먹였다.
+  cond('ambientTemp', '<=', 30, '°C', '주위온도 30°C 이하 시 보정계수 1.0. 초과 시 감소계수 적용'),
 ], [
-  { articleId: 'KEC-232.2', relation: 'reference', note: '주위온도 40°C 초과 시 보정계수 적용' },
-  { articleId: 'KEC-232.3', relation: 'reference', note: '3회로 초과 시 그룹 보정 적용' },
+  { articleId: 'KEC-232.5.3', relation: 'reference', note: '3회로 초과 시 그룹 보정 적용' },
   { articleId: 'KEC-212.3.4', relation: 'reference', note: '과전류 보호장치의 특성과 협조' },
   { articleId: 'NEC-310.16', relation: 'equivalent', note: 'NEC Table 310.16 허용전류표와 등가' },
 ]);
 
-export const KEC_232_2 = buildArticle('KEC-232.2', '232.2', '기중 배선 보정계수 — 주위온도 40°C', [
-  cond('ambientTemp', '<=', 40, '°C', '주위온도 40°C 이하 시 보정계수 1.0'),
-], [
-  { articleId: 'KEC-232.1', relation: 'reference', note: '허용전류 기본값 참조' },
-]);
-
-export const KEC_232_3 = buildArticle('KEC-232.3', '232.3', '전선 그룹 보정 — 3회로 이하', [
+export const KEC_232_5_3 = buildArticle('KEC-232.5.3', '232.5.3', '복수회로로 포설된 그룹', [
   cond('circuitGroupCount', '<=', 3, '회로', '전선 그룹 3회로 이하 시 보정불요'),
+  cond('groupingFactor', '<=', 1.0, '', '3선 초과 시 감소계수: 4-6선 0.8, 7-9선 0.7, 10-12선 0.65'),
 ], [
-  { articleId: 'KEC-232.1', relation: 'reference', note: '허용전류 기본값 참조' },
-  { articleId: 'KEC-232.4', relation: 'reference', note: '고조파 환경 시 중성선 가산 고려' },
+  { articleId: 'NEC-310.15(B)(3)', relation: 'equivalent', note: 'NEC 묶음 보정' },
+  { articleId: 'KEC-232.5.2', relation: 'reference', note: '허용전류 기본값 참조' },
+  { articleId: 'KEC-232.5.4', relation: 'reference', note: '고조파 환경 시 중성선 가산 고려' },
 ]);
 
-export const KEC_232_4 = buildArticle('KEC-232.4', '232.4', '중성선 전류 고조파 — 33% 이하', [
-  cond('neutralHarmonicRatio', '<=', 33, '%', '중성선 고조파 전류비 33% 이하'),
+export const KEC_232_5_4 = buildArticle('KEC-232.5.4', '232.5.4', '통전도체의 수', [
+  cond('neutralHarmonicRatio', '<=', 33, '%', '중성선 고조파 전류비 33% 이하 — 초과 시 중성선을 통전도체로 산입'),
 ], [
-  { articleId: 'KEC-232.3', relation: 'reference', note: '그룹 보정과 동시 적용 주의' },
-  { articleId: 'KEC-232.1', relation: 'reference', note: '허용전류 기본값 참조' },
+  { articleId: 'KEC-232.5.3', relation: 'reference', note: '그룹 보정과 동시 적용 주의' },
+  { articleId: 'KEC-232.5.2', relation: 'reference', note: '허용전류 기본값 참조' },
 ]);
 
 // ─── PART 8: KEC 234 — 조명 ───────────────────────────────────
@@ -230,7 +250,7 @@ export const KEC_240_1 = buildArticle('KEC-212.3.4', '212.3.4', '보호장치의
   cond('breakerRating', '>=', 0, 'A', '과전류 보호 차단기 설치'),
   cond('breakerRating', '<=', 0, 'A', '차단기 정격 ≤ 전선 허용전류'),
 ], [
-  { articleId: 'KEC-232.1', relation: 'reference', note: '전선 허용전류와 차단기 정격 협조' },
+  { articleId: 'KEC-232.5.2', relation: 'reference', note: '전선 허용전류와 차단기 정격 협조' },
   { articleId: 'KEC-212.5.5', relation: 'reference', note: '단락보호장치의 특성 — 차단용량 확인' },
   { articleId: 'NEC-240.4', relation: 'equivalent', note: 'NEC 240.4 과전류보호와 등가' },
 ]);
@@ -364,13 +384,13 @@ const ALL_EXTENDED_ARTICLES: CodeArticle[] = [
   // 210 배선일반
   KEC_210_1, KEC_210_2, KEC_210_3,
   // 211 배선방법
-  KEC_211_1, KEC_211_2, KEC_211_3, KEC_211_4,
+  KEC_232_11, KEC_232_12, KEC_232_41, KEC_232_10,
   // 220 부하산정
   KEC_220_1, KEC_220_2, KEC_220_3, KEC_220_4,
   // 230 전선/케이블
   KEC_230_1, KEC_230_2, KEC_230_3, KEC_230_4,
   // 232 허용전류 확장
-  KEC_232_1, KEC_232_2, KEC_232_3, KEC_232_4,
+  KEC_232_5_2, KEC_232_5_3, KEC_232_5_4,
   // 234 조명
   KEC_234_1, KEC_234_2, KEC_234_3,
   // 240 보호

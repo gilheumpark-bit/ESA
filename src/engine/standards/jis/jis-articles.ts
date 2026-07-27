@@ -43,7 +43,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   ['JIS-523.1', jis('523.1', '523.1', '허용전류 — JIS C 3005 설치방법별', [
     { param: 'loadCurrent', operator: '<=', value: 9999, unit: 'A', result: 'PASS', note: '부하전류가 JIS C 3005 허용전류 이내 (테이블 참조 필수). 기본 30°C, 설치방법 A1/B1/C/D 구분.' },
     { param: 'ambientTemp', operator: '<=', value: 40, unit: '°C', result: 'PASS', note: '주위온도 40°C 초과 시 보정계수 적용 (JIS C 3005 Table 3)' },
-  ], [{ articleId: 'KEC-232.1', relation: 'equivalent', note: 'KEC 허용전류' }])],
+  ], [{ articleId: 'KEC-232.5', relation: 'equivalent', note: 'KEC 허용전류' }])],
 
   // 과전류 보호
   ['JIS-432.1', jis('432.1', '432.1', '과전류 보호 — 차단기 선정', [

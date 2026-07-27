@@ -1,14 +1,14 @@
 /**
  * KEC 허용전류표 (Korean Electrotechnical Code)
  *
- * KEC 232.3 기준 허용전류
+ * KEC 232.5 기준 허용전류
  * 도체 종류: Cu (구리), Al (알루미늄)
  * 절연체: PVC (60°C), XLPE (90°C), MI (70°C Mineral Insulated)
  * 시공방법: conduit (전선관), tray (케이블트레이), directBuried (직매), freeAir (기중)
  *
  * 보정계수:
- *   - 주위온도 보정 (KEC 232.3.3)
- *   - 전선 밀집 보정 (KEC 232.3.4)
+ *   - 주위온도 보정 (KEC 232.5.2 허용전류의 결정)
+ *   - 전선 밀집 보정 (KEC 232.5.3 복수회로로 포설된 그룹)
  */
 
 import { SourceTag, createSource } from '../../engine/sjc/types';
@@ -63,7 +63,7 @@ export const KEC_CABLE_SIZES = [
 
 // =========================================================================
 // PART 3 — Base Ampacity Tables (A)
-// KEC 232.3 Table — 30°C ambient, single circuit
+// KEC 232.5 Table — 30°C ambient, single circuit
 // =========================================================================
 
 /**
@@ -123,7 +123,7 @@ const BASE_AMPACITY: Record<AmpacityTableKey, number[]> = {
 };
 
 // =========================================================================
-// PART 4 — Temperature Correction Factors (KEC 232.3.3)
+// PART 4 — Temperature Correction Factors (KEC 232.5.2)
 // =========================================================================
 
 interface TempCorrectionRow {
@@ -178,7 +178,7 @@ function getTemperatureFactor(ambientTemp: number, insulation: InsulationType): 
 }
 
 // =========================================================================
-// PART 5 — Grouping Correction Factors (KEC 232.3.4)
+// PART 5 — Grouping Correction Factors (KEC 232.5.3)
 // Number of current-carrying circuits or cables
 // =========================================================================
 

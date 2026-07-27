@@ -63,7 +63,7 @@ const PROTECTION: CodeArticle[] = [
 const SELECTION: CodeArticle[] = [
   iec('523.1', '523.1', '전선 허용전류 — 설치 방법별', [
     { param: 'loadCurrent', operator: '<=', value: 0, unit: 'A', result: 'PASS', note: '설치 방법(A1/A2/B1/B2/C/D/E/F)별 허용전류 적용' },
-  ], [{ articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 허용전류' }, { articleId: 'NEC-310.16', relation: 'equivalent', note: 'NEC Table 310.16' }]),
+  ], [{ articleId: 'KEC-232.5', relation: 'equivalent', note: 'KEC 허용전류' }, { articleId: 'NEC-310.16', relation: 'equivalent', note: 'NEC Table 310.16' }]),
 
   iec('524.1', '524.1', '전선 단면적 — 기계적 강도', [
     { param: 'minConductorSize', operator: '>=', value: 1.5, unit: 'mm²', result: 'PASS', note: '고정 설비 최소: Cu 1.5mm², Al 16mm²' },

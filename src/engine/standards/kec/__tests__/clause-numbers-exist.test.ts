@@ -158,9 +158,8 @@ describe('조항 번호 중복 정의', () => {
    * 해소하려면 두 정의의 조건·상호참조를 합쳐 한쪽으로 모아야 한다.
    */
   const DECLARED_DUPLICATES = new Set([
-    '211.1', '211.2', '211.3', '211.4',
     '220.1', '220.2', '220.3',
-    '232.1', '232.2', '232.3', '232.4',
+    // 211.1~211.4 · 232.1~232.4 해소 2026-07-27 (232.x 로 재번호하며 조건 병합)
     '234.1', '234.2',
     '311.1', '311.2',
     '341.1', '341.2',
@@ -208,10 +207,13 @@ describe('조항 번호 중복 정의', () => {
 describe('중복 조항의 승자', () => {
   it('kec-full 이 이기고 kec-extended 의 같은 번호 정의는 버려진다', async () => {
     const { KEC_ARTICLES } = await import('@/engine/standards/kec');
-    // 둘 다 232.1 을 정의한다. kec-full 은 "전선 허용전류 — 설계전류 이상",
-    // kec-extended 는 "허용전류 — 일반 원칙" 이다.
-    expect(KEC_ARTICLES.get('KEC-232.1')?.title).toContain('설계전류');
-    // 220.1 도 마찬가지 — kec-full 의 "주거용 부하" 가 남는다.
+    // 둘 다 220.1 을 정의한다. kec-full 의 "주거용 부하" 가 남는다.
     expect(KEC_ARTICLES.get('KEC-220.1')?.title).toContain('주거용');
+    // 232.1 로도 잠가 뒀었는데 232.5 계열로 재번호하며 중복이 풀렸다(2026-07-27).
+    // 그때 이 가드가 실제로 값을 갈랐다는 것도 드러났다 — 같은 항목을 kec-full 은
+    // 주위온도 40°C, kec-extended 는 30°C 로 갖고 있었고 **틀린 40°C 가 살아남아**
+    // 허용전류를 과대평가하고 있었다. 병합하며 30°C 로 바로잡았다.
+    expect(KEC_ARTICLES.get('KEC-232.5.2')?.conditions
+      .find((c) => c.param === 'ambientTemp')?.value).toBe(30);
   });
 });

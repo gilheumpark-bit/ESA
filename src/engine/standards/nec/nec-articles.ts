@@ -32,7 +32,7 @@ const WIRING: CodeArticle[] = [
 
   nec('210.19', '210.19', '분기회로 전선 크기 — 허용전류 ≥ 부하', [
     { param: 'conductorAmpacity', operator: '>=', value: 0, unit: 'A', result: 'PASS', note: '전선 허용전류 ≥ 비연속부하 + 연속부하×1.25' },
-  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 허용전류' }]),
+  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: 'Table 310.16 허용전류' }, { articleId: 'KEC-232.5', relation: 'equivalent', note: 'KEC 허용전류' }]),
 
   nec('210.52', '210.52', '주거 콘센트 배치 기준', [
     { param: 'wallSpaceFt', operator: '<=', value: 6, unit: 'ft', result: 'PASS', note: '벽면: 어느 지점에서든 6ft 이내 콘센트' },
@@ -41,7 +41,7 @@ const WIRING: CodeArticle[] = [
 
   nec('210.8', '210.8', 'GFCI 보호 필요 장소', [
     { param: 'gfciRequired', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '욕실/주방/옥외/차고/미완성 지하실: GFCI 필수' },
-  ], [{ articleId: 'KEC-232.4', relation: 'equivalent', note: 'KEC 누전차단기 설치' }]),
+  ], [{ articleId: 'KEC-211.2.4', relation: 'equivalent', note: 'KEC 누전차단기의 시설' }]),
 
   nec('210.12', '210.12', 'AFCI 보호 필요 장소', [
     { param: 'afciRequired', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '거실/침실/서재 등 주거 공간: AFCI 필수' },
@@ -83,15 +83,15 @@ const WIRING: CodeArticle[] = [
 const CONDUCTORS: CodeArticle[] = [
   nec('310.16', '310.16', '절연전선 허용전류 (도관 내 3선 이하, 30°C)', [
     { param: 'loadCurrent', operator: '<=', value: 0, unit: 'A', result: 'PASS', note: '부하전류 ≤ Table 310.16 허용전류' },
-  ], [{ articleId: 'NEC-240.4', relation: 'reference', note: '과전류보호 협조' }, { articleId: 'NEC-310.15(B)(3)', relation: 'reference', note: '묶음 보정' }, { articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 허용전류' }]),
+  ], [{ articleId: 'NEC-240.4', relation: 'reference', note: '과전류보호 협조' }, { articleId: 'NEC-310.15(B)(3)', relation: 'reference', note: '묶음 보정' }, { articleId: 'KEC-232.5', relation: 'equivalent', note: 'KEC 허용전류' }]),
 
   nec('310.15(B)(2)', '310.15(B)(2)', '주위 온도 보정 계수', [
     { param: 'ambientTemp', operator: '<=', value: 30, unit: '°C', result: 'PASS', note: '기준 30°C. 초과 시 보정계수 적용 (Table 310.15(B)(2)(a))' },
-  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: '기본 허용전류표' }, { articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 온도 보정' }]),
+  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: '기본 허용전류표' }, { articleId: 'KEC-232.5.2', relation: 'equivalent', note: 'KEC 온도 보정' }]),
 
   nec('310.15(B)(3)', '310.15(B)(3)', '전선 묶음 감소 계수', [
     { param: 'conductorCount', operator: '<=', value: 3, unit: 'ea', result: 'PASS', note: '1-3선: 100%, 4-6: 80%, 7-9: 70%, 10-20: 50%, 21-30: 45%, 31-40: 40%, 41+: 35%' },
-  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: '기본 허용전류표' }, { articleId: 'KEC-232.3', relation: 'equivalent', note: 'KEC 밀집 보정' }]),
+  ], [{ articleId: 'NEC-310.16', relation: 'reference', note: '기본 허용전류표' }, { articleId: 'KEC-232.5.3', relation: 'equivalent', note: 'KEC 밀집 보정' }]),
 
   nec('310.10', '310.10', '전선 사용 환경 조건', [
     { param: 'ambientTemp', operator: '<=', value: 90, unit: '°C', result: 'PASS', note: '전선 절연체 온도 등급 이하에서 사용' },

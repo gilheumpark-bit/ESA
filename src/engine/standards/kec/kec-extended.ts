@@ -89,20 +89,21 @@ const LOW_VOLTAGE: CodeArticle[] = [
     { param: 'connectionMethod', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '압착/납땜/커넥터 접속. 테이핑만은 금지' },
   ]),
 
-  // 211 배선 방법
-  kec('211.1', '211.1', '배선 방법 — 애자 사용 배선', [
+  // 232 배선설비 — 공사방법
+  //
+  // 이 다섯은 `211.1~211.5` 로 등록돼 있었다. 현행 211 은 **감전에 대한 보호**고
+  // 공사방법은 232 다. 2026-07-27 재번호.
+  //
+  // 금속관·합성수지관은 kec-full 도 각자 정의하고 있어서(관 굵기) 그쪽으로
+  // 조건을 합치고 여기서는 뺐다 — 등록부가 먼저 등록된 kec-full 만 남기므로
+  // 두 곳에 두면 이 파일 정의가 통째로 버려진다.
+  kec('232.2', '232.2', '배선설비 공사의 종류', [
     { param: 'wiringMethodValid', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '애자/금속관/합성수지관/케이블트레이/케이블 직매설 등' },
   ]),
-  kec('211.2', '211.2', '금속관 배선', [
-    { param: 'metalConduit', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속관 내 절연전선 사용, 관 내경에 맞는 전선 수' },
-  ]),
-  kec('211.3', '211.3', '합성수지관 배선', [
-    { param: 'pvcConduit', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'CD관/PF관 사용. 콘크리트 매입 시 CD관 사용' },
-  ]),
-  kec('211.4', '211.4', '케이블 배선', [
+  kec('232.51', '232.51', '케이블공사', [
     { param: 'cableWiring', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '케이블 직매설/관로/트레이/행거' },
   ]),
-  kec('211.5', '211.5', '버스 덕트 배선', [
+  kec('232.61', '232.61', '버스덕트공사', [
     { param: 'busDuct', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '버스 덕트 시설 기준' },
   ]),
 
@@ -135,17 +136,19 @@ const LOW_VOLTAGE: CodeArticle[] = [
   kec('231.1', '231.1', '전선의 최소 굵기', [
     { param: 'minWireSize_mm2', operator: '>=', value: 1.5, unit: 'mm²', result: 'PASS', note: '조명회로 최소 1.5mm², 콘센트 최소 2.5mm²' },
   ]),
-  kec('232.1', '232.1', '허용전류 — 일반 원칙', [
+  // 허용전류는 232.5 다 — `232.1~232.4` 로 등록돼 있었다(현행 232.1 적용범위 /
+  // 232.2 배선설비 공사의 종류 / 232.3 고려사항 / 232.4 외부영향). 2026-07-27 재번호.
+  //
+  // 주위온도 보정은 kec-full 의 232.5.2 로 합쳤다. 여기 값(기준 30°C)이 맞고
+  // kec-full 이 갖고 있던 40°C 가 틀렸는데, 등록부가 kec-full 만 남기는 바람에
+  // **틀린 쪽이 live 였다.** 허용전류표(kec-ampacity.ts)도 30°C 기준이다.
+  kec('232.5', '232.5', '허용전류', [
     { param: 'ampacityCalculated', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '설치방법/주위온도/전선묶음 보정계수 적용' },
   ]),
-  kec('232.2', '232.2', '허용전류 — 주위온도 보정', [
-    { param: 'ambientTemp_C', operator: '<=', value: 30, unit: '°C', result: 'PASS', note: '기준 30°C. 초과 시 보정계수 적용' },
-  ], [{ articleId: 'NEC-310.15(B)(2)', relation: 'equivalent', note: 'NEC 온도 보정' }]),
-  kec('232.3', '232.3', '허용전류 — 전선 묶음 보정', [
-    { param: 'groupingFactor', operator: '<=', value: 1.0, unit: '', result: 'PASS', note: '3선 초과 시 감소계수: 4-6선 0.8, 7-9선 0.7, 10-12선 0.65' },
-  ], [{ articleId: 'NEC-310.15(B)(3)', relation: 'equivalent', note: 'NEC 묶음 보정' }]),
-  kec('232.4', '232.4', '특수 장소 허용전류', [
-    { param: 'specialLocationFactor', operator: '<=', value: 1.0, unit: '', result: 'PASS', note: '위험장소/고온장소 추가 감소계수' },
+  // 묶음 보정(groupingFactor)은 kec-full 의 232.5.3 으로 합쳤다 — 같은 조항을
+  // 두 파일에 두면 나중 등록분이 통째로 버려진다.
+  kec('232.4', '232.4', '배선설비의 선정과 설치에 고려해야할 외부영향', [
+    { param: 'specialLocationFactor', operator: '<=', value: 1.0, unit: '', result: 'PASS', note: '위험장소/고온장소 등 외부영향에 따른 추가 감소계수' },
   ]),
   // 원문 확인 2026-07-26: 232.31 은 전선관이 아니라 **금속덕트공사**이고 한도는
   // 20% 다(표시장치·제어회로 배선만이면 50%). 여기 있던 "전선관 충전율 40%" 는

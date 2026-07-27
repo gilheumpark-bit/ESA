@@ -26,7 +26,7 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   // === 필수 (essential) — 거의 매회 출제 ===
   { articleId: 'KEC-232.3.9', articleTitle: '전압강하', frequencyLast10: 9, importance: 'essential', commonCalcTypes: ['전압강하율 계산', '전선 굵기 산정'], examSubject: '전기설비기술기준', studyTip: '3%/5% 기준 + 공식 암기 필수. 3상/단상 공식 구분.' },
   { articleId: 'KEC-212.3', articleTitle: '과전류차단기 선정', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['차단기 정격 산정', 'Ib≤In≤Iz 관계'], examSubject: '전기설비기술기준', studyTip: 'Ib≤In≤Iz, I2≤1.45×Iz 공식 필수.' },
-  { articleId: 'KEC-232.3', articleTitle: '허용전류', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['허용전류 산정', '보정계수 적용'], examSubject: '전기설비기술기준', studyTip: '온도 보정 + 묶음 보정 반드시 출제.' },
+  { articleId: 'KEC-232.5', articleTitle: '허용전류', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['허용전류 산정', '보정계수 적용'], examSubject: '전기설비기술기준', studyTip: '온도 보정 + 묶음 보정 반드시 출제.' },
   { articleId: 'KEC-142.3', articleTitle: '접지 저항', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['접지 저항 계산', '접지봉 병렬'], examSubject: '전기설비기술기준', studyTip: '1/2/3종 접지 기준값 암기. 병렬 접지 공식.' },
   { articleId: 'KEC-142.5', articleTitle: '접지 시스템 (TN/TT/IT)', frequencyLast10: 7, importance: 'essential', commonCalcTypes: ['접지 계통 구분', '감전 보호'], examSubject: '전기설비기술기준', studyTip: 'TN-S/TN-C-S/TT/IT 각 특징과 적용 장소.' },
 
@@ -41,7 +41,7 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   // === 중빈도 (medium) — 3~5회에 1번 ===
   { articleId: 'KEC-234.1', articleTitle: '조도 계산', frequencyLast10: 3, importance: 'medium', commonCalcTypes: ['조도 산출', '광속법'], examSubject: '전기응용', studyTip: 'F = E×A / (U×M) 공식.' },
   { articleId: 'KEC-131.1', articleTitle: '감전 보호', frequencyLast10: 3, importance: 'medium', examSubject: '전기설비기술기준', studyTip: '직접/간접 접촉 보호 방법 구분.' },
-  { articleId: 'KEC-211.2', articleTitle: '금속관 배선', frequencyLast10: 3, importance: 'medium', examSubject: '전기공사', studyTip: '관 내경과 전선 수 관계. 실기 자주 출제.' },
+  { articleId: 'KEC-232.12', articleTitle: '금속관공사', frequencyLast10: 3, importance: 'medium', examSubject: '전기공사', studyTip: '관 내경과 전선 수 관계. 실기 자주 출제.' },
   // 원문 확인 2026-07-26: 232.31 은 금속덕트공사이고 한도는 20% 다. 전에 여기
   // 적혀 있던 "전선관 충전율 / 3선 이상 40%" 는 NEC Chapter 9 Table 1 값이었다.
   // 수험생이 이 줄을 외우면 시험에서 틀린다 — 시험 데이터라 더 위험하다.
