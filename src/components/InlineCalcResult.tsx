@@ -23,6 +23,7 @@ import { useCalculator } from '@/hooks/useCalculator';
 import type { DetailedCalcResult, CalcStep } from '@/engine/calculators/types';
 import type { ExtendedParamDef } from '@/components/CalculatorForm';
 import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { calculatorHref } from '@/lib/calculator-catalog';
 
 // =============================================================================
 // PART 1 -- Types & Constants
@@ -205,12 +206,19 @@ function ResultCard({
   const judgment = extractJudgment(result);
   const primary = formatPrimaryValue(result);
 
-  // 상세 페이지 URL 생성 (쿼리 파라미터에 입력값 포함)
-  const queryString = Object.entries(params)
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-    .join('&');
-  const detailUrl = `/calc/${calculatorId}/${calculatorId}${queryString ? `?${queryString}` : ''}`;
+  /**
+   * 상세 페이지 URL — **카테고리는 카탈로그에서 가져온다.**
+   *
+   * 전에는 `/calc/${calculatorId}/${calculatorId}` 로, id 를 카테고리 자리에
+   * 그대로 넣었다. 라우트가 카테고리를 검증하지 않아 페이지는 열리지만
+   * (실측: `/calc/motor-capacity/motor-capacity` 도 열린다) 공유·북마크되는
+   * 주소가 정본(`/calc/motor/motor-capacity`)과 달라진다. 같은 계산이 두
+   * 가지 주소를 갖는다.
+   *
+   * `calculatorHref` 가 이미 카탈로그에서 카테고리를 찾고 쿼리도 만든다 —
+   * 링크 만드는 법이 두 벌일 이유가 없다.
+   */
+  const detailUrl = calculatorHref(calculatorId, params);
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">

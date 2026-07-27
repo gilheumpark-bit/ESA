@@ -61,6 +61,47 @@ describe('계산기 id 참조', () => {
   });
 
   /**
+   * `CalculationEntry.calculatorId` 에는 **레지스트리 계산기가 아닌 것**도
+   * 들어간다 — KEC 표 조회, 전압강하 판정 단계, 팀 검토 묶음 같은 것들이다.
+   * 지금 화면은 그걸 라벨로만 쓰고 링크를 걸지 않아 문제가 없다.
+   *
+   * 다만 필드 이름이 `calculatorId` 라 링크를 걸고 싶어진다 — 실제로
+   * `motor-load` 가 그렇게 빈 페이지로 갔다. 그래서 "계산기가 아닌 것" 을
+   * **여기 적어 두고**, 목록 밖의 새 값이 나타나면 실패시킨다. 새로 추가한
+   * 사람이 링크 대상인지 라벨인지 한 번 생각하게 하는 것이 목적이다.
+   */
+  const PSEUDO_IDS = new Set([
+    'ampacity',              // KEC 허용전류 표 조회 — 계산기 실행이 아니다
+    'voltage-drop-judgment', // 전압강하 판정 단계
+    'wiring-distance',       // 배치 검토의 배선 거리 항목
+    'team-review',           // 팀 검토 묶음(내보내기 페이로드 라벨)
+  ]);
+
+  it('CalculationEntry 의 calculatorId 는 실재 계산기이거나 선언된 유사 id 다', () => {
+    const files = [
+      'src/agent/teams/standards-team.ts',
+      'src/agent/teams/sld-team.ts',
+      'src/agent/teams/layout-team.ts',
+    ];
+    const unknown: string[] = [];
+    for (const rel of files) {
+      const src = readFileSync(join(REPO, rel), 'utf8');
+      for (const m of src.matchAll(/calculatorId:\s*'([a-z0-9-]+)'/g)) {
+        if (!IDS.has(m[1]) && !PSEUDO_IDS.has(m[1])) unknown.push(`${rel}: ${m[1]}`);
+      }
+    }
+    expect(unknown).toEqual([]);
+  });
+
+  it('선언된 유사 id 가 실제로 아직 쓰인다 — 안 쓰이면 목록만 낡는다', () => {
+    const all = ['src/agent/teams/standards-team.ts', 'src/agent/teams/sld-team.ts',
+      'src/agent/teams/layout-team.ts', 'src/app/(with-nav)/report/[id]/page.tsx']
+      .map((r) => readFileSync(join(REPO, r), 'utf8')).join('\n');
+    const stale = [...PSEUDO_IDS].filter((id) => !all.includes(`'${id}'`));
+    expect(stale).toEqual([]);
+  });
+
+  /**
    * 라벨이 없으면 화면에 원본 id 가 그대로 찍힌다(`?? id`). 링크는 살아
    * 있으니 치명적이진 않지만, OCR 이 추천하는 것은 전부 라벨을 가져야 한다.
    */
