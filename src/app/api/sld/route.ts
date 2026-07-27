@@ -169,7 +169,20 @@ async function POST__impl(req: NextRequest) {
       provider,
       model,
       durationMs: timer.elapsed(),
-      meta: { sagaStatus: sagaResult.status, steps: sagaResult.completedSteps },
+      // 공급자 원문을 **여기 남긴다.** `classifyProviderFailure` 주석은
+      // "원문은 서버 로그에만 남기고 클라이언트에는 분류만 준다" 고 하는데,
+      // 정작 로그에 안 실려 원문이 통째로 사라지고 있었다(2026-07-28 실측:
+      // 503 을 열 번 넘게 받고도 로그에 sagaStatus·steps 뿐이라 공급자
+      // 과부하인지 다른 원인인지 가릴 수 없었다).
+      //
+      // `apiLog` 는 `error` 필드에 redactSecrets 를 걸므로 키가 섞여 있어도
+      // 마스킹된다 — 클라이언트로 나가는 것은 여전히 분류뿐이다.
+      ...(sagaResult.error ? { error: sagaResult.error } : {}),
+      meta: {
+        sagaStatus: sagaResult.status,
+        steps: sagaResult.completedSteps,
+        ...(sagaResult.failedStep ? { failedStep: sagaResult.failedStep } : {}),
+      },
     });
 
     if (sagaResult.status !== 'COMPLETED' || !analysis) {

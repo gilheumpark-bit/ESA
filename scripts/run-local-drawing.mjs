@@ -262,6 +262,41 @@ if (res.status !== 200) {
   check('피뢰기', physicalByType.arrester ?? 0, spec.label.arresters);
   check('계기', physicalByType.meter ?? 0, spec.label.meters);
 
+  // 손 판독 라벨 17 개 중 5 개만 대조되고 있었다(2026-07-28 실측). 특히
+  // **그 픽스처가 존재하는 이유**가 안 재어졌다 — p4 의 환각 측정
+  // (totalElectricalComponents 0)과 p6 의 정격 발명 측정
+  // (printedBreakerRatings 0)이 선언만 있고 비교되지 않았다.
+  // 선언만 있고 안 재는 라벨은 죽은 단언이다.
+
+  // 주석(annotation)은 기기가 아니다 — 도면에 적힌 참조·표제를 담는 자리라
+  // 기기 수에서 뺀다. 그 외 전부가 "이 도면에서 뽑아낸 전기 부품" 이다.
+  const electricalCount = comps.filter((c) => c.type !== 'annotation').length;
+  check('전기부품 총수', electricalCount, spec.label.totalElectricalComponents);
+
+  // 빈 차단기 일람표에서 정격을 지어내는지 — 차단기로 낸 것 중 정격 표기를
+  // 가진 개수. 도면에 인쇄된 정격이 0 인데 값이 나오면 전부 발명이다.
+  const breakerRatings = comps.filter((c) =>
+    /breaker/i.test(String(c.type ?? '')) && [c.rating, c.current].some(Boolean)).length;
+  check('차단기 정격 표기', breakerRatings, spec.label.printedBreakerRatings);
+
+  if (spec.label.systemVoltage != null) {
+    const got = String(data?.systemVoltage ?? '');
+    const want = String(spec.label.systemVoltage);
+    // 표기 흔들림(공백·대소문자·Ø/φ)을 걷어내고 숫자+단위가 겹치는지 본다.
+    const norm = (s) => s.replace(/\s+/g, '').toUpperCase().replace(/[ØΦ]/g, 'P');
+    const ok = norm(got) === norm(want) || norm(got).includes(norm(want)) || norm(want).includes(norm(got));
+    console.log(`   ${ok ? 'OK  ' : '불일치'} ${'계통전압'.padEnd(14)} 결과 ${got || '-'}    라벨 ${want}`);
+  }
+
+  // 대조하지 못하는 라벨은 **침묵하지 않고 적는다.** SLD 어휘가 ZCT·PT·SPD 를
+  // 따로 구분하지 않아(각각 meter·meter·arrester) 개수로 견줄 수 없다.
+  const uncheckable = ['sheetType', 'interlocks', 'mainCircuits', 'busRating',
+    'breakersWithoutTypeLabel', 'zct', 'spd', 'pt', 'loads']
+    .filter((k) => spec.label[k] != null);
+  if (uncheckable.length) {
+    console.log(`   (미대조 ${uncheckable.length}: ${uncheckable.join(' · ')} — SLD 어휘가 이 구분을 갖지 않거나 손으로 확정하지 못한 항목)`);
+  }
+
   mkdirSync('test-results', { recursive: true });
   const out = join('test-results', `local-drawing-${which}.json`);
   writeFileSync(out, JSON.stringify({
