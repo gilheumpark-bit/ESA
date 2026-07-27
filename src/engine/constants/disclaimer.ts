@@ -114,12 +114,34 @@ export interface ReviewRequirement {
 }
 
 /** 계산 유형별 전문가 검토 필요 여부 */
+/**
+ * 검토 요구 표.
+ *
+ * **키가 id 와 category 를 섞어 쓴다**(2026-07-28 확인). 인자 이름은
+ * `calculatorCategory` 인데 `arc-flash`·`short-circuit`·`cable-sizing` 은
+ * 계산기 **id** 이고, 레지스트리에서 앞의 둘은 category 가 `protection` 이다.
+ * 그래서 호출부가 `entry.category` 를 넘기면 `protection` → 표에 없음 →
+ * null 이 되어 **검토 필수 두 건이 통째로 사라졌다.** 방향이 "검토 안 해도
+ * 된다" 쪽이라 위험하다.
+ *
+ * id 항목은 그대로 두고(그 계산기 하나를 콕 집어 묻는 경우), 그것이 속한
+ * category 항목을 더해 어느 쪽으로 물어도 요구가 살아 있게 했다.
+ *
+ * 나머지 카테고리(power·motor·lighting·renewable·substation·global·ai)는
+ * **비워 둔다** — 검토가 필요한지는 제품·전문가 판단이고 코드 정리하다
+ * 정할 일이 아니다. `substation`(피뢰기 선정·수전 용량)은 안전 인접이라
+ * 판단이 필요한 후보로 남긴다.
+ */
 export const REVIEW_REQUIREMENTS: ReviewRequirement[] = [
   { category: 'arc-flash', required: true, reviewer: 'PE (전기)', reason: '안전 관련 — IEEE 1584 적합성 검증 필수' },
   { category: 'short-circuit', required: true, reviewer: 'PE (전기)', reason: '보호 협조 — 차단 용량 검증 필수' },
+  // 위 둘이 속한 카테고리. 이 줄이 없으면 category 로 물을 때 요구가 사라진다.
+  { category: 'protection', required: true, reviewer: 'PE (전기)', reason: '안전·보호 협조 — 아크플래시 입사에너지와 차단 용량 검증 필수' },
   { category: 'grounding', required: true, reviewer: 'PE (전기)', reason: '안전 관련 — 현장 측정 병행 필수' },
   { category: 'voltage-drop', required: false, reviewer: '전기 기사', reason: '설계 검증 — 서류 검토로 충분' },
   { category: 'cable-sizing', required: false, reviewer: '전기 기사', reason: '설계 검증 — 보정계수 확인' },
+  // `cable-sizing` 이 속한 카테고리 — 같은 요구를 카테고리 조회에도 건다.
+  { category: 'cable', required: false, reviewer: '전기 기사', reason: '설계 검증 — 보정계수 확인' },
   { category: 'transformer', required: false, reviewer: '전기 기사', reason: '용량 산정 — 부하 데이터 확인' },
 ];
 
