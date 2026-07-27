@@ -209,6 +209,8 @@ Return ONLY valid JSON with this structure:
 - Position x/y must be numeric values from 0 to 100 relative to the current image
 - Include length only when a numeric value and unit are explicitly printed on the drawing
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
+- If printed text is too blurred, faint, or low-resolution to read with certainty, set that field to null. Do NOT pick the most likely digit. A scanned drawing where "5" and "6" are indistinguishable must yield null, not a guess — a wrong rating on a compliance report is worse than a missing one
+- Lower "confidence" when key printed values were unreadable. A high confidence with guessed ratings is the worst outcome
 Return ONLY valid JSON. No markdown, no explanation.`;
 
 /**

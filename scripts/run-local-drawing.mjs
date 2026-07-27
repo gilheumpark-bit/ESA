@@ -11,7 +11,7 @@
  *   node --env-file=.env.example scripts/run-local-drawing.mjs [라벨키] [baseUrl]
  * 키는 환경변수로만 받고 출력하지 않는다.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -187,6 +187,12 @@ if (!KEY) {
   process.exit(2);
 }
 if (!existsSync(spec.file)) { console.error(`이미지 없음: ${spec.file}`); process.exit(2); }
+
+// 이전 실행의 영수증을 먼저 지운다. 공급자가 503 이면 영수증이 안 써지는데,
+// 낡은 것이 남아 있으면 그걸 이번 결과로 읽게 된다 — 실제로 그렇게 프롬프트
+// 수정 효과를 잘못 판정할 뻔했다(2026-07-27). 없으면 "이번에 안 돌았음" 이다.
+const RECEIPT = `test-results/local-drawing-${which}.json`;
+rmSync(RECEIPT, { force: true });
 
 const form = new FormData();
 form.append('image', new Blob([readFileSync(spec.file)], { type: spec.mime }), spec.file.split('/').pop());
