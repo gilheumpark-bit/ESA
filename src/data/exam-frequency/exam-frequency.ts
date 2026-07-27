@@ -27,7 +27,7 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-232.3.9', articleTitle: '전압강하', frequencyLast10: 9, importance: 'essential', commonCalcTypes: ['전압강하율 계산', '전선 굵기 산정'], examSubject: '전기설비기술기준', studyTip: '3%/5% 기준 + 공식 암기 필수. 3상/단상 공식 구분.' },
   { articleId: 'KEC-212.3', articleTitle: '과전류차단기 선정', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['차단기 정격 산정', 'Ib≤In≤Iz 관계'], examSubject: '전기설비기술기준', studyTip: 'Ib≤In≤Iz, I2≤1.45×Iz 공식 필수.' },
   { articleId: 'KEC-232.5', articleTitle: '허용전류', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['허용전류 산정', '보정계수 적용'], examSubject: '전기설비기술기준', studyTip: '온도 보정 + 묶음 보정 반드시 출제.' },
-  { articleId: 'KEC-142.3', articleTitle: '접지 저항', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['접지 저항 계산', '접지봉 병렬'], examSubject: '전기설비기술기준', studyTip: '1/2/3종 접지 기준값 암기. 병렬 접지 공식.' },
+  { articleId: 'KEC-142.2', articleTitle: '접지극의 시설 및 접지저항', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['접지 저항 계산', '접지봉 병렬'], examSubject: '전기설비기술기준', studyTip: '1/2/3종 접지 기준값 암기. 병렬 접지 공식.' },
   { articleId: 'KEC-142.5', articleTitle: '접지 시스템 (TN/TT/IT)', frequencyLast10: 7, importance: 'essential', commonCalcTypes: ['접지 계통 구분', '감전 보호'], examSubject: '전기설비기술기준', studyTip: 'TN-S/TN-C-S/TT/IT 각 특징과 적용 장소.' },
 
   // === 고빈도 (high) — 2~3회에 1번 ===
@@ -54,7 +54,7 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   // 시험 빈도표에 두면 수험생이 존재하지 않는 번호를 외운다.
   { articleId: 'KEC-242.10', articleTitle: '의료장소', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준', studyTip: '의료장소별 계통접지·비상전원. 특수장소 중 실제로 KEC 에 있는 조항이다.' },
   { articleId: 'KEC-241.17', articleTitle: '전기자동차 전원설비', frequencyLast10: 1, importance: 'low', examSubject: '전기설비기술기준', studyTip: '향후 출제 증가 예상.' },
-  { articleId: 'KEC-143.1', articleTitle: '피뢰 시스템', frequencyLast10: 2, importance: 'low', examSubject: '전기설비기술기준' },
+  { articleId: 'KEC-151.1', articleTitle: '피뢰시스템 적용범위', frequencyLast10: 2, importance: 'low', examSubject: '전기설비기술기준' },
 ];
 
 /** 중요도별 조항 수 */

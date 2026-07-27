@@ -59,19 +59,26 @@ const COMMON: CodeArticle[] = [
   kec('141.1', '141.1', '보호 접지 — 노출도전부 접지', [
     { param: 'protectiveGrounding', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속 외함 등 노출도전부 접지 필수' },
   ]),
-  kec('142.1', '142.1', '접지극 — 종류 및 시공', [
+  // 접지 계열 재번호 2026-07-27. 142.2 와 142.3 이 **서로 바뀌어** 있었다 —
+  // 리포는 142.2 를 접지도체로, 142.3 을 접지저항으로 달았는데 현행은
+  // 142.2 접지극의 시설 및 접지저항 / 142.3 접지도체·보호도체 다.
+  //
+  //   142.1 접지극 시공  ┐
+  //   142.3 접지저항     ┘→ 142.2 접지극의 시설 및 접지저항 (표제가 둘 다 덮는다)
+  //   142.2 접지도체      → 142.3.1 접지도체
+  //   142.4 등전위본딩    → 143.1  보호등전위본딩의 적용
+  //   143.1 피뢰시스템    → 151.1  피뢰시스템 적용범위
+  kec('142.2', '142.2', '접지극의 시설 및 접지저항', [
     { param: 'earthElectrodeInstalled', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '접지봉/접지판/접지망/기초접지 시공' },
-  ]),
-  kec('142.2', '142.2', '접지 도체 — 재질 및 규격', [
-    { param: 'earthConductorSize_mm2', operator: '>=', value: 6, unit: 'mm²', result: 'PASS', note: '접지 도체 최소 6mm² (Cu)' },
-  ]),
-  kec('142.3', '142.3', '접지 저항 — 기준값', [
     { param: 'earthResistance_ohm', operator: '<=', value: 10, unit: 'Ω', result: 'PASS', note: '특별 제3종 접지: ≤10Ω (변압기 2차측)' },
   ], [{ articleId: 'IEC-612.6.1', relation: 'equivalent', note: 'IEC 접지저항' }]),
-  kec('142.4', '142.4', '등전위 본딩', [
+  kec('142.3.1', '142.3.1', '접지도체', [
+    { param: 'earthConductorSize_mm2', operator: '>=', value: 6, unit: 'mm²', result: 'PASS', note: '접지 도체 최소 6mm² (Cu)' },
+  ]),
+  kec('143.1', '143.1', '보호등전위본딩의 적용', [
     { param: 'equipotentialBonding', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '수도관/가스관/금속구조물 등전위 본딩' },
   ]),
-  kec('143.1', '143.1', '피뢰 시스템', [
+  kec('151.1', '151.1', '피뢰시스템 적용범위', [
     { param: 'lightningProtection', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '건축물 높이 20m 초과 또는 화약류 등: 피뢰설비 설치' },
   ]),
 ];

@@ -23,7 +23,7 @@ export const JIS_ARTICLES = new Map<string, CodeArticle>([
   // 접지
   ['JIS-542.1', jis('542.1', '542.1', '접지 — D종 접지공사 (100Ω 이하)', [
     { param: 'earthResistance_ohm', operator: '<=', value: 100, unit: 'Ω', result: 'PASS', note: 'D종 접지: ≤100Ω (300V 이하 기기)' },
-  ], [{ articleId: 'KEC-142.3', relation: 'equivalent', note: 'KEC 접지저항' }])],
+  ], [{ articleId: 'KEC-142.2', relation: 'equivalent', note: 'KEC 접지극의 시설 및 접지저항' }])],
   ['JIS-542.2', jis('542.2', '542.2', '접지 — C종 접지공사 (10Ω 이하)', [
     { param: 'earthResistance_ohm', operator: '<=', value: 10, unit: 'Ω', result: 'PASS', note: 'C종 접지: ≤10Ω (300V 초과 저압기기)' },
   ])],
