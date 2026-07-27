@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, MessageSquare, ChevronUp, Award, Tag, Plus } from 'lucide-react';
+import { Search, MessageSquare, ChevronUp, Tag, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 /**
@@ -27,7 +27,10 @@ interface QuestionSummary {
   answerCount: number;
   status: 'open' | 'resolved';
   createdAt: string;
-  isExpertAuthor?: boolean;
+  // 질문에는 Expert 배지가 없다. `lib/community.ts` 의 `Question` 타입에도
+  // 행 매퍼에도 그런 필드가 없어 서버가 만들지 못한다 — 배지는 답변 전용
+  // (`Answer.isExpert`)이다. 전문가 인증 승인 경로가 생기면 질문 쪽도
+  // 함께 살린다(docs/DORMANT_MANIFEST.md 참조).
 }
 
 type SortOption = 'newest' | 'votes' | 'unanswered';
@@ -233,12 +236,6 @@ function QuestionCard({ q }: { q: QuestionSummary }) {
           </div>
 
           <div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
-            {q.isExpertAuthor && (
-              <span className="flex items-center gap-1 text-amber-600">
-                <Award className="h-3 w-3" />
-                Expert
-              </span>
-            )}
             <span>{q.authorName ?? 'Anonymous'}</span>
             <span>·</span>
             <span>{timeAgo}</span>
