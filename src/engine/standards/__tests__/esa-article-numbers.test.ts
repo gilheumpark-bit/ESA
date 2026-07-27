@@ -61,6 +61,30 @@ describe('전기안전관리법 조문 인용', () => {
     expect(missing).toEqual([]);
   });
 
+  /**
+   * 규격 브라우저 카탈로그(`data/standards/standard-refs.ts`)의 ESA 항목.
+   *
+   * 조문 파일과 **별도 데이터**인데 화면에 뜨는 건 이쪽이다. 조문 파일만
+   * 고치고 카탈로그를 빠뜨려서, 정정한 뒤에도 화면에는 구 전기사업법
+   * 번호(61/62/63/64)가 그대로 보이고 있었다 — KEC 카탈로그에서 이미 한 번
+   * 겪은 일을 되풀이했다.
+   */
+  it('카탈로그의 ESA 조문도 전기안전관리법에 실재한다', () => {
+    const src = readFileSync(join(REPO, 'src/data/standards/standard-refs.ts'), 'utf8');
+    const block = src.slice(
+      src.indexOf('const ESA_REFS: StandardRef[] = ['),
+      src.indexOf('\n];', src.indexOf('const ESA_REFS: StandardRef[] = [')),
+    );
+    const clauses = [...block.matchAll(/clause:\s*'(\d+)'/g)].map((m) => `제${m[1]}조`);
+
+    // 정규식이 죽으면 빈 목록으로 통과한다 — 그게 사각을 만드는 방식이다.
+    expect(clauses.length).toBeGreaterThan(4);
+
+    // 제99조는 전기공사업법 소관이라 이 법에 없다(조문 파일에도 그렇게 적었다).
+    const missing = clauses.filter((c) => c !== '제99조' && !OFFICIAL.has(c)).sort();
+    expect(missing).toEqual([]);
+  });
+
   it('구 전기사업법 번호가 되살아나지 않는다', () => {
     // 이관 전 번호들. 주석에서 "구 제63조" 처럼 설명하는 것은 허용한다.
     const RETIRED = ['제62조', '제63조', '제73조', '제101조'];

@@ -778,38 +778,42 @@ const JIS_REFS: StandardRef[] = [
 // PART 6: NER (한국전기내선규정 2022 — 대한전기협회)
 // =============================================================================
 
+// NER 카탈로그. 내선규정은 판단기준 폐지로 **현행 설계 근거가 아니다** —
+// 2022년부터 KEC 만 적용 가능하고 협회가 개정 계획 없음을 밝혔다.
+// `Edition: 2022` 로 띄우고 있었는데 그런 개정판은 없다(2026-07-27 정정).
+// 항목번호도 실제는 2225-5·3315-3 형식이라 아래 한 자리 숫자는 임시다.
 const NER_REFS: StandardRef[] = [
   {
     id: 'ner-2', standard: 'NER', clause: '2',
     title_ko: '분기회로', title_en: 'Branch Circuits',
-    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    edition: '판단기준 폐지 전 최종판', licenseType: 'open', country: 'KR', body: '대한전기협회',
     url: 'https://www.kea.kr',
   },
   {
     id: 'ner-5', standard: 'NER', clause: '5',
     title_ko: '누전차단기 설치의무', title_en: 'ELCB/GFCI Mandatory Installation',
-    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    edition: '판단기준 폐지 전 최종판', licenseType: 'open', country: 'KR', body: '대한전기협회',
     url: 'https://www.kea.kr',
   },
   {
     id: 'ner-6', standard: 'NER', clause: '6',
     title_ko: '과전류 차단기 선정', title_en: 'Overcurrent Breaker Selection (MCCB)',
-    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    edition: '판단기준 폐지 전 최종판', licenseType: 'open', country: 'KR', body: '대한전기협회',
   },
   {
     id: 'ner-8', standard: 'NER', clause: '8',
     title_ko: '전선관 충전율', title_en: 'Conduit Fill Rate (40% Rule)',
-    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    edition: '판단기준 폐지 전 최종판', licenseType: 'open', country: 'KR', body: '대한전기협회',
   },
   {
     id: 'ner-9', standard: 'NER', clause: '9',
     title_ko: '콘센트 설치 기준', title_en: 'Outlet Installation Requirements',
-    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    edition: '판단기준 폐지 전 최종판', licenseType: 'open', country: 'KR', body: '대한전기협회',
   },
   {
     id: 'ner-12', standard: 'NER', clause: '12',
     title_ko: '분전반 설치', title_en: 'Distribution Panel Installation',
-    edition: '2022', licenseType: 'open', country: 'KR', body: '대한전기협회',
+    edition: '판단기준 폐지 전 최종판', licenseType: 'open', country: 'KR', body: '대한전기협회',
   },
 ];
 
@@ -817,33 +821,37 @@ const NER_REFS: StandardRef[] = [
 // PART 7: ESA (전기사업법 2023 — 산업통상자원부)
 // =============================================================================
 
+// ESA 카탈로그. 전기안전관리법(2021.4.1 시행)이 전기사업법의 안전 조항을
+// 이관해 갔는데 구 전기사업법 번호(61/62/63/64/73)를 띄우고 있었다.
+// 조문 파일은 고쳤는데 **카탈로그를 빠뜨렸다** — 화면에 뜨는 건 이쪽이다.
+// 제목이 일치하는 것만 옮겼다(2026-07-27). 근거 = fixtures/esa/…tsv
 const ESA_REFS: StandardRef[] = [
   {
-    id: 'esa-61', standard: 'ESA', clause: '61',
+    id: 'esa-61', standard: 'ESA', clause: '19',
     title_ko: '전기설비 유지 의무', title_en: 'Obligation to Maintain Electrical Facilities',
     edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
     url: 'https://www.law.go.kr',
   },
   {
-    id: 'esa-62', standard: 'ESA', clause: '62',
+    id: 'esa-62', standard: 'ESA', clause: '11',
     title_ko: '정기검사', title_en: 'Periodic Inspection',
     edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
     url: 'https://www.law.go.kr',
   },
   {
-    id: 'esa-63', standard: 'ESA', clause: '63',
+    id: 'esa-63', standard: 'ESA', clause: '9',
     title_ko: '사용 전 검사', title_en: 'Pre-use Inspection',
     edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
     url: 'https://www.law.go.kr',
   },
   {
-    id: 'esa-64', standard: 'ESA', clause: '64',
+    id: 'esa-64', standard: 'ESA', clause: '10',
     title_ko: '임시 검사', title_en: 'Temporary/Spot Inspection',
     edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
     url: 'https://www.law.go.kr',
   },
   {
-    id: 'esa-73', standard: 'ESA', clause: '73',
+    id: 'esa-73', standard: 'ESA', clause: '22',
     title_ko: '안전관리자 선임', title_en: 'Safety Manager Appointment',
     edition: '2023', licenseType: 'open', country: 'KR', body: '산업통상자원부',
     url: 'https://www.law.go.kr',
