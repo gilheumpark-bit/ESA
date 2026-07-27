@@ -150,11 +150,22 @@ export function getDisclaimer(language: string = 'ko'): ProfessionalDisclaimer {
   return DISCLAIMERS[language] ?? DISCLAIMERS['ko'];
 }
 
-/** 불확실성 정보 조회 */
-export function getUncertainty(calculatorId: string): UncertaintyInfo | null {
-  // 카테고리 추출 (voltage-drop-3phase → voltage-drop)
-  const baseId = calculatorId.replace(/-3phase|-complex|-busbar|-country.*$/, '');
-  return UNCERTAINTY[baseId] ?? null;
+/**
+ * 불확실성 정보 조회 — id 우선, 없으면 카테고리로.
+ *
+ * 전에는 접미사 정규식으로 기본 id 를 뽑았다(`voltage-drop-3phase →
+ * voltage-drop`). 그런데 **그 명명 규칙이 이 저장소에 없다** — 실제 id 는
+ * `three-phase-vd`·`complex-voltage-drop`·`busbar-vd`·`country-compare-vd`
+ * 라 정규식이 한 번도 안 걸렸다(2026-07-28 확인). 결과적으로 전압강하
+ * 변형 4 종이 전부 null 이었고, 표의 `grounding` 키는 id 가 아니라
+ * 카테고리라 접지 계산기 3 종도 전부 null 이었다.
+ *
+ * 정규식이 하려던 일이 곧 "변형을 기본 항목으로 모으기" 이므로, 그걸
+ * 레지스트리가 이미 갖고 있는 **카테고리**로 한다. 여기서 레지스트리를
+ * import 하면 상수↔계산기 순환이 생기므로 호출부가 넘긴다.
+ */
+export function getUncertainty(calculatorId: string, category?: string): UncertaintyInfo | null {
+  return UNCERTAINTY[calculatorId] ?? (category ? UNCERTAINTY[category] ?? null : null);
 }
 
 /** 전문가 검토 필요 여부 */
