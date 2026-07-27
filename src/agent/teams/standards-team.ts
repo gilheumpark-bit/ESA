@@ -45,6 +45,20 @@ function parseStandardQuery(query: string): StandardQueryIntent {
     };
   }
 
+  // 비교 — **주제 검사보다 먼저 본다.**
+  //
+  // 전에는 맨 뒤에 있었다. 그래서 "전압강하 기준 비교" 가 앞의 `전압강하`
+  // 에 먼저 걸려 `voltage_drop_check` 로 갔고, **비교 경로에 절대 도달하지
+  // 못했다**(실측 2026-07-27). 허용전류·차단기도 같았다 — 세 주제가 통째로
+  // 비교 불가였다.
+  //
+  // "비교" 는 주제가 아니라 주제에 붙는 요청이다. 주제어보다 먼저 봐야
+  // "X 비교" 가 X 조회로 새지 않는다. 다만 조문 직접 참조(위)는 그대로
+  // 앞에 둔다 — "KEC 232.5" 처럼 번호를 대면 그 조문을 원하는 것이다.
+  if (q.includes('비교') || q.includes('compare') || q.includes('vs')) {
+    return { type: 'comparison' };
+  }
+
   // 허용전류 질의
   if (q.includes('허용전류') || q.includes('ampacity') || q.includes('전류용량')) {
     return { type: 'ampacity_query' };
@@ -58,11 +72,6 @@ function parseStandardQuery(query: string): StandardQueryIntent {
   // 차단기 선정
   if (q.includes('차단기') || q.includes('breaker') || q.includes('mccb')) {
     return { type: 'breaker_check' };
-  }
-
-  // 비교
-  if (q.includes('비교') || q.includes('compare') || q.includes('vs')) {
-    return { type: 'comparison' };
   }
 
   return { type: 'general' };

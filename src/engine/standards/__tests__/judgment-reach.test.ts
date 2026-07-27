@@ -55,6 +55,43 @@ describe('조항의 판정 도달', () => {
     expect(kec(bad)).toBe('FAIL');
   });
 
+  /**
+   * 한 단계 더 올라간다. 위 검사는 `compareDesign` 을 **직접** 부르므로
+   * 사용자가 그 함수에 도달하는 경로가 끊겨도 초록이다.
+   *
+   * 실제 사슬:
+   *   POST /api/team-review → runOrchestrator → executeStandardsTeam
+   *   → parseStandardQuery 가 "비교" 를 `comparison` 으로 분류
+   *   → compareStandards → compareDesign → evaluateStandard
+   *
+   * 여기서는 팀 진입점부터 탄다 — 의도 분류와 `case 'comparison'` 배선까지
+   * 함께 걸린다. 배선이 끊기면 추천이 안 나온다.
+   */
+  it('사용자 질의가 팀을 통해 비교 판정까지 도달한다', async () => {
+    const { executeStandardsTeam } = await import('@/agent/teams/standards-team');
+    const run = (voltageDropPercent: number) => executeStandardsTeam({
+      sessionId: 'judgment-reach-probe',
+      classification: 'text_query',
+      query: '전압강하 기준 비교',
+      params: { voltageDropPercent, loadCurrent: 100, wireAmpacity: 150, breakerRating: 125 },
+    });
+
+    const ok = await run(3);
+    const bad = await run(99);
+
+    const verdict = (r: Awaited<ReturnType<typeof executeStandardsTeam>>) =>
+      r.recommendations?.find((x) => x.id === 'rec-compare')?.description;
+
+    // 추천 자체가 안 나오면 배선이 끊긴 것이다 — undefined 도 실패로 잡힌다.
+    //
+    // 3% 가 "적합" 이 되려면 HOLD 를 부적합으로 세지 않아야 한다. 전에는
+    // `every(PASS)` 였고 NEC 210.19 가 자리표시자라 늘 HOLD 여서, **입력과
+    // 무관하게 언제나 "일부 기준 부적합"** 이었다. 두 값이 갈리는지가
+    // 그 수리를 지킨다.
+    expect(verdict(ok)).toBe('전 기준 적합');
+    expect(verdict(bad)).toBe('일부 기준 부적합');
+  });
+
   it('판정에 도달할 수 있는 조항 수가 선언과 같다 — 배선이 늘면 눈에 띄어야 한다', () => {
     const files = walk(join(REPO, 'src'));
     const inStandards = (f: string) => f.startsWith(STANDARDS);

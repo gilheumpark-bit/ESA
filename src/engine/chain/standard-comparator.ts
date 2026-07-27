@@ -64,8 +64,17 @@ export interface ComparisonReport {
   params: Record<string, unknown>;
   /** 각 기준별 결과 */
   entries: ComparisonEntry[];
-  /** 모든 기준에서 적합한지 */
+  /**
+   * 판정된 기준 중 **부적합이 없는지**.
+   *
+   * HOLD 는 부적합으로 세지 않는다 — HOLD 는 "판정할 수 없음" 이지
+   * "안 맞음" 이 아니다. 전에는 `every(PASS)` 라 HOLD 하나가 곧 부적합이었고,
+   * NEC 210.19 가 자리표시자 조항(`conductorAmpacity >= 0`)이라 늘 HOLD 여서
+   * **입력과 무관하게 항상 false** 였다 — 검사가 아니라 상수였다(2026-07-27).
+   */
   universallyCompliant: boolean;
+  /** 판정을 못 낸 기준. 비어 있지 않으면 위 판정은 부분 결과다. */
+  undetermined: StandardId[];
   /** 가장 엄격한 기준 */
   strictestStandard: StandardId;
 }
@@ -143,7 +152,7 @@ export function compareAmpacity(
   return {
     params: opts as unknown as Record<string, unknown>,
     entries,
-    universallyCompliant: true, // 허용전류 비교는 적합 여부가 아닌 값 비교
+    universallyCompliant: true, undetermined: [], // 허용전류 비교는 적합 여부가 아닌 값 비교
     strictestStandard: strictest.standard,
   };
 }
@@ -161,7 +170,7 @@ export function compareVoltageDropLimits(): ComparisonReport {
   return {
     params: { comparison: 'voltage-drop-limits' },
     entries,
-    universallyCompliant: true,
+    universallyCompliant: true, undetermined: [],
     strictestStandard: 'IEC',
   };
 }
@@ -193,12 +202,15 @@ export function compareDesign(params: {
     note: `허용전류 ${params.wireAmpacity}A → ${necVD.judgment}`,
   });
 
-  const universallyCompliant = entries.every(e => e.judgment?.judgment === 'PASS');
+  // HOLD 는 부적합이 아니다 — 판정 불가로 따로 모은다.
+  const undetermined = entries.filter(e => e.judgment?.judgment === 'HOLD').map(e => e.standard);
+  const universallyCompliant = entries.every(e => e.judgment?.judgment !== 'FAIL');
 
   return {
     params: params as Record<string, unknown>,
     entries,
     universallyCompliant,
+    undetermined,
     strictestStandard: universallyCompliant ? 'KEC' : entries.find(e => e.judgment?.judgment !== 'PASS')?.standard ?? 'KEC',
   };
 }
