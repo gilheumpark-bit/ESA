@@ -188,43 +188,49 @@ const ms = Date.now() - started;
 
 if (res.status !== 200) {
   console.log(`HTTP ${res.status} (${(ms / 1000).toFixed(1)}s) — ${String(payload?.error ?? payload?.parseError ?? '').slice(0, 300)}`);
-  process.exit(1);
+  // `process.exit(1)` 을 쓰면 undici 소켓이 아직 닫히는 중이라 libuv 가
+  // `!(handle->flags & UV_HANDLE_CLOSING)` 로 abort 하고, **종료 코드가 1 이
+  // 아니라 127 로 바뀐다**(실측 3/3). 방향은 안전하지만(0 이 아님) 게이트가
+  // 읽는 숫자가 스크립트 의도와 다르다. exitCode 만 세우고 자연 종료한다.
+  process.exitCode = 1;
+} else {
+
+  const data = payload?.data ?? payload;
+  const comps = Array.isArray(data?.components) ? data.components : [];
+  const conns = Array.isArray(data?.connections) ? data.connections : [];
+  const byType = {};
+  for (const c of comps) byType[c.type ?? 'unknown'] = (byType[c.type ?? 'unknown'] ?? 0) + 1;
+
+  console.log(`결과 (${(ms / 1000).toFixed(1)}s) — 부품 ${comps.length} · 연결 ${conns.length}`
+    + (data?.confidence != null ? ` · conf ${data.confidence}` : ''));
+  console.log(`타입 분포: ${JSON.stringify(byType)}`);
+  console.log(`계통: ${data?.systemVoltage ?? '-'} / ${data?.systemType ?? '-'}\n`);
+  console.log('부품 목록:');
+  for (const c of comps) {
+    console.log(`   ${String(c.type ?? '?').padEnd(12)} ${String(c.label ?? '').slice(0, 40).padEnd(40)}`
+      + ` ${[c.rating, c.current, c.voltage].filter(Boolean).join(' ')}`);
+  }
+
+  console.log('\n대조:');
+  const check = (name, got, want) => {
+    if (want == null) return;
+    const mark = got === want ? 'OK  ' : got > want ? '초과 ' : '누락 ';
+    console.log(`   ${mark} ${name.padEnd(14)} 결과 ${String(got).padEnd(4)} 라벨 ${want}`);
+  };
+  check('변압기', byType.transformer ?? 0, spec.label.transformers);
+  check('발전기', byType.generator ?? 0, spec.label.generators);
+  check('차단기', byType.breaker ?? 0, spec.label.breakers);
+  check('피뢰기', byType.arrester ?? 0, spec.label.arresters);
+  check('계기', byType.meter ?? 0, spec.label.meters);
+
+  mkdirSync('test-results', { recursive: true });
+  const out = join('test-results', `local-drawing-${which}.json`);
+  writeFileSync(out, JSON.stringify({
+    base: BASE, provider: PROVIDER, model: MODEL || '(기본)', ms,
+    what: spec.what, label: spec.label, byType,
+    systemVoltage: data?.systemVoltage ?? null, systemType: data?.systemType ?? null,
+    components: comps, connections: conns, confidence: data?.confidence ?? null,
+  }, null, 2));
+  console.log(`\n영수증 → ${out}`);
+
 }
-
-const data = payload?.data ?? payload;
-const comps = Array.isArray(data?.components) ? data.components : [];
-const conns = Array.isArray(data?.connections) ? data.connections : [];
-const byType = {};
-for (const c of comps) byType[c.type ?? 'unknown'] = (byType[c.type ?? 'unknown'] ?? 0) + 1;
-
-console.log(`결과 (${(ms / 1000).toFixed(1)}s) — 부품 ${comps.length} · 연결 ${conns.length}`
-  + (data?.confidence != null ? ` · conf ${data.confidence}` : ''));
-console.log(`타입 분포: ${JSON.stringify(byType)}`);
-console.log(`계통: ${data?.systemVoltage ?? '-'} / ${data?.systemType ?? '-'}\n`);
-console.log('부품 목록:');
-for (const c of comps) {
-  console.log(`   ${String(c.type ?? '?').padEnd(12)} ${String(c.label ?? '').slice(0, 40).padEnd(40)}`
-    + ` ${[c.rating, c.current, c.voltage].filter(Boolean).join(' ')}`);
-}
-
-console.log('\n대조:');
-const check = (name, got, want) => {
-  if (want == null) return;
-  const mark = got === want ? 'OK  ' : got > want ? '초과 ' : '누락 ';
-  console.log(`   ${mark} ${name.padEnd(14)} 결과 ${String(got).padEnd(4)} 라벨 ${want}`);
-};
-check('변압기', byType.transformer ?? 0, spec.label.transformers);
-check('발전기', byType.generator ?? 0, spec.label.generators);
-check('차단기', byType.breaker ?? 0, spec.label.breakers);
-check('피뢰기', byType.arrester ?? 0, spec.label.arresters);
-check('계기', byType.meter ?? 0, spec.label.meters);
-
-mkdirSync('test-results', { recursive: true });
-const out = join('test-results', `local-drawing-${which}.json`);
-writeFileSync(out, JSON.stringify({
-  base: BASE, provider: PROVIDER, model: MODEL || '(기본)', ms,
-  what: spec.what, label: spec.label, byType,
-  systemVoltage: data?.systemVoltage ?? null, systemType: data?.systemType ?? null,
-  components: comps, connections: conns, confidence: data?.confidence ?? null,
-}, null, 2));
-console.log(`\n영수증 → ${out}`);
