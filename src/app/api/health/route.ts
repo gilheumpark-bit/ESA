@@ -16,6 +16,7 @@ import { getTCCDeviceCount } from '@/data/protection/tcc-data';
 import { getCertCount } from '@/data/certifications/certification-db';
 import { getRateLimitStoreSize } from '@/lib/rate-limit';
 import { withRequestLog } from '@/lib/api/with-request-log';
+import { validateEnv } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -92,9 +93,18 @@ async function GET__impl(req: NextRequest) {
   const providers = checkProviderKeys();
   const allDeps = [supabase, weaviate, ...providers];
 
+  // 필수 환경변수 검증. `validateEnv` 는 잘 만들어져 있는데 **부르는 곳이
+  // 없었다**(2026-07-28 실측) — 설정 누락이 기동 시점에 드러나지 않고 첫
+  // 요청에서 런타임 오류로 나타났다. 특히 `STRIPE_BILLING_ENABLED=true` 인데
+  // 웹훅 시크릿이 없으면 결제가 조용히 깨진다.
+  //
+  // 누락된 **변수 이름은 공개하지 않는다** — 어떤 연동이 구성돼 있는지를
+  // 알려 주는 셈이다. 공개 응답은 상태만 바꾸고, 목록은 토큰 뒤에 둔다.
+  const env = validateEnv();
+
   const hasCriticalDown = allDeps.some(d => d.name === 'Supabase' && d.status === 'down');
   const overallStatus = hasCriticalDown ? 'unhealthy'
-    : allDeps.every(d => d.status === 'healthy') ? 'healthy'
+    : (allDeps.every(d => d.status === 'healthy') && env.valid) ? 'healthy'
     : 'degraded';
   const timestamp = new Date().toISOString();
   const detailedData = canViewDetails(req)
@@ -104,6 +114,11 @@ async function GET__impl(req: NextRequest) {
         totalLatencyMs: Date.now() - start,
         rateLimitStoreSize: getRateLimitStoreSize(),
         dependencies: allDeps,
+        config: {
+          valid: env.valid,
+          missingRequired: env.missing,
+          warnings: env.warnings,
+        },
         dataAssets: {
           inspectionItems: getInspectionItemCount(),
           tccDevices: getTCCDeviceCount(),
