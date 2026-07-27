@@ -227,10 +227,8 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('341.9', '341.9', '개폐기의 시설', [
     { param: 'switchgearInstalled', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'VCB/ACB/DS/LBS 설치 기준' },
   ]),
-  kec('313.1', '313.1', '모선 — 부스바 시설', [
-    { param: 'busbarInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '모선 이격, 지지, 접속, 상 표시' },
-  ]),
-  kec('320.1', '320.1', '고압 케이블 — 시설 기준', [
+  // 320 은 없는 번호다. 고압 옥내배선은 342.1 이다(2026-07-27).
+  kec('342.1', '342.1', '고압 옥내배선 등의 시설', [
     { param: 'hvCableInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '고압 케이블 포설/접속/종단/시험' },
   ]),
   // 현행 321 은 없다. 가공전선로는 332, 지중전선로는 223.1 이다(2026-07-27).
@@ -240,8 +238,11 @@ const HIGH_VOLTAGE: CodeArticle[] = [
   kec('223.1', '223.1', '지중전선로의 시설', [
     { param: 'undergroundCable', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '매설 깊이: 일반 0.6m, 중량물 압력 우려 장소 1.2m (원문 표 미확보 — 재확인 필요)' },
   ], [{ articleId: 'NEC-300.5', relation: 'equivalent', note: 'NEC 매설 깊이' }]),
+  // 구 350.1 "보호 계전 방식" 도 여기로 합쳤다 — 350 은 없는 번호이고
+  // 비율차동은 변압기 보호의 대표 방식이다(발전기 351.3 · 조상설비 351.5).
   kec('351.4', '351.4', '특고압용 변압기의 보호장치', [
     { param: 'protectiveRelay', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'OCR/OCGR/UVR/OVR/DGR 설치 기준' },
+    { param: 'protectionScheme', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '비율차동/거리/방향/과전류 계전 방식 선정' },
   ]),
   kec('351.5', '351.5', '조상설비의 보호장치', [
     { param: 'powerCapacitor', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '역률 0.9 이상 유지, 방전 코일 설치' },
@@ -255,12 +256,12 @@ const HIGH_VOLTAGE: CodeArticle[] = [
     { articleId: 'NEC-430.22', relation: 'equivalent', note: 'NEC 전동기 전선' },
     { articleId: 'NEC-430.32', relation: 'equivalent', note: 'NEC 과부하 계전기' },
   ]),
-  kec('350.1', '350.1', '수변전 설비 — 보호 계전 방식', [
-    { param: 'protectionScheme', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '비율차동/거리/방향/과전류 계전 방식 선정' },
-  ]),
-  // 현행 351.1 은 발전소 등의 울타리·담이다. 배전반 시설은 351.7 이다.
+  // 구 313.1 모선 부스바도 여기로 합쳤다 — 313 은 없는 번호이고 모선은
+  // 배전반 구성요소다. 351.7 은 하위가 없어서 351.7.1 을 만들 수 없다 —
+  // 없는 하위 번호를 짓는 것이 이번 세션에 계속 고쳐 온 그 결함이다.
   kec('351.7', '351.7', '배전반의 시설', [
     { param: 'switchboardInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '폐쇄형/개방형, 이격, 조작통로, 표시' },
+    { param: 'busbarInstallation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '모선 이격, 지지, 접속, 상 표시' },
   ]),
   kec('360.1', '360.1', '전력구/관로 — 시설 기준', [
     { param: 'cableTunnel', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '전력구 환기/소화/배수/조명 기준' },
