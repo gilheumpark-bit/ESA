@@ -59,6 +59,21 @@ const COMMON: CodeArticle[] = [
     { param: 'groundingSystemType', operator: '>=', value: 1, unit: 'enum', result: 'PASS', note: 'TN-S/TN-C/TN-C-S/TT/IT 중 선택' },
   ], [{ articleId: 'IEC-411.1', relation: 'equivalent', note: 'IEC 접지 계통' }]),
   // `141.1` 도 없는 번호였다. 노출도전부(금속 외함) 접지는 142.7 이다.
+  // 아래 넷은 **다른 규격이 참조하는데 정의가 없어 링크가 죽어 있었다**
+  // (2026-07-27 상호참조 게이트로 발각). 232.3.9 는 이 리포의 대표 조항인
+  // 전압강하인데도 인용만 있고 조항이 없었다.
+  kec('142.5', '142.5', '변압기 중성점 접지', [
+    { param: 'neutralEarthing', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '변압기 중성점 접지 — 계통접지 방식에 따라 시설' },
+  ]),
+  kec('232.3.9', '232.3.9', '수용가 설비에서의 전압강하', [
+    { param: 'voltageDropPercent', operator: '<=', value: 5, unit: '%', result: 'PASS', note: '저압수전 기타 5% · 조명 3%. 고압 이상 수전은 별도 값 — 상세는 calculators/voltage-drop' },
+  ]),
+  kec('242.1', '242.1', '방전등 공사의 시설 제한', [
+    { param: 'dischargeLampWiring', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '1kV 이하 방전등 — 관등회로 배선·안정기·변압기 시설 제한' },
+  ]),
+  kec('244', '244', '비상용 예비전원설비', [
+    { param: 'emergencyPowerSupply', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '비상용 예비전원설비의 시설' },
+  ]),
   kec('142.7', '142.7', '기계기구의 철대 및 외함의 접지', [
     { param: 'protectiveGrounding', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '금속 외함 등 노출도전부 접지 필수' },
   ]),

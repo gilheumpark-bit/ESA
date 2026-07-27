@@ -202,11 +202,11 @@ const WIRING_METHODS: CodeArticle[] = [
 
   nec('408.36', '408.36', '분전반 과전류보호 최대 수', [
     { param: 'panelCircuitCount', operator: '<=', value: 42, unit: 'ea', result: 'PASS', note: '분전반 당 최대 42회로 (2023 기준)' },
-  ], [{ articleId: 'KEC-242.1', relation: 'equivalent', note: 'KEC 분전반 회로수' }]),
+  ], [{ articleId: 'KEC-351.7', relation: 'reference', note: 'KEC 351.7 배전반의 시설. KEC 는 분전반 회로수 상한을 두지 않는다' }]),
 
   nec('480.9', '480.9', '배터리실 환기 요건', [
     { param: 'batteryVentilation', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '축전지실: 수소 가스 환기 시스템 필수' },
-  ], [{ articleId: 'IEC-554.1', relation: 'equivalent', note: 'IEC 축전지실 환기' }]),
+  ], [{ articleId: 'KEC-511.2', relation: 'reference', note: 'KEC 511.2 전기저장장치의 시설. IEC 조항 세트에 축전지실 환기 조항이 없다' }]),
 
   nec('690.12', '690.12', '태양광 긴급차단장치', [
     { param: 'pvRapidShutdown', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '옥상 PV: 30초 이내 80V 이하 긴급차단 필수' },
