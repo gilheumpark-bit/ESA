@@ -20,6 +20,50 @@ import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { withRequestLog } from '@/lib/api/with-request-log';
 import { checkRasterImage } from '@/lib/image-signature';
 
+/**
+ * 공급자 실패를 사용자가 무엇을 해야 하는지로 번역한다.
+ *
+ * 그동안 어떤 실패든 "API 키·모델·파일을 확인하세요" 한 줄이었다. 실측
+ * 2026-07-27: Gemini 가 503(과부하)을 냈는데 그 문구가 떠서, 멀쩡한 키를 직접
+ * 조회해 보고(모델 50 개 정상 응답) 파일 크기를 대조하는 데 몇 분을 썼다.
+ * 원인이 상대편에 있는데 이쪽을 뒤지게 만드는 문구는 오답보다 나쁠 때가 있다.
+ *
+ * 재시도로 풀리는 것(과부하·한도)과 설정을 고쳐야 하는 것(키·요청)을 가른다.
+ */
+export function classifyProviderFailure(raw: string | undefined): {
+  message: string; code: string; status: number; retryable: boolean;
+} {
+  const text = raw ?? '';
+  const httpCode = /(?:error|status)\s*(\d{3})/i.exec(text)?.[1];
+
+  if (httpCode === '503' || /overload|unavailable|과부하/i.test(text)) {
+    return {
+      message: 'AI 공급자가 일시적으로 응답하지 못했습니다(과부하). 잠시 후 다시 시도하세요 — 키·파일 설정 문제가 아닙니다.',
+      code: 'ESA-6003', status: 503, retryable: true,
+    };
+  }
+  if (httpCode === '429' || /rate.?limit|quota|exceeded/i.test(text)) {
+    return {
+      message: 'AI 공급자 호출 한도에 걸렸습니다. 잠시 후 다시 시도하거나 다른 키를 사용하세요.',
+      code: 'ESA-6004', status: 429, retryable: true,
+    };
+  }
+  if (httpCode === '401' || httpCode === '403' || /api.?key|unauthor|permission/i.test(text)) {
+    return {
+      message: 'AI 공급자가 인증을 거부했습니다. API 키를 확인하세요.',
+      code: 'ESA-6002', status: 502, retryable: false,
+    };
+  }
+  // 분류가 안 되면 **원문을 붙이지 않는다.** 처음엔 단서를 주려고 원문을 잘라
+  // 넣었는데 기존 보안 테스트(`SLD saga diagnostics stay server-side`)가 잡았다 —
+  // 공급자 오류 문자열에는 내부 경로·키 조각·모델명이 섞여 나올 수 있다.
+  // 원문은 서버 로그에만 남기고 클라이언트에는 분류만 준다.
+  return {
+    message: 'SLD 공급자 분석을 완료하지 못했습니다. 잠시 후 다시 시도하고, 계속되면 API 키와 파일 형식을 확인하세요.',
+    code: 'ESA-6001', status: 502, retryable: false,
+  };
+}
+
 export const runtime = 'nodejs';
 
 async function POST__impl(req: NextRequest) {
@@ -129,10 +173,15 @@ async function POST__impl(req: NextRequest) {
     });
 
     if (sagaResult.status !== 'COMPLETED' || !analysis) {
+      // 사가는 failedStep·error 를 갖고 있는데 그동안 버리고 일반 문구만 냈다.
+      // 실측 2026-07-27: 공급자가 503(과부하)을 냈는데 화면에는 "API 키·모델·
+      // 파일을 확인하세요" 가 떴다 — 멀쩡한 키와 파일을 몇 분간 뒤졌다.
+      const failure = classifyProviderFailure(sagaResult.error);
       return NextResponse.json({
-        error: 'SLD 공급자 분석을 완료하지 못했습니다. API 키·모델·파일을 확인하세요.',
-        code: 'ESA-6001',
-      }, { status: 502 });
+        error: failure.message,
+        code: failure.code,
+        ...(failure.retryable ? { retryable: true } : {}),
+      }, { status: failure.status });
     }
 
     const calcChain = generateCalcChainFromSLD(analysis);
@@ -175,9 +224,10 @@ async function POST__impl(req: NextRequest) {
       error: err instanceof Error ? err.name : 'UnknownError',
       durationMs: timer.elapsed(),
     });
+    const failure = classifyProviderFailure(err instanceof Error ? err.message : undefined);
     return NextResponse.json(
-      { error: 'SLD 공급자 분석을 완료하지 못했습니다. API 키·모델·파일을 확인하세요.', code: 'ESA-6001' },
-      { status: 502 },
+      { error: failure.message, code: failure.code, ...(failure.retryable ? { retryable: true } : {}) },
+      { status: failure.status },
     );
   }
 }

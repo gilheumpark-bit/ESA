@@ -114,6 +114,28 @@ const LABELS = {
       printedBreakerRatings: 0,
     },
   },
+
+  /**
+   * MCC-101 결선도 — 고밀도. 이번 어휘 보강의 효과를 재는 도면이다.
+   *
+   * 상단에 SPD 40kA · LF(한류퓨즈) · E(접지) · PT×3 · CT×3 가 있고, 본체는
+   * 전동기 기동 회로가 줄지어 있다(MCCB + MC 전자접촉기 + THR). 보강 전에는
+   * MC·THR·LF·접지를 전부 몰라 `load`·`breaker` 로 흡수했다.
+   *
+   * 분기 수는 손으로 확정하지 못했다(스캔 열화). 그래서 세는 대신 **신설·보강한
+   * 타입이 실제로 나오는가**와 환각 축만 본다 — 못 센 것을 센 척하지 않는다.
+   */
+  'sejong-p2': {
+    file: 'fixtures/drawings/local/sejong-swgr-db-p2-raster.png',
+    mime: 'image/png',
+    what: 'MCC-101 결선도 (고밀도) · 어휘 보강 효과 측정용',
+    label: {
+      sheetType: 'mcc-wiring',
+      transformers: 0,      // PT·CT 는 계기용 — 전력 변압기는 없다
+      generators: 0,        // 환각 측정용
+      arresters: 1,         // SPD 40kA/mode
+    },
+  },
 };
 
 const which = process.argv[2] ?? 'threeline';
