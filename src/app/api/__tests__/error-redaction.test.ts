@@ -90,6 +90,10 @@ describe('public drawing API error redaction', () => {
 
     expect(response.status).toBe(502);
     expect(text).not.toContain(SECRET);
+    // 호출자가 보낸 BYOK 키도 되돌아오면 안 된다. 위 SECRET 은 **서버 쪽**
+    // 진단이고 이건 **호출자 쪽** 자격증명이라 다른 누출이다 — 응답이
+    // 영수증·보고서에 실리거나 캐시되면 그 자리에 남는다.
+    expect(text).not.toContain(requestKey);
   });
 
   test('SLD saga diagnostics stay server-side', async () => {
@@ -106,5 +110,6 @@ describe('public drawing API error redaction', () => {
 
     expect(response.status).toBe(502);
     expect(text).not.toContain(SECRET);
+    expect(text).not.toContain(requestKey);
   });
 });
