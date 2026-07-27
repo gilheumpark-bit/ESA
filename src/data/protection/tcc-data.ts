@@ -231,6 +231,11 @@ export interface CoordinationResult {
  * 2개 보호장치 간 선택성(selectivity) 검증.
  * 하위 장치가 상위보다 먼저 동작해야 선택성 확보.
  * 최소 마진: 0.3s (MCCB-MCCB), 0.15s (fuse-MCCB)
+ *
+ * **현재 호출처 0 이다**(2026-07-28 확인). `standards-team` 이 import 만
+ * 하고 한 번도 부르지 않아 그 import 를 뺐다 — 판정을 붙일 때 다시
+ * 가져오면 된다. 그래서 아래 밴드 수리는 지금 사용자에게 닿지 않는다.
+ * 다만 붙이는 순간 협조 판정이 나가므로 지금 고쳐 두고 잠근다.
  */
 export function checkSelectivity(
   upstream: TCCDevice,
@@ -240,9 +245,11 @@ export function checkSelectivity(
   const ratio_up = faultCurrent_A / upstream.ratingA;
   const ratio_down = faultCurrent_A / downstream.ratingA;
 
-  // 곡선에서 동작 시간 보간
-  const upTime = interpolateTime(upstream.curve, ratio_up);
-  const downTime = interpolateTime(downstream.curve, ratio_down);
+  // **밴드의 최악 조합을 본다.** 상위가 가장 빨리 떨어지고 하위가 가장
+  // 늦게 떨어지는 순간이 협조가 깨지는 순간이다(IEEE 242 계열 관행).
+  // 둘 다 최대측으로 보면 마진이 부풀어 안 되는 조합이 통과한다.
+  const upTime = interpolateTime(upstream.curve, ratio_up, 'min');
+  const downTime = interpolateTime(downstream.curve, ratio_down, 'max');
 
   const minMargin = upstream.type === 'fuse' || downstream.type === 'fuse' ? 0.15 : 0.3;
   const margin = upTime - downTime;
@@ -262,21 +269,34 @@ export function checkSelectivity(
   };
 }
 
-function interpolateTime(curve: TCCPoint[], multiple: number): number {
+/**
+ * 동작시간 보간 — **밴드의 어느 쪽을 쓸지 부르는 쪽이 정한다.**
+ *
+ * 전에는 밴드 구분이 없어 안쪽은 `timeMax_s`, 범위 밖은 `timeMin_s` 를
+ * 냈다. 상위·하위에 같은 함수를 쓰니 상위도 최대측을 받아 "상위는 느리다"
+ * 고 가정한 셈이고, 마진이 부풀어 **협조가 안 되는 조합을 확보로 보고**했다
+ * (2026-07-28 실측: 200AT 상위·100AT 하위·1200A 에서 확보로 나왔다).
+ * 범위 안팎에서 밴드가 뒤바뀌는 불연속도 함께 있었다.
+ *
+ * `min` = 밴드 하단(가장 빨리 떨어질 때) · `max` = 상단(가장 늦게).
+ */
+function interpolateTime(curve: TCCPoint[], multiple: number, band: 'min' | 'max'): number {
   if (multiple <= 0) return Infinity;
   if (curve.length === 0) return 0;
 
-  // 범위 밖
-  if (multiple <= curve[0].currentMultiple) return curve[0].timeMax_s;
-  if (multiple >= curve[curve.length - 1].currentMultiple) return curve[curve.length - 1].timeMin_s;
+  const pick = (p: TCCPoint) => (band === 'min' ? p.timeMin_s : p.timeMax_s);
+
+  // 범위 밖 — 안쪽과 **같은 밴드**로 클램프한다.
+  if (multiple <= curve[0].currentMultiple) return pick(curve[0]);
+  if (multiple >= curve[curve.length - 1].currentMultiple) return pick(curve[curve.length - 1]);
 
   // 선형 보간 (log-log 스케일)
   for (let i = 1; i < curve.length; i++) {
     if (multiple <= curve[i].currentMultiple) {
       const x0 = Math.log10(curve[i - 1].currentMultiple);
       const x1 = Math.log10(curve[i].currentMultiple);
-      const y0 = Math.log10(curve[i - 1].timeMax_s || 0.001);
-      const y1 = Math.log10(curve[i].timeMax_s || 0.001);
+      const y0 = Math.log10(pick(curve[i - 1]) || 0.001);
+      const y1 = Math.log10(pick(curve[i]) || 0.001);
       const x = Math.log10(multiple);
       const y = y0 + (y1 - y0) * (x - x0) / (x1 - x0);
       return Math.pow(10, y);

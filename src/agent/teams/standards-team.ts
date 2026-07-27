@@ -9,7 +9,9 @@
  * PART 4: Team result assembly
  */
 
-import { checkSelectivity, MCCB_TCC, ACB_TCC } from '@/data/protection/tcc-data';
+// 보호협조(`checkSelectivity`·`MCCB_TCC`·`ACB_TCC`) import 를 뺐다
+// (2026-07-28). 셋 다 이 파일에서 한 번도 호출되지 않았다 — import 는
+// 호출이 아니다(§2.2). 협조 판정을 붙일 때 다시 가져오면 된다.
 
 import type {
   TeamInput,
