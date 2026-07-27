@@ -1,91 +1,18 @@
-import type { DocumentInventory, DocumentInventoryPage } from './types-v3';
-import { createHash } from 'node:crypto';
+import type { DocumentInventoryPage } from './types-v3';
 
-export interface ClassifyDocumentInput {
-  bytes: ArrayBuffer;
-  mimeType: string;
-  fileName?: string;
-  requestedPages?: 'all' | number[];
-  /** Optional page dimensions when known (PDF render / image size) */
-  pageHints?: Array<{ width: number; height: number; hasVectorOps?: boolean; isRasterOnly?: boolean }>;
-}
-
-export function classifyDocument(input: ClassifyDocumentInput): DocumentInventory {
-  const drawingHash = createHash('sha256').update(Buffer.from(input.bytes)).digest('hex');
-  const mime = input.mimeType.toLowerCase();
-  const name = (input.fileName ?? '').toLowerCase();
-
-  if (mime.includes('dxf') || name.endsWith('.dxf')) {
-    return {
-      drawingHash,
-      mimeType: input.mimeType,
-      formatClass: 'dxf',
-      pages: [{ pageIndex: 0, width: 0, height: 0, renderMode: 'vector', drawingKind: 'sld' }],
-      requestedPagePolicy: 'all',
-    };
-  }
-
-  if (mime.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(name)) {
-    const hint = input.pageHints?.[0];
-    return {
-      drawingHash,
-      mimeType: input.mimeType,
-      formatClass: 'raster-image',
-      pages: [{
-        pageIndex: 0,
-        width: hint?.width ?? 0,
-        height: hint?.height ?? 0,
-        renderMode: 'raster',
-        drawingKind: 'sld',
-      }],
-      requestedPagePolicy: 'all',
-    };
-  }
-
-  // PDF
-  const pageCount = Math.max(1, input.pageHints?.length ?? detectPdfPageCount(input.bytes) ?? 1);
-  const pages: DocumentInventoryPage[] = [];
-  for (let i = 0; i < pageCount; i++) {
-    const hint = input.pageHints?.[i];
-    let renderMode: DocumentInventoryPage['renderMode'] = 'hybrid';
-    if (hint?.isRasterOnly) renderMode = 'raster';
-    else if (hint?.hasVectorOps) renderMode = 'vector';
-    pages.push({
-      pageIndex: i,
-      width: hint?.width ?? 0,
-      height: hint?.height ?? 0,
-      renderMode,
-      drawingKind: 'unknown',
-    });
-  }
-
-  const modes = new Set(pages.map((p) => p.renderMode));
-  let formatClass: DocumentInventory['formatClass'] = 'mixed-pdf';
-  if (modes.size === 1 && modes.has('vector')) formatClass = 'vector-pdf';
-  if (modes.size === 1 && modes.has('raster')) formatClass = 'raster-pdf';
-
-  const requestedPagePolicy =
-    input.requestedPages === undefined || input.requestedPages === 'all'
-      ? 'all'
-      : { pages: input.requestedPages };
-
-  return {
-    drawingHash,
-    mimeType: input.mimeType,
-    formatClass,
-    pages,
-    requestedPagePolicy,
-  };
-}
-
-export function resolveRequestedPages(inventory: DocumentInventory): number[] {
-  if (inventory.requestedPagePolicy === 'all') {
-    return inventory.pages.map((p) => p.pageIndex);
-  }
-  const allowed = new Set(inventory.pages.map((p) => p.pageIndex));
-  return inventory.requestedPagePolicy.pages.filter((p) => allowed.has(p));
-}
-
+/**
+ * 페이지 한 장이 어떤 도면인지 훑는다.
+ *
+ * 실제로 결과가 있는 판정은 `empty` 하나다 — 오케스트레이터가 그 페이지를
+ * `skipped-empty` 로 표시하고 분석 루프에서 건너뛴다. 나머지 분류는 페이지
+ * 상태에 기록만 되고 아직 아무도 읽지 않는다(보고서·평가기 모두 미소비).
+ * 그러니 여기서 조심할 것은 분류의 정교함이 아니라 **멀쩡한 페이지를
+ * empty 로 몰지 않는 것**이다. 잘못 몰면 도면 한 장이 오류도 경고도 없이
+ * 사라진다.
+ *
+ * 입력은 `drawing-source.ts` 가 만든다: 이미지는 rasterOpCount 1, DXF 는
+ * vectorOpCount 1, PDF 는 연산자 목록에서 실제로 센 값이다.
+ */
 export function surveyPageKind(input: {
   textSample?: string;
   vectorOpCount?: number;
@@ -101,17 +28,4 @@ export function surveyPageKind(input: {
   if (/LAYOUT|평면도|FLOOR/.test(text)) return 'layout';
   if (/SLD|단선|SINGLE.?LINE|VCB|TR-|BUS/.test(text) || (input.vectorOpCount ?? 0) > 40) return 'sld';
   return 'unknown';
-}
-
-function detectPdfPageCount(bytes: ArrayBuffer): number | null {
-  try {
-    const text = Buffer.from(bytes).toString('latin1');
-    const matches = text.match(/\/Type\s*\/Page[^s]/g);
-    if (matches && matches.length > 0) return matches.length;
-    const countMatch = text.match(/\/Count\s+(\d+)/);
-    if (countMatch) return Math.max(1, Number(countMatch[1]));
-  } catch {
-    /* ignore */
-  }
-  return null;
 }

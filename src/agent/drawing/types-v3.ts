@@ -73,14 +73,6 @@ export interface DocumentInventoryPage {
   drawingKind?: 'sld' | 'sequence' | 'layout' | 'legend' | 'title' | 'mixed' | 'unknown' | 'empty';
 }
 
-export interface DocumentInventory {
-  drawingHash: string;
-  mimeType: string;
-  formatClass: 'raster-image' | 'vector-pdf' | 'raster-pdf' | 'mixed-pdf' | 'dxf';
-  pages: DocumentInventoryPage[];
-  requestedPagePolicy: 'all' | { pages: number[] };
-}
-
 export interface EvidenceRef {
   evidenceId: string;
   pageIndex: number;
