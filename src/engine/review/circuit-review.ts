@@ -511,15 +511,46 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     const v2 = v2parsed as number;
     const i2 = phase3 ? (kva * 1000) / (Math.sqrt(3) * v2) : (kva * 1000) / v2;
     const formula = phase3 ? 'I₂ = kVA×1000/(√3×V₂)' : 'I₂ = kVA×1000/V₂ (단상)';
+
+    // 여기까지는 **읽은 용량에서 파생**한 값이라 용량이 틀리면 오차를 키운다.
+    // 그래서 도면이 따로 들고 있는 값과 맞춰 본다: 2차 주차단기는 변압기
+    // 정격 2차전류를 흘려야 하므로 트립 정격이 I₂ 이상이어야 한다.
+    // 이 페이지 최대 트립조차 I₂보다 작으면 둘 중 하나는 틀렸다 — 용량이든
+    // 정격이든, 아니면 실제로 미달이든. **어느 쪽인지 우리는 모른다.**
+    // 그래서 FAIL이 아니라 WARN이고, 판정문에 세 가능성을 다 적는다.
+    //
+    // 왜 필요한가(실측 2026-07-28 스캔 티어): 같은 도면을 스캔으로 넣었더니
+    // 500kVA 변압기를 300kVA·1000kVA로 읽었고, 틀린 쪽 응답의 문서 confidence가
+    // 0.9였다. 모델 자기신고는 오독을 가리키지 못한다. 도면 안의 다른 값과
+    // 맞춰 보는 것이 이 자리에서 쓸 수 있는 유일한 독립 근거다.
+    const maxTrip = breakers
+      .map((b) => specByBreaker.get(b.id)?.tripA)
+      .filter((t): t is number => typeof t === 'number' && Number.isFinite(t) && t > 0)
+      .reduce<number | null>((max, t) => (max === null || t > max ? t : max), null);
+    const i2Rounded = Math.round(i2);
+    const inconsistent = maxTrip !== null && maxTrip < i2Rounded;
+
     findings.push({
       rule: 'TR-MAIN-CURRENT',
-      severity: 'INFO',
+      severity: inconsistent ? 'WARN' : 'INFO',
       subject: subjectOf(tr),
       componentId: tr.id,
-      given: { rating: `${kva}kVA`, secondary: `${v2}V`, phase: phase3 ? '3φ' : '1φ' },
-      computed: { '정격 2차전류': `${Math.round(i2)}A` },
-      limit: { value: `${Math.round(i2)}A`, source: formula },
-      verdict: `정격 2차전류 ${Math.round(i2)}A — 2차 주차단기 선정 대조 기준값(계산 참고·부합 판정 아님)`,
+      given: {
+        rating: `${kva}kVA`,
+        secondary: `${v2}V`,
+        phase: phase3 ? '3φ' : '1φ',
+        ...(maxTrip !== null ? { '이 페이지 최대 트립': `${maxTrip}AT` } : {}),
+      },
+      computed: { '정격 2차전류': `${i2Rounded}A` },
+      limit: { value: `${i2Rounded}A`, source: formula },
+      verdict: inconsistent
+        ? `정격 2차전류 ${i2Rounded}A인데 이 페이지 최대 트립이 ${maxTrip}AT다 — 셋 중 하나다:`
+          + ` 2차 주차단기가 이 페이지에 없거나, 용량·정격 중 하나를 잘못 읽었거나, 실제로 미달이다.`
+          + ` 원본에서 용량(${kva}kVA)과 주차단기 정격을 직접 확인할 것`
+        : maxTrip !== null
+          ? `정격 2차전류 ${i2Rounded}A — 이 페이지 최대 트립 ${maxTrip}AT가 이를 상회(용량·정격 상호 모순 없음.`
+            + ` 주차단기 선정 적합 판정은 아님 — 여유율·단락용량은 별도)`
+          : `정격 2차전류 ${i2Rounded}A — 2차 주차단기 선정 대조 기준값(이 페이지에 정격 파싱된 차단기가 없어 대조 생략)`,
     });
   }
 
