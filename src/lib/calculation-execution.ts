@@ -8,8 +8,22 @@ import { getSafetyProfile, type CountryCode } from '@engine/constants/safety-fac
 
 const EXECUTABLE_COUNTRIES = new Set<CountryCode>(['KR', 'US', 'JP', 'INT']);
 
+/**
+ * 계산 결과·영수증·PDF 에 찍히는 판본 문자열.
+ *
+ * KR 이 `KEC 2021` 이었는데 2026-07-27 에 **조항 번호·표제를 현행 전문
+ * (시행 2026.1.5)에 전수 대조**했다. 번호는 그 판본 기준이다.
+ *
+ * 다만 `KEC 2026` 이라고 쓰면 과장이다 — 대조한 것은 번호와 표제뿐이고
+ * **임계값(수치)은 검증하지 않았다.** 확보한 원문 색인에 본문이 없다.
+ * 그래서 무엇을 대조했는지까지 문자열에 적는다.
+ *
+ * 영수증은 이와 별개로 `isStandardCurrent: false` 를 유지한다
+ * (`receipt-generator` 의 허용 목록이 의도적으로 비어 있다) — 판본을
+ * "현행" 으로 주장하지 않는다.
+ */
 export const COUNTRY_STANDARD_MAP: Readonly<Record<'KR' | 'US' | 'JP' | 'INT', { standard: string; version: string }>> = {
-  KR: { standard: 'KEC', version: 'KEC 2021' },
+  KR: { standard: 'KEC', version: 'KEC 조항번호 시행 2026.1.5 대조 (임계값 미검증)' },
   US: { standard: 'NEC', version: 'NEC 2023' },
   JP: { standard: 'JIS', version: 'JIS C 0364:2019' },
   INT: { standard: 'IEC', version: 'IEC 60364' },

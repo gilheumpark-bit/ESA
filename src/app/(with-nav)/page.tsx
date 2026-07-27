@@ -176,7 +176,10 @@ export default function HomePage() {
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
           내장 계산 엔진 준비
         </span>
-        <span className="shrink-0">내장 판본 KEC 2021 · NEC 2023 · IEC 60364</span>
+        {/* KEC 는 2026-07-27 에 조항 번호·표제를 현행 전문(시행 2026.1.5)에
+            전수 대조했다. 임계값까지 검증한 것은 아니라 "2026" 이라고만
+            쓰면 과장이라 대조 범위를 함께 적는다. */}
+        <span className="shrink-0">내장 판본 KEC 조항 2026.1.5 대조 · NEC 2023 · IEC 60364</span>
         <span className="hidden shrink-0 sm:inline">BYOK · AES-GCM 세션 암호화</span>
         <span className="ml-auto hidden shrink-0 sm:inline">엔진 {CALCULATOR_COUNT}종</span>
       </div>
