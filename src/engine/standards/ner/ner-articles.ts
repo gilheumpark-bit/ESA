@@ -85,7 +85,7 @@ const BRANCH_CIRCUIT_ARTICLES: NerArticle[] = [
       { label: '20A 분기회로 전선 최소 굵기', value: '4mm² (IV/HIV)',   note: 'HVAC·소형가전' },
       { label: '30A 분기회로 전선 최소 굵기', value: '6mm² (IV/HIV)',   note: '대형기기' },
     ],
-    crossRef: ['KEC 212.2조', 'KEC 232.3조'],
+    crossRef: ['KEC 212.6.4 (분기회로의 시설)', 'KEC 231.3 (저압 옥내배선의 사용전선 및 중성선의 굵기)'],
     keywords: ['분기회로', '차단기', '전선굵기', '15A', '20A', '30A', '배선용차단기'],
     edition: '판단기준 폐지 전 최종판 (2022년 개정판은 없다 — 협회 개정계획 없음)',
   },
@@ -98,7 +98,7 @@ const BRANCH_CIRCUIT_ARTICLES: NerArticle[] = [
       '15A 분기회로 1개 회로에 설치할 수 있는 콘센트 및 조명기구 총 부하용량은 ' +
       '12A(정격의 80%) 이하를 원칙으로 한다. 단, 에어컨·전기레인지 등 단독 부하는 ' +
       '전용 분기회로를 설치하여야 한다.',
-    crossRef: ['KEC 212.4조'],
+    crossRef: ['KEC 212.6.4 (분기회로의 시설)'],
     keywords: ['부하제한', '80%', '콘센트 수', '전용회로', '에어컨'],
     edition: '판단기준 폐지 전 최종판 (2022년 개정판은 없다 — 협회 개정계획 없음)',
   },
@@ -127,7 +127,7 @@ const PROTECTION_ARTICLES: NerArticle[] = [
       { label: '정격감도전류 (습기 장소)', value: '15mA 이하',  note: '강화 보호' },
       { label: '동작시간',                value: '0.03초 이하', note: '심실세동 방지' },
     ],
-    crossRef: ['KEC 212.2조', 'KEC 212.3조', '산안법 제304조'],
+    crossRef: ['KEC 211.2.4 (누전차단기의 시설)', '산안법 제304조'],
     keywords: ['누전차단기', 'ELB', '감도전류', '욕실', '주방', '옥외', '습기', '현장'],
     edition: '판단기준 폐지 전 최종판 (2022년 개정판은 없다 — 협회 개정계획 없음)',
   },
@@ -159,7 +159,7 @@ const PROTECTION_ARTICLES: NerArticle[] = [
       '② 세면대, 싱크대, 욕조 등 수원에서 수평 1.5m 이상 이격\n' +
       '③ 욕실 내 방수형(IP44 이상) 콘센트 사용\n' +
       '④ 어린이 보호용 콘센트(셔터 내장)는 어린이 이용 공간에서 권장',
-    crossRef: ['KEC 232조', 'KS C IEC 60884'],
+    crossRef: ['KEC 234.5 (콘센트의 시설)', 'KS C IEC 60884'],
     keywords: ['콘센트', '설치높이', '방수', 'IP44', '이격거리', '욕실'],
     edition: '판단기준 폐지 전 최종판 (2022년 개정판은 없다 — 협회 개정계획 없음)',
   },
@@ -189,7 +189,7 @@ const WIRING_ARTICLES: NerArticle[] = [
       { label: '전선 3본+ 충전율',   value: '40% 이하' },
       { label: '케이블 트레이 충전율', value: '40% 이하', note: '바닥 점유 면적 기준' },
     ],
-    crossRef: ['KEC 232.33조', 'NEC 310.15'],
+    crossRef: ['KEC 232.31 (금속덕트공사 — 20%. KEC 는 전선관 충전율을 규정하지 않는다)', 'NEC Chapter 9 Table 1'],
     keywords: ['전선관', '충전율', '케이블트레이', '배선', '전선단면적', '40%', '48%'],
     edition: '판단기준 폐지 전 최종판 (2022년 개정판은 없다 — 협회 개정계획 없음)',
   },

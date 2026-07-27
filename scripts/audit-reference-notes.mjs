@@ -57,11 +57,27 @@ function walk(dir, out = []) {
 
 const REF = /\{\s*articleId:\s*'KEC-([\d.]+)',\s*relation:\s*'\w+',\s*note:\s*'([^']*)'\s*\}/g;
 
+/**
+ * 문자열 상호참조. NER/ESA 는 `crossRef: ['KEC 232.33조']` 처럼 배열로
+ * 가리킨다 — 위 REF 가 못 잡아서 오래 사각이었다.
+ *
+ * 괄호 안 설명이 있으면 그것을, 없으면 '조' 앞 숫자만 남긴다.
+ */
+const XREF = /'KEC\s*([0-9]+(?:\.[0-9]+)*)조?\s*(?:\(([^)]*)\))?[^']*'/g;
+
 const rows = [];
 for (const f of walk(join(REPO, 'src/engine/standards'))) {
   const rel = f.replace(REPO + '/', '').split('\\').join('/');
   for (const [i, line] of readFileSync(f, 'utf8').split('\n').entries()) {
     if (/^\s*\/\//.test(line)) continue;
+      for (const m of line.matchAll(XREF)) {
+        const [, num, paren] = m;
+        const off = OFFICIAL.get(num);
+        if (!off) continue;
+        const topic = (paren ?? '').replace(/KEC|[\d.]+/g, '').trim();
+        if (topic.length < 2) continue;   // 설명이 없으면 대조할 것이 없다
+        rows.push({ num, note: m[0], topic, off, d: dice(topic, off), where: `${rel}:${i + 1}` });
+      }
     for (const m of line.matchAll(REF)) {
       const [, num, note] = m;
       const off = OFFICIAL.get(num);
