@@ -306,7 +306,9 @@ export const KEC_142_2_ELECTRODE = buildArticle('KEC-142.2', '142.2', '접지극
   cond('rodLength', '>=', 900, 'mm', '접지봉 최소 길이 900mm'),
   // kec-extended 가 갖고 있던 조건 — 두 파일에 두면 그쪽이 통째로 버려진다.
   cond('earthElectrodeInstalled', '==', 1, 'bool', '접지봉/접지판/접지망/기초접지 시공'),
-  cond('earthResistance_ohm', '<=', 10, 'Ω', '특별 제3종 접지: ≤10Ω (변압기 2차측)'),
+  // "특별 제3종 접지" 로 적혀 있던 것을 고쳤다. 종별 접지는 KEC 가 폐지한
+  // 구 판단기준 용어다 — 이번 재번호에서 그 문구를 그대로 옮겨 심었었다.
+  cond('earthResistance_ohm', '<=', 10, 'Ω', '접지저항 ≤10Ω (고압·특고압 기기 외함 등)'),
 ], [
   { articleId: 'IEC-612.6.1', relation: 'equivalent', note: 'IEC 접지저항' },
 ]);

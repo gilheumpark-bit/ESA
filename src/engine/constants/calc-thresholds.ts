@@ -42,7 +42,7 @@ export const DEFAULT_REACTANCE_OHM_PER_KM = CABLE_REACTANCE_DEFAULTS.lv_general;
 
 /**
  * 절연체별 최대 허용 도체 온도.
- * Reference: IEC 60364-5-52 Table 52.1, KEC 232.3
+ * Reference: IEC 60364-5-52 Table 52.1, KEC 232.5 (허용전류)
  */
 export const INSULATION_TEMP_LIMITS: Record<string, number> = {
   PVC: 70,
@@ -121,12 +121,15 @@ export const DEFAULT_MOTOR_STARTING_VD_LIMIT = MOTOR_STARTING_VD_LIMITS.general;
 
 /**
  * 차단기 선정 배수.
- * Reference: KEC 212.3, NEC 240.4, IEC 60364-4-43
+ * Reference: NEC 240.4, IEC 60364-4-43, KEC 212.4/212.5
+ *
+ * 연속부하 125%·전동기 250% 는 **NEC 개념**이다(210.19/215.2/430.52).
+ * KEC·IEC 는 `Ib ≤ In ≤ Iz`, `I2 ≤ 1.45×Iz` 로 가고 125% 배수를 두지 않는다.
  */
 export const BREAKER_MULTIPLIERS = {
-  /** 연속 부하 (KEC 125%, NEC 125%) */
+  /** 연속 부하 — NEC 125% (KEC 는 배수 규정 없음) */
   continuous: 1.25,
-  /** 모터 과부하 (KEC 250%, NEC 250%) */
+  /** 모터 과부하 — NEC 250% (KEC 는 배수 규정 없음) */
   motor: 2.50,
   /** 과부하 보호 범위 상한 */
   overload_upper: 1.45,
@@ -141,8 +144,14 @@ export const BREAKER_MULTIPLIERS = {
 // =========================================================================
 
 /**
- * 전선관 점유율.
- * Reference: KEC 232.6, NEC 300.17/Annex C
+ * 전선관 점유율 — **NEC Chapter 9 Table 1** 값이다.
+ *
+ * `KEC 232.6` 으로 달아 뒀는데 그 번호는 KEC 에 없다. KEC 는 전선관 공사
+ * (232.11 합성수지관·232.12 금속관·232.13 가요전선관)에 충전율을 규정하지
+ * 않는다 — 232.31 금속덕트가 20% 일 뿐이다. 한국의 전선관 충전율은 내선규정
+ * 2225-5 소관으로 32%(굵기 상이)/48%(동일 굵기)다(2026-07-27 정정).
+ *
+ * Reference: NEC Chapter 9 Table 1, NEC 300.17/Annex C
  */
 export const CONDUIT_FILL_RATES = {
   /** 1본 삽입 */
@@ -158,18 +167,27 @@ export const CONDUIT_FILL_RATES = {
 // =========================================================================
 
 /**
- * 접지 저항 기준값 (Ω).
- * Reference: KEC 142.4, NEC 250, IEC 60364-5-54
+ * 접지 저항 기준 (Ω).
+ *
+ * **종별 접지(제1종·제2종·제3종·특별 제3종)는 KEC 가 아니다.** 구 「전기설비
+ * 기술기준의 판단기준」 용어이고 KEC(2021.1.1 시행)가 폐지했다 — 현행 색인
+ * 전수 검색에서 그 표제는 0 건이다. KEC 142 는 계통접지(TN/TT/IT)와
+ * 142.2 접지극·접지저항 / 142.5 변압기 중성점 접지 / 142.6 공통·통합접지로
+ * 간다. 폐지된 종별을 "KEC 기준" 으로 제시하면 현행 규정과 어긋난 판정이
+ * 나온다(2026-07-27 정정).
+ *
+ * 아래 값은 **구 판단기준** 값이다. 기존 설비 도면에 그 표기가 남아 있어
+ * 읽어야 할 때가 있어 남기되, 근거를 KEC 로 쓰지 않는다.
  */
 export const GROUNDING_RESISTANCE = {
-  /** 제1종 접지 (KEC) */
-  kec_class1: 10,
-  /** 제2종 접지 (KEC) — 150/Ig 단, max 150Ω */
-  kec_class2_max: 150,
-  /** 제3종 접지 (KEC) */
-  kec_class3: 100,
-  /** 특별 제3종 접지 (KEC) */
-  kec_special3: 10,
+  /** 제1종 접지 — 구 판단기준 (KEC 아님) */
+  legacy_class1: 10,
+  /** 제2종 접지 — 구 판단기준, 150/Ig 단 max 150Ω (KEC 아님) */
+  legacy_class2_max: 150,
+  /** 제3종 접지 — 구 판단기준 (KEC 아님) */
+  legacy_class3: 100,
+  /** 특별 제3종 접지 — 구 판단기준 (KEC 아님) */
+  legacy_special3: 10,
   /** TT system (IEC) — 50V/Ia */
   iec_tt_touch_voltage: 50,
   /** NEC 250 — 25Ω 권장 */

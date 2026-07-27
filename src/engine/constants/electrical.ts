@@ -81,7 +81,8 @@ export const CONDUIT_FILL_RATES = {
 
 /** 차단기 보호 협조 계수 */
 export const BREAKER_COORDINATION = {
-  /** 연속 부하: 차단기 ≥ 125% × 부하전류 (KEC 212.3 / NEC 240.4) */
+  /** 연속 부하: 차단기 ≥ 125% × 부하전류 — **NEC 210.19/215.2**.
+   *  KEC·IEC 는 배수가 아니라 `Ib ≤ In ≤ Iz` 로 간다. */
   CONTINUOUS_LOAD_FACTOR: 1.25,
   /** 전동기 분기: 차단기 ≤ 250% × FLC (NEC 430.52) */
   MOTOR_BRANCH_MAX: 2.50,
@@ -91,16 +92,28 @@ export const BREAKER_COORDINATION = {
   MOTOR_OL_SF_LOW: 1.25,
 } as const;
 
-/** 접지 저항 기준 (Ω) */
+/**
+ * 접지 저항 기준 (Ω).
+ *
+ * **종별 접지(제1종·제2종·제3종·특별 제3종)는 KEC 가 아니다.** 구 「전기설비
+ * 기술기준의 판단기준」 용어이고 KEC(2021.1.1 시행)가 폐지했다 — 현행 색인
+ * 전수 검색에서 그 표제는 0 건이다. KEC 142 는 계통접지(TN/TT/IT)와
+ * 142.2 접지극·접지저항 / 142.5 변압기 중성점 접지 / 142.6 공통·통합접지로
+ * 간다. 폐지된 종별을 "KEC 기준" 으로 제시하면 현행 규정과 어긋난 판정이
+ * 나온다(2026-07-27 정정).
+ *
+ * 아래 값은 **구 판단기준** 값이다. 기존 설비 도면에 그 표기가 남아 있어
+ * 읽어야 할 때가 있어 남기되, 근거를 KEC 로 쓰지 않는다.
+ */
 export const GROUNDING_RESISTANCE = {
-  /** KEC 142.5 특별 3종 접지 */
-  KEC_SPECIAL_3RD: 10,
-  /** KEC 142.5 제1종 접지 */
-  KEC_1ST: 10,
-  /** KEC 142.5 제2종 접지 */
-  KEC_2ND: 150, // ÷ 1초 이내 차단 전류
-  /** KEC 142.5 제3종 접지 */
-  KEC_3RD: 100,
+  /** 특별 3종 접지 — 구 판단기준 (KEC 아님) */
+  LEGACY_SPECIAL_3RD: 10,
+  /** 제1종 접지 — 구 판단기준 (KEC 아님) */
+  LEGACY_1ST: 10,
+  /** 제2종 접지 — 구 판단기준 (KEC 아님) */
+  LEGACY_2ND: 150, // ÷ 1초 이내 차단 전류
+  /** 제3종 접지 — 구 판단기준 (KEC 아님) */
+  LEGACY_3RD: 100,
   /** IEC TT 시스템: R_A × I_Δn ≤ 50V */
   IEC_TT_TOUCH_VOLTAGE: 50,
 } as const;

@@ -27,7 +27,7 @@ export const KEC_EXAM_FREQUENCY: ExamFrequencyEntry[] = [
   { articleId: 'KEC-232.3.9', articleTitle: '전압강하', frequencyLast10: 9, importance: 'essential', commonCalcTypes: ['전압강하율 계산', '전선 굵기 산정'], examSubject: '전기설비기술기준', studyTip: '3%/5% 기준 + 공식 암기 필수. 3상/단상 공식 구분.' },
   { articleId: 'KEC-212.3', articleTitle: '과전류차단기 선정', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['차단기 정격 산정', 'Ib≤In≤Iz 관계'], examSubject: '전기설비기술기준', studyTip: 'Ib≤In≤Iz, I2≤1.45×Iz 공식 필수.' },
   { articleId: 'KEC-232.5', articleTitle: '허용전류', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['허용전류 산정', '보정계수 적용'], examSubject: '전기설비기술기준', studyTip: '온도 보정 + 묶음 보정 반드시 출제.' },
-  { articleId: 'KEC-142.2', articleTitle: '접지극의 시설 및 접지저항', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['접지 저항 계산', '접지봉 병렬'], examSubject: '전기설비기술기준', studyTip: '1/2/3종 접지 기준값 암기. 병렬 접지 공식.' },
+  { articleId: 'KEC-142.2', articleTitle: '접지극의 시설 및 접지저항', frequencyLast10: 8, importance: 'essential', commonCalcTypes: ['접지 저항 계산', '접지봉 병렬'], examSubject: '전기설비기술기준', studyTip: '계통접지 TN/TT/IT 구분과 접지극 시설 기준. 병렬 접지 공식. 구 1~3종 접지는 KEC 가 폐지했으니 그 값을 현행으로 외우면 틀린다.' },
   { articleId: 'KEC-142.5', articleTitle: '접지 시스템 (TN/TT/IT)', frequencyLast10: 7, importance: 'essential', commonCalcTypes: ['접지 계통 구분', '감전 보호'], examSubject: '전기설비기술기준', studyTip: 'TN-S/TN-C-S/TT/IT 각 특징과 적용 장소.' },
 
   // === 고빈도 (high) — 2~3회에 1번 ===
