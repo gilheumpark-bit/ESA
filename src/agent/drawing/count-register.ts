@@ -127,8 +127,16 @@ function resolveCountStatus(input: {
 function normalizeKind(type: string): string {
   const t = type.toLowerCase();
   if (t.includes('vcb') || t === 'breaker') return 'VCB/breaker';
+  // 계량·계측 기기를 전력변압기보다 **먼저** 가른다. 일반 분기가 앞에 있으면
+  // `transformer_ct`·`transformer_vt` 가 `includes('transformer')` 에 걸려
+  // 전력변압기 대수에 합산되고, 아래 PT 분기는 도달조차 못 한다.
+  if (t === 'transformer_ct' || t === 'ct' || t.includes('current_transformer')) return 'CT';
+  if (t === 'transformer_zct' || t === 'zct') return 'ZCT';
+  if (t === 'transformer_gpt' || t === 'gpt') return 'GPT';
+  if (t === 'transformer_vt' || t === 'vt' || t === 'pt' || t === 'ppt' || t.includes('voltage_transformer')) return 'PT/PPT';
+  if (t === 'metering_outfit' || t === 'mof') return 'MOF';
+  // 건식·유입·단권은 모두 전력변압기라 함께 센다.
   if (t.includes('transformer') || t === 'tr') return 'transformer';
-  if (t === 'pt' || t === 'ppt' || t.includes('voltage_transformer')) return 'PT/PPT';
   return type;
 }
 

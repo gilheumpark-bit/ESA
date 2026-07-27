@@ -289,3 +289,42 @@ describe('electrical invariants', () => {
     expect(original.every((issue) => issue.judgment === 'BLOCK' || issue.judgment === 'FAIL' || issue.judgment === 'HOLD')).toBe(true);
   });
 });
+
+/**
+ * 보호기기 판별은 "고장전류를 실제로 차단하는가" 다.
+ *
+ * 이 집합에 들면 `NO_UPSTREAM_PROTECTION` 검사가 그 경로를 보호된 것으로
+ * 보고 건너뛴다 — 아닌 기기를 넣으면 무보호 경로가 조용히 통과한다.
+ *   피뢰기(LA) : 서지를 대지로 흘릴 뿐 과전류 보호를 하지 않는다
+ *   ASS        : 상위 재폐로기 무전압 구간에서 개방되는 구분개폐기로
+ *                고장전류 차단 능력이 없다
+ */
+describe('보호기기 판별 — 차단 능력이 있는 기기만 경로를 보호한다', () => {
+  const pathVia = (candidate: string) => validateElectricalInvariants(makeNormalizedFixture({
+    symbols: [
+      symbol('GEN-01', 'GEN', 'GEN', 0),
+      symbol('MID-01', candidate, candidate, 40),
+      symbol('LOAD-01', 'LOAD', 'LOAD', 80),
+    ],
+    edges: [
+      edge('EDGE-01', 'MID-01', 'GEN-01', 'LINE-01'),
+      edge('EDGE-02', 'LOAD-01', 'MID-01', 'LINE-02'),
+    ],
+  }));
+  const unprotected = (candidate: string) =>
+    pathVia(candidate).some((issue) => issue.code === 'NO_UPSTREAM_PROTECTION');
+
+  it.each([['GCB', '가스차단기'], ['OCB', '유입차단기'], ['COS', '컷아웃스위치(퓨즈 내장)'], ['VCB', '진공차단기']])(
+    '%s 경유 경로는 보호된 것으로 본다 — %s',
+    (candidate) => {
+      expect(unprotected(candidate)).toBe(false);
+    },
+  );
+
+  it.each([['LA', '피뢰기 — 과전류 보호 아님'], ['ASS', '자동고장구분개폐기 — 고장전류 차단 불가']])(
+    '%s 경유 경로는 여전히 무보호로 본다 — %s',
+    (candidate) => {
+      expect(unprotected(candidate)).toBe(true);
+    },
+  );
+});

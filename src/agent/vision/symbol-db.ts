@@ -25,21 +25,35 @@ export interface SymbolEntry {
 
 export const EXPANDED_SYMBOL_DB: SymbolEntry[] = [
   // === 변압기 (Transformer) ===
-  { id: 'SYM-TR-001', type: 'transformer', category: 'power', aliases: ['TR', 'XFMR', 'TRANSFORMER', 'MOF', '변압기', 'Transformer', 'Power Transformer'], iecRef: 'IEC-60617-06-01', description: 'Power transformer', descriptionKo: '전력 변압기' },
+  { id: 'SYM-TR-001', type: 'transformer', category: 'power', aliases: ['TR', 'XFMR', 'TRANSFORMER', '변압기', 'Transformer', 'Power Transformer'], iecRef: 'IEC-60617-06-01', description: 'Power transformer', descriptionKo: '전력 변압기' },
   { id: 'SYM-TR-002', type: 'transformer_dry', category: 'power', aliases: ['DRY_TR', '건식변압기', 'Dry Transformer', 'MOLD_TR'], description: 'Dry-type transformer', descriptionKo: '건식 변압기' },
   { id: 'SYM-TR-003', type: 'transformer_auto', category: 'power', aliases: ['AUTO_TR', '단권변압기', 'Autotransformer'], description: 'Autotransformer', descriptionKo: '단권 변압기' },
   { id: 'SYM-TR-004', type: 'transformer_ct', category: 'measurement', aliases: ['CT', 'CURRENT_TR', '변류기', 'Current Transformer'], iecRef: 'IEC-60617-06-06', description: 'Current transformer', descriptionKo: '변류기 (CT)' },
   { id: 'SYM-TR-005', type: 'transformer_vt', category: 'measurement', aliases: ['VT', 'PT', 'VOLTAGE_TR', '계기용변압기', 'Potential Transformer'], iecRef: 'IEC-60617-06-07', description: 'Voltage transformer', descriptionKo: '계기용 변압기 (PT)' },
+  // MOF 는 CT+PT 를 한 함에 넣은 한전 계량용 조합기기다. 전력변압기가 아니라서
+  // 용량(kVA) 판정·표준도면 변압기 대수 대조 대상이 아니다. IEC 60617 에
+  // 대응 심볼이 없어 iecRef 는 붙이지 않는다.
+  { id: 'SYM-TR-006', type: 'metering_outfit', category: 'measurement', aliases: ['MOF', 'METERING_OUTFIT', '계기용변성기', 'Metering Outfit', 'Metering Out-Fit'], description: 'Metering outfit (CT+VT assembly)', descriptionKo: '계기용 변성기 (MOF)' },
+  { id: 'SYM-TR-007', type: 'transformer_zct', category: 'measurement', aliases: ['ZCT', '영상변류기', 'Zero-phase Current Transformer'], description: 'Zero-phase current transformer', descriptionKo: '영상 변류기 (ZCT)' },
+  { id: 'SYM-TR-008', type: 'transformer_gpt', category: 'measurement', aliases: ['GPT', '접지형계기용변압기', 'Grounding Potential Transformer'], description: 'Grounding potential transformer', descriptionKo: '접지형 계기용변압기 (GPT)' },
 
   // === 차단기 (Breaker/Switch) ===
   { id: 'SYM-BR-001', type: 'breaker_acb', category: 'protection', aliases: ['ACB', 'AIR_CB', '기중차단기'], description: 'Air circuit breaker', descriptionKo: '기중 차단기 (ACB)' },
   { id: 'SYM-BR-002', type: 'breaker_vcb', category: 'protection', aliases: ['VCB', 'VACUUM_CB', '진공차단기'], description: 'Vacuum circuit breaker', descriptionKo: '진공 차단기 (VCB)' },
   { id: 'SYM-BR-003', type: 'breaker_mccb', category: 'protection', aliases: ['MCCB', 'MOLDED_CB', '배선용차단기'], description: 'Molded case circuit breaker', descriptionKo: '배선용 차단기 (MCCB)' },
+  // 154kV 계통 표준 차단기. GCB 가 없어 초고압 도면의 인입 차단기가
+  // 미분류로 빠지고 있었다. OCB 는 노후 도면에서 아직 나온다.
+  { id: 'SYM-BR-012', type: 'breaker_gcb', category: 'protection', aliases: ['GCB', 'GAS_CB', 'SF6_CB', 'SF6 BREAKER', '가스차단기'], description: 'Gas circuit breaker', descriptionKo: '가스 차단기 (GCB)' },
+  { id: 'SYM-BR-013', type: 'breaker_ocb', category: 'protection', aliases: ['OCB', 'OIL_CB', '유입차단기'], description: 'Oil circuit breaker', descriptionKo: '유입 차단기 (OCB)' },
   { id: 'SYM-BR-004', type: 'breaker_elcb', category: 'protection', aliases: ['ELCB', 'ELB', 'RCD', 'GFCI', '누전차단기'], description: 'Earth leakage circuit breaker', descriptionKo: '누전 차단기 (ELCB)' },
   { id: 'SYM-BR-005', type: 'breaker_mcb', category: 'protection', aliases: ['MCB', '소형차단기', 'Miniature CB'], description: 'Miniature circuit breaker', descriptionKo: '소형 차단기 (MCB)' },
   { id: 'SYM-BR-006', type: 'fuse', category: 'protection', aliases: ['FUSE', 'PF', 'POWER_FUSE', '퓨즈', '전력퓨즈'], iecRef: 'IEC-60617-07-12', description: 'Fuse', descriptionKo: '퓨즈' },
   { id: 'SYM-BR-007', type: 'switch_ds', category: 'switching', aliases: ['DS', 'DISCONNECT', '단로기', 'Disconnector'], description: 'Disconnecting switch', descriptionKo: '단로기 (DS)' },
   { id: 'SYM-BR-008', type: 'switch_ls', category: 'switching', aliases: ['LS', 'LOAD_SW', 'LBS', '부하개폐기'], description: 'Load break switch', descriptionKo: '부하 개폐기 (LBS)' },
+  // 22.9kV 수전 단선도의 인입 개폐기. ASS·COS 가 없어 인입점 기기가
+  // 미분류(원본 문자열 그대로)로 빠지고 있었다.
+  { id: 'SYM-BR-010', type: 'switch_ass', category: 'switching', aliases: ['ASS', '자동고장구분개폐기', 'Automatic Section Switch'], description: 'Automatic section switch', descriptionKo: '자동 고장구분 개폐기 (ASS)' },
+  { id: 'SYM-BR-011', type: 'cutout_switch', category: 'protection', aliases: ['COS', 'CUTOUT', '컷아웃스위치', 'Cut Out Switch'], description: 'Fused cutout switch', descriptionKo: '컷아웃 스위치 (COS)' },
   { id: 'SYM-BR-009', type: 'contactor', category: 'motor', aliases: ['MC', 'CONTACTOR', '전자접촉기', 'Magnetic Contactor'], description: 'Magnetic contactor', descriptionKo: '전자 접촉기 (MC)' },
   { id: 'SYM-BR-010', type: 'switch_ats', category: 'switching', aliases: ['ATS', 'AUTO_TRANSFER', '자동절환개폐기'], description: 'Automatic transfer switch', descriptionKo: '자동 절환 개폐기 (ATS)' },
 
@@ -62,7 +76,12 @@ export const EXPANDED_SYMBOL_DB: SymbolEntry[] = [
 
   // === 접지 / 보호 (Grounding/Protection) ===
   { id: 'SYM-GD-001', type: 'ground_rod', category: 'grounding', aliases: ['GND', 'GROUND', 'EARTH', '접지봉', '접지'], iecRef: 'IEC-60617-02-15', description: 'Ground rod', descriptionKo: '접지봉' },
-  { id: 'SYM-GD-002', type: 'spd', category: 'protection', aliases: ['SPD', 'SURGE', 'LA', '서지보호기', 'Lightning Arrester'], description: 'Surge protective device', descriptionKo: '서지 보호기 (SPD)' },
+  // 피뢰기(LA)와 서지보호장치(SPD)는 다른 기기다 — 근거 조항부터 갈린다.
+  //   LA  : KEC 341.13 피뢰기의 시설 · 341.14 피뢰기의 접지 · 451.3/451.4 선정
+  //         고압·특고압측(22.9kV 수전 인입·154kV 모선)
+  //   SPD : KEC 153.1.4 서지보호장치 시설 (내부피뢰시스템) — 저압 분전반
+  { id: 'SYM-GD-002', type: 'spd', category: 'protection', aliases: ['SPD', 'SURGE', '서지보호기', '서지보호장치', 'Surge Protective Device'], description: 'Surge protective device', descriptionKo: '서지 보호기 (SPD)' },
+  { id: 'SYM-GD-004', type: 'lightning_arrester', category: 'protection', aliases: ['LA', '피뢰기', 'Lightning Arrester', 'Surge Arrester', 'ARRESTER'], description: 'Lightning arrester', descriptionKo: '피뢰기 (LA)' },
   { id: 'SYM-GD-003', type: 'afci', category: 'protection', aliases: ['AFCI', 'ARC_FAULT', '아크차단기'], description: 'Arc fault circuit interrupter', descriptionKo: '아크 차단기 (AFCI)' },
 
   // === 부하 (Load) ===

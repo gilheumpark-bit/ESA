@@ -49,7 +49,12 @@ const MAX_ISSUES = 10_000;
 const SOURCE_TYPES = new Set(['generator', 'ups', 'solar_panel', 'battery']);
 const SOURCE_LABELS = new Set(['UTILITY', 'GRID', 'INCOMER', 'SOURCE', '수전', '전원']);
 const SOURCE_BUS_LABELS = new Set(['SOURCE BUS', 'UTILITY BUS', 'INCOMER BUS', '수전 모선', '전원 모선']);
-const PROTECTION_TYPES = new Set(['breaker_acb', 'breaker_vcb', 'breaker_mccb', 'breaker_elcb', 'breaker_mcb', 'fuse', 'afci']);
+// 고장전류를 실제로 차단하는 기기만 넣는다 — 이 집합에 들면
+// `NO_UPSTREAM_PROTECTION` 검사가 그 경로를 보호된 것으로 보고 건너뛴다.
+//   피뢰기(LA)  : 서지를 대지로 흘릴 뿐 과전류 보호를 하지 않는다 → 제외
+//   ASS         : 상위 재폐로기 무전압 구간에서 개방되는 구분개폐기로
+//                 고장전류 차단 능력이 없다 → 제외(switching)
+const PROTECTION_TYPES = new Set(['breaker_acb', 'breaker_vcb', 'breaker_mccb', 'breaker_elcb', 'breaker_mcb', 'breaker_gcb', 'breaker_ocb', 'fuse', 'cutout_switch', 'afci']);
 const PROTECTION_LABELS = new Set(['ACB', 'VCB', 'MCCB', 'ELCB', 'ELB', 'RCD', 'GFCI', 'MCB', 'CB', 'FUSE', 'PF', 'POWER FUSE', 'RELAY', 'AFCI']);
 const LOAD_TYPES = new Set(['load_general', 'motor', 'light', 'outlet', 'hvac', 'ev_charger']);
 const LOAD_LABELS = new Set(['LOAD', 'MOTOR', 'LIGHT', 'LAMP', 'OUTLET', 'RECEPTACLE', 'HVAC', 'AHU', 'EV', 'CHARGER', 'EVSE', '부하', '전동기', '조명', '콘센트']);
@@ -432,7 +437,11 @@ function voltageDomainBoundary(symbol: SpatialSymbol): boolean {
     type === 'transformer'
     || type === 'transformer_dry'
     || type === 'transformer_auto'
-    || type === 'transformer_vt');
+    || type === 'transformer_vt'
+    // MOF·GPT 도 내부에 PT 를 물고 있어 2 차측이 다른 전압 계통이다.
+    // MOF 를 전력변압기 별칭에서 떼어내면서 여기서 빠졌던 것을 되돌린다.
+    || type === 'metering_outfit'
+    || type === 'transformer_gpt');
 }
 
 function validateVoltageDomains(context: Context): ElectricalIssue[] {
