@@ -71,10 +71,8 @@ const COMMON: CodeArticle[] = [
   //   142.2 접지도체      → 142.3.1 접지도체
   //   142.4 등전위본딩    → 143.1  보호등전위본딩의 적용
   //   143.1 피뢰시스템    → 151.1  피뢰시스템 적용범위
-  kec('142.2', '142.2', '접지극의 시설 및 접지저항', [
-    { param: 'earthElectrodeInstalled', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '접지봉/접지판/접지망/기초접지 시공' },
-    { param: 'earthResistance_ohm', operator: '<=', value: 10, unit: 'Ω', result: 'PASS', note: '특별 제3종 접지: ≤10Ω (변압기 2차측)' },
-  ], [{ articleId: 'IEC-612.6.1', relation: 'equivalent', note: 'IEC 접지저항' }]),
+  // 142.2 는 kec-full 이 접지극 매설깊이·봉길이와 함께 갖고 있다(구 410.1/410.5).
+  // 조건을 그쪽으로 합쳤다 — 두 곳에 두면 이 파일 정의가 통째로 버려진다.
   kec('142.3.1', '142.3.1', '접지도체', [
     { param: 'earthConductorSize_mm2', operator: '>=', value: 6, unit: 'mm²', result: 'PASS', note: '접지 도체 최소 6mm² (Cu)' },
   ]),
@@ -329,9 +327,7 @@ const DISTRIBUTED: CodeArticle[] = [
   kec('512.1', '512.1', '리튬계·나트륨계 이차전지의 시설', [
     { param: 'batteryRoom', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '축전지실: 환기/방폭/온도관리/화재감시' },
   ], [{ articleId: 'NEC-480.9', relation: 'equivalent', note: 'NEC 배터리실' }]),
-  kec('512.1.4', '512.1.4', '제어, 감시 및 보호장치 등', [
-    { param: 'essPCS', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: 'PCS 효율/보호/계통연계/단독운전방지' },
-  ]),
+  // 512.1.4 는 kec-full 이 과충전·과방전 보호와 함께 갖고 있다(구 520.2/520.3).
   kec('241.17.3', '241.17.3', '전기자동차의 충전장치 시설', [
     { param: 'evInfrastructure', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '급속/완속 충전기 시설 기준' },
   ]),

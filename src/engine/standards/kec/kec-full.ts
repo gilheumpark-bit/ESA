@@ -311,24 +311,32 @@ export const KEC_240_5 = buildArticle('KEC-212.5.5', '212.5.5', '단락보호장
 // (ceilingHeight 12 곳·efficiency 163 곳은 소방 감지기·전동기 효율 계산기로
 //  이름만 같고 이 조항과 무관하다).
 
-export const KEC_410_1 = buildArticle('KEC-410.1', '410.1', '접지극 — 최소 매설 깊이', [
+// KEC 에 410 편은 **전기철도**다(제4편). 접지는 142 다 — 410.1/410.2/410.4/410.5
+// 는 아예 없는 번호였다. 2026-07-27 재번호.
+//
+// 매설 깊이와 봉 길이는 둘 다 접지극 시공이라 142.2 로 모았다. 접지선은
+// 142.3.2 보호도체, 공통접지는 142.6 이 제 자리다.
+
+export const KEC_142_2_ELECTRODE = buildArticle('KEC-142.2', '142.2', '접지극의 시설 및 접지저항', [
   cond('burialDepth', '>=', 750, 'mm', '접지극 최소 매설 깊이 750mm'),
+  cond('rodLength', '>=', 900, 'mm', '접지봉 최소 길이 900mm'),
+  // kec-extended 가 갖고 있던 조건 — 두 파일에 두면 그쪽이 통째로 버려진다.
+  cond('earthElectrodeInstalled', '==', 1, 'bool', '접지봉/접지판/접지망/기초접지 시공'),
+  cond('earthResistance_ohm', '<=', 10, 'Ω', '특별 제3종 접지: ≤10Ω (변압기 2차측)'),
+], [
+  { articleId: 'IEC-612.6.1', relation: 'equivalent', note: 'IEC 접지저항' },
 ]);
 
-export const KEC_410_2 = buildArticle('KEC-410.2', '410.2', '접지선 — 기계적 보호', [
+export const KEC_142_3_2 = buildArticle('KEC-142.3.2', '142.3.2', '보호도체', [
   cond('crossSection', '>=', 6, 'mm²', '접지선 기계적 보호 미적용 시 6mm² 이상'),
 ]);
 
-export const KEC_410_3 = buildArticle('KEC-143.3', '143.3', '등전위본딩 도체', [
+export const KEC_143_3 = buildArticle('KEC-143.3', '143.3', '등전위본딩 도체', [
   cond('crossSection', '>=', 6, 'mm²', '등전위 본딩 도체 6mm² 이상'),
 ]);
 
-export const KEC_410_4 = buildArticle('KEC-410.4', '410.4', '접지저항 — 공통접지', [
+export const KEC_142_6 = buildArticle('KEC-142.6', '142.6', '공통접지 및 통합접지', [
   cond('resistance', '<=', 10, 'ohm', '공통접지 접지저항 10 ohm 이하'),
-]);
-
-export const KEC_410_5 = buildArticle('KEC-410.5', '410.5', '접지극 — 봉형 최소 길이', [
-  cond('rodLength', '>=', 900, 'mm', '접지봉 최소 길이 900mm'),
 ]);
 
 // ─── PART 14: KEC 521/522 — 태양광설비 ────────────────────────
@@ -359,26 +367,25 @@ export const KEC_522_3 = buildArticle('KEC-522.3', '522.3', '제어 및 보호�
   { articleId: 'NEC-690.12', relation: 'equivalent', note: 'NEC PV 긴급차단' },
 ]);
 
-// ─── PART 15: KEC 520 — ESS ────────────────────────────────────
+// ─── PART 15: KEC 511/512 — 전기저장장치 ──────────────────────
+//
+// `520.1~520.5` 로 등록돼 있었다. **520 대는 KEC 에 없다** — 전기저장장치는
+// 511 공통사항 / 512 이차전지 용량 및 종류에 따른 시설이다. 2026-07-27 재번호.
+//
+// 설치실 환기(520.5)는 뺐다. 조건이 `ventilationRate >= 0` 이라 무엇을 넣어도
+// PASS 였다 — 검사가 아니라 자리표시자다. 511.2.6 이차전지실 환기 요건을
+// 원문에서 확보하면 그때 수록한다.
 
-export const KEC_520_1 = buildArticle('KEC-520.1', '520.1', 'ESS — 최대 충전 전압', [
+export const KEC_511_2_4 = buildArticle('KEC-511.2.4', '511.2.4', '이차전지의 시설', [
   cond('maxChargeVoltage', '<=', 1000, 'V', 'ESS 최대 충전전압 1000V 이하 (저압)'),
-]);
-
-export const KEC_520_2 = buildArticle('KEC-520.2', '520.2', 'ESS — 과충전 보호', [
-  cond('overchargeProtection', '>=', 1, '', '과충전 보호장치 설치 (1=있음)'),
-]);
-
-export const KEC_520_3 = buildArticle('KEC-520.3', '520.3', 'ESS — 과방전 보호', [
-  cond('overDischargeProtection', '>=', 1, '', '과방전 보호장치 설치 (1=있음)'),
-]);
-
-export const KEC_520_4 = buildArticle('KEC-520.4', '520.4', 'ESS — 셀 온도 상한', [
   cond('cellTemp', '<=', 60, '°C', 'ESS 셀 온도 60°C 이하'),
 ]);
 
-export const KEC_520_5 = buildArticle('KEC-520.5', '520.5', 'ESS — 설치실 환기', [
-  cond('ventilationRate', '>=', 0, 'm³/h', 'ESS 설치실 적정 환기량 확보'),
+export const KEC_512_1_4_PROTECT = buildArticle('KEC-512.1.4', '512.1.4', '제어, 감시 및 보호장치 등', [
+  cond('overchargeProtection', '>=', 1, '', '과충전 보호장치 설치 (1=있음)'),
+  cond('overDischargeProtection', '>=', 1, '', '과방전 보호장치 설치 (1=있음)'),
+  // kec-extended 가 갖고 있던 조건 — 합치지 않으면 그쪽이 버려진다.
+  cond('essPCS', '==', 1, 'bool', 'PCS 효율/보호/계통연계/단독운전방지'),
 ]);
 
 // ─── PART 16: Registry & Evaluator Export ──────────────────────
@@ -402,11 +409,11 @@ const ALL_EXTENDED_ARTICLES: CodeArticle[] = [
   // 234 조명 · 311 수변전 치수 · 341 변압기 사양 · 351 수변전실 치수는
   // 2026-07-27 에 전부 뺐다 — KEC 조항이 아니었다(위 주석 참조).
   // 410 접지일반
-  KEC_410_1, KEC_410_2, KEC_410_3, KEC_410_4, KEC_410_5,
+  KEC_142_2_ELECTRODE, KEC_142_3_2, KEC_143_3, KEC_142_6,
   // 502 신재생
   KEC_521_3, KEC_522_2, KEC_522_3,
   // 520 ESS
-  KEC_520_1, KEC_520_2, KEC_520_3, KEC_520_4, KEC_520_5,
+  KEC_511_2_4, KEC_512_1_4_PROTECT,
 ];
 
 /**
