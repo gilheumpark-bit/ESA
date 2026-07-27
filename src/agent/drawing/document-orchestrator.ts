@@ -666,6 +666,13 @@ export async function runDocumentAnalysis(
           const actualCalls = rasterResult.drawingReview?.coverage.plannedCalls ?? plannedCalls;
           vlmCalls += actualCalls;
           state.vlmCalls += actualCalls;
+          // 쓴 즉시 적는다. 이 함수엔 try/catch 가 없어서 아래에서 예외가
+          // 나면 다음 체크포인트까지의 호출이 잊혔고, `/run` 은 실패 시
+          // 상태를 QUEUED 로 되돌려 재시도를 허용한다 — 잊힌 만큼 문서
+          // 예산(`maxVlmCalls`)을 매번 넘어설 수 있었다. 예산 검사는
+          // `previousVlmCalls`(= 저장된 값)에서 출발하므로 저장이 늦으면
+          // 상한이 늦게 걸린다.
+          updateJob(job.jobId, { vlmCallsUsed: previousVlmCalls + vlmCalls });
           if (rasterResult.success && rasterResult.drawingReview) {
             mergeAdapted(rasterResult, page, source, symbolHits, lineHits, textSeeds, continuityByPage);
             calculationHits.push(...adaptDrawingCalculations(rasterResult.drawingSynthesis).map((calculation) => ({
