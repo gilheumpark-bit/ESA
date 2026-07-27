@@ -235,3 +235,62 @@ describe('independent logic conflict comparison', () => {
     expect(review).toEqual(beforeReview);
   });
 });
+
+/**
+ * 154kV 변전소 수전 구성. 이 앱이 실제로 상대하는 도면이다.
+ *
+ * 1차 GCB(가스차단기) → 변압기 → 2차 VCB → 부하. 변압기를 지키는 것은
+ * 상위 GCB 다. 판정층이 GCB 를 보호 기기로 못 알아보면, 인접에 있는
+ * **2차측 VCB 를 변압기의 보호 기기로 지목하고 CONTRADICTION** 을 낸다 —
+ * 맞는 도면을 틀렸다고 하는 것이고, 지목한 답도 도메인상 틀렸다.
+ *
+ * 실제로 그랬다: `logic-conflicts.ts` 에 손으로 적힌 보호 기기 목록에서
+ * GCB·OCB·COS 가 빠져 있었다(2026-07-28 실측). 목록을 정본 하나로 합쳤다.
+ */
+describe('154kV 수전 — 1차 차단기 인식', () => {
+  const hv = (primary: string): NormalizedElectricalGraph => {
+    const symbols = [
+      { id: 'PRI-01', originalEvidenceId: 'orig-pri', originalEvidenceIds: ['orig-pri'], sourceIds: ['source-symbols'], typeCandidates: [primary], rawLabel: primary, bounds: bounds(100), ports: [], confidence: 0.99 },
+      { id: 'TR-01', originalEvidenceId: 'orig-tr', originalEvidenceIds: ['orig-tr'], sourceIds: ['source-symbols'], typeCandidates: ['TR'], rawLabel: 'TR', bounds: bounds(300), ports: [], confidence: 0.99 },
+      { id: 'SEC-01', originalEvidenceId: 'orig-sec', originalEvidenceIds: ['orig-sec'], sourceIds: ['source-symbols'], typeCandidates: ['VCB'], rawLabel: 'VCB', bounds: bounds(500), ports: [], confidence: 0.99 },
+    ];
+    const line = (id: string, orig: string, x1: number, x2: number) => ({
+      id, originalEvidenceId: orig, originalEvidenceIds: [orig], sourceIds: ['source-lines'], pages: [1],
+      lineKind: 'power' as const, path: [{ x: x1, y: 120 }, { x: x2, y: 120 }],
+      start: { x: x1, y: 120 }, end: { x: x2, y: 120 }, junctions: [], crossovers: [], confidence: 0.98,
+    });
+    return {
+      drawingHash: 'drawing-hash',
+      graph: {
+        drawingHash: 'drawing-hash', symbols,
+        lines: [line('LINE-001', 'orig-line-1', 140, 300), line('LINE-002', 'orig-line-2', 340, 500)],
+        texts: [], junctions: [], crossovers: [], textLinks: [], conflicts: [],
+        edges: [
+          { id: 'EDGE-001', from: 'PRI-01', to: 'TR-01', lineId: 'LINE-001', confidence: 0.98 },
+          { id: 'EDGE-002', from: 'TR-01', to: 'SEC-01', lineId: 'LINE-002', confidence: 0.98 },
+        ],
+      },
+      specs: [], warnings: [],
+    };
+  };
+
+  const 보호주장 = statement({
+    topic: 'PROTECTION_CHAIN', subjectIds: ['local:tr'],
+    attributes: { protectedById: 'local:pri' },
+    evidenceBounds: [bounds(300), bounds(100)],
+  });
+
+  it.each(['GCB', 'OCB', 'COS', 'VCB', 'ACB'])(
+    '1차가 %s 라도 "변압기는 1차 차단기가 보호한다" 는 판정을 통과한다', (primary) => {
+      expect(compareLogicToGraph(hv(primary), envelope([보호주장]))).toEqual([]);
+    },
+  );
+
+  it('1차가 피뢰기면 통과시키지 않는다 — 서지 보호는 과전류 보호가 아니다', () => {
+    const result = compareLogicToGraph(hv('LA'), envelope([보호주장]));
+    expect(result).not.toEqual([]);
+    // 인접한 진짜 차단기(2차 VCB)를 대신 지목한다 — 사람이 볼 신호다.
+    expect(result[0].reasonCode).toBe('PROTECTOR_MISMATCH');
+    expect(result[0].kind).toBe('CONTRADICTION');
+  });
+});

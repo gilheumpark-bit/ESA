@@ -4,6 +4,7 @@ import type { NormalizedElectricalGraph, NormalizedSpec } from './domain-normali
 import type { SpatialEvidenceGraph, SpatialSymbol } from '../vision/spatial-graph';
 import type { LogicEvidence, ReviewBounds, RoleReviewEnvelope } from '../vision/review-types';
 import { resolveSymbol } from '../vision/symbol-db';
+import { PROTECTION_TYPES } from './electrical-invariants';
 
 export type LogicConflictKind = 'UNRESOLVED_LOGIC_REFERENCE' | 'CONTRADICTION';
 export type LogicConflictTopic = LogicEvidence['topic'];
@@ -331,9 +332,18 @@ function compareDirection(graph: SpatialEvidenceGraph, item: LogicEvidence): Log
   return [makeConflict(graph, item, 'UNRESOLVED_LOGIC_REFERENCE', forward.length + reverse.length === 0 ? 'MISSING_RELATION' : 'AMBIGUOUS_DIRECTION', resolutions)];
 }
 
+/**
+ * 고장전류를 실제로 차단하는 기기인가.
+ *
+ * 목록은 `electrical-invariants.ts` 가 정본이다. 여기 손으로 한 벌 더
+ * 두었더니 GCB·OCB·COS 가 빠진 채로 갈렸다(2026-07-28 실측). 154kV 변전소
+ * 주 차단기가 GCB 라 그 도면에서 `assertedProtector` 가 보호 기기로 안
+ * 잡혔고, 인접에 다른 차단기가 하나 있으면 **맞는 도면이 CONTRADICTION /
+ * PROTECTOR_MISMATCH 로 몰렸다**.
+ */
 function isProtection(symbol: SpatialSymbol): boolean {
   const types = sorted(symbol.typeCandidates.map((candidate) => resolveSymbol(candidate)));
-  return types.length > 0 && types.every((type) => ['breaker_acb', 'breaker_vcb', 'breaker_mccb', 'breaker_elcb', 'breaker_mcb', 'fuse', 'afci'].includes(type));
+  return types.length > 0 && types.every((type) => PROTECTION_TYPES.has(type));
 }
 
 function adjacent(graph: SpatialEvidenceGraph, left: string, right: string): boolean {

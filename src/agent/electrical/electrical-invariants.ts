@@ -54,7 +54,13 @@ const SOURCE_BUS_LABELS = new Set(['SOURCE BUS', 'UTILITY BUS', 'INCOMER BUS', '
 //   피뢰기(LA)  : 서지를 대지로 흘릴 뿐 과전류 보호를 하지 않는다 → 제외
 //   ASS         : 상위 재폐로기 무전압 구간에서 개방되는 구분개폐기로
 //                 고장전류 차단 능력이 없다 → 제외(switching)
-const PROTECTION_TYPES = new Set(['breaker_acb', 'breaker_vcb', 'breaker_mccb', 'breaker_elcb', 'breaker_mcb', 'breaker_gcb', 'breaker_ocb', 'fuse', 'cutout_switch', 'afci']);
+//   SPD         : 서지 보호 소자. 피뢰기와 같은 이유로 제외
+// symbol-db 의 `category: 'protection'` 을 그대로 쓰면 안 된다 — 거기엔
+// 피뢰기·SPD 도 들어 있다. "보호 기기" 라는 말이 도면 분류에서는 서지
+// 보호를 포함하지만 보호 협조에서는 차단 능력을 뜻하기 때문이다.
+// 판정층(`logic-conflicts.ts`)도 이 집합을 쓴다 — 손으로 두 벌 두었더니
+// 실제로 갈렸다(GCB·OCB·COS 누락, 2026-07-28 실측).
+export const PROTECTION_TYPES = new Set(['breaker_acb', 'breaker_vcb', 'breaker_mccb', 'breaker_elcb', 'breaker_mcb', 'breaker_gcb', 'breaker_ocb', 'fuse', 'cutout_switch', 'afci']);
 // 'RELAY' 는 뺀다 — 보호계전기는 고장을 검출해 차단기에 지령을 보낼 뿐
 // 스스로 고장전류를 차단하지 않는다. 계전기가 source→load 경로에 올라와
 // 있으면 보호 확인이 아니라 확인 필요(HOLD)가 맞다.
