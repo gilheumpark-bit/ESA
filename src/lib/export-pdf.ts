@@ -12,6 +12,16 @@
 import type { Receipt } from '@/engine/receipt/types';
 import { buildPdfData } from '@/engine/receipt/export-pdf';
 import { CALCULATOR_NAMES } from '@/lib/calculator-params';
+/**
+ * 이스케이프는 **공용 것 하나만 쓴다.**
+ *
+ * 여기 사본이 따로 있었고 작은따옴표(`'`)를 안 지웠다. 지금 템플릿은
+ * 작은따옴표 속성을 하나도 안 써서(실측 0 건) 뚫리지는 않았지만, 누가
+ * `title='…'` 하나만 추가하면 그 순간 주입 경로가 된다. 보안 원시함수를
+ * 두 벌 두면 한쪽만 강화되고 다른 쪽은 남는다 — 실제로 갈라져 있었다
+ * (2026-07-28).
+ */
+import { escapeHtml } from '@/lib/security-hardening';
 import type { DisclaimerLang } from '@/engine/receipt/disclaimer';
 
 // ---------------------------------------------------------------------------
@@ -91,13 +101,7 @@ const LABEL: Record<Lang, {
 // PART 2 -- HTML template builder
 // ---------------------------------------------------------------------------
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// 이스케이프는 공용 것 하나만 쓴다 — 파일 상단 import 참조.
 
 function buildReceiptHtml(receipt: Receipt, lang: Lang): string {
   const data = buildPdfData(receipt, lang as DisclaimerLang);
