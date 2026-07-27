@@ -129,6 +129,16 @@ const DEFINITION = /(?:buildArticle\('KEC-|kec\(')([\d.]+)'\s*,\s*'[\d.]+'\s*,\s
  */
 const CATALOG_ENTRY = /clause:\s*'([\d.]+)',\s*\n\s*title_ko:\s*'([^']*)'/g;
 
+/**
+ * 검색 자동완성이 띄우는 조항 제안(`search/autocomplete.ts`).
+ *
+ * 사용자가 검색창에 타이핑하면 뜨는 목록이라 그대로 외우고 인용한다.
+ * 13 건 중 12 건이 틀려 있었다 — 232 를 "고압·특고압 전선로"(실제 저압
+ * 배선설비), 351 을 "분산형전원 태양광"(실제 발전소·변전소)으로 띄웠고
+ * 140·210·310·352·353·354 는 아예 없는 번호였다.
+ */
+const SUGGESTION = /text:\s*'KEC (\d+(?:\.\d+)*)',\s*subtitle:\s*'([^']*)'/g;
+
 /** 조항을 **인용**하는 자리 전부 — 정의뿐 아니라 상호참조·시험데이터도 센다. */
 const CITATION = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-)([\d.]+)'/g;
 
@@ -237,6 +247,27 @@ describe('KEC 조항 표제 정합', () => {
         const official = OFFICIAL.get(num);
         if (!official) return `${num} "${title}" — 현행에 없는 번호`;
         if (!sameTopic(title, official)) return `${num} "${title}" ≠ 현행 "${official}"`;
+        return null;
+      })
+      .filter(Boolean);
+    expect(violations).toEqual([]);
+  });
+
+  it('검색 자동완성이 띄우는 조항도 번호와 표제가 맞다', () => {
+    const src = readFileSync(join(REPO, 'src', 'search', 'autocomplete.ts'), 'utf8');
+    const entries = [...src.matchAll(SUGGESTION)];
+
+    // 정규식이 죽으면 빈 목록으로 통과한다 — 사각을 만드는 방식이 그거다.
+    expect(entries.length).toBeGreaterThan(10);
+
+    const violations = entries
+      .map(([, num, subtitle]) => {
+        const official = OFFICIAL.get(num);
+        if (!official) return `KEC ${num} "${subtitle}" — 현행에 없는 번호`;
+        // 부제는 "저압전기설비 — 배선설비" 처럼 편 이름이 앞에 붙는다.
+        // 대시 뒤쪽만 표제로 본다.
+        const tail = subtitle.split('—').pop()!.trim();
+        if (!sameTopic(tail, official)) return `KEC ${num} "${tail}" ≠ 현행 "${official}"`;
         return null;
       })
       .filter(Boolean);

@@ -68,6 +68,13 @@ const kecBlock = refsSrc.slice(
 );
 for (const m of kecBlock.matchAll(/clause:\s*'([\d.]+)'/g)) cited.add(m[1]);
 
+// 검색 자동완성이 띄우는 조항 제안. 사용자가 그대로 외우고 인용하는 자리인데
+// 13 건 중 12 건이 틀린 채로 있었다 — 이것도 게이트 사각이었다.
+const AUTOCOMPLETE = join(REPO, 'src', 'search', 'autocomplete.ts');
+for (const m of readFileSync(AUTOCOMPLETE, 'utf8').matchAll(/text:\s*'KEC (\d+(?:\.\d+)*)'/g)) {
+  cited.add(m[1]);
+}
+
 const rows = [...cited].sort().filter((c) => official.has(c));
 const missing = [...cited].sort().filter((c) => !official.has(c));
 

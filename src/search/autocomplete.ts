@@ -165,19 +165,29 @@ export const AUTOCOMPLETE_DICTIONARY: readonly AutocompleteDictEntry[] = [
 
 /** Common KEC/NEC/IEC clause references for standard-type suggestions */
 const STANDARD_REFERENCES: readonly { text: string; subtitle: string }[] = [
-  { text: 'KEC 131', subtitle: '공통사항 — 전선' },
-  { text: 'KEC 132', subtitle: '공통사항 — 전로의 절연' },
-  { text: 'KEC 140', subtitle: '공통사항 — 접지시스템' },
-  { text: 'KEC 210', subtitle: '저압전기설비 — 일반' },
-  { text: 'KEC 212', subtitle: '저압전기설비 — 배선' },
-  { text: 'KEC 213', subtitle: '저압전기설비 — 개폐기 및 과전류보호' },
-  { text: 'KEC 232', subtitle: '고압·특고압 전기설비 — 전선로' },
-  { text: 'KEC 241', subtitle: '전력보안 통신설비' },
-  { text: 'KEC 310', subtitle: '분산형전원 — 일반사항' },
-  { text: 'KEC 351', subtitle: '분산형전원 — 태양광' },
-  { text: 'KEC 352', subtitle: '분산형전원 — 풍력' },
-  { text: 'KEC 353', subtitle: '분산형전원 — 연료전지' },
-  { text: 'KEC 354', subtitle: '분산형전원 — ESS' },
+  // 2026-07-27 전면 정정. 13 건 중 12 건이 틀려 있었다 — 검색창에 뜨는
+  // 제안이라 사용자가 그대로 외우고 인용한다.
+  //   131 을 "전선" 으로 (131 = 전로의 절연 원칙, 전선은 121~123)
+  //   232 를 "고압·특고압 전선로" 로 (232 = 저압 배선설비)
+  //   351 을 "분산형전원 태양광" 으로 (351 = 발전소·변전소·개폐소 전기설비)
+  //   241 을 "전력보안 통신설비" 로 (241 = 특수 시설)
+  //   140 · 210 · 310 · 352 · 353 · 354 는 아예 없는 번호
+  { text: 'KEC 122', subtitle: '공통사항 — 전선의 종류' },
+  { text: 'KEC 132', subtitle: '공통사항 — 전로의 절연저항 및 절연내력' },
+  { text: 'KEC 142', subtitle: '공통사항 — 접지시스템의 시설' },
+  { text: 'KEC 151', subtitle: '공통사항 — 피뢰시스템' },
+  { text: 'KEC 211', subtitle: '저압전기설비 — 감전에 대한 보호' },
+  { text: 'KEC 212', subtitle: '저압전기설비 — 과전류에 대한 보호' },
+  { text: 'KEC 232', subtitle: '저압전기설비 — 배선설비' },
+  { text: 'KEC 234', subtitle: '저압전기설비 — 조명설비' },
+  { text: 'KEC 241', subtitle: '저압전기설비 — 특수 시설' },
+  { text: 'KEC 331', subtitle: '고압·특고압 — 전선로 일반' },
+  { text: 'KEC 334', subtitle: '고압·특고압 — 지중전선로' },
+  { text: 'KEC 341', subtitle: '고압·특고압 — 기계 및 기구' },
+  { text: 'KEC 351', subtitle: '고압·특고압 — 발전소·변전소·개폐소' },
+  { text: 'KEC 511.2', subtitle: '분산형전원 — 전기저장장치의 시설' },
+  { text: 'KEC 522', subtitle: '분산형전원 — 태양광설비의 시설' },
+  { text: 'KEC 532', subtitle: '분산형전원 — 육상 풍력발전설비' },
   { text: 'NEC 210', subtitle: 'Branch Circuits' },
   { text: 'NEC 215', subtitle: 'Feeders' },
   { text: 'NEC 220', subtitle: 'Branch-Circuit, Feeder, and Service Load Calculations' },
