@@ -193,7 +193,9 @@ const KOREA_CERTS: Certification[] = [
       { name: '소방원론', type: 'written' },
       { name: '소방전기일반', type: 'written' },
       { name: '소방관계법규', type: 'written' },
-      { name: '소방전기시설의 구조 및 원리', type: 'written', relatedArticles: ['KEC-234.2'] },
+      // 비상조명을 'KEC-234.2' 로 걸어 두었으나 그건 KEC 조항이 아니다
+      // (소방시설법 NFPC 304). 이 리포에 소방 규격 세트가 없어 링크를 뺐다.
+      { name: '소방전기시설의 구조 및 원리', type: 'written' },
       { name: '소방전기설비 설계 및 시공 (실기)', type: 'practical' },
     ],
     eligibility: '관련학과 4년제 졸업, 또는 산업기사+1년',

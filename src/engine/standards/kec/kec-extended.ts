@@ -174,13 +174,17 @@ const LOW_VOLTAGE: CodeArticle[] = [
     { param: 'ductFillPercentControlOnly', operator: '<=', value: 50, unit: '%', result: 'PASS', note: '전광표시장치·제어회로 배선만인 경우 50% 이하' },
   ], [{ articleId: 'NEC-376.22', relation: 'reference', note: 'NEC 금속 wireway 충전율 20%' }]),
 
-  // 234 조명
-  kec('234.1', '234.1', '조명 설비 — 조도 기준', [
-    { param: 'illuminance_lux', operator: '>=', value: 300, unit: 'lx', result: 'PASS', note: '사무실 300lx, 주거 150lx, 공장 200lx (KS A 3011)' },
-  ]),
-  kec('234.2', '234.2', '비상 조명 — 비상등', [
-    { param: 'emergencyLighting', operator: '==', value: 1, unit: 'bool', result: 'PASS', note: '피난구유도등, 통로유도등, 비상조명등 설치' },
-  ]),
+  // 조도 기준(234.1)·비상등(234.2)을 뺐다 2026-07-27 — **KEC 조항이 아니다.**
+  //
+  // 현행 234 조명설비의 하위를 전수 확인했더니 등기구·코드·전구선·콘센트·
+  // 점멸기·옥외등·전주외등·방전등·네온·수중조명·교통신호등뿐이고 조도 기준도
+  // 비상조명도 없다. 원문 전체에서 "조도"는 710.10(수력 서지탱크 조도계수)
+  // 하나뿐이고 "비상조명"은 0 건이다.
+  //
+  // 실제 소관: 조도 = KS A 3011(조도기준) · 비상조명·유도등 = 소방시설법
+  // (NFPC 303 유도등, NFPC 304 비상조명등). 이 리포는 KS·소방 규격 세트를
+  // 갖고 있지 않다. 없는 KEC 번호를 붙여 두느니 빼고, 어디 있는지만 남긴다.
+  // 소비처는 0 이었다(illuminance_lux·emergencyLighting 을 읽는 코드 없음).
 
   // 240 보호 협조
   kec('212.4.1', '212.4.1', '도체와 과부하 보호장치 사이의 협조', [
