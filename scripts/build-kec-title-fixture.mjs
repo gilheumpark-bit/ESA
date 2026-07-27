@@ -68,6 +68,18 @@ const kecBlock = refsSrc.slice(
 );
 for (const m of kecBlock.matchAll(/clause:\s*'([\d.]+)'/g)) cited.add(m[1]);
 
+// 심사 팀이 판정 행에 **손으로 써 넣는** 조항. 조항 정의를 안 거치므로 위
+// 정규식 밖인데, 정작 사용자가 화면에서 읽는 자리다. `311.1` 을 "변압기 용량"
+// 으로, `232.3` 을 "허용전류 산정" 으로 내보내고 있었다(2026-07-28) — 둘 다
+// 픽스처에 없어서 표제 게이트가 건너뛰고 있었다.
+// `standard: 'KEC'` 로 묶인 것만 받는다. NEC·IEC 조항 번호가 KEC 번호와
+// 우연히 겹치면 엉뚱한 표제가 섞인다.
+for (const f of walk(join(REPO, 'src'))) {
+  const src = readFileSync(f, 'utf8');
+  for (const m of src.matchAll(/standard:\s*'KEC',\s*clause:\s*'([\d.]+)'/g)) cited.add(m[1]);
+  for (const m of src.matchAll(/standardRef:\s*'KEC[\s-]*([\d.]+)'/g)) cited.add(m[1]);
+}
+
 // 검색 자동완성이 띄우는 조항 제안. 사용자가 그대로 외우고 인용하는 자리인데
 // 13 건 중 12 건이 틀린 채로 있었다 — 이것도 게이트 사각이었다.
 const AUTOCOMPLETE = join(REPO, 'src', 'search', 'autocomplete.ts');

@@ -490,14 +490,18 @@ async function runCalculations(
         unit: 'kVA',
         compliant: null,
         note: '도면 인식 값 전사 — transformer-capacity 계산기·부하 조건 미적용. 수동 검증 또는 /calc 경로 필요.',
-        standardRef: 'KEC 311.1',
+        // 311.1 이 아니라 341.1.2 다(2026-07-28 정정). 311.1 은 "절연수준의
+        // 선정" 이고, 변압기 용량 조항은 341.1.2 "특고압용 변압기의 용량"
+        // 하나뿐이다. 구 310 대(수전설비 구성·수전전압)를 2026-07-27 에
+        // 걷어낼 때 이 자리가 같이 안 따라왔다.
+        standardRef: 'KEC 341.1.2',
       });
       standards.push({
         standard: 'KEC',
-        clause: '311.1',
-        title: '변압기 용량',
+        clause: '341.1.2',
+        title: '특고압용 변압기의 용량',
         judgment: 'HOLD',
-        note: `${tr.label}: 표기 ${tr.rating} — 적합성 미판정`,
+        note: `${tr.label}: 표기 ${tr.rating} — 적합성 미판정 (특고압 수전 기준)`,
       });
     }
   }

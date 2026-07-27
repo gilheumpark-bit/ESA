@@ -266,12 +266,16 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
               value: data?.ampacity ?? 0,
               unit: 'A',
               compliant: !!success,
-              standardRef: 'KEC 232.3',
+              // 232.3 이 아니라 232.5 다(2026-07-28 정정). 232.3 은 "배선설비
+              // 적용 시 고려사항" 이고 허용전류는 232.5(하위 232.5.2 허용전류의
+              // 결정)다. PASS/FAIL 이 나가는 자리라 틀린 조항으로 적합 판정이
+              // 찍히고 있었다.
+              standardRef: 'KEC 232.5',
             });
             standards.push({
               standard: 'KEC',
-              clause: '232.3',
-              title: '허용전류 산정',
+              clause: '232.5',
+              title: '허용전류',
               judgment: success ? 'PASS' : 'FAIL',
             });
           }
@@ -301,7 +305,7 @@ export async function executeStandardsTeam(input: TeamInput): Promise<TeamResult
           standards.push({
             standard: 'KEC',
             clause: '232.3.9',
-            title: '전압강하 기준',
+            title: '전압강하',
             judgment: vdVerdict,
           });
 

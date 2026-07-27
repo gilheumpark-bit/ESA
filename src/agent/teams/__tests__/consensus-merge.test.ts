@@ -64,12 +64,12 @@ describe('consensus 병합 — 같은 조항 키의 최악 판정 보존', () =>
       sessionId: 't', projectName: 't', projectType: 't',
       teamResults: [
         sldResult([
-          { standard: 'KEC', clause: '311.1', title: '변압기 용량', judgment: 'PASS', note: 'TR-1' },
-          { standard: 'KEC', clause: '311.1', title: '변압기 용량', judgment: 'HOLD', note: 'TR-2 정격 미상' },
+          { standard: 'KEC', clause: '341.1.2', title: '특고압용 변압기의 용량', judgment: 'PASS', note: 'TR-1' },
+          { standard: 'KEC', clause: '341.1.2', title: '특고압용 변압기의 용량', judgment: 'HOLD', note: 'TR-2 정격 미상' },
         ]),
       ],
     });
-    const merged = (teamResult.standards ?? []).filter((s) => s.clause === '311.1');
+    const merged = (teamResult.standards ?? []).filter((s) => s.clause === '341.1.2');
     expect(merged[0].judgment).toBe('HOLD');
   });
 
