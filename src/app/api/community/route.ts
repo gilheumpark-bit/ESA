@@ -93,7 +93,8 @@ async function POST__impl(request: NextRequest) {
     }
 
     // Content safety check
-    const titleCheck = checkContent(body.title);
+    // 위에서 제목은 5 자로 검증했다 — 안전 검사에도 같은 숫자를 준다.
+    const titleCheck = checkContent(body.title, { minLength: 5 });
     if (!titleCheck.safe) {
       return NextResponse.json(
         { success: false, error: { code: 'ESVA-7053', message: `Title: ${titleCheck.reason}` } },

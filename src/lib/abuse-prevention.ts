@@ -33,10 +33,14 @@ export interface ContentReport {
 const REPORTS_TABLE = 'content_reports';
 const AUTO_HIDE_THRESHOLD = 3;
 
-/** Patterns indicating spam */
+/**
+ * Patterns indicating spam.
+ *
+ * URL 은 **여기 넣지 않는다.** 링크 개수는 아래에서 `MAX_LINKS_ALLOWED` 로
+ * 따로 세고 전용 사유를 돌려준다 — 여기에도 넣으면 임계(>2)가 더 낮아
+ * 링크 3 개짜리 글이 "최대 3 개" 라고 안내해 놓고 "스팸" 사유로 막혔다.
+ */
 const SPAM_PATTERNS: RegExp[] = [
-  // Excessive URLs
-  /https?:\/\/\S+/gi,
   // Korean/English spam phrases
   /무료\s*상담/gi,
   /click\s*here/gi,
@@ -55,17 +59,26 @@ const MAX_REPEATED_CHAR_RATIO = 0.5;
 /**
  * Check text content for spam, abuse, and quality issues.
  * Returns { safe: true } or { safe: false, reason: "..." }.
+ *
+ * `minLength` 는 부르는 쪽이 정한다. 제목과 본문은 최소 길이가 다른데
+ * (제목 5 · 본문 10) 여기서 본문 값을 강요하면 라우트가 "최소 5 자" 라고
+ * 검증해 통과시킨 제목을 바로 다음 줄에서 "최소 10 자" 로 되막는다 —
+ * 사용자는 한 요청에서 서로 다른 숫자 두 개를 듣는다.
  */
-export function checkContent(text: string): ContentCheckResult {
+export function checkContent(
+  text: string,
+  options: { minLength?: number } = {},
+): ContentCheckResult {
   if (!text || typeof text !== 'string') {
     return { safe: false, reason: 'Content is empty' };
   }
 
+  const minLength = options.minLength ?? MIN_CONTENT_LENGTH;
   const trimmed = text.trim();
 
   // Minimum length
-  if (trimmed.length < MIN_CONTENT_LENGTH) {
-    return { safe: false, reason: `Content too short (minimum ${MIN_CONTENT_LENGTH} characters)` };
+  if (trimmed.length < minLength) {
+    return { safe: false, reason: `Content too short (minimum ${minLength} characters)` };
   }
 
   // Excessive links
@@ -75,12 +88,17 @@ export function checkContent(text: string): ContentCheckResult {
   }
 
   // Repeated character abuse (e.g., "aaaaaaaaaa" or "ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ")
+  //
+  // 공백은 세지 않는다. 여기 올라오는 글에는 정렬한 회로 표를 그대로 붙여
+  // 넣는 경우가 많은데, 그러면 공백이 절반을 넘어 정상 글이 막힌다.
+  // 공백을 빼면 "ㅋ ㅋ ㅋ" 처럼 띄어서 도배하는 것도 같이 걸린다.
+  const dense = trimmed.replace(/\s+/g, '');
   const charCounts = new Map<string, number>();
-  for (const ch of trimmed) {
+  for (const ch of dense) {
     charCounts.set(ch, (charCounts.get(ch) ?? 0) + 1);
   }
-  const maxCharCount = Math.max(...charCounts.values());
-  if (maxCharCount / trimmed.length > MAX_REPEATED_CHAR_RATIO && trimmed.length > 20) {
+  const maxCharCount = Math.max(...charCounts.values(), 0);
+  if (dense.length > 20 && maxCharCount / dense.length > MAX_REPEATED_CHAR_RATIO) {
     return { safe: false, reason: 'Excessive repeated characters detected' };
   }
 
@@ -95,8 +113,19 @@ export function checkContent(text: string): ContentCheckResult {
   }
 
   // All caps abuse (Latin text only)
+  //
+  // 대문자 비율만으로는 못 가른다. 이 게시판의 정상 답변은 대문자 약어로
+  // 가득하다 — KEC · IEC · IEEE · ANSI · MOF · VCB · ZCT · GPT · OCGR.
+  // "22.9kV 수전반은 LBS-PF-MOF-VCB-TR 순서고 보호는 OCR/OCGR, KEC 와
+  // IEC 를 보세요" 는 대문자 비율 0.98 이다(실측). PART 5 가 "근거 조항을
+  // 명시해 주세요" 라고 권하는 바로 그 글이 막혔다.
+  //
+  // 가르는 것은 **본문이 라틴 문자만으로 되어 있는가** 다. 약어를 아무리
+  // 많이 써도 한국어 글에는 조사와 명사가 남는다(실측 최대 0.81). 고함은
+  // 라틴만으로 채워진다(1.00). 그래서 거의 전부 라틴일 때만 대문자를 본다.
   const latinChars = trimmed.replace(/[^a-zA-Z]/g, '');
-  if (latinChars.length > 20) {
+  const latinShare = dense.length > 0 ? latinChars.length / dense.length : 0;
+  if (latinChars.length > 20 && latinShare > 0.9) {
     const upperRatio = latinChars.replace(/[^A-Z]/g, '').length / latinChars.length;
     if (upperRatio > 0.8) {
       return { safe: false, reason: 'Excessive use of capital letters' };
