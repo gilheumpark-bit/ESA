@@ -14,6 +14,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { validateClientReceiptForExport } from '@/lib/calculation-execution';
+import { ENGINE_VERSION } from '@engine/receipt';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRequestLog } from '@/lib/api/with-request-log';
@@ -136,10 +137,17 @@ async function POST__impl(req: NextRequest): Promise<NextResponse> {
       // 키 없는 체크섬만 믿지 않고 서버 계산기로 입력을 재실행해 전체 claim을 대조한다.
       const validation = await validateClientReceiptForExport(body.receipt);
       if (!validation.valid) {
-        return NextResponse.json(
-          { error: `ESVA-5012: Receipt verification failed (${validation.reason})` },
-          { status: 422 },
-        );
+        // 엔진 판이 바뀌어 재실행이 안 되는 것은 **사용자 잘못이 아니다.**
+        // 같은 422 로 나가더라도 문장이 달라야 한다 — 앞서 전부
+        // "Receipt verification failed" 였고, 사용자는 자기 영수증이
+        // 의심받는다고 읽었다(2026-07-28 독립 심사 백엔드 좌석).
+        const message = validation.reason === 'ENGINE_VERSION_DRIFT'
+          ? 'ESVA-5013: 이 영수증은 이전 계산 엔진(판 ' + body.receipt.engineVersion
+            + ')으로 발급됐습니다. 현재 엔진(' + ENGINE_VERSION + ')은 일부 값을'
+            + ' 다르게 계산하므로 재확인할 수 없습니다. 같은 입력으로 다시'
+            + ' 계산하면 현재 판의 영수증을 받을 수 있습니다.'
+          : `ESVA-5012: Receipt verification failed (${validation.reason})`;
+        return NextResponse.json({ error: message }, { status: 422 });
       }
       receipt = body.receipt;
     } else {

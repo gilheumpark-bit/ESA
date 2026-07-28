@@ -112,7 +112,21 @@ function expectedClaim(receipt: Receipt, execution: CalculationExecution): Recei
 
 export interface ClientReceiptValidation {
   valid: boolean;
-  reason?: 'MALFORMED' | 'CHECKSUM_MISMATCH' | 'UNSUPPORTED_CLAIM' | 'REPLAY_MISMATCH';
+  reason?:
+    | 'MALFORMED'
+    | 'CHECKSUM_MISMATCH'
+    | 'UNSUPPORTED_CLAIM'
+    | 'REPLAY_MISMATCH'
+    /**
+     * 재실행 값이 다르고 **영수증의 엔진 판이 현재와 다르다** — 우리가 식을
+     * 바꾼 것이지 영수증이 위조된 것이 아니다. 둘을 뭉뚱그리면 사용자는
+     * 자기 영수증이 의심받는다고 읽는다(2026-07-28 독립 심사 백엔드 좌석).
+     *
+     * 그래도 통과시키지는 않는다 — 옛 판으로는 재실행할 수 없으니 **확인
+     * 못 한 것**이고, 확인 못 한 것을 확인된 것처럼 내보내는 게 이 제품이
+     * 하지 않기로 한 일이다. 다만 사유를 정확히 말한다.
+     */
+    | 'ENGINE_VERSION_DRIFT';
 }
 
 /**
@@ -154,8 +168,11 @@ export async function validateClientReceiptForExport(
 
     const replayMatches = canonicalize(claimFromReceipt(receipt))
       === canonicalize(expectedClaim(receipt, execution));
-    return replayMatches
-      ? { valid: true }
+    if (replayMatches) return { valid: true };
+
+    // 값이 다를 때만 판을 본다 — 옛 판이어도 값이 그대로면 통과가 맞다.
+    return receipt.engineVersion !== ENGINE_VERSION
+      ? { valid: false, reason: 'ENGINE_VERSION_DRIFT' }
       : { valid: false, reason: 'REPLAY_MISMATCH' };
   } catch {
     return { valid: false, reason: 'MALFORMED' };

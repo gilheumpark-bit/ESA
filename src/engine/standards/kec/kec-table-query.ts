@@ -68,9 +68,30 @@ export function queryAmpacity(opts: AmpacityOptions): AmpacityQueryResult | null
       source: result.source,
       query: opts,
     };
-  } catch {
+  } catch (err) {
+    // 내부 불변식(우리 표에 구멍)은 삼키지 않는다 — 아래 참조.
+    rethrowIfInternal(err);
     return null;
   }
+}
+
+/**
+ * `ESVA-INTERNAL:` 표식이 붙은 오류는 그대로 올려보낸다.
+ *
+ * 이 파일의 세 자리가 표 조회 오류를 전부 삼켰다(`return null` · `continue` ·
+ * `failResult`). 그 결과 허용전류표가 배포 사고로 깨져도 **HTTP 200** 이
+ * 나가고 로그·알람이 0 건이었다. 게다가 사용자가 보는 문장이 거짓이었다:
+ *
+ *   "요구 전류를 만족하는 KEC 표준 케이블 규격이 없습니다."
+ *
+ * 실제 원인은 표가 깨진 것이다. 도메인적으로 틀린 문장을 200 으로 내보내면
+ * 사용자는 그 말을 믿고 설계를 바꾼다(2026-07-28 독립 심사 백엔드 좌석).
+ *
+ * 호출자 잘못(굵기 미지원 등)은 계속 삼킨다 — 그건 정말로 "그 규격엔 없다"
+ * 이고, 다음 규격으로 넘어가는 것이 맞다.
+ */
+function rethrowIfInternal(err: unknown): void {
+  if (err instanceof Error && /ESVA-INTERNAL:/.test(err.message)) throw err;
 }
 
 // =========================================================================
@@ -117,7 +138,10 @@ export function findMinCableSize(
           source: result.source,
         };
       }
-    } catch {
+    } catch (err) {
+      // 우리 표에 구멍이 난 것이면 다음 규격으로 넘어가면 안 된다 —
+      // 그러면 표가 통째로 깨져도 "만족하는 규격이 없다" 로 끝난다.
+      rethrowIfInternal(err);
       // 해당 규격에서 데이터 없음 (예: Al 1.5sq) → 다음 규격
       continue;
     }
@@ -311,6 +335,8 @@ export function executeQuery(query: StructuredQuery): QueryResult {
         return failResult(query.type, `지원하지 않는 쿼리 타입: ${query.type}`);
     }
   } catch (err) {
+    // 내부 불변식은 failResult(HTTP 200)로 흡수하지 않는다.
+    rethrowIfInternal(err);
     return failResult(query.type, err instanceof Error ? err.message : String(err));
   }
 }

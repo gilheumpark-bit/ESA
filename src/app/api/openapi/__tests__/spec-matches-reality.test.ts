@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { NextRequest } from 'next/server';
 
 import { GET } from '../route';
@@ -90,6 +93,47 @@ describe('OpenAPI 선언 — 실제와 대조', () => {
       const sch = j.paths['/search'].post.requestBody.content['application/json'].schema;
       expect(sch.required).toContain('query');
       expect(Object.keys(sch.properties ?? {})).not.toContain('q');
+    });
+  });
+
+  /**
+   * **선언한 상태와 라우트가 실제로 내는 상태가 같은가.**
+   *
+   * 앞서 `/calculate` 의 responses 는 200·400·404 뿐이었다 — 이 배치의 주제인
+   * **422 가 빠져 있었고**, 403·429·500 도 없었다. 같은 파일의 다른 주석은
+   * "전에는 … 422 였다(실측)" 라고 쓰고 있었는데 목록은 안 고쳤다
+   * (2026-07-28 독립 심사 백엔드 좌석). 통합하는 쪽은 이 표를 보고 오류
+   * 처리를 짜므로, 선언에 없는 상태가 오면 그쪽이 깨진다.
+   *
+   * 라우트 소스에서 `status: NNN` 을 뽑아 대조한다. 라우트가 새 상태를
+   * 내기 시작하면 여기서 깨진다.
+   */
+  describe('/calculate — 선언한 상태 = 라우트가 내는 상태', () => {
+    const routeSrc = readFileSync(
+      join(__dirname, '..', '..', 'calculate', 'route.ts'),
+      'utf8',
+    );
+
+    function declared(): number[] {
+      return [...routeSrc.matchAll(/status:\s*(\d{3})/g)]
+        .map((m) => Number(m[1]))
+        .filter((n, i, a) => a.indexOf(n) === i)
+        .sort((a, b) => a - b);
+    }
+
+    it('훑기가 실제로 상태를 찾았다 — 공회전 알람', () => {
+      expect(declared().length).toBeGreaterThanOrEqual(5);
+    });
+
+    it('라우트가 내는 상태가 전부 선언돼 있다', async () => {
+      const j = await spec() as { paths: Record<string, { post: { responses: Record<string, unknown> } }> };
+      const spec422 = Object.keys(j.paths['/calculate'].post.responses).map(Number);
+      expect(declared().filter((s) => !spec422.includes(s))).toEqual([]);
+    });
+
+    it('422 는 어느 칸이 문제인지 알려준다고 적혀 있다', async () => {
+      const j = await spec() as { paths: Record<string, { post: { responses: Record<string, { description?: string }> } }> };
+      expect(j.paths['/calculate'].post.responses[422]?.description ?? '').toMatch(/field/);
     });
   });
 });
