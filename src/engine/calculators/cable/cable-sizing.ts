@@ -145,7 +145,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   const Kt = correctionProbe.factors.find((factor) => factor.type === 'temperature')?.factor ?? 1;
   steps.push({
     step: 1,
-    title: 'Temperature correction factor',
+    title: '온도 보정계수',
     formula: 'K_t = \\sqrt{\\frac{\\theta_{max} - \\theta_{amb}}{\\theta_{max} - 30}}',
     value: Kt,
     unit: '-',
@@ -155,7 +155,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   const Kg = correctionProbe.factors.find((factor) => factor.type === 'grouping')?.factor ?? 1;
   steps.push({
     step: 2,
-    title: 'Grouping correction factor',
+    title: '다조 포설 보정계수',
     formula: 'K_g = f(n)',
     value: Kg,
     unit: '-',
@@ -167,7 +167,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   const I_required = correctionProduct > 0 ? I / correctionProduct : Infinity;
   steps.push({
     step: 3,
-    title: 'Required cable ampacity (before correction)',
+    title: '보정 전 필요 허용전류',
     formula: 'I_{req} = \\frac{I_{load}}{K_t \\times K_g}',
     value: round(I_required, 2),
     unit: 'A',
@@ -254,7 +254,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
 
   steps.push({
     step: 5,
-    title: 'Verify voltage drop',
+    title: '전압강하 확인',
     formula: 'e\\% \\leq ' + dropLimitPercent + '\\%',
     value: vdPct,
     unit: '%',
