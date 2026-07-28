@@ -76,19 +76,14 @@ export function queryAmpacity(opts: AmpacityOptions): AmpacityQueryResult | null
 }
 
 /**
- * `ESVA-INTERNAL:` 표식이 붙은 오류는 그대로 올려보낸다.
+ * `ESVA-INTERNAL:` 표식이 붙은 오류는 삼키지 말고 올려보낸다.
  *
- * 이 파일의 세 자리가 표 조회 오류를 전부 삼켰다(`return null` · `continue` ·
- * `failResult`). 그 결과 허용전류표가 배포 사고로 깨져도 **HTTP 200** 이
- * 나가고 로그·알람이 0 건이었다. 게다가 사용자가 보는 문장이 거짓이었다:
+ * 이 파일의 조회 세 자리는 오류를 `null`·`continue`·`failResult` 로 흡수한다.
+ * 표가 깨진 것까지 흡수하면 **HTTP 200 으로 "요구 전류를 만족하는 규격이
+ * 없습니다"** 가 나간다 — 도메인적으로 거짓이고, 사용자는 그 말을 믿고
+ * 설계를 바꾸며, 우리는 표가 깨진 줄 모른다.
  *
- *   "요구 전류를 만족하는 KEC 표준 케이블 규격이 없습니다."
- *
- * 실제 원인은 표가 깨진 것이다. 도메인적으로 틀린 문장을 200 으로 내보내면
- * 사용자는 그 말을 믿고 설계를 바꾼다(2026-07-28 독립 심사 백엔드 좌석).
- *
- * 호출자 잘못(굵기 미지원 등)은 계속 삼킨다 — 그건 정말로 "그 규격엔 없다"
- * 이고, 다음 규격으로 넘어가는 것이 맞다.
+ * 호출자 잘못(굵기 미지원 등)은 계속 삼킨다 — 그건 정말로 "그 규격엔 없다" 다.
  */
 function rethrowIfInternal(err: unknown): void {
   if (err instanceof Error && /ESVA-INTERNAL:/.test(err.message)) throw err;

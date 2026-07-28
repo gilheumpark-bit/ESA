@@ -140,18 +140,12 @@ interface TempCorrectionRow {
  * Base ambient temperature: 30°C. 각 밴드는 상한 온도의 값(밴드 내 보수측)을 쓴다.
  *
  * **열 이름의 숫자는 도체 최고 허용온도(Tmax)다** — PVC 70 · MI 70(시스) ·
- * XLPE/EPR 90. 표 값은 전부 `√((Tmax − Ta)/(Tmax − 30))` 과 일치하며,
- * `ampacity-temp-invariant.test.ts` 가 세 경로(이 표 · IEC 표 · temp-correction
- * 계산기)를 그 식에 함께 묶어 둔다. 이름과 Tmax 가 어긋나면 폴백이 이름을
- * 따라가 틀린다(2026-07-28 실측: `pvc60` 이라 폴백이 60 을 썼다).
+ * XLPE/EPR 90. 이름과 Tmax 가 어긋나면 표 밖 온도의 폴백이 이름을 따라가
+ * 틀린다. 값은 전부 `√((Tmax − Ta)/(Tmax − 30))` 과 일치해야 하고,
+ * `ampacity-temp-invariant.test.ts` 가 세 경로를 그 식에 함께 묶어 둔다.
  *
- * 2026-07-21 버그 사냥 #1 수리: `xlpe90` 열이 실제로는 PVC70 값(35°C 0.94·45°C
- * 0.79·60°C 0.50)을 담고, `pvc70` 열은 한 밴드 어긋나(45°C 0.71·60°C 0.00) 있었다.
- * XLPE는 90°C 도체라 PVC(70°C)보다 열에 강해 보정계수가 높아야 하는데(45°C 0.87 vs
- * 0.79) 역전돼 있었다 — XLPE 케이블을 과소, 저온측(15°C)은 과대(비보수·화재 방향)로
- * 계산. 별개 `temp-correction` 계산기(공식 √((Tmax−Ta)/(Tmax−30)))는 XLPE 40°C를
- * 0.913으로 옳게 내던 것과도 표가 모순이었다. B.52.14 정확값으로 정렬한다.
- * (mi70 열은 70°C sheath 값이 이미 정확해 불변.)
+ * 열끼리 값이 뒤바뀌면 XLPE 를 과소·저온측을 과대(비보수·화재 방향)로
+ * 계산한다 — 표를 손볼 때 열 순서부터 확인할 것.
  */
 const TEMP_CORRECTION: TempCorrectionRow[] = [
   { ambientMin: 10, ambientMax: 15, pvc70: 1.17, mi70: 1.18, xlpe90: 1.12 },

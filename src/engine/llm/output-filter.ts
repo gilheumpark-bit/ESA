@@ -32,10 +32,8 @@ const PROBABILISTIC_PATTERNS = /(?:약|대략|보통|일반적으로|대체로|�
  * Number pattern: integers, decimals, percentages, scientific notation.
  * Excludes dates (YYYY-MM-DD), version strings (v1.2.3), and clause refs (232.3.9).
  *
- * \uCC9C\uB2E8\uC704 \uAD6C\uBD84\uC790\uB294 \uD55C \uB369\uC5B4\uB9AC\uB85C \uC77D\uB294\uB2E4. \uC774\uC804\uC5D0\uB294 "55,000 W" \uAC00 "55" \uC640 "000" \uB450
- * \uD1A0\uD070\uC73C\uB85C \uCABC\uAC1C\uC838, \uC55E\uC790\uB9AC\uB294 \uC0AC\uC6A9\uC790 \uC785\uB825\uC774\uB77C \uD1B5\uACFC\uD558\uACE0 \uB4B7\uC790\uB9AC\uB294 \uADFC\uAC70\uAC00 \uC5C6\uB2E4\uBA70
- * \uC9C0\uC6CC\uC84C\uB2E4 \u2014 \uC0AC\uC6A9\uC790\uC5D0\uAC8C\uB294 "55,[\uBBF8\uD655\uC778]" \uC774\uB77C\uB294 \uBB38\uC7A5\uC774 \uB098\uAC14\uB2E4(\uC2E4\uCE21 2026-07-26,
- * \uBAA8\uB378\uC774 55kW \uB97C W \uB85C \uD658\uC0B0\uD55C \uC790\uB9AC). \uC27C\uD45C\uB294 \uC790\uB9BF\uC218 \uD45C\uAE30\uC9C0 \uAC12\uC758 \uACBD\uACC4\uAC00 \uC544\uB2C8\uB2E4.
+ * 천단위 쉼표는 한 덩어리로 읽는다 — 쉼표는 자릿수 표기지 값의 경계가
+ * 아니다. 쪼개면 "55,000 W" 가 "55,[미확인]" 으로 나간다.
  */
 const NUMBER_PATTERN = /(?<!\d{4}-\d{2}-)(?<!\d\.)(?<![vV]\d+\.)(?<!\w)(?<![\d,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(%|[A-Za-z\u03A9]+(?:\/[A-Za-z]+)?)?/g;
 
@@ -157,17 +155,11 @@ function normalizeNumericToken(value: string): string {
 }
 
 /**
- * 사용자가 질문에 적어 넣은 **조항 표기**를 모은다.
+ * 사용자가 질문에 적어 넣은 조항 표기.
  *
- * 수치 규칙에는 이미 `isTrustedInput` 예외가 있는데(질문에 있던 값은 그대로
- * 인용해도 된다) 조항 인용 규칙에는 없었다. 그래서 사용자가 조항 번호를
- * 대고 그 내용을 물으면, 답이 **"문의하신 [미확인] 조항은 존재하지
- * 않습니다"** 로 나왔다 — 무엇을 묻고 답하는지가 지워진다(실측 2026-07-28,
- * 실재하지 않는 번호를 일부러 물어본 라이브 답변).
- *
- * 질문의 조항을 되받는 것은 **근거 주장이 아니라 대상 지칭**이다. 모델이
- * *다른* 조항을 근거로 끌어오는 것은 여전히 막힌다 — 질문에 없으면 여기
- * 집합에 없다.
+ * 질문의 조항을 되받는 것은 근거 주장이 아니라 **대상 지칭**이다. 이 예외가
+ * 없으면 "문의하신 [미확인] 조항은…" 처럼 무엇을 묻는지가 지워진다. 모델이
+ * *다른* 조항을 근거로 끌어오는 것은 여전히 막힌다 — 질문에 없으면 여기 없다.
  */
 function findTrustedCitations(input: string): Set<string> {
   const found = new Set<string>();
@@ -191,48 +183,21 @@ function findTrustedNumbers(input: string): Set<string> {
 }
 
 /**
- * Find all source tag positions in the output.
- */
-/**
  * `[SOURCE: ...]` 태그 위치.
  *
- * **이 태그는 모델이 쓴 글자다.** 파일 위 주석은 "tool system injects" 라고
- * 하지만 라우트는 `toolCalls` 로 빈 배열을 넘기고, 태그는 모델 출력 안에
- * 텍스트로 들어 있다. 즉 모델이 태그를 적는 것만으로 제 숫자에 근거를
- * 붙일 수 있었다.
+ * **이 태그는 모델이 쓴 글자다** — 라우트는 `toolCalls` 로 빈 배열을 넘기고,
+ * 태그는 모델 출력 안의 텍스트다. 즉 태그를 적는 것만으로 제 숫자에 근거를
+ * 붙일 수 있다.
  *
- * 실측 2026-07-28(실공급자 라이브): "154kV 접근 한계거리?" 에 모델이
- * **1.6m** 이라 답하며 `[SOURCE: ESA_CALCULATOR:unit-converter]` 를 달았다.
- * 그 계산기는 같은 요청에서 `judgment.pass=false` ("kV 에서 m 로는 단위
- * 환산만으로 갈 수 없습니다") 로 **실패**했는데, 실패한 계산기의 태그가
- * 지어낸 거리를 정당화했다. 앱의 체크리스트는 1.7m 를 말한다.
+ * **계산기 태그는 근접 승인을 하지 않는다.** 계산기가 실제로 낸 값은
+ * `trustedInput`(= `calculationEvidence.trustedText`)에 있고 값이 정확히
+ * 일치할 때 이미 통과하므로, 근접 창이 덮는 것은 계산기가 내지 않은 수치뿐이다.
+ * 비용: 모델이 9.93 을 "약 10" 으로 반올림해 쓰면 막힌다 — 10 은 계산기가
+ * 말한 값이 아니므로 그게 맞다.
  *
- * 1 차 수리는 `attestedSources` 대조였다 — 돌아서 통과한 계산기 id 집합에
- * 있을 때만 근거로 인정. **그걸로는 모자랐다**(2026-07-28 독립 심사 백엔드
- * 좌석 실행 실측). 뚫린 자리 넷:
- *
- *   `[SOURCE: esa_calculator:unit-converter]`  소문자 — 정규식에 `i` 없음
- *   `[SOURCE: ESA_CALCULATOR]`                 id 생략 — 대조할 게 없어 통과
- *   `[SOURCE: KEC_TABLE 232.3]`                계산기가 아닌 payload
- *   성공한 계산기 태그 옆 ±200 자의 **모든** 수치
- *
- * 마지막이 제일 크다. 태그는 **값을 대조하지 않고** 근접만 본다. kV→V 환산이
- * *성공*하기만 하면 같은 문단의 지어낸 1.63m 가 같이 통과했다("154kV 는
- * 154,000V 입니다. [SOURCE: …] 이 전압의 접근 한계거리는 1.63m 입니다").
- * 실패한 계산기를 막았더니 성공한 계산기가 같은 일을 했다.
- *
- * **그래서 계산기 태그는 근접 승인을 아예 못 한다.** 계산기가 실제로 낸
- * 값은 `trustedInput`(= `calculationEvidence.trustedText`)에 있고 값이
- * 정확히 일치할 때 이미 통과한다 — 근접 승인은 **잉여이면서 유해**했다.
- * 그 창이 덮던 것은 계산기가 내지 않은 수치뿐이다.
- *
- * 비용을 밝힌다: 모델이 9.93 을 "약 10" 으로 반올림해 쓰면 막힌다. 그게
- * 맞다 — 10 은 계산기가 말한 값이 아니다.
- *
- * 계산기가 아닌 payload(`KEC_TABLE …`)는 종전대로 근접 승인이 된다. 이건
- * 남은 구멍이다 — 모델이 표 번호를 지어낼 수 있다. 값에 결박할 대상이 없어
- * (표 조회 결과가 응답 경로에 없다) 지금은 못 닫는다. 닫으려면 표 조회를
- * 실증 경로에 올려야 한다.
+ * **남은 구멍**: 계산기가 아닌 payload(`KEC_TABLE …`)는 여전히 ±200 자 근접
+ * 승인이 된다. 모델이 표 번호를 지어낼 수 있는데, 값에 결박할 대상이 없어
+ * (표 조회 결과가 응답 경로에 없다) 지금은 못 닫는다.
  */
 function findSourcePositions(output: string, attestedSources?: ReadonlySet<string>): Set<number> {
   const positions = new Set<number>();
@@ -331,13 +296,8 @@ export function filterLLMOutput(
   const trustedCitations = findTrustedCitations(trustedInput);
 
   /**
-   * 앱이 이미 근거와 함께 내보내는 값은 **그 근거를 붙여** 남긴다.
-   *
-   * 실측 2026-07-28: "적정공기 기준이 뭔가요" 에 산소·CO₂·CO·H₂S 수치가
-   * 전부 `[미확인]` 으로 나갔다. 같은 값을 `/field` 체크리스트는 조문과
-   * 함께 그대로 보여 준다 — 앱은 말할 용의가 있는데 챗만 못 했다.
-   * 통과 조건은 값·단위 정확 일치 **+ 대상 용어 근접**이라 좁다
-   * (`app-asserted-constants.ts`).
+   * 앱이 이미 근거와 함께 내보내는 값은 그 근거를 붙여 남긴다. 통과 조건은
+   * 값·단위 정확 일치 + 대상 용어 근접이다(`app-asserted-constants.ts`).
    */
   const assertedNotes = new Map<number, string>();
 
@@ -544,11 +504,8 @@ export function applyConfidenceGate(
  * Quick check whether an LLM output would pass the filter.
  * Cheaper than full filterLLMOutput() — no replacement step.
  *
- * trustedInput 을 받는 이유: 이 인자가 없던 동안 isClean() 이 filterLLMOutput()
- * 보다 엄격했다. 사용자가 질문에 적어 넣은 수치를 그대로 인용한 답을
- * filterLLMOutput() 은 통과시키는데 isClean() 은 거부해, 같은 출력에 두 함수가
- * 다른 판정을 냈다. 현재 프로덕션 호출처는 0 이라 실피해는 없었지만(engine/index
- * 재수출과 테스트뿐) 배선되는 순간 발화할 함정이라 계약을 맞춰 둔다.
+ * `trustedInput` 은 생략하지 말 것 — 빼면 `filterLLMOutput()` 보다 엄격해져
+ * 같은 출력에 두 함수가 다른 판정을 낸다. (현재 프로덕션 호출처 0)
  */
 export function isClean(
   output: string,
