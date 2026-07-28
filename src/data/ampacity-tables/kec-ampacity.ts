@@ -246,7 +246,8 @@ export function getAmpacity(opts: AmpacityOptions): AmpacityResult {
   // Find size index
   const sizeIdx = KEC_CABLE_SIZES.indexOf(size as (typeof KEC_CABLE_SIZES)[number]);
   if (sizeIdx === -1) {
-    throw new Error(
+    throw new CalcValidationError(
+      'size',
       `Invalid cable size: ${size} mm². Valid KEC sizes: ${KEC_CABLE_SIZES.join(', ')}`,
     );
   }
@@ -255,12 +256,13 @@ export function getAmpacity(opts: AmpacityOptions): AmpacityResult {
   const tableKey = `${conductor}_${insulation}_${installation}` as AmpacityTableKey;
   const row = BASE_AMPACITY[tableKey];
   if (!row) {
-    throw new Error(`No ampacity data for: ${tableKey}`);
+    throw new CalcValidationError('insulation',`No ampacity data for: ${tableKey}`);
   }
 
   const baseAmpacity = row[sizeIdx];
   if (baseAmpacity === 0) {
-    throw new Error(
+    throw new CalcValidationError(
+      'size',
       `Cable size ${size} mm² is not available for ${conductor}/${insulation}/${installation}`,
     );
   }

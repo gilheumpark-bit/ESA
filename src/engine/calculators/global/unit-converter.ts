@@ -13,6 +13,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import { DetailedCalcResult, CalcStep, round } from '../types';
 
 // ── 물리량과 배수 ────────────────────────────────────────────────────────────
@@ -115,13 +116,13 @@ export interface UnitConverterInput {
 export function convertUnit(input: UnitConverterInput): DetailedCalcResult {
   const { value } = input;
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error('변환할 값이 숫자가 아닙니다.');
+    throw new CalcValidationError('value','변환할 값이 숫자가 아닙니다.');
   }
 
   const fromKey = resolveKey(input.fromUnit);
   const toKey = resolveKey(input.toUnit);
-  if (!fromKey) throw new Error(`알 수 없는 단위입니다: ${input.fromUnit}`);
-  if (!toKey) throw new Error(`알 수 없는 단위입니다: ${input.toUnit}`);
+  if (!fromKey) throw new CalcValidationError('fromUnit',`알 수 없는 단위입니다: ${input.fromUnit}`);
+  if (!toKey) throw new CalcValidationError('toUnit',`알 수 없는 단위입니다: ${input.toUnit}`);
 
   const from = UNITS[fromKey];
   const to = UNITS[toKey];

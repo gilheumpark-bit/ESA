@@ -12,6 +12,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -54,7 +55,7 @@ export function calculateRelayBasic(input: RelayBasicInput): DetailedCalcResult 
   assertOneOf(input.curveType, VALID_CURVES, 'curveType');
 
   if (input.faultCurrent <= input.loadCurrent) {
-    throw new Error('faultCurrent must be greater than loadCurrent');
+    throw new CalcValidationError('faultCurrent','faultCurrent must be greater than loadCurrent');
   }
 
   const { loadCurrent: Iload, faultCurrent: Ifault, ctRatio: CTR, curveType } = input;

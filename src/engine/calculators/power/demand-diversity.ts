@@ -13,6 +13,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -41,7 +42,7 @@ export interface DemandDiversityInput {
 export function calculateDemandDiversity(input: DemandDiversityInput): DetailedCalcResult {
   // PART 1 — Validation
   if (!input.individualMaxDemands || input.individualMaxDemands.length === 0) {
-    throw new Error('At least one individual max demand value is required');
+    throw new CalcValidationError('individualMaxDemands','At least one individual max demand value is required');
   }
   for (let i = 0; i < input.individualMaxDemands.length; i++) {
     assertPositive(input.individualMaxDemands[i], `individualMaxDemands[${i}]`);

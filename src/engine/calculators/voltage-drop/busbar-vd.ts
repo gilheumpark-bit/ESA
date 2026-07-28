@@ -14,6 +14,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import { SQRT3 } from '@engine/constants/physical';
 import {
   activeDefaults,
@@ -69,7 +70,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
   assertPositive(input.voltage, 'voltage');
   assertRange(input.powerFactor, 0.01, 1.0, 'powerFactor');
   if (!input.sections || input.sections.length === 0) {
-    throw new Error('At least one busbar section is required');
+    throw new CalcValidationError('sections','At least one busbar section is required');
   }
 
   for (let i = 0; i < input.sections.length; i++) {

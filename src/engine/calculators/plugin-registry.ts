@@ -11,6 +11,7 @@
  */
 
 import type { CalculatorRegistryEntry, DetailedCalcResult } from './types';
+import { CalcValidationError } from './types';
 
 class CalculatorPluginRegistry {
   private readonly entries = new Map<string, CalculatorRegistryEntry>();
@@ -34,7 +35,7 @@ class CalculatorPluginRegistry {
   execute(id: string, inputs: Record<string, unknown>): DetailedCalcResult {
     const entry = this.entries.get(id);
     if (!entry) {
-      throw new Error(`ESVA-4005: Unknown calculator: ${id}`);
+      throw new CalcValidationError('calculatorId', `ESVA-4005: Unknown calculator: ${id}`);
     }
     return entry.calculator(inputs);
   }

@@ -15,6 +15,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -79,7 +80,7 @@ function selectSwitchgear(current: number): number {
 export function calculateSubstationCapacity(input: SubstationCapacityInput): DetailedCalcResult {
   // PART 1 -- Validation
   if (!input.loads || input.loads.length === 0) {
-    throw new Error('At least one load entry is required');
+    throw new CalcValidationError('loads','At least one load entry is required');
   }
   assertRange(input.futureGrowth, 0, 100, 'futureGrowth');
 

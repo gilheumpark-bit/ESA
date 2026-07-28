@@ -283,7 +283,8 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
   // Find size index
   const sizeIdx = IEC_CABLE_SIZES.indexOf(size as IecSize);
   if (sizeIdx === -1) {
-    throw new Error(
+    throw new CalcValidationError(
+      'size',
       `Invalid IEC cable size: ${size} mm². Valid sizes: ${IEC_CABLE_SIZES.join(', ')}`,
     );
   }
@@ -302,7 +303,8 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
     const supportedMethods = (Object.keys(IEC_BASE_AMPACITY) as IecAmpacityKey[])
       .filter((k) => k.startsWith(`${conductor}_${lookupInsulation}_`))
       .map((k) => k.split('_')[2]);
-    throw new Error(
+    throw new CalcValidationError(
+      'method',
       supportedMethods.length > 0
         ? `IEC method '${method}' has no table for ${conductor}/${insulation}. ` +
           `Supported methods for this material/insulation: ${supportedMethods.join(', ')}.`
@@ -312,7 +314,8 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
 
   const baseAmpacity = row[sizeIdx];
   if (baseAmpacity === 0) {
-    throw new Error(
+    throw new CalcValidationError(
+      'size',
       `Cable size ${size} mm² not available for ${conductor}/${insulation}/${method}`,
     );
   }

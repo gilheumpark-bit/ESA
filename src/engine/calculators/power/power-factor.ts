@@ -11,6 +11,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -36,7 +37,7 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
   assertPositive(input.activePower, 'activePower');
 
   if (input.apparentPower === undefined && input.reactivePower === undefined) {
-    throw new Error('Either apparentPower or reactivePower must be provided');
+    throw new CalcValidationError('apparentPower','Either apparentPower or reactivePower must be provided');
   }
 
   const P = input.activePower;
@@ -51,7 +52,7 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
     S = input.apparentPower;
 
     if (P > S) {
-      throw new Error('activePower cannot exceed apparentPower');
+      throw new CalcValidationError('activePower','activePower cannot exceed apparentPower');
     }
 
     // Step 1: Power factor from P/S

@@ -10,6 +10,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -41,7 +42,7 @@ export function calculateMotorPFCorrection(input: MotorPFCorrectionInput): Detai
   assertPositive(input.motorVoltage, 'motorVoltage');
 
   if (input.targetPF <= input.motorPF) {
-    throw new Error('targetPF must be greater than motorPF');
+    throw new CalcValidationError('targetPF','targetPF must be greater than motorPF');
   }
 
   const { motorPower: P, motorPF: pf1, targetPF: pf2, motorVoltage: V } = input;

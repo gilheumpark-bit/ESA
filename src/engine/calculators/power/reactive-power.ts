@@ -12,6 +12,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -44,7 +45,7 @@ export function calculateReactivePower(input: ReactivePowerInput): DetailedCalcR
   assertRange(input.targetPF, 0.01, 1.0, 'targetPF');
 
   if (input.targetPF <= input.currentPF) {
-    throw new Error('targetPF must be greater than currentPF');
+    throw new CalcValidationError('targetPF','targetPF must be greater than currentPF');
   }
 
   const { activePower: P, currentPF: pf1, targetPF: pf2 } = input;

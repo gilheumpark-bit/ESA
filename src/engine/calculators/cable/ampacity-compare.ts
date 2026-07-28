@@ -13,6 +13,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -92,7 +93,7 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown lookup failure';
-    throw new Error(`KEC ampacity not available for this comparison: ${reason}`);
+    throw new CalcValidationError('cableSize',`KEC ampacity not available for this comparison: ${reason}`);
   }
   const kecBase = kecLookup.ampacity;
 
@@ -106,7 +107,7 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown lookup failure';
-    throw new Error(`NEC ampacity not available for this comparison: ${reason}`);
+    throw new CalcValidationError('cableSize',`NEC ampacity not available for this comparison: ${reason}`);
   }
 
   // IEC 60364-5-52 실표 조회 — mm² 네이티브라 환산 불필요.
@@ -117,7 +118,7 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     });
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown lookup failure';
-    throw new Error(`IEC ampacity not available for this comparison: ${reason}`);
+    throw new CalcValidationError('cableSize',`IEC ampacity not available for this comparison: ${reason}`);
   }
 
   steps.push({

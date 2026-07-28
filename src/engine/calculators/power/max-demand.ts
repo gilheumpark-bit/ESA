@@ -13,6 +13,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -44,11 +45,11 @@ export interface MaxDemandInput {
 export function calculateMaxDemand(input: MaxDemandInput): DetailedCalcResult {
   // PART 1 — Validation
   if (!input.loads || input.loads.length === 0) {
-    throw new Error('At least one load entry is required');
+    throw new CalcValidationError('loads','At least one load entry is required');
   }
   assertPositive(input.diversityFactor, 'diversityFactor');
   if (input.diversityFactor < 1.0) {
-    throw new Error('diversityFactor must be >= 1.0');
+    throw new CalcValidationError('diversityFactor','diversityFactor must be >= 1.0');
   }
 
   for (const load of input.loads) {

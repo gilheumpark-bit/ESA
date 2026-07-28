@@ -14,6 +14,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -46,7 +47,7 @@ export function calculateParallelOperation(input: ParallelOperationInput): Detai
   // PART 1 — Validation
   const { transformers } = input;
   if (!Array.isArray(transformers) || transformers.length < 2) {
-    throw new Error('At least 2 transformers are required for parallel operation analysis');
+    throw new CalcValidationError('transformers','At least 2 transformers are required for parallel operation analysis');
   }
 
   for (let i = 0; i < transformers.length; i++) {

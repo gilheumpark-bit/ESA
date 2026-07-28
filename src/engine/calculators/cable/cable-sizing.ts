@@ -31,6 +31,7 @@ import {
 import {
   DetailedCalcResult,
   CalcStep,
+  CalcValidationError,
   assertPositive,
   assertOneOf,
   round,
@@ -133,7 +134,10 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     }
   }
   if (!correctionProbe) {
-    throw new Error(`No IEC ampacity entries are available for ${conductor}/${insulation}/${installation}.`);
+    throw new CalcValidationError(
+      'installation',
+      `${conductor}/${insulation}/${installation} 조합의 IEC 허용전류 표가 없습니다 — 설치 방법이나 절연 종류를 바꿔 보십시오.`,
+    );
   }
 
   const Kt = correctionProbe.factors.find((factor) => factor.type === 'temperature')?.factor ?? 1;
@@ -222,7 +226,10 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   // If we iterated all and none passed VD, select the last one tried
   if (selectedSize === null) {
     if (!largestAvailable) {
-      throw new Error(`No IEC ampacity entries are available for ${conductor}/${insulation}/${installation}.`);
+      throw new CalcValidationError(
+      'installation',
+      `${conductor}/${insulation}/${installation} 조합의 IEC 허용전류 표가 없습니다 — 설치 방법이나 절연 종류를 바꿔 보십시오.`,
+    );
     }
     selectedSize = largestAvailable.size;
     selectedAmpacity = largestAvailable.result.ampacity;

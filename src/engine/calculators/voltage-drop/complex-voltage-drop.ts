@@ -12,6 +12,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import { SQRT3 } from '@engine/constants/physical';
 import {
   activeDefaults,
@@ -73,7 +74,7 @@ export function calculateComplexVoltageDrop(input: ComplexVoltageDropInput): Det
   assertOneOf(input.phase, [1, 3] as const, 'phase');
 
   if (!input.sections || input.sections.length === 0) {
-    throw new Error('At least one cable section is required');
+    throw new CalcValidationError('sections','At least one cable section is required');
   }
   for (let i = 0; i < input.sections.length; i++) {
     assertPositive(input.sections[i].length, `sections[${i}].length`);

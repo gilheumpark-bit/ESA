@@ -12,6 +12,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -126,7 +127,7 @@ export function convertAwgMm2(input: AwgConverterInput): DetailedCalcResult {
 
     // Standard AWG conversion
     if (input.awg === undefined) {
-      throw new Error('awg or kcmil is required for awg-to-mm2 direction');
+      throw new CalcValidationError('awg','awg or kcmil is required for awg-to-mm2 direction');
     }
 
     const awgNum = input.awg;
@@ -194,7 +195,7 @@ export function convertAwgMm2(input: AwgConverterInput): DetailedCalcResult {
   } else {
     // PART 2 — mm² → AWG conversion
     if (input.mm2 === undefined) {
-      throw new Error('mm2 is required for mm2-to-awg direction');
+      throw new CalcValidationError('mm2','mm2 is required for mm2-to-awg direction');
     }
     assertPositive(input.mm2, 'mm2');
 

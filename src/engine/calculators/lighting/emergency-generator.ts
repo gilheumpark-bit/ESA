@@ -12,6 +12,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -66,7 +67,7 @@ const SPECIFIC_CONSUMPTION = 0.21;
 export function calculateEmergencyGenerator(input: EmergencyGeneratorInput): DetailedCalcResult {
   // PART 1 -- Validation
   if (!input.emergencyLoads || input.emergencyLoads.length === 0) {
-    throw new Error('At least one emergency load entry is required');
+    throw new CalcValidationError('loads','At least one emergency load entry is required');
   }
   assertRange(input.safetyFactor, 1.0, 2.0, 'safetyFactor');
 

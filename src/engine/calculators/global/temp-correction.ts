@@ -15,6 +15,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
+import { CalcValidationError } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -42,10 +43,10 @@ export function calculateTempCorrection(input: TempCorrectionInput): DetailedCal
   assertPositive(input.baseAmpacity, 'baseAmpacity');
   // referenceTemp and actualTemp can be negative (Nordic)
   if (!Number.isFinite(input.referenceTemp)) {
-    throw new Error('referenceTemp must be a finite number');
+    throw new CalcValidationError('referenceTemp','referenceTemp must be a finite number');
   }
   if (!Number.isFinite(input.actualTemp)) {
-    throw new Error('actualTemp must be a finite number');
+    throw new CalcValidationError('actualTemp','actualTemp must be a finite number');
   }
   assertPositive(input.maxConductorTemp, 'maxConductorTemp');
 

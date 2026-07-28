@@ -241,7 +241,8 @@ export function getNecAmpacity(opts: NecAmpacityOptions): NecAmpacityResult {
   // Find size index
   const sizeIdx = NEC_SIZES.indexOf(size as NecSize);
   if (sizeIdx === -1) {
-    throw new Error(
+    throw new CalcValidationError(
+      'size',
       `Invalid NEC wire size: "${size}". Valid sizes: ${NEC_SIZES.join(', ')}`,
     );
   }
@@ -249,12 +250,13 @@ export function getNecAmpacity(opts: NecAmpacityOptions): NecAmpacityResult {
   const tableKey = `${conductor}_${tempRating}` as AmpacityKey;
   const row = NEC_TABLE_310_16[tableKey];
   if (!row) {
-    throw new Error(`No NEC ampacity data for: ${tableKey}`);
+    throw new CalcValidationError('tempRating',`No NEC ampacity data for: ${tableKey}`);
   }
 
   const baseAmpacity = row[sizeIdx];
   if (baseAmpacity === 0) {
-    throw new Error(
+    throw new CalcValidationError(
+      'size',
       `Wire size ${size} is not available in ${conductor} ${tempRating}°C column`,
     );
   }
