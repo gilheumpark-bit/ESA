@@ -258,7 +258,10 @@ function determinePPE(incidentEnergy: number): PPEInfo {
 export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   const steps: CalcStep[] = [];
 
-  // 입력 검증 — IEEE 1584-2018 적용 범위.
+  // 입력 검증 — IEEE 1584-**2002** 시험 범위(208~15,000V · 0.7~106kA · 13~152mm).
+  // 2026-07-28 정정: 아래 메시지는 2002 라고 말하는데 이 주석만 "2018" 로
+  // 남아 있었다 — 이 커밋이 고치려던 **판 라벨 불일치 그 자체**를 내가
+  // 새로 만든 셈이다(독립 심사 지적). 판 표기는 한 파일 안에서도 어긋난다.
   // ESVA-440x 코드를 throw 메시지에 포함해 API 응답에서 표준 에러 코드를 노출한다.
   if (!Number.isFinite(input.voltage_V) || input.voltage_V < 208 || input.voltage_V > 15000) {
     throw new CalcValidationError(
