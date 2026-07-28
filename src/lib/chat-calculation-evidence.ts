@@ -72,6 +72,22 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
 }
 
 /**
+ * 공식을 쓸 때의 규칙.
+ *
+ * "수치 없이 설명해도 됩니다" 만으로는 부족했다. 모델은 공식의 **상수**를
+ * 수치로 여기지 않아 `e = 30.8·L·I/(1000·A)` 처럼 적고, 출력 검증이 그
+ * 상수를 지워 `e = [미확인]·L·I/([미확인]·A)` 가 됐다. 라이브 실측
+ * 2026-07-28: "전압강하 계산해줘" 한 번에 공식 3 개가 전부 뚫리고
+ * `[미확인]` 이 8 개 나왔다. 구멍 난 공식은 안 보여 주느니만 못하다.
+ *
+ * 상수도 기호로 두라고 명시한다. 값은 계산기가 적용한다.
+ */
+const SYMBOLIC_FORMULA_RULE = '\n공식에는 **숫자를 하나도 쓰지 마세요.** 계수도 단위 환산 상수도'
+  + ' 전부 기호로 두고 기호가 무엇인지만 밝히세요(예: `e = k·L·I/A`, k 는 배선 방식과'
+  + ' 단위 환산을 포함한 상수). 숫자를 적으면 출력 검증이 그 숫자를 지워 공식이 읽을 수'
+  + ' 없게 됩니다 — 상수의 실제 값은 계산기가 적용합니다.';
+
+/**
  * 표·규정에서 **수치를 꺼내 오는** 질문인가.
  *
  * `parseQuery` 는 "케이블 35sq 허용전류 알려줘" 를 `calculate` 가 아니라
@@ -156,6 +172,7 @@ export function resolveChatCalculationShortfall(query: string): string | null {
   if (!intent.calculatorId) {
     if (parseQuery(query).intent === 'calculate') {
       return '\n\n계산 요청이지만 이 질문에 맞는 검증된 ESA 계산기를 지목하지 못했습니다.\n수치를 직접 만들어 제시하지 마세요. 대신 ① 적용 공식을 기호로, ② 각 기호에 해당하는 입력값이 무엇인지, ③ 어떤 계산기·기준을 봐야 하는지를 설명하세요.\n질문에 이미 주어진 값은 그대로 인용해도 됩니다.'
+        + SYMBOLIC_FORMULA_RULE
         + calculatorRoster();
     }
     return asksForTableValue(query) ? LOOKUP_SHORTFALL + calculatorRoster() : null;
@@ -169,5 +186,5 @@ export function resolveChatCalculationShortfall(query: string): string | null {
     ? `\n질문에 있으나 앱이 어느 입력인지 읽지 못한 수치: ${intent.unreadNumbers.join(', ')} — 각각 무엇의 값인지 확인하세요.`
     : '';
 
-  return `\n\n계산 요청이지만 검증된 ESA 계산기(${intent.calculatorName ?? intent.calculatorId})를 실행할 입력이 확정되지 않았습니다.\n직접 계산해서 수치를 제시하지 마세요. 대신 필요한 입력을 구체적으로 되물으세요.\n필요한 입력: ${needed.join(', ') || '없음'}${unread}\n일반 원리·공식·판단 기준은 수치 없이 설명해도 됩니다.`;
+  return `\n\n계산 요청이지만 검증된 ESA 계산기(${intent.calculatorName ?? intent.calculatorId})를 실행할 입력이 확정되지 않았습니다.\n직접 계산해서 수치를 제시하지 마세요. 대신 필요한 입력을 구체적으로 되물으세요.\n필요한 입력: ${needed.join(', ') || '없음'}${unread}\n일반 원리·공식·판단 기준은 수치 없이 설명해도 됩니다.${SYMBOLIC_FORMULA_RULE}`;
 }

@@ -135,3 +135,29 @@ describe('지시가 없을 때 사용자가 받는 것', () => {
     expect(r.filtered).toContain('100AF');
   });
 });
+
+/**
+ * 공식을 쓸 때 **상수까지 기호로** 두라고 말하는지 본다.
+ *
+ * "수치 없이 설명해도 됩니다" 만으로는 부족했다. 모델은 공식의 상수를
+ * 수치로 여기지 않아 `e = 30.8·L·I/(1000·A)` 처럼 적었고, 출력 검증이 그
+ * 상수를 지워 `e = [미확인]·L·I/([미확인]·A)` 가 됐다. 라이브 실측
+ * 2026-07-28: "전압강하 계산해줘" 한 번에 공식 3 개가 전부 뚫리고
+ * `[미확인]` 이 8 개 나왔다. 구멍 난 공식은 안 보여 주느니만 못하다.
+ */
+describe('공식은 상수까지 기호로', () => {
+  it.each([
+    ['계산기 지목됨·입력 부족', '전압강하 계산해줘'],
+    ['계산 의도·계산기 없음', '22.9kV 500kVA 변압기 2차 전류가 얼마인가요?'],
+  ])('%s — 상수 기호화 지시가 붙는다', (_이름, q) => {
+    const sf = resolveChatCalculationShortfall(q);
+    expect(sf).toContain('숫자를 하나도 쓰지 마세요');
+    expect(sf).toContain('계산기가 적용');
+  });
+
+  it('영수증이 나오는 경로에는 안 붙는다 — 거기선 실제 수치를 써야 한다', () => {
+    const q = '전압 380V, 전류 100A, 길이 50m, 케이블 35sq 전압강하 계산해줘';
+    expect(resolveChatCalculationEvidence(q)).not.toBeNull();
+    expect(resolveChatCalculationShortfall(q)).toBeNull();
+  });
+});
