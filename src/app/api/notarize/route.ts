@@ -12,7 +12,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { loadCalculation, getSupabaseAdmin } from '@/lib/supabase';
 import { anonymizeReceipt, pinToIPFS } from '@/lib/ipfs';
-import { createTimestampProof, getProofForReceipt } from '@/lib/blockchain';
+import { createTimestampProof, getProofForReceipt, verifyProof } from '@/lib/blockchain';
 import { isTierAtLeast, type Tier } from '@/lib/tier-gate';
 import type { Receipt } from '@engine/receipt/types';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
@@ -224,4 +224,95 @@ async function POST__impl(request: NextRequest) {
   }
 }
 
+// ─── PART 3: GET — 등록된 증명 대조 ────────────────────────────
+
+/**
+ * 영수증 행이 들고 있는 증명 정보를 **증명 레지스트리와 맞춰 본다.**
+ *
+ * 이게 자기 대조가 아닌 이유: 두 저장소가 다르다. 영수증 행의
+ * `metadata.ipfsCid`·`proofRegistryRecordId` 는 등록 시점에 그 행에 쓰였고,
+ * `timestamp_proofs` 표는 같은 시점에 **따로** 쓰였다. 나중에 영수증 행이
+ * 손대지면 둘이 어긋난다 — `verifyProof` 가 CID·txHash 불일치로 잡는다.
+ *
+ * 레지스트리에서 꺼낸 것을 레지스트리와 맞추면 언제나 통과한다(§2.3).
+ * 그래서 **영수증 행 쪽을 제시본으로** 삼는다.
+ *
+ * 등록과 같은 플래그·티어·소유 규율을 따른다 — 남의 영수증 증명 상태를
+ * 조회할 수 있으면 그 자체가 노출이다.
+ */
+async function GET__impl(request: NextRequest) {
+  try {
+    const blocked = applyRateLimit(request, 'notarize');
+    if (blocked) return blocked;
+    if (!isFeatureEnabledServer('RECEIPT_NOTARIZE')) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-6001', message: 'IPFS timestamp registration is not enabled' } },
+        { status: 404 },
+      );
+    }
+
+    const userId = await extractVerifiedUserId(request);
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-1001', message: 'Authentication required' } },
+        { status: 401 },
+      );
+    }
+
+    const receiptId = new URL(request.url).searchParams.get('receiptId');
+    if (!receiptId) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-6020', message: 'receiptId 가 필요합니다.' } },
+        { status: 400 },
+      );
+    }
+
+    const stored = await loadCalculation(receiptId);
+    if (!stored || stored.user_id !== userId) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-6021', message: '영수증을 찾지 못했습니다.' } },
+        { status: 404 },
+      );
+    }
+
+    const meta = (stored.metadata ?? {}) as Record<string, unknown>;
+    const receiptHash = typeof meta.receiptHash === 'string' ? meta.receiptHash : stored.receipt_hash;
+    const ipfsCid = typeof meta.ipfsCid === 'string' ? meta.ipfsCid : '';
+    const txHash = typeof meta.proofRegistryRecordId === 'string' ? meta.proofRegistryRecordId : '';
+    const recordedAt = typeof meta.proofRecordedAt === 'string' ? meta.proofRecordedAt : '';
+    const chain = typeof meta.proofRegistry === 'string' ? meta.proofRegistry : '';
+
+    // 등록한 적이 없으면 "위조" 가 아니라 "등록 안 됨" 이다. 가르지 않으면
+    // 사용자는 무언가 잘못됐다고 읽는다.
+    if (!receiptHash || !ipfsCid || !txHash) {
+      return NextResponse.json({
+        success: true,
+        data: { registered: false, valid: null, reason: '이 영수증은 타임스탬프에 등록된 적이 없습니다.' },
+      });
+    }
+
+    const verification = await verifyProof({
+      txHash, blockNumber: 0, timestamp: recordedAt, chain: chain || 'esa-registry', receiptHash, ipfsCid,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        registered: true,
+        valid: verification.valid,
+        timestamp: verification.timestamp,
+        reason: verification.reason,
+        ipfsCid,
+      },
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (err) {
+    console.error('[ESVA Timestamp verify]', err instanceof Error ? err.name : 'UnknownError');
+    return NextResponse.json(
+      { success: false, error: { code: 'ESVA-6098', message: '타임스탬프 대조에 실패했습니다.' } },
+      { status: 500 },
+    );
+  }
+}
+
 export const POST = withRequestLog(POST__impl);
+export const GET = withRequestLog(GET__impl);

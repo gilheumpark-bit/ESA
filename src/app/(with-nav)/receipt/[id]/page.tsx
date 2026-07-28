@@ -9,8 +9,9 @@
  * PART 4: Main page component
  */
 
-import { use, useEffect, useState, useCallback } from 'react';
+import { use, useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   Share2,
@@ -272,6 +273,85 @@ function IntegrityPanel({ receipt }: { receipt: ReceiptWithIntegrity }) {
   );
 }
 
+/**
+ * 등록된 타임스탬프를 레지스트리와 맞춰 본 결과.
+ *
+ * `/api/notarize` POST 가 `verifyUrl`(`/receipt/{id}?verify=true`)을
+ * 돌려주고 화면이 "검증 페이지 열기" 링크를 그렸는데, **그 쿼리를 읽는
+ * 코드가 없었다** — 눌러도 같은 화면이 다시 떴다(2026-07-28 실측,
+ * §2.8 스텁 어포던스). 대조 로직(`verifyProof`)도 호출처가 0 이었다.
+ *
+ * 등록한 적이 없는 경우를 "위조" 로 읽히게 하지 않는다 — 그건 아무 일도
+ * 없었다는 뜻이다.
+ */
+function TimestampVerification({ receiptId }: { receiptId: string }) {
+  const [state, setState] = useState<
+    { loading: true } | { loading: false; registered: boolean; valid: boolean | null; reason?: string; ipfsCid?: string } | null
+  >({ loading: true });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authenticatedFetch(`/api/notarize?receiptId=${encodeURIComponent(receiptId)}`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (!json.success) { setState(null); return; }
+        setState({ loading: false, ...json.data });
+      } catch {
+        if (!cancelled) setState(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [receiptId]);
+
+  if (!state) return null;
+  if (state.loading) {
+    return (
+      <div className="mt-6 flex items-center gap-2 rounded-xl border border-[var(--border-default)] p-4 text-sm text-[var(--text-secondary)] no-print">
+        <Loader2 size={16} className="animate-spin" />
+        타임스탬프 등록 기록을 대조하는 중입니다.
+      </div>
+    );
+  }
+
+  const tone = !state.registered
+    ? { box: 'border-[var(--border-default)] bg-[var(--bg-secondary)]', text: 'text-[var(--text-secondary)]', Icon: Shield, title: '등록 안 됨' }
+    : state.valid
+      ? { box: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-300', Icon: ShieldCheck, title: '등록 기록과 일치' }
+      : { box: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20', text: 'text-red-700 dark:text-red-300', Icon: ShieldAlert, title: '등록 기록과 불일치' };
+
+  return (
+    <div data-testid="timestamp-verification" data-registered={String(state.registered)} data-valid={String(state.valid)}
+      className={`mt-6 flex gap-2 rounded-xl border p-4 no-print ${tone.box}`}>
+      <tone.Icon size={18} className={`mt-0.5 shrink-0 ${tone.text}`} />
+      <div className="min-w-0">
+        <span className={`block text-sm font-semibold ${tone.text}`}>{tone.title}</span>
+        <span className="block text-xs leading-relaxed text-[var(--text-secondary)]">
+          {!state.registered
+            ? '이 영수증은 타임스탬프에 등록된 적이 없습니다. 등록하지 않았다는 뜻이며, 내용에 문제가 있다는 뜻이 아닙니다.'
+            : state.valid
+              ? '영수증에 적힌 등록 정보가 등록 기록과 같습니다.'
+              : `영수증에 적힌 등록 정보가 등록 기록과 다릅니다${state.reason ? ` (${state.reason})` : ''}. 원본을 확인하십시오.`}
+        </span>
+        {state.ipfsCid && (
+          <span className="mt-1 block truncate font-mono text-[10px] text-[var(--text-tertiary)]">IPFS CID: {state.ipfsCid}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 등록 성공 화면의 "검증 페이지 열기" 가 가는 곳이 `?verify=true` 다.
+ * 그 쿼리를 읽는 자리 — 링크가 약속한 것만 한다(§11).
+ */
+function TimestampVerificationGate({ receiptId }: { receiptId: string }) {
+  const searchParams = useSearchParams();
+  if (searchParams.get('verify') !== 'true') return null;
+  return <TimestampVerification receiptId={receiptId} />;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 3.5 — Optional IPFS timestamp registration (calls /api/notarize)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -447,7 +527,14 @@ export default function ReceiptPage({
 
         <IntegrityPanel receipt={receipt} />
 
-        {isFeatureEnabled('RECEIPT_NOTARIZE') && <TimestampRegistrationButton receiptId={id} />}
+        {isFeatureEnabled('RECEIPT_NOTARIZE') && (
+          <>
+            <Suspense fallback={null}>
+              <TimestampVerificationGate receiptId={id} />
+            </Suspense>
+            <TimestampRegistrationButton receiptId={id} />
+          </>
+        )}
       </div>
     </div>
   );
