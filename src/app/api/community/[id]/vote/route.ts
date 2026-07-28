@@ -11,6 +11,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { voteQuestion, voteAnswer, type VoteDirection } from '@/lib/community';
+import { classifyVoteError } from '@/lib/community-error';
 import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ─── PART 1: Auth ──────────────────────────────────────────────
@@ -83,11 +84,22 @@ async function POST__impl(
       data: { votes: result.votes },
     });
   } catch (err) {
+    // 호출자 잘못을 500 으로 뭉개지 않는다. 가장 흔한 경우는 경합이다 —
+    // 신고 3 회면 글이 자동으로 숨겨지고 RPC 는 숨겨진 글을 투표 대상에서
+    // 뺀다. 화면을 열어 둔 사이에 그렇게 되면 정상적인 상황인데 500 이
+    // 나가 운영 알람이 울린다.
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Vote POST]', message);
+    const mapped = classifyVoteError(err);
     return NextResponse.json(
-      { success: false, error: { code: 'ESVA-7072', message: '투표를 반영하지 못했습니다.' } },
-      { status: 500 },
+      {
+        success: false,
+        error: {
+          code: mapped ? 'ESVA-7073' : 'ESVA-7072',
+          message: mapped?.message ?? '투표를 반영하지 못했습니다.',
+        },
+      },
+      { status: mapped?.status ?? 500 },
     );
   }
 }
