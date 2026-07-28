@@ -67,7 +67,8 @@ const SPECIFIC_CONSUMPTION = 0.21;
 export function calculateEmergencyGenerator(input: EmergencyGeneratorInput): DetailedCalcResult {
   // PART 1 -- Validation
   if (!input.emergencyLoads || input.emergencyLoads.length === 0) {
-    throw new CalcValidationError('loads','At least one emergency load entry is required');
+    // 폼 칸 이름은 `emergencyLoads` 다 — `'loads'` 로는 어느 칸도 안 짚었다.
+    throw new CalcValidationError('emergencyLoads','At least one emergency load entry is required');
   }
   assertRange(input.safetyFactor, 1.0, 2.0, 'safetyFactor');
 

@@ -13,7 +13,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
-import { CalcValidationError } from '../types';
+import { CalcValidationError, remapErrorField } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -82,44 +82,53 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
   const steps: CalcStep[] = [];
 
   // PART 2 — Base ampacity lookup
-  let kecLookup: ReturnType<typeof getKecAmpacity>;
-  try {
-    kecLookup = getKecAmpacity({
-      size: input.cableSize,
-      conductor: input.conductor,
-      insulation: input.insulation,
-      installation: 'freeAir',
-      ambientTemp,
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'unknown lookup failure';
-    throw new CalcValidationError('cableSize',`KEC ampacity not available for this comparison: ${reason}`);
-  }
+  //
+  // **표 조회 오류를 감싸지 않는다.** 앞서 세 자리가 전부 이렇게 돼 있었다:
+  //
+  //   catch (error) { throw new CalcValidationError('cableSize', `… ${error.message}`) }
+  //
+  // 셋을 한꺼번에 망가뜨렸다(2026-07-28 독립 심사 백엔드 좌석 실행 실측):
+  //
+  //  ① **분류가 뭉개진다.** 표 계층의 `ESVA-INTERNAL:` 500(= 우리 표에 구멍)이
+  //     여기서 422 로 바뀌어 나간다. 라우트는 422 를 `console.error` 없이
+  //     내보내므로 **표가 깨져도 로그도 알람도 0 건**이 된다.
+  //  ② **엉뚱한 칸을 짚는다.** 실제 원인이 `ambientTemp` 여도 `cableSize` 라고
+  //     보고한다 — 단면적은 멀쩡한데 단면적 칸이 빨개진다.
+  //  ③ **내부 표 키가 새어 나간다.** `Cu_XLPE_freeAir` 같은 내부 이름이
+  //     사용자 응답 본문에 그대로 실렸다.
+  //
+  // `remapErrorField` 는 셋 다 해소한다 — **종류를 보존**하므로 내부 불변식은
+  // 500 그대로 가고(①), 칸 이름만 이 폼의 것으로 옮기고(②), 내부 메시지를
+  // 이어 붙이지 않는다(③ — `CalcValidationError` 의 메시지만 지나가고 그건
+  // 애초에 사용자용이다).
+  //
+  // 표 계층은 제 이름(`size`)으로 칸을 지목한다. 이 폼의 칸은 `cableSize` 라
+  // 그대로 올리면 화면이 없는 칸을 짚는다.
+  //
+  // 표 이름을 맥락으로 붙인다: NEC 는 AWG 로 환산해 조회하므로 2.5mm² 를 넣은
+  // 사용자가 "Wire size 14 is not available" 만 보면 어느 단계인지 모른다.
+  const TABLE_FIELDS = { size: 'cableSize' } as const;
+
+  const kecLookup = remapErrorField(() => getKecAmpacity({
+    size: input.cableSize,
+    conductor: input.conductor,
+    insulation: input.insulation,
+    installation: 'freeAir',
+    ambientTemp,
+  }), TABLE_FIELDS, 'KEC');
   const kecBase = kecLookup.ampacity;
 
   // NEC 310.16 실표 조회 — mm²는 보수적으로 하향 스냅한 AWG로 환산(등가 규격 공개).
   const [necSize, necSizeMm2] = necSizeAtOrBelow(input.cableSize);
   const necTempRating: NecTempRating = input.insulation === 'PVC' ? 75 : 90;
-  let necLookup: ReturnType<typeof getNecAmpacity>;
-  try {
-    necLookup = getNecAmpacity({
-      size: necSize, conductor: input.conductor, tempRating: necTempRating, ambientTemp,
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'unknown lookup failure';
-    throw new CalcValidationError('cableSize',`NEC ampacity not available for this comparison: ${reason}`);
-  }
+  const necLookup = remapErrorField(() => getNecAmpacity({
+    size: necSize, conductor: input.conductor, tempRating: necTempRating, ambientTemp,
+  }), TABLE_FIELDS, 'NEC 310.16');
 
   // IEC 60364-5-52 실표 조회 — mm² 네이티브라 환산 불필요.
-  let iecLookup: ReturnType<typeof getIecAmpacity>;
-  try {
-    iecLookup = getIecAmpacity({
-      size: input.cableSize, conductor: input.conductor, insulation: input.insulation, ambientTemp,
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : 'unknown lookup failure';
-    throw new CalcValidationError('cableSize',`IEC ampacity not available for this comparison: ${reason}`);
-  }
+  const iecLookup = remapErrorField(() => getIecAmpacity({
+    size: input.cableSize, conductor: input.conductor, insulation: input.insulation, ambientTemp,
+  }), TABLE_FIELDS, 'IEC 60364-5-52');
 
   steps.push({
     step: 1,

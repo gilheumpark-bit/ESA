@@ -295,7 +295,11 @@ async function POST__impl(request: NextRequest) {
     // Handle calculator validation errors distinctly
     if (err instanceof CalcValidationError) {
       return jsonWithEsa(
-        { success: false, error: { code: 'ESVA-4010', message: err.message } },
+        // `field` 를 함께 싣는다. 앞서 `{code, message}` 만 보내고 버렸는데,
+        // 계산기가 어느 칸이 문제인지 이미 알고 있으면서 화면은 그걸 못 받아
+        // 아무 칸도 짚지 못했다 — 422 로 바꾼 목적의 절반이 여기서 끊겨 있었다
+        // (2026-07-28 독립 심사 백엔드 좌석).
+        { success: false, error: { code: 'ESVA-4010', message: err.message, field: err.field } },
         { status: 422 },
       );
     }

@@ -114,6 +114,43 @@ export class CalcValidationError extends Error {
   }
 }
 
+/**
+ * 공용 계층이 던진 거부의 **칸 이름만** 호출자 폼 이름으로 바꾼다.
+ *
+ * 허용전류표 계층은 `size`·`method` 같은 제 이름을 쓴다. 그 이름이 그대로
+ * 422 로 나가면 화면이 없는 칸을 짚는다 — `ampacity-compare` 의 폼은
+ * `cableSize` 다(2026-07-28 독립 심사 백엔드 좌석 예고 → 배선 후 게이트 실측).
+ *
+ * **감싸지 않는다.** 앞서 이 자리는 `catch (error) { throw new
+ * CalcValidationError('cableSize', \`… ${error.message}\`) }` 였는데, 그러면
+ * ① 내부 불변식 500 이 422 로 뭉개지고 ② 원인이 다른 칸이어도 한 칸만 짚고
+ * ③ 내부 표 키가 메시지에 실려 나갔다. 여기서는 **종류도 메시지도 그대로**
+ * 두고 이름만 옮긴다. `CalcValidationError` 가 아닌 것은 손대지 않는다.
+ */
+export function remapErrorField<T>(
+  fn: () => T,
+  map: Readonly<Record<string, string>>,
+  /**
+   * 어느 표에서 났는지 — 붙이면 메시지 앞에 온다. 여러 표를 잇달아 조회하는
+   * 계산기에서 필요하다(2.5mm² 를 넣었는데 "Wire size 14 …" 만 나오면 사용자가
+   * 어느 단계인지 모른다 — NEC 는 AWG 로 환산해 조회하기 때문이다).
+   *
+   * `CalcValidationError` 에만 붙는다. 내부 불변식(500)은 손대지 않으므로
+   * 내부 표 키가 이 경로로 새어 나갈 수 없다.
+   */
+  context?: string,
+): T {
+  try {
+    return fn();
+  } catch (e) {
+    if (e instanceof CalcValidationError && (map[e.field] || context)) {
+      const field = map[e.field] ?? e.field;
+      throw new CalcValidationError(field, context ? `${context}: ${e.message}` : e.message);
+    }
+    throw e;
+  }
+}
+
 export function assertPositive(value: number, field: string): void {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     throw new CalcValidationError(field, `${field} must be a positive finite number, got ${value}`);

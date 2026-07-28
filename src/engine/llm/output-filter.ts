@@ -207,10 +207,32 @@ function findTrustedNumbers(input: string): Set<string> {
  * 환산만으로 갈 수 없습니다") 로 **실패**했는데, 실패한 계산기의 태그가
  * 지어낸 거리를 정당화했다. 앱의 체크리스트는 1.7m 를 말한다.
  *
- * 그래서 `attestedSources` 를 받는다 — **실제로 돌아서 통과한** 계산기 id
- * 집합. 주어지면 `ESA_CALCULATOR:` 태그는 그 집합에 있을 때만 근거가 된다.
- * 주지 않으면 종전대로 — 호출부가 실증을 넘기도록 `chat-source-attestation`
- * 검사가 라우트를 잠근다.
+ * 1 차 수리는 `attestedSources` 대조였다 — 돌아서 통과한 계산기 id 집합에
+ * 있을 때만 근거로 인정. **그걸로는 모자랐다**(2026-07-28 독립 심사 백엔드
+ * 좌석 실행 실측). 뚫린 자리 넷:
+ *
+ *   `[SOURCE: esa_calculator:unit-converter]`  소문자 — 정규식에 `i` 없음
+ *   `[SOURCE: ESA_CALCULATOR]`                 id 생략 — 대조할 게 없어 통과
+ *   `[SOURCE: KEC_TABLE 232.3]`                계산기가 아닌 payload
+ *   성공한 계산기 태그 옆 ±200 자의 **모든** 수치
+ *
+ * 마지막이 제일 크다. 태그는 **값을 대조하지 않고** 근접만 본다. kV→V 환산이
+ * *성공*하기만 하면 같은 문단의 지어낸 1.63m 가 같이 통과했다("154kV 는
+ * 154,000V 입니다. [SOURCE: …] 이 전압의 접근 한계거리는 1.63m 입니다").
+ * 실패한 계산기를 막았더니 성공한 계산기가 같은 일을 했다.
+ *
+ * **그래서 계산기 태그는 근접 승인을 아예 못 한다.** 계산기가 실제로 낸
+ * 값은 `trustedInput`(= `calculationEvidence.trustedText`)에 있고 값이
+ * 정확히 일치할 때 이미 통과한다 — 근접 승인은 **잉여이면서 유해**했다.
+ * 그 창이 덮던 것은 계산기가 내지 않은 수치뿐이다.
+ *
+ * 비용을 밝힌다: 모델이 9.93 을 "약 10" 으로 반올림해 쓰면 막힌다. 그게
+ * 맞다 — 10 은 계산기가 말한 값이 아니다.
+ *
+ * 계산기가 아닌 payload(`KEC_TABLE …`)는 종전대로 근접 승인이 된다. 이건
+ * 남은 구멍이다 — 모델이 표 번호를 지어낼 수 있다. 값에 결박할 대상이 없어
+ * (표 조회 결과가 응답 경로에 없다) 지금은 못 닫는다. 닫으려면 표 조회를
+ * 실증 경로에 올려야 한다.
  */
 function findSourcePositions(output: string, attestedSources?: ReadonlySet<string>): Set<number> {
   const positions = new Set<number>();
@@ -219,15 +241,43 @@ function findSourcePositions(output: string, attestedSources?: ReadonlySet<strin
   SOURCE_TAG_PATTERN.lastIndex = 0;
   while ((match = SOURCE_TAG_PATTERN.exec(output)) !== null) {
     const payload = (match[1] ?? '').trim();
-    const calc = /ESA_CALCULATOR\s*:\s*([A-Za-z0-9_-]+)/.exec(payload);
-    if (attestedSources && calc && !attestedSources.has(calc[1])) {
-      // 돌지 않았거나 실패한 계산기를 댄 태그 — 근거로 세지 않는다.
-      continue;
-    }
+    // 계산기를 댄 태그는 **근접만으로 근거가 되지 않는다** — 아래 참조.
+    if (namesCalculator(payload)) continue;
     positions.add(match.index);
   }
 
+  void attestedSources; // 대조는 `findForgedCalculatorTags` 가 한다.
   return positions;
+}
+
+/** 계산기를 근거로 댄 태그인가 — 대소문자·id 유무와 무관하게 잡는다. */
+function namesCalculator(payload: string): boolean {
+  return /ESA_CALCULATOR/i.test(payload);
+}
+
+/**
+ * 모델이 **돌지 않은 계산기**를 근거로 댄 자리들.
+ *
+ * 근접 승인을 없앤 뒤에도 이 대조가 필요한 이유: 출처를 지어내는 것 자체가
+ * 신호다. 수치는 어차피 막히지만, 없는 근거를 만들어 내는 답변은 사용자에게
+ * 그대로 나가면 안 되고 로그에도 남아야 한다.
+ */
+function findForgedCalculatorTags(
+  output: string,
+  attestedSources?: ReadonlySet<string>,
+): Array<{ index: number; payload: string }> {
+  if (!attestedSources) return [];
+  const found: Array<{ index: number; payload: string }> = [];
+  let match: RegExpExecArray | null;
+  SOURCE_TAG_PATTERN.lastIndex = 0;
+  while ((match = SOURCE_TAG_PATTERN.exec(output)) !== null) {
+    const payload = (match[1] ?? '').trim();
+    if (!namesCalculator(payload)) continue;
+    const id = /ESA_CALCULATOR\s*:\s*([A-Za-z0-9_-]+)/i.exec(payload)?.[1];
+    // id 를 안 밝힌 태그도 위조로 본다 — 어느 계산기인지 대조할 수 없다.
+    if (!id || !attestedSources.has(id)) found.push({ index: match.index, payload });
+  }
+  return found;
 }
 
 // ---------------------------------------------------------------------------
@@ -376,6 +426,21 @@ export function filterLLMOutput(
         position: pos,
       });
     }
+  }
+
+  /**
+   * Step 5: 돌지 않은 계산기를 근거로 댄 태그.
+   *
+   * 근접 승인을 없앤 뒤에도 이걸 따로 잡는다 — **출처를 지어내는 것 자체가
+   * 신호**다. 수치는 어차피 막히지만, 없는 근거를 만들어 내는 답변을 그대로
+   * 내보내면 사용자는 그 태그를 읽고 믿는다. 로그에도 남아야 한다.
+   */
+  for (const forged of findForgedCalculatorTags(output, attestedSources)) {
+    blocked.push({
+      text: `[SOURCE: ${forged.payload}]`,
+      reason: 'no_tool_call',
+      position: forged.index,
+    });
   }
 
   /**

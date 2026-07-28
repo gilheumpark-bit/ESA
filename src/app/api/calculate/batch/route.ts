@@ -35,7 +35,8 @@ interface BatchResultItem {
   success: boolean;
   result?: unknown;
   receipt?: unknown;
-  error?: { code: string; message: string };
+  /** `field` = 어느 입력 칸이 문제인지. 화면이 그 칸을 짚을 수 있도록 싣는다. */
+  error?: { code: string; message: string; field?: string };
 }
 
 interface BatchSummary {
@@ -107,7 +108,7 @@ async function executeSingle(
       return {
         index,
         success: false,
-        error: { code: 'ESVA-4010', message: err.message },
+        error: { code: 'ESVA-4010', message: err.message, field: err.field },
       };
     }
     const message = err instanceof Error ? err.message : 'Unknown error';
