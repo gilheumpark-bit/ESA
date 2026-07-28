@@ -161,6 +161,77 @@ describe('모든 항목이 내용을 들고 나온다', () => {
   });
 });
 
+describe('인식했는데 안 다루는 조건을 밝힌다', () => {
+  /**
+   * 파서가 **신뢰도 1.00** 으로 낙뢰·고소를 읽고 체크리스트는 기본 2 개만
+   * 냈다. 사용자는 자기가 낙뢰를 적었고 앱이 만점으로 분석했다고 보므로
+   * **침묵을 "그 조건은 문제없음" 으로 읽는다.**
+   */
+  it.each([
+    ['옥외 철탑 점검, 낙뢰, 2명, 13시~17시', ['낙뢰', '고소']],
+    ['전주 작업, 강풍, 3명, 09시~17시', ['강풍', '고소']],
+    ['변압기 교체 작업, 전기실, 4명', ['변압기']],
+  ])('%s — 공백 고지가 나온다', (text, expected) => {
+    const gap = analyzeSafety(parseSafetyIntent(text)).checkItems.find((i) => i.id === 'gap-01');
+    expect(gap).toBeDefined();
+    for (const token of expected) expect(gap!.title).toContain(token);
+  });
+
+  it('고지 문구가 "없음 = 안전"으로 읽히지 않게 말한다', () => {
+    const gap = analyzeSafety(parseSafetyIntent('낙뢰 옥외 작업 2명')).checkItems
+      .find((i) => i.id === 'gap-01');
+    expect(gap!.description).toMatch(/안전하다는 뜻이 아닙니다/);
+  });
+
+  /**
+   * 다루는 조건만 있으면 고지가 뜨지 않는다 — 상시 발화하면 사용자가 이
+   * 항목 전체를 무시하게 되고, 그러면 진짜 공백일 때도 안 읽는다.
+   *
+   * `배전반 작업`(panel_work)은 여기 넣지 않는다. 처음엔 "기본 전기 항목이
+   * 덮으니 고지가 뜨면 안 된다" 고 적었다가 실행 결과를 보고 바꿨다 —
+   * 배전반의 고유 위험은 **아크플래시**이고, 이 앱은 계산기에서 PPE 등급을
+   * 내면서 현장 체크리스트로는 한 줄도 보내지 않는다(같은 심사 F3).
+   * 즉 고지가 맞다.
+   */
+  it.each([
+    '154kV 수전설비 정전 작업, 3명, 09시~18시',
+    '맑음, 전기실 정기 점검 2명',
+    '우천 시 실내 작업 2명',
+  ])('%s — 고지가 뜨지 않는다', (text) => {
+    const items = analyzeSafety(parseSafetyIntent(text)).checkItems;
+    expect(items.find((i) => i.id === 'gap-01')).toBeUndefined();
+  });
+
+  it('배전반 작업은 고지가 뜬다 — 아크플래시가 현장에 안 닿는다', () => {
+    const gap = analyzeSafety(parseSafetyIntent('배전반 작업 2명')).checkItems
+      .find((i) => i.id === 'gap-01');
+    expect(gap?.title).toContain('배전반');
+  });
+});
+
+describe('밀폐공간 — 철수·재진입 구간', () => {
+  const a = analyzeSafety(parseSafetyIntent('맨홀 내부 작업 2명, 09시~15시, 관리자 1명'));
+
+  /**
+   * 앞 8 항목은 **들어가기 전**만 다뤘다. 국내 질식 사망의 전형적인 마지막
+   * 단계 — 철수할 때 안에 남은 한 명을 세지 못한 채 뚜껑을 닫는 것 — 이
+   * 비어 있었다(2026-07-28 독립 심사 완전성 좌석).
+   */
+  it.each([
+    ['출입 인원 점검', /인원/],
+    ['출입금지 표지', /출입금지/],
+    ['재진입 조건', /재진입/],
+  ])('%s 항목이 있다', (_label, re) => {
+    expect(textOf(a.checkItems)).toMatch(re);
+  });
+
+  it('인원 점검과 재진입은 critical 이다', () => {
+    for (const id of ['cs-09', 'cs-11']) {
+      expect(a.checkItems.find((i) => i.id === id)?.riskLevel).toBe('critical');
+    }
+  });
+});
+
 describe('작업 일정 — 적정공기 수치를 값 단위로 잠근다', () => {
   const sched = generateSafetySchedule(
     parseSafetyIntent('맨홀 내부 케이블 작업 2명, 09시~18시, 관리자 1명'),

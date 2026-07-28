@@ -109,6 +109,46 @@ const CONFINED_SPACE_MANDATORY: Omit<SafetyCheckItem, 'isMissing'>[] = [
     riskLevel: 'high',
     alternative: '작업 전 119와 현장 관리자 연락처를 직접 확보할 것. (앱 SOS 버튼은 화면 경보만 제공하며 외부 발송 기능은 없음)',
   },
+  // ── 철수·재진입 구간 (2026-07-28 독립 심사 완전성 좌석) ──
+  //
+  // 앞 8 항목은 **들어가기 전**만 다뤘다. 진입 준비(측정·환기·감시인·구조장비)는
+  // 촘촘한데, 나온 뒤와 다시 들어갈 때가 비어 있었다. 국내 질식 사망의
+  // 전형적인 마지막 단계가 여기다 — 철수할 때 안에 남은 한 명을 세지 못한 채
+  // 뚜껑을 닫는 것.
+  //
+  // 새 수치를 만들지 않는다. 세 항목 모두 **이미 있는 항목을 언제 다시
+  // 하느냐**를 정할 뿐이고, 농도·시간 기준은 cs-01 과 스케줄러가 이미 갖고 있다
+  // (§2.10 — 도메인 오라클 없이 안전 수치를 쓰지 않는다).
+  {
+    id: 'cs-09',
+    category: '인원 관리',
+    title: '출입 인원 점검 (들어간 수 = 나온 수)',
+    description: '진입·퇴장 때마다 인원을 세어 기록한다. 작업 종료 시 들어간 수와'
+      + ' 나온 수가 같은지 확인한 뒤에야 개구부를 닫는다.',
+    regulation: '산안법 밀폐공간 작업 (인원 확인)',
+    riskLevel: 'critical',
+    alternative: '감시인이 종이에 이름을 적고 나올 때 지운다. 이름이 남아 있으면 사람이 남아 있다.',
+  },
+  {
+    id: 'cs-10',
+    category: '인원 관리',
+    title: '관계자 외 출입금지 표지',
+    description: '측정·환기가 끝나지 않은 공간에 다른 작업자가 내려가지 않도록'
+      + ' 개구부에 출입금지 표지를 세운다.',
+    regulation: '산안법 밀폐공간 작업 (출입 금지)',
+    riskLevel: 'high',
+    alternative: '표지가 없으면 개구부를 덮거나 감시인이 상주해 접근을 막을 것.',
+  },
+  {
+    id: 'cs-11',
+    category: '작업 중단·재개',
+    title: '대피 후 재진입 조건',
+    description: '경보·이상 징후로 대피했다면 그대로 다시 들어가지 않는다.'
+      + ' 재환기 → 재측정(cs-01 기준) → 감시인 재확인을 마친 뒤에만 재진입한다.',
+    regulation: '산안법 밀폐공간 작업 (작업 재개)',
+    riskLevel: 'critical',
+    alternative: '측정기가 없으면 재진입하지 않는다. 대피는 항상 재진입으로 이어지므로 이 순간이 규칙이 필요한 자리다.',
+  },
 ];
 
 /** 우천 시 추가 체크 항목 */
@@ -297,6 +337,66 @@ function collectRegulations(items: SafetyCheckItem[]): string[] {
 /**
  * 현장 안전 분석 — 파서 결과 → 체크리스트 + 누락 항목 + 종합 위험도
  */
+/**
+ * 파서가 읽어 낸 **위험 조건 중 체크리스트가 다루지 않는 것**들.
+ *
+ * 표를 명시적으로 둔다 — 나중에 어느 조건의 항목을 만들면 그 줄을 지우면
+ * 된다. 반대로 파서에 새 조건을 추가하고 항목을 안 만들면 여기 자동으로
+ * 잡힌다(`covered` 접두사를 안 붙였으므로).
+ *
+ * `clear`(맑음)·`indoor`·`outdoor` 는 그 자체로 위험 조건이 아니라 넣지 않는다.
+ * 넣으면 상시 고지가 떠서 사용자가 이 항목 전체를 무시하게 된다.
+ */
+const UNCOVERED_HAZARDS = {
+  weather: {
+    snow: '눈',
+    wind: '강풍',
+    fog: '안개',
+    thunder: '낙뢰',
+  } as Record<string, string>,
+  location: {
+    elevated: '고소(전주·철탑·고가)',
+    rooftop: '옥상',
+    underground: '지하',
+  } as Record<string, string>,
+  /** 활선(`live_work`)만 전용 항목이 있다. 나머지는 기본 전기 항목만 걸린다. */
+  workType: {
+    transformer_work: '변압기 작업',
+    panel_work: '배전반·분전반 작업',
+    grounding: '접지 작업',
+    cable_pulling: '입선·케이블 포설',
+  } as Record<string, string>,
+};
+
+/** 이미 만들어진 항목이 그 조건을 실제로 덮는지 — id 접두사로 본다. */
+function describeUncovered(
+  intent: SafetyIntentResult,
+  items: SafetyCheckItem[],
+): string[] {
+  const has = (prefix: string) => items.some((i) => i.id.startsWith(prefix));
+  const out: string[] = [];
+
+  for (const w of intent.weather) {
+    const ko = UNCOVERED_HAZARDS.weather[w.condition];
+    if (ko) out.push(ko);
+  }
+  const locKo = intent.location && UNCOVERED_HAZARDS.location[intent.location.type];
+  if (locKo) out.push(locKo);
+  for (const t of intent.workTypes) {
+    const ko = UNCOVERED_HAZARDS.workType[t.type];
+    if (ko) out.push(ko);
+  }
+
+  // 표에 없는데도 항목이 안 붙은 경우를 대비 — 우천·폭염·활선·밀폐공간은
+  // 항목이 있어야 정상이다. 없으면 그것도 공백이므로 함께 밝힌다.
+  if (intent.weather.some((w) => w.condition === 'rain') && !has('rain-')) out.push('우천');
+  if (intent.weather.some((w) => w.condition === 'extreme_heat') && !has('heat-')) out.push('폭염');
+  if (intent.workTypes.some((w) => w.isLiveWork) && !has('live-')) out.push('활선 작업');
+  if (intent.isConfinedSpace && !has('cs-')) out.push('밀폐공간');
+
+  return [...new Set(out)];
+}
+
 export function analyzeSafety(intent: SafetyIntentResult): SafetyAnalysisResult {
   const allItems: SafetyCheckItem[] = [];
 
@@ -401,6 +501,39 @@ export function analyzeSafety(intent: SafetyIntentResult): SafetyAnalysisResult 
         },
       ], intent),
     );
+  }
+
+  /**
+   * **인식했는데 다룰 항목이 없는 조건을 밝힌다.**
+   *
+   * 실측(2026-07-28 독립 심사 완전성 좌석): `'옥외 철탑 점검, 낙뢰, 2명'` 을
+   * 넣으면 파서가 **신뢰도 1.00** 으로 낙뢰와 고소를 정확히 읽고, 체크리스트는
+   * 기본 전기 항목 2 개만 낸다. 낙뢰 0 줄, 추락 방지 0 줄. 같은 일이
+   * 강풍·눈·안개, 그리고 변압기·개폐기 조작 같은 작업 유형에서도 일어난다.
+   *
+   * 사용자는 자기가 낙뢰를 적었고 앱이 만점으로 분석했다고 보므로 **앱의
+   * 침묵을 "그 조건은 문제없음" 으로 읽는다.** 이게 이 파일에서 가장 위험한
+   * 형태다 — 틀린 항목보다 없는 항목이 안전해 보인다.
+   *
+   * 없는 항목을 지어내지 않는다(§2.10 — 도메인 오라클 없이 안전 지시를 쓰는
+   * 것은 이 리포가 아크플래시에서 이미 한 번 한 실수다). 대신 **다루지 않는다는
+   * 사실 자체를 항목으로 만든다.** 조용한 공백을 보이는 공백으로 바꾼다.
+   */
+  const uncovered = describeUncovered(intent, allItems);
+  if (uncovered.length > 0) {
+    allItems.push({
+      id: 'gap-01',
+      category: '이 앱이 다루지 않는 조건',
+      title: `${uncovered.join(' · ')} — 별도 확인 필요`,
+      description: `입력에서 ${uncovered.join(' · ')} 조건을 읽었지만 이 체크리스트에는`
+        + ' 해당 항목이 없습니다. 항목이 없는 것은 안전하다는 뜻이 아닙니다 —'
+        + ' 이 앱이 아직 다루지 않는 범위입니다. 해당 조건의 작업 중지 기준과'
+        + ' 보호 조치는 사내 절차와 관련 규정으로 별도 확인하십시오.',
+      regulation: '해당 없음 (범위 밖 고지)',
+      riskLevel: 'high',
+      isMissing: true,
+      alternative: '해당 조건을 다루는 절차서가 없으면 작업 전 관리감독자와 확인할 것.',
+    });
   }
 
   const missingCritical = allItems.filter(i => i.isMissing && i.riskLevel === 'critical');

@@ -299,7 +299,23 @@ export default function FieldSafetyPage() {
           />
 
           {/* 스케줄 */}
-          {schedule && <SchedulePanel schedule={schedule} />}
+          {schedule ? <SchedulePanel schedule={schedule} /> : (
+            /*
+             * 일정이 **조용히 사라지지 않게** 한다. 스케줄러는 작업 시간이
+             * 없으면 `null` 을 돌려주는데, 앞서 화면은 `{schedule && …}` 로
+             * 아무것도 안 그렸다 — 밀폐공간 작업인데 2 시간마다 가스를 다시
+             * 재라는 일정이 통째로 없어지고 그 사실을 알리지도 않았다
+             * (2026-07-28 독립 심사 완전성 좌석).
+             */
+            <div className="rounded-xl border border-[var(--color-border)] p-4 text-sm text-[var(--color-text-secondary)]">
+              <p className="font-medium text-[var(--color-text)]">점검 일정이 만들어지지 않았습니다</p>
+              <p className="mt-1">
+                작업 시간을 적지 않아 시각 기준 일정을 짤 수 없습니다.
+                {analysis.intent.isConfinedSpace
+                  && ' 밀폐공간 작업은 가스 재측정 주기가 일정에 포함되므로, 시작·종료 시각을 넣어 다시 분석하십시오.'}
+              </p>
+            </div>
+          )}
 
           {/* 모니터링 시작 */}
           <button
