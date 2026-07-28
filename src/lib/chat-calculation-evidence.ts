@@ -1,6 +1,8 @@
 import { CALCULATOR_REGISTRY, normalizeUnit } from '@/engine/calculators';
 import type { DetailedCalcResult } from '@/engine/calculators';
 import { analyzeCalcIntent, coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { extractScopedParams } from '@/lib/calculator-lexicon';
+import { CALCULATOR_PARAMS } from '@/lib/calculator-params';
 import { parseQuery } from '@/search/query-parser';
 
 export interface ChatCalculationEvidence {
@@ -93,10 +95,90 @@ function resolveUnitConversion(query: string): ChatCalculationEvidence | null {
 }
 
 /**
+ * 앞 turn 의 계산을 이어받아 값 하나만 바꾼 후속 질문을 푼다.
+ *
+ * "전압 380V 전류 100A 길이 50m 35sq 전압강하 계산해줘" 다음에 "그럼 길이를
+ * 100m 로 늘리면?" 이 오면, 지금까지는 되물었다. 마지막 메시지만 보기
+ * 때문이다. 수치를 지어내지 않는다는 점에서 **안전한 쪽으로 틀렸지만**
+ * 자연스러운 후속이 매번 막힌다.
+ *
+ * 그냥 대화를 이어붙이면 위험하다. 실측 2026-07-28:
+ *   · 앞뒤로 붙이면 **앞의 값이 이긴다** — 후속의 100m 가 무시되고 낡은
+ *     50m 로 계산된 영수증이 나갔다.
+ *   · 무관한 후속("그건 왜 그래?")에도 앞 turn 값이 다 살아나 **묻지도
+ *     않은 계산의 영수증**이 붙었다.
+ *
+ * 그래서 좁게 연다:
+ *   ① 앞 turn 중 **실제로 영수증이 나온** 것만 바탕으로 삼는다(그 값들은
+ *      한 번 계산에 쓸 만하다고 확인된 것이다).
+ *   ② 후속에서 **그 계산기의 파라미터를 실제로 다시 말했을 때만** 잇는다.
+ *      "그건 왜 그래?" 는 아무 값도 안 주므로 이어지지 않는다.
+ *   ③ 후속이 말한 값이 앞의 값을 덮는다.
+ *   ④ 이어받은 값을 **답변에서 밝히게** 한다 — 사용자는 앞의 조건이
+ *      그대로 쓰였다는 걸 알아야 한다.
+ */
+function resolveFollowUp(
+  latest: string,
+  priorUserTexts: readonly string[],
+): ChatCalculationEvidence | null {
+  for (let i = priorUserTexts.length - 1; i >= 0; i -= 1) {
+    const base = resolveSingleTurn(priorUserTexts[i]);
+    if (!base) continue;
+    const defs = CALCULATOR_PARAMS[base.calculatorId];
+    if (!defs) return null;
+
+    const changed = extractScopedParams(latest, defs).values;
+    if (Object.keys(changed).length === 0) return null;   // ② 다시 말한 값이 없다
+
+    const calculator = CALCULATOR_REGISTRY.get(base.calculatorId);
+    if (!calculator) return null;
+    const merged = { ...base.input, ...changed };          // ③ 후속이 이긴다
+    try {
+      const calculated = calculator.calculator(merged as never);
+      const carried = Object.entries(base.input)
+        .filter(([name]) => !(name in changed))
+        .map(([name, value]) => {
+          const def = defs.find((p) => p.name === name);
+          return `${def?.description ?? name}=${String(value)}${def?.unit ? ` ${def.unit}` : ''}`;
+        });
+      const result = {
+        value: calculated.value,
+        unit: calculated.unit,
+        formula: calculated.formula,
+        steps: calculated.steps,
+        additionalOutputs: calculated.additionalOutputs,
+        judgment: calculated.judgment,
+      };
+      const trustedText = JSON.stringify({ calculatorId: calculator.id, input: merged, result });
+      return {
+        calculatorId: calculator.id,
+        calculatorName: calculator.name,
+        input: merged,
+        result,
+        assumed: carried,
+        trustedText,
+        promptContext: `\n\n검증된 ESA 계산기 영수증(앞선 조건을 이어받아 다시 계산):\n${trustedText}`
+          + (carried.length > 0
+            ? `\n앞 대화에서 그대로 가져온 값: ${carried.join(', ')} — 답변 첫머리에 이 조건들을 그대로 쓴다고 밝히고, 바꾸고 싶으면 말해 달라고 하세요.`
+            : '')
+          + `\n위 영수증의 입력과 결과만 [확인] 수치로 사용하고, 결과 뒤에 [SOURCE: ESA_CALCULATOR:${calculator.id}]를 붙이세요.`
+          + ' 영수증에 없는 수치나 새로운 반올림 수치를 만들지 마세요.',
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * 완전한 자연어 계산 입력만 정본 계산기로 실행한다. 파라미터가 빠졌거나
  * 파서 확신도가 낮으면 null을 반환해 LLM이 누락 입력만 설명하게 한다.
+ *
+ * `priorUserTexts` 는 앞 turn 의 사용자 발화다(오래된 것부터). 마지막
+ * 메시지만으로 영수증이 안 나올 때 후속 병합을 시도한다.
  */
-export function resolveChatCalculationEvidence(query: string): ChatCalculationEvidence | null {
+function resolveSingleTurn(query: string): ChatCalculationEvidence | null {
   const conversion = resolveUnitConversion(query);
   if (conversion) return conversion;
 
@@ -149,6 +231,20 @@ export function resolveChatCalculationEvidence(query: string): ChatCalculationEv
   } catch {
     return null;
   }
+}
+
+/**
+ * 채팅 한 번에 대한 계산 근거.
+ *
+ * 마지막 메시지만으로 영수증이 나오면 그것을 쓴다. 안 나오면 앞 turn 을
+ * 이어받아 다시 본다 — 이어받기는 `resolveFollowUp` 의 네 조건 안에서만
+ * 일어난다.
+ */
+export function resolveChatCalculationEvidence(
+  query: string,
+  priorUserTexts: readonly string[] = [],
+): ChatCalculationEvidence | null {
+  return resolveSingleTurn(query) ?? resolveFollowUp(query, priorUserTexts);
 }
 
 /**

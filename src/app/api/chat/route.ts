@@ -404,8 +404,16 @@ async function POST__impl(request: NextRequest) {
       }
     }
 
+    // 앞 turn 의 사용자 발화를 함께 넘긴다 — 마지막 메시지만으로 영수증이
+    // 안 나올 때 "길이만 100m 로 바꾸면?" 같은 후속을 이어받기 위해서다.
+    // 이어받는 조건은 `resolveFollowUp` 이 좁게 정한다(앞 turn 이 실제로
+    // 영수증을 냈고, 후속이 그 계산기의 값을 다시 말했을 때만).
+    const priorUserTexts = body.messages
+      .filter((message) => message.role === 'user' && typeof message.content === 'string')
+      .slice(0, -1)
+      .map((message) => message.content);
     const calculationEvidence = lastUser && typeof lastUser.content === 'string'
-      ? resolveChatCalculationEvidence(lastUser.content)
+      ? resolveChatCalculationEvidence(lastUser.content, priorUserTexts)
       : null;
     // 영수증이 없으면 모델이 스스로 계산하고 출력 필터가 그 수치를 지워 문장이
     // 깨진다. 그럴 땐 계산 대신 필요한 입력을 되묻게 한다.

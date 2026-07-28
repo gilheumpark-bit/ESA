@@ -256,6 +256,23 @@ export function matchCalculatorByName(query: string): string | undefined {
 const NUMBER = '(-?\\d+(?:\\.\\d+)?)';
 
 /**
+ * 단위 뒤에 와도 되는 것.
+ *
+ * 라틴 문자가 이어지면 더 긴 단위의 앞부분을 자른 것이다(`m` in `mm`) —
+ * 그건 계속 막는다. 그런데 **한글 전체**를 막고 있어서 조사가 붙은 흔한
+ * 표현이 통째로 안 읽혔다(실측 2026-07-28):
+ *   "길이를 100m로 늘리면"  → 아무것도 못 읽음
+ *   "케이블 50sq로 하면"    → 아무것도 못 읽음
+ *   "길이 100m"             → 읽음
+ * 조사 하나 차이로 값이 사라진다. 사용자는 그 규칙을 알 수 없다.
+ *
+ * 그래서 한글이 오면 **조사인지** 본다. 조사가 아닌 한글이 붙으면(`5m미터`)
+ * 여전히 거른다.
+ */
+const UNIT_PARTICLES = ['으로', '에서', '까지', '부터', '짜리', '로', '에', '와', '과', '의', '는', '은', '이', '가', '를', '을', '면', '고', '며'];
+const UNIT_BOUNDARY = `(?![A-Za-z])(?:(?![가-힣])|(?=(?:${UNIT_PARTICLES.join('|')})))`;
+
+/**
  * 추출 결과. 읽어낸 값과 **질문에 적힌 그대로의 숫자**를 함께 돌려준다.
  *
  * 단위 환산이 있으면 둘이 달라진다 — "22.9kV" 는 값 22900 으로 읽히지만 질문에
@@ -496,7 +513,7 @@ export function extractScopedParams(
     if (paramName in found) continue;
     const units = unitAliasesForMatch(unit).map(escapeRegExp).join('|');
     if (!units) continue;
-    const pattern = new RegExp(`${NUMBER}\\s*(${units})(?![A-Za-z가-힣])`, 'i');
+    const pattern = new RegExp(`${NUMBER}\\s*(${units})${UNIT_BOUNDARY}`, 'i');
     const match = pattern.exec(query);
     if (!match || match.index === undefined) continue;
     if (overlaps(match.index, match.index + match[0].length)) continue;
