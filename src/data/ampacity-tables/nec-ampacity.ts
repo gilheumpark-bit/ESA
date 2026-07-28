@@ -250,7 +250,9 @@ export function getNecAmpacity(opts: NecAmpacityOptions): NecAmpacityResult {
   const tableKey = `${conductor}_${tempRating}` as AmpacityKey;
   const row = NEC_TABLE_310_16[tableKey];
   if (!row) {
-    throw new CalcValidationError('tempRating',`No NEC ampacity data for: ${tableKey}`);
+    // 위와 같은 이유 — 도체·온도정격은 상류 검증을 통과했는데 표가 없다면
+    // 우리 데이터 문제다(2026-07-28 독립 심사 지적).
+    throw new Error(`ESVA-INTERNAL: NEC 허용전류표 누락 — ${tableKey}`);
   }
 
   const baseAmpacity = row[sizeIdx];

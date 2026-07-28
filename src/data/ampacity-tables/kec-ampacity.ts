@@ -256,7 +256,17 @@ export function getAmpacity(opts: AmpacityOptions): AmpacityResult {
   const tableKey = `${conductor}_${insulation}_${installation}` as AmpacityTableKey;
   const row = BASE_AMPACITY[tableKey];
   if (!row) {
-    throw new CalcValidationError('insulation',`No ampacity data for: ${tableKey}`);
+    // **여기는 우리 잘못이다 — 422 가 아니라 500 이 맞다.**
+    // 도체·절연·공사방법은 상류에서 이미 검증됐다. 셋 다 유효한데 표가
+    // 없다는 것은 **우리 표에 구멍이 났다**는 뜻이지 호출자 입력이 틀린
+    // 게 아니다. 실측: 유효 조합 24/24 전부 표가 있어 지금은 도달 불가한
+    // 방어적 불변식이다 — 발화하면 데이터 회귀이고 경보가 울려야 한다.
+    //
+    // 2026-07-28 독립 심사 지적으로 되돌린다. 앞서 35 자리를 일괄
+    // CalcValidationError 로 바꿀 때 이 자리까지 쓸어 담았는데, 그러면
+    // 표가 깨져도 사용자에게 "절연 종류가 잘못됐다"(422)가 나가고
+    // 페이징이 죽는다. 분류 변경은 수리가 아니다.
+    throw new Error(`ESVA-INTERNAL: KEC 허용전류표 누락 — ${tableKey}`);
   }
 
   const baseAmpacity = row[sizeIdx];

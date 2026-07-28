@@ -30,8 +30,19 @@ const SCANNED = [
   join(SRC, 'data', 'ampacity-tables'),
 ];
 
-/** 평문 Error 가 허용되는 자리 — `파일:사유`. 등재 없이 늘리지 말 것. */
-const ALLOWED: Record<string, string> = {};
+/**
+ * 평문 `Error` 는 **`ESVA-INTERNAL:` 표식이 있을 때만** 허용한다.
+ *
+ * 처음엔 파일 단위 allowlist 로 두려 했는데 바꿨다 — 그러면 그 파일 전체가
+ * 면제돼 나중에 들어온 진짜 호출자 오류까지 통과한다. 표식은 throw 자리에서
+ * 스스로 의도를 밝히므로 읽는 사람이 대장을 찾아갈 필요도 없다.
+ *
+ * 붙여도 되는 조건: **상류 검증을 통과한 입력인데도 실패**하는 경우
+ * (= 우리 데이터·상태가 깨진 것). 그때는 500 이 맞고 경보가 울려야 한다.
+ * 예: 유효한 도체/절연/공사방법 조합인데 허용전류표가 없다(실측 24/24
+ * 조합에 표가 있으므로 지금은 도달 불가한 방어선).
+ */
+const INTERNAL_MARKER = /ESVA-INTERNAL:/;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -50,16 +61,41 @@ describe('계산 경로 — 호출자 잘못은 500 이 아니다', () => {
     expect(files.length).toBeGreaterThan(40);
   });
 
-  it('평문 `throw new Error(` 가 없다', () => {
+  /**
+   * 훑기 결과를 **위반·면제 둘 다** 돌려준다.
+   *
+   * 면제 수를 함께 세는 이유: 표식 검사를 무조건 통과로 바꾸면 위반이
+   * 0 이 되어 검사가 조용히 공회전한다 — 변이 실측에서 실제로 초록이었다
+   * (2026-07-28). 면제 수까지 0 이 되므로 그쪽이 알람이 된다.
+   */
+  function scan(): { offenders: string[]; exempted: string[] } {
     const offenders: string[] = [];
+    const exempted: string[] = [];
     for (const f of files) {
       const rel = f.slice(SRC.length + 1).replace(/\\/g, '/');
-      if (ALLOWED[rel]) continue;
-      readFileSync(f, 'utf8').split(/\r?\n/).forEach((line, i) => {
-        if (/throw new Error\(/.test(line)) offenders.push(`${rel}:${i + 1}`);
+      const lines = readFileSync(f, 'utf8').split(/\r?\n/);
+      lines.forEach((line, i) => {
+        if (!/throw new Error\(/.test(line)) return;
+        // 표식은 메시지가 줄바꿈될 수 있어 뒤 두 줄까지 본다.
+        if (INTERNAL_MARKER.test(lines.slice(i, i + 3).join(' '))) {
+          exempted.push(`${rel}:${i + 1}`);
+          return;
+        }
+        offenders.push(`${rel}:${i + 1}`);
       });
     }
-    expect(offenders).toEqual([]);
+    return { offenders, exempted };
+  }
+
+  it('평문 `throw new Error(` 가 없다 — 내부 불변식 표식 제외', () => {
+    expect(scan().offenders).toEqual([]);
+  });
+
+  it('훑기가 throw 문에 실제로 닿는다 — 공회전 알람', () => {
+    // 현재 등재된 내부 불변식: KEC·NEC 허용전류표 누락 2 자리.
+    // 이 수가 0 이 되면 위반 0 은 "깨끗해서" 가 아니라 "안 봐서" 다.
+    const { exempted } = scan();
+    expect(exempted.length).toBeGreaterThanOrEqual(2);
   });
 
   it('탐지 정규식이 실제로 무언가를 잡는다 — 패턴 오타로 0건이 되지 않도록', () => {
