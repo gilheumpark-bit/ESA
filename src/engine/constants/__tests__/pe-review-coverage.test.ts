@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { requiresPEReview, REVIEW_REQUIREMENTS } from '../disclaimer';
 import { CALCULATOR_REGISTRY } from '@engine/calculators';
 
@@ -71,6 +74,54 @@ describe('PE 검토 필요 판정 — 조회 키', () => {
   it('모르는 키는 null 이다 — 없는 요구를 지어내지 않는다', () => {
     expect(requiresPEReview('없는카테고리')).toBeNull();
     expect(requiresPEReview('')).toBeNull();
+  });
+
+  /**
+   * 이 표는 아직 **아무에게도 안 닿는다** — `requiresPEReview` 의 production
+   * 호출처가 0 이다(2026-07-28 실측). `required: true` 가 어느 화면에도
+   * 뜨지 않는다. 대장에 그렇게 적었다(docs/DORMANT_MANIFEST.md).
+   *
+   * 이 검사는 그 선언을 잠근다 — **배선하는 순간 깨지도록.** 깨지면
+   * 대장에서 이 줄을 지우고, 어디에 어떻게 띄울지를 그때 정하면 된다.
+   */
+  it('아직 production 호출처가 없다 — 배선하면 대장을 고쳐라', () => {
+    const walk = (dir: string, out: string[] = []): string[] => {
+      for (const name of readdirSync(dir)) {
+        if (['node_modules', '.next', '__tests__'].includes(name)) continue;
+        const full = join(dir, name);
+        if (statSync(full).isDirectory()) walk(full, out);
+        else if (/\.(ts|tsx)$/.test(full)) out.push(full);
+      }
+      return out;
+    };
+    const files = walk(join(__dirname, '..', '..', '..'));
+    expect(files.length).toBeGreaterThan(100); // 훑기가 공회전이 아닌지
+
+    const callers = files.filter((f) => {
+      if (f.endsWith(join('constants', 'disclaimer.ts'))) return false; // 정의 자신
+      return /requiresPEReview\s*\(/.test(readFileSync(f, 'utf8'));
+    });
+    expect(callers).toEqual([]);
+  });
+
+  /**
+   * 안전 관련 표면은 PE 검토 필수다 — 표 자신의 기준선(**안전 관련 → PE /
+   * 설계 검증 → 기사**)을 항목으로 못 박는다. 변이 실측에서 피뢰기 요구를
+   * false 로 내려도 아무 검사도 안 깨졌다(2026-07-28) — 대칭 검사만으로는
+   * 요구 자체가 사라지는 것을 못 잡는다.
+   */
+  it.each([
+    ['arc-flash', '입사 에너지 → PPE 등급'],
+    ['short-circuit', '차단 용량'],
+    ['protection', '보호 협조'],
+    ['grounding', '접지'],
+    ['surge-arrester', '절연협조 — 정격이 낮으면 스스로 파괴, 높으면 보호 실패'],
+    ['substation', '수전설비 — 유자격자 설계 영역'],
+  ])('%s 는 PE 검토 필수다 (%s)', (key) => {
+    const r = requiresPEReview(key);
+    expect(r).not.toBeNull();
+    expect(r!.required).toBe(true);
+    expect(r!.reviewer).toMatch(/PE/);
   });
 
   it('필수 항목에는 사유와 검토자가 적혀 있다 — 근거 없는 요구는 무시된다', () => {

@@ -127,10 +127,21 @@ export interface ReviewRequirement {
  * id 항목은 그대로 두고(그 계산기 하나를 콕 집어 묻는 경우), 그것이 속한
  * category 항목을 더해 어느 쪽으로 물어도 요구가 살아 있게 했다.
  *
- * 나머지 카테고리(power·motor·lighting·renewable·substation·global·ai)는
- * **비워 둔다** — 검토가 필요한지는 제품·전문가 판단이고 코드 정리하다
- * 정할 일이 아니다. `substation`(피뢰기 선정·수전 용량)은 안전 인접이라
- * 판단이 필요한 후보로 남긴다.
+ * `substation` 을 어떻게 할지 미뤄 뒀었다. 다시 보니 물음이 틀렸다 —
+ * **`requiresPEReview` 는 production 호출처가 0 이다**(2026-07-28 실측).
+ * 어느 쪽으로 답하든 사용자에게 닿지 않는다. `arc-flash`·`grounding` 의
+ * `required: true` 조차 아무 화면에도 안 뜬다. 이 표 전체가 휴면이고
+ * 그 사실은 `docs/DORMANT_MANIFEST.md` 에 적었다(§2.5-②).
+ *
+ * 그래도 표는 맞게 둔다 — 배선하는 날 틀린 표를 켜지 않도록. 표 자신의
+ * 기준선(**안전 관련 → PE 필수 / 설계 검증 → 기사**)을 그대로 적용하면
+ * `substation` 은 카테고리 통째로 답할 수 없다. 섞여 있기 때문이다:
+ * 수전 용량·CT·VT 선정은 설계 검증이고, **피뢰기 선정은 보호 기기 선정**
+ * 이라 `protection`·`grounding` 과 같은 줄이다. 그래서 표의 기존 방식대로
+ * (id 항목 + 카테고리 항목) 피뢰기만 id 로 집어 올린다.
+ *
+ * 나머지 카테고리(power·motor·lighting·renewable·global·ai)는 **비워 둔다** —
+ * 검토가 필요한지는 제품·전문가 판단이고 코드 정리하다 정할 일이 아니다.
  */
 export const REVIEW_REQUIREMENTS: ReviewRequirement[] = [
   { category: 'arc-flash', required: true, reviewer: 'PE (전기)', reason: '안전 관련 — IEEE 1584 적합성 검증 필수' },
@@ -143,6 +154,15 @@ export const REVIEW_REQUIREMENTS: ReviewRequirement[] = [
   // `cable-sizing` 이 속한 카테고리 — 같은 요구를 카테고리 조회에도 건다.
   { category: 'cable', required: false, reviewer: '전기 기사', reason: '설계 검증 — 보정계수 확인' },
   { category: 'transformer', required: false, reviewer: '전기 기사', reason: '용량 산정 — 부하 데이터 확인' },
+  // 피뢰기는 보호 기기 선정이다 — 정격이 낮으면 뇌서지에 스스로 파괴되고,
+  // 높으면 보호가 안 된다. 표의 기준선상 `protection`·`grounding` 과 같은 줄.
+  { category: 'surge-arrester', required: true, reviewer: 'PE (전기)', reason: '안전 관련 — 절연협조(보호여유도) 검증 필수' },
+  // 카테고리도 필수다. 처음엔 '수전 용량·CT·VT 는 설계 검증' 이라 false 로
+  // 뒀는데 기존 게이트가 잡았다 — 카테고리로 물으면 피뢰기 요구가 사라진다.
+  // 조회 키가 하나뿐이라 카테고리 답이 id 답을 덮는다. 게이트가 옳다.
+  // 도메인으로도 맞다: 이 제품의 대상은 154kV 급 수전설비이고, 국내에서
+  // 수전설비 설계는 유자격 전기기술자의 영역이다.
+  { category: 'substation', required: true, reviewer: 'PE (전기)', reason: '안전 관련 — 피뢰기 절연협조(보호여유도) 검증 + 수전설비 설계는 유자격자 영역' },
 ];
 
 /** 면책조항 생성 */

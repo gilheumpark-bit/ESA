@@ -8,7 +8,21 @@
  *   Service Size:       I = total_VA / (V x sqrt(3))  [3-phase]
  *                       I = total_VA / V               [1-phase]
  *
- * Standards: NEC Article 220 (Branch-Circuit, Feeder, Service Load Calc)
+ * Standards: **NEC 2020** Article 220 (Branch-Circuit, Feeder, Service Load Calc)
+ *
+ * **판을 밝힌다.** 여기 쓰인 조항 번호(220.12 일반조명 · 220.42 수요율 ·
+ * 220.52 소형기기)는 **2020 판 번호**다. 그런데 결과의 `source` 는
+ * `edition: '2023'` 을 달고 나갔다 — 선언한 판과 인용한 번호가 서로 다른
+ * 상태였다(2026-07-28 적출).
+ *
+ * 이후 판에서 번호가 옮겨졌다:
+ *   · 2023 판 — 220.12(비주거 조명)의 내용이 **220.42** 로 이동, Table 220.12
+ *     개칭, Article 220 이 7 개 Part 로 재편(517·555 의 수요율 흡수)
+ *   · 2026 판 — **Article 220 자체가 Article 120 으로** 재번호
+ *
+ * 번호를 새 판으로 옮겨 적지 않는다 — NEC 원문이 이 리포에 없고, 확인하지
+ * 못한 번호를 지어내는 것이 이 계산기가 저지르던 바로 그 잘못이다(§2.10).
+ * 대신 **어느 판 번호인지**와 **이후 판에서 옮겨졌다는 사실**을 결과에 싣는다.
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -130,7 +144,7 @@ export function calculateNECLoad(input: NECLoadCalcInput): DetailedCalcResult {
     formula: 'VA = area \\times VA/m^2',
     value: round(generalLighting, 0),
     unit: 'VA',
-    standardRef: 'NEC 220.12',
+    standardRef: 'NEC 2020 220.12',
   });
 
   // Step 2: Small appliance & laundry (dwelling only)
@@ -142,7 +156,7 @@ export function calculateNECLoad(input: NECLoadCalcInput): DetailedCalcResult {
     formula: 'VA = circuits \\times 1500',
     value: round(smallApplianceVA + laundryVA, 0),
     unit: 'VA',
-    standardRef: 'NEC 220.52',
+    standardRef: 'NEC 2020 220.52',
   });
 
   // Step 3: Apply demand factor to lighting + small appliance
@@ -154,7 +168,7 @@ export function calculateNECLoad(input: NECLoadCalcInput): DetailedCalcResult {
     formula: '\\text{NEC 220.42 Table}',
     value: round(afterDemand, 0),
     unit: 'VA',
-    standardRef: 'NEC 220.42',
+    standardRef: 'NEC 2020 220.42',
   });
 
   // Step 4: Fixed appliance loads
@@ -173,7 +187,7 @@ export function calculateNECLoad(input: NECLoadCalcInput): DetailedCalcResult {
       : 'VA_{app}',
     value: round(applianceDemand, 0),
     unit: 'VA',
-    standardRef: 'NEC 220.53',
+    standardRef: 'NEC 2020 220.53',
   });
 
   // Step 5: Motor loads (largest motor at 125%)
@@ -191,7 +205,7 @@ export function calculateNECLoad(input: NECLoadCalcInput): DetailedCalcResult {
     formula: 'VA_{motor} + 0.25 \\times VA_{largest}',
     value: round(motorDemand, 0),
     unit: 'VA',
-    standardRef: 'NEC 220.50',
+    standardRef: 'NEC 2020 220.50',
   });
 
   // Step 6: HVAC load
@@ -237,7 +251,14 @@ export function calculateNECLoad(input: NECLoadCalcInput): DetailedCalcResult {
     unit: 'VA',
     formula: 'VA_{total} = \\Sigma VA_{demand}',
     steps,
-    source: [createSource('NEC', '220', { edition: '2023' })],
+    source: [createSource('NEC', '220', { edition: '2020' })],
+    // 주석만으로는 아무에게도 안 닿는다. 판과 재번호 사실을 결과에 싣는다 —
+    // 조항 번호로 원문을 찾아보는 사람이 최신판에서 헤매지 않도록.
+    warnings: [
+      '이 계산의 조항 번호는 NEC **2020** 판 기준입니다(220.12 일반조명 · 220.42 수요율 · 220.52 소형기기).',
+      '이후 판에서 번호가 옮겨졌습니다 — 2023 판은 220.12 의 비주거 조명 내용을 220.42 로 옮기고 Article 220 을 7 개 Part 로 재편했으며, 2026 판은 Article 220 자체를 **Article 120** 으로 재번호했습니다. 최신판에서 찾을 때는 이 점을 감안하십시오.',
+      '수요율은 간이 표만 적용합니다. 실제 설계에는 해당 판 원문의 전체 표와 예외 조항을 확인하십시오.',
+    ],
     judgment: createJudgment(
       true,
       `총 수요 ${round(totalDemand, 0).toLocaleString()} VA, 서비스 ${round(serviceSize, 1)} A -> ${selectedService} A 표준`,
