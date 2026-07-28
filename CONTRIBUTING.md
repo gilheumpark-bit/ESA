@@ -6,11 +6,31 @@
 git clone https://github.com/gilheumpark-bit/ESA.git
 cd ESA
 npm ci
+git config core.hooksPath .githooks
 cp .env.example .env.local
 npm run dev
 ```
 
 Node.js 요구 버전은 `.nvmrc`와 `package.json`을 확인하십시오. 실제 비밀값은 `.env.local`에만 넣고 Git에 커밋하지 않습니다.
+
+### 커밋 훅 — 클론마다 한 번 켜야 합니다
+
+Git은 저장소에 들어 있는 훅을 자동으로 활성화하지 않습니다. 위
+`git config core.hooksPath .githooks` 를 실행하지 않으면 `.githooks/pre-commit`
+은 **파일로만 존재하고 한 번도 돌지 않습니다.**
+
+이 훅은 시크릿이 담긴 커밋을 차단합니다. 이 저장소는 **공개**이고
+`.env.example` 은 추적 대상이라 `git add -A` 한 번이면 로컬 값이 그대로
+공개됩니다. 훅은 두 가지를 봅니다.
+
+- 이름이 시크릿인 변수(`KEY`·`SECRET`·`TOKEN`·`PASSWORD`·`CREDENTIAL`·`PRIVATE`)에
+  값이 붙어 있는 `.env*` 파일
+- 알려진 시크릿 형태(Google·OpenAI·Slack·GitHub PAT·AWS·PEM 개인키)가 추가된 줄
+
+차단 메시지는 어느 파일인지만 알리고 **값은 출력하지 않습니다.** 훅이
+실제로 발화하는지는 `npx jest scripts/__tests__/pre-commit-hook` 이 검증합니다.
+
+`--no-verify` 는 여전히 통합니다. 훅은 실수를 막지 실행자를 막지 않습니다.
 
 ## 작업 순서
 

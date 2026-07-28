@@ -32,8 +32,8 @@
 
 | 명령 | 전제 | 커버 |
 |---|---|---|
-| `npm test -- --runInBand` | 없음 | 전체 회귀 — `ad7b91c` 직전 동일 제품 코드에서 175 suites / 1,412 tests green 실측 |
-| `npm run test:calc` | 없음 | 계산기 known-answer 52 test (`src/engine/calculators/__tests__/accuracy-known-answers.test.ts`) |
+| `npm test -- --runInBand` | 없음 | 전체 회귀. 스위트·테스트 **개수는 여기 적지 않는다** — 기능이 바뀌면 같이 바뀌어 반드시 드리프트한다. 아래 앵커 표의 날짜·커밋에 묶인 수치만 증거다 |
+| `npm run test:calc` | 없음 | 계산기 known-answer (`src/engine/calculators/__tests__/accuracy-known-answers.test.ts`) |
 | `npm run gate:pdf` | **3010 라이브 서버** | 실도면 fixtures → `/api/pdf-drawing` 라이브 관통 |
 | `npm run gate:sld-golden` | 예측 산출물 + attestation 키 (아래 주의) | golden adjudicated 라벨 대조 |
 | `npm run gate:sld-v3-contract` | 없음 | evaluator 계약 |

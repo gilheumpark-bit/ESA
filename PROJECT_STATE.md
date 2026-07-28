@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: f966c6e3fb72bb327978f13c9bec601cd064d799
-updatedAt: 2026-07-23T11:04:50.3159278+09:00
+codeBaselineCommit: e1a118ea9e2f2a08845a73f7f76226bd64377200
+updatedAt: 2026-07-28T00:00:00+09:00
 trigger: architecture
 changedDomains: [app, lib, docs, scripts, ci]
 ---
@@ -89,21 +89,23 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 검증
 
+> 스위트·테스트·페이지 **개수를 이 문서에 복제하지 않는다.** 기능이 바뀌면 같이 바뀌는 수라 반드시 드리프트하고, 드리프트한 수는 읽는 사람을 잘못 인도한다. 아래는 **어떤 게이트가 exit 0 이었는지**만 기록하고, 현재 수치는 명령을 직접 돌려 확인한다.
+
 - `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
-- `npm test -- --runInBand`: exit 0, 136개 스위트·1,115개 테스트 통과.
-- `npm run build`: exit 0, Next.js 16.2.10 production build와 64개 route 항목 생성, Turbopack 경고 0건.
+- `npm test -- --runInBand`: exit 0.
+- `npm run build`: exit 0, Next.js production build, Turbopack 경고 0건.
 - `npm run gate:pdf`: exit 0, 회로·표제란·격자·오탐·12MB·비PDF 거부 fixture 9/9 통과.
-- V3 전용: 21개 스위트·74개 테스트, topology 5개 스위트·77개 테스트, `gate:sld-v3-contract` 5/5 통과.
+- V3 전용 스위트와 topology 스위트, `gate:sld-v3-contract` 5/5 통과.
 - 브라우저 실증: 운영 저장소 미설정 503 fail-closed, 명시적 로컬 모드 합성 DXF COMPLETE(1페이지·구획 1/1·미확정 0), 새로고침 결과 복구, 데스크톱·390px 모바일 수평 넘침 0을 확인했다.
 - 브라우저 E2E: 체크인된 `L1-01-basic-radial.dxf` 업로드→`/api/dxf`→분석 결과→기기 5개·연결 4개 표시가 1/1 통과했다.
 - 공개 PDF 생산 API: 대산전기 11/11페이지·관계 244건(HOLD, 저신뢰 관계 명시), 한국기계연구원 18/18페이지·확정 관계 1,168건(COMPLETE), 두 파일 모두 실패·빈 페이지 오판정·가짜 페이지 간 관계 0.
 - 독립 코드·회귀·비밀자료 심사에서 최종 P0~P2와 회사 원본·키·대형 생성물 유입 0건을 확인했다.
 - `npm run gate:sld-golden`: exit 1, `verified95=false`; 실패 사유는 키·예측·실도면 데이터 부재와 claim 비활성이다.
-- 2026-07-23 경계 연속성 배치: `test:drawing-v3` 27개 스위트·138개, vision/UI 13개 스위트·130개, 4×4 production integration 1개 모두 통과했다. `npx tsc --noEmit --incremental false`, 수정 파일 ESLint, `npm run build`도 exit 0이며 65개 페이지를 생성했다.
+- 2026-07-23 경계 연속성 배치: `test:drawing-v3`, vision/UI, 4×4 production integration이 모두 통과했다. `npx tsc --noEmit --incremental false`, 수정 파일 ESLint, `npm run build`도 exit 0이었다.
 - standalone과 브라우저 공개 자산에서 `jbig2.wasm` 104,852B, `FoxitFixed.pfb` 17,597B, `78-H.bcmap` 2,379B, worker 1,304,896B를 non-empty로 확인했다.
-- 2026-07-23 답변 경로 배치: 전체 Jest 175개 스위트·1,412개, 전체 ESLint, `npx tsc --noEmit --incremental false`, 65페이지 production build가 모두 exit 0이었다.
+- 2026-07-23 답변 경로 배치: 전체 Jest, 전체 ESLint, `npx tsc --noEmit --incremental false`, production build가 모두 exit 0이었다.
 - `npm run gate:chat-live`: HTTP 200, 입력 `3상 380V·100A·50m·35mm² Cu·PF 0.9`가 정본 `voltage-drop` 계산기에서 `4.14V·1.09%·PASS`로 실행됐고, 같은 영수증이 모델 요청에 들어간 뒤 UI용 SSE 영수증→답변 순서로 전송됐다.
 
 ## 다음 첫 행동
