@@ -420,3 +420,18 @@ export function getAutocompleteSuggestions(
 
   return sorted.slice(0, limit);
 }
+
+/**
+ * 요청의 `limit` 문자열을 실제로 쓸 개수로 다듬는다.
+ *
+ * `parseInt('abc')` 도 `parseInt('')` 도 NaN 이고 **`Math.max(1, NaN)` 은
+ * 1 이 아니라 NaN 이다.** 그대로 흘리면 `slice(0, NaN)` 이 되어 제안이
+ * 0 개로 나온다 — 오류도 경고도 없이 자동완성만 안 뜬다(실측 2026-07-28).
+ * `?limit=` 처럼 빈 값을 붙이는 것은 클라이언트에서 흔한 모양이다.
+ *
+ * 라우트와 검사가 같은 것을 보도록 여기 한 벌만 둔다.
+ */
+export function clampSuggestionLimit(raw: string | null | undefined): number {
+  const parsed = Number.parseInt(raw ?? '', 10);
+  return Number.isFinite(parsed) ? Math.min(20, Math.max(1, parsed)) : 8;
+}

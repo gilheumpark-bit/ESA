@@ -10,7 +10,7 @@
 
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
-import { getAutocompleteSuggestions } from '@search/autocomplete';
+import { clampSuggestionLimit, getAutocompleteSuggestions } from '@search/autocomplete';
 import type { SupportedLanguage } from '@search/types';
 import { withRequestLog } from '@/lib/api/with-request-log';
 
@@ -25,8 +25,7 @@ async function GET__impl(request: NextRequest) {
 
     const q = searchParams.get('q') ?? '';
     const lang = (searchParams.get('lang') ?? 'ko') as SupportedLanguage;
-    const limitParam = searchParams.get('limit');
-    const limit = Math.min(20, Math.max(1, parseInt(limitParam ?? '8', 10)));
+    const limit = clampSuggestionLimit(searchParams.get('limit'));
 
     // Validate language
     if (lang !== 'ko' && lang !== 'en') {
