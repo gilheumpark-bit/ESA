@@ -201,7 +201,7 @@ function calculateArcFlashBoundary(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 3 — PPE Category (NFPA 70E Table 130.7(C)(15)(a))
+// PART 3 — PPE Category (NFPA 70E 2018+ Table 130.7(C)(15)(c))
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface PPEInfo {
@@ -211,9 +211,30 @@ interface PPEInfo {
   hazardLabel: 'green' | 'yellow' | 'orange' | 'red';
 }
 
+/**
+ * 입사 에너지 → PPE 등급.
+ *
+ * 2026-07-28 에 두 가지를 고쳤다. 둘 다 인명 안전 문구다:
+ *
+ *  ① **Category 0 은 NFPA 70E 2015 판에서 삭제됐다.** 표는 1 부터 시작한다.
+ *     1.2 cal/cm² 는 등급 경계가 아니라 2도 화상 경계다. 없어진 등급 이름을
+ *     10 년 넘게 내보내고 있었다.
+ *  ② 그 구간 안내가 `'일반 작업복 (면 또는 합성섬유)'` 였다. **합성섬유는
+ *     금지다** — NFPA 70E 130.7(C)(9) 는 315°C 미만에서 녹는 섬유(아세테이트·
+ *     아크릴·나일론·폴리에스터·폴리에틸렌·폴리프로필렌·스판덱스)를 단독·혼방
+ *     모두 금한다. 녹아서 피부에 들러붙어 화상을 키우기 때문이다. 계산기가
+ *     **정확히 금지된 옷을 권하고 있었다.** 100% 천연섬유도 보호가 필요한
+ *     자리에서는 불충분하다고 본다(2015 판 변경).
+ */
 function determinePPE(incidentEnergy: number): PPEInfo {
-  if (incidentEnergy <= PPE_THRESHOLDS.CAT_0_MAX) {
-    return { category: 0, description: '일반 작업복 (면 또는 합성섬유)', minCalRating: 0, hazardLabel: 'green' };
+  if (incidentEnergy <= PPE_THRESHOLDS.BURN_THRESHOLD) {
+    return {
+      category: 0,
+      description: '등급 없음 (1.2 cal/cm² 이하 — 2015 판부터 이 구간에 등급을 매기지 않음)'
+        + ' · 녹는 합성섬유(나일론·폴리에스터·아크릴·스판덱스 등) 착용 금지',
+      minCalRating: 0,
+      hazardLabel: 'green',
+    };
   }
   if (incidentEnergy <= PPE_THRESHOLDS.CAT_1_MAX) {
     return { category: 1, description: '내아크 상의 + 내아크 장갑 + 안면 보호구', minCalRating: 4, hazardLabel: 'yellow' };
@@ -344,11 +365,14 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   const ppe = determinePPE(worstEnergy);
   steps.push({
     step: 5,
-    title: `PPE Category ${ppe.category}`,
-    formula: 'NFPA 70E Table 130.7(C)(15)(a)',
+    // 0 은 등급이 아니다 — 2015 판에서 Category 0 이 삭제됐다.
+    title: ppe.category > 0 ? `PPE Category ${ppe.category}` : 'PPE 등급 없음 (화상 경계 이하)',
+    // (a) 는 **작업 기반** 표(기기 종류로 고르는 길)다. 입사 에너지로 고르는
+    // 것은 (c) 다 — 이 계산기는 에너지를 냈으므로 (c) 가 맞다.
+    formula: 'NFPA 70E 2018+ Table 130.7(C)(15)(c) — 입사 에너지 기반 선정',
     value: ppe.category,
     unit: '',
-    standardRef: 'NFPA 70E',
+    standardRef: 'NFPA 70E 2018+ 130.7(C)(15)(c)',
   });
 
   return {
@@ -358,7 +382,7 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     label: '아크플래시 입사 에너지',
     formula: 'IEEE 1584-2002 아크 전류·정규화 에너지·입사 에너지 식 (2018 판 아님)',
     steps,
-    standardRef: 'IEEE 1584-2002 · PPE 등급 NFPA 70E',
+    standardRef: 'IEEE 1584-2002 · PPE 등급 NFPA 70E 2018+',
     arcingCurrent_kA: Math.round(arcCurrent_kA * 100) / 100,
     incidentEnergy_cal_cm2: worstEnergy,
     arcFlashBoundary_mm: boundary,
@@ -383,6 +407,8 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
       '표준 자체의 모델 불확실성(±25%)이 있습니다. 이 구현은 표준 원문이 아니라 공개 문헌 2 곳에서 계수 단위로 대조해 옮긴 것입니다.',
       'PPE 등급 선정 등 안전 관련 최종 판단에는 ETAP/SKM/EasyPower 등 전문 소프트웨어 검증이 필요합니다.',
       '아크 지속시간 > 2초인 경우 반드시 에너지 저감 조치를 검토하세요.',
+      // 등급이 낮게 나왔을 때가 오히려 위험하다 — "이 정도면 평상복" 으로 읽힌다.
+      '녹는 합성섬유(아세테이트·아크릴·나일론·폴리에스터·폴리에틸렌·폴리프로필렌·스판덱스)는 단독·혼방 모두 착용 금지입니다 — 녹아서 피부에 들러붙습니다(NFPA 70E 130.7(C)(9)). 등급이 낮게 나온 경우에도 같습니다.',
     ],
   };
 }

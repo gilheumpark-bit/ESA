@@ -197,29 +197,30 @@ export const IEEE_1584_2002 = {
   VARIATION_FACTOR: 0.85,
 } as const;
 
-/** IEEE 1584-2018 거리 지수 */
-export const IEEE_1584_DISTANCE_EXPONENT = {
-  VCB: 1.641,
-  VCBB: 1.641,
-  HCB: 1.641,
-  VOA: 2.0,
-  HOA: 2.0,
-} as const;
+// `IEEE_1584_DISTANCE_EXPONENT` 는 삭제했다(2026-07-28). 라벨은 "2018" 인데
+// 값(1.641·2.0)은 2002 판 Table 4 행이었고, 아크플래시가 2002 판으로 바뀌면서
+// 거리 지수를 제 자리에서 정하게 돼 **호출처가 0** 이 됐다. 내 수리가 만든
+// 고아라 같은 배치에서 치운다(§2.5-①·§2.11).
 
-/** NFPA 70E PPE 등급 경계 (cal/cm²) */
+/**
+ * PPE 등급 경계 (cal/cm²) — **NFPA 70E 2018 이후** 기준.
+ *
+ * 값은 각 등급의 최소 내아크 정격(4·8·25·40 cal/cm²)이고, 1.2 는 등급이
+ * 아니라 **2도 화상 경계**다(Stoll curve). 앞 판은 이걸 `CAT_0_MAX` 라
+ * 불렀는데 **Category 0 은 2015 판에서 삭제됐다** — 지금 표는 1 부터
+ * 시작한다. 이름이 없어진 등급을 부르고 있었다(2026-07-28 적출).
+ */
 export const PPE_THRESHOLDS = {
-  /** Category 0 상한 */
-  CAT_0_MAX: 1.2,
-  /** Category 1 상한 */
-  CAT_1_MAX: 4.0,
-  /** Category 2 상한 */
-  CAT_2_MAX: 8.0,
-  /** Category 3 상한 */
-  CAT_3_MAX: 25.0,
-  /** Category 4 상한 */
-  CAT_4_MAX: 40.0,
-  /** 2차 화상 경계 */
+  /** 2도 화상 경계 — 등급 아님. 이 아래는 NFPA 70E 가 등급을 매기지 않는다. */
   BURN_THRESHOLD: 1.2,
+  /** Category 1 상한 (최소 내아크 정격 4) */
+  CAT_1_MAX: 4.0,
+  /** Category 2 상한 (8) */
+  CAT_2_MAX: 8.0,
+  /** Category 3 상한 (25) */
+  CAT_3_MAX: 25.0,
+  /** Category 4 상한 (40) */
+  CAT_4_MAX: 40.0,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
