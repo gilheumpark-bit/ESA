@@ -64,11 +64,36 @@ const WEATHER_PATTERNS: Array<{
   { pattern: /비\s*옴|우천|강우|빗속|비\s*오|빗|빗/i,        condition: 'rain',         ko: '비/우천' },
   { pattern: /눈\s*옴|강설|눈\s*오|적설/i,                   condition: 'snow',         ko: '눈' },
   { pattern: /강풍|돌풍|바람\s*강|태풍/i,                    condition: 'wind',         ko: '강풍' },
-  { pattern: /폭염|폭서|더위|혹서|35도|36도|37도|38도|39도|40도/i, condition: 'extreme_heat', ko: '폭염' },
+  // 온도 표기는 아래 `matchesHeatTemperature` 가 따로 본다 — 숫자 비교가 필요해서다.
+  { pattern: /폭염|폭서|더위|혹서/i,                         condition: 'extreme_heat', ko: '폭염' },
   { pattern: /안개|짙은\s*안개/i,                            condition: 'fog',          ko: '안개' },
   { pattern: /낙뢰|천둥|번개|뇌우/i,                         condition: 'thunder',      ko: '낙뢰/뇌우' },
   { pattern: /맑음|청명|쾌청|sunny/i,                        condition: 'clear',        ko: '맑음' },
 ];
+
+/** 폭염작업 기준 — 체감온도(°C). 체크리스트 문구와 같은 값이어야 한다. */
+const HEAT_THRESHOLD_C = 31;
+
+/**
+ * 온도 표기로 폭염을 판정한다.
+ *
+ * **앞서 이 자리는 `35도|36도|…|40도` 라는 문자열 나열이었다.** 둘이 틀렸다:
+ * ① 기준이 35 였다 — 현행 기준은 **체감온도 31°C** 이고 체크리스트 문구는
+ * 이미 31 로 고쳤는데 파서가 35 에 머물러 **31~34°C 구간에서 폭염 항목이
+ * 한 건도 안 나왔다**(2026-07-28 독립 심사 도메인 좌석 실행 실측:
+ * "체감온도 32도" → NOMATCH). 화면에 도달하지 못하는 수리였다.
+ * ② 나열이라 41도 이상이 빠졌다 — 더 더운데 안 잡히는 쪽이 위험하다.
+ *
+ * 숫자를 읽어 비교한다. 기준 미만의 온도 언급은 폭염이 아니다 —
+ * "기온 20도" 를 폭염으로 읽으면 항목이 상시 떠서 사용자가 무시하게 된다.
+ */
+function matchesHeatTemperature(text: string): boolean {
+  const re = /(\d{1,2}(?:\.\d)?)\s*(?:도|°\s*C|℃)/gi;
+  for (const m of text.matchAll(re)) {
+    if (Number.parseFloat(m[1]) >= HEAT_THRESHOLD_C) return true;
+  }
+  return false;
+}
 
 /** 작업 유형 패턴 */
 const WORK_TYPE_PATTERNS: Array<{
@@ -128,6 +153,10 @@ function extractWeather(text: string): WeatherInfo[] {
     if (entry.pattern.test(text)) {
       result.push({ condition: entry.condition, ko: entry.ko });
     }
+  }
+  // 온도 표기 경로 — 키워드로 이미 잡혔으면 중복해 넣지 않는다.
+  if (matchesHeatTemperature(text) && !result.some((w) => w.condition === 'extreme_heat')) {
+    result.push({ condition: 'extreme_heat', ko: '폭염' });
   }
   return result;
 }

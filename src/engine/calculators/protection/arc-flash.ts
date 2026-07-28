@@ -152,7 +152,18 @@ function calculateArcingCurrent(
  * 입사 에너지 — IEEE 1584-**2002**.
  *
  *   lg En = K1 + K2 + 1.081·lg Ia + 0.0011·G
- *   E     = 4.184 · Cf · En · (t/0.2) · (610^x / D^x)      [cal/cm²]
+ *   E     = 4.184 · Cf · En · (t/0.2) · (610^x / D^x)      **[J/cm²]**
+ *
+ * **J → cal 로 바꿔 반환한다. 앞서 이 주석이 식 옆에 `[cal/cm²]` 라고 적어
+ * 놓았고, 코드는 J 값을 그대로 돌려주면서 `cal/cm²` 라벨을 붙여 cal 기준
+ * PPE 표(1.2·4·8·25·40)와 대조했다 — 전 구간 4.184 배 과대.**
+ *
+ * 480V·20kA·0.2s·457mm 에서 41.55 가 나와 40 을 넘겨 **"작업 금지"** 판정이
+ * 됐다. 정답은 9.93 cal/cm² · Category 3 이다. 더 나쁜 것은 이 리포의
+ * `ppe-safety-wording.test.ts` 가 바로 그 41.55 를 관측하고도 *입력을
+ * 5kA·0.1s 로 바꿔 회피*했다는 점이다 — 값이 이상하다고 적어 놓고 값을
+ * 의심하는 대신 테스트를 비켜 갔다. 이 파일 머리말이 죽이려 한 "늑대 소년"
+ * 이 단위 차원에서 되살아나 있었다(2026-07-28 독립 심사 도메인 좌석).
  *
  * 앞 판은 `K1 + 1.5·lg Ia + K3·lg(V/1000)` 를 썼고 K1 에 −0.5588 을 넣었다 —
  * 그건 **아크 전류식의 교차항 계수**(0.5588)를 부호만 바꿔 옮겨 놓은 것이다.
@@ -180,10 +191,13 @@ function calculateIncidentEnergy(
 
   const Cf = voltage_V < 1000 ? e.CF_LV : e.CF_HV;
   const x = distanceExponent;
-  const E = e.UNIT * Cf * En * (arcDuration_s / e.REF_TIME_S)
+
+  // 식 (5) 의 결과는 **J/cm²** 다.
+  const E_Jcm2 = e.J_PER_CAL * Cf * En * (arcDuration_s / e.REF_TIME_S)
     * Math.pow(e.REF_DISTANCE_MM, x) / Math.pow(workingDistance_mm, x);
 
-  return Math.round(E * 100) / 100;
+  // PPE 표도, 우리가 붙이는 라벨도 cal/cm² 다. 여기서 바꾼다.
+  return Math.round((E_Jcm2 / e.J_PER_CAL) * 100) / 100;
 }
 
 /**

@@ -35,9 +35,16 @@ function input(over: Partial<ArcFlashInput> = {}): ArcFlashInput {
 
 /** 화상 경계 아래로 떨어지는 입력 — 지속시간을 아주 짧게. */
 const lowEnergy = calculateArcFlash(input({ boltedFaultCurrent_kA: 0.7, arcDuration_s: 0.01 }));
-// 등급이 실제로 나오는 중간대. 480V·5kA·100ms → 5.96 cal/cm² · Cat 2 (실측).
-// 20kA·200ms 로 잡았다가 40 cal/cm² 를 넘겨 -1(작업 금지)이 나왔다 —
-// 480V 반의 실제 입사 에너지가 그만큼 크다.
+// 등급이 실제로 나오는 중간대. 480V·5kA·100ms → 1.43 cal/cm² · Cat 1 (실측).
+//
+// **이 줄은 앞서 거짓말이었다.** 원래 여기엔 "20kA·200ms 로 잡았다가 40
+// cal/cm² 를 넘겨 -1(작업 금지)이 나왔다 — 480V 반의 실제 입사 에너지가
+// 그만큼 크다" 라고 적혀 있었다. 41.55 라는 값을 **관측하고도** 그게 단위
+// 오류(J/cm² 를 cal 로 라벨)라는 것을 의심하는 대신, 입력을 5kA·0.1s 로
+// 바꿔 비켜 가고 이상한 값을 "480V 반이 원래 그렇다" 로 정당화했다.
+// 480V·20kA·0.2s 의 정답은 9.93 cal/cm² · Category 3 이다.
+//
+// 남겨 두는 이유: 값이 예상 밖일 때 입력을 바꾸는 것은 회피지 검증이 아니다.
 const highEnergy = calculateArcFlash(input({ boltedFaultCurrent_kA: 5, arcDuration_s: 0.1 }));
 
 describe('PPE 안내 — 안전 문구', () => {

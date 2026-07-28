@@ -35,8 +35,35 @@ export interface AppAssertedConstant {
   unit: string;
   /** 이 값이 무엇의 값인지 — 근처에 하나라도 있어야 통과. */
   terms: readonly string[];
+  /**
+   * **반드시** 근처에 있어야 하는 식별자 — 등급·구간처럼 같은 대상 안에서
+   * 값이 갈리는 경우에만 쓴다.
+   *
+   * 왜 필요한가(2026-07-28 독립 심사 도메인 좌석 실행 실측): 절연장갑
+   * 항목의 `terms` 에 `'절연장갑'` 이 들어 있어 **등급과 무관하게** 통과했다.
+   *
+   *   "Class 4 절연장갑의 최대 사용전압은 500V 입니다"  → 통과(출처 부여)
+   *   "22.9kV 활선용 절연 장갑 정격 1000V"              → 통과(출처 부여)
+   *
+   * Class 4 는 36,000V 다. 22.9kV 작업자에게 1,000V 장갑을 "IEC 60903" 을
+   * 달아 승인하는 경로였다 — 필터가 막으라고 있는 바로 그것을 만들었다.
+   */
+  discriminator?: string;
   /** 앱이 이 값을 내보낼 때 함께 쓰는 근거. 비워 둘 수 없다. */
   source: string;
+}
+
+/**
+ * 식별자 근접 판정 — **부분 문자열이 아니라 경계로** 본다.
+ *
+ * `'Class 0'.includes` 로 보면 `"Class 00"` 안에서도 참이 된다. 실제로
+ * 그랬다: Class 00(500V) 문장이 Class 0(1000V) 항목에 걸렸다. 뒤에 숫자가
+ * 더 붙으면 다른 등급이다.
+ */
+function hasToken(context: string, token: string): boolean {
+  const esc = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tail = /\d$/.test(token) ? '(?!\\d)' : '';
+  return new RegExp(esc + tail, 'i').test(context);
 }
 
 /**
@@ -63,8 +90,20 @@ export const APP_ASSERTED_CONSTANTS: readonly AppAssertedConstant[] = [
   { value: '1.7', unit: 'm', terms: ['154kV', '접근 한계거리'], source: '안전보건규칙 제321조 제1항' },
 
   // ── 절연장갑 등급 (IEC 60903) ──
-  { value: '500', unit: 'V', terms: ['Class 00', '절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
-  { value: '1000', unit: 'V', terms: ['Class 0', '절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
+  //
+  // **6 등급을 전부 등재한다.** 앞서 00·0 두 줄만 있었다. 이 앱의 대상은
+  // 154kV 수전설비고 22.9kV 활선의 실제 등급은 Class 3·4 인데, 그 값을
+  // 챗이 말하면 목록에 없다는 이유로 `[미확인]` 로 지워졌다 — 앱이 구조적으로
+  // 정답을 못 내고 오답(1000V)만 승인하는 상태였다.
+  //
+  // `discriminator` 로 등급을 못 박는다. 등급 없이 "절연장갑 500V" 라고만
+  // 쓰면 통과하지 않는다 — 어느 등급인지 모르는 전압은 현장에서 위험하다.
+  { value: '500', unit: 'V', discriminator: 'Class 00', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
+  { value: '1000', unit: 'V', discriminator: 'Class 0', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
+  { value: '7500', unit: 'V', discriminator: 'Class 1', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
+  { value: '17000', unit: 'V', discriminator: 'Class 2', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
+  { value: '26500', unit: 'V', discriminator: 'Class 3', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
+  { value: '36000', unit: 'V', discriminator: 'Class 4', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
 
   // ── 이 앱이 쓰는 판 — "어느 표준을 쓰나요" 에 답할 수 있어야 한다 ──
   { value: '1584', unit: '', terms: ['IEEE', '아크플래시', 'arc flash'], source: '이 앱의 아크플래시 계산기 구현(IEEE 1584-2002)' },
@@ -93,7 +132,9 @@ export function findAssertedSource(
   for (const c of APP_ASSERTED_CONSTANTS) {
     if (normalize(c.value) !== v) continue;
     if (normalize(c.unit) !== u) continue;
-    if (!c.terms.some((t) => context.includes(t))) continue;
+    // 등급·구간이 갈리는 값은 그 식별자가 반드시 있어야 한다.
+    if (c.discriminator && !hasToken(context, c.discriminator)) continue;
+    if (!c.terms.some((t) => hasToken(context, t))) continue;
     return c.source;
   }
   return null;
