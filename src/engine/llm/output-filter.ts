@@ -155,6 +155,29 @@ function normalizeNumericToken(value: string): string {
   return value.replace(/\s+/g, '').replace(/,/g, '').toLowerCase();
 }
 
+/**
+ * 사용자가 질문에 적어 넣은 **조항 표기**를 모은다.
+ *
+ * 수치 규칙에는 이미 `isTrustedInput` 예외가 있는데(질문에 있던 값은 그대로
+ * 인용해도 된다) 조항 인용 규칙에는 없었다. 그래서 사용자가 조항 번호를
+ * 대고 그 내용을 물으면, 답이 **"문의하신 [미확인] 조항은 존재하지
+ * 않습니다"** 로 나왔다 — 무엇을 묻고 답하는지가 지워진다(실측 2026-07-28,
+ * 실재하지 않는 번호를 일부러 물어본 라이브 답변).
+ *
+ * 질문의 조항을 되받는 것은 **근거 주장이 아니라 대상 지칭**이다. 모델이
+ * *다른* 조항을 근거로 끌어오는 것은 여전히 막힌다 — 질문에 없으면 여기
+ * 집합에 없다.
+ */
+function findTrustedCitations(input: string): Set<string> {
+  const found = new Set<string>();
+  const pattern = new RegExp(STANDARD_CITATION_PATTERN.source, STANDARD_CITATION_PATTERN.flags);
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(input)) !== null) {
+    found.add(match[0].replace(/\s+/g, ' ').trim().toUpperCase());
+  }
+  return found;
+}
+
 function findTrustedNumbers(input: string): Set<string> {
   const numbers = new Set<string>();
   const pattern = new RegExp(NUMBER_PATTERN.source, NUMBER_PATTERN.flags);
@@ -227,6 +250,7 @@ export function filterLLMOutput(
 
   // Step 2: Extract and check all numbers
   const numbers = extractNumbers(output, sourcePositions, findTrustedNumbers(trustedInput));
+  const trustedCitations = findTrustedCitations(trustedInput);
 
   for (const num of numbers) {
     if (num.isAllowed || num.isTrustedInput) continue;
@@ -289,7 +313,10 @@ export function filterLLMOutput(
       }
     }
 
-    if (!hasLookup && !hasSourceTag) {
+    // 질문에 있던 조항을 되받는 것은 대상 지칭이지 근거 주장이 아니다.
+    const isTrustedCitation = trustedCitations.has(stdMatch[0].replace(/\s+/g, ' ').trim().toUpperCase());
+
+    if (!hasLookup && !hasSourceTag && !isTrustedCitation) {
       blocked.push({
         text: stdMatch[0],
         reason: 'direct_citation',
