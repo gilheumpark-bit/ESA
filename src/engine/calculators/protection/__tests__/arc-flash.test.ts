@@ -63,7 +63,10 @@ describe('Arc Flash Calculator (IEEE 1584-2002)', () => {
     const result = calculateArcFlash(baseInput);
     expect(result.steps).toHaveLength(5);
     expect(result.steps[0].title).toContain('아크 전류');
-    expect(result.steps[4].title).toContain('PPE');
+    // 앞서 'PPE' 였다. 5 단계는 보호구 선정이고, 그 정본은 입사 에너지
+    // 분석 경로의 Table 130.5(G)(최소 내아크 정격)다 — NFPA 70E 130.5(F)
+    // 가 130.7(C)(15)(c) 의 '등급' 을 이 경로에서 쓰지 못하게 한다.
+    expect(result.steps[4].title).toMatch(/보호구 선정|화상 경계 이하/);
   });
 
   test('throws on voltage out of range', () => {

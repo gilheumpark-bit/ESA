@@ -208,6 +208,69 @@ describe('입사 에너지 — 절대 눈금', () => {
     expect(atBoundary.incidentEnergy_cal_cm2).toBeCloseTo(1.2, 1);
   });
 
+  /**
+   * **거리 지수와 통상 간격이 기기·전압대별로 갈린다** (2002 Table 4).
+   *
+   * 앞서 `endsWith('OA') ? 2.0 : 1.641` 로 전압과 무관하게 1.641 을 썼다.
+   * 1.641 은 **저압 MCC·분전반** 행이다. 중고압 배전반은 0.973 이고 통상
+   * 간격도 32mm 가 아니라 152mm 다. 두 오차가 같은 방향으로 겹쳐
+   * 13.8kV 에서 **3.79 → 6.73 cal/cm² (+78%)**, 즉 앞 구현은 과소평가였다.
+   * 아크플래시에서 과소평가는 보호구 등급을 낮게 잡게 만든다
+   * (2026-07-28 독립 심사 도메인 좌석 → 2차 문헌 대조로 확정).
+   *
+   * 상대 검사로는 이걸 못 잡는다 — 전압대마다 **절대 대역**을 박는다.
+   */
+  /**
+   * 두 오차를 **나눠서** 잠근다. 처음엔 하나로 묶었다가 `base` 의
+   * `conductorGap_mm: 32` 를 물려받아 간격 기본값 효과가 빠진 채 측정됐다 —
+   * 검사가 제 이름과 다른 것을 재고 있었다.
+   *
+   *   지수만 (간격 32mm 고정):  3.79 → 4.97   (+31%)
+   *   지수 + 간격 기본값 152mm:  3.79 → 6.73   (+78%)
+   */
+  it.each([
+    ['13.8kV', 13800],
+    ['4.16kV', 4160],
+  ])('%s 배전반 — 거리 지수가 중고압 행이다 (간격 고정)', (_label, voltage_V) => {
+    const r = calculateArcFlash({ ...base, voltage_V, workingDistance_mm: 914 });
+    expect(r.incidentEnergy_cal_cm2).toBeGreaterThan(4.5);
+    expect(r.incidentEnergy_cal_cm2).toBeLessThan(5.5);
+  });
+
+  it.each([
+    ['13.8kV', 13800],
+    ['4.16kV', 4160],
+  ])('%s 배전반 — 간격 기본값이 중고압 행이다 (간격 미기재)', (_label, voltage_V) => {
+    const { conductorGap_mm: _omit, ...noGap } = base;
+    const r = calculateArcFlash({ ...noGap, voltage_V, workingDistance_mm: 914 });
+    expect(r.incidentEnergy_cal_cm2).toBeGreaterThan(6);
+    expect(r.incidentEnergy_cal_cm2).toBeLessThan(8);
+  });
+
+  /**
+   * 기기 종류가 실제로 결과를 바꾸는지 — 표를 넣고도 한 행만 쓰면 소용없다.
+   * 저압에서 배전반(1.473·32mm)과 MCC(1.641·25mm)는 값이 달라야 한다.
+   */
+  it('저압 배전반과 MCC 가 다른 값을 낸다', () => {
+    const sg = calculateArcFlash({ ...base, equipmentClass: 'switchgear' });
+    const mcc = calculateArcFlash({ ...base, equipmentClass: 'mcc_panel' });
+    expect(sg.incidentEnergy_cal_cm2).not.toBeCloseTo(mcc.incidentEnergy_cal_cm2, 1);
+  });
+
+  /** 기본값이 배전반이다 — 이 제품의 대상은 수전설비다. */
+  it('기기 종류를 안 주면 배전반으로 계산한다', () => {
+    const auto = calculateArcFlash(base);
+    const sg = calculateArcFlash({ ...base, equipmentClass: 'switchgear' });
+    expect(auto.incidentEnergy_cal_cm2).toBeCloseTo(sg.incidentEnergy_cal_cm2, 2);
+  });
+
+  /** 개방 배치는 전압대와 무관하게 2.0 이다. */
+  it('개방 배치는 함체보다 에너지가 낮다 — 지수 2.0', () => {
+    const box = calculateArcFlash({ ...base, electrodeConfig: 'VCB', enclosureType: 'box' });
+    const open = calculateArcFlash({ ...base, electrodeConfig: 'VOA', enclosureType: 'open' });
+    expect(open.incidentEnergy_cal_cm2).toBeLessThan(box.incidentEnergy_cal_cm2);
+  });
+
   /** 위 두 검사가 실제로 값을 읽는지 — 필드명이 바뀌어 undefined 가 되면 알람. */
   it('읽는 필드가 살아 있다 — 공회전 알람', () => {
     const r = calculateArcFlash(base);

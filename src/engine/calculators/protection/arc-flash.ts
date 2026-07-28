@@ -22,7 +22,7 @@
  *
  * PART 1: Input/Output types
  * PART 2: 간략 경험식 계산
- * PART 3: PPE Category determination
+ * PART 3: 보호구 선정 (NFPA 70E Table 130.5(G))
  * PART 4: Calculator entry point
  */
 
@@ -56,8 +56,9 @@ export interface ArcFlashInput {
   enclosureDepth_mm?: number;
   /**
    * 전극 간격 (mm) — 2002 식의 `G`. 아크 전류식과 정규화 에너지식 양쪽에
-   * 들어간다. 미기재 시 저압 배전반 기본값(32mm)을 쓰고 **가정했다는 사실을
-   * 결과에 싣는다**(25↔32mm 차이는 결과 2~4%).
+   * 들어간다. 미기재 시 **기기 종류·전압대별 통상 간격**(2002 Table 4)을
+   * 쓰고 가정했다는 사실을 결과에 싣는다 — 저압 배전반 32 · 저압 MCC 25 ·
+   * 중고압 배전반 152mm.
    */
   conductorGap_mm?: number;
   /**
@@ -65,7 +66,16 @@ export interface ArcFlashInput {
    * 접지계통(−0.113)보다 에너지가 크게 나오는 쪽이라 보수적이다.
    */
   grounding?: 'grounded' | 'ungrounded';
+  /**
+   * 기기 종류 — 2002 Table 4 의 **거리 지수 `x` 와 통상 전극 간격**을 고른다.
+   * 미기재 시 `switchgear`(개방 배치는 `open_air`). 이 제품의 대상이
+   * 수전설비라 배전반이 기본이다.
+   */
+  equipmentClass?: EquipmentClass;
 }
+
+/** 2002 Table 4 의 기기 분류. */
+export type EquipmentClass = 'switchgear' | 'mcc_panel' | 'cable' | 'open_air';
 
 export type ElectrodeConfig =
   | 'VCB'    // Vertical conductors in box
@@ -81,7 +91,12 @@ export interface ArcFlashResult extends DetailedCalcResult {
   incidentEnergy_cal_cm2: number;
   /** 아크플래시 경계 (mm) — 1.2 cal/cm² 기준 */
   arcFlashBoundary_mm: number;
-  /** PPE 등급 */
+  /**
+   * 내부 심각도 밴드(1~4, −1 = 작업 금지). **NFPA 등급이 아니다** —
+   * 130.5(F) 가 입사 에너지 분석 결과로 130.7(C)(15)(c) 등급을 지정하는
+   * 것을 허용하지 않는다. 화면 색·정렬용이고, 표준 산출물은
+   * 5 단계 step 의 `value`(최소 내아크 정격 cal/cm² · Table 130.5(G))다.
+   */
   ppeCategory: number;
   /** PPE 설명 */
   ppeDescription: string;
@@ -215,7 +230,7 @@ function calculateArcFlashBoundary(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PART 3 — PPE Category (NFPA 70E 2018+ Table 130.7(C)(15)(c))
+// PART 3 — 보호구 선정 (NFPA 70E Table 130.5(G) · 입사 에너지 분석 경로)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface PPEInfo {
@@ -307,16 +322,34 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     );
   }
 
+  /**
+   * 기기 종류 — 2002 Table 4 의 행을 고른다.
+   *
+   * 입력에 없으면 개방 여부만 `electrodeConfig` 로 보고 나머지는
+   * **`switchgear`** 로 둔다. `electrodeConfig`(VCB/VCBB/HCB)는 2018 판의
+   * 전극 배치라 2002 의 기기 분류(배전반/MCC/케이블)를 구분해 주지 못한다.
+   *
+   * 한때 저압 기본을 `mcc_panel`(x=1.641)로 두려 했다 — 457mm 에서 값이 더
+   * 크게 나와 "보수적" 이라는 이유였다. 바꿨다. 이 제품의 대상은 154kV 급
+   * **수전설비**이고 거기서 세는 기기는 배전반이다. 잘못된 기기의 값을
+   * 크게 내는 것은 보수가 아니라 **다른 기기를 계산하는 것**이고, 사용자가
+   * 다른 도구와 대조하면 어긋난다. 값이 궁금하면 `equipmentClass` 로 고른다.
+   *
+   * 중고압 `switchgear`(x=0.973 · gap 152mm)는 보수적일 뿐 아니라 표준이
+   * 정한 값 그 자체다 — 앞서 저압 MCC 행을 쓰던 것이 오류였다.
+   */
+  const isOpenAir = input.electrodeConfig.endsWith('OA');
+  const band = input.voltage_V < 1000 ? 'LV' : 'MV';
+  const equipmentClass: EquipmentClass = input.equipmentClass
+    ?? (isOpenAir ? 'open_air' : 'switchgear');
+  const classRow = IEEE_1584_2002.EQUIPMENT_CLASS[band][equipmentClass];
+
   // 표준이 요구하는데 입력에 없던 두 값. 기본값을 쓸 때는 그 사실을 남긴다.
   const gapAssumed = !Number.isFinite(input.conductorGap_mm as number);
-  const gap_mm = gapAssumed
-    ? IEEE_1584_2002.TYPICAL_GAP_MM.LV_SWITCHGEAR
-    : (input.conductorGap_mm as number);
+  const gap_mm = gapAssumed ? classRow.gap_mm : (input.conductorGap_mm as number);
   const groundingAssumed = input.grounding === undefined;
   const grounding = input.grounding ?? 'ungrounded';
-  // 거리 지수 — 2002 Table 4 는 기기 종류별인데 전 표가 이 리포에 없다.
-  // 공개 확인된 두 값만 쓴다(개방 2.0 · 함체 1.641 = MCC·패널보드 행).
-  const distExp = input.electrodeConfig.endsWith('OA') ? 2.0 : 1.641;
+  const distExp = classRow.x;
 
   // Step 1: 아크 전류 계산
   const { arcCurrent_kA, variationFactor, violatesPhysics } = calculateArcingCurrent(
@@ -383,13 +416,31 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   steps.push({
     step: 5,
     // 0 은 등급이 아니다 — 2015 판에서 Category 0 이 삭제됐다.
-    title: ppe.category > 0 ? `PPE Category ${ppe.category}` : 'PPE 등급 없음 (화상 경계 이하)',
-    // (a) 는 **작업 기반** 표(기기 종류로 고르는 길)다. 입사 에너지로 고르는
-    // 것은 (c) 다 — 이 계산기는 에너지를 냈으므로 (c) 가 맞다.
-    formula: 'NFPA 70E 2018+ Table 130.7(C)(15)(c) — 입사 에너지 기반 선정',
-    value: ppe.category,
-    unit: '',
-    standardRef: 'NFPA 70E 2018+ 130.7(C)(15)(c)',
+    title: ppe.minCalRating > 0 && ppe.category > 0
+      ? `보호구 선정 — 최소 내아크 정격 ${ppe.minCalRating} cal/cm²`
+      : '화상 경계 이하 (내아크 정격 요구 없음)',
+    /**
+     * **표를 바꿨다. 앞서 인용한 표를 표준이 금지한다.**
+     *
+     * 여기엔 이렇게 적혀 있었다: "(a) 는 작업 기반 표다. 입사 에너지로
+     * 고르는 것은 (c) 다 — 이 계산기는 에너지를 냈으므로 (c) 가 맞다."
+     * 정반대다(2026-07-28 독립 심사 도메인 좌석 → 외부 대조로 확정).
+     *
+     * NFPA 70E 130.5(F) 는 보호구 선정에 두 길을 두고 **같은 기기에 병용을
+     * 금지**한다: ① 입사 에너지 분석 → 130.5(G) ② 아크플래시 PPE 등급표
+     * → 130.7(C)(15). 그리고 **입사 에너지 분석 결과로 130.7(C)(15)(c) 의
+     * 등급을 지정하는 것은 허용되지 않는다.**
+     *
+     * 이 계산기는 ① 을 한다. 그러므로 정본은 **Table 130.5(G)** 이고,
+     * 산출물은 등급 번호가 아니라 **최소 내아크 정격(cal/cm²)** 이다.
+     * 등급 번호(`ppeCategory`)는 화면 색·정렬용 내부 심각도 밴드로 남기되,
+     * 그것이 NFPA 등급이라고 말하지 않는다.
+     */
+    formula: 'NFPA 70E Table 130.5(G) — 입사 에너지 분석 기반 보호구 선정'
+      + ' (내아크 정격 ≥ 입사 에너지)',
+    value: ppe.minCalRating,
+    unit: 'cal/cm²',
+    standardRef: 'NFPA 70E 130.5(G)',
   });
 
   return {

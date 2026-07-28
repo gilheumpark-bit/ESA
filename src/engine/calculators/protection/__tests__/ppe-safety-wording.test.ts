@@ -87,16 +87,38 @@ describe('PPE 안내 — 안전 문구', () => {
   it('② 없어진 Category 0 을 등급으로 부르지 않는다', () => {
     expect(lowEnergy.ppeDescription).not.toMatch(/Category\s*0|등급\s*0|카테고리\s*0/);
     expect(lowEnergy.ppeDescription).toMatch(/등급 없음|2015/);
-    const step = lowEnergy.steps.find((s) => /PPE/.test(s.title));
+    const step = lowEnergy.steps.find((s) => /보호구 선정|화상 경계 이하/.test(s.title));
+    expect(step).toBeDefined();
     expect(step?.title).not.toMatch(/Category\s*0/);
   });
 
-  it('② 입사 에너지 기반 표를 인용한다 — 작업 기반 표 (a) 가 아니다', () => {
-    const step = highEnergy.steps.find((s) => /PPE/.test(s.title));
-    expect(step?.standardRef).toMatch(/130\.7\(C\)\(15\)\(c\)/);
-    expect(step?.standardRef).not.toMatch(/130\.7\(C\)\(15\)\(a\)/);
-    // 판이 붙어야 한다 — Category 0 삭제가 판 차이다.
-    expect(step?.standardRef).toMatch(/20\d\d/);
+  /**
+   * **이 검사는 반대로 적혀 있었다.** 이름이 "입사 에너지 기반 표를
+   * 인용한다 — 작업 기반 표 (a) 가 아니다" 이고 `130.7(C)(15)(c)` 를
+   * 요구했다. 표준은 정반대를 말한다(2026-07-28 독립 심사 도메인 좌석 →
+   * 외부 대조로 확정):
+   *
+   *   NFPA 70E 130.5(F) 는 보호구 선정에 두 길을 두고 **같은 기기에
+   *   병용을 금지**한다. 그리고 **입사 에너지 분석 결과로
+   *   130.7(C)(15)(c) 의 등급을 지정하는 것은 허용되지 않는다.**
+   *
+   * 이 계산기는 입사 에너지를 낸다. 그러므로 정본은 Table 130.5(G) 이고
+   * 산출물은 등급 번호가 아니라 최소 내아크 정격(cal/cm²)이다.
+   */
+  it('② 입사 에너지 분석 경로의 표를 인용한다 — 등급표가 아니다', () => {
+    const step = highEnergy.steps.find((s) => /보호구 선정|화상 경계 이하/.test(s.title));
+    expect(step).toBeDefined();
+    expect(step?.standardRef).toMatch(/130\.5\(G\)/);
+    expect(step?.standardRef).not.toMatch(/130\.7\(C\)\(15\)/);
+    // 산출물은 등급 번호가 아니라 정격이다.
+    //
+    // `> 0` 으로 두면 등급 번호(1~4)도 통과한다 — 변이 실측에서 실제로
+    // 초록이었다. 130.5(G) 의 **정의**로 잠근다: 고른 보호구의 내아크 정격은
+    // 입사 에너지 **이상**이어야 한다. 등급 번호는 이 부등식을 만족하지
+    // 않는다(1.43 cal/cm² 에 등급 1).
+    expect(step?.unit).toBe('cal/cm²');
+    expect(step!.value as number)
+      .toBeGreaterThanOrEqual(highEnergy.incidentEnergy_cal_cm2);
   });
 
   it('높은 에너지에서는 등급과 최소 정격이 함께 나온다', () => {
