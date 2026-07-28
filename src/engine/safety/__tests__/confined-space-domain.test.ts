@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { parseSafetyIntent } from '@/lib/safety-intent-parser';
+import { analyzeSafety } from '../confined-space';
+
 /**
  * 현장 안전 체크리스트의 **숫자**를 법령 문면에 결박한다.
  *
@@ -236,11 +239,26 @@ describe('현장 안전 — 도메인 수치 결박', () => {
     expect(CODE).toMatch(/고무창 신발은 정격이 없어 대체 불가/);
   });
 
-  it('전부 critical 로 분류돼 있다 — 인명 항목이 권고로 내려가지 않도록', () => {
+  /**
+   * **소스 훑기에서 런타임으로 바꿨다.**
+   *
+   * 앞서 `id: 'live-03'` 위치에서 700 자를 잘라 그 안에 `riskLevel:
+   * 'critical'` 이 있는지 봤다. 그 항목의 설명을 늘리자 `riskLevel` 이 창
+   * 밖으로 밀려나 **검사가 깨졌다** — 위험도는 그대로인데. 반대 방향도
+   * 참이다: 등급을 낮추고 설명을 줄이면 옆 항목의 `critical` 이 창에 들어와
+   * 통과할 수 있다. 창 크기를 늘리는 것은 그 다음 편집까지만 버틴다.
+   *
+   * 실제로 나온 항목의 `riskLevel` 을 읽는다.
+   */
+  it('인명 항목이 critical 로 나온다 — 권고로 내려가지 않도록', () => {
+    const confined = analyzeSafety(parseSafetyIntent('맨홀 내부 작업 2명, 09시~15시'));
+    const live = analyzeSafety(parseSafetyIntent('154kV 활선 근접 작업 3명, 09시~18시'));
+    const byId = new Map(
+      [...confined.checkItems, ...live.checkItems].map((i) => [i.id, i]),
+    );
     for (const id of ['cs-01', 'cs-02', 'live-03']) {
-      const idx = SRC.indexOf(`id: '${id}'`);
-      const block = SRC.slice(idx, idx + 700);
-      expect(block).toMatch(/riskLevel:\s*'critical'/);
+      expect(byId.get(id)).toBeDefined();
+      expect(byId.get(id)!.riskLevel).toBe('critical');
     }
   });
 });
