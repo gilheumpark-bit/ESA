@@ -49,7 +49,22 @@ export function generateSafetySchedule(intent: SafetyIntentResult): SafetySchedu
 
   const { start, end, durationHours } = intent.hours;
   const startMin = timeToMinutes(start);
-  const endMin = timeToMinutes(end);
+  /**
+   * **자정을 넘기면 종료가 시작보다 작다.** 그대로 쓰면 `22:00 → 06:00` 이
+   * `1320 → 360` 이 되어 2 시간 주기 루프(`while (t < endMin)`)가 첫 바퀴에
+   * 끝나고 **법정 가스 재측정이 통째로 사라진다** — 실행 재현: 야간 1 건 대
+   * 주간 5 건(2026-07-28 독립 공격자 좌석). 154kV 수전설비 정전작업은 야간이
+   * 표준이다. 중간 점검도 `(endMin - startMin)` 이 음수라 같이 죽는다.
+   *
+   * 하루를 넘긴 만큼 더한 **절대 분**으로 계산하고, 표시할 때만
+   * `minutesToTime` 이 `% 24` 로 되돌린다(이미 그렇게 돼 있다).
+   *
+   * 시작과 종료가 **같으면** 24 시간으로 읽지 않는다 — `08시~08시` 는 오타일
+   * 가능성이 크고, 24 시간으로 늘리면 가스 측정 12 건짜리 일정이 나온다
+   * (이 수리를 처음 쓸 때 `<=` 로 두어 실제로 그렇게 됐다). 0 이 안전하다.
+   */
+  const endMinRaw = timeToMinutes(end);
+  const endMin = endMinRaw < startMin ? endMinRaw + 24 * 60 : endMinRaw;
 
   const checkpoints: CheckpointItem[] = [];
 
@@ -131,7 +146,18 @@ export function generateSafetySchedule(intent: SafetyIntentResult): SafetySchedu
   });
 
   // 시간 순 정렬
-  checkpoints.sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+  /**
+   * **작업 순서대로** 정렬한다 — 벽시계 순이 아니다.
+   *
+   * 자정을 넘기면 시각 문자열 순서가 뒤집힌다: `22:00` 시작 항목이
+   * `00:00`·`02:00` 보다 뒤로 가서 **종료 확인이 목록 맨 위**에 오고
+   * 시작 점검이 맨 아래로 밀린다(2026-07-28 독립 공격자 좌석).
+   * 현장에서 위에서부터 읽는 목록이라 순서가 곧 지시다.
+   *
+   * 시작 시각을 0 으로 두고 경과 분으로 센다.
+   */
+  const elapsed = (t: string) => (timeToMinutes(t) - startMin + 24 * 60) % (24 * 60);
+  checkpoints.sort((a, b) => elapsed(a.time) - elapsed(b.time));
 
   const deadManInterval = intent.isConfinedSpace
     ? CONFINED_CHECKIN_INTERVAL_MIN

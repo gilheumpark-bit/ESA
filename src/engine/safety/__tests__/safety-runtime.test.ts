@@ -179,6 +179,106 @@ describe('모든 항목이 내용을 들고 나온다', () => {
   });
 });
 
+/**
+ * **위험을 숨기는 자연어.** 파서가 못 읽으면 항목이 안 나오고, 항목이 안
+ * 나오면 화면은 "위험 없음" 처럼 보인다. 공백 고지(`gap-01`)조차 못 읽은
+ * 조건은 대상이 아니라 **아무 말도 안 나온다.**
+ *
+ * 아래는 전부 2026-07-28 독립 공격자 좌석이 찾아 **실행으로 재현한** 입력이다.
+ */
+describe('위험을 숨기는 입력 — 파서 사각지대', () => {
+  const csCount = (text: string) =>
+    analyzeSafety(parseSafetyIntent(text)).checkItems.filter((i) => i.id.startsWith('cs-')).length;
+
+  /**
+   * `/탱크|조(槽)|수조|오수조/` 에서 `(槽)` 는 **캡처 그룹**이라 `조槽` 두 글자
+   * 연속일 때만 맞았다 — `조` 도 `槽` 도 단독으로는 안 걸린다. 그래서
+   * **정화조·침전조가 밀폐공간이 아니었다.** 국내 질식 사망의 대표 장소다.
+   */
+  it.each([
+    '정화조 내부 점검, 2명',
+    '침전조 청소 작업 2명',
+    '오수처리조 점검 2명',
+    '집수정 내부 작업 2명',
+    '맨홀 내부 작업 2명',
+  ])('%s — 밀폐공간 항목이 나온다', (text) => {
+    expect(parseSafetyIntent(text).isConfinedSpace).toBe(true);
+    expect(csCount(text)).toBeGreaterThan(5);
+  });
+
+  /** `조` 를 통째로 잡으면 오발화한다 — 상시 발화는 무시로 이어진다. */
+  it.each(['배전반 구조 검토 2명', '계약 조건 확인 2명', '조명 작업 2명'])(
+    '%s — 밀폐공간이 아니다',
+    (text) => {
+      expect(parseSafetyIntent(text).isConfinedSpace).toBe(false);
+      expect(csCount(text)).toBe(0);
+    },
+  );
+
+  /** `우천` 이라고 써야만 걸렸다. 현장은 `폭우`·`소나기`·`장마` 라고 쓴다. */
+  it.each(['폭우 속 옥외 배전반 작업 2명', '소나기 옥외 작업 2명', '장마철 옥외 작업 2명', '우천 옥외 작업 2명'])(
+    '%s — 우천 항목이 나온다',
+    (text) => {
+      const items = analyzeSafety(parseSafetyIntent(text)).checkItems;
+      expect(items.some((i) => i.id.startsWith('rain-'))).toBe(true);
+    },
+  );
+
+  it('맑은 날은 우천 항목이 없다', () => {
+    const items = analyzeSafety(parseSafetyIntent('맑은 날 옥외 작업 2명')).checkItems;
+    expect(items.some((i) => i.id.startsWith('rain-'))).toBe(false);
+  });
+
+  /**
+   * 온도 판정이 셋 다 틀렸다: 부호를 안 봐서 **`영하 40도` 에 폭염 안내**,
+   * `\d{1,2}` 라 **99 도 초과가 안전**, 문맥을 안 봐서 **각도·습도가 폭염**.
+   */
+  it.each([
+    ['영하 40도 옥외 작업', false],
+    ['체감온도 100도', true],
+    ['체감온도 32도', true],
+    ['케이블 35도 각도로 포설', false],
+    ['습도 35도 전기실', false],
+    ['기온 20도 점검', false],
+  ])('%s → 폭염 항목 %s', (text, expected) => {
+    const items = analyzeSafety(parseSafetyIntent(text)).checkItems;
+    expect(items.some((i) => i.id.startsWith('heat-'))).toBe(expected);
+  });
+});
+
+describe('자정을 넘기는 작업 — 법정 재측정이 사라지지 않는다', () => {
+  const sched = (text: string) => generateSafetySchedule(parseSafetyIntent(text))!;
+  const gas = (text: string) => sched(text).checkpoints.filter((c) => c.isGasMeasurement).length;
+
+  /**
+   * `22:00 → 06:00` 이 분으로는 `1320 → 360` 이라 2 시간 주기 루프가 첫
+   * 바퀴에 끝났다. **가스 재측정 1 건**(주간 5 건). 154kV 수전설비 정전작업은
+   * 야간이 표준이다.
+   */
+  it('야간 8시간 작업에 2시간 주기 재측정이 붙는다', () => {
+    expect(gas('맨홀 작업 2명, 22시~06시')).toBeGreaterThanOrEqual(4);
+  });
+
+  it('주간은 그대로다 — 회귀 아님', () => {
+    expect(gas('맨홀 작업 2명, 09시~18시')).toBeGreaterThanOrEqual(4);
+  });
+
+  /**
+   * 목록은 위에서부터 읽는다 — 순서가 곧 지시다. 시각 문자열로 정렬하면
+   * 자정을 넘길 때 **종료 확인이 맨 위**로 온다.
+   */
+  it('체크포인트가 작업 순서대로 정렬된다', () => {
+    const times = sched('맨홀 작업 2명, 22시~06시').checkpoints.map((c) => c.time);
+    expect(times[0]).toBe('22:00');
+    expect(times[times.length - 1]).toBe('06:00');
+  });
+
+  /** 시작=종료는 24시간이 아니다 — 이 수리를 처음 쓸 때 12건짜리 일정이 났다. */
+  it('시작과 종료가 같으면 하루짜리 일정이 되지 않는다', () => {
+    expect(gas('맨홀 작업 2명, 08시~08시')).toBeLessThanOrEqual(2);
+  });
+});
+
 describe('인식했는데 안 다루는 조건을 밝힌다', () => {
   /**
    * 파서가 **신뢰도 1.00** 으로 낙뢰·고소를 읽고 체크리스트는 기본 2 개만
