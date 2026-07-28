@@ -1,6 +1,7 @@
 import { getAmpacity } from '../kec-ampacity';
 import { getIecAmpacity } from '../iec-ampacity';
 import { calculateTempCorrection } from '@/engine/calculators/global/temp-correction';
+import { CalcValidationError } from '@/engine/calculators/types';
 
 /**
  * 주변온도 보정을 **세 곳이 따로 들고 있다.**
@@ -141,11 +142,29 @@ describe('주변온도 보정 — 세 경로 불변식', () => {
    * 도체 온도에 도달하면 여유가 0 이다 — 그때는 못 쓴다고 말해야 한다.
    * 위 수리가 "무조건 계산해 준다" 로 흘러가지 않았는지 본다.
    */
-  it('도체 최고온도 이상에서는 여전히 사용 불가로 막는다', () => {
-    expect(() => getAmpacity({ size: 16, conductor: 'Cu', insulation: 'PVC', installation: 'conduit', ambientTemp: 70 }))
-      .toThrow(/최대 온도|exceeds maximum/);
-    expect(() => getAmpacity({ size: 16, conductor: 'Cu', insulation: 'PVC', installation: 'conduit', ambientTemp: 75 }))
-      .toThrow(/최대 온도|exceeds maximum/);
+  it.each([70, 75])('도체 최고온도 이상(%d°C)에서는 사용 불가로 막는다', (t) => {
+    expect(() => getAmpacity({ size: 16, conductor: 'Cu', insulation: 'PVC', installation: 'conduit', ambientTemp: t }))
+      .toThrow(/최고 허용온도/);
+  });
+
+  /**
+   * **호출자 잘못이지 서버 고장이 아니다.** 평문 Error 로 던지면
+   * `/api/calculate` 의 마지막 catch 가 500 "Internal calculation error" 로
+   * 뭉갠다 — 주위 온도 75°C(입력칸 max 는 80 을 허용)를 넣은 사용자가 무엇이
+   * 잘못됐는지 알 수 없는 메시지를 받았다(2026-07-28 라이브 실측).
+   * `CalcValidationError` 여야 라우트가 422 로 내보내며 메시지를 그대로 전한다.
+   */
+  it('그 거부는 CalcValidationError 다 — 500 이 아니라 422 로 나가야 한다', () => {
+    try {
+      getAmpacity({ size: 16, conductor: 'Cu', insulation: 'PVC', installation: 'conduit', ambientTemp: 75 });
+      throw new Error('던지지 않았다');
+    } catch (e) {
+      expect(e).toBeInstanceOf(CalcValidationError);
+      expect((e as CalcValidationError).field).toBe('ambientTemp');
+      // 사용자가 다음에 무엇을 할지 알 수 있어야 한다.
+      expect((e as Error).message).toMatch(/70°C/);
+      expect((e as Error).message).toMatch(/XLPE|낮추/);
+    }
   });
 
   it('대조본 자체가 값을 낸다 — 이 파일이 공회전이 아님', () => {

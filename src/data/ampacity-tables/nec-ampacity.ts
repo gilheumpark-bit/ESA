@@ -11,6 +11,7 @@
  */
 
 import { SourceTag, createSource } from '../../engine/sjc/types';
+import { CalcValidationError } from '../../engine/calculators/types';
 
 // =========================================================================
 // PART 1 — Types
@@ -265,7 +266,12 @@ export function getNecAmpacity(opts: NecAmpacityOptions): NecAmpacityResult {
   if (ambientTemp !== 30) {
     const tf = getNecTempFactor(ambientTemp, tempRating);
     if (tf === 0) {
-      throw new Error(`Ambient temperature ${ambientTemp}°C exceeds maximum for ${tempRating}°C rated conductors`);
+      // 호출자 잘못 → 422. 평문 Error 는 라우트에서 500 으로 뭉개진다.
+      throw new CalcValidationError(
+        'ambientTemp',
+        `주위 온도 ${ambientTemp}°C 가 ${tempRating}°C 정격 도체의 한계 이상입니다.`
+        + ' 이 조건에서는 허용전류가 남지 않습니다 — 더 높은 온도 정격을 쓰거나 주위 온도를 낮추십시오.',
+      );
     }
     factors.push({
       type: 'temperature',

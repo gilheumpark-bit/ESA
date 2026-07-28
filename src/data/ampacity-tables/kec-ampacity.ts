@@ -12,6 +12,7 @@
  */
 
 import { SourceTag, createSource } from '../../engine/sjc/types';
+import { CalcValidationError } from '../../engine/calculators/types';
 
 // =========================================================================
 // PART 1 — Types
@@ -165,6 +166,11 @@ const TEMP_CORRECTION: TempCorrectionRow[] = [
   { ambientMin: 56, ambientMax: 60, pvc70: 0.50, mi70: 0.50, xlpe90: 0.71 },
 ];
 
+/** 도체 최고 허용온도 — 표 열 이름의 숫자와 같은 값. 폴백과 오류 메시지가 이걸 공유한다. */
+function maxConductorTemp(insulation: InsulationType): number {
+  return insulation === 'PVC' ? 70 : insulation === 'MI' ? 70 : 90;
+}
+
 function getTemperatureFactor(ambientTemp: number, insulation: InsulationType): number {
   for (const row of TEMP_CORRECTION) {
     if (ambientTemp >= row.ambientMin && ambientTemp <= row.ambientMax) {
@@ -188,7 +194,7 @@ function getTemperatureFactor(ambientTemp: number, insulation: InsulationType): 
   //
   // 필드 이름도 `pvc70` → `pvc70` 으로 고쳤다. 이름이 60 이라 폴백이 60 을
   // 따라간 것이고, 값은 2026-07-21 수리에서 이미 70°C 정확값으로 정렬됐었다.
-  const tMax = insulation === 'PVC' ? 70 : insulation === 'MI' ? 70 : 90;
+  const tMax = maxConductorTemp(insulation);
   const numerator = tMax - ambientTemp;
   if (numerator <= 0) return 0;
   return Math.sqrt(numerator / (tMax - 30));
@@ -267,7 +273,16 @@ export function getAmpacity(opts: AmpacityOptions): AmpacityResult {
   if (ambientTemp !== 30) {
     const tf = getTemperatureFactor(ambientTemp, insulation);
     if (tf === 0) {
-      throw new Error(`Ambient temperature ${ambientTemp}°C exceeds maximum for ${insulation} insulation`);
+      // 호출자 잘못이지 서버 고장이 아니다. 평문 Error 로 던지면 `/api/calculate`
+      // 의 마지막 catch 가 **500 "Internal calculation error"** 로 뭉갠다 —
+      // 사용자는 주위 온도 75°C 를 넣고(입력칸 max 는 80 을 허용한다) 무엇이
+      // 잘못됐는지 알 수 없는 메시지를 받았다(2026-07-28 라이브 실측).
+      // `CalcValidationError` 는 라우트가 422 로 내보내며 메시지를 그대로 전한다.
+      throw new CalcValidationError(
+        'ambientTemp',
+        `주위 온도 ${ambientTemp}°C 가 ${insulation} 절연의 최고 허용온도(${maxConductorTemp(insulation)}°C) 이상입니다.`
+        + ' 이 조건에서는 허용전류가 남지 않습니다 — 내열 절연(XLPE 90°C 등)을 쓰거나 주위 온도를 낮추십시오.',
+      );
     }
     factors.push({
       type: 'temperature',

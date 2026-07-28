@@ -11,6 +11,7 @@
  */
 
 import { SourceTag, createSource } from '../../engine/sjc/types';
+import { CalcValidationError } from '../../engine/calculators/types';
 
 // =========================================================================
 // PART 1 — Types
@@ -196,6 +197,11 @@ const IEC_GROUND_TEMP_CORRECTION: IecTempCorrRow[] = [
   { ambientMin: 56, ambientMax: 60, pvc70: 0.45, xlpe90: 0.65 },
 ];
 
+/** XLPE·EPR 은 90°C 도체, PVC 는 70°C. 폴백과 오류 메시지가 이 판별을 공유한다. */
+function isXlpeLike(insulation: IecInsulationType): boolean {
+  return insulation === 'XLPE' || insulation === 'EPR';
+}
+
 function getIecTempFactor(ambientTemp: number, insulation: IecInsulationType): number {
   const isXlpeType = insulation === 'XLPE' || insulation === 'EPR';
   for (const row of IEC_TEMP_CORRECTION) {
@@ -321,8 +327,16 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
       ? getIecGroundTempFactor(ambientTemp, insulation)
       : getIecTempFactor(ambientTemp, insulation);
     if (tf === 0) {
-      throw new Error(
-        `${isBuried ? 'Ground' : 'Ambient'} temperature ${ambientTemp}°C exceeds maximum for ${insulation} insulation`,
+      // 호출자 잘못이지 서버 고장이 아니다. 평문 Error 로 던지면
+      // `/api/calculate` 의 마지막 catch 가 500 "Internal calculation error"
+      // 로 뭉갠다 — 주위 온도 75°C(입력칸 max 는 80 을 허용)를 넣은 사용자가
+      // 무엇이 잘못됐는지 알 수 없는 메시지를 받았다(2026-07-28 라이브 실측:
+      // cable-sizing 은 KEC 가 아니라 **이 IEC 경로**를 쓴다).
+      const limit = isXlpeLike(insulation) ? 90 : 70;
+      throw new CalcValidationError(
+        'ambientTemp',
+        `${isBuried ? '지중' : '주위'} 온도 ${ambientTemp}°C 가 ${insulation} 절연의 최고 허용온도(${limit}°C) 이상입니다.`
+        + ' 이 조건에서는 허용전류가 남지 않습니다 — 내열 절연(XLPE 90°C 등)을 쓰거나 온도를 낮추십시오.',
       );
     }
     factors.push({
