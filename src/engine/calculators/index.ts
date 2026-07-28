@@ -188,6 +188,9 @@ export { compareGlobalAmpacity } from './global/ampacity-global-compare';
 export type { AmpacityGlobalCompareInput } from './global/ampacity-global-compare';
 
 export { convertAwgFull } from './global/awg-converter-full';
+import { convertUnit } from './global/unit-converter';
+export { convertUnit, normalizeUnit, SUPPORTED_UNITS } from './global/unit-converter';
+export type { UnitConverterInput } from './global/unit-converter';
 export type { AwgConverterInput as AwgConverterFullInput } from './global/awg-converter-full';
 
 export { compareFrequency50vs60 } from './global/frequency-compare';
@@ -465,6 +468,18 @@ export const CALCULATOR_REGISTRY: ReadonlyMap<string, CalculatorRegistryEntry> =
       difficulty: 'basic',
       calculator: (input) =>
         convertAwgMm2(input as Parameters<typeof convertAwgMm2>[0]),
+    },
+  ],
+  [
+    'unit-converter',
+    {
+      id: 'unit-converter',
+      name: '전기 단위 환산',
+      nameEn: 'Electrical Unit Converter',
+      category: 'global',
+      difficulty: 'basic',
+      calculator: (input) =>
+        convertUnit(input as Parameters<typeof convertUnit>[0]),
     },
   ],
   [

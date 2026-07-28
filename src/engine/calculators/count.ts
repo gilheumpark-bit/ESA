@@ -15,7 +15,9 @@
  * Public-facing calculator count.
  *
  * Source: actual entries in `CALCULATOR_REGISTRY` (engine/calculators/index.ts).
- * Counting method: `^      id:\s+'[a-z]` lines = 57 (2026-05-12 audit).
+ * Counting method: `^      id:\s+'[a-z]` lines = 58 (2026-07-28).
+ * 57 → 58: `unit-converter` 추가. 채팅이 "0.4kV 는 몇 V" 를 답하지
+ * 못했다 — 영수증 없는 수치를 지우는데 보증할 계산기가 없었다.
  *
  * Earlier value (52) was derived from `^export { calculate` patterns in
  * index.ts and undercounted by 5 entries that the registry exposes through
@@ -27,13 +29,13 @@
  *   2. Run `npm test` (calculator accuracy tests assume this many engines).
  *   3. Update CLAUDE.md mentions.
  */
-export const CALCULATOR_COUNT = 57;
+export const CALCULATOR_COUNT = 58;
 
 /**
  * Standalone module file count (one `.ts` per category in `engine/calculators/<category>/`).
  * Equals `CALCULATOR_COUNT` after the 2026-05-12 reconciliation — kept as a separate
  * symbol so future drift between registry entries and source files is observable.
  */
-export const CALCULATOR_MODULE_COUNT = 57;
+export const CALCULATOR_MODULE_COUNT = 58;
 
 // IDENTITY_SEAL: calculators/count | role=SoT for engine count | inputs=none | outputs=numeric constants

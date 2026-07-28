@@ -1,5 +1,5 @@
 /**
- * 계산기 57종 도달 계약.
+ * 계산기 전종 도달 계약.
  *
  * 2026-07-25 실측 이전에는 자연어 질문으로 도달 가능한 계산기가 10종뿐이었다.
  * 의도 파서의 명시 도구 8종과 검색 파서의 제안 6종이 전부였고, 나머지 47종은
@@ -12,6 +12,7 @@
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
+import { CALCULATOR_COUNT } from '@engine/calculators/count';
 import { join } from 'node:path';
 import { analyzeCalcIntent } from '../calc-intent-bridge';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '../calculator-params';
@@ -45,9 +46,11 @@ function synthesize(id: string): string {
 
 const ALL_IDS = Object.keys(CALCULATOR_PARAMS);
 
-describe('57종 도달', () => {
+describe('전 계산기 도달', () => {
   it('정의된 계산기 수가 이름표와 어긋나지 않는다', () => {
-    expect(ALL_IDS.length).toBe(57);
+    // 숫자를 여기 박으면 계산기를 추가할 때마다 두 곳이 갈린다.
+    // 정본은 `engine/calculators/count.ts` 다.
+    expect(ALL_IDS.length).toBe(CALCULATOR_COUNT);
     expect(ALL_IDS.filter((id) => !CALCULATOR_NAMES[id])).toEqual([]);
   });
 
@@ -325,10 +328,10 @@ describe('분야 카탈로그가 화면마다 갈리지 않는다', () => {
     expect(src).not.toMatch(/\{ id: '[a-z0-9-]+', name: '[^']+', nameEn: '[^']+', difficulty:/);
   });
 
-  it('카탈로그로 만든 목록이 57종을 빠짐없이 덮는다', () => {
+  it('카탈로그로 만든 목록이 전 계산기를 빠짐없이 덮는다', () => {
     const covered = new Set(Object.keys(CALCULATOR_CATALOG));
     expect(Object.keys(CALCULATOR_PARAMS).filter((id) => !covered.has(id))).toEqual([]);
-    expect(covered.size).toBe(57);
+    expect(covered.size).toBe(CALCULATOR_COUNT);
   });
 });
 

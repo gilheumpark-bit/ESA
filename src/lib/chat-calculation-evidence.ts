@@ -1,4 +1,4 @@
-import { CALCULATOR_REGISTRY } from '@/engine/calculators';
+import { CALCULATOR_REGISTRY, normalizeUnit } from '@/engine/calculators';
 import type { DetailedCalcResult } from '@/engine/calculators';
 import { analyzeCalcIntent, coerceCalculatorInput } from '@/lib/calc-intent-bridge';
 import { parseQuery } from '@/search/query-parser';
@@ -16,10 +16,90 @@ export interface ChatCalculationEvidence {
 
 
 /**
+ * 단위 환산 질문만 따로 읽는다.
+ *
+ * 범용 의도 브리지는 이 모양을 못 읽는다(실측 2026-07-28):
+ *   "0.4kV는 몇 V야?"                  → 계산기 미지목
+ *   "380V를 kV로 바꿔줘"                → 계산기 미지목
+ *   "전기 단위 환산: 값 0.4, 현재 kV, 바꿀 V" → 지목되지만 `toUnit` 을 kV 로
+ *                                        잘못 뽑는다(옵션이 같은 종류라 앞의
+ *                                        것이 두 자리에 다 붙는다)
+ *
+ * 브리지를 고치면 57 종이 함께 흔들린다. 환산 질문은 모양이 좁고 분명해서
+ * (`<수치><단위>` 하나 + 숫자 없는 목표 단위 하나) 여기서 직접 읽는 편이
+ * 안전하다.
+ *
+ * **환산 의도가 없으면 읽지 않는다.** "380V 100A 전압강하 계산해줘" 에도
+ * 단위가 둘 있지만 그건 환산 요청이 아니다.
+ */
+const CONVERSION_INTENT = /(환산|변환|바꿔|바꾸|몇\s*[A-Za-z㎸㎾㎿Ω]|얼마|→|->)/;
+const NUMBER_WITH_UNIT = /(-?\d+(?:\.\d+)?)\s*(k?[Vv]|m[VvAa]|k?[Aa]|[Mk]?W|[Mk]?VA|[Mk]?var|k?Ω|m?Ω|k?[Hh]z|k?m|mm|[Mk]?Wh)\b/g;
+const BARE_UNIT = /(?:^|[\s(,를을로으로]) ?(k?V|mV|mA|kA|A|MW|kW|W|MVA|kVA|VA|Mvar|kvar|var|kΩ|mΩ|Ω|kHz|Hz|km|mm|m|MWh|kWh|Wh)\b/g;
+
+function resolveUnitConversion(query: string): ChatCalculationEvidence | null {
+  if (!CONVERSION_INTENT.test(query)) return null;
+
+  NUMBER_WITH_UNIT.lastIndex = 0;
+  const source = NUMBER_WITH_UNIT.exec(query);
+  if (!source) return null;
+  // 수치가 둘 이상이면 환산이 아니라 계산이다 — 손대지 않는다.
+  if (NUMBER_WITH_UNIT.exec(query)) return null;
+
+  const fromUnit = normalizeUnit(source[2]);
+  if (!fromUnit) return null;
+
+  // 목표 단위는 수치 뒤에, 숫자 없이 나온다.
+  const tail = query.slice(source.index + source[0].length);
+  BARE_UNIT.lastIndex = 0;
+  let target: string | null = null;
+  let hit: RegExpExecArray | null;
+  while ((hit = BARE_UNIT.exec(tail)) !== null) {
+    const candidate = normalizeUnit(hit[1]);
+    if (candidate && candidate !== fromUnit) { target = candidate; break; }
+  }
+  if (!target) return null;
+
+  const calculator = CALCULATOR_REGISTRY.get('unit-converter');
+  if (!calculator) return null;
+  const input = { value: Number(source[1]), fromUnit: source[2], toUnit: hit![1] };
+  try {
+    const calculated = calculator.calculator(input as never);
+    const result = {
+      value: calculated.value,
+      unit: calculated.unit,
+      formula: calculated.formula,
+      steps: calculated.steps,
+      additionalOutputs: calculated.additionalOutputs,
+      judgment: calculated.judgment,
+    };
+    const trustedText = JSON.stringify({ calculatorId: calculator.id, input, result });
+    return {
+      calculatorId: calculator.id,
+      calculatorName: calculator.name,
+      input,
+      result,
+      assumed: [],
+      trustedText,
+      promptContext: `\n\n검증된 ESA 계산기 영수증:\n${trustedText}`
+        + '\n위 영수증의 입력과 결과만 [확인] 수치로 사용하고, 결과 뒤에'
+        + ` [SOURCE: ESA_CALCULATOR:${calculator.id}]를 붙이세요.`
+        + ' 영수증에 없는 수치나 새로운 반올림 수치를 만들지 마세요.'
+        + ' judgment 가 실패면 그 사유를 그대로 전하고 임의로 환산하지 마세요'
+        + ' — 물리량이 다르면 단위 환산으로는 갈 수 없습니다.',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 완전한 자연어 계산 입력만 정본 계산기로 실행한다. 파라미터가 빠졌거나
  * 파서 확신도가 낮으면 null을 반환해 LLM이 누락 입력만 설명하게 한다.
  */
 export function resolveChatCalculationEvidence(query: string): ChatCalculationEvidence | null {
+  const conversion = resolveUnitConversion(query);
+  if (conversion) return conversion;
+
   const intent = analyzeCalcIntent(query);
   if (!intent.hasCalcIntent || !intent.canAutoExecute || intent.confidence < 0.8 || !intent.calculatorId) return null;
   const calculator = CALCULATOR_REGISTRY.get(intent.calculatorId);

@@ -56,6 +56,7 @@ export const CALCULATOR_CATALOG: Record<string, { category: CalcCategoryId; diff
   'country-compare-vd': { category: 'voltage-drop', difficulty: 'advanced' },
   'cable-sizing': { category: 'cable', difficulty: 'advanced' },
   'awg-converter': { category: 'cable', difficulty: 'basic' },
+  'unit-converter': { category: 'global', difficulty: 'basic' },
   'ampacity-compare': { category: 'cable', difficulty: 'intermediate' },
   'cable-impedance': { category: 'cable', difficulty: 'intermediate' },
   'transformer-capacity': { category: 'transformer', difficulty: 'intermediate' },
