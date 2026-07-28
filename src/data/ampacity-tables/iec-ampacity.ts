@@ -317,6 +317,7 @@ export function getIecAmpacity(opts: IecAmpacityOptions): IecAmpacityResult {
     throw new CalcValidationError(
       'size',
       `Cable size ${size} mm² not available for ${conductor}/${insulation}/${method}`,
+      'SIZE_UNAVAILABLE',
     );
   }
 

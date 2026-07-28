@@ -104,10 +104,24 @@ export interface CalculatorRegistryEntry {
 // ---------------------------------------------------------------------------
 // Validation helper
 // ---------------------------------------------------------------------------
+/**
+ * 호출자가 분기해야 하는 거부 사유. **메시지 문자열이 아니라 이것으로 판별한다.**
+ *
+ * 왜 필요한가(2026-07-28 독립 심사 백엔드 좌석): `cable-sizing` 이 굵기 후보를
+ * 훑으면서 `/not available/i.test(error.message)` 로 "다음 굵기로 넘어갈지"
+ * 를 정했다. 허용전류표 세 곳의 영문 메시지에 제어 흐름이 매달려 있었고,
+ * 같은 배치가 형제 메시지(주위 온도)를 이미 한국어로 바꿨다 — 남은 영문을
+ * 누가 번역하는 순간 `continue` 가 `throw` 로 뒤집혀 Al 1.5mm² 같은 **정상
+ * 입력이 죽는다.** 드리프트는 이미 시작돼 있었다.
+ */
+export type CalcErrorCode = 'SIZE_UNAVAILABLE';
+
 export class CalcValidationError extends Error {
   constructor(
     public readonly field: string,
     message: string,
+    /** 호출자가 분기할 때 쓰는 안정된 사유. 없으면 단순 거부다. */
+    public readonly code?: CalcErrorCode,
   ) {
     super(message);
     this.name = 'CalcValidationError';

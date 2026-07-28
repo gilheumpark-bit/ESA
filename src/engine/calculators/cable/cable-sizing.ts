@@ -46,8 +46,19 @@ type InsulationType = 'XLPE' | 'PVC';
 type ConductorMaterial = 'Cu' | 'Al';
 type InstallationMethod = 'A1' | 'A2' | 'B1' | 'B2' | 'C' | 'D' | 'E' | 'F';
 
+/**
+ * 이 굵기에 표가 없어서 난 거부인가 — **그러면 다음 굵기로 넘어간다.**
+ *
+ * 앞서 `/not available/i.test(error.message)` 였다. 허용전류표 세 곳의 영문
+ * 메시지에 제어 흐름이 매달려 있었고, 같은 배치가 형제 메시지(주위 온도)를
+ * 이미 한국어로 바꿨다 — 남은 영문을 누가 번역하는 순간 `continue` 가
+ * `throw` 로 뒤집혀 **Al 1.5mm² 같은 정상 입력이 죽는다.** 드리프트는 이미
+ * 시작돼 있었다(2026-07-28 독립 심사 백엔드 좌석).
+ *
+ * 사유 코드로 판별한다. 메시지는 자유롭게 번역해도 된다.
+ */
 function isUnavailableSize(error: unknown): boolean {
-  return error instanceof Error && /not available/i.test(error.message);
+  return error instanceof CalcValidationError && error.code === 'SIZE_UNAVAILABLE';
 }
 
 // ── Input ───────────────────────────────────────────────────────────────────

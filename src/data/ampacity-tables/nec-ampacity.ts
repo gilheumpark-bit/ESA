@@ -260,6 +260,7 @@ export function getNecAmpacity(opts: NecAmpacityOptions): NecAmpacityResult {
     throw new CalcValidationError(
       'size',
       `Wire size ${size} is not available in ${conductor} ${tempRating}°C column`,
+      'SIZE_UNAVAILABLE',
     );
   }
 

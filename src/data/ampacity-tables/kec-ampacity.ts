@@ -274,6 +274,7 @@ export function getAmpacity(opts: AmpacityOptions): AmpacityResult {
     throw new CalcValidationError(
       'size',
       `Cable size ${size} mm² is not available for ${conductor}/${insulation}/${installation}`,
+      'SIZE_UNAVAILABLE',
     );
   }
 
