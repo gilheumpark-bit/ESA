@@ -1,0 +1,66 @@
+#!/bin/sh
+# ---------------------------------------------------------------------------
+# 시크릿이 담긴 채로 커밋되는 것을 **차단**한다. 자기신고가 아니라 exit code.
+#
+# 왜 필요한가 (2026-07-28 독립 보안 좌석 실측):
+#   · 이 리포는 **PUBLIC** 이다 (`gh repo view` → visibility PUBLIC)
+#   · `.env.example` 은 **tracked** 이고 `.gitignore` 는 `.env*.local` 만 덮는다
+#   · 워킹트리의 `.env.example` 에는 **실키가 들어 있다**(로컬 검증 스크립트가
+#     `node --env-file=.env.example` 로 읽는다). 커밋본은 값이 비어 있다.
+#   · 훅 0개 · CI 에 gitleaks/trufflehog 0개 → **잡아 줄 게 아무것도 없었다**
+#
+# 즉 `git add -A` 나 `git commit -a` **한 번**이면 공개 리포로 나간다.
+# 지금까지는 사람이 매번 `':(exclude).env.example'` 을 붙여 막고 있었다 —
+# 그건 방어가 아니라 기억력이다.
+#
+# 이 훅은 **스테이지된 내용**만 본다(워킹트리 아님). 값을 출력하지 않는다.
+# ---------------------------------------------------------------------------
+set -u
+
+fail=0
+
+note() {
+  if [ "$fail" -eq 0 ]; then
+    echo ""
+    echo "커밋을 막았다 — 스테이지에 시크릿으로 보이는 것이 있다."
+    echo ""
+  fi
+  fail=1
+  echo "  $1"
+}
+
+# ── 1. 이름이 시크릿인 환경변수에 값이 붙어 있는가 ──────────────────────────
+# `KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE` 를 이름에 가진 줄에 값이 있으면 막는다.
+# 커밋본 `.env.example` 은 이 이름들이 전부 빈 값이라 정상 통과한다.
+for f in $(git diff --cached --name-only --diff-filter=ACM | grep -E '(^|/)\.env' || true); do
+  hits=$(git show ":$f" 2>/dev/null \
+    | grep -nE '^[A-Za-z0-9_]*(KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE)[A-Za-z0-9_]*=.+' \
+    | cut -d: -f1 | tr '\n' ' ')
+  if [ -n "$hits" ]; then
+    note "$f — 시크릿 이름을 가진 변수에 값이 있다 (줄: $hits)"
+  fi
+done
+
+# ── 2. 알려진 시크릿 형태가 스테이지 diff 에 있는가 ─────────────────────────
+# 파일 종류를 가리지 않는다 — 소스·테스트·문서 어디든.
+patterns='AIza[0-9A-Za-z_-]{20,}|AQ\.[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+if git diff --cached -U0 | grep -qE "^\+.*($patterns)"; then
+  # 어느 파일인지만 알린다. **값은 출력하지 않는다.**
+  files=$(git diff --cached -U0 --name-only | while read -r p; do
+    if git diff --cached -U0 -- "$p" | grep -qE "^\+.*($patterns)"; then echo "$p"; fi
+  done | tr '\n' ' ')
+  note "알려진 시크릿 형태가 추가된 줄에 있다 — 파일: $files"
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "  고칠 방법:"
+  echo "    · 값을 지우고 다시 스테이지 (git add <파일>)"
+  echo "    · 해당 파일만 빼고 커밋:  git add . ':(exclude)<파일>'"
+  echo ""
+  echo "  이 검사를 건너뛰어야 한다면 --no-verify 다. 다만 이 리포는 PUBLIC 이다."
+  echo ""
+  exit 1
+fi
+
+exit 0
