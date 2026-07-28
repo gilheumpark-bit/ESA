@@ -80,7 +80,7 @@ function ResultDisplay({
           className="flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
           <FileDown size={16} />
-          PDF
+          인쇄 · PDF
         </button>
         <button
           type="button"

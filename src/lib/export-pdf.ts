@@ -103,9 +103,29 @@ const LABEL: Record<Lang, {
 
 // 이스케이프는 공용 것 하나만 쓴다 — 파일 상단 import 참조.
 
+/**
+ * 인쇄 안내 바 — **없어서 생긴 구멍을 메운다.**
+ *
+ * 화면 버튼은 "PDF" 인데 이 경로가 내주는 것은 `text/html` 이다(`%PDF-`
+ * 서명 없음). 의도는 브라우저 인쇄로 PDF 저장이고 그래서 `@media print`·
+ * `@page` 규칙이 이미 있는데, **사용자에게 그 말을 하는 곳이 없었다** —
+ * 본문에 인쇄 안내가 0건이었다(2026-07-28 실측). 누른 사람은 웹페이지
+ * 하나를 받고 다음에 뭘 해야 할지 알 수 없다(§2.8).
+ *
+ * `.no-print` 클래스도 CSS 에 정의만 되고 **쓰는 곳이 0** 이었다 — 이 바가
+ * 원래 들어갈 자리였다(§2.2).
+ */
+const PRINT_HINT: Record<Lang, { note: string; button: string }> = {
+  ko: { note: '이 문서는 인쇄용입니다. 아래 버튼 또는 Ctrl+P 로 “PDF로 저장”을 선택하세요.', button: '인쇄 · PDF로 저장' },
+  en: { note: 'This document is print-ready. Use the button below or Ctrl+P and choose “Save as PDF”.', button: 'Print / Save as PDF' },
+  ja: { note: 'この文書は印刷用です。下のボタンまたは Ctrl+P で「PDFとして保存」を選んでください。', button: '印刷 / PDF 保存' },
+  zh: { note: '本文档为打印版。请使用下方按钮或 Ctrl+P 并选择“另存为 PDF”。', button: '打印 / 另存为 PDF' },
+};
+
 function buildReceiptHtml(receipt: Receipt, lang: Lang): string {
   const data = buildPdfData(receipt, lang as DisclaimerLang);
   const L = LABEL[lang] ?? LABEL.en;
+  const HINT = PRINT_HINT[lang] ?? PRINT_HINT.en;
 
   // --- Meta table rows
   //
@@ -240,6 +260,12 @@ function buildReceiptHtml(receipt: Receipt, lang: Lang): string {
   .disclaimer { font-size: 7.5pt; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 8px; margin-top: 16px; }
   .copyright { font-size: 7pt; color: #9ca3af; margin-top: 6px; }
 
+  .print-hint { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px;
+    padding: 10px 14px; margin-bottom: 16px; font-size: 9pt; color: #78350f; }
+  .print-hint button { font: inherit; cursor: pointer; padding: 6px 12px;
+    border: 1px solid #b45309; background: #b45309; color: #fff; border-radius: 4px; }
+
   @media print {
     body { padding: 0; }
     .no-print { display: none; }
@@ -248,6 +274,12 @@ function buildReceiptHtml(receipt: Receipt, lang: Lang): string {
 </head>
 <body>
 <div class="container">
+
+  <!-- PRINT HINT (인쇄 시 자동 숨김) -->
+  <div class="no-print print-hint">
+    <span>${escapeHtml(HINT.note)}</span>
+    <button type="button" onclick="window.print()">${escapeHtml(HINT.button)}</button>
+  </div>
 
   <!-- HEADER -->
   <div class="header">
