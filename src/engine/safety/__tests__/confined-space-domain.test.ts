@@ -200,6 +200,42 @@ describe('현장 안전 — 도메인 수치 결박', () => {
     });
   });
 
+  /**
+   * ⑥ 폭염 기준. 2024-10-22 개정 산업안전보건법(2025-06-01 시행)이 폭염을
+   * 사업주 보건조치 대상으로 신설했고 안전보건규칙이 2025-07-17 개정됐다.
+   * 앞 문안은 **기온 35°C** 였는데 두 겹으로 틀렸다 — 임계가 4°C 높고,
+   * 재는 값이 기온이라 습할 때 늘 늦게 걸린다. 둘 다 늦게 쉬게 만든다.
+   */
+  describe('⑥ 폭염작업 기준', () => {
+    it('체감온도 31°C 다 — 기온 35°C 가 아니다', () => {
+      expect(CODE).toMatch(/체감온도 31°C 이상/);
+      expect(CODE).not.toMatch(/온도 35°C 이상/);
+    });
+
+    it('기온이 아니라 체감온도임을 본문이 밝힌다', () => {
+      expect(CODE).toMatch(/기온이 아니라 체감온도/);
+    });
+
+    it('측정·기록과 조치를 함께 적는다', () => {
+      const idx = CODE.indexOf("id: 'heat-01'");
+      const block = CODE.slice(idx, idx + 900);
+      expect(block).toMatch(/기록·보관/);
+      expect(block).toMatch(/작업시간대 조정|휴식 부여/);
+    });
+
+    it('확인 못 한 조문 번호를 달지 않는다', () => {
+      const idx = CODE.indexOf("id: 'heat-01'");
+      const block = CODE.slice(idx, idx + 900);
+      expect(block).not.toMatch(/제580조/);
+    });
+  });
+
+  /** 절연화도 장갑과 같은 규율 — 정격 없는 대체품 금지. */
+  it('절연화 대체로 일반 고무창 신발을 권하지 않는다', () => {
+    expect(CODE).not.toMatch(/절연화 없으면 고무창 신발/);
+    expect(CODE).toMatch(/고무창 신발은 정격이 없어 대체 불가/);
+  });
+
   it('전부 critical 로 분류돼 있다 — 인명 항목이 권고로 내려가지 않도록', () => {
     for (const id of ['cs-01', 'cs-02', 'live-03']) {
       const idx = SRC.indexOf(`id: '${id}'`);
