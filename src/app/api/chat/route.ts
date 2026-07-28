@@ -226,10 +226,20 @@ async function buildStreamingResponse(
           .filter((message) => message.role === 'user')
           .map((message) => message.content)
           .join('\n');
+        // 모델이 쓴 `[SOURCE: ESA_CALCULATOR:*]` 태그를 **실제로 돌아서
+        // 통과한** 계산기와 대조한다. 실측 2026-07-28: unit-converter 가
+        // `judgment.pass=false`("kV→m 환산 불가")로 실패했는데 모델이 그
+        // 태그를 달고 154kV 접근 한계거리를 1.6m 로 지어냈다(앱 체크리스트는
+        // 1.7m). 실패한 계산기의 이름표가 근거로 통하면 안 된다.
+        const attestedSources = new Set<string>();
+        if (calculationEvidence && calculationEvidence.result?.judgment?.pass !== false) {
+          attestedSources.add(calculationEvidence.calculatorId);
+        }
         const filtered = filterLLMOutput(
           fullText,
           [],
           `${trustedUserInput}\n${calculationEvidence?.trustedText ?? ''}`,
+          attestedSources,
         );
         const safeText = filtered.filtered;
         const finishReason = await result.finishReason;

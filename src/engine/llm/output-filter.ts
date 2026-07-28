@@ -16,6 +16,7 @@
  */
 
 import type { FilterResult, BlockedItem } from './types';
+import { findAssertedSource } from './app-asserted-constants';
 
 // ---------------------------------------------------------------------------
 // PART 1 — Detection Patterns
@@ -192,12 +193,37 @@ function findTrustedNumbers(input: string): Set<string> {
 /**
  * Find all source tag positions in the output.
  */
-function findSourcePositions(output: string): Set<number> {
+/**
+ * `[SOURCE: ...]` 태그 위치.
+ *
+ * **이 태그는 모델이 쓴 글자다.** 파일 위 주석은 "tool system injects" 라고
+ * 하지만 라우트는 `toolCalls` 로 빈 배열을 넘기고, 태그는 모델 출력 안에
+ * 텍스트로 들어 있다. 즉 모델이 태그를 적는 것만으로 제 숫자에 근거를
+ * 붙일 수 있었다.
+ *
+ * 실측 2026-07-28(실공급자 라이브): "154kV 접근 한계거리?" 에 모델이
+ * **1.6m** 이라 답하며 `[SOURCE: ESA_CALCULATOR:unit-converter]` 를 달았다.
+ * 그 계산기는 같은 요청에서 `judgment.pass=false` ("kV 에서 m 로는 단위
+ * 환산만으로 갈 수 없습니다") 로 **실패**했는데, 실패한 계산기의 태그가
+ * 지어낸 거리를 정당화했다. 앱의 체크리스트는 1.7m 를 말한다.
+ *
+ * 그래서 `attestedSources` 를 받는다 — **실제로 돌아서 통과한** 계산기 id
+ * 집합. 주어지면 `ESA_CALCULATOR:` 태그는 그 집합에 있을 때만 근거가 된다.
+ * 주지 않으면 종전대로 — 호출부가 실증을 넘기도록 `chat-source-attestation`
+ * 검사가 라우트를 잠근다.
+ */
+function findSourcePositions(output: string, attestedSources?: ReadonlySet<string>): Set<number> {
   const positions = new Set<number>();
   let match: RegExpExecArray | null;
 
   SOURCE_TAG_PATTERN.lastIndex = 0;
   while ((match = SOURCE_TAG_PATTERN.exec(output)) !== null) {
+    const payload = (match[1] ?? '').trim();
+    const calc = /ESA_CALCULATOR\s*:\s*([A-Za-z0-9_-]+)/.exec(payload);
+    if (attestedSources && calc && !attestedSources.has(calc[1])) {
+      // 돌지 않았거나 실패한 계산기를 댄 태그 — 근거로 세지 않는다.
+      continue;
+    }
     positions.add(match.index);
   }
 
@@ -241,19 +267,46 @@ export function filterLLMOutput(
   output: string,
   toolCalls: Array<{ name: string; result?: unknown }> = [],
   trustedInput = '',
+  /** 실제로 돌아서 통과한 계산기 id — 주면 모델이 쓴 근거 태그를 대조한다. */
+  attestedSources?: ReadonlySet<string>,
 ): FilterResult {
   const blocked: BlockedItem[] = [];
   const hasAnyToolCalls = toolCalls.length > 0;
 
   // Step 1: Find all source tag positions
-  const sourcePositions = findSourcePositions(output);
+  const sourcePositions = findSourcePositions(output, attestedSources);
 
   // Step 2: Extract and check all numbers
   const numbers = extractNumbers(output, sourcePositions, findTrustedNumbers(trustedInput));
   const trustedCitations = findTrustedCitations(trustedInput);
 
+  /**
+   * 앱이 이미 근거와 함께 내보내는 값은 **그 근거를 붙여** 남긴다.
+   *
+   * 실측 2026-07-28: "적정공기 기준이 뭔가요" 에 산소·CO₂·CO·H₂S 수치가
+   * 전부 `[미확인]` 으로 나갔다. 같은 값을 `/field` 체크리스트는 조문과
+   * 함께 그대로 보여 준다 — 앱은 말할 용의가 있는데 챗만 못 했다.
+   * 통과 조건은 값·단위 정확 일치 **+ 대상 용어 근접**이라 좁다
+   * (`app-asserted-constants.ts`).
+   */
+  const assertedNotes = new Map<number, string>();
+
   for (const num of numbers) {
     if (num.isAllowed || num.isTrustedInput) continue;
+
+    if (!num.hasSource) {
+      // 숫자 앞뒤를 함께 본다 — 용어가 앞에 오기도("산소 18%"), 뒤에 오기도 한다.
+      const ctx = output.slice(Math.max(0, num.position - 60), num.position + 60);
+      const asserted = findAssertedSource(
+        num.text.replace(/[^\d.,]/g, ''),
+        num.unit ?? '',
+        ctx,
+      );
+      if (asserted) {
+        assertedNotes.set(num.position, asserted);
+        continue;
+      }
+    }
 
     if (!num.hasSource && !hasAnyToolCalls) {
       // No tool calls at all — any number is suspicious
@@ -325,9 +378,20 @@ export function filterLLMOutput(
     }
   }
 
+  /**
+   * 앱 근거로 남긴 값의 출처를 답변 끝에 한 번 모아 붙인다.
+   *
+   * **조용히 통과시키지 않는다** — 필터의 목적은 "근거 없는 수치 제거"이지
+   * "일부 수치 면제"가 아니다. 남겼으면 근거를 보여야 그 목적이 유지된다.
+   */
+  const assertedFooter = assertedNotes.size > 0
+    ? `${'\n'}${'\n'}> 위 수치 중 다음은 앱이 근거와 함께 쓰는 값입니다 — ${[...new Set(assertedNotes.values())].join(' · ')}.`
+    : '';
+
   // Step 5: Build filtered output
   if (blocked.length === 0) {
-    return { original: output, filtered: output, blocked: [], passed: true };
+    const passedOutput = output + assertedFooter;
+    return { original: output, filtered: passedOutput, blocked: [], passed: true };
   }
 
   // Collapse overlapping findings before replacement. A probabilistic phrase
@@ -364,6 +428,7 @@ export function filterLLMOutput(
   filtered += `
 
 > 위에서 **미확인**으로 표시된 값은 근거가 없어 앱이 제거한 것입니다 (${reasons.join(', ')}). 정확한 값은 해당 계산기나 기준 원문에서 확인하세요.`;
+  filtered += assertedFooter;
 
   return {
     original: output,
