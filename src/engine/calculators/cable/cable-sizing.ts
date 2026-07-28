@@ -24,10 +24,12 @@ import {
   type LoadKind,
 } from '@/engine/calculators/country-defaults';
 import {
-  getIecAmpacity,
   IEC_CABLE_SIZES,
   type IecAmpacityResult,
 } from '@/data/ampacity-tables/iec-ampacity';
+// 한국 제품이므로 허용전류는 KEC 표에서 뽑는다 — 근거·실측 대조는
+// `ampacity-basis.ts` 머리말에 있다(2026-07-28, 사용자 지적).
+import { lookupAmpacityByCountry } from './ampacity-basis';
 import {
   DetailedCalcResult,
   CalcStep,
@@ -119,11 +121,11 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   let correctionProbe: IecAmpacityResult | null = null;
   for (const size of CABLE_SIZES_MM2) {
     try {
-      correctionProbe = getIecAmpacity({
+      correctionProbe = lookupAmpacityByCountry({
         size,
         conductor,
         insulation,
-        method: installation,
+        installation,
         ambientTemp,
         groupCount,
       });
@@ -136,7 +138,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   if (!correctionProbe) {
     throw new CalcValidationError(
       'installation',
-      `${conductor}/${insulation}/${installation} 조합의 IEC 허용전류 표가 없습니다 — 설치 방법이나 절연 종류를 바꿔 보십시오.`,
+      `${conductor}/${insulation}/${installation} 조합의 허용전류 표가 없습니다 — 설치 방법이나 절연 종류를 바꿔 보십시오.`,
     );
   }
 
@@ -184,11 +186,11 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
   for (const size of CABLE_SIZES_MM2) {
     let ampacity: IecAmpacityResult;
     try {
-      ampacity = getIecAmpacity({
+      ampacity = lookupAmpacityByCountry({
         size,
         conductor,
         insulation,
-        method: installation,
+        installation,
         ambientTemp,
         groupCount,
       });
@@ -228,7 +230,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     if (!largestAvailable) {
       throw new CalcValidationError(
       'installation',
-      `${conductor}/${insulation}/${installation} 조합의 IEC 허용전류 표가 없습니다 — 설치 방법이나 절연 종류를 바꿔 보십시오.`,
+      `${conductor}/${insulation}/${installation} 조합의 허용전류 표가 없습니다 — 설치 방법이나 절연 종류를 바꿔 보십시오.`,
     );
     }
     selectedSize = largestAvailable.size;
@@ -243,7 +245,7 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
 
   steps.push({
     step: 4,
-    title: `Select minimum cable size (IEC Method ${installation})`,
+    title: `최소 케이블 굵기 선정 (공사방법 ${installation})`,
     formula: 'I_{base} \\geq I_{req}',
     value: selectedSize,
     unit: 'mm\u00B2',

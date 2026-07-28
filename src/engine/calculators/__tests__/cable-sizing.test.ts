@@ -15,7 +15,7 @@ import { calculateCableSizing, CABLE_SIZES_MM2 } from '../cable/cable-sizing';
 // ── Tests ───────────────────────────────────────────────────────
 
 describe('Cable Sizing Calculator', () => {
-  test('100A, XLPE Cu, 30°C, no grouping — Method C 정본의 최소 16mm²', () => {
+  test('100A, XLPE Cu, 30°C, no grouping — KEC 트레이 정본의 최소 25mm²', () => {
     // IEC 60364-5-52 Method C: 16mm² = 100A, so it is the minimum exact match.
     const result = calculateCableSizing({
       current: 100,
@@ -29,7 +29,10 @@ describe('Cable Sizing Calculator', () => {
       phase: 3,
     });
 
-    expect(result.value).toBe(16);
+        // 2026-07-28 — 허용전류 기준을 IEC 에서 **KEC** 로 옮겼다(한국 제품).
+    // 같은 조건에서 KEC 표가 9~17% 낮아 한 단계 굵어진다 — 규정 방향이다.
+    // 근거·실측 대조는 `cable/ampacity-basis.ts` 머리말.
+    expect(result.value).toBe(25);
     expect(result.unit).toBe('mm²');
   });
 
@@ -122,7 +125,7 @@ describe('Cable Sizing Calculator', () => {
     expect(resultGrouped.value as number).toBeGreaterThanOrEqual(resultSingle.value as number);
   });
 
-  test('8회로 집합은 IEC B.52-17의 0.52를 적용해 110A를 70mm²로 선정한다', () => {
+  test('8회로 집합 보정을 적용해 110A 를 선정한다 (KEC 기준)', () => {
     const result = calculateCableSizing({
       current: 110,
       length: 1,
@@ -137,10 +140,10 @@ describe('Cable Sizing Calculator', () => {
     });
 
     expect(result.value).toBe(70);
-    expect(result.additionalOutputs!.correctedAmpacity!.value).toBeCloseTo(131.56, 2);
+    expect(result.additionalOutputs!.correctedAmpacity!.value).toBeCloseTo(119.08, 2);
   });
 
-  test('PVC Cu 16mm²의 Method C 76A를 넘는 78A 부하는 25mm²로 올린다', () => {
+  test('PVC Cu 78A 부하는 KEC 트레이 기준으로 한 단계 굵은 굵기를 고른다', () => {
     const result = calculateCableSizing({
       current: 78,
       length: 1,
@@ -155,7 +158,10 @@ describe('Cable Sizing Calculator', () => {
     });
 
     expect(result.value).toBe(25);
-    expect(result.additionalOutputs!.baseAmpacity!.value).toBe(101);
+    // 2026-07-28 — 허용전류 기준을 IEC 에서 **KEC** 로 옮겼다(한국 제품).
+    // 같은 조건에서 KEC 표가 9~17% 낮아 한 단계 굵어진다 — 규정 방향이다.
+    // 근거·실측 대조는 `cable/ampacity-basis.ts` 머리말.
+    expect(result.additionalOutputs!.baseAmpacity!.value).toBe(84);
   });
 
   test('정본 표가 없는 A2/B2/F 설치방법은 근사 PASS 대신 거부한다', () => {

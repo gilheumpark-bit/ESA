@@ -96,7 +96,10 @@ describe('#9 rcd-sizing 정격초과', () => {
 describe('#10 cable-sizing 설치방법', () => {
   test('정본 표가 없는 A2는 근사계수로 계산하지 않고 거부한다', () => {
     const c = calculateCableSizing({ current: 125, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'C', phase: 3 });
-    expect(c.value).toBe(25);
+        // 2026-07-28 — 허용전류 기준을 IEC 에서 **KEC** 로 옮겼다(한국 제품).
+    // 같은 조건에서 KEC 표가 9~17% 낮아 한 단계 굵어진다 — 규정 방향이다.
+    // 근거·실측 대조는 `cable/ampacity-basis.ts` 머리말.
+    expect(c.value).toBe(35);
     expect(() => calculateCableSizing({ current: 125, length: 20, voltage: 380, conductor: 'Cu', insulation: 'XLPE', installation: 'A2', phase: 3 }))
       .toThrow(/no table|지원하지|Supported methods/i);
   });

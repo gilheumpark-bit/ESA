@@ -68,7 +68,7 @@ export const CALCULATOR_PARAMS: Record<string, ExtendedParamDef[]> = {
       { value: 'XLPE', label: 'XLPE (가교폴리에틸렌)' },
       { value: 'PVC', label: 'PVC (비닐)' },
     ], defaultValue: 'XLPE' },
-    { name: 'installation', type: 'string', unit: '', description: '설치 방법 (IEC 60364-5-52)', options: [
+    { name: 'installation', type: 'string', unit: '', description: '설치 방법 (KEC 232.3 대응)', options: [
       { value: 'C', label: 'C — 벽/트레이 직부' },
       { value: 'A1', label: 'A1 — 단열벽 전선관' },
       { value: 'D', label: 'D — 지중 매설' },
