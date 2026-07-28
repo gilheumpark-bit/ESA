@@ -576,6 +576,44 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     });
   }
 
+  // ── 규칙 5: 연결 전무 (구조 자체가 안 읽힌 경우) ──
+  //
+  // 부품은 여럿인데 연결이 하나도 없으면 이 결과로는 계통을 세울 수 없다.
+  // 상하류·경로·주차단기 식별이 전부 불가하고, 규칙 2(케이블)는 판정 재료가
+  // 없어 통째로 굶는다. 이건 화질 판정이 아니라 **출력에 대한 사실**이다 —
+  // 임계도 교보재도 필요 없다.
+  //
+  // 왜 따로 내나: 규칙 4 는 이 상황을 "케이블 미결속 N/N" 으로만 적는다.
+  // 읽는 사람은 케이블 정보가 모자란 것으로 읽지, **계통을 통째로 못 읽었다**
+  // 는 것으로 읽지 않는다. 부품 수 자체를 믿을 수 없다는 것도 전달되지 않는다.
+  //
+  // 실측 근거(2026-07-28 스캔 티어 n=8, `test-results/scan-tier-results.json`):
+  // 연결 0 인 4 회는 차단기 수를 2.3~7.0 배 틀렸고(12·6 vs 정답 42 / 14·24 vs
+  // 정답 6), 연결이 잡힌 4 회는 1.0~1.29 배에 머물렀다(6/6 · 7·8·7 vs 9).
+  // 두 무리 사이가 비어 있다.
+  // 다만 이건 **뒷받침**이지 근거의 본체가 아니다 — n=8 로 분류기를 세운 게
+  // 아니라, 연결 0 이면 계통 판정이 불가하다는 사실을 적을 뿐이다.
+  // 반대로 이 신호는 정격 오독을 잡지 못한다(같은 실측: p5 scan-heavy 는
+  // 연결 12 개가 잡힌 채로 500kVA 를 300·1000kVA 로 읽었다).
+  //
+  // 스케줄 표 문서는 제외한다 — 표에는 결선이 없는 게 정상이다.
+  const isScheduleDocument = (analysis.scheduleTables?.length ?? 0) > 0;
+  if (analysis.components.length > 1 && analysis.connections.length === 0 && !isScheduleDocument) {
+    findings.push({
+      rule: 'DATA-GAP',
+      severity: 'UNKNOWN',
+      subject: '페이지 전체 — 계통',
+      given: {
+        '읽은 부품': `${analysis.components.length}`,
+        '읽은 연결': '0',
+      },
+      verdict:
+        '부품은 읽혔는데 연결선을 하나도 읽지 못했다 — 이 결과로는 상하류·경로·주차단기 식별을 할 수 없고,'
+        + ' 케이블 판정도 재료가 없다. 부품 수 자체도 신뢰 구간 밖일 수 있으니 목록으로만 쓰고'
+        + ' 계통 판단은 원본 도면에서 할 것',
+    });
+  }
+
   return {
     findings,
     summary: summarize(findings),

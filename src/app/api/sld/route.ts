@@ -205,10 +205,25 @@ async function POST__impl(req: NextRequest) {
     // analysis는 saga 클로저에서 대입돼 TS 흐름상 never로 좁혀진다 — 위 COMPLETED
     // 가드로 non-null이 보장되므로 명시 캐스트로 타입을 회복한다(파일 관례).
     const analyzed = analysis as unknown as SLDAnalysis;
+    // 계통 판독 상태 — 사가의 validate 단계가 이미 세는 값이다. 그동안
+    // 응답에 실어 보내고 **화면이 통째로 버렸다**(2026-07-28 실측: src 전체에
+    // `topology` 소비처 0). 검토 패널에 같이 실어 읽히게 한다 — 부품 목록만
+    // 보고 계통까지 읽힌 것으로 오해하는 것이 이 경로의 실패 모드다.
+    const stats = validation!.stats;
+    const danglingEdges = validation!.issues.filter((i) => i.type === 'MISSING_EDGE_TARGET').length;
+    const topologyReadout = {
+      nodes: stats.nodeCount,
+      edges: stats.edgeCount,
+      isolated: stats.isolatedNodes,
+      fragments: stats.connectedComponents,
+      ...(danglingEdges > 0 ? { danglingEdges } : {}),
+    };
     const review = analyzed.confidence >= 0.5
       ? { ...reviewAnalysis(analyzed), extractionSource: 'VLM-scan (미검증·HOLD)' as const,
+          topology: topologyReadout,
           disclaimer: '스캔 판독 기반 검토 — 추출값이 VLM 판독(미검증)이라 판정은 도면 원본 재확인이 필요합니다. 최종 판정·지시는 유자격 기술자의 몫입니다.' }
-      : { skipped: true as const, reason: `confidence ${analyzed.confidence} — 구조 판독 미달로 검토 생략` };
+      : { skipped: true as const, reason: `confidence ${analyzed.confidence} — 구조 판독 미달로 검토 생략`,
+          topology: topologyReadout };
 
     return NextResponse.json({
       success: true,

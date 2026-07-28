@@ -13,9 +13,19 @@
 import type { ReviewReport, ReviewFinding } from '@/engine/review/circuit-review';
 import { Wrench, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Info } from 'lucide-react';
 
+/** 계통을 얼마나 읽었는지 — `/api/sld` 사가의 validate 단계가 세는 값. */
+export interface TopologyReadout {
+  nodes: number;
+  edges: number;
+  isolated: number;
+  fragments: number;
+  /** 없는 부품을 가리키는 연결 — 모델이 지어낸 참조다. */
+  danglingEdges?: number;
+}
+
 export type ReviewLike =
-  | (ReviewReport & { extractionSource?: string; disclaimer?: string })
-  | { skipped: true; reason: string };
+  | (ReviewReport & { extractionSource?: string; disclaimer?: string; topology?: TopologyReadout })
+  | { skipped: true; reason: string; topology?: TopologyReadout };
 
 type Sev = ReviewFinding['severity'];
 
@@ -96,6 +106,35 @@ function FindingCard({ f }: { f: ReviewFinding }) {
   );
 }
 
+/**
+ * 계통 판독 요약. 서버가 세어 응답에 실어 보내던 값인데 화면이 통째로
+ * 버리고 있었다(2026-07-28 실측: src 전체에 소비처 0). 부품 목록만 보이면
+ * 계통까지 읽힌 것으로 읽힌다 — 이 경로의 실패 모드가 그거다.
+ *
+ * 고립 노드를 하나씩 나열하지 않는다. 연결이 0 이면 전부 고립이라 목록이
+ * 노드 수만큼 길어지고, 그 길이가 신호를 덮는다(§3 신호 압축).
+ */
+function TopologyLine({ t }: { t: TopologyReadout }) {
+  const unreadable = t.edges === 0 && t.nodes > 1;
+  return (
+    <p
+      data-testid="topology-readout"
+      data-unreadable={String(unreadable)}
+      className="mt-2 text-[12px] text-[var(--text-tertiary)]"
+    >
+      <span className="font-[family-name:var(--font-mono)]">
+        계통 판독 · 부품 {t.nodes} · 연결 {t.edges} · 고립 {t.isolated} · 분리 {t.fragments}
+        {t.danglingEdges ? ` · 없는 부품 참조 ${t.danglingEdges}` : ''}
+      </span>
+      {unreadable && (
+        <span className="ml-1.5 text-[var(--color-accent)]">
+          — 연결을 하나도 읽지 못했습니다. 부품 목록으로만 쓰고 계통 판단은 원본에서 하십시오.
+        </span>
+      )}
+    </p>
+  );
+}
+
 export default function ReviewReportPanel({ review }: { review: ReviewLike | null }) {
   if (!review) return null;
 
@@ -104,11 +143,12 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
       <section className="rounded-2xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-5">
         <h3 className="text-[15px] font-bold text-[var(--text-primary)]">회로 검토</h3>
         <p className="mt-1.5 text-[13px] text-[var(--text-tertiary)]">{review.reason}</p>
+        {review.topology && <TopologyLine t={review.topology} />}
       </section>
     );
   }
 
-  const { findings, summary, disclaimer, extractionSource } = review;
+  const { findings, summary, disclaimer, extractionSource, topology } = review;
   const sorted = [...findings].sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity));
 
   // 요약 배지 — 0인 항목은 숨긴다(신호 압축).
@@ -141,6 +181,8 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
           </span>
         )}
       </div>
+
+      {topology && <TopologyLine t={topology} />}
 
       {sorted.length > 0 ? (
         <div className="mt-4 flex flex-col gap-2.5">
