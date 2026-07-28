@@ -79,15 +79,30 @@ describe('요청 본문 파싱 방어', () => {
   it('방어 없는 본문 파싱이 baseline 밖으로 늘지 않는다', () => {
     const unguarded = new Set<string>();
     for (const f of routes) {
-      const lines = readFileSync(f, 'utf8').split(/\r?\n/);
+      const src = readFileSync(f, 'utf8');
+      const lines = src.split(/\r?\n/);
+      // 이 파일이 애초에 500 을 낼 수 있는가. 못 내면 파싱이 어느 try 안에
+      // 있든 바깥 catch 는 4xx 만 낸다.
+      const canAnswer500 = /status:\s*500/.test(src);
       lines.forEach((line, i) => {
         if (!PARSE.test(line)) return;
         if (line.includes('.catch(')) return;
-        // 바로 앞(빈 줄·주석 제외)이 `try {` 이면 자기 try 안이다.
+        // 바로 앞(빈 줄·주석 제외)이 `try {` 이면 try 안이다. 다만 **try
+        // 안이라는 것이 4xx 를 뜻하지는 않는다** — 바깥 catch 가 500 을
+        // 내면 깨진 본문이 여전히 "서버 잘못" 으로 보고된다.
+        //
+        // 실측 2026-07-28: `drawing-jobs/[jobId]/resume` 이 정확히 그랬다.
+        // 파싱이 함수 전체를 감싸는 try 의 첫 줄이라 면제됐는데 그 catch 는
+        // 500 이었다. 검사는 초록인 채로 결함이 살아 있었다(§2.2).
+        //
+        // 그래서 면제 조건을 좁힌다: **파싱 전용 try**(바로 다음 줄이
+        // `} catch`)이거나, 그 파일이 500 을 낼 수 없을 때만.
         for (let j = i - 1; j >= 0 && j >= i - 4; j--) {
           const prev = lines[j].trim();
           if (!prev || prev.startsWith('//') || prev.startsWith('*')) continue;
-          if (prev === 'try {') return;
+          if (prev !== 'try {') break;
+          const next = (lines[i + 1] ?? '').trim();
+          if (next.startsWith('} catch') || !canAnswer500) return;
           break;
         }
         unguarded.add(relative(API, f).replace(/\\/g, '/'));

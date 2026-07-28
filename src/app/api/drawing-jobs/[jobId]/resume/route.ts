@@ -49,8 +49,14 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
     return userError('재개할 작업을 찾지 못했습니다.', 404);
   }
   if (job.document.jobStatus === 'COMPLETE') return userError('이미 전체 판독이 완료된 작업입니다.', 409);
+  // 형제인 `run` 과 같게 400 으로 거절한다. 이 라우트만 파싱이 바깥 try
+  // 안에 있어서, 깨진 본문이 그 catch 로 흘러 **500** 이 나갔다 —
+  // "서버 잘못" 이라는 뜻이라 운영 알람을 울리고 호출자에게는 무엇을
+  // 고쳐야 하는지 안 알려 준다(실측 2026-07-28).
+  const form = await req.formData().catch(() => null);
+  if (!form) return userError('요청 형식이 올바르지 않습니다.', 400);
+
   try {
-    const form = await req.formData();
     const providerRaw = String(form.get('provider') ?? 'gemini');
     if (!PROVIDERS.has(providerRaw as VisionProvider)) return userError('지원하지 않는 Vision 제공자입니다.', 400);
     const provider = providerRaw as VisionProvider;
