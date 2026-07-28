@@ -69,8 +69,14 @@ export function generateSafetySchedule(intent: SafetyIntentResult): SafetySchedu
     checkpoints.push({
       time: start,
       title: '진입 전 산소/유해가스 측정',
-      description: '산소 18%~23.5%, H₂S 10ppm 이하, CO 30ppm 이하 확인.',
-      regulation: '산안법 제619조',
+      // 적정공기 네 항목을 규정 문면대로. 2026-07-28 정정 — 여기 문구는
+      // `engine/safety/confined-space.ts` 와 **같은 수치의 두 번째 사본**이라
+      // 그쪽만 고쳤을 때 화면에 옛 값이 남아 있었다(라이브 실측).
+      // "이하" 는 규정의 "미만" 보다 느슨해 경계에서 부적합을 적합으로 읽고,
+      // 이산화탄소 1.5% 는 아예 빠져 있었다.
+      description: '산소 18% 이상 23.5% 미만, 이산화탄소 1.5% 미만,'
+        + ' 일산화탄소 30ppm 미만, 황화수소 10ppm 미만 확인.',
+      regulation: '산업안전보건기준에 관한 규칙 제618조(적정공기 정의)·제619조',
       isGasMeasurement: true,
       isMandatory: true,
     });
