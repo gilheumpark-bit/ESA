@@ -1,12 +1,21 @@
 /**
- * Arc Flash Calculator — IEEE 1584 기반 간략식
+ * Arc Flash Calculator — IEEE 1584-**2002**
  * ----------------------------------------
- * 아크플래시 사고 에너지 및 경계 거리 계산.
- * IEEE 1584 계열 경험식을 축약해 구현. 208V~15kV, 200A~106kA 범위.
- * **전체 계수 모델이 아니다** — 전극 구성별 계수·함체 크기 보정·전압 구간
- * 보간을 적용하지 않는다. 거리 지수 1.641 은 2018 판이 아니라 2002 판의
- * MCC·패널보드 행 값과 일치한다. 결과의 warnings 가 이 사실을 사용자에게
- * 그대로 알린다(2026-07-28 정정 — 전에는 표준 준수를 단정했다).
+ * 아크플래시 입사 에너지·경계 거리. 208V~15kV, 0.2~106kA.
+ *
+ * **판(edition)을 먼저 밝힌다.** 이 구현은 2002 판이고 현행판은 2018 이다.
+ * 2018 모델은 유료 표준 원문에만 있는 ~600 계수 체계라 이 리포에 없다.
+ *
+ * 2026-07-28 이전 판은 더 나빴다: 식이 `K1 + K2·lg Ibf + K3·(V/1000)` 라는
+ * **어느 판에도 없는 3항식**이었는데 결과에는 `IEEE 1584-2018 Section 4.3`
+ * 이 붙어 나갔다. 480V·20kA 에서 아크 전류 23.5kA(볼트 단락 20kA 초과)를
+ * 냈고, 격자 280 점 중 189 점이 물리 제약을 위반했다. 출처 없는 수가 표준
+ * 이름을 달고 PPE 등급을 내고 있었다(§2.10 도메인 진실).
+ *
+ * 검증 수준(과장 금지): 계수는 공개 문헌 **2 곳에서 계수 단위로 일치**를
+ * 확인했다. **표준 원문 대조가 아니다.** 2002 판 공개 예제가 없어
+ * known-answer 는 못 걸고, 대신 ① 물리 제약 ② 2018 공개 예제와의 거리
+ * ③ Ia/Ibf 대역으로 잠근다 — `__tests__/arc-flash-known-answer.test.ts`.
  *
  * 주의: 이 계산기는 참고용이며, 실제 아크플래시 분석은
  *       반드시 전문 소프트웨어(ETAP, SKM, EasyPower)로 검증해야 합니다.
@@ -20,7 +29,7 @@
 import type { DetailedCalcResult, CalcStep } from '../types';
 import { CalcValidationError } from '../types';
 import {
-  IEEE_1584_ARC_CURRENT,
+  IEEE_1584_2002,
   PPE_THRESHOLDS,
 } from '@/engine/constants/electrical';
 
@@ -45,6 +54,17 @@ export interface ArcFlashInput {
   enclosureWidth_mm?: number;
   enclosureHeight_mm?: number;
   enclosureDepth_mm?: number;
+  /**
+   * 전극 간격 (mm) — 2002 식의 `G`. 아크 전류식과 정규화 에너지식 양쪽에
+   * 들어간다. 미기재 시 저압 배전반 기본값(32mm)을 쓰고 **가정했다는 사실을
+   * 결과에 싣는다**(25↔32mm 차이는 결과 2~4%).
+   */
+  conductorGap_mm?: number;
+  /**
+   * 계통 접지 — 정규화 에너지식의 `K2`. 미기재 시 비접지(K2=0)로 본다.
+   * 접지계통(−0.113)보다 에너지가 크게 나오는 쪽이라 보수적이다.
+   */
+  grounding?: 'grounded' | 'ungrounded';
 }
 
 export type ElectrodeConfig =
@@ -74,101 +94,94 @@ export interface ArcFlashResult extends DetailedCalcResult {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * 아크 전류 — IEEE 1584 계열 간략 모델.
- * 전체 모델은 600+ 계수이지만, 여기서는 핵심 경험식만 사용.
- * 정밀 분석은 ETAP/SKM 사용을 권장.
+ * 아크 전류 — IEEE 1584-**2002**.
+ *
+ *   저압(≤1kV): lg Ia = K + 0.662·lg Ibf + 0.0966·V + 0.000526·G
+ *                       + 0.5588·V·lg Ibf − 0.00304·G·lg Ibf     (V in kV, G in mm)
+ *   중고압(>1kV): lg Ia = 0.00402 + 0.983·lg Ibf
+ *
+ * 앞 판은 저압에서 `K1 + K2·lg Ibf + K3·(V/1000)` 라는 **어느 판에도 없는
+ * 3항식**을 썼다. 480V·20kA 에 23.5kA 를 냈다 — 볼트 단락보다 큰 값이다.
+ * 두 항(V·lg Ibf 교차항·G 항)이 통째로 빠져 있었던 게 원인이다.
+ *
+ * 물리 제약은 그대로 둔다: 아크 임피던스가 회로에 더해지므로 Ia < Ibf 다.
+ * 2002 식은 이 격자에서 이를 위반하지 않지만, 검사는 유지한다 — 계수를
+ * 다시 건드리면 그때 잡혀야 한다.
  */
 function calculateArcingCurrent(
   voltage_V: number,
   boltedFault_kA: number,
-  electrodeConfig: ElectrodeConfig,
+  gap_mm: number,
+  enclosureType: 'open' | 'box',
 ): { arcCurrent_kA: number; variationFactor: number; violatesPhysics: boolean } {
-  const V = voltage_V;
   const Ibf = boltedFault_kA;
+  const lgIbf = Math.log10(Ibf);
 
   let raw: number;
   let variationFactor: number;
 
-  // 간략 모델 (저압 ≤1000V)
-  if (V <= 1000) {
-    // log(Ia) = K1 + K2×log(Ibf) + K3×(V/1000)
-    // K 계수는 전극 구성에 따라 다름 (여기선 VCB 기본값)
-    const K1 = IEEE_1584_ARC_CURRENT.K1[electrodeConfig] ?? IEEE_1584_ARC_CURRENT.K1.VCB;
-    const K2 = IEEE_1584_ARC_CURRENT.K2;
-    const K3 = IEEE_1584_ARC_CURRENT.K3;
-
-    raw = Math.pow(10, K1 + K2 * Math.log10(Ibf) + K3 * (V / 1000));
-    variationFactor = IEEE_1584_ARC_CURRENT.VARIATION_FACTOR;
+  // 경계 1kV 는 두 식의 범위에 모두 들어간다(저압 0.208~1kV · 중고압 1~15kV).
+  // 저압 식은 V→1kV 에서 교차항 `0.5588·V·lg Ibf` 가 커져 발산한다 —
+  // 1000V·100kA 에서 Ia/Ibf 가 1.83 까지 간다(2026-07-28 실측). 경계값은
+  // 중고압 식으로 보낸다. 2018 판이 나온 이유 중 하나가 이 불연속이다.
+  if (voltage_V < 1000) {
+    const c = IEEE_1584_2002.ARC_LV;
+    const V = voltage_V / 1000; // 식은 kV 단위
+    const K = enclosureType === 'box' ? c.K_BOX : c.K_OPEN;
+    const lgIa = K
+      + c.LG_IBF * lgIbf
+      + c.V * V
+      + c.G * gap_mm
+      + c.V_LG_IBF * V * lgIbf
+      + c.G_LG_IBF * gap_mm * lgIbf;
+    raw = Math.pow(10, lgIa);
+    variationFactor = IEEE_1584_2002.VARIATION_FACTOR;
   } else {
-    // 중/고압 (>1000V)
-    // log(Ia) = 0.00402 + 0.983×log(Ibf)
-    raw = Math.pow(10, 0.00402 + 0.983 * Math.log10(Ibf));
+    const c = IEEE_1584_2002.ARC_HV;
+    raw = Math.pow(10, c.CONST + c.LG_IBF * lgIbf);
     variationFactor = 1.0;
   }
 
-  /**
-   * **아크 전류는 볼트 단락전류를 넘을 수 없다.**
-   *
-   * 볼트 단락은 임피던스 0 인 극한이고, 아크가 생기면 아크 임피던스가
-   * 회로에 더해져 전류가 줄어든다. 저압에서는 아크 전압강하가 커서 보통
-   * Ia/Ibf 가 0.3~0.6 이다.
-   *
-   * 그런데 위 저압 식은 `K3·(V/1000)` 항 때문에 480V 에서 log 에 +0.139 를
-   * 더해 전류를 1.38 배로 올린다 — 20kA 볼트 단락에 23.51kA 아크 전류가
-   * 나왔다(2026-07-28 실측). 208~1000V · 0.5~100kA 격자 280 점 중 189 점이
-   * 이 물리 제약을 위반했다.
-   *
-   * 계수 재보정은 IEEE 1584 원문이 있어야 한다 — 없는 값을 지어내지 않는다.
-   * 여기서는 물리 한계로 자르고, **잘렸다는 사실을 결과에 실어 보낸다.**
-   * 자른 값은 추정치가 아니라 상한이다.
-   */
   // **값을 고치지 않는다.** 물리 한계로 자르면 Ia = Ibf 가 되는데 그것도
-  // 물리적으로 도달 불가한 극한이라 또 다른 거짓이 된다(기존 테스트가
-  // `Ia !== Ibf` 로 그걸 잡는다 — 그 테스트가 옳다). 계수 재보정은 IEEE
-  // 1584 원문이 있어야 하고 없는 값을 지어내지 않는다.
-  //
-  // 대신 **위반 사실을 결과에 실어 보내고 PPE 판정을 거부한다.** 이 저장소가
-  // 절연 미상 케이블을 낙관 PASS 대신 UNKNOWN 으로 두는 것과 같은 처리다.
-  const violatesPhysics = raw > Ibf;
-  return { arcCurrent_kA: raw, variationFactor, violatesPhysics };
+  // 도달 불가한 극한이라 또 다른 거짓이 된다. 위반 사실을 실어 보내고
+  // PPE 판정을 거부한다 — 절연 미상 케이블을 UNKNOWN 으로 두는 것과 같다.
+  return { arcCurrent_kA: raw, variationFactor, violatesPhysics: raw > Ibf };
 }
 
 /**
- * 입사 에너지 — 간략 모델.
- * E = Cn × En × (t/0.2) × (610^x / D^x)
+ * 입사 에너지 — IEEE 1584-**2002**.
+ *
+ *   lg En = K1 + K2 + 1.081·lg Ia + 0.0011·G
+ *   E     = 4.184 · Cf · En · (t/0.2) · (610^x / D^x)      [cal/cm²]
+ *
+ * 앞 판은 `K1 + 1.5·lg Ia + K3·lg(V/1000)` 를 썼고 K1 에 −0.5588 을 넣었다 —
+ * 그건 **아크 전류식의 교차항 계수**(0.5588)를 부호만 바꿔 옮겨 놓은 것이다.
+ * 지수 1.5 도 표준값 1.081 이 아니고, 간격항(+0.0011·G)과 단위계수(4.184)는
+ * 아예 없었다. Cf 도 함체 여부로 갈랐는데 2002 는 **전압**으로 가른다
+ * (<1kV 1.5 · >1kV 1.0).
  */
 function calculateIncidentEnergy(
   arcCurrent_kA: number,
   arcDuration_s: number,
   workingDistance_mm: number,
   voltage_V: number,
-  electrodeConfig: ElectrodeConfig,
+  gap_mm: number,
   enclosureType: 'open' | 'box',
+  grounding: 'grounded' | 'ungrounded',
+  distanceExponent: number,
 ): number {
-  const Ia = arcCurrent_kA;
-  const t = arcDuration_s;
-  const D = workingDistance_mm;
+  const en = IEEE_1584_2002.ENERGY_NORMALIZED;
+  const e = IEEE_1584_2002.ENERGY;
 
-  // 정규화 입사 에너지 (0.2초, 610mm 기준)
-  // log(En) = K1 + K2×log(Ia) + K3×log(V)
-  const K1 = enclosureType === 'box' ? -0.5588 : -0.3968;
-  const K2 = 1.5;
-  const K3 = voltage_V <= 1000 ? 0.0 : 0.5;
+  const K1 = enclosureType === 'box' ? en.K1_BOX : en.K1_OPEN;
+  const K2 = grounding === 'grounded' ? en.K2_GROUNDED : en.K2_UNGROUNDED;
+  const lgEn = K1 + K2 + en.LG_IA * Math.log10(arcCurrent_kA) + en.G * gap_mm;
+  const En = Math.pow(10, lgEn);
 
-  const logEn = K1 + K2 * Math.log10(Ia) + K3 * Math.log10(voltage_V / 1000);
-  const En = Math.pow(10, logEn);
-
-  // 거리 지수 (전극 구성에 따라)
-  const distanceExponent: Record<ElectrodeConfig, number> = {
-    VCB: 1.641, VCBB: 1.641, HCB: 1.641, VOA: 2.0, HOA: 2.0,
-  };
-  const x = distanceExponent[electrodeConfig];
-
-  // 밀폐 보정 계수
-  const Cf = enclosureType === 'box' ? 1.5 : 1.0;
-
-  // 최종 입사 에너지 (cal/cm²)
-  const E = Cf * En * (t / 0.2) * Math.pow(610, x) / Math.pow(D, x);
+  const Cf = voltage_V < 1000 ? e.CF_LV : e.CF_HV;
+  const x = distanceExponent;
+  const E = e.UNIT * Cf * En * (arcDuration_s / e.REF_TIME_S)
+    * Math.pow(e.REF_DISTANCE_MM, x) / Math.pow(workingDistance_mm, x);
 
   return Math.round(E * 100) / 100;
 }
@@ -229,13 +242,24 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   if (!Number.isFinite(input.voltage_V) || input.voltage_V < 208 || input.voltage_V > 15000) {
     throw new CalcValidationError(
       'voltage_V',
-      `ESVA-4401: voltage_V must be between 208 and 15000 (IEEE 1584-2018 range), got ${input.voltage_V}`,
+      `ESVA-4401: voltage_V must be between 208 and 15000 (IEEE 1584-2002 시험 범위), got ${input.voltage_V}`,
     );
   }
-  if (!Number.isFinite(input.boltedFaultCurrent_kA) || input.boltedFaultCurrent_kA < 0.2 || input.boltedFaultCurrent_kA > 106) {
+  // IEEE 1584-2002 시험 범위의 **하한은 700A** 다. 앞 판은 0.2kA(200A)까지
+  // 받아 범위 밖에서 PPE 등급을 냈다(2026-07-28 적출) — 모델이 검증되지 않은
+  // 구간의 답을 안전 판단에 쓰는 것이 §2.10 이 말하는 실패다.
+  if (!Number.isFinite(input.boltedFaultCurrent_kA) || input.boltedFaultCurrent_kA < 0.7 || input.boltedFaultCurrent_kA > 106) {
     throw new CalcValidationError(
       'boltedFaultCurrent_kA',
-      `ESVA-4402: boltedFaultCurrent_kA must be between 0.2 and 106 kA (IEEE 1584-2018 range), got ${input.boltedFaultCurrent_kA}`,
+      `ESVA-4402: boltedFaultCurrent_kA must be between 0.7 and 106 kA (IEEE 1584-2002 시험 범위), got ${input.boltedFaultCurrent_kA}`,
+    );
+  }
+  // 전극 간격도 시험 범위가 있다(13~152mm). 범위 밖 간격은 외삽이다.
+  if (input.conductorGap_mm !== undefined
+    && (!Number.isFinite(input.conductorGap_mm) || input.conductorGap_mm < 13 || input.conductorGap_mm > 152)) {
+    throw new CalcValidationError(
+      'conductorGap_mm',
+      `ESVA-4404: conductorGap_mm must be between 13 and 152 mm (IEEE 1584-2002 시험 범위), got ${input.conductorGap_mm}`,
     );
   }
   if (!Number.isFinite(input.arcDuration_s) || input.arcDuration_s < 0.001 || input.arcDuration_s > 10) {
@@ -245,48 +269,54 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     );
   }
 
+  // 표준이 요구하는데 입력에 없던 두 값. 기본값을 쓸 때는 그 사실을 남긴다.
+  const gapAssumed = !Number.isFinite(input.conductorGap_mm as number);
+  const gap_mm = gapAssumed
+    ? IEEE_1584_2002.TYPICAL_GAP_MM.LV_SWITCHGEAR
+    : (input.conductorGap_mm as number);
+  const groundingAssumed = input.grounding === undefined;
+  const grounding = input.grounding ?? 'ungrounded';
+  // 거리 지수 — 2002 Table 4 는 기기 종류별인데 전 표가 이 리포에 없다.
+  // 공개 확인된 두 값만 쓴다(개방 2.0 · 함체 1.641 = MCC·패널보드 행).
+  const distExp = input.electrodeConfig.endsWith('OA') ? 2.0 : 1.641;
+
   // Step 1: 아크 전류 계산
   const { arcCurrent_kA, variationFactor, violatesPhysics } = calculateArcingCurrent(
     input.voltage_V,
     input.boltedFaultCurrent_kA,
-    input.electrodeConfig,
+    gap_mm,
+    input.enclosureType,
   );
   steps.push({
     step: 1,
-    title: '아크 전류 계산 (IEEE 1584-2018)',
-    formula: 'log(I_a) = K_1 + K_2 \\cdot log(I_{bf}) + K_3 \\cdot (V/1000)',
+    title: '아크 전류 계산 (IEEE 1584-2002)',
+    formula: input.voltage_V <= 1000
+      ? 'lg I_a = K + 0.662\\cdot lg I_{bf} + 0.0966V + 0.000526G + 0.5588V\\cdot lg I_{bf} - 0.00304G\\cdot lg I_{bf}'
+      : 'lg I_a = 0.00402 + 0.983\\cdot lg I_{bf}',
     value: Math.round(arcCurrent_kA * 100) / 100,
     unit: 'kA',
-    standardRef: 'IEEE 1584-2018 Section 4.3',
+    standardRef: 'IEEE 1584-2002 (2018 판으로 대체됨)',
   });
 
   // Step 2: 입사 에너지 계산
   const incidentEnergy = calculateIncidentEnergy(
-    arcCurrent_kA,
-    input.arcDuration_s,
-    input.workingDistance_mm,
-    input.voltage_V,
-    input.electrodeConfig,
-    input.enclosureType,
+    arcCurrent_kA, input.arcDuration_s, input.workingDistance_mm,
+    input.voltage_V, gap_mm, input.enclosureType, grounding, distExp,
   );
   steps.push({
     step: 2,
     title: '입사 에너지 계산',
-    formula: 'E = C_f \\cdot E_n \\cdot (t/0.2) \\cdot (610^x / D^x)',
+    formula: 'lg E_n = K_1 + K_2 + 1.081\\cdot lg I_a + 0.0011G, \\quad E = 4.184 C_f E_n (t/0.2)(610^x / D^x)',
     value: incidentEnergy,
     unit: 'cal/cm²',
-    standardRef: 'IEEE 1584-2018 Section 4.4',
+    standardRef: 'IEEE 1584-2002 (2018 판으로 대체됨)',
   });
 
   // 변동 계수 적용 (최소 아크 전류 시나리오)
   const minArcCurrent = arcCurrent_kA * variationFactor;
   const minIncidentEnergy = calculateIncidentEnergy(
-    minArcCurrent,
-    input.arcDuration_s,
-    input.workingDistance_mm,
-    input.voltage_V,
-    input.electrodeConfig,
-    input.enclosureType,
+    minArcCurrent, input.arcDuration_s, input.workingDistance_mm,
+    input.voltage_V, gap_mm, input.enclosureType, grounding, distExp,
   );
   const worstEnergy = Math.max(incidentEnergy, minIncidentEnergy);
 
@@ -296,11 +326,10 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     formula: 'I_{a,min} = 0.85 \\cdot I_a',
     value: worstEnergy,
     unit: 'cal/cm²',
-    standardRef: 'IEEE 1584-2018 Section 4.9',
+    standardRef: 'IEEE 1584-2002 (2018 판으로 대체됨)',
   });
 
   // Step 4: 아크플래시 경계
-  const distExp = input.electrodeConfig.includes('OA') ? 2.0 : 1.641;
   const boundary = calculateArcFlashBoundary(worstEnergy, input.workingDistance_mm, distExp);
   steps.push({
     step: 4,
@@ -308,7 +337,7 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     formula: 'D_B = D \\cdot (E / E_b)^{1/x}',
     value: boundary,
     unit: 'mm',
-    standardRef: 'IEEE 1584-2018 Section 4.7',
+    standardRef: 'IEEE 1584-2002 (2018 판으로 대체됨)',
   });
 
   // Step 5: PPE 등급
@@ -325,11 +354,11 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
   return {
     value: worstEnergy,
     unit: 'cal/cm²',
-    source: [{ standard: 'IEEE 1584', clause: '4.3-4.9', edition: '2018' }],
+    source: [{ standard: 'IEEE 1584', clause: '아크 전류·입사 에너지·경계', edition: '2002' }],
     label: '아크플래시 입사 에너지',
-    formula: 'IEEE 1584 기반 간략 경험식 (전체 계수 모델 아님)',
+    formula: 'IEEE 1584-2002 아크 전류·정규화 에너지·입사 에너지 식 (2018 판 아님)',
     steps,
-    standardRef: 'IEEE 1584 기반 간략식 · PPE 등급 NFPA 70E',
+    standardRef: 'IEEE 1584-2002 · PPE 등급 NFPA 70E',
     arcingCurrent_kA: Math.round(arcCurrent_kA * 100) / 100,
     incidentEnergy_cal_cm2: worstEnergy,
     arcFlashBoundary_mm: boundary,
@@ -337,14 +366,21 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     ppeDescription: ppe.description,
     hazardLabel: ppe.hazardLabel,
     warnings: [
-      // 두 오차를 분리해서 말한다. 전에는 "IEEE 1584-2018 은 경험식으로
-      // 정확도 ±25%" 한 줄이라, 표준 자체의 불확실성이 이 구현의 축약까지
-      // 덮는 것처럼 읽혔다. PPE 등급을 정하는 수라 그 오해가 위험하다.
-      '이 계산기는 IEEE 1584 전체 계수 모델이 아니라 간략 경험식입니다. 전극 구성별 계수·함체 크기 보정·전압 구간 보간을 적용하지 않습니다.',
-      ...(violatesPhysics
-        ? ['⚠ 이 입력에서는 간략식이 볼트 단락전류보다 큰 아크 전류를 냅니다 — 물리적으로 불가능한 값입니다(아크 임피던스가 더해지면 전류는 줄어듭니다). 입사 에너지와 PPE 등급을 신뢰할 수 없으니 전문 소프트웨어로 산정하세요.']
+      // 판(edition)을 먼저 말한다. 전에는 결과가 "IEEE 1584-2018 Section 4.3"
+      // 을 달고 나갔는데 식은 어느 판에도 없는 것이었다(2026-07-28 적출).
+      // 어느 판인지가 PPE 등급을 좌우하므로 이게 첫 줄이다.
+      '이 계산은 IEEE 1584-**2002** 식입니다. 현행판은 2018 이며 두 판의 결과는 다릅니다(전극 구성별 계수 체계가 2018 에서 새로 들어왔습니다).',
+      '2018 판의 전극 구성별 계수·함체 크기 보정·전압 구간 보간은 적용하지 않습니다.',
+      ...(gapAssumed
+        ? [`전극 간격을 입력하지 않아 저압 배전반 기준 ${gap_mm}mm 로 가정했습니다. 실제 간격을 넣으면 결과가 달라집니다(25↔32mm 기준 2~4%).`]
         : []),
-      '표준 자체의 모델 불확실성(±25%)과 별개로, 위 간략화로 인한 편차는 정량화되지 않았습니다.',
+      ...(groundingAssumed
+        ? ['계통 접지를 입력하지 않아 비접지로 가정했습니다 — 접지계통보다 에너지가 크게 나오는 쪽입니다.']
+        : []),
+      ...(violatesPhysics
+        ? ['⚠ 이 입력에서는 식이 볼트 단락전류보다 큰 아크 전류를 냅니다 — 물리적으로 불가능한 값입니다(아크 임피던스가 더해지면 전류는 줄어듭니다). 입사 에너지와 PPE 등급을 신뢰할 수 없으니 전문 소프트웨어로 산정하세요.']
+        : []),
+      '표준 자체의 모델 불확실성(±25%)이 있습니다. 이 구현은 표준 원문이 아니라 공개 문헌 2 곳에서 계수 단위로 대조해 옮긴 것입니다.',
       'PPE 등급 선정 등 안전 관련 최종 판단에는 ETAP/SKM/EasyPower 등 전문 소프트웨어 검증이 필요합니다.',
       '아크 지속시간 > 2초인 경우 반드시 에너지 저감 조치를 검토하세요.',
     ],

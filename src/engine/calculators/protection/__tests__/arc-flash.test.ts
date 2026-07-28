@@ -1,6 +1,6 @@
 import { calculateArcFlash, type ArcFlashInput } from '../arc-flash';
 
-describe('Arc Flash Calculator (IEEE 1584-2018)', () => {
+describe('Arc Flash Calculator (IEEE 1584-2002)', () => {
   const baseInput: ArcFlashInput = {
     voltage_V: 480,
     boltedFaultCurrent_kA: 25,
@@ -26,7 +26,8 @@ describe('Arc Flash Calculator (IEEE 1584-2018)', () => {
   });
 
   test('PPE category 0 for low energy', () => {
-    const low: ArcFlashInput = { ...baseInput, boltedFaultCurrent_kA: 0.5, arcDuration_s: 0.02 };
+    // 0.5kA 는 표준 시험 하한(700A) 밖이라 이제 거부된다 — 하한값으로 올린다.
+    const low: ArcFlashInput = { ...baseInput, boltedFaultCurrent_kA: 0.7, arcDuration_s: 0.02 };
     const result = calculateArcFlash(low);
     expect(result.ppeCategory).toBe(0);
     expect(result.hazardLabel).toBe('green');
@@ -72,6 +73,8 @@ describe('Arc Flash Calculator (IEEE 1584-2018)', () => {
 
   test('throws on fault current out of range', () => {
     expect(() => calculateArcFlash({ ...baseInput, boltedFaultCurrent_kA: 0.1 })).toThrow('ESVA-4402');
+    // 하한이 0.2 가 아니라 0.7kA 다(IEEE 1584-2002 시험 범위).
+    expect(() => calculateArcFlash({ ...baseInput, boltedFaultCurrent_kA: 0.5 })).toThrow('ESVA-4402');
     expect(() => calculateArcFlash({ ...baseInput, boltedFaultCurrent_kA: 200 })).toThrow('ESVA-4402');
   });
 

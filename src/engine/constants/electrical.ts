@@ -145,20 +145,55 @@ export const DISCONNECTION_TIME = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /** IEEE 1584-2018 아크 전류 계수 (저압 ≤1000V) */
-export const IEEE_1584_ARC_CURRENT = {
-  /** K1 per electrode config */
-  K1: {
-    VCB: -0.04287,
-    VCBB: -0.05441,
-    HCB: -0.03510,
-    VOA: -0.04287,
-    HOA: -0.04287,
+/**
+ * IEEE 1584**-2002** 계수. 2018 판이 아니다 — 2018 모델은 유료 표준 원문에만
+ * 있는 ~600 계수 체계라 이 리포에 없다.
+ *
+ * 앞선 값(`K2: 0.98`·`K3: 0.29`·전극별 `K1`)은 **어느 판에도 없는 수**였다.
+ * 그 식은 480V·20kA 에서 아크 전류 23.5kA 를 냈다 — 볼트 단락 20kA 보다 큰,
+ * 물리적으로 불가능한 값(2026-07-28 실측: 280 점 중 189 점 위반). 그런데
+ * 결과는 `standardRef: 'IEEE 1584-2018 Section 4.3'` 을 달고 PPE 등급까지
+ * 냈다. 출처 없는 수가 표준 이름을 쓰고 있었다(§2.10).
+ *
+ * 아래는 공개 문헌 2 곳에서 계수 단위로 일치 확인한 2002 판 식이다:
+ *  · ecmag.com "Arcing Short-Circuit Current"
+ *  · arcadvisor.com "Procedure for IEEE 1584 based arc flash calculations"
+ * **표준 원문 대조가 아니다** — 검증 수준은 `arc-flash-known-answer.test.ts`
+ * 에 그대로 적어 두었다.
+ */
+export const IEEE_1584_2002 = {
+  /** 저압(0.208~1kV) 아크 전류: lg Ia = K + 0.662·lg Ibf + 0.0966·V + 0.000526·G + 0.5588·V·lg Ibf − 0.00304·G·lg Ibf */
+  ARC_LV: {
+    /** K — 개방(open) / 함체(box) */
+    K_OPEN: -0.153,
+    K_BOX: -0.097,
+    LG_IBF: 0.662,
+    V: 0.0966,
+    G: 0.000526,
+    V_LG_IBF: 0.5588,
+    G_LG_IBF: -0.00304,
   },
-  /** K2: 볼트 단락전류 지수 */
-  K2: 0.98,
-  /** K3: 전압 계수 */
-  K3: 0.29,
-  /** 변동 계수 (최소 아크 전류) */
+  /** 중·고압(1~15kV): lg Ia = 0.00402 + 0.983·lg Ibf */
+  ARC_HV: { CONST: 0.00402, LG_IBF: 0.983 },
+  /** 정규화 입사 에너지: lg En = K1 + K2 + 1.081·lg Ia + 0.0011·G */
+  ENERGY_NORMALIZED: {
+    K1_OPEN: -0.792,
+    K1_BOX: -0.555,
+    /** K2 — 비접지·고저항접지 0 / 접지 −0.113. 비접지가 에너지가 더 크다(보수적). */
+    K2_UNGROUNDED: 0,
+    K2_GROUNDED: -0.113,
+    LG_IA: 1.081,
+    G: 0.0011,
+  },
+  /** E = 4.184·Cf·En·(t/0.2)·(610^x / D^x) */
+  ENERGY: { UNIT: 4.184, CF_LV: 1.5, CF_HV: 1.0, REF_DISTANCE_MM: 610, REF_TIME_S: 0.2 },
+  /**
+   * 전극 간격 기본값 — 표준의 기기 종류별 표(2002 Table 4) 전체는 이 리포에
+   * 없다. 공개 문헌에서 확인된 저압 두 행만 쓴다. 기본값을 쓸 때는 결과에
+   * 가정 사실을 실어 보낸다.
+   */
+  TYPICAL_GAP_MM: { LV_SWITCHGEAR: 32, LV_MCC_PANEL: 25 },
+  /** 변동 계수 (최소 아크 전류 시나리오 — 저압 0.85) */
   VARIATION_FACTOR: 0.85,
 } as const;
 

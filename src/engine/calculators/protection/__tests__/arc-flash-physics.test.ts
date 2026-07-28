@@ -40,7 +40,8 @@ describe('아크플래시 — 물리 제약', () => {
   // 전압·전류·전극 구성을 훑는다. 한 점만 보면 그 점만 맞춰도 통과한다.
   const grid: ArcFlashInput[] = [];
   for (const voltage_V of [208, 240, 380, 480, 600, 1000, 4160, 13800]) {
-    for (const boltedFaultCurrent_kA of [0.5, 2, 5, 10, 20, 50, 100]) {
+    // 0.5kA 는 표준 시험 하한(700A) 밖이라 이제 계산기가 거부한다.
+    for (const boltedFaultCurrent_kA of [0.7, 2, 5, 10, 20, 50, 100]) {
       for (const electrodeConfig of CONFIGS) {
         grid.push(input({ voltage_V, boltedFaultCurrent_kA, electrodeConfig,
           enclosureType: electrodeConfig.endsWith('OA') ? 'open' : 'box' }));
