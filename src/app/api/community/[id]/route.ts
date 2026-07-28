@@ -12,7 +12,8 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
-import { getQuestion, getAnswersForQuestion, createAnswer } from '@/lib/community';
+import { getQuestion, getAnswersForQuestion, createAnswer , acceptAnswer } from '@/lib/community';
+import { classifyVoteError } from '@/lib/community-error';
 import { getExpertBadge } from '@/lib/expert-verification';
 import { checkContent, checkAnswerQuality } from '@/lib/abuse-prevention';
 import { withRequestLog } from '@/lib/api/with-request-log';
@@ -149,5 +150,64 @@ async function POST__impl(
   }
 }
 
+// ─── PART 4: PATCH — 답변 채택 ────────────────────────────────
+
+/**
+ * 질문 작성자가 답변 하나를 채택한다.
+ *
+ * 답변 생성(POST)과 섞지 않고 따로 둔다 — 권한이 다르다. 생성은 아무나,
+ * 채택은 질문 작성자만이다.
+ *
+ * 권한·중복·자기 채택 판정은 전부 `accept_community_answer` RPC 안에서
+ * 행 잠금과 같은 트랜잭션으로 한다. 여기서 한 번 더 검사하면 두 벌이 되어
+ * 갈린다.
+ */
+async function PATCH__impl(request: NextRequest) {
+  try {
+    const blocked = applyRateLimit(request, 'community');
+    if (blocked) return blocked;
+
+    const userId = await extractUserId(request);
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-1001', message: 'Authentication required' } },
+        { status: 401 },
+      );
+    }
+
+    const body = await request.json().catch(() => null) as { action?: string; answerId?: string } | null;
+    if (body?.action !== 'acceptAnswer') {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-7080', message: 'action 은 "acceptAnswer" 여야 합니다.' } },
+        { status: 400 },
+      );
+    }
+    if (!body.answerId || typeof body.answerId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-7081', message: '채택할 답변을 지정해 주세요.' } },
+        { status: 400 },
+      );
+    }
+
+    const { questionId } = await acceptAnswer(body.answerId, userId);
+    return NextResponse.json({ success: true, data: { questionId, answerId: body.answerId } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    console.error('[ESVA Accept PATCH]', message);
+    const mapped = classifyVoteError(err);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: mapped ? 'ESVA-7082' : 'ESVA-7083',
+          message: mapped?.message ?? '답변을 채택하지 못했습니다.',
+        },
+      },
+      { status: mapped?.status ?? 500 },
+    );
+  }
+}
+
 export const GET = withRequestLog(GET__impl);
 export const POST = withRequestLog(POST__impl);
+export const PATCH = withRequestLog(PATCH__impl);

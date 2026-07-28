@@ -42,30 +42,36 @@ describe('커뮤니티 — 쓰기 없는 절반', () => {
   });
 
   /**
-   * ① 채택을 세우는 곳이 아직 없다. 생기면 이 검사가 깨진다 — 그때
-   * 질문 작성자만 채택할 수 있는지, 자기 답변을 채택할 수 있는지를
-   * 정해야 한다.
+   * ① 채택은 **지어졌다**(2026-07-28, 마이그레이션 007). 이 검사는 그때
+   * 깨졌고, 설계한 대로였다 — 쓰기 경로가 생기면 만드는 사람이 대장을
+   * 읽고 자기 채택 금지를 함께 넣게 하는 것이 목적이었다. 실제로 그렇게
+   * 했다(`community-accept-selfvote.test.ts`).
+   *
+   * 이제는 **거꾸로** 잠근다: 채택 경로가 사라지면 화면의 초록 테두리와
+   * 체크 배지가 다시 절대 뜨지 않는 표시가 된다.
    */
-  it('`is_accepted` 를 참으로 만드는 경로가 아직 없다', () => {
+  it('`is_accepted` 를 참으로 만드는 경로가 있다', () => {
     const writers = sources.filter(({ text }) =>
-      /is_accepted\s*:\s*true/.test(text)
-      || /SET[\s\S]{0,80}is_accepted\s*=\s*(TRUE|true)/i.test(text)
-      || /update\([^)]*is_accepted/i.test(text));
-    expect(writers.map((w) => w.path)).toEqual([]);
+      /SET[\s\S]{0,80}is_accepted\s*=\s*(TRUE|true)/i.test(text));
+    expect(writers.length).toBeGreaterThan(0);
   });
 
   /** ② 평판을 읽는 곳이 아직 없다. */
   it('`getUserReputation` 은 아직 호출처가 없다 — 배선하면 자기 투표가 점수가 된다', () => {
+    // 주석에 이름이 나오는 것과 부르는 것은 다르다 — 마이그레이션 007 의
+    // 설명문이 이 이름을 적었다가 오탐으로 걸렸다(2026-07-28). 실호출만 본다.
     const callers = sources.filter(({ path, text }) =>
-      !path.endsWith('abuse-prevention.ts') && text.includes('getUserReputation'));
+      !path.endsWith('abuse-prevention.ts') && /getUserReputation\s*\(/.test(text));
     expect(callers.map((c) => c.path)).toEqual([]);
   });
 
-  it('대장이 이 휴면과 함께 해야 할 일을 적고 있다', () => {
+  it('대장이 남은 휴면과 함께 해야 할 일을 적고 있다', () => {
     const manifest = read('docs/DORMANT_MANIFEST.md');
-    expect(manifest).toContain('is_accepted');
     expect(manifest).toContain('getUserReputation');
-    expect(manifest).toContain('자기 투표');
+    // 채택·자기 투표 금지는 지어졌다. 대장은 그 사실과, 평판을 붙일 때
+    // 문서/코드 산식을 맞추라는 것을 적고 있어야 한다.
+    expect(manifest).toContain('자기 투표 금지는');
+    expect(manifest).toContain('Downvote received');
   });
 });
 

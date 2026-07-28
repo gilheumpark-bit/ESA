@@ -43,6 +43,34 @@ const RULES: Array<{ match: string; status: number; message: string }> = [
     status: 400,
     message: '투표 방향이 올바르지 않습니다.',
   },
+  {
+    // 002 판의 RPC 는 대상 종류와 방향을 한 문구로 묶어 던졌다. 007 이
+    // 함수를 교체했지만 중간 버전에서 멈춘 배포는 아직 이걸 낸다 —
+    // 검사가 **모든 함수 정의**를 훑다가 찾아냈다(2026-07-28).
+    match: 'invalid vote request',
+    status: 400,
+    message: '투표 요청 형식이 올바르지 않습니다.',
+  },
+  {
+    match: 'cannot vote on own post',
+    status: 403,
+    message: '자기 글에는 추천할 수 없습니다.',
+  },
+  {
+    match: 'accept target not found',
+    status: 404,
+    message: '이미 삭제되었거나 숨겨진 답변입니다. 목록을 새로고침해 주세요.',
+  },
+  {
+    match: 'only the question author can accept',
+    status: 403,
+    message: '질문을 올린 분만 답변을 채택할 수 있습니다.',
+  },
+  {
+    match: 'cannot accept own answer',
+    status: 403,
+    message: '자기 답변은 채택할 수 없습니다.',
+  },
 ];
 
 /**

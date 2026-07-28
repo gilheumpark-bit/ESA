@@ -308,6 +308,27 @@ async function vote(
   return { votes: data };
 }
 
+/**
+ * 답변을 채택한다 — 질문 작성자만, 자기 답변은 못 한다.
+ *
+ * 규칙은 전부 `accept_community_answer` RPC 안에 있다. 여기서 한 번 더
+ * 검사하면 두 벌이 되어 갈린다(투표에서 이미 그렇게 하고 있다).
+ * 채택은 평판 +15 로 투표(5·10)보다 크고 질문도 답변도 자기 것일 수
+ * 있어서, 권한 판정을 행 잠금과 같은 트랜잭션 안에 두는 편이 안전하다.
+ */
+export async function acceptAnswer(answerId: string, userId: string): Promise<{ questionId: string }> {
+  await ensureUserProfile(userId);
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin.rpc('accept_community_answer', {
+    p_answer_id: answerId,
+    p_user_id: userId,
+  });
+  if (error || typeof data !== 'string') {
+    throw new Error(`[ESA-7007] Failed to accept answer: ${error?.message ?? 'invalid accept result'}`);
+  }
+  return { questionId: data };
+}
+
 // ─── PART 5: Expert Profile Helpers ──────────────────────────
 
 export async function getExpertProfile(userId: string): Promise<ExpertProfile | null> {

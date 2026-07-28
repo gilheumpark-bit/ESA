@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { classifyVoteError, VOTE_ERROR_MATCHES } from '@/lib/community-error';
 
@@ -19,12 +19,26 @@ import { classifyVoteError, VOTE_ERROR_MATCHES } from '@/lib/community-error';
  * 을 전부 긁어 분류되는지 대조한다. RPC 에 새 예외를 넣으면 여기서 걸린다.
  */
 const REPO = join(__dirname, '..', '..', '..');
-const MIGRATION = readFileSync(join(REPO, 'supabase/migrations/001_initial_schema.sql'), 'utf8');
+// RPC 는 뒤 마이그레이션에서 교체된다(007 이 자기 투표 금지를 넣었다).
+// 001 만 보면 새 예외를 놓친다 — 전부 이어 붙여 본다.
+const MIGRATION = readdirSync(join(REPO, 'supabase/migrations'))
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
+  .map((name) => readFileSync(join(REPO, 'supabase/migrations', name), 'utf8'))
+  .join('\n');
 
-/** `cast_community_vote` 본문의 `RAISE EXCEPTION` 문구를 뽑는다. */
+/**
+ * `cast_community_vote` 본문의 `RAISE EXCEPTION` 문구를 뽑는다.
+ *
+ * 함수는 뒤 마이그레이션이 `CREATE OR REPLACE` 로 갈아엎는다. 첫 정의만
+ * 보면 나중에 추가된 예외(007 의 자기 투표 금지)를 놓치므로 **모든 정의**를
+ * 모은다 — 어느 판이 실제로 배포됐든 분류는 다 있어야 한다.
+ */
 function voteExceptions(): string[] {
-  const body = /CREATE OR REPLACE FUNCTION cast_community_vote[\s\S]*?\n\$\$;/.exec(MIGRATION)?.[0] ?? '';
-  return [...new Set([...body.matchAll(/RAISE EXCEPTION '([^']+)'/g)].map((m) => m[1]))];
+  const bodies = [...MIGRATION.matchAll(/CREATE OR REPLACE FUNCTION cast_community_vote[\s\S]*?\n\$\$;/g)]
+    .map((m) => m[0]);
+  return [...new Set(bodies.flatMap((body) =>
+    [...body.matchAll(/RAISE EXCEPTION '([^']+)'/g)].map((m) => m[1])))];
 }
 
 describe('투표 오류 → HTTP 상태', () => {
