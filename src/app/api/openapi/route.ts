@@ -156,21 +156,39 @@ const OPENAPI_SPEC = {
     },
     '/export': {
       post: {
-        summary: '영수증 내보내기 (PDF/Excel/CSV)',
+        // `pdf` 는 **인쇄용 HTML** 을 돌려준다(`text/html` · `%PDF-` 서명 없음).
+        // 요약에 "PDF" 만 적으면 통합하는 쪽이 PDF 파일을 기대한다 —
+        // 화면 버튼도 같은 이유로 "인쇄 · PDF" 로 고쳤다(2026-07-28).
+        summary: '영수증 내보내기 (인쇄용 HTML / Excel / CSV)',
         tags: ['Export'],
-        // 요청 본문이 아예 안 적혀 있었다(2026-07-28). 문서만 보고는 무엇을
-        // 보내야 하는지 알 수 없었고, 빈 본문을 보내면 500 이 났다.
+        // 2026-07-28 정정 셋 — 선언이 실제와 달랐다:
+        //  ① `receiptId` 만 필수로 적혀 있었는데 라우트는 **`receipt` 객체도**
+        //     받는다(익명·클라이언트 보관 영수증 경로). 문서만 보면 그 길을
+        //     찾을 수 없다.
+        //  ② `lang` enum 에 **ja·zh 가 빠져** 있었다. 네 언어 모두 실제로
+        //     동작한다(실측: 인쇄 안내가 ko/en/ja/zh 로 렌더).
+        //  ③ 요약이 "PDF" 였다(위 참조).
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['receiptId', 'format'],
+                description: 'receiptId 또는 receipt 중 하나는 반드시 있어야 한다.',
+                required: ['format'],
+                oneOf: [
+                  { required: ['receiptId'] },
+                  { required: ['receipt'] },
+                ],
                 properties: {
-                  receiptId: { type: 'string', description: '내보낼 영수증 ID' },
-                  format: { type: 'string', enum: ['pdf', 'excel', 'csv'] },
-                  lang: { type: 'string', enum: ['ko', 'en'] },
+                  receiptId: { type: 'string', description: '저장된 영수증 ID (서버에서 조회)' },
+                  receipt: { type: 'object', description: '영수증 객체를 직접 전달 (익명·클라이언트 보관분)' },
+                  format: {
+                    type: 'string',
+                    enum: ['pdf', 'excel', 'csv'],
+                    description: 'pdf 는 인쇄용 HTML(text/html) 을 돌려준다 — PDF 파일이 아니다.',
+                  },
+                  lang: { type: 'string', enum: ['ko', 'en', 'ja', 'zh'], default: 'ko' },
                 },
               },
             },
@@ -178,7 +196,7 @@ const OPENAPI_SPEC = {
         },
         responses: {
           200: { description: '파일 다운로드' },
-          400: { description: '본문이 JSON 이 아니거나 receiptId·format 누락' },
+          400: { description: '본문이 JSON 이 아니거나 (receiptId|receipt)·format 누락' },
           401: { description: '인증 필요' },
           404: { description: '영수증 없음' },
         },
