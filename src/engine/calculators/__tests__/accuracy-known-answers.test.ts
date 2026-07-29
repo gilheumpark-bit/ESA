@@ -580,3 +580,85 @@ describe('vt-sizing — 풀이 단계의 절대 눈금', () => {
     expect(step(n as number)).toBeCloseTo(expected as number, 1);
   });
 });
+
+/**
+ * **ct-sizing — 풀이 6 단계 전부 손계산으로 잠근다.**
+ *
+ * 앞 배치에서 이 계산기의 1 단계 표시값을 오염시켜도 전체 스위트가 초록인 것을
+ * 확인했다. CT 정격부담은 보호계전기가 포화 없이 동작하느냐를 가르고, 리드선
+ * 부담은 현장에서 케이블 길이로 실제 조정하는 값이다 — 화면에 뜨는 그 숫자를
+ * 실무자가 그대로 검산에 쓴다.
+ *
+ * 손계산(ρ_Cu = 0.0178 Ω·mm²/m · I₂ = 5 A · 왕복 2배):
+ *   R_lead = 2ρL/A = 2×0.0178×20/4 = 0.1780 Ω
+ *   VA_lead = I₂²·R = 25 × 0.1780 = 4.45 VA
+ *   VA_contact = 25 × 0.1 = 2.50 VA
+ *   ΣVA = 10 + 4.45 + 2.50 = 16.95 VA
+ *   정격부담 = 0.5 급 [2.5, 5, 10, 15, 30] 중 16.95 이상 최소 = 30 VA
+ *   여유율 = (30 − 16.95)/30 × 100 = 43.5 %
+ */
+describe('ct-sizing — 풀이 단계의 절대 눈금', () => {
+  const input = {
+    maxLoadCurrent: 200,
+    relayBurden: 10,
+    leadLength: 20,
+    leadSize: 4,
+    accuracyClass: '0.5',
+  };
+
+  it.each([
+    [2, 4.45, '리드선 부담 (VA)'],
+    [3, 2.50, '접촉저항 부담 (VA)'],
+    [4, 16.95, '총 실제 부담 (VA)'],
+    [5, 30, 'CT 정격부담 (VA)'],
+    [6, 43.5, '여유율 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('ct-sizing', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 1 단계는 CT 비 문자열이라 숫자 단언 대상이 아니다 — 최종 value 가 잠근다. */
+  it('CT 1차는 200×1.25=250 이상 최소 표준값 250', () => {
+    const { value } = run('ct-sizing', input);
+    expect(value).toBe(250);
+  });
+});
+
+/**
+ * **breaker-sizing — 협조 조건 Ib ≤ In ≤ Iz 를 단계별로 잠근다.**
+ *
+ * 이 계산기의 표시 단계도 오염 변이에 전체 스위트가 초록이었다. 여기서 화면에
+ * 뜨는 값은 **차단기 발주 사양**이다: 정격전류·차단용량 둘 다 그대로 주문서로
+ * 간다. 차단용량이 모자란 차단기는 사고 시 스스로 파괴된다.
+ *
+ * 손계산(부하 100 A · Isc 10 kA · 380 V · 케이블 허용 150 A):
+ *   step1 최소 정격 = Ib = 100 A
+ *   step2 표준 MCCB = [15…800] 중 100 이상 최소 = 100 A
+ *   step3 협조 확인 = 케이블 허용전류 Iz = 150 A (100 ≤ 100 ≤ 150 → 성립)
+ *   step4 필요 차단용량 = 10 kA
+ *   step5 표준 차단용량 = [10,16,25,36,50,65,85,100] 중 10 이상 최소 = 10 kA
+ *
+ * 경계에 정확히 걸리는 입력이다 — `>=` 를 `>` 로 바꾸면 한 단계 큰 규격을
+ * 집어 과설계가 되고, 그 회귀가 여기서 드러난다.
+ */
+describe('breaker-sizing — 풀이 단계의 절대 눈금', () => {
+  const input = { loadCurrent: 100, shortCircuitCurrent: 10, voltage: 380, cableAmpacity: 150 };
+
+  it.each([
+    [1, 100, '최소 정격전류 (A)'],
+    [2, 100, '표준 MCCB 정격 (A)'],
+    [3, 150, '케이블 허용전류 Iz (A)'],
+    [4, 10, '필요 차단용량 (kA)'],
+    [5, 10, '표준 차단용량 (kA)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('breaker-sizing', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** Iz 를 안 주면 협조 단계가 빠지고 번호가 당겨진다 — 그 분기도 고정한다. */
+  it('케이블 허용전류가 없으면 협조 단계 없이 4단계다', () => {
+    const { step } = run('breaker-sizing', { loadCurrent: 100, shortCircuitCurrent: 10, voltage: 380 });
+    expect(step(3)).toBeCloseTo(10, 2);  // 필요 차단용량이 3단계로 당겨진다
+    expect(step(4)).toBeCloseTo(10, 2);  // 표준 차단용량
+  });
+});
