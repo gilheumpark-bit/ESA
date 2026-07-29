@@ -174,7 +174,7 @@ function ProviderKeyCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
             {models.length > 0 ? 'API에서 조회한 모델' : '기본 카탈로그 모델'} · OCR·도면(SLD)·AI 답변에 사용됩니다.
             자동은 각 기능에 맞는 기본 모델을 씁니다.
           </p>
@@ -256,7 +256,7 @@ function ProviderKeyCard({
         <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700" aria-live="polite">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h4>
-            <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs tabular-nums text-zinc-700 dark:text-zinc-200">
               {state.probeResults.length}/{models.length} 완료
             </span>
           </div>
@@ -269,18 +269,18 @@ function ProviderKeyCard({
                   <th scope="col" className="px-3 py-2 font-medium">이미지 입력</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="text-zinc-800 dark:text-zinc-100">
                 {state.probeResults.map((result) => (
                   <tr key={result.model} className="border-t border-zinc-200 dark:border-zinc-700">
-                    <td className="max-w-48 truncate px-3 py-2" title={result.model}>{result.name}</td>
-                    <td className="px-3 py-2" title={result.text.detail}>{probeStatusLabel(result.text.status)}</td>
-                    <td className="px-3 py-2" title={result.vision.detail}>{probeStatusLabel(result.vision.status)}</td>
+                    <td className="max-w-48 truncate px-3 py-2 font-medium" title={result.model}>{result.name}</td>
+                    <td className={`px-3 py-2 ${probeStatusClass(result.text.status)}`} title={result.text.detail}>{probeStatusLabel(result.text.status)}</td>
+                    <td className={`px-3 py-2 ${probeStatusClass(result.vision.status)}`} title={result.vision.detail}>{probeStatusLabel(result.vision.status)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-300">
             성공: 텍스트·이미지 입력 호출 확인 · 실패: 이 호출 형식 미지원 · 보류: 할당량·일시 장애·시간 초과.
             이 검사는 도면 판독 품질을 보증하지 않습니다.
           </p>
@@ -294,6 +294,21 @@ function probeStatusLabel(status: ProbeStatus): string {
   if (status === 'success') return '성공';
   if (status === 'failed') return '실패';
   return '보류';
+}
+
+/**
+ * 판정을 색으로도 읽히게 한다. 앞서 이 표는 본문 글자색이 없어 상속으로
+ * 흐려졌고, 38 행을 눈으로 훑어 성공을 찾기가 어려웠다(실측: 사용자가
+ * 맨 위 실패 8 행만 보고 키가 안 먹는 줄로 읽었다).
+ *
+ * `실패` 를 빨강으로 칠하지 않는다 — 여기서 실패는 오류가 아니라 "이 모델은
+ * 이 호출 형식을 안 쓴다" 는 뜻이다(Deep Research·Robotics 계열). 경고색을
+ * 쓰면 정상 상태를 사고처럼 보이게 만든다.
+ */
+function probeStatusClass(status: ProbeStatus): string {
+  if (status === 'success') return 'font-medium text-emerald-700 dark:text-emerald-400';
+  if (status === 'hold') return 'text-amber-700 dark:text-amber-400';
+  return 'text-zinc-600 dark:text-zinc-300';
 }
 
 // =============================================================================
