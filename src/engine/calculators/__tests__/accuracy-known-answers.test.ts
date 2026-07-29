@@ -819,3 +819,58 @@ describe('earth-fault — 풀이 단계의 절대 눈금', () => {
     expect(solid).toBeLessThan(res);
   });
 });
+
+/**
+ * **lightning-protection — IEC 62305-3 표를 공표값으로 잠근다.**
+ *
+ * 변이 실측: 네 단계를 각각 오염시켜도 전체 3,396 개가 초록이었다.
+ * 회전구체 반경과 메시 간격은 **표에서 그대로 읽는 값**이라 오타 한 글자가
+ * 곧 오답이고, 검사가 없으면 영원히 안 드러난다.
+ *
+ * 기대값은 IEC 62305-3 공표값이다(구현 표를 옮겨 적은 것이 아니다):
+ *   LPL   회전구체 r   메시 간격
+ *    I      20 m        5 m
+ *    II     30 m       10 m
+ *    III    45 m       15 m
+ *    IV     60 m       20 m
+ *
+ * 보호각은 사정이 다르다. IEC Fig 3 은 곡선인데 구현은 직선 근사
+ * `α = α_base × (1 − 0.8·h/h_limit)` 를 쓴다고 주석에 선언한다. 그래서 이
+ * 검사는 **선언된 근사식을 고정할 뿐 표준값을 승인하지 않는다** — 곡선으로
+ * 바꿀지는 개발자 판단이다.
+ *   LPL II · h 15 m: α = 35 × (1 − 0.8×0.5) = 21.0°
+ */
+describe('lightning-protection — IEC 62305-3 표와 근사식', () => {
+  it.each([
+    ['I', 20, 5],
+    ['II', 30, 10],
+    ['III', 45, 15],
+    ['IV', 60, 20],
+  ])('LPL %s — 회전구체 %d m · 메시 %d m (IEC 62305-3)', (lpl, radius, mesh) => {
+    const { step } = run('lightning-protection', {
+      buildingHeight: 15, lplClass: lpl, method: 'sphere',
+    });
+    expect(step(1)).toBeCloseTo(radius as number, 2);
+    expect(step(3)).toBeCloseTo(mesh as number, 2);
+  });
+
+  it('보호각은 선언된 직선 근사를 따른다 — LPL II · h 15 m → 21.0°', () => {
+    const { step } = run('lightning-protection', {
+      buildingHeight: 15, lplClass: 'II', method: 'angle',
+    });
+    expect(step(1)).toBeCloseTo(35, 1);    // 기준 보호각
+    expect(step(2)).toBeCloseTo(21.0, 1);  // 높이 보정 후
+  });
+
+  /**
+   * 높이가 한계에 닿으면 보정이 멈춘다(`min(h/limit, 1)`). 상한을 안 걸면
+   * 보호각이 음수로 내려가 "보호 범위 없음" 이 아니라 헛값이 된다.
+   */
+  it('높이가 한계를 넘어도 보호각이 음수로 가지 않는다', () => {
+    const { step } = run('lightning-protection', {
+      buildingHeight: 200, lplClass: 'II', method: 'angle',
+    });
+    expect(step(2)).toBeCloseTo(7.0, 1);   // 35 × (1 − 0.8×1) = 7
+    expect(step(2)).toBeGreaterThanOrEqual(0);
+  });
+});
