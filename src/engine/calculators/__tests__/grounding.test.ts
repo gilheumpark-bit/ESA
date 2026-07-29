@@ -155,3 +155,56 @@ describe('Ground Resistance Calculator', () => {
     ).toThrow();
   });
 });
+
+/**
+ * **화면에 보이는 중간 단계에도 눈금을 박는다.**
+ *
+ * 이 스위트는 최종 합성저항만 잡고 있었다. 변이 실측(2026-07-29):
+ *
+ *   최종값 ×1.5   → 1 실패  ✓ 잡힘
+ *   단봉 저항 ×1.5 → 7 통과  ✗ 못 잡음
+ *   집합계수 ×1.5  → 7 통과  ✗ 못 잡음
+ *
+ * 두 값은 영수증의 풀이 과정에 그대로 뜬다. 접지 설계에서 실무자가 실제로
+ * 확인하는 것이 **집합계수**인데, 그게 틀려도 총합만 맞으면 통과했다.
+ * arc-flash 가 빠져나간 구멍과 같은 형태다 — 상대 검사만으로는 눈금이 없다.
+ *
+ * 기대값은 손계산이다(구현을 돌려 얻은 값이 아니다):
+ *   R₁ = ρ/(2πL)·ln(4L/d) = 100/(2π·3)·ln(750) = 5.3052 × 6.6201 = 35.12 Ω
+ *   n=4, S/L=1 → η=0.77 (IEEE 142 표)
+ *   R_total = R₁/(n·η) = 35.12/(4×0.77) = 11.40 Ω
+ *
+ * 참고(개발자 판단 대기): 구현은 Dwight 식의 `ln(4L/d)` 변형을 쓴다. 정식
+ * `ln(8L/d) − 1` 로 계산하면 같은 조건에서 33.49 Ω 로 **4.6% 낮다**. 구현
+ * 쪽이 저항을 크게 보므로 봉을 더 박는 방향(보수적)이지만, 어느 판을 쓰는지는
+ * 문서에 적히지 않았다. 이 검사는 현행 식을 고정할 뿐 판을 승인하지 않는다.
+ */
+describe('접지저항 — 풀이 단계의 절대 눈금', () => {
+  const result = calculateGroundResistance({
+    soilResistivity: 100,
+    rodLength: 3,
+    rodDiameter: 16,
+    rodCount: 4,
+    spacing: 3,
+    targetResistance: 10,
+  });
+  const step = (n: number) => result.steps?.find((s) => s.step === n)?.value as number;
+
+  it('단봉 저항 = 35.12 Ω (손계산)', () => {
+    expect(step(1)).toBeCloseTo(35.12, 1);
+  });
+
+  it('집합계수 = 0.77 (n=4 · S/L=1 · IEEE 142)', () => {
+    expect(step(2)).toBeCloseTo(0.77, 2);
+  });
+
+  it('합성저항 = 11.40 Ω (손계산)', () => {
+    expect(step(3)).toBeCloseTo(11.40, 1);
+    expect(result.value as number).toBeCloseTo(11.40, 1);
+  });
+
+  /** 단계가 실제로 존재하는지 — 없으면 위 검사는 undefined 를 재는 공회전이다. */
+  it('풀이 단계가 비어 있지 않다', () => {
+    expect((result.steps ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+});
