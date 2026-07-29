@@ -9,7 +9,7 @@
  * PART 4: Main form component with validation
  */
 
-import { useState, useCallback, useId, type FormEvent } from 'react';
+import { useState, useCallback, useId, useRef, type FormEvent } from 'react';
 import { useSettings } from '@/hooks/useSettings';
 import { getSafetyProfile } from '@engine/constants/safety-factors';
 import { IMPERIAL_LENGTH_KEYS, IMPERIAL_TEMP_KEYS } from '@engine/conversion/imperial-adapter';
@@ -431,6 +431,7 @@ export default function CalculatorForm({
 }: CalculatorFormProps) {
   const extParams = params;
   const formId = useId().replace(/:/g, '');
+  const formRef = useRef<HTMLFormElement>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // compact 모드: defaultValue 있는 필드 = 고급, 없는 필드 = 필수 (array는 항상 필수 표시)
@@ -467,7 +468,7 @@ export default function CalculatorForm({
     setFieldErrors((prev) => prev.filter((e) => e.field !== name));
   }, []);
 
-  const validate = useCallback((): boolean => {
+  const validate = useCallback((): FieldError[] => {
     const errors: FieldError[] = [];
 
     for (const param of extParams) {
@@ -515,16 +516,33 @@ export default function CalculatorForm({
     }
 
     setFieldErrors(errors);
-    return errors.length === 0;
+    // 불리언이 아니라 오류 목록을 돌려준다 — 호출부가 '어느 칸' 인지 알아야
+    // 포커스를 옮길 수 있다.
+    return errors;
   }, [extParams, values]);
 
   const handleSubmit = useCallback(
     (e: FormEvent) => {
       e.preventDefault();
-      if (!validate()) return;
+      const errors = validate();
+      if (errors.length > 0) {
+        /**
+         * **조용히 거절하지 않는다.** 앞서는 제출이 막혀도 포커스가 버튼에
+         * 그대로 남아, 스크린리더 사용자는 '계산하기' 를 눌러도 아무 소리도
+         * 못 들었다(실측 2026-07-29: aria-invalid 3 개가 붙는데 포커스는
+         * BUTTON 에 정지). 오류 칸으로 포커스를 옮기면 그 칸의 라벨과
+         * aria-describedby 오류 문구가 그 자리에서 읽힌다.
+         */
+        const first = errors[0];
+        const target = formRef.current?.querySelector<HTMLElement>(
+          `#${CSS.escape(`${formId}-${first.field.replace(/[^a-zA-Z0-9_-]/g, '-')}`)}`,
+        );
+        target?.focus();
+        return;
+      }
       onSubmit(assembleSubmitValues(extParams, values));
     },
-    [validate, extParams, values, onSubmit],
+    [validate, extParams, values, onSubmit, formId],
   );
 
   const renderField = (param: ExtendedParamDef) => {
@@ -595,7 +613,7 @@ export default function CalculatorForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
+    <form ref={formRef} onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
       {/* 필수 필드 */}
       {requiredParams.map(renderField)}
 
