@@ -211,6 +211,54 @@ export const DRAWING_SPECS = [
     noiseLines: 24,
   },
 
+  {
+    id: 'L2-06-rated-feeder',
+    tier: '중',
+    difficulty: ['clean-dxf', 'text-spec'],
+    description:
+      '차단기 정격(AF/AT)과 선로 케이블 스펙이 함께 적힌 급전 계통. '
+      + '앞선 15장은 차단기 정격이 L1-02 한 장뿐이고 케이블 스펙은 0장이라, '
+      + '회로 검토의 판정 분기(AT≤AF·허용전류)가 DXF 경로에서 한 번도 돌지 '
+      + '않았다 — 전 장이 판정 보류로만 초록이었다.',
+    nodes: [
+      { name: 'TR-1', type: 'transformer', x: 100, y: 800, expectRating: '1000kVA' },
+      { name: 'MCCB-1', type: 'breaker', x: 100, y: 600, expectRating: '225AF/200AT' },
+      { name: 'MCCB-2', type: 'breaker', x: 100, y: 400, expectRating: '100AF/150AT' },
+      { name: 'DB-1', type: 'panel', x: 100, y: 200, expectVoltage: '380V' },
+    ],
+    edges: [['TR-1', 'MCCB-1'], ['MCCB-1', 'MCCB-2'], ['MCCB-2', 'DB-1']],
+    // 심볼 간격을 200 으로 고르게 둔다 — 텍스트 근접 임계가 `중앙 심볼간격 ×
+    // 0.6` 이라 간격이 들쭉날쭉하면 임계가 흔들려 픽스처가 불안정해진다.
+    // 케이블 표기는 심볼이 아니라 **선로 중점 옆**(x+90)에 놓는다 — 도면
+    // 관례이자, 심볼에 먹히지 않고 연결에 결속되는 조건이다(임계 120 밖·중점 90).
+    texts: [
+      { content: '1000kVA', x: 118, y: 800 },
+      { content: '225AF/200AT', x: 118, y: 600 },
+      { content: '100AF/150AT', x: 118, y: 400 },
+      { content: '380V', x: 118, y: 200 },
+      { content: 'F-CV 4C 95sq', x: 190, y: 500 },
+      { content: 'F-CV 4C 16sq', x: 190, y: 300 },
+    ],
+    /**
+     * 검토층 정답 — **손으로 쓴다. 파서/판정 출력에서 파생하지 않는다.**
+     * 두 판정 모두 표 판(edition)이나 공사방법과 무관하게 참이다:
+     *   · 150AT > 100AF 는 산술이다(트립이 프레임을 넘을 수 없다).
+     *   · 16sq Cu XLPE 는 어떤 공사방법·어떤 판에서도 150A 를 못 흘린다
+     *     (통상 76~89A 대). 표를 안 봐도 방향이 갈리지 않는다.
+     */
+    expectedReview: {
+      breakersTotal: 2,
+      breakersRatedParsed: 2,
+      breakersWithCable: 2,
+      mustFail: [
+        { rule: 'AT-LE-AF', subject: 'MCCB-2' },
+        { rule: 'CABLE-AMPACITY', subject: 'MCCB-2' },
+      ],
+      mustNotFail: [
+        { rule: 'AT-LE-AF', subject: 'MCCB-1' },
+      ],
+    },
+  },
   // ═══════════════════════════════════════════════════════════
   // 고급 — 수전설비·다중 뱅크, 노드 50+
   // ═══════════════════════════════════════════════════════════

@@ -1,5 +1,5 @@
 /**
- * 기준선 리포트 — 15장 전수 측정표를 콘솔에 출력한다.
+ * 기준선 리포트 — 16장 전수 측정표를 콘솔에 출력한다.
  * 실행: npx jest drawing-baseline --silent=false
  *
  * 이건 게이트가 아니라 계측기다. 통과/실패를 내지 않고 숫자만 낸다 —
@@ -76,6 +76,6 @@ describe('도면 기준선 측정', () => {
       console.log('');
     }
 
-    expect(rows).toHaveLength(15);
+    expect(rows).toHaveLength(16);
   });
 });

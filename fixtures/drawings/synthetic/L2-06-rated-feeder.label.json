@@ -1,0 +1,87 @@
+{
+  "id": "L2-06-rated-feeder",
+  "source": "synthetic — ESVA 자체 작도",
+  "license": "own-work",
+  "tier": "중",
+  "fileDifficulty": [
+    "clean-dxf",
+    "text-spec"
+  ],
+  "description": "차단기 정격(AF/AT)과 선로 케이블 스펙이 함께 적힌 급전 계통. 앞선 15장은 차단기 정격이 L1-02 한 장뿐이고 케이블 스펙은 0장이라, 회로 검토의 판정 분기(AT≤AF·허용전류)가 DXF 경로에서 한 번도 돌지 않았다 — 전 장이 판정 보류로만 초록이었다.",
+  "labelMode": "full",
+  "coordScale": 1,
+  "expected": {
+    "nodeCount": 4,
+    "edgeCount": 3,
+    "nodes": [
+      {
+        "name": "TR-1",
+        "type": "transformer",
+        "x": 100,
+        "y": 800,
+        "rating": "1000kVA"
+      },
+      {
+        "name": "MCCB-1",
+        "type": "breaker",
+        "x": 100,
+        "y": 600,
+        "rating": "225AF/200AT"
+      },
+      {
+        "name": "MCCB-2",
+        "type": "breaker",
+        "x": 100,
+        "y": 400,
+        "rating": "100AF/150AT"
+      },
+      {
+        "name": "DB-1",
+        "type": "panel",
+        "x": 100,
+        "y": 200,
+        "voltage": "380V"
+      }
+    ],
+    "edges": [
+      {
+        "from": "TR-1",
+        "to": "MCCB-1"
+      },
+      {
+        "from": "MCCB-1",
+        "to": "MCCB-2"
+      },
+      {
+        "from": "MCCB-2",
+        "to": "DB-1"
+      }
+    ]
+  },
+  "invariants": {
+    "orphanNodes": 0,
+    "danglingEdges": 0,
+    "selfLoops": 0
+  },
+  "expectedReview": {
+    "breakersTotal": 2,
+    "breakersRatedParsed": 2,
+    "breakersWithCable": 2,
+    "mustFail": [
+      {
+        "rule": "AT-LE-AF",
+        "subject": "MCCB-2"
+      },
+      {
+        "rule": "CABLE-AMPACITY",
+        "subject": "MCCB-2"
+      }
+    ],
+    "mustNotFail": [
+      {
+        "rule": "AT-LE-AF",
+        "subject": "MCCB-1"
+      }
+    ]
+  }
+}

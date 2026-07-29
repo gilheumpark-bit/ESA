@@ -1,7 +1,7 @@
 /**
  * 도면 픽스처 회귀 테스트
  * ───────────────────────
- * 15장(초5·중5·고5)을 파서에 통과시키고 정답 라벨과 대조한다.
+ * 16장(초5·중6·고5)을 파서에 통과시키고 정답 라벨과 대조한다.
  *
  * 임계값은 발명하지 않았다 — 1차 전수 측정(docs/DRAWING_VALIDATION_RESULT.md)에서
  * 나온 실측값을 바닥으로 삼아 잠근다. 즉 여기의 숫자는 "이 정도면 좋다"가 아니라
@@ -32,10 +32,13 @@ function parse(dxf: string) {
 }
 
 describe('도면 픽스처 — 수확', () => {
-  it('15장이 모두 존재한다', () => {
-    expect(fixtures).toHaveLength(15);
+  // 수를 박아 두는 이유는 "많으면 좋다" 가 아니라 **없어지면 잡으려고** 다.
+  // 중급이 하나 많은 것은 의도다 — L2-06 은 차단기 정격과 케이블 스펙을 함께
+  // 담은 유일한 장이고, 그 전까지 검토 판정이 전 장에서 한 번도 안 났다.
+  it('16장이 모두 존재한다', () => {
+    expect(fixtures).toHaveLength(16);
     expect(fixtures.filter((f) => f.label.tier === '초')).toHaveLength(5);
-    expect(fixtures.filter((f) => f.label.tier === '중')).toHaveLength(5);
+    expect(fixtures.filter((f) => f.label.tier === '중')).toHaveLength(6);
     expect(fixtures.filter((f) => f.label.tier === '고')).toHaveLength(5);
   });
 
@@ -52,7 +55,7 @@ describe('도면 픽스처 — 수확', () => {
 });
 
 describe('도면 픽스처 — 정확도 바닥선', () => {
-  // 바닥선은 발명하지 않았다. 수리 후 15장 전수 실측이 모든 지표 100%였고
+  // 바닥선은 발명하지 않았다. 수리 후 전수 실측이 모든 지표 100%였고
   // (docs/DRAWING_VALIDATION_RESULT.md), 합성 도면은 정답이 확정적이므로
   // 100% 미만은 곧 회귀다. 실제 현장 도면이 들어오면 그쪽은 별도 바닥선을 갖는다
   // — 이 숫자를 그리로 옮기면 안 된다.

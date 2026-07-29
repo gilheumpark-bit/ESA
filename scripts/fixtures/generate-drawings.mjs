@@ -276,6 +276,9 @@ function buildDrawing(spec) {
       edges: normEdges.map((e) => ({ from: e.from, to: e.to })),
     },
     invariants: { orphanNodes: 0, danglingEdges: 0, selfLoops: 0 },
+    // 검토층 정답이 선언돼 있으면 라벨에 그대로 싣는다 — 이 값도 선언에서
+    // 오지 파서 출력에서 오지 않는다(위 머리말의 닫힌 순환 금지).
+    ...(spec.expectedReview ? { expectedReview: spec.expectedReview } : {}),
   };
 
   return { dxf, label };

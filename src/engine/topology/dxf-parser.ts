@@ -488,6 +488,14 @@ export function parseDxfToSLD(
       if (t.spec.voltage) closestComp.voltage = `${t.spec.voltage}V`;
       if (t.spec.current) closestComp.current = `${t.spec.current}A`;
       if (t.spec.power) closestComp.rating = `${t.spec.power}${t.spec.powerUnit}`;
+      // AF/AT 를 current 하나로 납작하게 누르면 **프레임이 사라진다**. 그러면
+      // 검토층의 1번 규칙(AT ≤ AF)이 입력을 못 받아 DXF 경로에서 아예 돌지
+      // 못한다 — 규칙도 있고 단위 검사도 있는데 발화만 0 이었다(실측
+      // 2026-07-29: `100AF/150AT` 가 `current: '150A'` 로만 남아 트립이
+      // 프레임을 넘은 차단기가 그냥 통과했다). 원문 표기를 rating 에 남긴다.
+      else if (t.spec.frameA != null && t.spec.tripA != null) {
+        closestComp.rating = `${t.spec.frameA}AF/${t.spec.tripA}AT`;
+      }
       const isCircle = closestComp.properties?.shape === 'circle';
       if (!closestComp.label || closestComp.label === closestComp.type || isCircle) {
         closestComp.label = t.text.slice(0, 50);
@@ -502,17 +510,25 @@ export function parseDxfToSLD(
 
     // 연결 매핑 (케이블 스펙)
     if (t.spec.conductorSize || t.spec.cableType) {
+      // **가장 가까운 선로**에 붙인다. 앞서는 반경 안에서 처음 만난 연결을
+      // 잡고 끊었는데(`break`), 반경이 임계의 2 배라 옆 구간이 먼저 걸리기
+      // 쉬웠다 — 실측 2026-07-29: 급전 계통에서 95sq 표기가 한 칸 위
+      // 구간에 붙어 차단기가 **제 것이 아닌 케이블**로 판정됐다. 케이블
+      // 판정은 그 회로의 케이블로 해야 의미가 있다.
+      let best: { conn: (typeof connections)[number]; dist: number } | null = null;
       for (const conn of connections) {
-        // 연결의 중점과 텍스트 거리
         const fromCoords = parseNodeCoords(conn.from);
         const toCoords = parseNodeCoords(conn.to);
         if (!fromCoords || !toCoords) continue;
         const mid = { x: (fromCoords.x + toCoords.x) / 2, y: (fromCoords.y + toCoords.y) / 2 };
-        if (euclideanDist({ x: t.x, y: t.y }, mid) < textProximityThreshold * 2) {
-          if (t.spec.conductorSize) conn.conductorSize = `${t.spec.conductorSize}sq`;
-          if (t.spec.cableType) conn.cableType = t.spec.cableType;
-          break;
+        const dist = euclideanDist({ x: t.x, y: t.y }, mid);
+        if (dist < textProximityThreshold * 2 && (!best || dist < best.dist)) {
+          best = { conn, dist };
         }
+      }
+      if (best) {
+        if (t.spec.conductorSize) best.conn.conductorSize = `${t.spec.conductorSize}sq`;
+        if (t.spec.cableType) best.conn.cableType = t.spec.cableType;
       }
     }
   }
