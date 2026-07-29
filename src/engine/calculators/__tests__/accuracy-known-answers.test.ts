@@ -1206,3 +1206,128 @@ describe('motor-pf-correction — 콘덴서 용량과 과보상 한계', () => {
     }
   });
 });
+
+/**
+ * transformer-capacity — 400 kW · cos φ 0.9 · η 0.98 · 수용률 0.8 · 여유 20 %
+ *   P_demand = 400 × 0.8            = 320.00 kW
+ *   S        = 320 / (0.9 × 0.98)   = 362.81 kVA
+ *   S_design = 362.81 × 1.2         = 435.37 kVA
+ *   표준 용량 = 435.37 이상 최초     = 500 kVA   (…300, 500, 750…)
+ * step 1·3 은 화면에만 나오고 반환값에는 없어, 1.5 배로 오염시켜도 3,447 개가
+ * 전부 초록이었다(변이 실측 2026-07-29). 설계자가 읽는 숫자다.
+ */
+describe('transformer-capacity — 수용률·여유·표준 용량 선정', () => {
+  const input = { totalLoad: 400, powerFactor: 0.9, efficiency: 0.98, demandFactor: 0.8, growthMargin: 0.2 };
+
+  it.each([
+    [1, 320.0, '수용 부하 (kW)'],
+    [2, 362.81, '소요 용량 (kVA)'],
+    [3, 435.37, '여유 반영 (kVA)'],
+    [4, 500, '선정 표준 용량 (kVA)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('transformer-capacity', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** 여유를 빼면 362.81 kVA — 300 으로 내려가지 않고 그 위 표준인 500 을 고른다. */
+  it('여유 0 이어도 경계 아래(300)로 내려가지 않는다', () => {
+    const { step } = run('transformer-capacity', { ...input, growthMargin: 0 });
+    expect(step(3)).toBeCloseTo(362.81, 1);
+    expect(step(4)).toBe(500);
+  });
+
+  /** 최대 표준(3000)을 넘는 요구는 합격시키면 안 된다 — 못 대는 변압기다. */
+  it('3000 kVA 를 넘는 요구는 FAIL', () => {
+    const { verdict } = run('transformer-capacity', { ...input, totalLoad: 5000 });
+    expect(verdict()).toBe(false);
+  });
+});
+
+/**
+ * single-phase-power — 220 V · 30 A · cos φ 0.85
+ *   S = 220 × 30                      = 6,600 VA
+ *   P = 6,600 × 0.85                  = 5,610 W
+ *   sin φ = √(1 − 0.85²) = √0.2775    = 0.526783
+ *   Q = 6,600 × 0.526783              = 3,476.77 var
+ * Q 는 역률 개선 콘덴서를 고르는 근거인데, 1.5 배로 부풀려도 스위트가 초록이었다.
+ */
+describe('single-phase-power — 피상·유효·무효', () => {
+  const input = { voltage: 220, current: 30, powerFactor: 0.85 };
+
+  it.each([
+    [1, 6600, '피상전력 (VA)'],
+    [2, 5610, '유효전력 (W)'],
+    [3, 3476.77, '무효전력 (var)'],
+  ])('step %d = %s', (n, expected) => {
+    const { step } = run('single-phase-power', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** P² + Q² = S² — 삼각형이 닫히지 않으면 sin φ 를 잘못 쓴 것이다. */
+  it('전력 삼각형이 닫힌다', () => {
+    const { step } = run('single-phase-power', input);
+    expect(Math.hypot(step(2), step(3))).toBeCloseTo(step(1), 1);
+  });
+});
+
+/**
+ * battery-capacity — 부하 10 kW · 4 시간 · 48 V · DoD 0.8 · 인버터 η 0.9 · 여유 20 %(기본)
+ *   E        = 10 × 4                    = 40.00 kWh
+ *   E_bat    = 40 / (0.8 × 0.9)          = 55.56 kWh
+ *   C        = 55,555.6 Wh / 48 V        = 1,157.4 Ah
+ *   C_권장   = 1,157.4 × 1.2             = 1,388.9 Ah
+ *   E_권장   = 1,388.9 × 48 / 1,000      = 66.67 kWh
+ * step 1·5 는 발주 수량과 직결되는데 오염돼도 안 잡혔다(변이 실측 2026-07-29).
+ */
+describe('battery-capacity — 방전심도·효율·여유', () => {
+  const input = { loadPower: 10, backupTime: 4, batteryVoltage: 48, depthOfDischarge: 0.8, inverterEfficiency: 0.9 };
+
+  it.each([
+    [1, 40.0, '소요 에너지 (kWh)'],
+    [2, 55.56, '배터리 에너지 (kWh)'],
+    [3, 1157.4, '소요 용량 (Ah)'],
+    [4, 1388.9, '권장 용량 (Ah)'],
+    [5, 66.67, '권장 에너지 (kWh)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('battery-capacity', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** DoD 를 절반으로 낮추면 필요한 용량은 정확히 두 배다 — 나눗셈 방향 확인. */
+  it('DoD 를 절반으로 낮추면 용량이 두 배', () => {
+    const a = run('battery-capacity', input).step(3);
+    const b = run('battery-capacity', { ...input, depthOfDischarge: 0.4 }).step(3);
+    expect(b).toBeCloseTo(a * 2, 0);
+  });
+});
+
+/**
+ * solar-generation — 100 kWp · 일조 3.5 h · PR 0.8 · 손실 10 % · 30 일/월(기본)
+ *   K        = 1 − 10/100                 = 0.9
+ *   E_daily  = 100 × 3.5 × 0.9 × 0.8      = 252.00 kWh/day
+ *   E_month  = 252 × 30                   = 7,560.0 kWh/month
+ *   E_year   = 252 × 365                  = 91,980 kWh/year
+ *   이용률   = 91,980 / 100               = 920 kWh/kWp/year
+ * 월 발전량과 이용률은 사업성 판단에 직접 쓰이는데 둘 다 무방비였다.
+ */
+describe('solar-generation — 손실·PR·이용률', () => {
+  const input = { installedCapacity: 100, peakSunHours: 3.5, performanceRatio: 0.8, systemLoss: 10 };
+
+  it.each([
+    [1, 0.9, '손실 계수 (−)'],
+    [2, 252.0, '일 발전량 (kWh/day)'],
+    [3, 7560.0, '월 발전량 (kWh/month)'],
+    [4, 91980, '연 발전량 (kWh/year)'],
+    [5, 920, '이용률 (kWh/kWp/year)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('solar-generation', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** 연 발전량은 일 발전량 × 365 여야 한다 — 월값 × 12 로 쓰면 4.2 % 모자란다. */
+  it('연 발전량은 월값 × 12 가 아니라 일값 × 365 다', () => {
+    const { step } = run('solar-generation', input);
+    expect(step(4)).toBeCloseTo(step(2) * 365, 0);
+    expect(step(4)).not.toBeCloseTo(step(3) * 12, 0);
+  });
+});
