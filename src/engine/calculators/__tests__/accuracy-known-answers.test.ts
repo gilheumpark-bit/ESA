@@ -1119,3 +1119,90 @@ describe('starting-current — 기동 방식별 절대 눈금', () => {
     }
   });
 });
+
+/**
+ * **equipotential-bonding — 주 등전위 본딩 도체(IEC 60364-5-54 §544.1.1).**
+ *
+ * 변이 실측: 네 단계를 오염시켜도 전체 3,431 개가 초록이었다.
+ * 등전위 본딩은 서로 다른 계통 사이의 전위차를 없애 **사람이 두 금속을 동시에
+ * 만졌을 때 감전되지 않게** 하는 도체다. 규칙은 세 조각이고 각각 다른 구간에서
+ * 지배한다 — PE 의 50 % · 하한 6 mm² · 상한 25 mm²(Cu 기준).
+ *
+ * 세 조각이 **실제로 각각 지배하는** 입력으로 잡는다. 하나만 재면 나머지 둘이
+ * 죽어도 안 드러난다:
+ *   PE  10 mm² → 50 % = 5.00  → 하한 6 이 지배   → 6 mm²
+ *   PE  50 mm² → 50 % = 25.00 → 어느 것도 안 걸림 → 25 mm²
+ *   PE 120 mm² → 50 % = 60.00 → 상한 25 가 지배  → 25 mm²
+ */
+describe('equipotential-bonding — 하한·상한이 각각 지배하는 구간', () => {
+  it.each([
+    [10, 5, 6, 6],
+    [50, 25, 25, 25],
+    [120, 60, 60, 25],
+  ])('PE %d mm²: 50%% %s → 하한후 %s → 상한후 %s', (pe, half, floor, capped) => {
+    const { step } = run('equipotential-bonding', { largestPE: pe });
+    expect(step(1)).toBeCloseTo(half as number, 2);
+    expect(step(2)).toBeCloseTo(floor as number, 2);
+    expect(step(3)).toBeCloseTo(capped as number, 2);
+    // 표준 굵기 선정까지 잰다 — 이 단계를 빼놨더니 값을 2 배로 오염시켜도
+    // 통과했다(변이 실측 2026-07-29).
+    expect(step(4)).toBeGreaterThanOrEqual(capped as number);
+    expect(step(4)).toBeLessThanOrEqual(25);
+  });
+
+  /** 상한을 없애면 PE 가 커질수록 본딩 도체가 무한정 굵어진다. */
+  it('PE 가 아무리 굵어도 25 mm² 를 넘지 않는다', () => {
+    for (const pe of [120, 240, 500]) {
+      expect(run('equipotential-bonding', { largestPE: pe }).step(3)).toBeCloseTo(25, 2);
+    }
+  });
+
+  /** 하한이 내려가면 PE 10 mm² 구간이 6 아래로 떨어진다. */
+  it('가는 PE 에서도 6 mm² 아래로 내려가지 않는다', () => {
+    for (const pe of [2.5, 4, 10]) {
+      expect(run('equipotential-bonding', { largestPE: pe }).step(2)).toBeGreaterThanOrEqual(6);
+    }
+  });
+});
+
+/**
+ * **motor-pf-correction — 콘덴서 용량. 과보상은 위험하다.**
+ *
+ * 변이 실측: 다섯 단계를 오염시켜도 전체 3,431 개가 초록이었다.
+ * 콘덴서가 무부하 여자 kvar 를 넘으면 전원 차단 후에도 전동기가 **자기여자로
+ * 발전**해 잔류 전압이 남고, 재투입 시 위상이 안 맞아 축이 상한다. 그래서
+ * 이 계산기는 용량만 내는 게 아니라 그 한계를 함께 낸다.
+ *
+ * 손계산(22 kW · 현재 pf 0.80 → 목표 0.95 · 380 V):
+ *   tanφ₁ = tan(acos 0.80) = 0.75000 · tanφ₂ = tan(acos 0.95) = 0.32868
+ *   Q_c = 22 × (0.75000 − 0.32868) = 9.27 kvar
+ *   I₁ = 22,000/(√3×380×0.80) = 41.78 A
+ *   I₂ = 22,000/(√3×380×0.95) = 35.18 A
+ *   감소율 = (I₁−I₂)/I₁ = 15.8 %  ( = 1 − 0.80/0.95 · 전압·출력과 무관 )
+ *   무부하 여자 kvar ≈ 22 × 0.35 = 7.70 kvar  ← Q_c 9.27 이 이를 넘는다
+ */
+describe('motor-pf-correction — 콘덴서 용량과 과보상 한계', () => {
+  const input = { motorPower: 22, motorPF: 0.8, targetPF: 0.95, motorVoltage: 380 };
+
+  it.each([
+    [1, 9.27, '필요 콘덴서 용량 (kvar)'],
+    [2, 41.78, '보정 전 전류 (A)'],
+    [3, 35.18, '보정 후 전류 (A)'],
+    [4, 15.8, '전류 감소율 (%)'],
+    [5, 7.70, '무부하 여자 kvar'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('motor-pf-correction', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /**
+   * 감소율은 역률비로만 정해진다 — 전압이나 출력을 바꿔도 같아야 한다.
+   * 전류식에 √3 이나 전압을 잘못 넣으면 이 항등식이 깨진다.
+   */
+  it('전류 감소율은 역률비로만 정해진다 (1 − pf₁/pf₂)', () => {
+    for (const [P, V] of [[7.5, 220], [75, 3300]]) {
+      const { step } = run('motor-pf-correction', { ...input, motorPower: P, motorVoltage: V });
+      expect(step(4)).toBeCloseTo((1 - 0.8 / 0.95) * 100, 1);
+    }
+  });
+});
