@@ -1736,3 +1736,136 @@ describe('pcs-capacity — 충방전 전력과 계통측 전류', () => {
     expect(b).toBeCloseTo(a / 2, 2);
   });
 });
+
+/**
+ * transformer-efficiency — 1,000 kVA · 무부하손 1,200 W · 부하손 10,000 W ·
+ *                          cos φ 0.9 · 부하율 0.75
+ *
+ *   출력    1,000 × 0.9 × 0.75 × 1000        = 675,000 W
+ *   총손실  1,200 + 10,000 × 0.75²            =   6,825 W
+ *   효율    675,000 / 681,825 × 100           = 98.9990 %
+ *   최적부하율 √(1,200 / 10,000)              =  0.3464
+ *   최적 대비 연간차 (6,825 − 2,400) × 8.76   = 38,763.00 kWh
+ *
+ * 최적 부하율은 **동손 = 철손**이 되는 점이다. 그 항등식을 함께 잠근다 —
+ * 값만 맞춰 두면 √ 안이 뒤집혀도(Pcu/Pfe) 한 케이스에서는 안 걸린다.
+ */
+describe('transformer-efficiency — 효율과 최적 부하율', () => {
+  const input = { capacity: 1000, noLoadLoss: 1200, loadLoss: 10000, powerFactor: 0.9, loadRatio: 0.75 };
+
+  it.each([
+    [1, 675000, '출력 (W)'],
+    [2, 6825, '총손실 (W)'],
+    [3, 98.9990, '효율 (%)'],
+    [4, 0.3464, '최적 부하율'],
+    [5, 38763.0, '최적 대비 연간차 (kWh)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('transformer-efficiency', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 4 ? 4 : 2);
+  });
+
+  /**
+   * 최적 부하율에서 동손과 철손이 같다 — √ 안이 뒤집히면(Pcu/Pfe) 깨진다.
+   * 화면 값은 소수 넷째 자리로 반올림돼 있어(0.34641016 → 0.3464) 되먹이면
+   * 0.07 W 쯤 잔차가 남는다. 항등식을 보는 것이지 정밀도를 보는 게 아니다.
+   */
+  it('최적 부하율에서 동손 = 철손', () => {
+    const { step } = run('transformer-efficiency', input);
+    const kOpt = step(4);
+    expect(input.loadLoss * kOpt * kOpt).toBeCloseTo(input.noLoadLoss, 0);
+  });
+
+  /**
+   * 최적 부하율로 돌리면 최적 대비 차이가 0 에 붙는다. 정확히 0 은 아니다 —
+   * 화면에 보이는 반올림 값(0.3464)을 되먹이기 때문이고, 잔차는 연간 0.62 kWh
+   * 다(이 변압기의 연간 총손실 약 5 만 kWh 대비 0.001 %).
+   * 부호가 뒤집히거나 자릿수가 달라지면 이 검사가 깨진다.
+   */
+  it('최적 부하율에서 연간 손실 차이가 0 에 붙는다', () => {
+    const kOpt = run('transformer-efficiency', input).step(4);
+    const { step } = run('transformer-efficiency', { ...input, loadRatio: kOpt });
+    expect(Math.abs(step(5))).toBeLessThan(1);
+  });
+
+  /** 무부하손은 부하율과 무관하다 — 부하율을 0 에 가깝게 해도 철손은 남는다. */
+  it('부하율이 낮아도 무부하손은 남는다', () => {
+    const { step } = run('transformer-efficiency', { ...input, loadRatio: 0.01 });
+    expect(step(2)).toBeCloseTo(1200 + 10000 * 0.0001, 2);
+  });
+});
+
+/**
+ * impedance-voltage — 2,000 kVA · 22.9 kV · 단락전류 1,200 A
+ *
+ *   정격전류  2,000,000 / (√3 × 22,900)  =  50.42 A
+ *   임피던스  22,900 / (√3 × 1,200)      = 11.0178 Ω
+ *   %임피던스 50.42 / 1,200 × 100        =   4.20 %
+ *
+ * %임피던스는 단락전류·병렬운전·전압변동의 공통 입력이다. 3/3 무방비였다.
+ */
+describe('impedance-voltage — %임피던스', () => {
+  const input = { ratedCapacity: 2000, ratedVoltage: 22900, shortCircuitCurrent: 1200 };
+
+  it.each([
+    [1, 50.42, '정격전류 (A)'],
+    [2, 11.0178, '임피던스 (Ω)'],
+    [3, 4.20, '%임피던스 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('impedance-voltage', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 2 ? 4 : 2);
+  });
+
+  /** %Z = I_n / I_sc × 100 — 단락전류를 두 배로 하면 %Z 는 절반이다. */
+  it('단락전류를 두 배로 하면 %임피던스는 절반', () => {
+    const a = run('impedance-voltage', input).step(3);
+    const b = run('impedance-voltage', { ...input, shortCircuitCurrent: 2400 }).step(3);
+    expect(b).toBeCloseTo(a / 2, 3);
+  });
+
+  /** 정상 범위(3~15 %)를 벗어나면 FAIL — 숫자가 맞아도 판정이 뒤집히면 안 된다. */
+  it('범위를 벗어난 %임피던스는 FAIL', () => {
+    expect(run('impedance-voltage', input).verdict()).toBe(true);
+    expect(run('impedance-voltage', { ...input, shortCircuitCurrent: 60000 }).verdict()).toBe(false);
+  });
+});
+
+/**
+ * transformer-loss — 무부하손 1,500 W · 정격부하손 12,000 W · 부하율 0.6 ·
+ *                    1,500 kVA · cos φ 0.95
+ *
+ *   동손      12,000 × 0.6²         =  4,320.00 W
+ *   총손실    1,500 + 4,320         =  5,820.00 W
+ *   효율      855,000 / 860,820     =     99.32 %
+ *   연간손실  5,820 × 8.76          = 50,983.20 kWh
+ *
+ * 이 계산기는 단계 번호가 `steps.length + 1` 이라 **정격용량을 안 주면 효율
+ * 단계가 빠지고 뒤 단계가 당겨진다**. 그 자리 이동 자체도 잠근다 — 소비처가
+ * 번호로 집으면 조용히 다른 값을 읽게 된다.
+ */
+describe('transformer-loss — 손실과 유동 단계번호', () => {
+  const input = { noLoadLoss: 1500, ratedLoadLoss: 12000, loadRatio: 0.6, ratedCapacity: 1500, powerFactor: 0.95 };
+
+  it.each([
+    [1, 4320.0, '동손 (W)'],
+    [2, 5820.0, '총손실 (W)'],
+    [3, 99.32, '효율 (%)'],
+    [4, 50983.2, '연간 손실 (kWh)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('transformer-loss', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  it('정격용량이 없으면 효율 단계가 빠지고 연간손실이 3 번이 된다', () => {
+    const { ratedCapacity, powerFactor, ...rest } = input;
+    const { step } = run('transformer-loss', rest);
+    expect(step(3)).toBeCloseTo(50983.2, 2);
+    expect(() => step(4)).toThrow('step 4 없음');
+  });
+
+  /** 동손은 부하율의 제곱이다 — 선형으로 새면 절반 부하에서 두 배 어긋난다. */
+  it('부하율 절반이면 동손은 1/4', () => {
+    const a = run('transformer-loss', input).step(1);
+    const b = run('transformer-loss', { ...input, loadRatio: 0.3 }).step(1);
+    expect(b).toBeCloseTo(a / 4, 2);
+  });
+});
