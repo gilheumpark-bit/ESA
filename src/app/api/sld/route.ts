@@ -20,6 +20,7 @@ import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { withRequestLog } from '@/lib/api/with-request-log';
 import { checkRasterImage } from '@/lib/image-signature';
 import { measureTextQuality } from '@/lib/drawing-text-quality';
+import { deriveConstraints } from '@/engine/review/cross-constraint';
 
 /**
  * 공급자 실패를 사용자가 무엇을 해야 하는지로 번역한다.
@@ -243,6 +244,11 @@ async function POST__impl(req: NextRequest) {
       data: analysis,
       // 스펙 수치를 믿어도 되는지 — 화면이 이걸 보고 경고를 붙인다.
       textQuality,
+      /**
+       * 읽은 값들끼리 맞는지. **품질이 나빠도 여기서 멈추지 않는다** —
+       * 못 읽은 용량을 옆 차단기가 구속하므로, 거절 대신 범위를 낸다.
+       */
+      constraints: deriveConstraints(analyzed.components ?? []),
       calcChain,
       review,
       topology: {
