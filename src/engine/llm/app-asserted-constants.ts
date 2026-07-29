@@ -50,8 +50,10 @@ export const APP_ASSERTED_CONSTANTS: readonly AppAssertedConstant[] = [
   { value: '31', unit: '', terms: ['체감온도'], source: '안전보건규칙 온열질환 예방 조항(2025-06-01 시행)' },
 
   // ── 충전전로 접근 한계거리 (제321조 제1항 표) ──
-  { value: '0.9', unit: 'm', terms: ['22.9kV', '접근 한계거리'], source: '안전보건규칙 제321조 제1항' },
-  { value: '1.7', unit: 'm', terms: ['154kV', '접근 한계거리'], source: '안전보건규칙 제321조 제1항' },
+  // 두 행이 `접근 한계거리` 를 공유하므로 **전압을 식별자로 못 박는다**.
+  // 안 그러면 154kV 문장에 22.9kV 행이 걸려 정답까지 모순으로 잡힌다.
+  { value: '0.9', unit: 'm', discriminator: '22.9kV', terms: ['접근 한계거리'], source: '안전보건규칙 제321조 제1항' },
+  { value: '1.7', unit: 'm', discriminator: '154kV', terms: ['접근 한계거리'], source: '안전보건규칙 제321조 제1항' },
 
   // ── 절연장갑 등급 (IEC 60903) ──
   // 등급 없이 "절연장갑 500V" 라고만 쓰면 통과하지 않는다 — 어느 등급인지
@@ -75,6 +77,47 @@ export const APP_ASSERTED_CONSTANTS: readonly AppAssertedConstant[] = [
 /** 표기 흔들림 흡수 — 쉼표·공백 제거, 전각 기호 통일. */
 function normalize(token: string): string {
   return token.replace(/,/g, '').replace(/\s+/g, '').trim();
+}
+
+/**
+ * 앱이 아는 값과 **다른 값**을 말하고 있는가.
+ *
+ * 출처 태그를 조이는 것만으로는 못 막는 경로가 있다: 사용자가 질문에 숫자를
+ * 적으면 그 숫자는 신뢰 입력이 되어 무검사로 통과한다. `"154kV 접근 한계거리
+ * 1.6m 맞죠?"` 라고 물으면 모델의 동의가 그대로 나간다 — 실측된 사고가
+ * 정확히 이 형태였고, 앱 체크리스트는 같은 값을 **1.7m** 라고 말한다.
+ *
+ * 그러니 통과 여부를 따지기 전에 **아는 값과 대조**한다. 우리가 정답을 들고
+ * 있는데 다른 값이 나가는 것은, 그 숫자를 누가 적었든 막아야 한다.
+ *
+ * 등재된 값과 **같은 대상·같은 단위**인데 값이 다를 때만 잡는다. 대상 용어가
+ * 없으면 무관한 문장이므로 건드리지 않는다.
+ */
+export function findContradiction(
+  value: string,
+  unit: string | undefined,
+  context: string,
+): { expected: string; source: string } | null {
+  const v = normalize(value);
+  const u = normalize(unit ?? '');
+
+  // 문맥에 해당하는 후보를 모은다. 같은 단위·같은 대상인 항목들이다.
+  const candidates = APP_ASSERTED_CONSTANTS.filter((c) => {
+    if (normalize(c.unit) !== u) return false;
+    if (c.discriminator && !hasToken(context, c.discriminator)) return false;
+    return c.terms.some((t) => hasToken(context, t));
+  });
+  if (candidates.length === 0) return null;
+
+  // **하나라도 일치하면 모순이 아니다.** 같은 대상에 값이 여럿인 경우가 있다
+  // (적정공기 산소는 하한 18 과 상한 23.5 둘 다 정당하다). 하나만 보고
+  // 판정하면 정답을 모순으로 잡는다 — 실측에서 실제로 그랬다.
+  if (candidates.some((c) => normalize(c.value) === v)) return null;
+
+  return {
+    expected: candidates.map((c) => `${c.value}${c.unit}`).join(' 또는 '),
+    source: candidates[0].source,
+  };
 }
 
 /** `context` 는 그 숫자의 주변 텍스트 — 대상 용어를 여기서 찾는다. */

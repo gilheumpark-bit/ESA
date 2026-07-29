@@ -1,5 +1,6 @@
 import { calculateArcFlash, type ArcFlashInput } from '../arc-flash';
 import { IEEE_1584_2002 } from '@/engine/constants/electrical';
+import { CalcValidationError } from '@/engine/calculators/types';
 
 /**
  * IEEE 1584-2002 식이 **실제로 그 식인지** 본다.
@@ -277,5 +278,53 @@ describe('입사 에너지 — 절대 눈금', () => {
     expect(typeof r.incidentEnergy_cal_cm2).toBe('number');
     expect(typeof r.arcFlashBoundary_mm).toBe('number');
     expect(r.arcFlashBoundary_mm).toBeGreaterThan(base.workingDistance_mm);
+  });
+});
+
+/**
+ * **입력 검증** — 검증이 없던 자리에서 등급이 조용히 뒤집혔다.
+ *
+ * 작업거리는 `(610/D)^x` 로 결과를 크게 좌우하는데 범위 검사가 없었다.
+ * 단위를 mm 대신 cm 로 적어 100 배가 되면 에너지가 0.01 로 떨어져
+ * **Category 3 이 "등급 없음" 이 되고**, 200 응답 + 영수증까지 발급된다.
+ *
+ * 열거값도 같다. 대문자 `"Box"` 가 오면 `=== 'box'` 가 거짓이 되어 개방
+ * 계수로 떨어진다 — 실측 9.46 → 4.77 cal/cm², 등급 한 칸 강등, 경고 0 줄.
+ * `electrodeConfig` 가 없으면 `endsWith` 가 터져 **호출자 잘못이 500** 이 된다.
+ */
+describe('입력 검증 — 조용히 등급을 바꾸지 못하게', () => {
+  it.each([
+    ['100배 단위 오타', { workingDistance_mm: 45700 }],
+    ['0mm', { workingDistance_mm: 0 }],
+    ['음수', { workingDistance_mm: -457 }],
+    ['누락', { workingDistance_mm: undefined }],
+    ['거대값', { workingDistance_mm: 1e9 }],
+  ])('작업거리 %s 는 거부한다', (_label, over) => {
+    expect(() => calculateArcFlash({ ...base, ...over } as never)).toThrow(CalcValidationError);
+  });
+
+  it.each([
+    ['대문자 Box', { enclosureType: 'Box' }],
+    ['빈 문자열', { enclosureType: '' }],
+    ['electrodeConfig 누락', { electrodeConfig: undefined }],
+    ['알 수 없는 equipmentClass', { equipmentClass: 'bogus' }],
+  ])('열거값 %s 는 거부한다 — 조용한 폴백 금지', (_label, over) => {
+    expect(() => calculateArcFlash({ ...base, ...over } as never)).toThrow(CalcValidationError);
+  });
+
+  /** 거부가 500 이 아니라 422 로 나가야 화면이 그 칸을 짚는다. */
+  it('거부는 호출자 잘못으로 분류된다', () => {
+    let thrown: unknown = null;
+    try {
+      calculateArcFlash({ ...base, workingDistance_mm: 45700 } as never);
+    } catch (e) { thrown = e; }
+    expect(thrown).toBeInstanceOf(CalcValidationError);
+    expect((thrown as CalcValidationError).field).toBe('workingDistance_mm');
+  });
+
+  /** 정상 범위는 계속 계산된다 — 과차단 회귀 방지. */
+  it.each([305, 457, 610, 914, 1000])('정상 작업거리 %dmm 는 계산된다', (d) => {
+    expect(calculateArcFlash({ ...base, workingDistance_mm: d }).incidentEnergy_cal_cm2)
+      .toBeGreaterThan(0);
   });
 });

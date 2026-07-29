@@ -16,7 +16,7 @@
  */
 
 import type { FilterResult, BlockedItem } from './types';
-import { findAssertedSource } from './app-asserted-constants';
+import { findAssertedSource, findContradiction } from './app-asserted-constants';
 
 // ---------------------------------------------------------------------------
 // PART 1 — Detection Patterns
@@ -26,7 +26,18 @@ import { findAssertedSource } from './app-asserted-constants';
  * Probabilistic / hedge expressions that are forbidden before numbers.
  * Korean + English + Japanese patterns.
  */
-const PROBABILISTIC_PATTERNS = /(?:약|대략|보통|일반적으로|대체로|경험상|대충|대개|통상|통상적으로|roughly|approximately|usually|typically|around|about|generally|normally|on average|大体|およそ|通常|一般的に|概ね)/gi;
+/**
+ * `약` 은 **낱말 안에서 발화하면 안 된다.**
+ *
+ * 무경계로 두면 `계약전력 100kW` 가 `계[미확인]` 이 된다 — 앞 음절부터
+ * 통째로 지워져 문장이 깨진다. 수전설비 앱에서 `계약전력` 은 최빈 용어이고,
+ * `절약`·`예약`·`요약`·`제약`·`규약` 도 같은 자리를 밟는다.
+ *
+ * 한국어에는 단어 경계(`\b`)가 없으므로 **앞 글자가 한글이면 접미가 아니다**
+ * 로 판별한다. `약 100kW`(추정)는 계속 잡히고 `계약전력`은 통과한다.
+ * 나머지 어휘는 그 자체로 두 글자 이상이라 이 문제가 없다.
+ */
+const PROBABILISTIC_PATTERNS = /(?:(?<![가-힣])약(?=\s*[\d.]|\s)|대략|보통|일반적으로|대체로|경험상|대충|대개|통상|통상적으로|roughly|approximately|usually|typically|around|about|generally|normally|on average|大体|およそ|通常|一般的に|概ね)/gi;
 
 /**
  * Number pattern: integers, decimals, percentages, scientific notation.
@@ -300,17 +311,50 @@ export function filterLLMOutput(
    * 값·단위 정확 일치 + 대상 용어 근접이다(`app-asserted-constants.ts`).
    */
   const assertedNotes = new Map<number, string>();
+  /** 아는 값과 어긋난 자리 — 답변 끝에 정정을 붙인다. */
+  const contradictionNotes = new Map<number, string>();
 
   for (const num of numbers) {
-    if (num.isAllowed || num.isTrustedInput) continue;
+    if (num.isAllowed) continue;
+
+    const nearby = output.slice(Math.max(0, num.position - 60), num.position + 60);
+
+    /**
+     * **아는 값과 다르면 막는다 — 누가 적었든.**
+     *
+     * `isTrustedInput` 보다 **먼저** 본다. 사용자가 질문에 적은 숫자는 신뢰
+     * 입력이 되어 무검사로 통과하는데, 그게 유도 질문의 통로였다:
+     * `"154kV 접근 한계거리 1.6m 맞죠?"` → 모델의 동의가 그대로 나간다.
+     * 앱 체크리스트는 같은 값을 1.7m 라고 말한다.
+     *
+     * 우리가 정답을 들고 있는 자리에서만 발화한다(등재된 대상·단위).
+     */
+    const contradiction = findContradiction(
+      num.text.replace(/[^\d.,]/g, ''),
+      num.unit ?? '',
+      nearby,
+    );
+    if (contradiction) {
+      blocked.push({
+        text: num.text,
+        reason: 'no_source',
+        position: num.position,
+      });
+      contradictionNotes.set(
+        num.position,
+        `${contradiction.expected}(${contradiction.source})`,
+      );
+      continue;
+    }
+
+    if (num.isTrustedInput) continue;
 
     if (!num.hasSource) {
       // 숫자 앞뒤를 함께 본다 — 용어가 앞에 오기도("산소 18%"), 뒤에 오기도 한다.
-      const ctx = output.slice(Math.max(0, num.position - 60), num.position + 60);
       const asserted = findAssertedSource(
         num.text.replace(/[^\d.,]/g, ''),
         num.unit ?? '',
-        ctx,
+        nearby,
       );
       if (asserted) {
         assertedNotes.set(num.position, asserted);
@@ -413,9 +457,19 @@ export function filterLLMOutput(
     ? `${'\n'}${'\n'}> 위 수치 중 다음은 앱이 근거와 함께 쓰는 값입니다 — ${[...new Set(assertedNotes.values())].join(' · ')}.`
     : '';
 
+  /**
+   * **정정을 함께 낸다.** 지우기만 하면 사용자는 무엇이 맞는지 모른 채
+   * 자기가 적은 값을 그대로 믿는다 — 유도 질문을 막는 목적이 그때 사라진다.
+   */
+  const correctionFooter = contradictionNotes.size > 0
+    ? `
+
+> 지운 수치가 앱이 아는 값과 달랐습니다. 앱 기준 — ${[...new Set(contradictionNotes.values())].join(' · ')}.`
+    : '';
+
   // Step 5: Build filtered output
   if (blocked.length === 0) {
-    const passedOutput = output + assertedFooter;
+    const passedOutput = output + assertedFooter + correctionFooter;
     return { original: output, filtered: passedOutput, blocked: [], passed: true };
   }
 
@@ -453,7 +507,7 @@ export function filterLLMOutput(
   filtered += `
 
 > 위에서 **미확인**으로 표시된 값은 근거가 없어 앱이 제거한 것입니다 (${reasons.join(', ')}). 정확한 값은 해당 계산기나 기준 원문에서 확인하세요.`;
-  filtered += assertedFooter;
+  filtered += assertedFooter + correctionFooter;
 
   return {
     original: output,

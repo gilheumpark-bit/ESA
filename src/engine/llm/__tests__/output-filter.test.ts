@@ -111,6 +111,35 @@ describe('LLM Output Filter - Blocked Output', () => {
     expect(isClean(output)).toBe(false);
   });
 
+  /**
+   * **`약` 은 낱말 안에서도 산다.** 추정 표현 정규식이 `약` 을 경계 없이 잡아
+   * `계약전력`·`절약`·`예약`·`요약`·`제약` 문장의 숫자가 통째로 지워졌다.
+   * 전기 상담에서 `계약전력` 은 가장 자주 나오는 낱말이다 — 필터가 정상 답변을
+   * 못 쓰게 만드는 쪽으로 실패하면 사용자는 필터를 끈다.
+   *
+   * 추정으로 잡을 것: 앞이 한글이 아니고 뒤가 숫자거나 공백인 `약`.
+   */
+  test.each([
+    ['계약전력', '계약전력 100kW 입니다.'],
+    ['절약', '절약 효과는 20% 입니다.'],
+    ['예약', '예약 시간은 30분 입니다.'],
+    ['요약', '요약하면 15년 주기입니다.'],
+    ['제약', '제약 조건은 40A 입니다.'],
+  ])('%s 의 약 은 추정 표현이 아니다', (_label, output) => {
+    // 숫자 근거 여부는 별개 축이므로 **추정 사유**만 본다.
+    const r = filterLLMOutput(output, [{ name: 'kec_lookup', result: {} }]);
+    expect(r.blocked.map((b) => b.reason)).not.toContain('probabilistic');
+  });
+
+  test.each([
+    '수명은 약 15년입니다.',
+    '약 100A 흐릅니다.',
+    '약100A 흐릅니다.',
+  ])('진짜 추정 표현은 여전히 잡는다 — %s', (output) => {
+    const r = filterLLMOutput(output, [{ name: 'kec_lookup', result: {} }]);
+    expect(r.blocked.map((b) => b.reason)).toContain('probabilistic');
+  });
+
   test('Standard citation without lookup tool call -- BLOCK', () => {
     const output = 'KEC 232.3.9에 따르면 3% 이하여야 합니다.';
     const result = filterLLMOutput(output, []);

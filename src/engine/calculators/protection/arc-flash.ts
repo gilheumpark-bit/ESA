@@ -21,7 +21,7 @@
  */
 
 import type { DetailedCalcResult, CalcStep } from '../types';
-import { CalcValidationError } from '../types';
+import { CalcValidationError, assertOneOf } from '../types';
 import {
   IEEE_1584_2002,
   PPE_THRESHOLDS,
@@ -290,6 +290,44 @@ export function calculateArcFlash(input: ArcFlashInput): ArcFlashResult {
     throw new CalcValidationError(
       'arcDuration_s',
       `ESVA-4403: arcDuration_s must be between 0.001 and 10 seconds, got ${input.arcDuration_s}`,
+    );
+  }
+  /**
+   * **작업거리는 검증이 없던 유일한 수치 입력이었다.**
+   *
+   * 에너지는 `(610/D)^x` 로 거리에 크게 좌우된다. 단위를 mm 대신 cm 로 적어
+   * 100 배가 되면 에너지가 0.01 로 떨어져 **Category 3 이 "등급 없음" 으로
+   * 뒤집히고**, 그 결과가 200 응답 + 영수증까지 나간다. 0 이나 음수는
+   * `Math.pow` 를 통과해 `null`·`Infinity` 를 만든다.
+   *
+   * 상한은 표준 시험 범위가 아니라 물리적 상식이다 — 사람이 서서 작업하는
+   * 거리이므로 5m 를 넘으면 단위를 잘못 적은 것이다.
+   */
+  if (!Number.isFinite(input.workingDistance_mm)
+      || input.workingDistance_mm < 100 || input.workingDistance_mm > 5000) {
+    throw new CalcValidationError(
+      'workingDistance_mm',
+      `ESVA-4405: workingDistance_mm must be between 100 and 5000 mm, got ${input.workingDistance_mm}`
+      + ' — 단위가 mm 인지 확인하십시오(18인치 = 457mm).',
+    );
+  }
+  /**
+   * 열거값도 막는다. 대문자 `"Box"` 나 빈 문자열이 오면 `=== 'box'` 가 거짓이
+   * 되어 **개방 계수로 조용히 떨어진다** — 실측에서 9.46 → 4.77 cal/cm² 로
+   * 등급이 한 칸 내려갔고 경고는 0 줄이었다. `electrodeConfig` 가 없으면
+   * `endsWith` 가 터져 500 이 난다(호출자 잘못이 서버 잘못으로 보고된다).
+   */
+  assertOneOf(input.enclosureType, ['open', 'box'] as const, 'enclosureType');
+  assertOneOf(
+    input.electrodeConfig,
+    ['VCB', 'VCBB', 'HCB', 'VOA', 'HOA'] as const,
+    'electrodeConfig',
+  );
+  if (input.equipmentClass !== undefined) {
+    assertOneOf(
+      input.equipmentClass,
+      ['switchgear', 'mcc_panel', 'cable', 'open_air'] as const,
+      'equipmentClass',
     );
   }
 
