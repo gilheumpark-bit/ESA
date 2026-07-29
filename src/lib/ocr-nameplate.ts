@@ -95,25 +95,41 @@ export function parseElectricalParams(text: string): Partial<NameplateData> {
     }
   }
 
-  // 전력 (Power): 5kW, 100W, 50kVA, 1MVA
-  const powerPatterns = [
-    /(\d+(?:\.\d+)?)\s*(?:MVA)/i,
-    /(\d+(?:\.\d+)?)\s*(?:kVA)/i,
-    /(\d+(?:\.\d+)?)\s*(?:kW|KW)/i,
-    /(?:power|전력|출력|電力|功率|rated\s*power|정격출력)\s*[:\s]*(\d+(?:\.\d+)?)\s*(?:kW|W|kVA|MVA)/i,
-    /(\d+(?:\.\d+)?)\s*W(?:\s|$|,)/i,
+  /**
+   * 전력 (Power): 5kW, 100W, 50kVA, 1MVA
+   *
+   * **단위 뒤에 글자가 더 붙으면 다른 단위다.** 앞서는 경계가 없어 `MVA` 가
+   * `MVAR` 의 앞부분에 걸렸다 — 라이브 실측(2026-07-29, wiki 단선도 OCR):
+   * 원문은 `23 MVAR` 로 정확히 읽혔는데 추출층이 **`전력: 23MVA`** 로 바꿔
+   * 놓고 "변압기 용량" 계산기를 권했다. 무효전력을 피상전력으로 바꾼 것이라
+   * 그대로 넘기면 용량 산정이 틀어진다(§2.10 — 비전 모델은 맞았고 우리가
+   * 틀렸다). `kVA`↔`kVAR`, `kW`↔`kWh`(전력량)도 같은 함정이다.
+   *
+   * 못 잡으면 `power` 는 비워 둔다 — 틀린 값을 채우는 것보다 낫다.
+   */
+  const UNIT_TAIL = '(?![A-Za-z])';
+  const powerPatterns: Array<{ re: RegExp; unit: string }> = [
+    { re: new RegExp(`(\\d+(?:\\.\\d+)?)\\s*MVA${UNIT_TAIL}`, 'i'), unit: 'MVA' },
+    { re: new RegExp(`(\\d+(?:\\.\\d+)?)\\s*kVA${UNIT_TAIL}`, 'i'), unit: 'kVA' },
+    { re: new RegExp(`(\\d+(?:\\.\\d+)?)\\s*kW${UNIT_TAIL}`, 'i'), unit: 'kW' },
+    {
+      re: new RegExp(
+        `(?:power|전력|출력|電力|功率|rated\\s*power|정격출력)\\s*[:\\s]*(\\d+(?:\\.\\d+)?)\\s*(?:kW|W|kVA|MVA)${UNIT_TAIL}`,
+        'i',
+      ),
+      unit: '',
+    },
+    { re: new RegExp(`(\\d+(?:\\.\\d+)?)\\s*W${UNIT_TAIL}`, 'i'), unit: 'W' },
   ];
 
-  for (const pattern of powerPatterns) {
-    const m = normalized.match(pattern);
-    if (m) {
-      const val = m[2] ?? m[1];
-      if (val) {
-        if (pattern.source.includes('MVA')) result.power = `${val}MVA`;
-        else if (pattern.source.includes('kVA')) result.power = `${val}kVA`;
-        else if (pattern.source.includes('kW|KW')) result.power = `${val}kW`;
-        else result.power = `${val}W`;
-      }
+  for (const { re, unit } of powerPatterns) {
+    const m = normalized.match(re);
+    if (m?.[1]) {
+      // 라벨형(네 번째)은 단위가 문장 안에 있으므로 원문에서 그대로 떼어 온다.
+      const resolved = unit || (/kVA/i.test(m[0]) ? 'kVA'
+        : /MVA/i.test(m[0]) ? 'MVA'
+          : /kW/i.test(m[0]) ? 'kW' : 'W');
+      result.power = `${m[1]}${resolved}`;
       break;
     }
   }
