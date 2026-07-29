@@ -1521,3 +1521,106 @@ describe('three-phase-vd — 정상상태 강하와 수전단 전압', () => {
     expect(step(1)).toBeCloseTo(0.641 * 0.85, 4);
   });
 });
+
+/**
+ * temp-correction — PVC 70 °C 도체 · 기준 30 °C · 주변 45 °C · 기준 허용전류 100 A
+ *
+ *   여유    70 − 45              = 25 K
+ *   기준차  70 − 30              = 40 K
+ *   CF      √(25 / 40)           = 0.7906
+ *   보정    100 × 0.7906         = 79.1 A
+ *
+ * **이 값은 표로 대조된다.** IEC 60364-5-52 Table B.52.14(PVC 70 °C, 기준 30 °C):
+ *
+ *   주변 35 °C  표 0.94  계산 0.9354
+ *   주변 40 °C  표 0.87  계산 0.8660
+ *   주변 45 °C  표 0.79  계산 0.7906
+ *   주변 50 °C  표 0.71  계산 0.7071
+ *
+ * 즉 이 앵커는 구현을 다시 계산한 것이 아니라 **규격 표에 맞춰 본 것**이다.
+ * 감소계수가 틀리면 케이블이 실제보다 굵게 보이고, 그 위에서 과열로 간다.
+ */
+describe('temp-correction — 온도 감소계수 (IEC 표 대조)', () => {
+  const input = { baseAmpacity: 100, referenceTemp: 30, actualTemp: 45, maxConductorTemp: 70 };
+
+  it.each([
+    [1, 25, '온도 여유 (K)'],
+    [2, 40, '기준 온도차 (K)'],
+    [3, 0.7906, '보정 계수'],
+    [4, 79.1, '보정 허용전류 (A)'],
+    [5, 45, '주변 온도 (C)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('temp-correction', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 3 ? 4 : 1);
+  });
+
+  /** IEC 60364-5-52 Table B.52.14 대조 — 표는 소수 둘째 자리로 반올림돼 있다. */
+  it.each([
+    [35, 0.94],
+    [40, 0.87],
+    [45, 0.79],
+    [50, 0.71],
+  ])('주변 %d °C 의 계수가 IEC 표값 %s 과 일치한다', (ambient, tabulated) => {
+    const { step } = run('temp-correction', { ...input, actualTemp: ambient });
+    expect(step(3)).toBeCloseTo(tabulated, 2);
+  });
+
+  /** 기준 온도에서는 보정이 없다 — 1.0 이 아니면 눈금 자체가 어긋난 것이다. */
+  it('주변이 기준 온도면 계수는 1 이다', () => {
+    const { step } = run('temp-correction', { ...input, actualTemp: 30 });
+    expect(step(3)).toBeCloseTo(1, 4);
+    expect(step(4)).toBeCloseTo(100, 1);
+  });
+
+  /** 기준보다 차가우면 계수가 1 을 넘는다 — 방향이 뒤집히면 한대지에서 과소 산정된다. */
+  it('기준보다 낮은 온도에서는 계수가 1 을 넘는다', () => {
+    expect(run('temp-correction', { ...input, actualTemp: 10 }).step(3)).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * reactive-power — 유효전력 300 kW · 현재 cos φ 0.75 → 목표 0.95
+ *
+ *   tan φ₁ = √(1 − 0.75²) / 0.75 = 0.8819
+ *   tan φ₂ = √(1 − 0.95²) / 0.95 = 0.3287
+ *   Q_c    = 300 × (0.8819 − 0.3287) = 165.97 kvar
+ *   Q₁     = 300 × 0.8819            = 264.58 kvar
+ *   Q₂     = 300 × 0.3287            =  98.61 kvar
+ *   표준 뱅크 = 165.97 이상 최초      = 200 kvar
+ *
+ * 콘덴서 뱅크 발주 수량이 이 다섯 줄에서 나오는데 전부 무방비였다.
+ */
+describe('reactive-power — 콘덴서 뱅크 용량', () => {
+  const input = { activePower: 300, currentPF: 0.75, targetPF: 0.95 };
+
+  it.each([
+    [1, 0.8819, 'tan φ₁'],
+    [2, 0.3287, 'tan φ₂'],
+    [3, 165.97, '필요 콘덴서 (kvar)'],
+    [4, 264.58, '현재 무효전력 (kvar)'],
+    [5, 98.61, '목표 무효전력 (kvar)'],
+    [6, 200, '선정 표준 뱅크 (kvar)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('reactive-power', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n <= 2 ? 4 : 2);
+  });
+
+  /** Q₁ − Q₂ = Q_c 는 항등이다 — 세 값을 따로 계산하므로 하나가 새면 여기서 깨진다. */
+  it('현재 무효 − 목표 무효 = 필요 콘덴서', () => {
+    const { step } = run('reactive-power', input);
+    expect(step(4) - step(5)).toBeCloseTo(step(3), 2);
+  });
+
+  /** 목표가 1.0 이면 무효분을 전부 상쇄한다 — tan(0) = 0. */
+  it('목표 역률 1.0 이면 목표 무효전력이 0 이다', () => {
+    const { step } = run('reactive-power', { ...input, targetPF: 1 });
+    expect(step(5)).toBeCloseTo(0, 2);
+    expect(step(3)).toBeCloseTo(step(4), 2);
+  });
+
+  /** 표준 뱅크는 필요량 이상이어야 한다 — 아래로 고르면 목표 역률에 못 미친다. */
+  it('선정 뱅크는 필요량 이상이다', () => {
+    const { step } = run('reactive-power', input);
+    expect(step(6)).toBeGreaterThanOrEqual(step(3));
+  });
+});
