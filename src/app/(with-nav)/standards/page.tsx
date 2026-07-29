@@ -460,10 +460,11 @@ function StandardConvertWidget() {
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+      {/* 카드 안 소제목이 아니라 페이지 h1 아래 독립 절이다 — h2 다. */}
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <ArrowRightLeft size={16} className="text-[var(--color-primary)]" />
         기준 변환
-      </h3>
+      </h2>
       <p className="mb-4 text-xs text-[var(--text-tertiary)]">
         KEC / NEC / IEC / JIS 조항 번호를 상호 변환합니다
       </p>

@@ -214,7 +214,7 @@ function QuestionCard({ q }: { q: QuestionSummary }) {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-medium text-[var(--text-primary)] line-clamp-2">
+          <h2 className="text-base font-medium text-[var(--text-primary)] line-clamp-2">
             {q.status === 'resolved' && (
               <span className="mr-2 inline-block rounded bg-green-100 px-1.5 py-0.5 text-xs text-green-700
                              dark:bg-green-900 dark:text-green-300">
@@ -222,7 +222,7 @@ function QuestionCard({ q }: { q: QuestionSummary }) {
               </span>
             )}
             {q.title}
-          </h3>
+          </h2>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {q.tags.slice(0, 4).map((tag) => (

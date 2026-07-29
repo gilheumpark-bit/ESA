@@ -192,10 +192,10 @@ function IntegrityPanel({ receipt }: { receipt: ReceiptWithIntegrity }) {
 
   return (
     <div className="mt-6 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 no-print">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
         <ShieldCheck size={18} className="text-emerald-600" />
         무결성 검증
-      </h3>
+      </h2>
 
       <div className="space-y-3">
         {verdict && VerdictIcon && (
@@ -398,10 +398,10 @@ function TimestampRegistrationButton({ receiptId }: { receiptId: string }) {
   if (result) {
     return (
       <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-5 no-print dark:border-emerald-800 dark:bg-emerald-900/20">
-        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
           <ShieldCheck size={18} />
           {result.alreadyRegistered ? '이미 등록됨' : '타임스탬프 등록 완료'}
-        </h3>
+        </h2>
         <div className="space-y-2 text-xs">
           <div className="flex items-center gap-2">
             <span className="text-emerald-600 dark:text-emerald-400">IPFS CID:</span>

@@ -127,9 +127,10 @@ function ProviderKeyCard({
     <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {/* 페이지 h1 아래 첫 절이다 — h3 로 두면 단계를 건너뛴다. */}
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {provider.name}
-          </h3>
+          </h2>
           {isLocal && (
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
               로컬 서버 — API 키가 없을 수 있습니다
@@ -255,7 +256,7 @@ function ProviderKeyCard({
       {provider.id === 'gemini' && (state.probeRunning || state.probeResults.length > 0) && (
         <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700" aria-live="polite">
           <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h4>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h3>
             <span className="text-xs tabular-nums text-zinc-700 dark:text-zinc-200">
               {state.probeResults.length}/{models.length} 완료
             </span>

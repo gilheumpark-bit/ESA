@@ -73,9 +73,9 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] truncate">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] truncate">
             {project.name}
-          </h3>
+          </h2>
           {project.description && (
             <p className="mt-1 text-sm text-[var(--text-tertiary)] line-clamp-2">
               {project.description}
@@ -222,7 +222,7 @@ export default function ProjectsPage() {
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] p-12 text-center">
           <FolderOpen className="mx-auto h-12 w-12 text-[var(--text-tertiary)]" />
-          <h3 className="mt-4 text-lg font-medium text-[var(--text-primary)]">프로젝트가 없습니다</h3>
+          <h2 className="mt-4 text-lg font-medium text-[var(--text-primary)]">프로젝트가 없습니다</h2>
           <p className="mt-2 text-sm text-[var(--text-tertiary)]">
             새 프로젝트를 만들어 계산 결과를 정리하세요.
           </p>

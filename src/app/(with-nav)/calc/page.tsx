@@ -225,7 +225,8 @@ function CategoryCard({ category }: { category: CategoryMeta }) {
           <Icon size={20} />
         </div>
         <div>
-          <h3 className="font-semibold text-[var(--text-primary)]">{category.name}</h3>
+          {/* 페이지 h1 바로 아래 절이므로 h2 다 — h3 로 두면 단계를 건너뛴다. */}
+          <h2 className="font-semibold text-[var(--text-primary)]">{category.name}</h2>
           <span className="text-xs text-[var(--text-tertiary)]">{category.nameEn}</span>
         </div>
       </div>

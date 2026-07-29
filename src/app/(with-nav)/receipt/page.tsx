@@ -35,9 +35,9 @@ function ReceiptItem({ calc }: { calc: RecentCalcEntry }) {
       <div className="flex items-start gap-3">
         <FileText size={20} className="mt-0.5 shrink-0 text-[var(--color-primary)]" />
         <div>
-          <h3 className="text-sm font-medium text-[var(--text-primary)]">
+          <h2 className="text-sm font-medium text-[var(--text-primary)]">
             {calc.calcName}
-          </h3>
+          </h2>
           <div className="mt-1 flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
             <span className="rounded bg-[var(--bg-secondary)] px-1.5 py-0.5">
               {calc.category}

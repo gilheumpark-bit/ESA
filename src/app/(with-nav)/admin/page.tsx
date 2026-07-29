@@ -190,7 +190,7 @@ function TenantSection({ tenant }: { tenant: TenantInfo | null }) {
       </div>
 
       <div className="rounded-xl border border-[var(--border-default)] p-4">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">활성화된 기능</h3>
+        <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">활성화된 기능</h2>
         <div className="flex flex-wrap gap-2">
           {tenant.features.map(f => (
             <span
@@ -211,7 +211,7 @@ function SSOSection({ tenant }: { tenant: TenantInfo | null }) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-[var(--border-default)] p-4">
-        <h3 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">SSO 설정</h3>
+        <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">SSO 설정</h2>
 
         {tenant.ssoType ? (
           <div className="space-y-3">
@@ -231,7 +231,7 @@ function SSOSection({ tenant }: { tenant: TenantInfo | null }) {
       </div>
 
       <div className="rounded-xl border border-[var(--border-default)] p-4">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">SSO 배포 상태</h3>
+        <h2 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">SSO 배포 상태</h2>
         <p className="text-sm text-[var(--text-secondary)]">
           이 저장소에는 범용 SAML/OIDC 콜백 라우트가 포함되어 있지 않습니다. 위 값은
           테넌트 구성 인벤토리이며, 로그인 기능으로 활성화하려면 배포별 IdP 연동과 실제

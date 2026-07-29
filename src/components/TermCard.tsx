@@ -55,7 +55,7 @@ export default function TermCard({ term, mode = 'compact' }: TermCardProps) {
       <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4 transition-colors hover:border-[var(--color-primary)]">
         {/* Header */}
         <div className="mb-2 flex items-start justify-between gap-2">
-          <h3 className="text-lg font-bold text-[var(--text-primary)]">{term.ko}</h3>
+          <h2 className="text-lg font-bold text-[var(--text-primary)]">{term.ko}</h2>
           <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${catColor}`}>
             {catLabel}
           </span>
@@ -101,7 +101,7 @@ export default function TermCard({ term, mode = 'compact' }: TermCardProps) {
       </span>
 
       {/* Korean name (prominent) */}
-      <h3 className="mt-3 text-xl font-bold text-[var(--text-primary)]">{term.ko}</h3>
+      <h2 className="mt-3 text-xl font-bold text-[var(--text-primary)]">{term.ko}</h2>
 
       {/* Multilingual names */}
       <div className="mt-2 space-y-0.5 text-sm">
