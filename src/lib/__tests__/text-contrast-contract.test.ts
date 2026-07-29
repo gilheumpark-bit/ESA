@@ -68,3 +68,38 @@ describe('본문 대비 계약', () => {
     for (const { pattern } of BANNED) expect(pattern.test(placeholder)).toBe(false);
   });
 });
+
+/**
+ * **디자인 토큰 자체의 대비 — 앞선 두 수리의 근인.**
+ *
+ * BYOK 화면과 SLD 패널에서 각각 흐린 글자를 고쳤는데, 재 보니 근인은 개별
+ * 화면이 아니라 **토큰**이었다. `--text-tertiary` 가 라이트·다크에 **같은 색**
+ * (`#8a8577`)으로 박혀 있어, 다크에서는 통과(4.96)하고 라이트에서만 떨어졌다.
+ *
+ * 라이브 실측(2026-07-29 · 계산된 색으로 WCAG 비율 산출, 308 곳에서 쓰이는 토큰):
+ *   라이트 #8a8577 → bg-primary 3.53 · bg-secondary 3.35 · bg-tertiary 3.07
+ *   다크   #8a8577 → bg-primary 4.96 · bg-tertiary 4.22
+ *
+ * 색상·채도는 그대로 두고 명도만 옮겼다 — "덜 중요한 글자" 위계는 유지하면서
+ * 읽히게만 만든다.
+ *   라이트 #6e6a5f → 5.17 · 4.91 · 4.50
+ *   다크   #8f8a7c → 5.30 · 4.51
+ *
+ * jsdom 은 CSS 변수를 계산하지 않으므로 여기서는 **선언된 값**을 잠근다.
+ * 비율의 근거는 위 실측이다.
+ */
+describe('디자인 토큰 대비', () => {
+  const css = readFileSync(join(process.cwd(), 'src', 'app', 'globals.css'), 'utf8');
+  const decls = [...css.matchAll(/--text-tertiary:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1].toLowerCase());
+
+  it('라이트·다크가 각각 자기 값을 갖는다 — 하나로 쓰면 한쪽이 반드시 떨어진다', () => {
+    expect(decls).toHaveLength(2);
+    expect(decls[0]).not.toBe(decls[1]);
+  });
+
+  it('AA 미달이던 옛 값으로 돌아가지 않는다', () => {
+    expect(decls).not.toContain('#8a8577');
+    expect(decls[0]).toBe('#6e6a5f');  // 라이트
+    expect(decls[1]).toBe('#8f8a7c');  // 다크
+  });
+});

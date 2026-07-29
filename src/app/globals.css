@@ -19,7 +19,14 @@
 
   --text-primary: #1c1b17;         /* 잉크 */
   --text-secondary: #5c5a53;
-  --text-tertiary: #8a8577;
+  /**
+   * 라이트 전용으로 한 단계 어둡게. 앞서는 다크와 **같은 #8a8577** 이었고,
+   * 다크 배경에서는 4.96 으로 통과하지만 라이트에서는 3.53/3.35/3.07 로
+   * 세 표면 모두 AA(4.5) 미달이었다(실측 2026-07-29 · 계산된 색으로 산출).
+   * 색상·채도는 그대로 두고 명도만 낮춰 5.17/4.91/4.50 으로 올린다 —
+   * "덜 중요한 글자" 라는 위계는 유지하면서 읽히게만 만든다.
+   */
+  --text-tertiary: #6e6a5f;
 
   --border-default: #e9e5db;
   --border-hover: #ddd7c8;
@@ -71,7 +78,8 @@ html.dark {
 
   --text-primary: #f2efe6;         /* 웜 오프화이트 */
   --text-secondary: #b8b3a6;
-  --text-tertiary: #8a8577;
+  /* 다크도 --bg-tertiary 위에서 4.22 로 미달이었다 — 5 단계만 올려 4.51. */
+  --text-tertiary: #8f8a7c;
 
   --border-default: #2c2a22;
   --border-hover: #3a382e;
