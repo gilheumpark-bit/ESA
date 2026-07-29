@@ -662,3 +662,46 @@ describe('breaker-sizing — 풀이 단계의 절대 눈금', () => {
     expect(step(4)).toBeCloseTo(10, 2);  // 표준 차단용량
   });
 });
+
+/**
+ * **short-circuit — 임피던스 사슬 5 단계를 손계산으로 잠근다.**
+ *
+ * 이 값은 차단기 차단용량 선정의 근거다. 중간 임피던스가 틀리면 최종 kA 가
+ * 맞아 보여도 다른 조건에서 무너진다 — 특히 케이블 저항과 리액턴스는 길이·
+ * 굵기에 따라 현장에서 매번 바뀌는 항이다.
+ *
+ * 손계산(380 V · TR 1000 kVA · %Z 5 · Cu 95 sq · 50 m ·
+ *        ρ = 0.017241 Ω·mm²/m · X = 0.08 Ω/km · κ_LV = 1.8):
+ *   Z_source = (380²/1,000,000) × 0.05          = 0.007220 Ω
+ *   R_cable  = (0.017241×1000/95) × 0.050       = 0.009074 Ω
+ *   X_cable  = 0.08 × 0.050                     = 0.004000 Ω
+ *   Z_cable  = √(0.009074² + 0.004²)            = 0.009917 Ω
+ *   Z_total                                     = 0.017137 Ω
+ *   I_sc = 380/(√3 × 0.017137)                  = 12,802.5 A = 12.80 kA
+ *   i_p  = κ√2·I_k = 1.8 × 1.41421 × 12.8025    = 32.59 kA
+ *
+ * 차단기는 대칭 실효값(12.80 kA)이 아니라 **피크값(32.59 kA)** 도 견뎌야
+ * 한다 — 그 값이 화면에 뜨는데 아무도 재지 않고 있었다.
+ */
+describe('short-circuit — 임피던스 사슬의 절대 눈금', () => {
+  const input = {
+    systemVoltage: 380,
+    transformerCapacity: 1000,
+    impedancePercent: 5,
+    cableLength: 50,
+    cableSize: 95,
+    conductor: 'Cu',
+  };
+
+  it.each([
+    [1, 0.007220, 'TR 임피던스 (Ω)'],
+    [2, 0.009917, '케이블 임피던스 (Ω)'],
+    [3, 0.017137, '합성 임피던스 (Ω)'],
+    [4, 12802.5, '단락전류 (A)'],
+    [5, 12.80, '단락전류 (kA)'],
+    [6, 32.59, '피크 단락전류 (kA)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('short-circuit', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, expected as number < 1 ? 5 : 1);
+  });
+});
