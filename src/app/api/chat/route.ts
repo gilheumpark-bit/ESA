@@ -47,7 +47,15 @@ interface ChatRequestBody {
   };
 }
 
-/** Daily token budget per IP: 500K tokens */
+/**
+ * **서버 키를 쓸 때만** 적용되는 IP 당 일일 토큰 예산.
+ *
+ * 이 예산이 지키는 것은 배포자의 API 청구서다. 그래서 자기 키를 넣은
+ * 사용자(BYOK)에게는 적용하지 않는다 — 앞서는 예산 검사가 키 해석보다
+ * 먼저 돌아 BYOK 사용자도 500K 에서 막혔고, 그때 나가는 안내가
+ * `"Provide your own API key to continue"` 였다. 이미 넣은 키를 넣으라는
+ * 말이라 사용자가 할 수 있는 일이 없다.
+ */
 const DAILY_TOKEN_BUDGET = 500_000;
 
 /** In-memory daily token usage tracker — 최대 10,000 엔트리 */
@@ -79,6 +87,21 @@ function checkTokenBudget(ip: string, estimatedTokens: number): { allowed: boole
 
   entry.tokens += estimatedTokens;
   return { allowed: true, remaining: DAILY_TOKEN_BUDGET - entry.tokens };
+}
+
+/**
+ * 예약분을 실사용량으로 정산한다.
+ *
+ * 요청 시점에는 출력이 얼마나 나올지 모르므로 `maxTokens` 상한을 먼저 잡아
+ * 둔다(안 잡으면 짧은 프롬프트로 긴 답을 뽑는 만큼 계량이 새어 나간다).
+ * 생성이 끝나 실제 수치를 알면 차액을 돌려준다 — 그러지 않으면 4096 을
+ * 예약하고 300 을 쓴 사용자가 하루 122 번 만에 막힌다.
+ */
+function settleTokenUsage(ip: string, reserved: number, actual: number): void {
+  const entry = tokenUsage.get(ip);
+  if (!entry || Date.now() >= entry.resetAt) return;
+  const refund = Math.max(0, reserved - actual);
+  entry.tokens = Math.max(0, entry.tokens - refund);
 }
 
 // Lazy cleanup every 10 minutes
@@ -114,6 +137,8 @@ async function buildStreamingResponse(
   maxTokens: number,
   onpremBaseUrl?: string,
   calculationEvidence: ChatCalculationEvidence | null = null,
+  /** 생성이 끝나면 공급자가 보고한 실사용 토큰을 넘긴다 — 예산 정산용. */
+  onUsage?: (totalTokens: number) => void,
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder();
 
@@ -243,6 +268,12 @@ async function buildStreamingResponse(
         );
         const safeText = filtered.filtered;
         const finishReason = await result.finishReason;
+        // 공급자가 보고한 실사용량으로 예약분을 정산한다. 보고가 없으면
+        // (일부 로컬 공급자) 정산하지 않는다 — 예약분을 그대로 둔다.
+        if (onUsage) {
+          const usage = await result.usage;
+          if (usage && Number.isFinite(usage.totalTokens)) onUsage(usage.totalTokens as number);
+        }
         console.info(JSON.stringify({
           level: 'info',
           event: 'chat_generation_complete',
@@ -433,33 +464,17 @@ async function POST__impl(request: NextRequest) {
     const responseLanguage = body.language === 'en' ? 'en' : 'ko';
     const calibratedSystemPrompt = `${buildElectricalAssistantPrompt(responseLanguage)}${calculationEvidence?.promptContext ?? calculationShortfall ?? ''}`;
 
-    // Token budget check
-    cleanupTokenUsage();
-    const estimatedTokens = body.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
-      + Math.ceil(calibratedSystemPrompt.length / 4);
-    const budget = checkTokenBudget(ip, estimatedTokens);
-    if (!budget.allowed) {
-      return jsonWithEsa(
-        {
-          success: false,
-          error: {
-            code: 'ESVA-3014',
-            message: 'Daily token budget exceeded (500K tokens/day). Provide your own API key to continue.',
-            remaining: budget.remaining,
-          },
-        },
-        { status: 429 },
-      );
-    }
-
     // Resolve API key: BYOK -> env -> error. On-premise providers use their
     // configured server credential; the SDK adapter still requires a non-empty value.
     let resolvedKey: string;
+    /** 이 요청이 배포자 지갑을 쓰는가 — 예산은 이때만 적용한다. */
+    let usesServerKey = false;
     try {
       const resolved = isOnpremise
-        ? { key: body.onpremise?.apiKey || 'onpremise-local' }
+        ? { key: body.onpremise?.apiKey || 'onpremise-local', source: 'env' as const }
         : resolveProviderKey(body.provider, body.apiKey);
       resolvedKey = resolved.key;
+      usesServerKey = !isOnpremise && resolved.source === 'env';
     } catch (keyErr) {
       return jsonWithEsa(
         {
@@ -489,6 +504,39 @@ async function POST__impl(request: NextRequest) {
     const temperature = Math.min(2, Math.max(0, body.temperature ?? 0.7));
     const maxTokens = Math.min(8192, Math.max(100, body.maxTokens ?? 4096));
 
+    /**
+     * 서버 키 예산 — **출력까지 센다.**
+     *
+     * 앞서는 입력 길이만 셌다. 그런데 비싼 쪽은 출력이고, `maxTokens` 는
+     * 요청이 정한다(상한 8192). `"안녕"` 한 마디(≈2 토큰)로 8192 토큰을
+     * 뽑으면 계량은 2, 청구서는 8194 다 — 500K 예산이 실제로는 20M 토큰을
+     * 허용한다. 여기서 미리 잡는 값은 **약속한 상한**이고, 실제 사용량은
+     * 스트림이 끝난 뒤 정산한다(아래 `settleTokenUsage`).
+     */
+    let reservedTokens = 0;
+    let budgetRemaining = DAILY_TOKEN_BUDGET;
+    if (usesServerKey) {
+      cleanupTokenUsage();
+      reservedTokens = body.messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
+        + Math.ceil(calibratedSystemPrompt.length / 4)
+        + maxTokens;
+      const budget = checkTokenBudget(ip, reservedTokens);
+      budgetRemaining = budget.remaining;
+      if (!budget.allowed) {
+        return jsonWithEsa(
+          {
+            success: false,
+            error: {
+              code: 'ESVA-3014',
+              message: 'Daily token budget exceeded (500K tokens/day). Provide your own API key to continue.',
+              remaining: budget.remaining,
+            },
+          },
+          { status: 429 },
+        );
+      }
+    }
+
     const stream = await buildStreamingResponse(
       body.provider,
       body.model,
@@ -499,6 +547,7 @@ async function POST__impl(request: NextRequest) {
       maxTokens,
       onpremiseBaseUrl,
       calculationEvidence,
+      usesServerKey ? (used) => settleTokenUsage(ip, reservedTokens, used) : undefined,
     );
 
     return new Response(stream, {
@@ -508,7 +557,7 @@ async function POST__impl(request: NextRequest) {
         'Cache-Control': 'no-cache, no-store',
         Connection: 'keep-alive',
         'X-RateLimit-Remaining': String(rl.remaining),
-        'X-Token-Budget-Remaining': String(budget.remaining),
+        'X-Token-Budget-Remaining': String(budgetRemaining),
       }),
     });
   } catch (err) {

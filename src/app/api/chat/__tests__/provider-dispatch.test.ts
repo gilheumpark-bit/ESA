@@ -111,17 +111,54 @@ describe('POST /api/chat advertised provider dispatch', () => {
     expect(options.instructions).not.toContain('CLIENT_CONTROLLED_SYSTEM_PROMPT');
   });
 
-  test('rejects a first request that exceeds the full daily token budget', async () => {
+  /**
+   * **이 검사는 앞서 BYOK 요청으로 429 를 기대했다.** `request()` 가 openai
+   * 요청에 사용자 키를 실어 보내는데도 예산에 막히기를 기대한 것이고, 그건
+   * 예산 검사가 키 해석보다 먼저 돌던 시절의 동작이다. 예산이 지키는 것은
+   * 배포자의 청구서이므로 자기 키로 부르는 요청은 대상이 아니다 —
+   * 그래서 여기서는 **서버 키 경로**로 확인한다.
+   */
+  test('서버 키 요청이 하루 예산을 통째로 넘기면 모델을 부르지 않는다', async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    const originalHeader = process.env.TRUSTED_CLIENT_IP_HEADER;
+    process.env.OPENAI_API_KEY = 'server-side-key';
+    process.env.TRUSTED_CLIENT_IP_HEADER = 'x-forwarded-for';
+    try {
+      const response = await POST(new NextRequest('http://localhost:3000/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: 'http://localhost:3000',
+          'X-Forwarded-For': '198.51.100.250',
+        },
+        body: JSON.stringify({
+          provider: 'openai',
+          model: 'gpt-5.6-luna',
+          messages: [{ role: 'user', content: 'a'.repeat(2_000_100) }],
+        }),
+      }));
+
+      expect(response.status).toBe(429);
+      const body = await response.json();
+      expect(body.error.code).toBe('ESVA-3014');
+      expect(streamTextMock).not.toHaveBeenCalled();
+    } finally {
+      if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = originalKey;
+      if (originalHeader === undefined) delete process.env.TRUSTED_CLIENT_IP_HEADER;
+      else process.env.TRUSTED_CLIENT_IP_HEADER = originalHeader;
+    }
+  });
+
+  /** 같은 양을 자기 키로 보내면 통과한다 — 예산이 지갑을 따라간다. */
+  test('BYOK 요청은 같은 양이어도 예산에 막히지 않는다', async () => {
     const response = await POST(request(
       'openai',
       'gpt-5.6-luna',
-      '198.51.100.250',
+      '198.51.100.251',
       'a'.repeat(2_000_100),
     ));
-
-    expect(response.status).toBe(429);
-    const body = await response.json();
-    expect(body.error.code).toBe('ESVA-3014');
-    expect(streamTextMock).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    await response.text();
   });
 });
