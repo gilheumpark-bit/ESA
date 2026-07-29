@@ -1331,3 +1331,108 @@ describe('solar-generation — 손실·PR·이용률', () => {
     expect(step(4)).not.toBeCloseTo(step(3) * 12, 0);
   });
 });
+
+/**
+ * nec-load-calc — 주택 200 m² · 1φ 240 V (NEC 2020)
+ *
+ *   조명      200 × 33 VA/m²                        = 6,600 VA   (220.12)
+ *   소형가전  (2 + 1) × 1,500                        = 4,500 VA   (220.52)
+ *   수요율    3,000 + (11,100 − 3,000) × 0.35        = 5,835 VA   (220.42)
+ *   고정기기  (1200+1500+800+1000) × 0.75 [4 대 이상] = 3,375 VA   (220.53)
+ *   전동기    (1500+750) + 1500 × 0.25               = 2,625 VA   (220.50)
+ *   HVAC                                             = 5,000 VA
+ *   합계                                             = 16,835 VA
+ *   서비스    16,835 / 240                           =    70.1 A
+ *
+ * 여덟 단계가 전부 화면에만 있고 반환값에는 없어, 1.5 배로 오염시켜도
+ * 스위트가 초록이었다(변이 실측 2026-07-29). 서비스 용량 산정 근거다.
+ */
+describe('nec-load-calc — 주택 수요 부하와 서비스 용량', () => {
+  const input = {
+    occupancyType: 'dwelling', area: 200,
+    applianceLoads: [
+      { name: 'dishwasher', va: 1200 }, { name: 'disposal', va: 1500 },
+      { name: 'compactor', va: 800 }, { name: 'water-heater', va: 1000 },
+    ],
+    motorLoads: [1500, 750], hvacLoad: 5000, phases: 1,
+  };
+
+  it.each([
+    [1, 6600, '일반 조명 (VA)'],
+    [2, 4500, '소형 가전 + 세탁 (VA)'],
+    [3, 5835, '수요율 적용 (VA)'],
+    [4, 3375, '고정 기기 · 4 대 이상 75 % (VA)'],
+    [5, 2625, '전동기 · 최대분 125 % (VA)'],
+    [6, 5000, 'HVAC (VA)'],
+    [7, 16835, '총 수요 (VA)'],
+    [8, 70.1, '서비스 용량 (A)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('nec-load-calc', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** 3 상은 √3 이 들어간다 — 단상 식을 그대로 쓰면 1.73 배 과대 산정된다. */
+  it('3 상 208 V 는 √3 으로 나눈다', () => {
+    const { step } = run('nec-load-calc', { ...input, phases: 3 });
+    expect(step(7)).toBeCloseTo(16835, 0);
+    expect(step(8)).toBeCloseTo(46.7, 1);
+  });
+
+  /** 기기가 3 대면 75 % 를 적용하지 않는다 — 경계에서 부하가 줄어들면 안 된다. */
+  it('고정 기기 3 대에는 수요율을 적용하지 않는다 (220.53 경계)', () => {
+    const three = { ...input, applianceLoads: input.applianceLoads.slice(0, 3) };
+    const { step } = run('nec-load-calc', three);
+    expect(step(4)).toBeCloseTo(1200 + 1500 + 800, 0);
+  });
+});
+
+/**
+ * cable-impedance — Cu 95 mm² · 250 m · 75 °C · 60 Hz
+ *
+ *   R₂₀ = 0.017241 × 1000 / 95            = 0.1815 Ω/km   (IEC 60228 · ρ = 1/58)
+ *   R₇₅ = 0.1815 × [1 + 0.00393 × 55]     = 0.2207 Ω/km
+ *   R   = 0.2207 × 0.25                   = 0.0552 Ω
+ *   X   = 0.073 × 60/50                   = 0.0876 Ω/km   (표값은 50 Hz 기준)
+ *   X   = 0.0876 × 0.25                   = 0.0219 Ω
+ *   Z   = √(0.0552² + 0.0219²)            = 0.0594 Ω
+ *   θ   = arctan(0.0219 / 0.0552)         = 21.65°
+ *
+ * 일곱 단계 중 여섯이 무방비였다. 이 값들은 전압강하와 고장전류 계산의
+ * 입력으로 흘러 들어간다.
+ */
+describe('cable-impedance — 온도 보정과 주파수 환산', () => {
+  const input = { cableSize: 95, conductor: 'Cu', length: 250, frequency: 60, temperature: 75 };
+
+  it.each([
+    [1, 0.1815, 'R₂₀ (Ω/km)'],
+    [2, 0.2207, 'R₇₅ (Ω/km)'],
+    [3, 0.0552, '총 저항 (Ω)'],
+    [4, 0.0876, '리액턴스 60 Hz (Ω/km)'],
+    [5, 0.0219, '총 리액턴스 (Ω)'],
+    [6, 0.0594, '임피던스 크기 (Ω)'],
+    [7, 21.65, '임피던스 각 (deg)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('cable-impedance', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 7 ? 1 : 4);
+  });
+
+  /** 20 °C 에서는 보정이 없어야 한다 — 부호가 뒤집히면 여기서 갈린다. */
+  it('20 °C 에서는 온도 보정이 항등이다', () => {
+    const { step } = run('cable-impedance', { ...input, temperature: 20 });
+    expect(step(2)).toBeCloseTo(step(1), 4);
+  });
+
+  /** 50 Hz 표값을 그대로 쓰는지 — 환산 방향이 뒤집히면 60/50 이 50/60 이 된다. */
+  it('50 Hz 에서는 표값이 그대로 나온다', () => {
+    const { step } = run('cable-impedance', { ...input, frequency: 50 });
+    expect(step(4)).toBeCloseTo(0.073, 4);
+  });
+
+  /** 길이는 선형이다 — km 환산에 1000 이 빠지면 여기서 깨진다. */
+  it('길이를 두 배로 하면 저항·리액턴스가 두 배', () => {
+    const a = run('cable-impedance', input);
+    const b = run('cable-impedance', { ...input, length: 500 });
+    expect(b.step(3)).toBeCloseTo(a.step(3) * 2, 4);
+    expect(b.step(5)).toBeCloseTo(a.step(5) * 2, 4);
+  });
+});
