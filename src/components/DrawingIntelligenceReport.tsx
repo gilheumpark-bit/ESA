@@ -115,7 +115,9 @@ export function DrawingIntelligenceReport({
             ['기기', `${report.symbols.length}개`],
             ['선로', `${report.lines.length}개`],
             ['연결관계', `${report.relations.length}개`],
-            ['근거 연결률', `${Math.round(report.traceability * 100)}%`],
+            // 추적할 항목이 없으면 0/0 이다. 100 % 로 적으면 아무것도 못 읽은
+            // 도면이 만점으로 보인다 — 판정 불가는 판정 불가로 적는다.
+            ['근거 연결률', report.traceability === null ? '판정 불가' : `${Math.round(report.traceability * 100)}%`],
           ].map(([term, value]) => (
             <div key={term} className="bg-[var(--bg-primary)] px-4 py-3">
               <dt className="text-xs text-[var(--text-tertiary)]">{term}</dt>

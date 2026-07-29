@@ -61,10 +61,16 @@ export interface DrawingMetrics {
   tier: string;
   difficulty: string[];
 
-  nodeRecall: number;
-  nodePrecision: number;
-  edgeRecall: number;
-  edgePrecision: number;
+  /**
+   * 분모가 0 이면 `null`(판정 불가)이다. 앞서는 `1` 을 돌려줬는데, 정밀도의
+   * 분모는 **파서가 뽑은 개수**라서 하나도 못 뽑으면 정밀도가 만점이 됐다.
+   * `edgePrecision >= 0.5` 게이트가 그래서 전멸에도 통과했다(실측 2026-07-29).
+   * 같은 객체의 typeAccuracy·specRecall 은 이미 null 을 쓰고 있었다.
+   */
+  nodeRecall: number | null;
+  nodePrecision: number | null;
+  edgeRecall: number | null;
+  edgePrecision: number | null;
   /** 위치가 맞은 노드 중 타입까지 맞은 비율 (위치 매칭 0이면 null) */
   typeAccuracy: number | null;
   /** 결선이 하나도 없는 노드 비율 */
@@ -209,7 +215,7 @@ export function compareToLabel(
     }
   }
 
-  const safeDiv = (n: number, d: number) => (d === 0 ? 1 : n / d);
+  const safeDiv = (n: number, d: number) => (d === 0 ? null : n / d);
 
   return {
     id: label.id,

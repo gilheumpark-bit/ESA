@@ -76,7 +76,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
           status: supported ? 'SUPPORTED' : 'HOLD',
           recommendedAction: '경로상 차단기·퓨즈 존재 여부와 도면 누락을 재확인하십시오.',
           requiredInputs: supported ? [] : ['전체 관련 구획 판독 완료'],
-          standardRefs: ['KEC 보호 일반'],
+          standardRefs: ['KEC 212 과전류에 대한 보호'],
           calcReceiptIds: [],
         }));
       }
@@ -117,7 +117,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       status: supported ? 'SUPPORTED' : 'HOLD',
       recommendedAction: '접지 기호·접지선 표기를 확인하고 필요 시 재스캔하십시오.',
       requiredInputs: supported ? [] : ['접지 표기 근거', '전체 구획 판독 완료 증거'],
-      standardRefs: ['KEC 접지'],
+      standardRefs: ['KEC 142 접지시스템의 시설'],
       calcReceiptIds: [],
     }));
   }

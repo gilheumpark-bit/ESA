@@ -14,6 +14,7 @@
 import { NextRequest } from 'next/server';
 import { esaResponseHeaders, jsonWithEsa } from '@/lib/esa-http';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { DAILY_TOKEN_BUDGET, checkTokenBudget, cleanupTokenUsage, settleTokenUsage } from '@/lib/token-budget';
 import { resolveProviderKey, validateLocalProviderUrl, getLocalProviderUrl } from '@/lib/server-ai';
 import { checkPromptInjectionSafety } from '@/lib/safety-policies';
 import { PROVIDERS, type ChatMessage } from '@/lib/ai-providers';
@@ -47,80 +48,9 @@ interface ChatRequestBody {
   };
 }
 
-/**
- * **서버 키를 쓸 때만** 적용되는 IP 당 일일 토큰 예산.
- *
- * 이 예산이 지키는 것은 배포자의 API 청구서다. 그래서 자기 키를 넣은
- * 사용자(BYOK)에게는 적용하지 않는다 — 앞서는 예산 검사가 키 해석보다
- * 먼저 돌아 BYOK 사용자도 500K 에서 막혔고, 그때 나가는 안내가
- * `"Provide your own API key to continue"` 였다. 이미 넣은 키를 넣으라는
- * 말이라 사용자가 할 수 있는 일이 없다.
- */
-const DAILY_TOKEN_BUDGET = 500_000;
-
-/** In-memory daily token usage tracker — 최대 10,000 엔트리 */
-const MAX_TOKEN_ENTRIES = 10_000;
-const tokenUsage = new Map<string, { tokens: number; resetAt: number }>();
-
-// ─── PART 2: Token Budget Check ─────────────────────────────────
-
-function checkTokenBudget(ip: string, estimatedTokens: number): { allowed: boolean; remaining: number } {
-  const now = Date.now();
-  const entry = tokenUsage.get(ip);
-
-  // Reset at midnight UTC
-  const midnightUtc = new Date();
-  midnightUtc.setUTCHours(24, 0, 0, 0);
-  const resetAt = midnightUtc.getTime();
-
-  if (!entry || now >= entry.resetAt) {
-    if (estimatedTokens > DAILY_TOKEN_BUDGET) {
-      return { allowed: false, remaining: DAILY_TOKEN_BUDGET };
-    }
-    tokenUsage.set(ip, { tokens: estimatedTokens, resetAt });
-    return { allowed: true, remaining: DAILY_TOKEN_BUDGET - estimatedTokens };
-  }
-
-  if (entry.tokens + estimatedTokens > DAILY_TOKEN_BUDGET) {
-    return { allowed: false, remaining: DAILY_TOKEN_BUDGET - entry.tokens };
-  }
-
-  entry.tokens += estimatedTokens;
-  return { allowed: true, remaining: DAILY_TOKEN_BUDGET - entry.tokens };
-}
-
-/**
- * 예약분을 실사용량으로 정산한다.
- *
- * 요청 시점에는 출력이 얼마나 나올지 모르므로 `maxTokens` 상한을 먼저 잡아
- * 둔다(안 잡으면 짧은 프롬프트로 긴 답을 뽑는 만큼 계량이 새어 나간다).
- * 생성이 끝나 실제 수치를 알면 차액을 돌려준다 — 그러지 않으면 4096 을
- * 예약하고 300 을 쓴 사용자가 하루 122 번 만에 막힌다.
- */
-function settleTokenUsage(ip: string, reserved: number, actual: number): void {
-  const entry = tokenUsage.get(ip);
-  if (!entry || Date.now() >= entry.resetAt) return;
-  const refund = Math.max(0, reserved - actual);
-  entry.tokens = Math.max(0, entry.tokens - refund);
-}
-
-// Lazy cleanup every 10 minutes
-let lastTokenCleanup = Date.now();
-function cleanupTokenUsage() {
-  const now = Date.now();
-  if (now - lastTokenCleanup < 600_000 && tokenUsage.size < MAX_TOKEN_ENTRIES) return;
-  lastTokenCleanup = now;
-  for (const [key, entry] of tokenUsage) {
-    if (now >= entry.resetAt) tokenUsage.delete(key);
-  }
-  // 크기 초과 시 가장 오래된 엔트리 삭제
-  if (tokenUsage.size > MAX_TOKEN_ENTRIES) {
-    const oldest = [...tokenUsage.entries()]
-      .sort((a, b) => a[1].resetAt - b[1].resetAt)
-      .slice(0, tokenUsage.size - MAX_TOKEN_ENTRIES);
-    for (const [key] of oldest) tokenUsage.delete(key);
-  }
-}
+// 토큰 예산은 `@/lib/token-budget` 로 옮겼다 — chat 한 라우트만 계량되고
+// 더 비싼 team-review 는 무계량이었다(실측 2026-07-29). 한 사용자의 하루
+// 사용량은 라우트별로 나눠 셀 값이 아니다.
 
 // ─── PART 3: Firebase Token Extraction (Optional) ───────────────
 // Uses shared extractVerifiedUserId from @/lib/auth-helpers

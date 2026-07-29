@@ -199,3 +199,49 @@ describe('drawing intelligence report v2', () => {
   });
 
 });
+
+/**
+ * 아무것도 못 읽은 도면 — 분모가 0 이 되는 경로.
+ *
+ * 실측 2026-07-29: `traceableTotal === 0 ? 1` 이라 추적률이 1 로 나왔고,
+ * `DrawingIntelligenceReport.tsx` 가 이를 그대로 백분율로 렌더해 화면에
+ * `기기 0개 · 선로 0개 · 연결관계 0개` 옆에 `근거 연결률 100%` 가 붙었다.
+ * 기존 9 개 케이스는 전부 내용이 있는 합성이라 이 경로를 한 번도 안 밟았다.
+ */
+describe('추적할 항목이 하나도 없을 때', () => {
+  function emptySynthesis(): DrawingSynthesis {
+    return {
+      ...synthesis(),
+      calculations: [], issues: [], conflicts: [], claims: [], recommendations: [],
+    };
+  }
+
+  function graphlessArtifact(): DrawingReviewArtifact {
+    const base = artifact();
+    return { ...base, graph: { ...base.graph!, edges: [] } };
+  }
+
+  it('100 % 가 아니라 판정 불가(null)를 돌려준다', () => {
+    const report = buildDrawingIntelligenceReport({
+      drawingReview: graphlessArtifact(), synthesis: emptySynthesis(), verified95: true,
+    });
+    expect(report.traceability).toBeNull();
+  });
+
+  it('판정 불가는 HOLD 이고 95 % 배지가 달리지 않는다', () => {
+    const report = buildDrawingIntelligenceReport({
+      drawingReview: graphlessArtifact(), synthesis: emptySynthesis(), verified95: true,
+    });
+    expect(report.holds).toContain('HOLD_NO_TRACEABLE_CONTENT');
+    expect(report.verified95).toBe(false);
+  });
+
+  /** 내용이 있으면 예전처럼 숫자가 나와야 한다 — 과차단 반증. */
+  it('내용이 있으면 여전히 숫자를 돌려준다', () => {
+    const report = buildDrawingIntelligenceReport({
+      drawingReview: artifact(), synthesis: synthesis(), verified95: false,
+    });
+    expect(typeof report.traceability).toBe('number');
+    expect(report.holds).not.toContain('HOLD_NO_TRACEABLE_CONTENT');
+  });
+});

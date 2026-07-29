@@ -38,7 +38,8 @@ export interface DrawingIntelligenceReport {
   calculations: DrawingSynthesis['calculations'];
   recommendations: DrawingSynthesis['recommendations'];
   holds: string[];
-  traceability: number;
+  /** 추적할 항목이 하나도 없으면 `null` — 0/0 을 100 % 로 반올림하지 않는다. */
+  traceability: number | null;
   verified95: boolean;
 }
 
@@ -200,8 +201,13 @@ export function buildDrawingIntelligenceReport(input: {
     + input.synthesis.issues.length
     + input.synthesis.conflicts.length
     + input.synthesis.calculations.length;
-  const traceability = traceableTotal === 0 ? 1 : traceable / traceableTotal;
-  if (traceability < 1) holds.add('HOLD_UNRESOLVED_TRACEABILITY');
+  // 분모가 0 이면 "전부 추적됐다"가 아니라 "추적할 것이 없다"다. 1 을 돌려주면
+  // 화면에 `기기 0개 · 선로 0개` 옆에 `근거 연결률 100%` 가 붙는다(실측 2026-07-29 ·
+  // DrawingIntelligenceReport.tsx 가 이 값을 그대로 백분율로 렌더한다).
+  // 판정 불가는 판정 불가로 내보내고, 이때 95 % 배지도 달리지 않게 HOLD 를 건다.
+  const traceability = traceableTotal === 0 ? null : traceable / traceableTotal;
+  if (traceability === null) holds.add('HOLD_NO_TRACEABLE_CONTENT');
+  else if (traceability < 1) holds.add('HOLD_UNRESOLVED_TRACEABILITY');
   const snapshot = input.drawingReview.snapshot;
   const report: DrawingIntelligenceReport = {
     schemaVersion: 2,

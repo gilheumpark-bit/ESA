@@ -50,8 +50,12 @@ describe('도면 기준선 측정', () => {
     for (const tier of ['초', '중', '고']) {
       const t = rows.filter((r) => r.tier === tier);
       if (!t.length) continue;
-      const avg = (sel: (m: DrawingMetrics) => number) =>
-        t.reduce((s, m) => s + sel(m), 0) / t.length;
+      // 판정 불가(null)는 분모에서 뺀다 — 0 으로 세면 없는 실패를 만들고,
+      // 1 로 세면 없는 성공을 만든다. 전부 null 이면 평균도 판정 불가다.
+      const avg = (sel: (m: DrawingMetrics) => number | null) => {
+        const values = t.map(sel).filter((v): v is number => v !== null);
+        return values.length === 0 ? null : values.reduce((s, v) => s + v, 0) / values.length;
+      };
       console.log(
         `[${tier}급 평균]`.padEnd(26) + '      ' +
         pct(avg((m) => m.nodeRecall)).padStart(7) + '  ' +

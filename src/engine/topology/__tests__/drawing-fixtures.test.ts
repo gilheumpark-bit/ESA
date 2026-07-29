@@ -125,7 +125,10 @@ describe('도면 픽스처 — 회귀 가드 (과거 실측 결함)', () => {
   it('레이어 노이즈가 결선으로 오검출되지 않는다', () => {
     const f = fixtures.find((x) => x.label.id === 'L2-05-layer-noise')!;
     const m = compareToLabel(f.label, parse(f.dxf));
-    // 노이즈 24줄 + 도면틀이 전부 결선이 되면 정밀도가 바닥난다
+    // 노이즈 24줄 + 도면틀이 전부 결선이 되면 정밀도가 바닥난다.
+    // 분모(뽑은 결선 수)가 0 이면 정밀도는 판정 불가지 만점이 아니다 —
+    // 앞서는 1 을 돌려줘서 파서가 전멸해도 이 게이트가 통과했다(실측 2026-07-29).
+    expect(m.counts.parsedEdges).toBeGreaterThan(0);
     expect(m.edgePrecision).toBeGreaterThanOrEqual(0.5);
   });
 });

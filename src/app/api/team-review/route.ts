@@ -12,6 +12,7 @@ import { startPerf, perfHeaders } from '@/lib/api/performance';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custom-rules';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { ORCHESTRATION_RESERVE, checkTokenBudget, cleanupTokenUsage, estimateTokens } from '@/lib/token-budget';
 import { isCatalogModel } from '@/lib/ai-providers';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
@@ -213,6 +214,24 @@ export const POST = withApiHandler(
     }
 
     perf.checkpoint('parse');
+
+    // 서버 키로 다중 에이전트를 돌리는 비용을 계량한다. chat 만 예산을 갖고
+    // 훨씬 비싼 이 경로는 무계량이었다(실측 2026-07-29). BYOK 로 온 요청은
+    // 비용 주체가 호출자라 빼둔다 — 넣은 키를 또 넣으라는 안내가 되지 않게.
+    if (!vision?.apiKey) {
+      cleanupTokenUsage();
+      const reserved = ORCHESTRATION_RESERVE
+        + estimateTokens(query ?? '')
+        + estimateTokens(JSON.stringify(params));
+      const budget = checkTokenBudget(ctx.ip, reserved);
+      if (!budget.allowed) {
+        return ctx.error(
+          'ESVA-3014',
+          '오늘 몫의 서버 검토 한도를 다 썼습니다. 내일 다시 시도하거나 설정에서 본인 API 키를 넣으면 계속할 수 있습니다.',
+          429,
+        );
+      }
+    }
 
     // Orchestrator 실행
     const result = await runOrchestrator({
