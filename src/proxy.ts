@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, getClientIp, RATE_LIMIT_PROFILES } from '@/lib/rate-limit';
+import { buildSecurityHeaders } from '@/lib/security-headers';
 
 // =============================================================================
 // PART 1: Configuration
@@ -41,18 +42,15 @@ function detectLocale(request: NextRequest): SupportedLocale {
   return DEFAULT_LOCALE;
 }
 
+/**
+ * 목록은 `@/lib/security-headers` 하나뿐이다 — `next.config.ts` 도 같은 것을
+ * 쓴다. 여기서 따로 적으면 둘이 어긋난다(실제로 어긋나 있었다).
+ * CSP 는 설정 파일이 전 경로에 걸므로 여기서는 싣지 않는다.
+ */
 function applySecurityHeaders(response: NextResponse): void {
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set(
-    'Strict-Transport-Security',
-    'max-age=63072000; includeSubDomains; preload',
-  );
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=()',
-  );
+  for (const { key, value } of buildSecurityHeaders(process.env.NODE_ENV === 'production', false)) {
+    response.headers.set(key, value);
+  }
 }
 
 // =============================================================================

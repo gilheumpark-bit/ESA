@@ -1,5 +1,7 @@
 import type { NextConfig } from 'next';
 
+import { buildSecurityHeaders } from './src/lib/security-headers';
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   /** Required for Docker multi-stage build (see Dockerfile → .next/standalone). */
@@ -49,39 +51,7 @@ const nextConfig: NextConfig = {
   compress: true,
 
   async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'X-XSS-Protection', value: '1; mode=block' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              // Dev mode needs unsafe-eval for React's callstack reconstruction
-              // (HMR + Fast Refresh). Production never uses eval. Without this,
-              // dev console shows: "eval() is not supported in this environment".
-              process.env.NODE_ENV === 'production'
-                ? "script-src 'self' 'unsafe-inline'"
-                : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-              "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-              // Source-linked SLD reports render a hash-verified drawing from
-              // browser-local IndexedDB through an object URL.
-              "img-src 'self' data: blob: https:",
-              "font-src 'self' https://cdn.jsdelivr.net",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-              "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://*.firebaseio.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.stripe.com",
-              "frame-src 'self' https://js.stripe.com",
-            ].join('; '),
-          },
-        ],
-      },
-    ];
+    return [{ source: '/(.*)', headers: buildSecurityHeaders(process.env.NODE_ENV === 'production') }];
   },
 
   async redirects() {

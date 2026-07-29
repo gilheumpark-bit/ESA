@@ -4,8 +4,25 @@
     {
       "name": "esva-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--turbopack", "-p", "3010"],
+      "runtimeArgs": [
+        "next",
+        "dev",
+        "--turbopack",
+        "-p",
+        "3010"
+      ],
       "port": 3010
+    },
+    {
+      "name": "esva-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "next",
+        "start",
+        "-p",
+        "3011"
+      ],
+      "port": 3011
     }
   ]
 }
