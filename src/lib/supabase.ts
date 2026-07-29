@@ -6,6 +6,30 @@
 
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * 저장소를 **쓸 수 없는 상태** — 우리 코드가 깨진 게 아니라 의존성이 없다.
+ *
+ * 라우트의 catch 가 이걸 평범한 `Error` 로 받으면 전부 500 이 된다. 실측
+ * (2026-07-29 · dev): `/api/community` 와 `/api/calculate/{id}` 가 Supabase
+ * 미구성만으로 500 을 냈다. **500 은 "우리 잘못" 이고 온콜을 깨운다.** 이건
+ * 503 — 의존성 부재이고, 배포 설정으로 고칠 일이다. `/api/health` 는 이미
+ * 그 구분을 하는데(critical down → 503) API 라우트만 안 하고 있었다.
+ */
+export class StoreUnavailableError extends Error {
+  readonly code = 'ESVA-5030';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'StoreUnavailableError';
+  }
+}
+
+/** 라우트 catch 에서 쓰는 판별기 — instanceof 는 번들 경계에서 흔들린다. */
+export function isStoreUnavailable(err: unknown): err is StoreUnavailableError {
+  return err instanceof StoreUnavailableError
+    || (err instanceof Error && err.name === 'StoreUnavailableError');
+}
+
 // ─── PART 1: Types ────────────────────────────────────────────
 
 export interface CalculationReceipt {
@@ -87,7 +111,9 @@ export function getSupabaseClient(): SupabaseClient {
   const anonKey = getEnvVar('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
   if (!url || !anonKey) {
-    throw new Error('저장 서비스를 사용할 수 없습니다. 배포 관리자에게 데이터베이스 구성을 확인해 주세요.');
+    throw new StoreUnavailableError(
+      '저장 서비스를 사용할 수 없습니다. 배포 관리자에게 데이터베이스 구성을 확인해 주세요.',
+    );
   }
 
   _client = createSupabaseClient(url, anonKey, {
@@ -108,7 +134,7 @@ export function getSupabaseAdmin(): SupabaseClient {
   const serviceKey = getEnvVar('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!url || !serviceKey) {
-    throw new Error('서버 저장 서비스를 사용할 수 없습니다.');
+    throw new StoreUnavailableError('서버 저장 서비스를 사용할 수 없습니다.');
   }
 
   return createSupabaseClient(url, serviceKey, {

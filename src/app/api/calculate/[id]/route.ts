@@ -3,6 +3,7 @@
  * Public receipts need no auth; private receipts require their owner token.
  */
 
+import { isStoreUnavailable } from '@/lib/supabase';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
@@ -65,6 +66,13 @@ async function GET__impl(
     );
   } catch (error) {
     console.error('[ESVA /api/calculate/[id]] Error:', error);
+    // 저장소 미구성/불가는 우리 코드의 실패가 아니다 — 503 으로 가른다.
+    if (isStoreUnavailable(error)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-5030', message: error.message } },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { success: false, error: { code: 'ESVA-4999', message: 'Failed to load receipt' } },
       { status: 500 },

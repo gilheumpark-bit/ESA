@@ -9,6 +9,7 @@
  * PART 3: POST handler (create question)
  */
 
+import { isStoreUnavailable } from '@/lib/supabase';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { getQuestions, createQuestion, type QuestionListOptions, type QuestionStatus } from '@/lib/community';
@@ -47,6 +48,13 @@ async function GET__impl(request: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ESVA Community GET]', message);
+    // 저장소 미구성/불가는 우리 코드의 실패가 아니다 — 503 으로 가른다.
+    if (isStoreUnavailable(err)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'ESVA-5030', message: err.message } },
+        { status: 503 },
+      );
+    }
     return NextResponse.json(
       { success: false, error: { code: 'ESVA-7050', message: '질문 목록을 불러오지 못했습니다.' } },
       { status: 500 },

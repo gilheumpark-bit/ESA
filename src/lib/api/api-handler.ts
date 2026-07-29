@@ -17,6 +17,7 @@ import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { sanitizeInput } from '@/lib/security-hardening';
 import { getErrorByCode } from '@/data/error-codes';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { isStoreUnavailable } from '@/lib/supabase';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -207,6 +208,13 @@ export function withApiHandler(
         durationMs,
         ip,
       });
+
+      // 의존성 부재는 **우리 코드의 실패가 아니다.** 500 은 온콜을 깨우고
+      // 코드 회귀를 찾게 만든다 — 저장소 미구성은 배포 설정 문제이므로 503 이
+      // 맞다. `/api/health` 는 이미 이 구분을 한다(critical down → 503).
+      if (isStoreUnavailable(err)) {
+        return buildError('ESVA-5030', err.message, 503);
+      }
 
       // ESVA-XXXX 코드가 에러 메시지에 있으면 추출 + error-codes DB 조회
       const codeMatch = message.match(/ESVA-\d{4}/);
