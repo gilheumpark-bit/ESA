@@ -49,43 +49,67 @@ export interface NameplateOCROptions {
  * 전기 파라미터 추출: OCR 텍스트에서 V, A, kW, Hz, kVA 값 추출
  * Supports multilingual labels (ko/en/ja/zh).
  */
+/**
+ * 단위 뒤에 라틴 문자가 더 붙으면 **다른 단위**다.
+ *
+ *   kV  ⊂ kVA   (전압 ⊂ 피상전력)   MVA ⊂ MVAR (피상 ⊂ 무효)
+ *   kW  ⊂ kWh   (전력 ⊂ 전력량)     kA  ⊂ kAh
+ *
+ * 경계가 없으면 명판의 `400kVA` 가 전압 `400kV` 로, 단선도의 `23 MVAR` 이
+ * 전력 `23MVA` 로 읽힌다 — 둘 다 라이브에서 실제로 났다(2026-07-29).
+ */
+const UNIT_TAIL = '(?![A-Za-z])';
+
 export function parseElectricalParams(text: string): Partial<NameplateData> {
   const result: Partial<NameplateData> = {};
   const normalized = text.replace(/\s+/g, ' ');
 
-  // 전압 (Voltage): 220V, 380V, 3.3kV, 6600V, etc.
+  /**
+   * 전압 (Voltage): 220V, 380V, 3.3kV, 6600V, etc.
+   *
+   * **`kV` 는 `kVA` 의 앞부분이다.** 경계가 없어 명판의 용량 `400kVA` 가
+   * 전압 `400kV` 로 읽혔다 — 라이브 실측(2026-07-29 · Trafo-Union GEAFOL
+   * 400kVA 20000/400V 명판). 400V 2차측이 400,000V 로 표시되는 것이고,
+   * 1000 배 오차를 **위험한 방향으로** 낸다. 비전 모델은 `20000/400V` 로
+   * 정확히 읽었는데 추출층이 뒤집었다(§2.10).
+   *
+   * `2 차측/1 차측` 쌍(`20000/400V`)을 단독 `V` 보다 먼저 본다 — 순서가
+   * 바뀌면 쌍의 앞 숫자만 잡는다.
+   */
   const voltagePatterns = [
-    /(\d+(?:\.\d+)?)\s*(?:kV|KV)/i,
-    /(?:voltage|전압|電圧|电压|rated\s*voltage)\s*[:\s]*(\d+(?:\.\d+)?)\s*(?:V|kV)/i,
-    /(\d{2,5})\s*\/\s*(\d{2,5})\s*V/i,
-    /(\d+(?:\.\d+)?)\s*V(?:\s|$|,)/i,
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*kV${UNIT_TAIL}`, 'i'),
+    new RegExp(
+      `(?:voltage|전압|電圧|电压|rated\\s*voltage)\\s*[:\\s]*(\\d+(?:\\.\\d+)?)\\s*(?:kV|V)${UNIT_TAIL}`,
+      'i',
+    ),
+    new RegExp(`(\\d{2,5})\\s*/\\s*(\\d{2,5})\\s*V${UNIT_TAIL}`, 'i'),
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*V${UNIT_TAIL}`, 'i'),
   ];
 
-  for (const pattern of voltagePatterns) {
+  for (const [index, pattern] of voltagePatterns.entries()) {
     const m = normalized.match(pattern);
-    if (m) {
-      if (pattern.source.includes('kV|KV') && m[1]) {
-        result.voltage = `${m[1]}kV`;
-      } else if (m[2]) {
-        result.voltage = `${m[1]}/${m[2]}V`;
-      } else if (m[1]) {
-        result.voltage = `${m[1]}V`;
-      }
-      break;
-    }
+    if (!m) continue;
+    // 0 번은 kV 전용 패턴, 2 번은 1·2 차 쌍. 나머지는 단독 V.
+    if (index === 0 && m[1]) result.voltage = `${m[1]}kV`;
+    else if (m[2]) result.voltage = `${m[1]}/${m[2]}V`;
+    else if (m[1]) result.voltage = `${m[1]}${/kV/i.test(m[0]) ? 'kV' : 'V'}`;
+    break;
   }
 
-  // 전류 (Current): 10A, 100A, 1.5kA
+  // 전류 (Current): 10A, 100A, 1.5kA — `kA` 는 `kAh` 의 앞부분이다.
   const currentPatterns = [
-    /(\d+(?:\.\d+)?)\s*(?:kA)/i,
-    /(?:current|전류|電流|电流|rated\s*current|정격전류)\s*[:\s]*(\d+(?:\.\d+)?)\s*A/i,
-    /(\d+(?:\.\d+)?)\s*A(?:\s|$|,)/i,
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*kA${UNIT_TAIL}`, 'i'),
+    new RegExp(
+      `(?:current|전류|電流|电流|rated\\s*current|정격전류)\\s*[:\\s]*(\\d+(?:\\.\\d+)?)\\s*A${UNIT_TAIL}`,
+      'i',
+    ),
+    new RegExp(`(\\d+(?:\\.\\d+)?)\\s*A${UNIT_TAIL}`, 'i'),
   ];
 
   for (const pattern of currentPatterns) {
     const m = normalized.match(pattern);
     if (m) {
-      if (pattern.source.includes('kA') && m[1]) {
+      if (/kA/i.test(m[0]) && m[1]) {
         result.current = `${m[1]}kA`;
       } else {
         const val = m[2] ?? m[1];
@@ -107,7 +131,6 @@ export function parseElectricalParams(text: string): Partial<NameplateData> {
    *
    * 못 잡으면 `power` 는 비워 둔다 — 틀린 값을 채우는 것보다 낫다.
    */
-  const UNIT_TAIL = '(?![A-Za-z])';
   const powerPatterns: Array<{ re: RegExp; unit: string }> = [
     { re: new RegExp(`(\\d+(?:\\.\\d+)?)\\s*MVA${UNIT_TAIL}`, 'i'), unit: 'MVA' },
     { re: new RegExp(`(\\d+(?:\\.\\d+)?)\\s*kVA${UNIT_TAIL}`, 'i'), unit: 'kVA' },
@@ -303,7 +326,9 @@ export async function recognizeNameplate(
     insulation: parsed.insulation ?? regexParams.insulation,
     protection: parsed.protection ?? regexParams.protection,
     rawText: parsed.rawText || responseText,
-    confidence: parsed.confidence ?? 0.5,
+    // 모델이 안 적어 보내면 0 이다. 0.5 를 지어내면 "절반은 맞다" 는 없는
+    // 근거가 생긴다 — 화면이 0 을 "미보고" 로 구분해 보여 준다.
+    confidence: parsed.confidence ?? 0,
     language: parsed.language && parsed.language !== 'unknown'
       ? parsed.language
       : detectLanguage(parsed.rawText || responseText),

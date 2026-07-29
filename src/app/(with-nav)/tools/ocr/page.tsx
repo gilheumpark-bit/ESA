@@ -268,18 +268,32 @@ function OCRResults({
 
   return (
     <div className="space-y-6">
-      {/* Confidence */}
-      <div className="flex items-center gap-3">
-        <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
-          <div
-            className="h-full rounded-full bg-[var(--color-primary)] transition-all"
-            style={{ width: `${Math.round(result.confidence * 100)}%` }}
-          />
+      {/*
+        모델이 자기 확신도를 안 적어 보내면 값이 0 으로 떨어진다. 그걸 그대로
+        "인식 정확도 0%" 로 쓰면 **다 읽어 놓고 실패한 것처럼 보인다** —
+        라이브 실측(2026-07-29, Trafo-Union 명판)에서 제조사·형식·전압·전류·
+        용량·주파수를 전부 옳게 읽고도 0% 였다. 없는 값을 0 으로 읽지 않는다.
+      */}
+      {result.confidence > 0 ? (
+        <div className="flex items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+            <div
+              className="h-full rounded-full bg-[var(--color-primary)] transition-all"
+              style={{ width: `${Math.round(result.confidence * 100)}%` }}
+            />
+          </div>
+          <span className="text-xs font-medium text-[var(--text-secondary)]">
+            인식 정확도 {Math.round(result.confidence * 100)}%
+          </span>
         </div>
-        <span className="text-xs font-medium text-[var(--text-secondary)]">
-          인식 정확도 {Math.round(result.confidence * 100)}%
-        </span>
-      </div>
+      ) : (
+        <p
+          data-testid="confidence-unreported"
+          className="text-xs text-[var(--text-secondary)]"
+        >
+          모델이 확신도를 보고하지 않았습니다 — 아래 값은 원문과 대조해 확인하십시오.
+        </p>
+      )}
 
       {/* Parameters */}
       <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">

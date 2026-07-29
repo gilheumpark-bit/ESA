@@ -75,3 +75,43 @@ describe('전력 단위 — 뒤에 글자가 더 붙으면 다른 단위다', ()
     expect(power(raw)).toBeUndefined();
   });
 });
+
+/**
+ * **`kV` 는 `kVA` 의 앞부분이다.**
+ *
+ * 라이브 실측(2026-07-29 · Trafo-Union GEAFOL 명판, 400kVA · 20000/400V):
+ * 비전 모델은 `"voltage": "20000/400V"` 로 정확히 읽었는데 추출층이 용량
+ * `400kVA` 에서 `400kV` 를 떼어 **전압 400,000V** 로 표시했다. 400V 2차측이
+ * 1000 배로 부풀어 오르는 방향이라 그대로 계산기에 넘기면 위험하다.
+ *
+ * 같은 함정: `kA` ⊂ `kAh`.
+ */
+describe('전압·전류 단위 경계', () => {
+  const P = parseElectricalParams;
+
+  it('명판 원문에서 용량을 전압으로 읽지 않는다', () => {
+    const live = '{"voltage":"20000/400V","current":"11.55/577A","power":"400kVA","frequency":"50Hz"}';
+    const r = P(live);
+    expect(r.voltage).toBe('20000/400V');
+    expect(r.power).toBe('400kVA');
+    expect(r.frequency).toBe('50Hz');
+  });
+
+  it.each([
+    ['400 kVA', 'voltage'],
+    ['100 kAh', 'current'],
+  ])('%s 는 %s 로 잡지 않는다', (text, field) => {
+    expect(P(text)[field as 'voltage' | 'current']).toBeUndefined();
+  });
+
+  it.each([
+    ['3.3 kV', 'voltage', '3.3kV'],
+    ['380 V', 'voltage', '380V'],
+    ['20000/400V', 'voltage', '20000/400V'],
+    ['1.5 kA', 'current', '1.5kA'],
+    ['577 A', 'current', '577A'],
+    ['정격전류: 12 A', 'current', '12A'],
+  ])('%s → %s = %s', (text, field, expected) => {
+    expect(P(text)[field as 'voltage' | 'current']).toBe(expected);
+  });
+});
