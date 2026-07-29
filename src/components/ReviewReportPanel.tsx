@@ -120,7 +120,7 @@ function TopologyLine({ t }: { t: TopologyReadout }) {
     <p
       data-testid="topology-readout"
       data-unreadable={String(unreadable)}
-      className="mt-2 text-[12px] text-[var(--text-tertiary)]"
+      className="mt-2 text-[12px] text-[var(--text-secondary)]"
     >
       <span className="font-[family-name:var(--font-mono)]">
         계통 판독 · 부품 {t.nodes} · 연결 {t.edges} · 고립 {t.isolated} · 분리 {t.fragments}
@@ -145,6 +145,12 @@ function TopologyLine({ t }: { t: TopologyReadout }) {
  *
  * 이 제품의 쓸모는 "빠진 게 있는지 찾아 준다" 인데, 정작 리포트가 자기가
  * 뭘 안 봤는지 말하지 않으면 그게 가장 큰 빠짐이다. 못 본 것을 먼저 말한다.
+ *
+ * 색은 `--text-tertiary` 가 아니라 `--text-secondary` 다. 라이트 모드에서
+ * tertiary 는 이 배경 대비 **3.53** 으로 12px 본문 AA(4.5) 미달이다(실측
+ * 2026-07-29, 라이브 계산). 판독 범위 두 줄은 장식이 아니라 읽히라고 있는
+ * 줄이므로 6.61 인 secondary 를 쓴다. 나머지 tertiary 표면은 그대로 뒀다 —
+ * 토큰 자체를 바꾸는 건 이 수리의 범위가 아니다.
  */
 function CoverageLine({ c }: { c: ReviewReport['coverage'] }) {
   const unratedCount = Math.max(0, c.breakersTotal - c.breakersRatedParsed);
@@ -157,7 +163,7 @@ function CoverageLine({ c }: { c: ReviewReport['coverage'] }) {
       data-testid="coverage-readout"
       data-unrated={String(unratedCount)}
       data-blind={String(blind)}
-      className="mt-2 text-[12px] text-[var(--text-tertiary)]"
+      className="mt-2 text-[12px] text-[var(--text-secondary)]"
     >
       <span className="font-[family-name:var(--font-mono)]">
         검토 범위 · 차단기 {c.breakersTotal} · 정격 읽음 {c.breakersRatedParsed}
@@ -235,7 +241,7 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
       ) : (
         // 빈 결과는 "깨끗하다" 와 "못 읽었다" 둘 다일 수 있다. 위 검토 범위
         // 줄이 어느 쪽인지 말해 주므로 여기서 단정하지 않는다.
-        <p className="mt-3 text-[13px] text-[var(--text-tertiary)]">
+        <p className="mt-3 text-[13px] text-[var(--text-secondary)]">
           대조할 판정 항목이 없습니다 — 적합 판정이 아니라 <strong>대조가 성립하지 않았다</strong>는 뜻입니다.
           위 검토 범위를 보고 원본에서 확인하십시오.
         </p>

@@ -211,3 +211,36 @@ describe('검토 범위 표기', () => {
     expect(html).not.toContain('이상 없');
   });
 });
+
+/**
+ * **판독 범위 줄은 읽혀야 한다 — 대비 회귀 가드.**
+ *
+ * 라이브 실측(2026-07-29, dev 서버 · 계산된 색으로 WCAG 비율 산출):
+ * `--text-tertiary` 는 이 패널 배경 대비 **라이트 3.53 · 다크 4.96** 이다.
+ * 12~13px 본문의 AA 기준은 4.5 이므로 라이트에서 미달이었다. `--text-secondary`
+ * 로 올린 뒤 **라이트 6.61 · 다크 8.72** 를 실측했다.
+ *
+ * jsdom 은 CSS 변수를 계산하지 않아 여기서 비율을 다시 잴 수는 없다. 그래서
+ * 이 검사는 **선택을 잠근다** — 누가 tertiary 로 되돌리면 깨진다. 실제 비율은
+ * 위 실측이 근거다(이 검사가 대비를 증명하지는 않는다).
+ */
+describe('판독 범위 줄 대비', () => {
+  const html = renderToStaticMarkup(
+    <ReviewReportPanel
+      review={{
+        findings: [],
+        summary: { pass: 0, warn: 0, fail: 0, unknown: 0, info: 0 },
+        coverage: { breakersTotal: 2, breakersRatedParsed: 1, breakersWithCable: 1 },
+        disclaimer: '검토 보조 결과입니다.',
+        topology: { nodes: 3, edges: 2, isolated: 0, fragments: 1 },
+      }}
+    />,
+  );
+
+  it.each(['coverage-readout', 'topology-readout'])('%s 는 tertiary 를 쓰지 않는다', (id) => {
+    const line = html.split('<p ').find((chunk) => chunk.includes(`data-testid="${id}"`));
+    expect(line).toBeDefined();
+    expect(line!.slice(0, line!.indexOf('>'))).toContain('--text-secondary');
+    expect(line!.slice(0, line!.indexOf('>'))).not.toContain('--text-tertiary');
+  });
+});
