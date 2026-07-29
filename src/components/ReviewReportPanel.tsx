@@ -135,6 +135,49 @@ function TopologyLine({ t }: { t: TopologyReadout }) {
   );
 }
 
+/**
+ * **검토 범위 — 얼마나 봤는지.**
+ *
+ * 이 패널은 판정 개수(FAIL 2 · UNKNOWN 4 …)만 보여 줬고, `coverage` 는
+ * 엔진이 세어 놓고도 화면에 오지 않았다(호출처 0). 그래서 차단기 12 개 중
+ * 3 개만 읽힌 도면도 `FAIL 0` 으로 보였다 — 읽은 3 개가 멀쩡했다는 뜻인데
+ * **"이상 없음" 으로 읽힌다.**
+ *
+ * 이 제품의 쓸모는 "빠진 게 있는지 찾아 준다" 인데, 정작 리포트가 자기가
+ * 뭘 안 봤는지 말하지 않으면 그게 가장 큰 빠짐이다. 못 본 것을 먼저 말한다.
+ */
+function CoverageLine({ c }: { c: ReviewReport['coverage'] }) {
+  const unratedCount = Math.max(0, c.breakersTotal - c.breakersRatedParsed);
+  const noCableCount = Math.max(0, c.breakersRatedParsed - c.breakersWithCable);
+  // 차단기를 하나도 못 읽었으면 검토 자체가 성립하지 않는다.
+  const blind = c.breakersTotal > 0 && c.breakersRatedParsed === 0;
+
+  return (
+    <p
+      data-testid="coverage-readout"
+      data-unrated={String(unratedCount)}
+      data-blind={String(blind)}
+      className="mt-2 text-[12px] text-[var(--text-tertiary)]"
+    >
+      <span className="font-[family-name:var(--font-mono)]">
+        검토 범위 · 차단기 {c.breakersTotal} · 정격 읽음 {c.breakersRatedParsed}
+        {' · 케이블 결속 '}{c.breakersWithCable}
+      </span>
+      {blind ? (
+        <span className="ml-1.5 text-[var(--color-accent)]">
+          — 정격을 하나도 읽지 못했습니다. 아래 판정은 회로 검토가 아닙니다.
+        </span>
+      ) : (unratedCount > 0 || noCableCount > 0) && (
+        <span className="ml-1.5 text-[var(--color-accent)]">
+          {unratedCount > 0 && `— 차단기 ${unratedCount}개는 정격을 못 읽어 검토에서 빠졌습니다.`}
+          {noCableCount > 0 && ` 케이블이 결속되지 않은 ${noCableCount}개는 허용전류 대조를 못 했습니다.`}
+          {' 빠진 항목은 판정 개수에 들어 있지 않습니다.'}
+        </span>
+      )}
+    </p>
+  );
+}
+
 export default function ReviewReportPanel({ review }: { review: ReviewLike | null }) {
   if (!review) return null;
 
@@ -148,7 +191,7 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
     );
   }
 
-  const { findings, summary, disclaimer, extractionSource, topology } = review;
+  const { findings, summary, disclaimer, extractionSource, topology, coverage } = review;
   const sorted = [...findings].sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity));
 
   // 요약 배지 — 0인 항목은 숨긴다(신호 압축).
@@ -182,6 +225,7 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
         )}
       </div>
 
+      {coverage && <CoverageLine c={coverage} />}
       {topology && <TopologyLine t={topology} />}
 
       {sorted.length > 0 ? (
@@ -189,7 +233,12 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
           {sorted.map((f, i) => <FindingCard key={f.componentId ?? `${f.rule}-${i}`} f={f} />)}
         </div>
       ) : (
-        <p className="mt-3 text-[13px] text-[var(--text-tertiary)]">판정 항목이 없습니다.</p>
+        // 빈 결과는 "깨끗하다" 와 "못 읽었다" 둘 다일 수 있다. 위 검토 범위
+        // 줄이 어느 쪽인지 말해 주므로 여기서 단정하지 않는다.
+        <p className="mt-3 text-[13px] text-[var(--text-tertiary)]">
+          대조할 판정 항목이 없습니다 — 적합 판정이 아니라 <strong>대조가 성립하지 않았다</strong>는 뜻입니다.
+          위 검토 범위를 보고 원본에서 확인하십시오.
+        </p>
       )}
 
       {disclaimer && (

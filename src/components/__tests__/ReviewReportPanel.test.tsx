@@ -5,6 +5,7 @@
  */
 
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { ReviewReport } from '@/engine/review/circuit-review';
 import ReviewReportPanel, { type ReviewLike } from '../ReviewReportPanel';
 
 const failReview: ReviewLike = {
@@ -129,5 +130,84 @@ describe('ReviewReportPanel', () => {
       expect(renderToStaticMarkup(<ReviewReportPanel review={failReview} />))
         .not.toContain('계통 판독');
     });
+  });
+});
+
+/**
+ * **검토 범위 — 안 본 것을 말하는가.**
+ *
+ * 엔진은 `coverage`(차단기 총수·정격 읽은 수·케이블 결속 수)를 세어 보내는데
+ * 패널이 통째로 버렸다(호출처 0, 2026-07-29 실측). 그래서 차단기 12 개 중
+ * 3 개만 읽힌 도면도 판정 배지만 보였고, `FAIL 0` 이 **"이상 없음"** 으로
+ * 읽혔다 — 실제로는 9 개를 아예 안 본 것이다.
+ *
+ * 이 제품의 쓸모가 "빠진 게 있는지 찾아 준다" 라면, 리포트가 자기가 안 본
+ * 곳을 말하지 않는 것이 가장 큰 빠짐이다.
+ */
+describe('검토 범위 표기', () => {
+  const withCoverage = (
+    coverage: ReviewReport['coverage'],
+    findings: ReviewReport['findings'] = [],
+  ): ReviewLike => ({
+    findings,
+    summary: { pass: 0, warn: 0, fail: 0, unknown: 0, info: 0 },
+    coverage,
+    disclaimer: '검토 보조 결과입니다.',
+  });
+
+  it('총수·읽은 수·결속 수를 그대로 보여 준다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 12, breakersRatedParsed: 7, breakersWithCable: 4 })} />,
+    );
+    expect(html).toContain('검토 범위');
+    expect(html).toContain('차단기 12');
+    expect(html).toContain('정격 읽음 7');
+    expect(html).toContain('케이블 결속 4');
+  });
+
+  it('못 읽은 차단기가 있으면 개수와 함께 경고한다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 12, breakersRatedParsed: 3, breakersWithCable: 3 })} />,
+    );
+    expect(html).toContain('9개는 정격을 못 읽어');
+    expect(html).toContain('판정 개수에 들어 있지 않습니다');
+  });
+
+  it('케이블이 결속 안 된 만큼 허용전류 대조를 못 했다고 말한다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 5, breakersRatedParsed: 5, breakersWithCable: 2 })} />,
+    );
+    expect(html).toContain('3개는 허용전류 대조를 못 했습니다');
+  });
+
+  /** 하나도 못 읽었으면 "판정" 이라는 말 자체가 오해다. */
+  it('정격을 하나도 못 읽으면 회로 검토가 아니라고 말한다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 8, breakersRatedParsed: 0, breakersWithCable: 0 })} />,
+    );
+    expect(html).toContain('정격을 하나도 읽지 못했습니다');
+    expect(html).toContain('회로 검토가 아닙니다');
+  });
+
+  /** 다 읽었으면 조용해야 한다 — 늑대 소년이 되면 아무도 안 읽는다. */
+  it('전부 읽혔으면 경고를 붙이지 않는다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 6, breakersRatedParsed: 6, breakersWithCable: 6 })} />,
+    );
+    expect(html).toContain('차단기 6');
+    expect(html).not.toContain('못 읽어');
+    expect(html).not.toContain('대조를 못 했습니다');
+  });
+
+  /**
+   * 빈 결과가 "적합" 으로 읽히지 않아야 한다. 앞서는 `판정 항목이 없습니다`
+   * 한 줄이라 깨끗한 도면과 못 읽은 도면이 같은 화면이었다.
+   */
+  it('판정 항목이 0 이어도 적합이라고 말하지 않는다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 4, breakersRatedParsed: 0, breakersWithCable: 0 })} />,
+    );
+    expect(html).toContain('대조가 성립하지 않았다');
+    expect(html).not.toContain('이상 없');
   });
 });
