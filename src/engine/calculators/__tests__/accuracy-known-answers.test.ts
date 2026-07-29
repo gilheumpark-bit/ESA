@@ -533,3 +533,50 @@ describe('판정 방향', () => {
     expect(r.verdict()).toBe(true);
   });
 });
+
+/**
+ * **영수증 '풀이 과정' 값에도 눈금을 박는다 — vt-sizing.**
+ *
+ * 이 파일 머리말(run 헬퍼 주석)이 예고한 구멍을 실측으로 확인했다.
+ * 변이(2026-07-29 · 표시 단계 값에 배수를 곱함):
+ *
+ *   vt-sizing 변성비·총부담·표준정격·등급한계 → 전체 3,359 개 초록
+ *   ct-sizing · breaker-sizing · cable-impedance 1단계 → 전체 3,359 개 초록
+ *
+ * 즉 화면에 뜨는 풀이 값은 대체로 **아무도 재지 않는다.** 최종 `value` 와
+ * `additionalOutputs` 만 잠겨 있어, 중간 표시가 틀려도 총합만 맞으면 통과한다.
+ * 실무자는 그 중간값으로 검산하고, 표준 VT 정격은 발주 값이기도 하다.
+ *
+ * 기대값은 손계산이다:
+ *   V₁ = 22,900 V (L-L) · n = 22900/110 = 208.18
+ *   ΣB = 15+10+2 = 27 VA · 표준 정격 = 27 이상 최소값 = 30 VA
+ *   등급 0.5 부담 한계 = 50 VA
+ *
+ * L-G 결선(1차 상전압 13,221.3 V·변성비)은 위쪽 'vt-sizing L-G 22.9kV'
+ * 케이스가 이미 잠근다 — 되풀이하지 않는다.
+ *
+ * 남은 잔여: 나머지 계산기의 표시 단계는 아직 눈금이 없다. 표본 3종을 변이로
+ * 확인했고, 전수는 손계산 값이 그만큼 필요해 이번 배치에 넣지 않았다.
+ */
+describe('vt-sizing — 풀이 단계의 절대 눈금', () => {
+  const base = {
+    systemVoltage: 22900,
+    secondaryVoltage: 110,
+    meterBurden: 15,
+    relayBurden: 10,
+    wireBurden: 2,
+    accuracyClass: '0.5',
+    connectionType: 'line-to-line',
+  };
+
+  it.each([
+    [1, 22900, 'VT 1차 전압'],
+    [2, 208.18, '변성비'],
+    [3, 27, '총 부담'],
+    [4, 30, '표준 VT 정격'],
+    [5, 50, '등급 0.5 부담 한계'],
+  ])('step %d = %s (%s)', (n, expected) => {
+    const { step } = run('vt-sizing', base);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+});
