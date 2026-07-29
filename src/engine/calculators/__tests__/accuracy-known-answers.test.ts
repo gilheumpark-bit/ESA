@@ -1624,3 +1624,115 @@ describe('reactive-power — 콘덴서 뱅크 용량', () => {
     expect(step(6)).toBeGreaterThanOrEqual(step(3));
   });
 });
+
+/**
+ * emergency-generator — 비상부하 3 종 · 안전율 1.25 · 8 시간 운전
+ *
+ *   정상부하  40/0.8 + 30/0.85 + 15/0.8              = 104.04 kVA
+ *   최대 전동기 30/0.85 = 35.29 kVA, 기동 6 배        = 211.76 kVA
+ *   기동 증분 211.76 − 35.29                          = 176.47 kVA
+ *   필요용량  (104.04 + 176.47) × 1.25                = 350.64 kVA
+ *   표준용량  350.64 이상 최초                        = 400 kVA
+ *   연료      400 × 0.8 × 0.75 × 0.21                 =  50.4 L/h
+ *   탱크      50.4 × 8                                =   403 L
+ *
+ * 발전기는 기동 돌입을 못 버티면 정상부하가 맞아도 시동에서 주저앉는다.
+ * 그 계산이 2·3 단계인데 무방비였다(변이 실측 2026-07-29).
+ */
+describe('emergency-generator — 기동 돌입과 연료탱크', () => {
+  const input = {
+    emergencyLoads: [
+      { name: '조명·콘센트', kW: 40, pf: 0.8, isMotor: false },
+      { name: '소화펌프', kW: 30, pf: 0.85, isMotor: true },
+      { name: '배연팬', kW: 15, pf: 0.8, isMotor: true },
+    ],
+    safetyFactor: 1.25,
+    requiredRuntime: 8,
+  };
+
+  it.each([
+    [1, 104.04, '정상부하 합 (kVA)'],
+    [2, 211.76, '최대 전동기 기동 (kVA)'],
+    [3, 350.64, '필요용량 (kVA)'],
+    [4, 400, '표준용량 (kVA)'],
+    [5, 50.4, '연료 (L/h)'],
+    [6, 403, '탱크 (L)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('emergency-generator', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 6 ? 0 : 1);
+  });
+
+  /**
+   * 전동기가 없으면 기동 증분도 없어야 한다 — 정상부하 × 안전율이 전부다.
+   * 기동분이 상수로 새면 여기서 잡힌다.
+   */
+  it('전동기가 없으면 필요용량은 정상부하 × 안전율이다', () => {
+    const noMotor = {
+      ...input,
+      emergencyLoads: [{ name: '조명', kW: 40, pf: 0.8, isMotor: false }],
+    };
+    const { step } = run('emergency-generator', noMotor);
+    expect(step(1)).toBeCloseTo(50, 2);
+    expect(step(3)).toBeCloseTo(50 * 1.25, 2);
+  });
+
+  /** 탱크는 시간에 선형이다 — 시간이 곱해지지 않으면 여기서 갈린다. */
+  it('운전 시간을 두 배로 하면 탱크도 두 배', () => {
+    const a = run('emergency-generator', input).step(6);
+    const b = run('emergency-generator', { ...input, requiredRuntime: 16 }).step(6);
+    expect(b).toBeCloseTo(a * 2, 0);
+  });
+
+  /** 표준용량은 필요량 이상이어야 한다 — 아래로 고르면 발전기가 못 버틴다. */
+  it('선정 표준용량은 필요량 이상이다', () => {
+    const { step } = run('emergency-generator', input);
+    expect(step(4)).toBeGreaterThanOrEqual(step(3));
+  });
+});
+
+/**
+ * pcs-capacity — 배터리 500 kWh · 충전 0.5C · 방전 0.8C · η 0.95 · 계통 380 V
+ *
+ *   충전전력  500 × 0.5                    = 250.00 kW
+ *   방전전력  500 × 0.8                    = 400.00 kW
+ *   PCS 용량  max(250, 400) / 0.95         = 421.05 kW
+ *   충전전류  250,000 / (√3 × 380)         = 379.84 A
+ *   방전전류  400,000 / (√3 × 380)         = 607.74 A
+ *
+ * 전류 두 값이 케이블·차단기 선정으로 바로 넘어가는데 무방비였다.
+ */
+describe('pcs-capacity — 충방전 전력과 계통측 전류', () => {
+  const input = { batteryCapacity: 500, maxChargeRate: 0.5, maxDischargeRate: 0.8, efficiency: 0.95, gridVoltage: 380 };
+
+  it.each([
+    [1, 250.0, '충전전력 (kW)'],
+    [2, 400.0, '방전전력 (kW)'],
+    [3, 421.05, 'PCS 필요용량 (kW)'],
+    [4, 379.84, '충전전류 (A)'],
+    [5, 607.74, '방전전류 (A)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('pcs-capacity', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 큰 쪽을 잡아야 한다 — 충전이 더 크면 그쪽이 기준이 된다. */
+  it('충전이 더 크면 충전 기준으로 용량을 잡는다', () => {
+    const { step } = run('pcs-capacity', { ...input, maxChargeRate: 1.2 });
+    expect(step(3)).toBeCloseTo((500 * 1.2) / 0.95, 2);
+  });
+
+  /** 효율은 나누는 자리다 — 곱하면 용량이 작아져 PCS 가 모자라게 선정된다. */
+  it('효율이 낮을수록 필요용량이 커진다', () => {
+    const high = run('pcs-capacity', input).step(3);
+    const low = run('pcs-capacity', { ...input, efficiency: 0.8 }).step(3);
+    expect(low).toBeGreaterThan(high);
+    expect(low).toBeCloseTo(400 / 0.8, 2);
+  });
+
+  /** 전류는 전압에 반비례한다 — √3 이 빠지면 1.73 배 과대 산정된다. */
+  it('계통 전압을 두 배로 하면 전류는 절반', () => {
+    const a = run('pcs-capacity', input).step(5);
+    const b = run('pcs-capacity', { ...input, gridVoltage: 760 }).step(5);
+    expect(b).toBeCloseTo(a / 2, 2);
+  });
+});
