@@ -705,3 +705,67 @@ describe('short-circuit — 임피던스 사슬의 절대 눈금', () => {
     expect(step(n as number)).toBeCloseTo(expected as number, expected as number < 1 ? 5 : 1);
   });
 });
+
+/**
+ * **cable-sizing — 5 단계 전부. 표를 베끼지 않는 눈금으로 잠근다.**
+ *
+ * 변이 실측: 다섯 단계 값을 각각 오염시켜도 전체 3,382 개가 초록이었다.
+ * 화면에 뜨는 보정계수는 실무자가 "왜 이 굵기냐" 를 따질 때 보는 값이고,
+ * 굵기 자체는 발주 수량이 된다.
+ *
+ * 기대값의 근거를 셋으로 나눈다 — 구현의 표를 그대로 옮겨 적지 않기 위해서다:
+ *
+ *  ① **정의**: 기준 조건(주위 30 ℃ · 단독 포설)에서 보정계수는 1.00 이다.
+ *     표를 몰라도 참이다. 어긋나면 기준점 자체가 틀린 것이다.
+ *  ② **항등식**: I_required = I / (Kt × Kg). 표 값이 무엇이든 성립해야 한다.
+ *     그래서 감온·다조 조건에서도 잰다.
+ *  ③ **공개 표 + 손계산**: 100 A · Cu · XLPE · 공사방법 C → 25 mm²
+ *     (IEC 60364-5-52 Table B.52.4, 3 심 XLPE Cu C 법 25 mm² ≈ 101 A).
+ *     전압강하는 손계산이다:
+ *       R = 0.017241×1000/25 = 0.68964 Ω/km
+ *       Z = 0.68964×0.9 + 0.08×0.43589 = 0.65555
+ *       e = √3×100×50×0.65555/1000 = 5.6772 V → 5.6772/380 = 1.494 %
+ */
+describe('cable-sizing — 풀이 단계의 절대 눈금', () => {
+  const base = {
+    current: 100,
+    length: 50,
+    voltage: 380,
+    conductor: 'Cu',
+    insulation: 'XLPE',
+    installation: 'C',
+    powerFactor: 0.9,
+    phase: 3,
+  };
+
+  it.each([
+    [1, 1, '온도 보정계수 (기준 30 ℃ → 1.00)'],
+    [2, 1, '다조 보정계수 (단독 → 1.00)'],
+    [3, 100, '보정 전 필요 허용전류 = I/(Kt·Kg) = 100 A'],
+    [4, 25, '최소 굵기 (IEC 60364-5-52 C 법)'],
+    [5, 1.494, '전압강하 % (손계산)'],
+  ])('기준 조건 step %d = %s — %s', (n, expected) => {
+    const { step } = run('cable-sizing', { ...base, ambientTemp: 30, groupCount: 1 });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /**
+   * ② 항등식 — 표 값이 무엇이든 성립한다. 보정계수를 곱셈이 아니라 덧셈으로
+   * 잘못 쓰거나 한쪽을 빠뜨리면 여기서 깨진다.
+   */
+  it('감온·다조 조건에서 I_required = I / (Kt × Kg) 가 성립한다', () => {
+    const { step } = run('cable-sizing', { ...base, ambientTemp: 45, groupCount: 4 });
+    const Kt = step(1);
+    const Kg = step(2);
+    expect(Kt).toBeLessThan(1);           // 주위온도가 높으면 내려간다
+    expect(Kg).toBeLessThan(1);           // 다조 포설이면 내려간다
+    expect(step(3)).toBeCloseTo(100 / (Kt * Kg), 2);
+  });
+
+  /** 보정이 걸리면 굵기는 절대 얇아지지 않는다 — 방향만 보는 안전 불변식. */
+  it('보정 조건이 나빠지면 굵기가 얇아지지 않는다', () => {
+    const easy = run('cable-sizing', { ...base, ambientTemp: 30, groupCount: 1 });
+    const hard = run('cable-sizing', { ...base, ambientTemp: 45, groupCount: 4 });
+    expect(hard.step(4)).toBeGreaterThanOrEqual(easy.step(4));
+  });
+});
