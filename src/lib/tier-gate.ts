@@ -111,17 +111,11 @@ const TIER_LIMITS: Record<Tier, TierLimits> = {
  * Get the limits for a given tier.
  * If OPEN_BETA is true, always returns Pro limits.
  */
-export function getTierLimits(tier: Tier): TierLimits {
+function getTierLimits(tier: Tier): TierLimits {
   if (OPEN_BETA) return TIER_LIMITS.pro;
   return TIER_LIMITS[tier] ?? TIER_LIMITS.free;
 }
 
-/**
- * Get raw tier limits without beta override (for admin/display).
- */
-export function getRawTierLimits(tier: Tier): TierLimits {
-  return TIER_LIMITS[tier] ?? TIER_LIMITS.free;
-}
 
 /** Minimum tier required for each difficulty level */
 const DIFFICULTY_MIN_TIER: Record<CalcDifficulty, Tier> = {
@@ -210,65 +204,13 @@ export function checkCalcAccess(
 }
 
 /**
- * Check if a specific feature is available for the tier.
+ * **여기 있던 다섯은 지웠다** — `checkFeatureAccess`·`checkDailyUsage`·
+ * `formatLimit`·`getTierDisplayName`·`ALL_TIERS` 전부 호출처 0 이었다
+ * (2026-07-29 실측). 요금제가 팔리기 시작하면 다시 필요하겠지만, 그때
+ * 필요한 것은 이 서명이 아니라 **사용량을 세는 저장소**다. 지금 형태의
+ * `checkDailyUsage(tier, feature, currentUsage)` 는 currentUsage 를
+ * 호출자가 주게 되어 있어, 정작 어려운 부분이 없는 채로 다 있는 것처럼
+ * 보였다. 일일 한도(`calcPerDay`·`aiChatPerDay`)는 표에 남겨 둔다 —
+ * 제품 결정이고, 어느 화면에도 광고되지 않아 깨진 약속은 아니다.
+ * 대장: `docs/DORMANT_MANIFEST.md`.
  */
-export function checkFeatureAccess(
-  tier: Tier,
-  feature: keyof TierLimits,
-): AccessResult {
-  const limits = getTierLimits(tier);
-  const value = limits[feature];
-
-  if (typeof value === 'boolean') {
-    return value
-      ? { allowed: true }
-      : { allowed: false, reason: `${String(feature)} requires a higher plan`, requiredTier: 'pro' };
-  }
-
-  if (typeof value === 'number' && value <= 0) {
-    return { allowed: false, reason: `${String(feature)} is not available on your plan`, requiredTier: 'pro' };
-  }
-
-  return { allowed: true };
-}
-
-/**
- * Check daily usage against tier limit.
- */
-export function checkDailyUsage(
-  tier: Tier,
-  feature: 'calcPerDay' | 'aiChatPerDay',
-  currentUsage: number,
-): AccessResult {
-  const limits = getTierLimits(tier);
-  const limit = limits[feature];
-
-  if (currentUsage >= limit) {
-    return {
-      allowed: false,
-      reason: `Daily ${feature === 'calcPerDay' ? 'calculation' : 'AI chat'} limit reached (${limit}/day)`,
-      requiredTier: tier === 'free' ? 'pro' : 'team',
-    };
-  }
-
-  return { allowed: true };
-}
-
-// ─── PART 5: Display Helpers ──────────────────────────────────
-
-export function formatLimit(value: number): string {
-  if (value === Infinity) return 'Unlimited';
-  return value.toLocaleString();
-}
-
-export function getTierDisplayName(tier: Tier): string {
-  const names: Record<Tier, string> = {
-    free: 'Free',
-    pro: 'Pro',
-    team: 'Team',
-    enterprise: 'Enterprise',
-  };
-  return names[tier];
-}
-
-export const ALL_TIERS: Tier[] = ['free', 'pro', 'team', 'enterprise'];

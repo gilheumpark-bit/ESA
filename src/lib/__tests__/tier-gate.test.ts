@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { checkCalcAccess, isTierAtLeast, OPEN_BETA, type Tier, type CalcDifficulty } from '@/lib/tier-gate';
 
 /**
@@ -87,5 +90,36 @@ describe('요금제 서열', () => {
     ['team', 'enterprise', false],
   ])('%s >= %s 는 %s', (current, required, expected) => {
     expect(isTierAtLeast(current, required)).toBe(expected);
+  });
+});
+
+/**
+ * **표면을 좁게 유지한다.**
+ *
+ * 2026-07-29 실측에서 이 모듈의 export 8 개 중 5 개가 호출처 0 이었다
+ * (`checkFeatureAccess`·`checkDailyUsage`·`formatLimit`·`getTierDisplayName`·
+ * `ALL_TIERS`). 요금제가 아직 안 팔리니 자연스러운 일이지만, "다 있다" 로
+ * 읽히는 게 문제였다 — 특히 `checkDailyUsage` 는 사용량을 호출자가 주는
+ * 서명이라 정작 어려운 부분(일일 카운터 저장소)이 없는 채로 완성처럼 보였다.
+ *
+ * 이 검사는 다시 늘어나면 깨진다. 새 export 를 더할 땐 **호출처와 함께** 더하고
+ * 여기 이름을 적는다. 잔여 선언은 `docs/DORMANT_MANIFEST.md`.
+ */
+describe('요금제 모듈 표면', () => {
+  it('쓰이는 것만 내보낸다', async () => {
+    const mod = await import('@/lib/tier-gate');
+    expect(Object.keys(mod).sort()).toEqual([
+      'OPEN_BETA',
+      'checkCalcAccess',
+      'isTierAtLeast',
+    ]);
+  });
+
+  /** 일일 한도는 표에 남아 있다 — 지운 것은 읽던 함수지 제품 결정이 아니다. */
+  it('일일 한도 숫자는 표에 남아 있고, 그것을 집행하는 곳은 없다', () => {
+    const src = readFileSync(join(__dirname, '..', 'tier-gate.ts'), 'utf8');
+    expect(src).toMatch(/calcPerDay:\s*10/);
+    expect(src).toMatch(/aiChatPerDay:\s*5/);
+    expect(src).not.toMatch(/function checkDailyUsage/);
   });
 });
