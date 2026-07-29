@@ -1,7 +1,7 @@
 /**
  * ESVA Embedding Generation — Vector embedding for RAG pipeline
  *
- * Supports OpenAI text-embedding-3-small (default) and Google text-embedding-004.
+ * Supports OpenAI text-embedding-3-small (default) and Google gemini-embedding-2.
  * Uses BYOK key resolution from server-ai.ts with provider fallback.
  *
  * PART 1: Types & constants
@@ -25,6 +25,27 @@ interface EmbeddingConfig {
   providerId: string;
 }
 
+/**
+ * Google 임베딩 모델 — **한 자리에서만 정한다.**
+ *
+ * 앞서 `text-embedding-004` 가 네 곳(설정·단건 엔드포인트·배치 엔드포인트·
+ * 요청 본문)에 하드코딩돼 있었고, 그 모델은 **2026-01-14 에 종료**됐다.
+ * 라이브 로그 실측(2026-07-29): `Gemini embedding failed (404)` → 키워드
+ * 전용 검색으로 폴백. 폴백이 정직해서 기능은 죽지 않았지만, 벡터 검색은
+ * 반년째 한 번도 돌지 않고 있었다.
+ *
+ * 왜 안 잡혔나: `model-catalog.test.ts` 가 모델 수명주기를 감시하는데
+ * **챗·비전 카탈로그만** 본다. 임베딩 모델은 이 파일의 문자열이라 감시
+ * 밖이었다(§2.2 — 가드는 있는데 이 표면을 안 덮었다).
+ *
+ * 정본: ai.google.dev/gemini-api/docs/deprecations
+ *   text-embedding-004  종료 2026-01-14  → gemini-embedding-2 로 대체
+ *   gemini-embedding-001 종료 2028-05-14 (아직 유효)
+ */
+const GEMINI_EMBEDDING_MODEL = 'gemini-embedding-2';
+
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
 const PROVIDER_CONFIGS: Record<EmbeddingProvider, EmbeddingConfig> = {
   openai: {
     model: 'text-embedding-3-small',
@@ -33,9 +54,12 @@ const PROVIDER_CONFIGS: Record<EmbeddingProvider, EmbeddingConfig> = {
     providerId: 'openai',
   },
   gemini: {
-    model: 'text-embedding-004',
+    model: GEMINI_EMBEDDING_MODEL,
+    // gemini-embedding-2 는 128~3072 사이를 고를 수 있다. 768 로 못 박는 이유는
+    // 캐시 키와 벡터 저장소 스키마가 이 차원을 전제하기 때문이다 — 모델을 바꾸며
+    // 차원까지 흔들면 기존 벡터와 새 벡터가 같은 공간에 있는 척하게 된다.
     dimensions: 768,
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent',
+    endpoint: `${GEMINI_API_BASE}/${GEMINI_EMBEDDING_MODEL}:embedContent`,
     providerId: 'gemini',
   },
 };
@@ -152,12 +176,14 @@ async function callGemini(texts: string[], apiKey: string): Promise<number[][]> 
 
   // Google embedding API processes one text at a time via embedContent
   // Use batchEmbedContents for efficiency
-  const batchEndpoint =
-    'https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents';
+  const config = PROVIDER_CONFIGS.gemini;
+  const batchEndpoint = `${GEMINI_API_BASE}/${GEMINI_EMBEDDING_MODEL}:batchEmbedContents`;
 
   const requests = texts.map((text) => ({
-    model: 'models/text-embedding-004',
+    model: `models/${GEMINI_EMBEDDING_MODEL}`,
     content: { parts: [{ text }] },
+    // 차원을 명시하지 않으면 모델 기본값(3072)이 나와 캐시·스키마와 어긋난다.
+    outputDimensionality: config.dimensions,
   }));
 
   const response = await fetch(batchEndpoint, {

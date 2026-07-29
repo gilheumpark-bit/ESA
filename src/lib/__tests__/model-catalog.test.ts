@@ -7,6 +7,9 @@
  * 실어 보내 400 이 나는 상태였다. 사용자에게는 "고를 수 있는데 안 되는 모델"이다.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { PROVIDERS, getModelList, getDefaultModel } from '../ai-providers';
 import { claudeAcceptsTemperature } from '@/agent/vision/vlm-client';
 import { PRICING } from '@/engine/calculators/ai/token-cost';
@@ -122,5 +125,65 @@ describe('공급자 목록이 비어 있지 않다', () => {
     for (const id of ['gemini', 'openai', 'groq', 'mistral']) {
       expect(PROVIDERS[id]?.models.length).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * **수명주기 감시가 챗 카탈로그만 보고 있었다.**
+ *
+ * 위 검사들은 `getModelList()` 로 노출되는 챗·비전 모델만 훑는다. 그런데
+ * 임베딩 모델은 `lib/embedding.ts` 안의 문자열이라 감시 밖이었고, 거기 박혀
+ * 있던 `text-embedding-004` 는 **2026-01-14 에 종료**됐다.
+ *
+ * 라이브 로그 실측(2026-07-29):
+ *   [ESA/RAG] Embedding generation failed … Gemini embedding failed (404)
+ *   → 키워드 전용 검색으로 폴백
+ *
+ * 폴백이 정직해서 화면은 안 죽었다. 대신 **벡터 검색이 반년째 한 번도 돌지
+ * 않았다** — 아무도 모르게. 초록 게이트가 못 보는 자리가 정확히 이런 곳이다.
+ *
+ * 정본: ai.google.dev/gemini-api/docs/deprecations
+ */
+describe('수명주기 — 임베딩 모델도 감시한다', () => {
+  const embeddingSrc = readFileSync(
+    join(process.cwd(), 'src', 'lib', 'embedding.ts'),
+    'utf8',
+  );
+
+  /** 주석·문서 줄을 뺀 실제 코드에서만 센다 — 이력은 주석에 적으라고 있다. */
+  const codeLines = embeddingSrc
+    .split(/\r?\n/)
+    .filter((line) => {
+      const t = line.trim();
+      return !t.startsWith('*') && !t.startsWith('//') && !t.startsWith('/**');
+    })
+    .join('\n');
+  const codeOccurrences = (needle: string) => codeLines.split(needle).length - 1;
+
+  it.each([
+    ['text-embedding-004', '2026-01-14 종료'],
+    ['embedding-001', '구형(2028-05-14 종료 예고)'],
+    ['textembedding-gecko', '레거시 Vertex 명'],
+  ])('종료된 임베딩 모델 %s 를 참조하지 않는다 (%s)', (dead) => {
+    // 주석·문서에서 이력으로 언급하는 것은 허용하고, 실제 식별자만 본다.
+    const identifiers = embeddingSrc
+      .split(/\r?\n/)
+      .filter((line) => !line.trim().startsWith('*') && !line.trim().startsWith('//'))
+      .join('\n');
+    expect(identifiers).not.toContain(dead);
+  });
+
+  it('현행 모델을 한 자리에서만 정한다 — 네 곳에 흩어져 있어 갱신이 새어 나갔다', () => {
+    const decls = embeddingSrc.match(/const GEMINI_EMBEDDING_MODEL = '[^']+'/g) ?? [];
+    expect(decls).toHaveLength(1);
+    expect(decls[0]).toContain('gemini-embedding-2');
+    // 상수를 만들어 놓고 코드에 문자열을 또 박으면 같은 사고가 반복된다.
+    // 주석은 이력을 적으라고 있는 자리이므로 코드 줄만 센다.
+    expect(codeOccurrences('gemini-embedding-2')).toBe(1);
+  });
+
+  /** 차원을 명시하지 않으면 모델 기본값이 나와 캐시·스키마와 어긋난다. */
+  it('출력 차원을 요청에 명시한다', () => {
+    expect(embeddingSrc).toContain('outputDimensionality');
   });
 });
