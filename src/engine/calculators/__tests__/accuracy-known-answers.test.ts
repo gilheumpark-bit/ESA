@@ -874,3 +874,85 @@ describe('lightning-protection — IEC 62305-3 표와 근사식', () => {
     expect(step(2)).toBeGreaterThanOrEqual(0);
   });
 });
+
+/**
+ * **rcd-sizing — 감전 보호 4 단계.**
+ *
+ * 변이 실측: 네 단계를 오염시켜도 전체 3,402 개가 초록이었다.
+ * 최대 허용 접지저항은 "이 접지로 이 RCD 를 쓸 수 있는가" 를 가르는 값이고,
+ * 습윤 장소(욕실·옥외)는 한계가 50 V 가 아니라 **25 V** 라 절반으로 떨어진다.
+ * 그 분기가 뒤바뀌면 욕실에 두 배 느슨한 기준이 적용된다.
+ *
+ * 손계산:
+ *   socket  : 감도 30 mA · 한계 50 V → R_max = 50/0.03  = 1,666.67 Ω
+ *   outdoor : 감도 30 mA · 한계 25 V → R_max = 25/0.03  =   833.33 Ω
+ *   motor   : 감도 100 mA · 한계 50 V → R_max = 50/0.10 =   500.00 Ω
+ *   접촉전압 V_t = (감도/1000) × R_e — socket · R_e 10 Ω → 0.30 V
+ */
+describe('rcd-sizing — 풀이 단계의 절대 눈금', () => {
+  it.each([
+    ['socket', 30, 0.30, 1666.67],
+    ['outdoor', 30, 0.30, 833.33],
+    ['motor', 100, 1.00, 500.00],
+  ])('%s: 감도 %d mA · 접촉전압 %s V · R_max %s Ω', (circuit, mA, vt, rmax) => {
+    const { step } = run('rcd-sizing', { circuitType: circuit, loadCurrent: 16, earthResistance: 10 });
+    expect(step(1)).toBeCloseTo(mA as number, 2);
+    expect(step(3)).toBeCloseTo(vt as number, 2);
+    expect(step(4)).toBeCloseTo(rmax as number, 1);
+  });
+
+  /** 습윤 장소가 일반과 같은 한계를 쓰면 이 검사가 깨진다. */
+  it('습윤 장소(옥외·욕실)는 일반보다 허용 접지저항이 낮다', () => {
+    const dry = run('rcd-sizing', { circuitType: 'socket', loadCurrent: 16, earthResistance: 10 }).step(4);
+    const wet = run('rcd-sizing', { circuitType: 'bathroom', loadCurrent: 16, earthResistance: 10 }).step(4);
+    expect(wet).toBeLessThan(dry);
+    expect(wet).toBeCloseTo(dry / 2, 1);   // 25 V 대 50 V
+  });
+
+  it('정격은 부하전류 이상 최소 표준값 — 16 A 부하 → 16 A', () => {
+    const { step } = run('rcd-sizing', { circuitType: 'socket', loadCurrent: 16, earthResistance: 10 });
+    expect(step(2)).toBeCloseTo(16, 2);
+  });
+});
+
+/**
+ * **motor-capacity — 축동력에서 정격전류까지 4 단계.**
+ *
+ * 변이 실측: 네 단계를 오염시켜도 전체 3,402 개가 초록이었다.
+ * 선정 kW 는 발주 사양이고, 정격전류는 그 뒤 차단기·케이블 굵기의 입력이 된다.
+ *
+ * 손계산(회전형 · T 100 N·m · n 1750 rpm · η 0.9 · 380 V · pf 0.85):
+ *   P_shaft = T·n/9550 = 100×1750/9550       = 18.3246 kW
+ *   P_input = P/η      = 18.3246/0.9          = 20.3607 kW
+ *   표준 정격 = 20.3607 이상 최소값            = 22 kW
+ *   I = 22,000/(√3×380×0.85×0.9)              = 43.69 A
+ *
+ * 상수 9550 은 `P[kW] = T[N·m]·n[rpm]/9550` 의 단위 환산항이다
+ * (= 60,000/2π). 이 값이 흔들리면 모든 회전 부하 계산이 함께 틀어진다.
+ */
+describe('motor-capacity — 풀이 단계의 절대 눈금', () => {
+  const input = {
+    loadType: 'rotary',
+    torqueOrForce: 100,
+    speedOrVelocity: 1750,
+    efficiency: 0.9,
+    voltage: 380,
+    powerFactor: 0.85,
+  };
+
+  it.each([
+    [1, 18.3246, '축동력 (kW)'],
+    [2, 20.3607, '입력 동력 = P/η (kW)'],
+    [3, 22, '표준 정격 (kW)'],
+    [4, 43.69, '정격전류 (A)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('motor-capacity', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 9550 은 60,000/2π 다 — 환산항이 흔들리면 회전 부하 전체가 틀어진다. */
+  it('환산 상수가 60000/2π 와 일치한다', () => {
+    const { step } = run('motor-capacity', input);
+    expect(step(1)).toBeCloseTo((100 * 1750) / (60_000 / (2 * Math.PI)), 2);
+  });
+});
