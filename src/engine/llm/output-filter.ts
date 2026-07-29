@@ -333,6 +333,8 @@ export function filterLLMOutput(
       num.text.replace(/[^\d.,]/g, ''),
       num.unit ?? '',
       nearby,
+      // 전압 같은 식별자는 답변 어딘가에 한 번만 적힌다 — 전체를 준다.
+      output,
     );
     if (contradiction) {
       blocked.push({
@@ -355,6 +357,8 @@ export function filterLLMOutput(
         num.text.replace(/[^\d.,]/g, ''),
         num.unit ?? '',
         nearby,
+        // 식별자(전압·등급)는 답변 어딘가에 한 번만 적힌다 — 전체를 준다.
+        output,
       );
       if (asserted) {
         assertedNotes.set(num.position, asserted);
