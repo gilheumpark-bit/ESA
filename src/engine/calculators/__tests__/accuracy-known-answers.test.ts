@@ -956,3 +956,89 @@ describe('motor-capacity — 풀이 단계의 절대 눈금', () => {
     expect(step(1)).toBeCloseTo((100 * 1750) / (60_000 / (2 * Math.PI)), 2);
   });
 });
+
+/**
+ * **ground-conductor — 보호도체 굵기(IEC 60364-5-54 단열식).**
+ *
+ * 변이 실측: 세 단계를 오염시켜도 전체 3,412 개가 초록이었다.
+ * 보호도체가 가늘면 지락 시 도체가 먼저 녹아 **접지가 끊긴 채로 기기가
+ * 충전된다.** 굵기는 그대로 발주 값이기도 하다.
+ *
+ * k 계수는 IEC 60364-5-54 공표값이다(구현 표를 옮겨 적은 것이 아니다):
+ *   PVC  Cu 143 · Al 95      XLPE/EPR Cu 176 · Al 116      나도체 Cu 159 · Al 105
+ *
+ * 손계산(지락 5,000 A · 차단 0.4 s · Cu · PVC):
+ *   A_min = I√t/k = 5000 × 0.63246 / 143 = 22.11 mm² → 표준 25 mm²
+ */
+describe('ground-conductor — IEC 60364-5-54 단열식', () => {
+  it.each([
+    ['PVC', 143, 22.11, 25],
+    ['XLPE', 176, 17.97, 25],
+    ['bare', 159, 19.89, 25],
+  ])('Cu · %s: k=%d → A_min %s mm² → 표준 %d mm²', (ins, k, amin, sel) => {
+    const { step } = run('ground-conductor', {
+      faultCurrent: 5000, clearingTime: 0.4, conductor: 'Cu', insulation: ins,
+    });
+    expect(step(1)).toBeCloseTo(k as number, 2);
+    expect(step(2)).toBeCloseTo(amin as number, 1);
+    expect(step(3)).toBeCloseTo(sel as number, 2);
+  });
+
+  /** 알루미늄은 k 가 작아 같은 조건에서 더 굵어야 한다 — 방향 불변식. */
+  it('알루미늄은 구리보다 굵어야 한다', () => {
+    const cu = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.4, conductor: 'Cu' }).step(2);
+    const al = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.4, conductor: 'Al' }).step(2);
+    expect(al).toBeGreaterThan(cu);
+  });
+
+  /** 차단시간이 4 배면 굵기는 2 배다(√t) — 지수를 1 로 바꾸면 깨진다. */
+  it('A_min 은 차단시간의 제곱근에 비례한다', () => {
+    const t1 = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.1, conductor: 'Cu' }).step(2);
+    const t4 = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.4, conductor: 'Cu' }).step(2);
+    expect(t4).toBeCloseTo(t1 * 2, 1);
+  });
+});
+
+/**
+ * **surge-arrester — MCOV·정격전압·공칭방전전류.**
+ *
+ * 변이 실측: 네 단계를 오염시켜도 전체 3,412 개가 초록이었다.
+ * MCOV 가 낮으면 피뢰기가 상시 전압에서 열폭주로 파괴되고, 높으면 보호가
+ * 안 된다. 중성점 접지 방식에 따라 √3 이 붙느냐가 갈리는 것이 핵심이다.
+ *
+ * 손계산(22.9 kV):
+ *   유효(solid)     U_c = 1.05 × 22.9/√3 = 13.88 kV → U_r = ×1.25 = 17.35 kV
+ *   임피던스        U_c = 1.25 × 22.9/√3 = 16.53 kV → U_r =        20.66 kV
+ *   비접지          U_c = 1.05 × 22.9    = 24.04 kV → U_r =        30.06 kV
+ *   공칭방전전류: 22.9 ≤ 36 kV 구간 → 5 kA
+ *   창거리 계수(IEC 60815): 중오염 25 mm/kV
+ *
+ * **비접지는 √3 을 나누지 않는다** — 1선 지락 시 건전상이 선간전압까지
+ * 올라가기 때문이다. 이 분기가 뒤집히면 MCOV 를 1/√3 로 과소 산정한다.
+ */
+describe('surge-arrester — 중성점 접지 방식별 MCOV', () => {
+  const base = { systemVoltage: 22900, pollutionLevel: 'heavy' };
+
+  it.each([
+    ['solid', 13.88, 17.35],
+    ['impedance', 16.53, 20.66],
+    ['ungrounded', 24.04, 30.06],
+  ])('%s: MCOV %s kV → 정격 %s kV', (grounding, mcov, ur) => {
+    const { step } = run('surge-arrester', { ...base, neutralGrounding: grounding });
+    expect(step(1)).toBeCloseTo(mcov as number, 1);
+    expect(step(2)).toBeCloseTo(ur as number, 1);
+  });
+
+  it('공칭방전전류 5 kA(≤36 kV) · 창거리 25 mm/kV(중오염)', () => {
+    const { step } = run('surge-arrester', { ...base, neutralGrounding: 'solid' });
+    expect(step(3)).toBeCloseTo(5, 2);
+    expect(step(4)).toBeCloseTo(25, 2);
+  });
+
+  /** 비접지가 유효접지와 같은 값을 내면 √3 분기가 죽은 것이다. */
+  it('비접지는 유효접지보다 MCOV 가 √3 배 높다', () => {
+    const solid = run('surge-arrester', { ...base, neutralGrounding: 'solid' }).step(1);
+    const ung = run('surge-arrester', { ...base, neutralGrounding: 'ungrounded' }).step(1);
+    expect(ung).toBeCloseTo(solid * Math.sqrt(3), 1);
+  });
+});
