@@ -769,3 +769,53 @@ describe('cable-sizing — 풀이 단계의 절대 눈금', () => {
     expect(hard.step(4)).toBeGreaterThanOrEqual(easy.step(4));
   });
 });
+
+/**
+ * **earth-fault — 접촉전압까지 4 단계. 사람이 감전되느냐를 가르는 값이다.**
+ *
+ * 변이 실측: 네 단계를 각각 오염시켜도 전체 3,389 개가 초록이었다.
+ * 접촉전압은 KEC 142 의 50 V(일반)·25 V(습윤) 한계와 직접 비교되는 값이고,
+ * 보폭전압은 접지망 설계를 바꾸는 근거다.
+ *
+ * 손계산(380 V · Zs 0.05 Ω · Zg 0.5 Ω):
+ *   V_ph = 380/√3 = 219.39 V
+ *   [직접접지] Z = Zs + Zg = 0.55        → I_g = 219.39/0.55   = 398.90 A
+ *   [저항접지] Z = √(0.05² + 0.5²) = 0.50249 → I_g = 219.39/0.50249 = 436.61 A
+ *   V_touch = I_g × Zg · V_step = V_touch × 0.2
+ *
+ * 두 접지 방식의 합성이 **직렬합 vs 제곱합**으로 갈린다는 점이 핵심이다.
+ * 한쪽 식을 다른 쪽에 쓰면 값이 9% 어긋나는데, 최종 판정이 같은 구간에
+ * 떨어지면 아무도 모른다.
+ */
+describe('earth-fault — 풀이 단계의 절대 눈금', () => {
+  const base = { systemVoltage: 380, groundImpedance: 0.5, sourceImpedance: 0.05 };
+
+  it.each([
+    [1, 219.39, '상전압 (V)'],
+    [2, 398.90, '지락전류 — 직접접지 Zs+Zg (A)'],
+    [3, 199.45, '접촉전압 = Ig×Zg (V)'],
+    [4, 39.89, '보폭전압 = 접촉전압×0.2 (V)'],
+  ])('직접접지 step %d = %s — %s', (n, expected) => {
+    const { step } = run('earth-fault', { ...base, groundingType: 'solid' });
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  it.each([
+    [2, 436.61, '지락전류 — 저항접지 √(Zs²+Zg²) (A)'],
+    [3, 218.30, '접촉전압 (V)'],
+  ])('저항접지 step %d = %s — %s', (n, expected) => {
+    const { step } = run('earth-fault', { ...base, groundingType: 'resistance' });
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /**
+   * 두 방식이 **같은 값을 내면** 한쪽 분기가 죽은 것이다 — 실제로는 직렬합이
+   * 제곱합보다 크므로 직접접지 쪽 전류가 더 작아야 한다.
+   */
+  it('직접접지와 저항접지가 서로 다른 식을 쓴다', () => {
+    const solid = run('earth-fault', { ...base, groundingType: 'solid' }).step(2);
+    const res = run('earth-fault', { ...base, groundingType: 'resistance' }).step(2);
+    expect(solid).not.toBeCloseTo(res, 1);
+    expect(solid).toBeLessThan(res);
+  });
+});
