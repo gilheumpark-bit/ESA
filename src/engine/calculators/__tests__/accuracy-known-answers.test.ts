@@ -1436,3 +1436,88 @@ describe('cable-impedance — 온도 보정과 주파수 환산', () => {
     expect(b.step(5)).toBeCloseTo(a.step(5) * 2, 4);
   });
 });
+
+/**
+ * voltage-drop — Cu 16 mm² · 120 m · 40 A · cos φ 0.9 · 3φ 380 V (KEC 232.3.9)
+ *
+ *   R      = 0.017241 × 1000 / 16          = 1.0776 Ω/km   (IEC 60228 · ρ = 1/58)
+ *   sin φ  = √(1 − 0.9²)                   = 0.435890
+ *   z      = 1.0776 × 0.9 + 0.08 × 0.43589 = 1.0047 Ω/km   (X 기본 0.08)
+ *   e      = √3 × 40 × 0.120 × 1.0047      =   8.35 V
+ *   e %    = 8.35 / 380 × 100              =   2.20 %
+ *
+ * 이 앱의 간판 계산기인데 네 단계가 전부 무방비였다(변이 실측 2026-07-29).
+ * 3·4 단계는 반환값·additionalOutputs 와 같은 수를 보여 주지만 **따로 계산해서
+ * 따로 반올림한다** — 한쪽만 고치면 화면과 결과가 어긋나고 아무도 못 잡는다.
+ */
+describe('voltage-drop — 저항·임피던스 계수·강하·백분율', () => {
+  const input = { cableSize: 16, conductor: 'Cu', length: 120, current: 40, powerFactor: 0.9, phase: 3, voltage: 380 };
+
+  it.each([
+    [1, 1.0776, '도체 저항 (Ω/km)'],
+    [2, 1.0047, '임피던스 계수 (Ω/km)'],
+    [3, 8.35, '전압 강하 (V)'],
+    [4, 2.20, '전압 강하율 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('voltage-drop', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n <= 2 ? 4 : 2);
+  });
+
+  /** 화면의 3·4 단계와 반환값이 같은 수여야 한다 — 따로 계산하는 자리다. */
+  it('표시 단계와 반환값이 어긋나지 않는다', () => {
+    const { step, value, extra } = run('voltage-drop', input);
+    expect(step(3)).toBeCloseTo(value, 2);
+    expect(step(4)).toBeCloseTo(extra.voltageDropPercent, 2);
+  });
+
+  /** 단상은 √3 이 아니라 2 다 — 왕복 도체이기 때문. 3φ 대비 2/√3 배. */
+  it('단상은 계수가 2 다 (3상 대비 2/√3 배)', () => {
+    const three = run('voltage-drop', input).step(3);
+    const single = run('voltage-drop', { ...input, phase: 1, voltage: 220 }).step(3);
+    expect(single).toBeCloseTo(three * (2 / Math.sqrt(3)), 2);
+  });
+
+  /** 한도를 넘으면 FAIL 이어야 한다 — 숫자가 맞아도 부등호가 뒤집히면 거짓말이다. */
+  it('한도 초과는 FAIL', () => {
+    expect(run('voltage-drop', { ...input, dropLimitPercent: 1 }).verdict()).toBe(false);
+    expect(run('voltage-drop', { ...input, dropLimitPercent: 5 }).verdict()).toBe(true);
+  });
+});
+
+/**
+ * three-phase-vd — 380 V · 100 A · 150 m · R 0.641 · X 0.078 · cos φ 0.85
+ *
+ *   sin φ = √(1 − 0.85²)                     = 0.526783
+ *   z     = 0.641 × 0.85 + 0.078 × 0.526783  =  0.5859 Ω/km
+ *   VD    = √3 × 100 × 0.150 × 0.5859        =   15.22 V
+ *   VD %  = 15.22 / 380 × 100                =    4.01 %
+ *   V_r   = 380 − 15.22                      =  364.78 V
+ *
+ * 수전단 전압은 기기 선정의 입력인데 무방비였다.
+ */
+describe('three-phase-vd — 정상상태 강하와 수전단 전압', () => {
+  const input = { voltage: 380, current: 100, length: 150, resistance: 0.641, reactance: 0.078, powerFactor: 0.85 };
+
+  it.each([
+    [1, 0.5859, '임피던스 계수 (Ω/km)'],
+    [2, 15.22, '전압 강하 (V)'],
+    [3, 4.01, '강하율 (%)'],
+    [4, 364.78, '수전단 전압 (V)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('three-phase-vd', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 1 ? 4 : 2);
+  });
+
+  /** 수전단 = 송전단 − 강하. 부호가 뒤집히면 전압이 올라간다. */
+  it('수전단 전압은 송전단에서 강하를 뺀 값이다', () => {
+    const { step } = run('three-phase-vd', input);
+    expect(step(4)).toBeCloseTo(input.voltage - step(2), 2);
+    expect(step(4)).toBeLessThan(input.voltage);
+  });
+
+  /** 리액턴스가 0 이면 계수는 R cos φ 뿐이다 — X 항이 새면 여기서 갈린다. */
+  it('리액턴스 0 이면 계수는 R cos φ 다', () => {
+    const { step } = run('three-phase-vd', { ...input, reactance: 0 });
+    expect(step(1)).toBeCloseTo(0.641 * 0.85, 4);
+  });
+});
