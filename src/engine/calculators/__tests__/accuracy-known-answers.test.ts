@@ -1042,3 +1042,80 @@ describe('surge-arrester — 중성점 접지 방식별 MCOV', () => {
     expect(ung).toBeCloseTo(solid * Math.sqrt(3), 1);
   });
 });
+
+/**
+ * **relay-basic — 과전류 계전기 정정 3 단계.**
+ *
+ * 변이 실측: 세 단계를 오염시켜도 전체 3,422 개가 초록이었다.
+ * 픽업이 낮으면 정상 부하에서 오동작해 정전을 만들고, 높으면 고장을 못 잡는다.
+ * **2 차 환산값이 실제로 계전기에 넣는 정정값**이라 CT 비를 잘못 나누면
+ * 현장에서 그대로 오정정된다.
+ *
+ * 손계산(부하 200 A · 고장 4,000 A · CT 300/5 → CTR 60):
+ *   I_pickup = 200 × 1.3 = 260 A          (여유율 1.3 배)
+ *   2 차 환산 = 260/60 × 5 = 21.67 A       (5 A 계전기 기준)
+ *   고장 배수 = 4,000/260 = 15.38
+ */
+describe('relay-basic — 정정값의 절대 눈금', () => {
+  const input = { loadCurrent: 200, faultCurrent: 4000, ctRatio: 60, curveType: 'SI' };
+
+  it.each([
+    [1, 260, '픽업 전류 (A)'],
+    [2, 21.67, 'CT 2차 환산 (A)'],
+    [3, 15.38, '고장 배수'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('relay-basic', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** CT 비를 곱하면 정정값이 CTR² 배로 틀어진다 — 나눗셈임을 못 박는다. */
+  it('CT 비가 커지면 2차 환산값은 작아진다', () => {
+    const low = run('relay-basic', { ...input, ctRatio: 60 }).step(2);
+    const high = run('relay-basic', { ...input, ctRatio: 120 }).step(2);
+    // 표시값이 소수 2자리로 반올림되므로(21.67/2 = 10.835 → 10.83) 여유를 둔다.
+    expect(high).toBeCloseTo(low / 2, 1);
+  });
+});
+
+/**
+ * **starting-current — 기동 방식별 배율과 전압강하.**
+ *
+ * 변이 실측: 네 단계를 오염시켜도 전체 3,422 개가 초록이었다.
+ * 기동 배율은 차단기 순시 정정을 넘기지 않게 잡는 근거이고, 기동 전압강하는
+ * 같은 모선의 다른 부하가 재기동하느냐를 가른다.
+ *
+ * 손계산(22 kW · 380 V · pf 0.85 · η 0.9):
+ *   I_rated = 22,000/(√3×380×0.85×0.9) = 43.69 A
+ *   DOL k=7      → 305.85 A · 강하 14.0 %
+ *   Star-Delta k=2.5 → 109.23 A · 강하  5.0 %
+ *   VFD k=1.2    →  52.43 A · 강하  2.4 %
+ *   Soft k=3     → 131.08 A · 강하  6.0 %
+ *
+ * 배율표는 실무 통용값(DOL 6~8 · Y-Δ 2~3 · VFD 1~1.5 · 소프트 2~4)의 대표값이다.
+ * 전압강하는 `k × 2 %` 로 단순화한 근사라고 코드에 선언돼 있다 — 이 검사는
+ * **선언된 근사를 고정할 뿐 계통 임피던스 기반 계산을 승인하지 않는다.**
+ */
+describe('starting-current — 기동 방식별 절대 눈금', () => {
+  const base = { ratedPower: 22, voltage: 380, powerFactor: 0.85, efficiency: 0.9 };
+
+  it.each([
+    ['DOL', 7, 305.85, 14.0],
+    ['Star-Delta', 2.5, 109.23, 5.0],
+    ['VFD', 1.2, 52.43, 2.4],
+    ['Soft-Starter', 3, 131.08, 6.0],
+  ])('%s: k=%s → 기동 %s A · 강하 %s %%', (method, k, ist, drop) => {
+    const { step } = run('starting-current', { ...base, startingMethod: method });
+    expect(step(1)).toBeCloseTo(43.69, 1);          // 정격전류는 방식과 무관
+    expect(step(2)).toBeCloseTo(k as number, 2);
+    expect(step(3)).toBeCloseTo(ist as number, 1);
+    expect(step(4)).toBeCloseTo(drop as number, 2);
+  });
+
+  /** 감압 기동이 DOL 보다 크면 표가 뒤집힌 것이다 — 방향 불변식. */
+  it('감압 기동은 DOL 보다 기동전류가 작다', () => {
+    const dol = run('starting-current', { ...base, startingMethod: 'DOL' }).step(3);
+    for (const m of ['Star-Delta', 'VFD', 'Soft-Starter']) {
+      expect(run('starting-current', { ...base, startingMethod: m }).step(3)).toBeLessThan(dol);
+    }
+  });
+});
