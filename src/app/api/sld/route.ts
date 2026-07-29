@@ -19,6 +19,7 @@ import { apiLog, createRequestTimer } from '@/lib/api-logger';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { withRequestLog } from '@/lib/api/with-request-log';
 import { checkRasterImage } from '@/lib/image-signature';
+import { measureTextQuality } from '@/lib/drawing-text-quality';
 
 /**
  * 공급자 실패를 사용자가 무엇을 해야 하는지로 번역한다.
@@ -124,6 +125,18 @@ async function POST__impl(req: NextRequest) {
       return NextResponse.json({ error: signature.message, code: 'ESA-4002' }, { status: 400 });
     }
 
+    /**
+     * **글자 선명도를 먼저 잰다.** AI 를 부르기 전이다.
+     *
+     * 실측: 같은 스캔 이미지·같은 모델로 두 번 돌렸더니 변압기를 300kVA 와
+     * 1000kVA 로 읽었다(실제 500kVA). 그리고 그 답의 문서 confidence 는 0.9
+     * 였다 — 못 읽었다는 신호가 응답 어디에도 없었다.
+     *
+     * 막지는 않는다. 이 제품은 판단을 대신하지 않으므로, **읽히지 않는다는
+     * 사실을 함께 실어 보낸다.** 화면이 스펙 수치에 그 경고를 붙일 수 있다.
+     */
+    const textQuality = await measureTextQuality(bytes);
+
     const blob = new Blob([bytes], { type: signature.type });
 
     // Saga: VLM 분석 → 토폴로지 변환 → 검증 (3단계 원자적 실행)
@@ -228,6 +241,8 @@ async function POST__impl(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: analysis,
+      // 스펙 수치를 믿어도 되는지 — 화면이 이걸 보고 경고를 붙인다.
+      textQuality,
       calcChain,
       review,
       topology: {
