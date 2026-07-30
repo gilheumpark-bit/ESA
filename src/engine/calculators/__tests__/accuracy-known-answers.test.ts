@@ -2847,3 +2847,104 @@ describe('relay-basic — 픽업 미달이면 동작하지 않는다', () => {
     }
   });
 });
+
+/**
+ * **규격 표값 직접 대조 3 종.**
+ *
+ * 아래 값들은 계산으로 유도한 것이 아니라 **규격에 실린 표**다. 손계산 앵커는
+ * 산술만 지키지 「그 상수가 그 규격의 것인지」는 못 본다 — 아크플래시 사고가
+ * 그 자리에서 났다. 표를 그대로 적어 대조한다.
+ */
+describe('규격 표값 대조 — 피뢰 보호레벨 (IEC 62305-3 Table 2)', () => {
+  it.each([
+    ['I', 20, 5],
+    ['II', 30, 10],
+    ['III', 45, 15],
+    ['IV', 60, 20],
+  ])('LPL %s — 회전구체 %s m · 메시 %s m', (lplClass, radius, mesh) => {
+    const { step } = run('lightning-protection', {
+      buildingHeight: 15, lplClass, method: 'sphere',
+    });
+    expect(step(1)).toBeCloseTo(radius as number, 2);
+    expect(step(3)).toBeCloseTo(mesh as number, 2);
+  });
+
+  /** 보호레벨이 높을수록(I 이 가장 엄격) 반경과 메시가 작다 — 순서가 뒤집히면 안 된다. */
+  it('보호레벨이 엄격할수록 회전구체가 작다', () => {
+    const r = (lplClass: string) =>
+      run('lightning-protection', { buildingHeight: 15, lplClass, method: 'sphere' }).step(1);
+    expect(r('I')).toBeLessThan(r('II'));
+    expect(r('II')).toBeLessThan(r('III'));
+    expect(r('III')).toBeLessThan(r('IV'));
+  });
+});
+
+/**
+ * 접지도체 단열식 k 값 — IEC 60364-5-54 Table 54.3
+ * (케이블에 포함되지 않은 보호도체, 초기 30 °C 기준)
+ *
+ *   Cu  PVC 143 · XLPE/EPR 176 · 나도체 159
+ *   Al  PVC  95 · XLPE/EPR 116 · 나도체 105
+ *
+ * S = √(I²t) / k 이므로 k 가 틀리면 접지선이 통째로 잘못 굵어지거나 가늘어진다.
+ */
+describe('규격 표값 대조 — 접지도체 k (IEC 60364-5-54 Table 54.3)', () => {
+  it.each([
+    ['Cu', 'PVC', 143],
+    ['Cu', 'XLPE', 176],
+    ['Cu', 'bare', 159],
+    ['Al', 'PVC', 95],
+    ['Al', 'XLPE', 116],
+    ['Al', 'bare', 105],
+  ])('%s · %s → k = %s', (conductor, insulation, k) => {
+    const { step } = run('ground-conductor', {
+      faultCurrent: 5000, clearingTime: 0.5, conductor, insulation,
+    });
+    expect(step(1)).toBe(k);
+  });
+
+  /**
+   * 단열식이 실제로 그 k 를 쓰는지 — 표만 맞고 식에서 안 쓰면 소용없다.
+   *   S = √(5000² × 0.5) / 143 = 24.72 mm²
+   */
+  it('단열식이 표의 k 를 실제로 쓴다 (Cu·PVC · 5 kA · 0.5 s → 24.72 mm²)', () => {
+    const { step } = run('ground-conductor', {
+      faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'PVC',
+    });
+    expect(step(2)).toBeCloseTo(Math.sqrt(5000 ** 2 * 0.5) / 143, 2);
+    expect(step(2)).toBeCloseTo(24.72, 2);
+  });
+
+  /** k 가 클수록 단면적은 작아진다 — 나눗셈 방향 확인. */
+  it('k 가 큰 절연일수록 필요 단면적이 작다', () => {
+    const pvc = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'PVC' }).step(2);
+    const xlpe = run('ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'XLPE' }).step(2);
+    expect(xlpe).toBeLessThan(pvc);
+  });
+});
+
+/**
+ * 등전위본딩 — IEC 60364-5-54 §544.2
+ *
+ *   보조 본딩 도체 ≥ **PE 의 1/2**, 하한 **6 mm² Cu**, 상한 **25 mm² Cu**
+ *
+ * 세 규칙이 순서대로 걸린다 — 상·하한이 뒤바뀌면 얇은 PE 에서 과대, 굵은 PE
+ * 에서 과소가 된다.
+ */
+describe('규격 표값 대조 — 등전위본딩 (IEC 60364-5-54 §544.2)', () => {
+  it.each([
+    [4, 6],      // 절반 2 → 하한 6 이 이긴다
+    [16, 8],     // 절반 8 — 하한·상한 사이
+    [35, 17.5],  // 절반 17.5
+    [70, 25],    // 절반 35 → 상한 25 가 이긴다
+    [300, 25],   // 아무리 굵어도 25 를 넘지 않는다
+  ])('PE %s mm² → 본딩 %s mm²', (pe, bond) => {
+    const { step } = run('equipotential-bonding', { largestPE: pe });
+    expect(step(3)).toBeCloseTo(bond as number, 2);
+  });
+
+  it('하한 6 · 상한 25 가 실제로 걸린다', () => {
+    expect(run('equipotential-bonding', { largestPE: 1.5 }).step(3)).toBe(6);
+    expect(run('equipotential-bonding', { largestPE: 1000 }).step(3)).toBe(25);
+  });
+});
