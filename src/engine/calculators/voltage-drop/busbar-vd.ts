@@ -109,8 +109,11 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
       dropPercent: (dropV / V) * 100,
     });
 
+    // 번호는 밀어 넣은 순서다. 앞서는 두 push 가 같은 `idx + 1` 을 써서
+    // 목록이 1,1,2,2,5 로 나왔다 — 번호가 겹치면 누적 % 항목은 번호로
+    // 접근이 안 되고, 3·4 가 비어 단계가 빠진 것처럼 보인다(실측 2026-07-30).
     steps.push({
-      step: idx + 1,
+      step: steps.length + 1,
       title: `${sec.name} — voltage drop`,
       formula: 'VD_i = \\sqrt{3} \\times I_i \\times L_i \\times (R_i\\cos\\varphi + X_i\\sin\\varphi)',
       value: round(dropV, 2),
@@ -119,7 +122,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
     });
 
     steps.push({
-      step: idx + 1,
+      step: steps.length + 1,
       title: `Cumulative after "${sec.name}"`,
       formula: 'VD_{cum} = \\sum VD_i',
       value: round(cumPercent, 2),

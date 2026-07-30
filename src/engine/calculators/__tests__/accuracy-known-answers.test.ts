@@ -2384,3 +2384,127 @@ describe('power-loss — I²R 손실', () => {
     expect(() => run('power-loss', rest).step(3)).toThrow('step 3 없음');
   });
 });
+
+/**
+ * complex-voltage-drop — 380 V · 100 A · 3φ · cos φ 0.9 · 구간 2
+ *
+ *   상계수  √3                                       =  1.7321
+ *   A 구간  √3 × 100 × 0.100 × (0.641×0.9 + 0.078×0.4359) =  10.58 V
+ *   B 구간  √3 × 100 × 0.050 × (1.150×0.9 + 0.080×0.4359) =   9.27 V
+ *   합계    10.58 + 9.27                             =  19.85 V
+ *   비율    19.85 / 380 × 100                        =   5.22 %
+ *
+ * 구간이 늘면 단계도 늘어난다 — 번호가 밀리는 자리라 함께 확인한다.
+ */
+describe('complex-voltage-drop — 구간 누적', () => {
+  const input = {
+    voltage: 380, current: 100, powerFactor: 0.9, phase: 3,
+    sections: [
+      { name: 'A', length: 100, resistance: 0.641, reactance: 0.078 },
+      { name: 'B', length: 50, resistance: 1.15, reactance: 0.08 },
+    ],
+  };
+
+  it.each([
+    [1, 1.7321, '상계수'],
+    [2, 10.58, 'A 구간 강하 (V)'],
+    [3, 9.27, 'B 구간 강하 (V)'],
+    [4, 19.85, '합계 (V)'],
+    [5, 5.22, '비율 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('complex-voltage-drop', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 1 ? 4 : 2);
+  });
+
+  /** 합계는 구간 합이다 — 하나라도 빠지면 여기서 갈린다. */
+  it('합계가 구간 강하의 합이다', () => {
+    const { step } = run('complex-voltage-drop', input);
+    expect(step(4)).toBeCloseTo(step(2) + step(3), 2);
+  });
+
+  /** 수전단 = 송전단 − 합계. 부가 출력이 인라인 계산이라 관계로 잠근다. */
+  it('수전단 전압 = 송전단 − 합계', () => {
+    const { step, extra } = run('complex-voltage-drop', input);
+    expect(extra.receivingEndVoltage).toBeCloseTo(input.voltage - step(4), 2);
+  });
+
+  /** 단상 계수는 2 다 — 3 상 대비 2/√3 배. */
+  it('단상 상계수는 2 다', () => {
+    const { step } = run('complex-voltage-drop', { ...input, phase: 1, voltage: 220 });
+    expect(step(1)).toBeCloseTo(2, 4);
+  });
+});
+
+/**
+ * busbar-vd — 380 V · cos φ 0.9 · 구간 2(전류가 구간마다 다르다)
+ *
+ *   A: √3 × 200 × 0.030 × (0.1×0.9 + 0.02×0.4359) = 1.03 V → 누적 0.27 %
+ *   B: √3 × 100 × 0.040 × (0.2×0.9 + 0.03×0.4359) = 1.34 V → 누적 0.62 %
+ *   총합 0.62 %
+ *
+ * **단계 번호 결함을 여기서 잡았다.** 구간마다 두 줄을 같은 번호로 밀어 넣어
+ * 목록이 `1, 1, 2, 2, 5` 였다 — 겹친 번호의 뒤쪽(누적 %)은 번호로 접근이 안
+ * 되고 3·4 가 비어 단계가 빠진 것처럼 보였다. 값은 전부 맞았기 때문에 값
+ * 앵커로는 영영 안 보였다. 순차 번호로 고치고 전 계산기에 번호 계약을 걸었다
+ * (`step-numbering-contract.test.ts`).
+ */
+describe('busbar-vd — 구간별 강하와 누적', () => {
+  const input = {
+    voltage: 380, powerFactor: 0.9,
+    sections: [
+      { name: 'A', current: 200, length: 30, resistance: 0.1, reactance: 0.02 },
+      { name: 'B', current: 100, length: 40, resistance: 0.2, reactance: 0.03 },
+    ],
+  };
+
+  it.each([
+    [1, 1.03, 'A 강하 (V)'],
+    [2, 0.27, 'A 까지 누적 (%)'],
+    [3, 1.34, 'B 강하 (V)'],
+    [4, 0.62, 'B 까지 누적 (%)'],
+    [5, 0.62, '총 누적 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('busbar-vd', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 마지막 구간 누적과 총합이 같아야 한다 — 따로 계산하는 자리다. */
+  it('마지막 구간 누적이 총 누적과 같다', () => {
+    const { step } = run('busbar-vd', input);
+    expect(step(4)).toBeCloseTo(step(5), 2);
+  });
+
+  /** 누적은 단조 증가한다 — 뒤 구간이 앞보다 작아지면 누적이 아니다. */
+  it('누적 비율이 단조 증가한다', () => {
+    const { step } = run('busbar-vd', input);
+    expect(step(4)).toBeGreaterThan(step(2));
+  });
+});
+
+/**
+ * country-compare-vd — 220 V · 30 A · 60 m · 1.83 Ω/km · X 0 · pf 1 · 단상
+ *
+ *   강하  2 × 30 × 0.060 × 1.83 = 6.59 V
+ *   비율  6.59 / 220 × 100      = 2.99 %
+ *
+ * 같은 회로를 나라별 한도와 대조하는 계산기다 — 강하 자체는 나라와 무관하고
+ * 한도만 달라야 한다.
+ */
+describe('country-compare-vd — 강하와 국가별 한도', () => {
+  const input = { voltage: 220, current: 30, length: 60, resistance: 1.83, reactance: 0, powerFactor: 1, phase: 1 };
+
+  it.each([
+    [1, 6.59, '강하 (V)'],
+    [2, 2.99, '비율 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('country-compare-vd', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 강하는 회로가 정하지 나라가 정하지 않는다 — 한도만 나라별로 다르다. */
+  it('강하와 비율이 부가 출력과 일치한다', () => {
+    const { step, extra } = run('country-compare-vd', input);
+    expect(extra.dropVolts).toBeCloseTo(step(1), 2);
+    expect(extra.dropPercent).toBeCloseTo(step(2), 2);
+  });
+});
