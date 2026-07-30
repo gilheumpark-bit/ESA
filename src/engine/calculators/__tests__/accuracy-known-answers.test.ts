@@ -2733,3 +2733,117 @@ describe('frequency-compare — 기기별 주파수 환산', () => {
     expect(step(4)).toBeCloseTo(0, 2);
   });
 });
+
+/**
+ * relay-basic — 부하 200 A · 고장 4,000 A · CT 200/5 · 표준반한시(SI)
+ *
+ *   픽업      200 × 1.3                       = 260.00 A
+ *   2 차 환산  260 / 200 × 5                    =   6.50 A   (5 A CT 기준)
+ *   고장배수  4,000 / 260                      =  15.38 ×
+ *   TDS       0.3 × (15.38^0.02 − 1) / 0.14    =  0.120
+ *   동작시간  TDS × 0.14 / (15.38^0.02 − 1)    =  0.300 s
+ *
+ * 곡선 상수는 IEC 60255 표준반한시 A = 0.14 · B = 0.02 다. 동작시간이
+ * 0.300 s 인 것은 우연이 아니라 **TDS 를 목표 0.3 s 에 맞춰 역산**하기
+ * 때문이다 — 두 식이 서로의 역이라 왕복이 닫혀야 한다.
+ *
+ * `ctRatio` 는 CT **1 차 정격**이다(200/5 CT 면 200). 2 차 6.50 A 가 5 A CT
+ * 에서 130 % 로 타당하다 — 40 을 넣으면 32.5 A 가 나와 물리적으로 말이 안 된다.
+ */
+describe('relay-basic — 픽업·고장배수·동작시간', () => {
+  const input = { loadCurrent: 200, faultCurrent: 4000, ctRatio: 200, curveType: 'SI' };
+
+  it.each([
+    [1, 260.0, '픽업 (A)'],
+    [2, 6.5, 'CT 2 차 (A)'],
+    [3, 15.38, '고장배수 (×)'],
+    [4, 0.12, 'TDS'],
+    [5, 0.3, '동작시간 (s)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('relay-basic', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** TDS 역산과 동작시간이 서로의 역이다 — 목표 0.3 s 로 닫혀야 한다. */
+  it('동작시간이 목표 0.3 s 로 닫힌다', () => {
+    for (const curveType of ['SI', 'VI', 'EI']) {
+      const { step } = run('relay-basic', { ...input, curveType });
+      expect(step(5)).toBeCloseTo(0.3, 3);
+    }
+  });
+
+  /** 픽업은 부하의 1.3 배다 — 배수가 새면 오동작하거나 보호를 못 한다. */
+  it('픽업이 부하의 1.3 배다', () => {
+    const { step } = run('relay-basic', input);
+    expect(step(1)).toBeCloseTo(input.loadCurrent * 1.3, 2);
+  });
+
+  /**
+   * 고장배수는 고장전류에 비례한다 — 두 배면 두 배.
+   * 표시값이 소수 둘째 자리로 반올림돼 있어 15.38 × 2 = 30.76 과
+   * 8,000/260 = 30.77 이 한 자리 어긋난다. 비례를 보는 것이지 그 자리의
+   * 정밀도를 보는 게 아니다.
+   */
+  it('고장전류를 두 배로 하면 배수도 두 배', () => {
+    const a = run('relay-basic', input).step(3);
+    const b = run('relay-basic', { ...input, faultCurrent: 8000 }).step(3);
+    expect(b).toBeCloseTo(30.77, 2);
+    expect(b).toBeCloseTo(a * 2, 1);
+  });
+
+  /** 2 차 전류는 CT 1 차 정격에 반비례한다 — 400/5 CT 면 절반이다. */
+  it('CT 1 차 정격을 두 배로 하면 2 차 전류는 절반', () => {
+    const a = run('relay-basic', input).step(2);
+    const b = run('relay-basic', { ...input, ctRatio: 400 }).step(2);
+    expect(b).toBeCloseTo(a / 2, 2);
+  });
+
+  /** 부가 출력이 단계와 같다 — 따로 계산하는 자리다. */
+  it('부가 출력이 단계와 같다', () => {
+    const { step, extra } = run('relay-basic', input);
+    expect(extra.pickupCurrent).toBeCloseTo(step(1), 2);
+    expect(extra.faultMultiple).toBeCloseTo(step(3), 2);
+    expect(extra.timeDial).toBeCloseTo(step(4), 3);
+  });
+});
+
+/**
+ * relay-basic — **동작하지 않는 가지.**
+ *
+ * 고장전류가 픽업 이하(M ≤ 1)면 계전기가 뜨지 않는다. 입력 검증은
+ * `faultCurrent > loadCurrent` 만 보는데 픽업은 부하의 1.3 배라, 그 사이
+ * (부하 < 고장 ≤ 1.3×부하)가 이 가지로 온다. 반한시 식은 여기서 `M^B − 1 < 0`
+ * 이 되어 **음수 동작시간**이라는 물리적으로 불가능한 값을 냈다 —
+ * 그래서 조기 반환으로 막아 두었다.
+ *
+ * 부하 200 A · 고장 250 A → 픽업 260 A · M = 0.96 ≤ 1 → 동작 안 함.
+ * 이 가지의 반환값·부가 출력이 무방비였다(재변이 실측).
+ */
+describe('relay-basic — 픽업 미달이면 동작하지 않는다', () => {
+  const input = { loadCurrent: 200, faultCurrent: 250, ctRatio: 200, curveType: 'SI' };
+
+  it('M ≤ 1 이면 FAIL 이고 동작시간 단계가 없다', () => {
+    const { verdict, step } = run('relay-basic', input);
+    expect(step(3)).toBeCloseTo(0.96, 2);   // 250 / 260
+    expect(verdict()).toBe(false);
+    expect(() => run('relay-basic', input).step(5)).toThrow('step 5 없음');
+  });
+
+  it('그 가지의 반환값·부가 출력이 픽업과 배수를 그대로 말한다', () => {
+    const { value, step, extra } = run('relay-basic', input);
+    expect(value).toBeCloseTo(260.0, 2);
+    expect(extra.pickupCurrent).toBeCloseTo(step(1), 2);
+    expect(extra.faultMultiple).toBeCloseTo(step(3), 2);
+    expect(extra.operates).toBe(0);
+  });
+
+  /** 음수 동작시간이 절대 나오지 않는다 — 이 가지가 막는 것이 그것이다. */
+  it('경계 근처 어디서도 음수 동작시간이 나오지 않는다', () => {
+    for (const faultCurrent of [210, 250, 259, 261, 300, 500]) {
+      const r = run('relay-basic', { ...input, faultCurrent });
+      let trip: number | null = null;
+      try { trip = r.step(5); } catch { trip = null; }
+      if (trip !== null) expect(trip).toBeGreaterThan(0);
+    }
+  });
+});
