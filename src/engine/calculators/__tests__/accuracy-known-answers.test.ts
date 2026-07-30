@@ -1869,3 +1869,72 @@ describe('transformer-loss — 손실과 유동 단계번호', () => {
     expect(b).toBeCloseTo(a / 4, 2);
   });
 });
+
+/**
+ * **부가 출력(additionalOutputs) 앵커.**
+ *
+ * `steps` 가 화면에 보이는 숫자라면 `additionalOutputs` 는 **다른 코드가 집어
+ * 가는 숫자**다 — 리포트·도면 파이프라인·API 응답이 여기서 값을 읽는다.
+ * 그런데 대부분이 같은 양을 **단계와 따로 계산해 따로 반올림**한다. 한쪽만
+ * 고치면 화면과 API 가 어긋나고, 지금까지 그걸 볼 검사가 없었다
+ * (변이 실측 2026-07-30 · 훑기 393 중 부가 출력 73 줄이 전량 무방비).
+ *
+ * 그래서 두 축으로 잠근다:
+ *   ① 단계와 짝이 있는 값 → **단계와 같아야 한다**(따로 계산하는 자리이므로
+ *      이 등식이 깨지는 것이 실제 결함 형태다). 단계 쪽에는 이미 절대 눈금이
+ *      붙어 있으므로 부가 출력도 전이적으로 절대 눈금을 갖는다.
+ *   ② 짝이 없는 값 → 손계산 절대 눈금.
+ */
+describe('부가 출력 — 단계와 어긋나지 않는다', () => {
+  it.each([
+    // [계산기, 입력, 부가출력 키, 대응 단계]
+    ['cable-impedance', { cableSize: 95, conductor: 'Cu', length: 250, frequency: 60, temperature: 75 }, 'resistance', 3],
+    ['cable-impedance', { cableSize: 95, conductor: 'Cu', length: 250, frequency: 60, temperature: 75 }, 'reactance', 5],
+    ['cable-impedance', { cableSize: 95, conductor: 'Cu', length: 250, frequency: 60, temperature: 75 }, 'impedance', 6],
+    ['cable-impedance', { cableSize: 95, conductor: 'Cu', length: 250, frequency: 60, temperature: 75 }, 'angle', 7],
+    ['cable-impedance', { cableSize: 95, conductor: 'Cu', length: 250, frequency: 60, temperature: 75 }, 'reactancePerKm', 4],
+    ['reactive-power', { activePower: 300, currentPF: 0.75, targetPF: 0.95 }, 'requiredCapacitorBank', 3],
+    ['reactive-power', { activePower: 300, currentPF: 0.75, targetPF: 0.95 }, 'currentReactive', 4],
+    ['reactive-power', { activePower: 300, currentPF: 0.75, targetPF: 0.95 }, 'targetReactive', 5],
+    ['voltage-drop', { cableSize: 16, conductor: 'Cu', length: 120, current: 40, powerFactor: 0.9, phase: 3, voltage: 380 }, 'cableResistance', 1],
+    ['temp-correction', { baseAmpacity: 100, referenceTemp: 30, actualTemp: 45, maxConductorTemp: 70 }, 'correctionFactor', 3],
+    ['battery-capacity', { loadPower: 10, backupTime: 4, batteryVoltage: 48, depthOfDischarge: 0.8, inverterEfficiency: 0.9 }, 'requiredEnergy', 2],
+    ['battery-capacity', { loadPower: 10, backupTime: 4, batteryVoltage: 48, depthOfDischarge: 0.8, inverterEfficiency: 0.9 }, 'recommendedEnergy', 5],
+    ['solar-generation', { installedCapacity: 100, peakSunHours: 3.5, performanceRatio: 0.8, systemLoss: 10 }, 'dailyGeneration', 2],
+    ['motor-pf-correction', { motorPower: 22, motorPF: 0.8, targetPF: 0.95, motorVoltage: 380 }, 'currentReduction', 4],
+  ])('%s · %s 가 step %d 과 같다', (id, input, key, stepNo) => {
+    const { step, extra } = run(id as string, input as Record<string, unknown>);
+    expect(extra[key as string]).toBeCloseTo(step(stepNo as number), 4);
+  });
+
+  /**
+   * NEC 부하계산은 부가 출력 키 이름이 단계 제목과 다르다 — 짝을 눈으로
+   * 맞춰야 해서 따로 적는다(잘못 짝지으면 그 자체가 결함이다).
+   */
+  it('nec-load-calc 의 부가 출력이 대응 단계와 같다', () => {
+    const { step, extra } = run('nec-load-calc', {
+      occupancyType: 'dwelling', area: 200,
+      applianceLoads: [
+        { name: 'dishwasher', va: 1200 }, { name: 'disposal', va: 1500 },
+        { name: 'compactor', va: 800 }, { name: 'water-heater', va: 1000 },
+      ],
+      motorLoads: [1500, 750], hvacLoad: 5000, phases: 1,
+    });
+    expect(extra.generalLighting).toBeCloseTo(step(1), 2);   // 6,600 VA
+    expect(extra.smallAppliance).toBeCloseTo(step(2), 2);    // 4,500 VA
+    expect(extra.totalDemand).toBeCloseTo(step(7), 2);       // 16,835 VA
+  });
+
+  /**
+   * 짝이 없는 부가 출력 — 위상각. 손계산:
+   *   φ₁ = arccos(0.75) = 41.41°   φ₂ = arccos(0.95) = 18.19°
+   * 역률에서 각도로 가는 변환이 뒤집히면(arcsin 오용) 여기서 갈린다.
+   */
+  it('reactive-power 의 위상각이 역률의 arccos 다', () => {
+    const { extra } = run('reactive-power', { activePower: 300, currentPF: 0.75, targetPF: 0.95 });
+    expect(extra.currentAngle).toBeCloseTo(41.41, 1);
+    expect(extra.targetAngle).toBeCloseTo(18.19, 1);
+    // 목표 역률이 더 좋으므로 각이 더 작아야 한다 — 부호·방향 확인.
+    expect(extra.targetAngle).toBeLessThan(extra.currentAngle);
+  });
+});
