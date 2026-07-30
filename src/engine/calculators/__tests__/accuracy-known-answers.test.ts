@@ -2017,3 +2017,188 @@ describe('부가 출력 3차 — 가지 분기', () => {
     expect(extra.startingCurrent).toBeGreaterThan(step(4));
   });
 });
+
+/**
+ * power-factor — 두 모드가 **다른 단계 열**을 낸다.
+ *
+ *   A 모드(P·S 주어짐)  P 180 kW · S 200 kVA
+ *     cos φ = 180/200            = 0.9000
+ *     φ     = arccos(0.9)        = 25.84°
+ *     Q     = √(200² − 180²)     = 87.18 kvar
+ *
+ *   B 모드(P·Q 주어짐)  P 180 kW · Q 100 kvar
+ *     S     = √(180² + 100²)     = 205.91 kVA
+ *     cos φ = 180/205.91         = 0.8742
+ *     φ     = arctan(100/180)    = 29.05°
+ *
+ * 두 모드 모두 무방비였다. 역률은 한전 요금과 콘덴서 선정의 입력이다.
+ */
+describe('power-factor — 두 입력 모드', () => {
+  it.each([
+    [1, 0.9, 'cos φ'],
+    [2, 25.84, '위상각 (deg)'],
+    [3, 87.18, '무효전력 (kvar)'],
+  ])('A 모드 step %d = %s — %s', (n, expected) => {
+    const { step } = run('power-factor', { activePower: 180, apparentPower: 200 });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  it.each([
+    [1, 205.91, '피상전력 (kVA)'],
+    [2, 0.8742, 'cos φ'],
+    [3, 29.05, '위상각 (deg)'],
+  ])('B 모드 step %d = %s — %s', (n, expected) => {
+    const { step } = run('power-factor', { activePower: 180, reactivePower: 100 });
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 2 ? 4 : 2);
+  });
+
+  /**
+   * 두 모드가 같은 삼각형을 말해야 한다 — A 가 낸 Q 를 B 에 넣으면 같은 역률이
+   * 나온다. 한 모드만 고치면 여기서 갈린다.
+   */
+  it('A 가 낸 Q 를 B 에 넣으면 같은 역률이 나온다', () => {
+    const a = run('power-factor', { activePower: 180, apparentPower: 200 });
+    const b = run('power-factor', { activePower: 180, reactivePower: a.step(3) });
+    expect(b.step(2)).toBeCloseTo(a.step(1), 3);
+    expect(b.step(1)).toBeCloseTo(200, 1);
+  });
+
+  /** 0.9 미만은 KEC 권고 미달이다 — 숫자가 맞아도 판정이 뒤집히면 안 된다. */
+  it('역률 0.9 경계에서 판정이 갈린다', () => {
+    expect(run('power-factor', { activePower: 180, apparentPower: 200 }).verdict()).toBe(true);
+    expect(run('power-factor', { activePower: 170, apparentPower: 200 }).verdict()).toBe(false);
+  });
+
+  /** 유효전력이 피상전력을 넘을 수 없다 — 물리적으로 불가능한 입력은 거절. */
+  it('P > S 는 거절한다', () => {
+    expect(() => run('power-factor', { activePower: 250, apparentPower: 200 })).toThrow();
+  });
+});
+
+/**
+ * max-demand — 부하 3 종 · 부등률 1.25
+ *
+ *   설비용량  100 + 60 + 40                        = 200.00 kW
+ *   수용가중  100×0.8 + 60×0.6 + 40×0.5            = 136.00 kW
+ *   최대수요  136.00 / 1.25                        = 108.80 kW
+ *   종합수용률 108.80 / 200.00                     =  0.5440
+ *
+ * 최대수요는 인입 용량·요금제의 입력이다.
+ */
+describe('max-demand — 수용률과 부등률', () => {
+  const input = {
+    loads: [
+      { name: '동력', ratedPower: 100, demandFactor: 0.8 },
+      { name: '조명', ratedPower: 60, demandFactor: 0.6 },
+      { name: '기타', ratedPower: 40, demandFactor: 0.5 },
+    ],
+    diversityFactor: 1.25,
+  };
+
+  it.each([
+    [1, 200.0, '설비용량 (kW)'],
+    [2, 136.0, '수용 가중합 (kW)'],
+    [3, 108.8, '최대수요 (kW)'],
+    [4, 0.544, '종합 수용률'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('max-demand', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 4 ? 4 : 2);
+  });
+
+  /** 부등률은 **나누는** 자리다 — 곱하면 최대수요가 부풀어 인입이 과대해진다. */
+  it('부등률이 클수록 최대수요가 작아진다', () => {
+    const a = run('max-demand', input).step(3);
+    const b = run('max-demand', { ...input, diversityFactor: 2.5 }).step(3);
+    expect(b).toBeCloseTo(a / 2, 2);
+  });
+
+  /** 수용률이 전부 1 이면 가중합 = 설비용량이다. */
+  it('수용률 1 이면 가중합이 설비용량과 같다', () => {
+    const all1 = { ...input, loads: input.loads.map((l) => ({ ...l, demandFactor: 1 })) };
+    const { step } = run('max-demand', all1);
+    expect(step(2)).toBeCloseTo(step(1), 2);
+  });
+});
+
+/**
+ * demand-diversity — 개별 최대 [120, 80, 60] · 합성 최대 200 · 설비 400 · 평균 140
+ *
+ *   개별 합계  120 + 80 + 60      = 260.00 kW
+ *   부등률     260 / 200          =  1.3000
+ *   수용률     200 / 400          =  0.5000
+ *   부하율     140 / 200          =  0.7000
+ *
+ * 부등률과 수용률은 이름이 비슷해 서로 뒤바뀌기 쉽다 — 분모가 다르다.
+ */
+describe('demand-diversity — 부등률·수용률·부하율', () => {
+  const input = {
+    individualMaxDemands: [120, 80, 60],
+    combinedMaxDemand: 200,
+    totalInstalled: 400,
+    averageDemand: 140,
+  };
+
+  it.each([
+    [1, 260.0, '개별 최대 합 (kW)'],
+    [2, 1.3, '부등률'],
+    [3, 0.5, '수용률'],
+    [4, 0.7, '부하율'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('demand-diversity', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 4);
+  });
+
+  /** 부등률 < 1 은 합성이 개별 합보다 크다는 뜻 — 물리적으로 이상 신호다. */
+  it('부등률이 1 미만이면 경고 판정', () => {
+    expect(run('demand-diversity', input).verdict()).toBe(true);
+    expect(run('demand-diversity', { ...input, combinedMaxDemand: 300 }).verdict()).toBe(false);
+  });
+
+  /** 평균수요를 안 주면 부하율 단계가 없다 — 있는 척하면 안 된다. */
+  it('평균수요가 없으면 부하율 단계도 없다', () => {
+    const { averageDemand, ...rest } = input;
+    expect(() => run('demand-diversity', rest).step(4)).toThrow('step 4 없음');
+  });
+});
+
+/**
+ * illuminance — 100 m² · 요구 500 lx · 광속 3,000 lm · 조명률 0.6 · 보수율 0.8 · 40 W
+ *
+ *   정확 수량  500 × 100 / (3000 × 0.6 × 0.8)  = 34.722 → **35 등**(올림)
+ *   달성 조도  35 × 3000 × 0.6 × 0.8 / 100     = 504.0 lx
+ *   전력밀도   35 × 40 / 100                    =  14.00 W/m²
+ *   설비 효율  504.0 / 14.00                    =  36.0 lx/(W/m²)
+ *
+ * 등기구 수량은 **올림**이다 — 내림이면 요구 조도에 못 미친다.
+ */
+describe('illuminance — 등기구 수량과 달성 조도', () => {
+  const input = {
+    area: 100, requiredLux: 500, luminousFlux: 3000,
+    utilizationFactor: 0.6, maintenanceFactor: 0.8, fixtureWattage: 40,
+  };
+
+  it.each([
+    [1, 35, '등기구 수량 (개)'],
+    [2, 504.0, '달성 조도 (lx)'],
+    [3, 14.0, '전력밀도 (W/m²)'],
+    [4, 36.0, '설비 효율'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('illuminance', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** 올림이라 달성 조도는 요구 조도 이상이어야 한다 — 내림이면 미달한다. */
+  it('달성 조도가 요구 조도 이상이다', () => {
+    const { step } = run('illuminance', input);
+    expect(step(2)).toBeGreaterThanOrEqual(input.requiredLux);
+    expect(run('illuminance', input).verdict()).toBe(true);
+  });
+
+  /** 면적이 두 배면 등기구도 대략 두 배 — 올림 때문에 정확히 두 배는 아니다. */
+  it('면적을 두 배로 하면 등기구가 두 배 근처가 된다', () => {
+    const a = run('illuminance', input).step(1);
+    const b = run('illuminance', { ...input, area: 200 }).step(1);
+    expect(b).toBeGreaterThanOrEqual(a * 2 - 1);
+    expect(b).toBeLessThanOrEqual(a * 2 + 1);
+  });
+});
