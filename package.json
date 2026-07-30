@@ -33,7 +33,8 @@
     "gate:sld-golden": "node scripts/sld-golden-gate.mjs --mode=enforce",
     "gate:sld-v3-contract": "jest --runInBand src/agent/drawing/__tests__/sld-evaluator-v2.test.ts",
     "test:sld-golden": "npm run gate:sld-golden",
-    "gate:audit": "node scripts/audit-baseline-gate.mjs"
+    "gate:audit": "node scripts/audit-baseline-gate.mjs",
+    "gate:snapshot": "node scripts/realworld-snapshot-freshness.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "1.0.2",
