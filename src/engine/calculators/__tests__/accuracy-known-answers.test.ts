@@ -3074,3 +3074,216 @@ describe('power-factor — B 모드 반환값·부가 출력', () => {
     expect(run('power-factor', { activePower: 160, apparentPower: 200 }).verdict()).toBe(false);
   });
 });
+
+/**
+ * awg-converter-full — 세 입력 단위(AWG · mm² · kcmil)가 각각 다른 1 단계를
+ * 낸다. 자동 생성 입력은 첫 단위만 돌았다.
+ *
+ *   AWG 10   → 지름 2.588 mm · 5.26 mm² · 10.4 kcmil   (ASTM B258 정의식)
+ *   mm² 25   → 지름 5.642 mm · 49.3 kcmil
+ *   kcmil 250 → 지름 12.700 mm · 126.68 mm²
+ *
+ * 250 kcmil 의 지름이 정확히 12.700 mm 인 것은 우연이 아니다 —
+ * kcmil 은 √(1000 × kcmil) mils 이고 1 mil = 0.0254 mm 이므로
+ * √250,000 × 0.0254 = 500 × 0.0254 = 12.7 이다.
+ */
+describe('awg-converter-full — 세 입력 단위', () => {
+  it('AWG 10 → 지름 2.588 mm', () => {
+    const { step } = run('awg-converter-full', { value: 10, fromUnit: 'awg' });
+    expect(step(1)).toBeCloseTo(2.588, 3);
+  });
+
+  it('mm² 25 → 지름 5.642 mm', () => {
+    const { step } = run('awg-converter-full', { value: 25, fromUnit: 'mm2' });
+    expect(step(1)).toBeCloseTo(5.642, 3);
+  });
+
+  it('kcmil 250 → 지름 12.700 mm (√250,000 mils × 0.0254)', () => {
+    const { step } = run('awg-converter-full', { value: 250, fromUnit: 'kcmil' });
+    expect(step(1)).toBeCloseTo(12.7, 3);
+  });
+
+  /**
+   * 지름 다음 단계들 — mm² 환산(3)과 kcmil 환산(5)은 입력 단위와 무관하게
+   * 같은 식을 탄다. 지름만 잠그면 뒤 세 단계가 통째로 무방비다(재변이 실측).
+   */
+  it.each([
+    [10, 'awg', 5.261, 10.38],
+    [25, 'mm2', 25.0, 49.32],
+    [250, 'kcmil', 126.677, 250.0],
+  ])('%s %s → mm² %s · kcmil %s', (value, fromUnit, mm2, kcmil) => {
+    const { step } = run('awg-converter-full', { value, fromUnit });
+    expect(step(3)).toBeCloseTo(mm2 as number, 2);
+    expect(step(5)).toBeCloseTo(kcmil as number, 1);
+  });
+
+  /** 입력 단위로 되돌아오면 그 값이 그대로 나온다 — 항등. */
+  it('mm² 로 넣으면 mm² 단계가 입력과 같다', () => {
+    expect(run('awg-converter-full', { value: 25, fromUnit: 'mm2' }).step(3)).toBeCloseTo(25, 2);
+  });
+
+  it('kcmil 로 넣으면 kcmil 단계가 입력과 같다', () => {
+    expect(run('awg-converter-full', { value: 250, fromUnit: 'kcmil' }).step(5)).toBeCloseTo(250, 1);
+  });
+
+  /** 세 단위가 같은 전선을 가리키면 같은 지름이 나와야 한다 — 왕복 닫힘. */
+  it('AWG 10 과 5.26 mm² 가 같은 지름을 가리킨다', () => {
+    const byAwg = run('awg-converter-full', { value: 10, fromUnit: 'awg' }).step(1);
+    const byMm2 = run('awg-converter-full', { value: 5.26, fromUnit: 'mm2' }).step(1);
+    expect(byMm2).toBeCloseTo(byAwg, 2);
+  });
+
+  /** 굵을수록 지름이 크다 — 단조성. */
+  it('단면적이 클수록 지름이 크다', () => {
+    const small = run('awg-converter-full', { value: 4, fromUnit: 'mm2' }).step(1);
+    const large = run('awg-converter-full', { value: 100, fromUnit: 'mm2' }).step(1);
+    expect(large).toBeGreaterThan(small);
+  });
+});
+
+/**
+ * unit-converter — 배율 두 번(기준 단위로, 목표 단위로).
+ * 소수 아홉째 자리까지 반올림하므로 부동소수 오차가 그대로 드러난다.
+ *
+ *   400 kV → V : 400 × 1e3 = 400,000 (기준) → / 1 = 400,000
+ *   1.5 MVA → kVA : 1.5 × 1e6 = 1,500,000 → / 1e3 = 1,500
+ *   250 mA → A : 250 × 1e-3 = 0.25 → / 1 = 0.25
+ */
+describe('unit-converter — 배율 환산', () => {
+  it.each([
+    [400, 'kv', 'v', 400_000, 400_000, 1000],
+    [1.5, 'mva', 'kva', 1_500_000, 1_500, 1000],
+    [250, 'ma', 'a', 0.25, 0.25, 0.001],
+  ])('%s %s → %s : 기준 %s · 결과 %s · 배율 %s', (value, fromUnit, toUnit, base, out, ratio) => {
+    const { step, extra } = run('unit-converter', { value, fromUnit, toUnit });
+    expect(step(1)).toBeCloseTo(base as number, 6);
+    expect(step(2)).toBeCloseTo(out as number, 6);
+    expect(extra.ratio).toBeCloseTo(ratio as number, 9);
+  });
+
+  /** 같은 단위로 바꾸면 값이 그대로다 — 배율 1. */
+  it('같은 단위면 항등이다', () => {
+    const { step, extra } = run('unit-converter', { value: 42, fromUnit: 'kw', toUnit: 'kw' });
+    expect(step(2)).toBeCloseTo(42, 9);
+    expect(extra.ratio).toBeCloseTo(1, 9);
+  });
+
+  /** 왕복이 제자리로 온다 — 배율이 서로의 역이어야 한다. */
+  it('왕복 환산이 제자리로 온다', () => {
+    const there = run('unit-converter', { value: 380, fromUnit: 'v', toUnit: 'kv' }).step(2);
+    const back = run('unit-converter', { value: there, fromUnit: 'kv', toUnit: 'v' }).step(2);
+    expect(back).toBeCloseTo(380, 6);
+  });
+
+  /** 다른 물리량 사이 환산은 거절한다 — kV 를 A 로 바꿀 수 없다. */
+  it('물리량이 다르면 거절한다', () => {
+    const r = run('unit-converter', { value: 1, fromUnit: 'kv', toUnit: 'a' });
+    expect(r.verdict()).toBe(false);
+  });
+});
+
+/**
+ * 잔여 단일 항목들 — 계산기마다 한두 줄씩 남은 것을 모아 닫는다.
+ * 대부분 **가지가 갈리는 자리**(선형 부하 · 자동 입력이 안 밟는 단계)다.
+ */
+describe('잔여 표시값 — 선형 부하·삼상 전력·태양광 스트링', () => {
+  /**
+   * motor-capacity 선형 부하 — 회전(토크·rpm)이 아니라 힘·속도로 온다.
+   * 자동 생성 입력은 첫 열거값(rotary)만 돌아서 이 가지가 안 밟혔다.
+   *   P = F × v / η = 500 × 2.5 / 0.9 = 1,388.9 W = 1.3889 kW
+   */
+  it('motor-capacity 선형 부하 — 500 N · 2.5 m/s · η 0.9 → 1.3889 kW', () => {
+    const { step } = run('motor-capacity', {
+      loadType: 'linear', torqueOrForce: 500, speedOrVelocity: 2.5,
+      efficiency: 0.9, voltage: 380, powerFactor: 0.85,
+    });
+    expect(step(1)).toBeCloseTo(1.3889, 4);
+  });
+
+  /** 효율이 낮을수록 필요 출력이 크다 — 나눗셈 방향. */
+  it('motor-capacity 효율이 절반이면 필요 출력이 두 배', () => {
+    const base = { loadType: 'linear', torqueOrForce: 500, speedOrVelocity: 2.5, voltage: 380, powerFactor: 0.85 };
+    const a = run('motor-capacity', { ...base, efficiency: 0.9 }).step(1);
+    const b = run('motor-capacity', { ...base, efficiency: 0.45 }).step(1);
+    expect(b).toBeCloseTo(a * 2, 3);
+  });
+
+  /**
+   * three-phase-power — 380 V · 100 A · cos φ 0.85
+   *   S = √3 × 380 × 100         = 65,817.93 VA
+   *   P = S × 0.85               = 55,945.24 W
+   */
+  it.each([
+    [1, 65817.93, '피상 (VA)'],
+    [2, 55945.24, '유효 (W)'],
+  ])('three-phase-power step %d = %s — %s', (n, expected) => {
+    const { step } = run('three-phase-power', { lineVoltage: 380, lineCurrent: 100, powerFactor: 0.85 });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** P = S × cos φ 는 항등이다 — 두 단계를 따로 계산하는 자리다. */
+  it('three-phase-power 유효 = 피상 × 역률', () => {
+    const { step } = run('three-phase-power', { lineVoltage: 380, lineCurrent: 100, powerFactor: 0.85 });
+    expect(step(2)).toBeCloseTo(step(1) * 0.85, 1);
+  });
+
+  /**
+   * solar-cable — 모듈 Voc 45.6 V × 20 직렬 · Isc 11.2 A
+   *   스트링 전압  45.6 × 20      = 912.0 V
+   *   설계 전류    11.2 × 1.25    =  14.00 A   (IEC 62548 안전율 1.25)
+   */
+  it.each([
+    [1, 912.0, '스트링 전압 (V)'],
+    [2, 14.0, '설계 전류 (A)'],
+  ])('solar-cable step %d = %s — %s', (n, expected) => {
+    const { step } = run('solar-cable', {
+      moduleVoc: 45.6, stringCount: 20, isc: 11.2, length: 50, maxVoltageDrop: 3,
+    });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 설계 전류는 Isc 의 1.25 배다 — 안전율이 빠지면 케이블이 가늘어진다. */
+  it('solar-cable 설계 전류가 Isc 의 1.25 배', () => {
+    const { step } = run('solar-cable', {
+      moduleVoc: 45.6, stringCount: 20, isc: 11.2, length: 50, maxVoltageDrop: 3,
+    });
+    expect(step(2)).toBeCloseTo(11.2 * 1.25, 2);
+  });
+
+  /**
+   * parallel-operation — %Z 5.5 · 6.0 병렬
+   *   평균 %Z    (5.5 + 6.0) / 2              = 5.750
+   *   최대 편차  |6.0 − 5.75| / 5.75 × 100    = 4.35 %   (한도 ±10 %)
+   */
+  it('parallel-operation %Z 편차 4.35 % (한도 10 % 이내)', () => {
+    const { step, verdict, extra } = run('parallel-operation', {
+      transformers: [
+        { capacity: 1000, impedancePercent: 5.5, voltageRatio: '22900/380', vectorGroup: 'Dyn11' },
+        { capacity: 1000, impedancePercent: 6.0, voltageRatio: '22900/380', vectorGroup: 'Dyn11' },
+      ],
+    });
+    expect(step(3)).toBeCloseTo(4.35, 2);
+    expect(verdict()).toBe(true);
+    // 부가 출력이 단계와 따로 반올림되는 자리다.
+    expect(extra.maxZDeviation).toBeCloseTo(step(3), 2);
+    expect(extra.totalCapacity).toBeCloseTo(2000, 1);
+    expect(extra.compatible).toBe(1);
+    // %Z 가 같으면 분담률도 같다.
+    expect(extra.loadShare_T1 + extra.loadShare_T2).toBeCloseTo(100, 1);
+  });
+
+  /** 편차가 10 % 를 넘으면 FAIL — 병렬 운전에서 한 대에 부하가 몰린다. */
+  it('parallel-operation %Z 편차가 10 % 를 넘으면 FAIL', () => {
+    const { step, verdict, extra } = run('parallel-operation', {
+      transformers: [
+        { capacity: 1000, impedancePercent: 4.0, voltageRatio: '22900/380', vectorGroup: 'Dyn11' },
+        { capacity: 1000, impedancePercent: 6.0, voltageRatio: '22900/380', vectorGroup: 'Dyn11' },
+      ],
+    });
+    expect(step(3)).toBeCloseTo(20.0, 2);
+    expect(verdict()).toBe(false);
+    // 분담률은 %Z 의 역비다 — 낮은 %Z 쪽이 더 많이 먹는다. 합은 100 %.
+    expect(extra.loadShare_T1 + extra.loadShare_T2).toBeCloseTo(100, 1);
+    expect(extra.loadShare_T1).toBeGreaterThan(extra.loadShare_T2);
+  });
+});
