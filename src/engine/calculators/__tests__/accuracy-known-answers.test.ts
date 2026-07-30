@@ -2202,3 +2202,185 @@ describe('illuminance — 등기구 수량과 달성 조도', () => {
     expect(b).toBeLessThanOrEqual(a * 2 + 1);
   });
 });
+
+/**
+ * token-cost — 단가는 **정당하게 바뀌는 값**이라 절대 눈금을 박지 않는다.
+ * 단가 자체는 `token-cost-current-pricing.test.ts` 가 따로 잠근다.
+ * 여기서는 그 위에 쌓이는 **산술 관계**를 본다 — 다섯 단계가 전부 무방비였고,
+ * 관계가 깨지면 화면의 월 비용이 조용히 어긋난다.
+ *
+ *   step 1 입력비 · step 2 출력비
+ *   step 3 = 1 + 2          (요청당)
+ *   step 4 = 3 × 요청수      (일)
+ *   step 5 = 4 × 30         (월)
+ */
+describe('token-cost — 비용 누적 관계', () => {
+  const input = { model: 'claude-sonnet-5', inputTokens: 10_000, outputTokens: 2_000, requestCount: 500 };
+
+  it('요청당 비용 = 입력비 + 출력비', () => {
+    const { step } = run('token-cost', input);
+    expect(step(3)).toBeCloseTo(step(1) + step(2), 6);
+    expect(step(1)).toBeGreaterThan(0);
+    expect(step(2)).toBeGreaterThan(0);
+  });
+
+  it('일 비용 = 요청당 × 요청수 · 월 비용 = 일 × 30', () => {
+    const { step } = run('token-cost', input);
+    expect(step(4)).toBeCloseTo(step(3) * input.requestCount, 3);
+    expect(step(5)).toBeCloseTo(step(4) * 30, 1);
+  });
+
+  /** 토큰이 두 배면 그 항의 비용도 두 배 — 단가표가 뭐든 성립해야 한다. */
+  it('입력 토큰을 두 배로 하면 입력비가 두 배', () => {
+    const a = run('token-cost', input).step(1);
+    const b = run('token-cost', { ...input, inputTokens: 20_000 }).step(1);
+    expect(b).toBeCloseTo(a * 2, 6);
+  });
+
+  /** 출력 단가가 입력보다 비싸다 — 뒤집히면 모델 선택 권고가 반대로 간다. */
+  it('같은 토큰 수에서 출력이 입력보다 비싸다', () => {
+    const { step } = run('token-cost', { ...input, inputTokens: 1000, outputTokens: 1000 });
+    expect(step(2)).toBeGreaterThan(step(1));
+  });
+});
+
+/**
+ * energy-saving — 100 kW → 60 kW · 10 h/일 · 300 일 · 120 원/kWh ·
+ *                 투자 50,000,000 원 · 배출계수 0.4594
+ *
+ *   절감 전력  100 − 60                    =     40.000 kW
+ *   연간 절감  40 × 10 × 300               = 120,000.0 kWh
+ *   비용 절감  120,000 × 120               = 14,400,000 원
+ *   CO₂ 감축   120,000 × 0.4594            =  55,128.0 kg
+ *   회수 기간  50,000,000 / 14,400,000 × 12 =     41.7 개월
+ */
+describe('energy-saving — 절감량과 회수 기간', () => {
+  const input = {
+    beforePower: 100, afterPower: 60, dailyHours: 10, annualDays: 300,
+    electricityRate: 120, investmentCost: 50_000_000,
+  };
+
+  it.each([
+    [1, 40.0, '절감 전력 (kW)'],
+    [2, 120000.0, '연간 절감 (kWh)'],
+    [3, 14400000, '비용 절감 (원)'],
+    [4, 55128.0, 'CO₂ 감축 (kg)'],
+    [5, 41.7, '회수 기간 (개월)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('energy-saving', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  /** 투자비가 없으면 회수 기간 단계가 없어야 한다 — 0 을 내면 즉시 회수로 읽힌다. */
+  it('투자비가 없으면 회수 기간 단계가 없다', () => {
+    const { investmentCost, ...rest } = input;
+    expect(() => run('energy-saving', rest).step(5)).toThrow('step 5 없음');
+  });
+
+  /**
+   * 개선 후가 개선 전보다 크거나 같으면 **단계를 비우고 FAIL** 을 낸다.
+   * 0 을 단계로 채워 내보내면 «절감 0 kWh» 가 성과처럼 보인다 — 계산기 쪽
+   * 선택이 옳고, 그 선택 자체를 잠근다.
+   */
+  it('절감이 없으면 단계가 비고 FAIL 이다', () => {
+    const { value, verdict } = run('energy-saving', { ...input, afterPower: 100 });
+    expect(value).toBe(0);
+    expect(verdict()).toBe(false);
+    expect(() => run('energy-saving', { ...input, afterPower: 100 }).step(1)).toThrow('step 1 없음');
+  });
+
+  /** 개선 후가 더 크면(악화) 마찬가지로 FAIL — 음수 절감을 만들지 않는다. */
+  it('개선 후가 더 크면 음수 절감이 아니라 FAIL', () => {
+    const worse = run('energy-saving', { ...input, afterPower: 130 });
+    expect(worse.value).toBe(0);
+    expect(worse.verdict()).toBe(false);
+  });
+});
+
+/**
+ * ups-capacity — 부하 50 kW · pf 0.9 · η 0.92 · 안전율 1.25 · 백업 15 분 ·
+ *                배터리 240 V · DoD 0.8 · 셀 12 V
+ *
+ *   UPS 용량   (50 / (0.9 × 0.92)) × 1.25              =  75.48 kVA
+ *   배터리     75.48×1000×15 / (240×0.92×0.8×60)       = 106.8 Ah
+ *   직렬 개수  ⌈240 / 12⌉                               =  20 개
+ *   실제 백업  106.8×240×0.92×0.8×60 / (75.48×1000)     =  15.0 분
+ *
+ * 실제 백업이 요구 백업과 같아야 한다 — 두 식이 서로의 역이다.
+ */
+describe('ups-capacity — 용량·배터리·실백업', () => {
+  const input = {
+    loadPower: 50, loadPF: 0.9, backupMinutes: 15, inputVoltage: 380,
+    batteryVoltage: 240, efficiency: 0.92, safetyFactor: 1.25,
+  };
+
+  it.each([
+    [1, 75.48, 'UPS 용량 (kVA)'],
+    [2, 106.8, '배터리 (Ah)'],
+    [4, 15.0, '실제 백업 (분)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('ups-capacity', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 1);
+  });
+
+  it('직렬 배터리 개수는 ⌈배터리전압 / 셀전압⌉ 이다', () => {
+    const { step } = run('ups-capacity', input);
+    expect(step(3)).toBe(20);
+  });
+
+  /** 실백업이 요구 백업 아래로 내려가면 안 된다 — 두 식이 역관계라 같아야 한다. */
+  it('실제 백업이 요구 백업 이상이다', () => {
+    const { step } = run('ups-capacity', input);
+    expect(step(4)).toBeGreaterThanOrEqual(input.backupMinutes * 0.99);
+    expect(run('ups-capacity', input).verdict()).toBe(true);
+  });
+
+  /** 백업 시간을 두 배로 하면 배터리 용량도 두 배다. */
+  it('백업 시간을 두 배로 하면 Ah 도 두 배', () => {
+    const a = run('ups-capacity', input).step(2);
+    const b = run('ups-capacity', { ...input, backupMinutes: 30 }).step(2);
+    expect(b).toBeCloseTo(a * 2, 0);
+  });
+});
+
+/**
+ * power-loss — 200 A · 0.641 Ω/km · 0.15 km · 3φ · 부하 100 kW
+ *
+ *   I²R        200² × 0.641          = 25,640.0000 W/km
+ *   손실       3 × 25,640 × 0.15 / 1000 =   11.5380 kW
+ *   손실률     11.538 / 100 × 100     =      11.54 %
+ *
+ * 3 상 계수는 3 이다(단상은 2) — 도체 수가 다르다.
+ */
+describe('power-loss — I²R 손실', () => {
+  const input = { current: 200, resistance: 0.641, length: 0.15, phase: 3, loadPower: 100 };
+
+  it.each([
+    [1, 25640.0, 'I²R (W/km)'],
+    [2, 11.538, '손실 (kW)'],
+    [3, 11.54, '손실률 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('power-loss', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, n === 1 ? 1 : 3);
+  });
+
+  /** 손실은 전류의 **제곱**이다 — 선형으로 새면 두 배 전류에서 두 배만 는다. */
+  it('전류를 두 배로 하면 손실은 네 배', () => {
+    const a = run('power-loss', input).step(2);
+    const b = run('power-loss', { ...input, current: 400 }).step(2);
+    expect(b).toBeCloseTo(a * 4, 3);
+  });
+
+  /** 단상 계수는 2 — 3 상 대비 2/3 배다. */
+  it('단상 손실은 3 상의 2/3 배', () => {
+    const three = run('power-loss', input).step(2);
+    const single = run('power-loss', { ...input, phase: 1 }).step(2);
+    expect(single).toBeCloseTo(three * (2 / 3), 3);
+  });
+
+  /** 부하를 안 주면 손실률 단계가 없다. */
+  it('부하전력이 없으면 손실률 단계도 없다', () => {
+    const { loadPower, ...rest } = input;
+    expect(() => run('power-loss', rest).step(3)).toThrow('step 3 없음');
+  });
+});
