@@ -1938,3 +1938,82 @@ describe('부가 출력 — 단계와 어긋나지 않는다', () => {
     expect(extra.targetAngle).toBeLessThan(extra.currentAngle);
   });
 });
+
+/**
+ * 부가 출력 2차 — 단계와 짝이 있는 나머지.
+ *
+ * 단계 번호는 **소스를 읽어 확정**했다. 표현식으로 자동 대조하는 스크립트를
+ * 먼저 썼는데 `round` 없는 단계(예: `value: selectedSize`)에서 번호가 밀려
+ * 3 건 중 2 건을 틀렸다(등전위 4→3 · 피뢰 4→2). 자동 대조 결과를 그대로
+ * 쓰지 않고 파일을 열어 맞춘 이유다.
+ *
+ * 피뢰와 전동기는 방식에 따라 단계 열이 갈라져 번호가 달라진다 — 입력이
+ * 어느 가지를 타는지가 곧 번호를 정한다.
+ */
+describe('부가 출력 2차 — 단계와 어긋나지 않는다', () => {
+  it.each([
+    ['transformer-capacity', { totalLoad: 400, powerFactor: 0.9, efficiency: 0.98, demandFactor: 0.8, growthMargin: 0.2 }, 'demandLoad', 1],
+    ['transformer-efficiency', { capacity: 1000, noLoadLoss: 1200, loadLoss: 10000, powerFactor: 0.9, loadRatio: 0.75 }, 'annualLossDeltaVsOptimal', 5],
+    ['impedance-voltage', { ratedCapacity: 2000, ratedVoltage: 22900, shortCircuitCurrent: 1200 }, 'impedance', 2],
+    ['equipotential-bonding', { largestPE: 35 }, 'minimumBonding', 3],
+    ['ground-conductor', { faultCurrent: 5000, clearingTime: 0.5, conductor: 'Cu', insulation: 'PVC' }, 'minimumSize', 2],
+    ['earth-fault', { systemVoltage: 380, groundingType: 'solid', groundImpedance: 0.5, sourceImpedance: 0.5 }, 'stepVoltage', 4],
+    ['rcd-sizing', { circuitType: 'socket', loadCurrent: 16, earthResistance: 10 }, 'touchVoltage', 3],
+  ])('%s · %s 가 step %d 과 같다', (id, input, key, stepNo) => {
+    const { step, extra } = run(id as string, input as Record<string, unknown>);
+    expect(extra[key as string]).toBeCloseTo(step(stepNo as number), 4);
+  });
+
+  /** transformer-loss 는 `steps.length + 1` 이라 정격용량 유무로 번호가 바뀐다. */
+  it('transformer-loss 의 연간손실이 마지막 단계와 같다', () => {
+    const withCapacity = run('transformer-loss', {
+      noLoadLoss: 1500, ratedLoadLoss: 12000, loadRatio: 0.6, ratedCapacity: 1500, powerFactor: 0.95,
+    });
+    expect(withCapacity.extra.annualLoss).toBeCloseTo(withCapacity.step(4), 2);
+
+    const without = run('transformer-loss', { noLoadLoss: 1500, ratedLoadLoss: 12000, loadRatio: 0.6 });
+    expect(without.extra.annualLoss).toBeCloseTo(without.step(3), 2);
+  });
+});
+
+/**
+ * 부가 출력 3차 — 가지가 갈리는 넷.
+ *
+ * 피뢰는 `method`(회전구체/보호각)로, 전동기는 `loadType` 으로 단계 열이
+ * 갈라진다. 입력이 어느 가지를 타는지가 곧 단계 번호를 정하므로 기존
+ * describe 가 쓰는 입력을 그대로 재사용한다.
+ */
+describe('부가 출력 3차 — 가지 분기', () => {
+  it('ct-sizing 여유율이 step 6 과 같다', () => {
+    const { step, extra } = run('ct-sizing', {
+      maxLoadCurrent: 200, relayBurden: 10, leadLength: 20, leadSize: 4, accuracyClass: '0.5',
+    });
+    expect(extra.marginPercent).toBeCloseTo(step(6), 4);
+  });
+
+  it('surge-arrester 최소 창거리가 step 5 와 같다', () => {
+    const { step, extra } = run('surge-arrester', {
+      systemVoltage: 22900, pollutionLevel: 'heavy', neutralGrounding: 'solid',
+    });
+    expect(extra.minCreepage).toBeCloseTo(step(5), 4);
+  });
+
+  /** 보호각 가지에서만 alpha 가 나온다 — 회전구체 가지에는 없는 값이다. */
+  it('lightning-protection 보호각이 보호각 가지의 step 2 와 같다', () => {
+    const { step, extra } = run('lightning-protection', {
+      buildingHeight: 15, lplClass: 'II', method: 'angle',
+    });
+    expect(extra.protectionAngle).toBeCloseTo(step(2), 4);
+    expect(extra.protectionAngle).toBeCloseTo(21.0, 1); // 선언된 직선 근사
+  });
+
+  it('motor-capacity 기동전류가 step 5 와 같다', () => {
+    const { step, extra } = run('motor-capacity', {
+      loadType: 'rotary', torqueOrForce: 100, speedOrVelocity: 1750,
+      efficiency: 0.9, voltage: 380, powerFactor: 0.85,
+    });
+    expect(extra.startingCurrent).toBeCloseTo(step(5), 4);
+    // 기동전류는 정격전류보다 커야 한다 — 배수가 1 미만이면 방향이 뒤집힌 것이다.
+    expect(extra.startingCurrent).toBeGreaterThan(step(4));
+  });
+});
