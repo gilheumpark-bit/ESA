@@ -2637,3 +2637,99 @@ describe('awg-converter — 가지별 반환값·부가 출력', () => {
     }
   });
 });
+
+/**
+ * frequency-compare — 60 Hz 설비를 50 Hz 계통에 쓸 때. 기기 종류마다
+ * **단계 열이 완전히 다르다**(전동기 4 · 변압기 4 · 콘덴서 3 · 임피던스 3).
+ * 자동 생성 입력은 첫 종류만 돌아서 나머지 셋은 한 번도 안 밟혔다.
+ *
+ *   주파수비  50/60                    = 0.8333
+ *   전동기    동기속도 120×50/4        = 1,500 rpm (60 Hz 에선 1,800)
+ *             자속 (1/0.8333 − 1)×100  = +20.00 %   ← 전압을 그대로 두면 자속이 는다
+ *             출력 (0.8333 − 1)×100    = −16.67 %
+ *   변압기    자속 +20.00 % · 정격 −16.67 % · 포화 위험 60/50 = 1.200
+ *   콘덴서    용량성 리액턴스 +20.00 % · 무효전력 −16.67 %
+ *   임피던스  유도성 −16.67 % · 용량성 +20.00 %
+ *
+ * 60 → 50 Hz 는 자속이 **늘어난다**(주파수가 분모다) — 부호가 뒤집히면
+ * 포화 위험을 반대로 읽는다.
+ */
+describe('frequency-compare — 기기별 주파수 환산', () => {
+  const base = { ratedPower: 100, ratedFreq: 60, targetFreq: 50 };
+
+  it('주파수비는 종류와 무관하게 같다', () => {
+    for (const equipmentType of ['motor', 'transformer', 'capacitor', 'impedance']) {
+      expect(run('frequency-compare', { ...base, equipmentType }).step(1)).toBeCloseTo(0.8333, 4);
+    }
+  });
+
+  it.each([
+    [2, 1500, '동기속도 (rpm)'],
+    [3, 20.0, '자속 변화 (%)'],
+    [4, -16.67, '출력 변화 (%)'],
+  ])('전동기 step %d = %s — %s', (n, expected) => {
+    const { step } = run('frequency-compare', { ...base, equipmentType: 'motor', motorPoles: 4 });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  it.each([
+    [2, 20.0, '철심 자속 (%)'],
+    [3, -16.67, '정격 용량 (%)'],
+    [4, 1.2, '포화 위험 (f₁/f₂)'],
+  ])('변압기 step %d = %s — %s', (n, expected) => {
+    const { step } = run('frequency-compare', { ...base, equipmentType: 'transformer' });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  it.each([
+    [2, 20.0, '용량성 리액턴스 (%)'],
+    [3, -16.67, '무효전력 (%)'],
+  ])('콘덴서 step %d = %s — %s', (n, expected) => {
+    const { step } = run('frequency-compare', { ...base, equipmentType: 'capacitor' });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  it.each([
+    [2, -16.67, '유도성 임피던스 (%)'],
+    [3, 20.0, '용량성 임피던스 (%)'],
+  ])('임피던스 step %d = %s — %s', (n, expected) => {
+    const { step } = run('frequency-compare', { ...base, equipmentType: 'impedance' });
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 동기속도는 극수에 반비례한다 — 120 f / p 의 p 가 새면 여기서 갈린다. */
+  it('극수를 두 배로 하면 동기속도는 절반', () => {
+    const p4 = run('frequency-compare', { ...base, equipmentType: 'motor', motorPoles: 4 }).step(2);
+    const p8 = run('frequency-compare', { ...base, equipmentType: 'motor', motorPoles: 8 }).step(2);
+    expect(p8).toBeCloseTo(p4 / 2, 0);
+  });
+
+  /** 주파수를 낮추면 디레이팅이 필요하다 — 올리면 필요 없다. */
+  it('주파수를 낮출 때만 디레이팅 판정이 난다', () => {
+    expect(run('frequency-compare', { ...base, equipmentType: 'motor' }).verdict()).toBe(false);
+    expect(run('frequency-compare', {
+      ...base, equipmentType: 'motor', ratedFreq: 50, targetFreq: 60,
+    }).verdict()).toBe(true);
+  });
+
+  /**
+   * 부가 출력 셋. 자동 계약이 못 보는 자리다 — 생성 입력에서 두 주파수가
+   * 같아져 전부 0 이 되고, **0 은 1.5 배를 곱해도 0** 이라 오염이 안 보인다.
+   * 값이 살아 있는 입력으로 따로 잠근다.
+   */
+  it('부가 출력이 전동기 단계와 같다', () => {
+    const { step, extra } = run('frequency-compare', { ...base, equipmentType: 'motor', motorPoles: 4 });
+    expect(extra.coreFluxChange).toBeCloseTo(step(3), 2);   // +20.00 %
+    expect(extra.ratingChange).toBeCloseTo(step(4), 2);     // −16.67 %
+    expect(extra.speedChange).toBeCloseTo(-16.67, 2);       // 단계는 rpm, 이건 %
+    expect(extra.deratingNeeded).toBe(1);
+  });
+
+  /** 같은 주파수면 아무것도 안 변한다 — 항등 확인. */
+  it('같은 주파수면 변화가 0 이다', () => {
+    const { step } = run('frequency-compare', { ...base, equipmentType: 'motor', targetFreq: 60 });
+    expect(step(1)).toBeCloseTo(1, 4);
+    expect(step(3)).toBeCloseTo(0, 2);
+    expect(step(4)).toBeCloseTo(0, 2);
+  });
+});
