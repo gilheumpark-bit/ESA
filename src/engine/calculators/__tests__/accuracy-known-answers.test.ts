@@ -3287,3 +3287,198 @@ describe('잔여 표시값 — 선형 부하·삼상 전력·태양광 스트링
     expect(extra.loadShare_T1).toBeGreaterThan(extra.loadShare_T2);
   });
 });
+
+/**
+ * 마지막 잔여 8 줄 — 계산기마다 한 줄씩 남은 것.
+ * 값은 전부 실행으로 확인하고, **그 값이 왜 그 값인지**를 관계식으로 함께
+ * 잠근다. 실행 결과만 베끼면 닫힌 순환이다(§2.3).
+ */
+describe('잔여 표시값 — 마지막 8 줄', () => {
+  /**
+   * inrush-current — 1,000 kVA · 22.9 kV · 배전용
+   *   정격전류  1,000,000 / (√3 × 22,900)  =  25.21 A
+   *   돌입배수  (6 + 8) / 2                =   7    (배전용 6~8 배)
+   *   돌입전류  7 × 25.21                  = 176.48 A
+   */
+  it('inrush-current — 정격 25.21 A · 배수 7 · 돌입 176.48 A', () => {
+    const { step } = run('inrush-current', {
+      ratedCapacity: 1000, ratedVoltage: 22900, transformerType: 'distribution',
+    });
+    expect(step(1)).toBeCloseTo(25.21, 2);
+    expect(step(2)).toBe(7);
+    expect(step(3)).toBeCloseTo(176.48, 2);
+    // 표시값이 소수 둘째 자리로 반올림돼 25.21 × 7 = 176.47 과 실제 176.48 이
+    // 한 자리 어긋난다 — 곱셈 관계를 보는 것이지 그 자리 정밀도를 보는 게 아니다.
+    expect(step(3)).toBeCloseTo(step(1) * step(2), 1);
+  });
+
+  /** 변압기 종류마다 배수가 다르다 — 건식이 가장 크다(10~15 → 12.5). */
+  it('inrush-current 종류별 배수 (배전 7 · 전력 10 · 건식 12.5)', () => {
+    const base = { ratedCapacity: 1000, ratedVoltage: 22900 };
+    expect(run('inrush-current', { ...base, transformerType: 'distribution' }).step(2)).toBe(7);
+    expect(run('inrush-current', { ...base, transformerType: 'power' }).step(2)).toBe(10);
+    expect(run('inrush-current', { ...base, transformerType: 'dry-type' }).step(2)).toBe(12.5);
+  });
+
+  /**
+   * substation-capacity — 300 kW/0.9/0.8 + 200 kW/0.85/0.7
+   *   수용 부하  300/0.9×0.8 + 200/0.85×0.7 = 431.37 kVA
+   */
+  it('substation-capacity 수용 부하 431.37 kVA', () => {
+    const { step } = run('substation-capacity', {
+      loads: [
+        { name: 'A', kW: 300, pf: 0.9, demandFactor: 0.8 },
+        { name: 'B', kW: 200, pf: 0.85, demandFactor: 0.7 },
+      ],
+      futureGrowth: 0.2,
+    });
+    expect(step(1)).toBeCloseTo(300 / 0.9 * 0.8 + 200 / 0.85 * 0.7, 2);
+    expect(step(1)).toBeCloseTo(431.37, 2);
+  });
+
+  /**
+   * grid-connect — PV 500 kW · ESS 200 kWh(0.5C → 100 kW) · 계약 400 kW
+   *   총 발전  500 + 100 = 600 kW
+   *   최대 역송 min(600, 400) = **400 kW** — 계약전력이 상한이다.
+   */
+  it('grid-connect 최대 역송은 계약전력으로 잘린다', () => {
+    const { step } = run('grid-connect', {
+      pvCapacity: 500, batteryCapacity: 200, gridVoltage: 22900, contractDemand: 400,
+    });
+    expect(step(1)).toBeCloseTo(400, 2);
+    // 계약을 키우면 총 발전(600)까지만 는다 — min 이 뒤집히면 여기서 갈린다.
+    const big = run('grid-connect', {
+      pvCapacity: 500, batteryCapacity: 200, gridVoltage: 22900, contractDemand: 900,
+    });
+    expect(big.step(1)).toBeCloseTo(600, 2);
+  });
+
+  /**
+   * motor-efficiency — 75 kW · 부하율 0.8 · IE3 · 4,000 h
+   *   연간 에너지 = (75 × 0.8) / η × 4,000
+   * η 는 부분부하 모델이 정하므로 절대값 대신 **관계**를 잠근다.
+   */
+  it('motor-efficiency 연간 에너지 = 출력 / 효율 × 시간', () => {
+    const { step } = run('motor-efficiency', {
+      ratedPower: 75, loadRatio: 0.8, ieClass: 'IE3', annualHours: 4000,
+    });
+    expect(step(3)).toBeCloseTo(251859, 0);
+    // 효율은 화면에 소수 첫째 자리(95.3 %)로 반올림돼 있어 되먹이면 23 kWh
+    // 쯤 잔차가 남는다(연간 25 만 kWh 대비 0.009 %). 관계를 보는 검사다.
+    const eta = step(2) / 100;
+    expect(step(3) / ((75 * 0.8) / eta * 4000)).toBeCloseTo(1, 3);
+  });
+
+  /** 운전 시간이 두 배면 연간 에너지도 두 배. */
+  it('motor-efficiency 운전 시간에 선형이다', () => {
+    const base = { ratedPower: 75, loadRatio: 0.8, ieClass: 'IE3' };
+    const a = run('motor-efficiency', { ...base, annualHours: 4000 }).step(3);
+    const b = run('motor-efficiency', { ...base, annualHours: 8000 }).step(3);
+    expect(b).toBeCloseTo(a * 2, 0);
+  });
+
+  /**
+   * ampacity-compare — Cu 25 mm² XLPE · 주변 30 °C
+   *   KEC 133 A · NEC 95 A · IEC 133 A
+   * 같은 전선인데 규격마다 값이 다르다 — 그게 이 계산기의 존재 이유다.
+   */
+  it('ampacity-compare 규격별 허용전류 (KEC 133 · NEC 95 · IEC 133)', () => {
+    const { step } = run('ampacity-compare', {
+      cableSize: 25, conductor: 'Cu', insulation: 'XLPE', ambientTemp: 30,
+    });
+    expect(step(1)).toBe(133);
+    expect(step(2)).toBe(95);
+    expect(step(3)).toBe(133);
+    // KEC 와 IEC 는 같은 계보라 일치해야 한다.
+    expect(step(3)).toBe(step(1));
+  });
+
+  /**
+   * ampacity-global-compare — 보정계수 곱(재질 × 절연).
+   * Cu·XLPE 는 둘 다 보정 없음이라 1.0 이다 — Al 이나 PVC 면 1 미만이 된다.
+   *
+   * **두 허용전류 계산기가 도체 표기를 다르게 쓴다**: `ampacity-compare` 는
+   * `Cu`/`Al`, `ampacity-global-compare` 는 `copper`/`aluminum`. 같은 화면에서
+   * 둘을 쓰면 한쪽이 검증 예외로 떨어진다 — 그 비대칭 자체를 여기 적어 둔다.
+   */
+  it('ampacity-global-compare 보정계수 — copper·XLPE 는 1.0, aluminum·PVC 는 그보다 작다', () => {
+    const cuXlpe = run('ampacity-global-compare', {
+      cableSize: 25, conductor: 'copper', insulation: 'XLPE', ambientTemp: 30,
+    }).step(1);
+    expect(cuXlpe).toBeCloseTo(1.0, 3);
+
+    const alPvc = run('ampacity-global-compare', {
+      cableSize: 25, conductor: 'aluminum', insulation: 'PVC', ambientTemp: 30,
+    }).step(1);
+    expect(alPvc).toBeLessThan(1.0);
+  });
+
+  /** 도체 표기가 서로 다르다는 사실을 잠근다 — 통일되면 이 검사가 깨진다. */
+  it('두 허용전류 계산기의 도체 표기가 서로 다르다', () => {
+    expect(() => run('ampacity-compare', {
+      cableSize: 25, conductor: 'copper', insulation: 'XLPE', ambientTemp: 30,
+    })).toThrow('Cu, Al');
+    expect(() => run('ampacity-global-compare', {
+      cableSize: 25, conductor: 'Cu', insulation: 'XLPE', ambientTemp: 30,
+    })).toThrow('copper, aluminum');
+  });
+
+  /**
+   * lightning-protection 보호각 가지 — LPL II · 높이 15 m
+   *   기준 보호각 35° → 높이 보정 후 21°
+   * 회전구체 가지(반경 30 m)와는 다른 단계 열이다.
+   */
+  it('lightning-protection 보호각 가지 — 기준 35° → 보정 21°', () => {
+    const { step } = run('lightning-protection', {
+      buildingHeight: 15, lplClass: 'II', method: 'angle',
+    });
+    expect(step(1)).toBe(35);
+    expect(step(2)).toBeCloseTo(21, 1);
+    // 높을수록 보호각이 작아진다 — 방향이 뒤집히면 보호 범위를 과대평가한다.
+    const taller = run('lightning-protection', {
+      buildingHeight: 25, lplClass: 'II', method: 'angle',
+    }).step(2);
+    expect(taller).toBeLessThan(step(2));
+  });
+
+  /** 보호각 가지의 **반환값**이 보정 후 각과 같다 — 단계와 따로 반올림한다. */
+  it('lightning-protection 보호각 가지의 반환값이 step 2 와 같다', () => {
+    const { value, step } = run('lightning-protection', {
+      buildingHeight: 15, lplClass: 'II', method: 'angle',
+    });
+    expect(value).toBeCloseTo(step(2), 1);
+    expect(value).toBeCloseTo(21, 1);
+  });
+
+  /** demand-diversity 부가 출력이 단계와 같다. */
+  it('demand-diversity 부가 출력이 단계와 같다', () => {
+    const { step, extra } = run('demand-diversity', {
+      individualMaxDemands: [120, 80, 60], combinedMaxDemand: 200,
+      totalInstalled: 400, averageDemand: 140,
+    });
+    expect(extra.diversityFactor).toBeCloseTo(step(2), 4);
+    expect(extra.demandFactor).toBeCloseTo(step(3), 4);
+    expect(extra.loadFactor).toBeCloseTo(step(4), 4);
+  });
+
+  /** power-loss 손실률 부가 출력이 단계와 같다. */
+  it('power-loss 손실률 부가 출력이 단계와 같다', () => {
+    const { step, extra } = run('power-loss', {
+      current: 200, resistance: 0.641, length: 0.15, phase: 3, loadPower: 100,
+    });
+    expect(extra.powerLoss).toBeCloseTo(step(2), 4);
+    expect(extra.lossPercent).toBeCloseTo(step(3), 2);
+  });
+
+  /** energy-saving 절감률 부가 출력 — (before − after)/before. */
+  it('energy-saving 절감률이 40 % 이고 부가 출력이 단계와 같다', () => {
+    const { step, extra } = run('energy-saving', {
+      beforePower: 100, afterPower: 60, dailyHours: 10, annualDays: 300,
+      electricityRate: 120, investmentCost: 50_000_000,
+    });
+    expect(extra.reductionPercent).toBeCloseTo(40.0, 1);
+    expect(extra.costSavings).toBeCloseTo(step(3), 0);      // 14,400,000 원
+    expect(extra.co2Reduction).toBeCloseTo(step(4), 1);     // 55,128.0 kg
+    expect(extra.paybackPeriod).toBeCloseTo(step(5), 1);    // 41.7 개월
+  });
+});
