@@ -2643,6 +2643,7 @@
           "given": {
             "케이블 미결속 차단기": "11/11",
             "정격(AF/AT) 미파싱 차단기": "5/11",
+            "프레임·트립 쌍 부재로 AT≤AF 판정 불가": "6/11",
             "수치 없는 TR 심볼": "1/1"
           },
           "verdict": "이 회로들은 이 도면만으로 케이블 판정 불가 — 분기 케이블은 통상 간선 스케줄(표)에 있다(중급 교차 검토 대상)"
@@ -2740,7 +2741,7 @@
       "method": "pdf-vector",
       "confidence": 0.85,
       "description": "PDF vector parsed (page 4): 76 components, 73 connections (snapped 78, junctions 35, dropped 14), 165 text items, 149 line segments",
-      "durationMs": 120
+      "durationMs": 127
     }
   }
 }

@@ -391,11 +391,18 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
   // ── 규칙 1: AT ≤ AF (트립은 프레임을 넘을 수 없다 — 차단기 구조 정의) ──
   const specByBreaker = new Map<string, ReturnType<typeof deriveSpec>>();
   let ratedParsed = 0;
+  // AT ≤ AF 는 **프레임과 트립이 둘 다** 있어야 판정한다. `ratedParsed` 는
+  // 「프레임 또는 전류」를 세므로 둘 사이에 틈이 생긴다 — 영문 도면은 차단기를
+  // `VCB 630 A` 처럼 단일 정격으로 적어 프레임이 없다(실측 2026-07-30 RSC p4:
+  // 정격 파싱 6/11 인데 AT≤AF 판정 0). 그 틈을 세지 않으면 사용자는 «검사했는데
+  // 다 통과» 와 «판정할 수 없었다» 를 구분하지 못한다.
+  let framePairMissing = 0;
   for (const b of breakers) {
     const spec = deriveSpec(b);
     specByBreaker.set(b.id, spec);
     if (spec.frameA === undefined && spec.current === undefined) continue;
     ratedParsed += 1;
+    if (spec.frameA === undefined || spec.tripA === undefined) framePairMissing += 1;
     if (spec.frameA !== undefined && spec.tripA !== undefined && spec.tripA <= spec.frameA) {
       findings.push({
         rule: 'AT-LE-AF',
@@ -587,6 +594,9 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     if (breakers.length > 0) {
       given['케이블 미결속 차단기'] = `${gapCable}/${breakers.length}`;
       given['정격(AF/AT) 미파싱 차단기'] = `${gapRating}/${breakers.length}`;
+      if (framePairMissing > 0) {
+        given['프레임·트립 쌍 부재로 AT≤AF 판정 불가'] = `${framePairMissing}/${breakers.length}`;
+      }
     }
     if (bareTransformers > 0) {
       given['수치 없는 TR 심볼'] = `${bareTransformers}/${transformers.length}`;

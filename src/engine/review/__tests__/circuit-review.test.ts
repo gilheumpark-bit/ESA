@@ -51,6 +51,33 @@ describe('AT-LE-AF — 트립은 프레임을 넘을 수 없다', () => {
     ]));
     expect(r.findings.filter((x) => x.rule === 'AT-LE-AF')).toHaveLength(0);
   });
+  /**
+   * **판정 불가를 통과와 구분해 센다.**
+   *
+   * 영문 도면은 차단기를 `VCB 630 A` 처럼 단일 정격으로 적어 프레임이 없다.
+   * AT ≤ AF 는 프레임과 트립이 둘 다 있어야 판정하므로 이런 차단기는 조용히
+   * 빠진다 — 실측 2026-07-30 RSC p4: 정격 파싱 6/11 인데 AT≤AF 판정 0 건이고,
+   * 보고에는 그 이유가 없었다. 사용자는 «다 통과» 로 읽는다.
+   */
+  it('단일 정격(프레임 없음)은 판정 불가로 집계된다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'VCB 630 A', position: pos },
+      { id: 'comp_2', type: 'breaker', label: 'MCCB 3P-100/75', rating: '100AF/75AT', position: pos },
+    ]));
+    const gap = r.findings.find((f) => f.rule === 'DATA-GAP');
+    expect(gap?.given['프레임·트립 쌍 부재로 AT≤AF 판정 불가']).toBe('1/2');
+    // 쌍이 있는 쪽은 정상적으로 PASS 가 난다 — 과차단 반증.
+    expect(r.summary.pass).toBe(1);
+  });
+
+  /** 전부 쌍이 있으면 그 항목은 아예 나오지 않는다 — 0 을 적어 두지 않는다. */
+  it('모두 프레임·트립 쌍이 있으면 판정 불가 항목이 없다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '100AF/75AT', position: pos },
+    ]));
+    const gap = r.findings.find((f) => f.rule === 'DATA-GAP');
+    expect(gap?.given['프레임·트립 쌍 부재로 AT≤AF 판정 불가']).toBeUndefined();
+  });
 
   it('트립>프레임(50AF/100AT)은 FAIL', () => {
     const r = reviewAnalysis(analysisOf([
