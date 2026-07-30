@@ -2948,3 +2948,129 @@ describe('규격 표값 대조 — 등전위본딩 (IEC 60364-5-54 §544.2)', ()
     expect(run('equipotential-bonding', { largestPE: 1000 }).step(3)).toBe(25);
   });
 });
+
+/**
+ * three-phase-vd — **전동기 기동 구간.** `motorStarting` 을 주지 않으면 단계
+ * 5~7 이 아예 없다. 자동 생성 입력은 그 선택 필드를 안 채워서 이 가지가 한
+ * 번도 안 밟혔다.
+ *
+ *   380 V · 정격 100 A · 150 m · R 0.641 · X 0.078 · 기동배수 6 · 기동역률 0.35
+ *     기동전류  100 × 6                                  = 600.00 A
+ *     기동 z    0.641×0.35 + 0.078×0.9367                =  0.2974 Ω/km
+ *     기동강하  √3 × 600 × 0.150 × 0.2974                =  46.36 V
+ *     기동강하율 46.36 / 380 × 100                        =  12.20 %
+ *
+ * 기동 역률(0.35)이 정상 역률(0.85)보다 훨씬 낮아 **리액턴스 항이 커진다** —
+ * 정상 z 를 그대로 쓰면 기동 강하를 과소평가한다.
+ */
+describe('three-phase-vd — 전동기 기동 강하', () => {
+  const input = {
+    voltage: 380, current: 100, length: 150, resistance: 0.641, reactance: 0.078, powerFactor: 0.85,
+    motorStarting: { startingCurrentMultiplier: 6, startingPowerFactor: 0.35 },
+  };
+
+  it.each([
+    [5, 600.0, '기동전류 (A)'],
+    [6, 46.36, '기동 강하 (V)'],
+    [7, 12.2, '기동 강하율 (%)'],
+  ])('step %d = %s — %s', (n, expected) => {
+    const { step } = run('three-phase-vd', input);
+    expect(step(n as number)).toBeCloseTo(expected as number, 2);
+  });
+
+  /** 기동 정보를 안 주면 그 단계들이 없어야 한다 — 있는 척하면 안 된다. */
+  it('기동 정보가 없으면 단계 5 가 없다', () => {
+    const { motorStarting, ...rest } = input;
+    expect(() => run('three-phase-vd', rest).step(5)).toThrow('step 5 없음');
+  });
+
+  /** 기동 강하율 부가 출력이 단계와 같다 — 기동 정보가 있을 때만 붙는다. */
+  it('기동 강하율 부가 출력이 단계 7 과 같다', () => {
+    const { step, extra } = run('three-phase-vd', input);
+    expect(extra.motorStartingDropPercent).toBeCloseTo(step(7), 2);
+    const { motorStarting, ...rest } = input;
+    expect(run('three-phase-vd', rest).extra.motorStartingDropPercent).toBeUndefined();
+  });
+
+  /**
+   * **역률과 강하의 방향은 R/X 비가 정한다.** 처음엔 「기동 역률이 낮을수록
+   * 강하가 크다」로 기대했다가 틀렸다 — 그건 리액턴스가 우세한 고압 선로의
+   * 이야기다.
+   *
+   *   z = R cos φ + X sin φ
+   *   저압(R 0.641 ≫ X 0.078): pf 0.35 → 0.2974 · pf 0.85 → 0.5859  (R 항이 지배)
+   *   고압(R 0.05 ≪ X 0.4)   : pf 0.35 → 0.3922 · pf 0.85 → 0.2532  (X 항이 지배)
+   *
+   * 두 방향을 다 잠근다. 한쪽만 보면 R·X 를 맞바꿔도 안 걸린다.
+   */
+  it('R 우세 선로에서는 역률이 높을수록 강하가 크다', () => {
+    const lowPf = run('three-phase-vd', input).step(6);
+    const highPf = run('three-phase-vd', {
+      ...input, motorStarting: { startingCurrentMultiplier: 6, startingPowerFactor: 0.85 },
+    }).step(6);
+    expect(highPf).toBeGreaterThan(lowPf);
+  });
+
+  it('X 우세 선로에서는 역률이 낮을수록 강하가 크다', () => {
+    const hv = { ...input, resistance: 0.05, reactance: 0.4 };
+    const lowPf = run('three-phase-vd', hv).step(6);
+    const highPf = run('three-phase-vd', {
+      ...hv, motorStarting: { startingCurrentMultiplier: 6, startingPowerFactor: 0.85 },
+    }).step(6);
+    expect(lowPf).toBeGreaterThan(highPf);
+  });
+
+  /** 기동배수에 선형이다. */
+  it('기동배수를 두 배로 하면 기동전류·강하도 두 배', () => {
+    const a = run('three-phase-vd', input);
+    const b = run('three-phase-vd', {
+      ...input, motorStarting: { startingCurrentMultiplier: 12, startingPowerFactor: 0.35 },
+    });
+    expect(b.step(5)).toBeCloseTo(a.step(5) * 2, 2);
+    // 표시값이 소수 둘째 자리로 반올림돼 46.36 × 2 = 92.72 와 실제 92.73 이
+    // 한 자리 어긋난다 — 비례를 보는 것이지 그 자리의 정밀도를 보는 게 아니다.
+    expect(b.step(6)).toBeCloseTo(92.73, 2);
+    expect(b.step(6)).toBeCloseTo(a.step(6) * 2, 1);
+  });
+});
+
+/**
+ * power-factor — **B 모드의 반환값과 부가 출력.**
+ * A 모드와 B 모드가 각각 return 문을 갖고 그 안에서 같은 양을 또 반올림한다.
+ * B 모드 쪽이 무방비였다(재변이 실측).
+ *
+ *   P 180 kW · Q 100 kvar → S 205.91 kVA · cos φ 0.8742 · φ 29.05°
+ */
+describe('power-factor — B 모드 반환값·부가 출력', () => {
+  const input = { activePower: 180, reactivePower: 100 };
+
+  it('반환값과 부가 출력이 단계와 같다', () => {
+    const { value, step, extra } = run('power-factor', input);
+    expect(value).toBeCloseTo(step(2), 4);            // cos φ 0.8742
+    expect(extra.powerFactor).toBeCloseTo(step(2), 4);
+    expect(extra.phaseAngle).toBeCloseTo(step(3), 2); // 29.05°
+    expect(extra.apparentPower).toBeCloseTo(step(1), 2); // 205.91 kVA
+  });
+
+  /**
+   * A 모드도 같은 계약을 지킨다 — 두 return 이 어긋나면 안 된다.
+   * 다만 **부가 출력 키가 모드마다 다르다**: A 는 입력으로 받은 S 대신
+   * 계산된 `reactivePower` 를, B 는 계산된 `apparentPower` 를 낸다.
+   * 소비처가 한 이름만 기대하면 다른 모드에서 `undefined` 를 읽는다.
+   */
+  it('A 모드도 같은 계약을 지킨다 (부가 출력 키가 다르다)', () => {
+    const { value, step, extra } = run('power-factor', { activePower: 180, apparentPower: 200 });
+    expect(value).toBeCloseTo(step(1), 4);
+    expect(extra.powerFactor).toBeCloseTo(step(1), 4);
+    expect(extra.phaseAngle).toBeCloseTo(step(2), 2);
+    expect(extra.reactivePower).toBeCloseTo(step(3), 2);  // 87.18 kvar
+    expect(extra.apparentPower).toBeUndefined();          // A 모드엔 없다
+  });
+
+  /** 0.85 미만은 「correction required」— 세 구간이 순서대로 갈린다. */
+  it('0.85 · 0.9 두 경계에서 심각도가 갈린다', () => {
+    expect(run('power-factor', { activePower: 180, apparentPower: 200 }).verdict()).toBe(true);
+    expect(run('power-factor', { activePower: 174, apparentPower: 200 }).verdict()).toBe(false);
+    expect(run('power-factor', { activePower: 160, apparentPower: 200 }).verdict()).toBe(false);
+  });
+});
