@@ -314,6 +314,20 @@ export function reviewScheduleTables(tables: ScheduleTableLike[]): ReviewReport 
       const subject = subjectOfRow(cells, index);
 
       // AT ≤ AF — 표에 프레임·트립이 함께 적히므로 결선 없이도 판정 가능.
+      // **통과도 기록한다.** 위반만 남기면 「검사했고 통과했다」와 「아예 안 봤다」가
+      // 결과에서 구분되지 않는다 — 실측 2026-07-30: 차단기 41 개의 정격을 전부
+      // 파싱하고 전부 만족했는데 summary.pass 가 0 이라, 준수 여부를 묻는 사람에게
+      // 보여 줄 근거가 하나도 없었다.
+      if (bSpec.frameA !== undefined && bSpec.tripA !== undefined && bSpec.tripA <= bSpec.frameA) {
+        findings.push({
+          rule: 'AT-LE-AF',
+          severity: 'PASS',
+          subject,
+          given: { rating: `${bSpec.frameA}AF/${bSpec.tripA}AT` },
+          limit: { value: `트립 ≤ 프레임`, source: IEC_FRAME_SOURCE },
+          verdict: `트립 ${bSpec.tripA}AT ≤ 프레임 ${bSpec.frameA}AF — 적합`,
+        });
+      }
       if (bSpec.frameA !== undefined && bSpec.tripA !== undefined && bSpec.tripA > bSpec.frameA) {
         const proposal: ReviewProposalOption[] = [];
         const tripDown = largestTripAtMost(bSpec.frameA);
@@ -382,6 +396,17 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     specByBreaker.set(b.id, spec);
     if (spec.frameA === undefined && spec.current === undefined) continue;
     ratedParsed += 1;
+    if (spec.frameA !== undefined && spec.tripA !== undefined && spec.tripA <= spec.frameA) {
+      findings.push({
+        rule: 'AT-LE-AF',
+        severity: 'PASS',
+        subject: subjectOf(b),
+        componentId: b.id,
+        given: { rating: `${spec.frameA}AF/${spec.tripA}AT` },
+        limit: { value: `트립 ≤ 프레임`, source: IEC_FRAME_SOURCE },
+        verdict: `트립 ${spec.tripA}AT ≤ 프레임 ${spec.frameA}AF — 적합`,
+      });
+    }
     if (spec.frameA !== undefined && spec.tripA !== undefined && spec.tripA > spec.frameA) {
       // 무발명 제안: 표준 정격 사다리 역산 — 프레임 유지 시 트립 하향, 트립 유지 시
       // 프레임 상향. 사다리 밖이면 해당 후보를 넣지 않는다(숫자 발명 금지).

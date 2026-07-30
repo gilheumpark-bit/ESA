@@ -20,11 +20,36 @@ function analysisOf(components: SLDComponent[], connections: SLDConnection[] = [
 const pos = { x: 0, y: 0 };
 
 describe('AT-LE-AF — 트립은 프레임을 넘을 수 없다', () => {
-  it('KIMM 실측 표기 100AF/75AT는 위반이 아니다', () => {
+  /**
+   * **적합도 근거로 남긴다.**
+   *
+   * 앞서는 위반일 때만 finding 을 냈다. 그러면 「검사했고 통과했다」와 「아예
+   * 안 봤다」가 결과에서 구분되지 않는다 — 실측 2026-07-30: KIMM p40 에서
+   * 차단기 41 개의 정격을 전부 파싱하고 전부 만족했는데 `summary.pass` 가 0 이라,
+   * 「KEC 기준을 준수했나」를 묻는 사람에게 보여 줄 근거가 하나도 없었다.
+   *
+   * 이 제품의 일이 «근거 · 준수 여부 · 빠진 것» 셋이므로, 통과 근거가 없으면
+   * 셋 중 하나가 통째로 빈다.
+   */
+  it('100AF/75AT 는 PASS 로 근거가 남는다', () => {
     const r = reviewAnalysis(analysisOf([
       { id: 'comp_1', type: 'breaker', label: 'MCCB 3P-100/75', rating: '100AF/75AT', position: pos },
     ]));
-    expect(r.findings.filter((f) => f.rule === 'AT-LE-AF')).toHaveLength(0);
+    const f = r.findings.filter((x) => x.rule === 'AT-LE-AF');
+    expect(f).toHaveLength(1);
+    expect(f[0].severity).toBe('PASS');
+    expect(f[0].given.rating).toBe('100AF/75AT');
+    expect(f[0].limit?.source).toContain('IEC 60947-2');
+    expect(r.summary.pass).toBe(1);
+    expect(r.summary.fail).toBe(0);
+  });
+
+  /** 정격을 못 읽으면 PASS 도 FAIL 도 아니다 — 통과를 지어내지 않는다. */
+  it('정격이 없으면 AT-LE-AF 판정 자체가 없다', () => {
+    const r = reviewAnalysis(analysisOf([
+      { id: 'comp_1', type: 'breaker', label: 'MCCB 3P', position: pos },
+    ]));
+    expect(r.findings.filter((x) => x.rule === 'AT-LE-AF')).toHaveLength(0);
   });
 
   it('트립>프레임(50AF/100AT)은 FAIL', () => {
