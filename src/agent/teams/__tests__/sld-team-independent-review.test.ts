@@ -337,6 +337,33 @@ describe('SLD raster independent council integration', () => {
     expect(JSON.stringify(result)).not.toContain(KEY);
   });
 
+  it('stops before raster preparation and council dispatch when the request is aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const prepareRaster = jest.fn(async () => prepared());
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+
+    const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), { prepareRaster, runCouncil, resolveVisionKey: () => ({ key: KEY, source: 'user' }) });
+
+    expect(result.success).toBe(false);
+    expect(prepareRaster).not.toHaveBeenCalled();
+    expect(runCouncil).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('fails closed when the request aborts while a council dependency is in flight', async () => {
+    const controller = new AbortController();
+    const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => { controller.abort(); return { envelopes: envelopes(), failures: [] }; },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.');
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
   it.each([
     [1, 'variant:original', 4, 19],
     [2, 'variant:upscale-2x', 9, 34],
