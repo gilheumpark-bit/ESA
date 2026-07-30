@@ -2508,3 +2508,132 @@ describe('country-compare-vd — 강하와 국가별 한도', () => {
     expect(extra.dropPercent).toBeCloseTo(step(2), 2);
   });
 });
+
+/**
+ * awg-converter — **ASTM B258 정의식으로 대조된다.**
+ *
+ *   d(mm) = 0.127 × 92^((36 − n)/39)
+ *
+ * 이건 근사가 아니라 AWG 의 **정의**다. 그래서 공표된 규격표와 자릿수까지
+ * 맞아야 한다 — 아래 값은 그 표의 값이다:
+ *
+ *   AWG 10  d 2.588 mm · 5.26 mm² · 10.4 kcmil
+ *   AWG 12  d 2.053 mm · 3.31 mm² ·  6.5 kcmil
+ *   AWG  2  d 6.544 mm · 33.63 mm² · 66.4 kcmil
+ *
+ * 세 방향(AWG→mm² · kcmil→mm² · mm²→AWG)이 서로 다른 단계 열을 낸다.
+ * 자동 생성 입력은 첫 방향만 돌아서 나머지 두 가지는 한 번도 안 밟혔다.
+ */
+describe('awg-converter — ASTM B258 정의식', () => {
+  it.each([
+    [10, 2.588, 5.26, 10.4],
+    [12, 2.053, 3.31, 6.5],
+    [2, 6.544, 33.63, 66.4],
+  ])('AWG %d → 지름 %s mm · %s mm² · %s kcmil', (awg, d, mm2, kcmil) => {
+    const { step } = run('awg-converter', { direction: 'awg-to-mm2', awg });
+    expect(step(1)).toBeCloseTo(d as number, 3);
+    expect(step(2)).toBeCloseTo(mm2 as number, 2);
+    expect(step(4)).toBeCloseTo(kcmil as number, 1);
+  });
+
+  /** AWG 번호가 클수록 가늘다 — 부호가 뒤집히면 전선이 반대로 굵어진다. */
+  it('AWG 번호가 클수록 가늘다', () => {
+    const thin = run('awg-converter', { direction: 'awg-to-mm2', awg: 14 }).step(2);
+    const thick = run('awg-converter', { direction: 'awg-to-mm2', awg: 4 }).step(2);
+    expect(thin).toBeLessThan(thick);
+  });
+
+  /** kcmil → mm² 는 0.5067 배다(ASTM B258). 별도 가지라 따로 밟는다. */
+  it('kcmil 250 → 126.68 mm²', () => {
+    const { step } = run('awg-converter', { direction: 'awg-to-mm2', kcmil: 250 });
+    expect(step(1)).toBeCloseTo(126.68, 2);
+  });
+
+  /**
+   * 역방향 — 자동 생성 입력이 한 번도 안 밟던 가지다.
+   *   d = √(4 × 16 / π) = 4.514 mm
+   *   n = 36 − 39 log₉₂(4.514 / 0.127) = 5.20
+   *   kcmil = (4.514/0.0254)² / 1000 = 31.6
+   */
+  it('mm² 16 → 지름 4.514 mm · AWG 5.20 · 31.6 kcmil', () => {
+    const { step } = run('awg-converter', { direction: 'mm2-to-awg', mm2: 16 });
+    expect(step(1)).toBeCloseTo(4.514, 3);
+    expect(step(2)).toBeCloseTo(5.2, 2);
+    expect(step(4)).toBeCloseTo(31.6, 1);
+  });
+
+  /** 왕복 변환이 제자리로 온다 — 두 식이 서로의 역이 아니면 여기서 갈린다. */
+  it('AWG → mm² → AWG 가 제자리로 온다', () => {
+    const mm2 = run('awg-converter', { direction: 'awg-to-mm2', awg: 10 }).step(2);
+    const back = run('awg-converter', { direction: 'mm2-to-awg', mm2 }).step(2);
+    expect(back).toBeCloseTo(10, 1);
+  });
+
+  /** 방향에 맞는 입력이 없으면 거절한다 — 조용히 0 을 내면 안 된다. */
+  it('방향에 맞지 않는 입력은 거절한다', () => {
+    expect(() => run('awg-converter', { direction: 'awg-to-mm2' })).toThrow();
+    expect(() => run('awg-converter', { direction: 'mm2-to-awg' })).toThrow();
+  });
+});
+
+/**
+ * awg-converter — 세 가지 각각의 **반환값과 부가 출력**.
+ *
+ * 단계만 잠그면 절반이다. 이 계산기는 방향마다 return 문이 따로 있고, 그
+ * 안에서 같은 양을 **또 한 번 반올림**한다 — 한 가지의 return 만 고쳐도
+ * 단계는 그대로라 안 보인다(재변이 실측: 15 줄 중 8 이 단계 앵커를 빠져나갔다).
+ */
+describe('awg-converter — 가지별 반환값·부가 출력', () => {
+  it('AWG→mm² 가지의 반환값과 부가 출력이 단계와 같다', () => {
+    const { value, step, extra } = run('awg-converter', { direction: 'awg-to-mm2', awg: 10 });
+    expect(value).toBeCloseTo(step(2), 2);          // 5.26 mm²
+    expect(extra.exactMm2).toBeCloseTo(step(2), 2);
+    expect(extra.diameterMm).toBeCloseTo(step(1), 3); // 2.588 mm
+    expect(extra.kcmil).toBeCloseTo(step(4), 1);      // 10.4 kcmil
+    expect(extra.nearestStandard).toBe(step(3));
+  });
+
+  it('kcmil→mm² 가지의 반환값과 부가 출력이 단계와 같다', () => {
+    const { value, step, extra } = run('awg-converter', { direction: 'awg-to-mm2', kcmil: 250 });
+    expect(value).toBeCloseTo(126.68, 2);
+    expect(value).toBeCloseTo(step(1), 2);
+    expect(extra.exactMm2).toBeCloseTo(step(1), 2);
+    expect(extra.nearestStandard).toBe(step(2));
+  });
+
+  /**
+   * mm²→AWG 가지. 정확 AWG 는 5.20 이지만 **표에 AWG 5 가 없다** — 상용 표는
+   * 홀수 게이지(5·7·9·11·13)를 싣지 않는다(1, 2, 3, 4, **6**, 8, 10 …).
+   * 그래서 최근접 표준은 AWG 6(13.30 mm²)이다: |16−13.30| = 2.70 이
+   * |16−21.15| = 5.15 보다 가깝다.
+   *
+   * 처음엔 AWG 5(16.77)를 기대했다가 틀렸다 — 정의식으로만 계산하면 표에
+   * 없는 게이지를 답으로 삼게 된다. 계산기 쪽이 옳았다.
+   */
+  it('mm²→AWG 가지의 반환값과 부가 출력이 단계와 같다', () => {
+    const { value, step, extra } = run('awg-converter', { direction: 'mm2-to-awg', mm2: 16 });
+    expect(value).toBe(5);                            // round(5.20) — 정확값의 반올림
+    expect(step(3)).toBeCloseTo(13.3, 2);             // 표에 실재하는 최근접
+    expect(extra.exactAwg).toBeCloseTo(step(2), 2);   // 5.20
+    expect(extra.diameterMm).toBeCloseTo(step(1), 3); // 4.514 mm
+    expect(extra.kcmil).toBeCloseTo(step(4), 1);      // 31.6
+  });
+
+  /** 최근접은 표에 실재하는 값 중에서 고른다 — 정의식 값을 그대로 쓰면 안 된다. */
+  it('최근접 표준은 표에 있는 이웃 중 더 가까운 쪽이다', () => {
+    const { step } = run('awg-converter', { direction: 'mm2-to-awg', mm2: 16 });
+    expect(Math.abs(step(3) - 16)).toBeLessThan(Math.abs(21.15 - 16));
+    expect([13.3, 21.15]).toContain(step(3));
+  });
+
+  /**
+   * 표와 정의식이 서로 맞는지 — 표 값이 손으로 적힌 상수라 식과 어긋날 수 있다.
+   * AWG 10 · 12 · 2 를 표(step 3 경로)와 식(step 1·2 경로) 양쪽에서 본다.
+   */
+  it('표에 적힌 지름이 정의식과 일치한다', () => {
+    for (const [awg, d] of [[10, 2.588], [12, 2.053], [2, 6.544]] as const) {
+      const { step } = run('awg-converter', { direction: 'awg-to-mm2', awg });
+      expect(step(1)).toBeCloseTo(d, 3);
+    }
+  });
+});
