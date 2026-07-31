@@ -108,7 +108,10 @@ export function calculateMaxDemand(input: MaxDemandInput): DetailedCalcResult {
     formula: 'MD = \\frac{\\sum (P_i \\times D_i)}{F_{div}}',
     steps,
     source: [
-      createSource('KEC', '232.2', { edition: '2021' }),
+      // KEC 232.2 는 「배선설비 공사의 종류」다. 수용률·부등률·부하율·최대수요는
+      // 공표 전문 **표제 0 건** — KEC 에 조항 자체가 없다(2026-07-31 색인 대조).
+      // 부하 산정은 내선규정 소관이고, 국제 기준으로는 NEC Article 220 이다.
+      createSource('NEC', '220', { edition: '2020' }),
     ],
     judgment: createJudgment(
       true,

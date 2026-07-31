@@ -92,10 +92,10 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
     const severity = pf >= 0.9 ? 'info' : pf >= 0.85 ? 'warning' : 'error';
     const message =
       pf >= 0.9
-        ? `Power factor ${round(pf, 4)} meets KEC recommendation (>= 0.9)`
+        ? `Power factor ${round(pf, 4)} meets the 0.9 threshold (한전 전기공급약관 역률 요금)`
         : pf >= 0.85
-          ? `Power factor ${round(pf, 4)} is below 0.9 — improvement recommended per KEC`
-          : `Power factor ${round(pf, 4)} is below 0.85 — correction required per KEC`;
+          ? `Power factor ${round(pf, 4)} is below 0.9 — 한전 전기공급약관 역률 요금 기준 미달`
+          : `Power factor ${round(pf, 4)} is below 0.85 — 역률 개선 필요 (한전 전기공급약관)`;
 
     return {
       value: round(pf, 4),
@@ -103,9 +103,13 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
       formula: '\\cos\\varphi = \\frac{P}{S}',
       steps,
       source: [
-        createSource('KEC', '232', { edition: '2021' }),
+        // KEC 232 는 「배선설비」다. 역률을 규정하지 않는다 — 공표 전문 전체에서
+        // 역률 표제는 441.4「전기철도차량의 역률」하나뿐이고 일반 수용가와 무관하다
+        // (2026-07-31 원문 색인 대조). 0.9 기준의 실제 출처는 한전 전기공급약관
+        // 역률 요금이다. 조항 번호는 원문 대조 전이라 달지 않는다.
+        createSource('KEPCO', '전기공급약관 (역률 요금)'),
       ],
-      judgment: createJudgment(pass, message, severity, 'KEC 232'),
+      judgment: createJudgment(pass, message, severity, '한전 전기공급약관'),
       additionalOutputs: {
         powerFactor: { value: round(pf, 4), unit: '' },
         phaseAngle: { value: round(phiDeg, 2), unit: 'deg' },
@@ -153,10 +157,10 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
     const severity = pf >= 0.9 ? 'info' : pf >= 0.85 ? 'warning' : 'error';
     const message =
       pf >= 0.9
-        ? `Power factor ${round(pf, 4)} meets KEC recommendation (>= 0.9)`
+        ? `Power factor ${round(pf, 4)} meets the 0.9 threshold (한전 전기공급약관 역률 요금)`
         : pf >= 0.85
-          ? `Power factor ${round(pf, 4)} is below 0.9 — improvement recommended per KEC`
-          : `Power factor ${round(pf, 4)} is below 0.85 — correction required per KEC`;
+          ? `Power factor ${round(pf, 4)} is below 0.9 — 한전 전기공급약관 역률 요금 기준 미달`
+          : `Power factor ${round(pf, 4)} is below 0.85 — 역률 개선 필요 (한전 전기공급약관)`;
 
     return {
       value: round(pf, 4),
@@ -164,9 +168,13 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
       formula: '\\cos\\varphi = \\frac{P}{\\sqrt{P^2 + Q^2}}',
       steps,
       source: [
-        createSource('KEC', '232', { edition: '2021' }),
+        // KEC 232 는 「배선설비」다. 역률을 규정하지 않는다 — 공표 전문 전체에서
+        // 역률 표제는 441.4「전기철도차량의 역률」하나뿐이고 일반 수용가와 무관하다
+        // (2026-07-31 원문 색인 대조). 0.9 기준의 실제 출처는 한전 전기공급약관
+        // 역률 요금이다. 조항 번호는 원문 대조 전이라 달지 않는다.
+        createSource('KEPCO', '전기공급약관 (역률 요금)'),
       ],
-      judgment: createJudgment(pass, message, severity, 'KEC 232'),
+      judgment: createJudgment(pass, message, severity, '한전 전기공급약관'),
       additionalOutputs: {
         powerFactor: { value: round(pf, 4), unit: '' },
         phaseAngle: { value: round(phiDeg, 2), unit: 'deg' },

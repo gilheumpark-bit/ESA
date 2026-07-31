@@ -8,7 +8,8 @@
  * Selects nearest standard capacitor bank size from:
  *   [5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200, 300, 500] kvar
  *
- * Standards: KEC 232 (역률 개선), IEC 60831 (콘덴서)
+ * Standards: IEC 60831 (콘덴서). KEC 는 역률 개선을 규정하지 않는다 —
+ * 232 는 「배선설비」이고 역률 표제는 441.4 전기철도차량뿐이다.
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -125,7 +126,6 @@ export function calculateReactivePower(input: ReactivePowerInput): DetailedCalcR
     formula: 'Q_c = P \\times (\\tan\\varphi_1 - \\tan\\varphi_2)',
     steps,
     source: [
-      createSource('KEC', '232', { edition: '2021' }),
       createSource('IEC', '60831', { edition: '2014' }),
     ],
     judgment: createJudgment(
