@@ -14,12 +14,17 @@
 import type { ExtractedComponent, ExtractedConnection } from '../teams/types';
 import { ROLE_PROMPTS } from './role-prompts';
 import { parseRoleReviewData, type RoleReviewData } from './review-types';
+import {
+  googleApiKeyHeaders,
+  googleGenerateContentEndpoint,
+  type GoogleModelProvider,
+} from '@/lib/google-model-transport';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Provider Abstraction + Configurable Params
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export type VLMProvider = 'gemini' | 'openai' | 'claude';
+export type VLMProvider = 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
 
 export interface VLMOptions {
   provider: VLMProvider;
@@ -62,6 +67,12 @@ const VLM_CONFIG = {
   gemini: {
     defaultModel: 'gemini-3.5-flash',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
+    defaultTemp: 0.1,
+    defaultMaxTokens: 8192,
+  },
+  'google-agent-platform': {
+    defaultModel: 'gemini-3.6-flash',
+    endpoint: 'https://aiplatform.googleapis.com/v1/publishers/google/models',
     defaultTemp: 0.1,
     defaultMaxTokens: 8192,
   },
@@ -136,8 +147,8 @@ function validateApiKey(provider: VLMProvider, apiKey: string): void {
   if (provider === 'openai' && !apiKey.startsWith('sk-')) {
     throw new Error(`[VLM] OpenAI API key must start with "sk-". 키 형식을 확인하세요.`);
   }
-  if (provider === 'gemini' && apiKey.length < 20) {
-    throw new Error(`[VLM] Gemini API key appears too short. 키를 다시 확인하세요.`);
+  if ((provider === 'gemini' || provider === 'google-agent-platform') && apiKey.length < 20) {
+    throw new Error(`[VLM] Google API key appears too short. 키를 다시 확인하세요.`);
   }
   if (provider === 'claude' && apiKey.length < 20) {
     throw new Error(`[VLM] Anthropic API key appears too short. 키를 다시 확인하세요.`);
@@ -379,18 +390,20 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-async function requestGeminiJson(
+async function requestGoogleJson(
+  provider: GoogleModelProvider,
   imageBase64: string,
   mimeType: string,
   prompt: string,
   options: VLMOptions,
 ): Promise<RawProviderJsonResult> {
-  const cfg = VLM_CONFIG.gemini;
-  const model = resolveVlmModel('gemini', options.model);
+  const cfg = VLM_CONFIG[provider];
+  const model = resolveVlmModel(provider, options.model);
+  const providerName = provider === 'gemini' ? 'Gemini' : 'Google Agent Platform';
   return withRequestScope(options, async (scope) => {
-    const response = await fetchWithTimeout(`${cfg.endpoint}/${model}:generateContent`, {
+    const response = await fetchWithTimeout(googleGenerateContentEndpoint(provider, model), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.apiKey },
+      headers: googleApiKeyHeaders(options.apiKey),
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
         generationConfig: {
@@ -401,13 +414,13 @@ async function requestGeminiJson(
       }),
     }, scope, options);
     const raw = await readResponseText(response, scope);
-    if (!response.ok) throw new ProviderHttpError('Gemini', response.status, sanitizeErrorText(raw, options.apiKey));
-    const data = parseProviderPayload('Gemini', raw);
+    if (!response.ok) throw new ProviderHttpError(providerName, response.status, sanitizeErrorText(raw, options.apiKey));
+    const data = parseProviderPayload(providerName, raw);
     const candidate = Array.isArray(data.candidates) ? recordValue(data.candidates[0]) : undefined;
     const content = candidate ? recordValue(candidate.content) : undefined;
     const firstPart = content && Array.isArray(content.parts) ? recordValue(content.parts[0]) : undefined;
     const rawText = firstPart?.text;
-    if (typeof rawText !== 'string') throw new Error('Gemini Vision API returned no text response.');
+    if (typeof rawText !== 'string') throw new Error(`${providerName} Vision API returned no text response.`);
     return { rawText, model };
   });
 }
@@ -568,7 +581,9 @@ async function callProviderForJson(
   const request = () => {
     switch (options.provider) {
       case 'gemini':
-        return requestGeminiJson(imageBase64, mimeType, prompt, options);
+        return requestGoogleJson('gemini', imageBase64, mimeType, prompt, options);
+      case 'google-agent-platform':
+        return requestGoogleJson('google-agent-platform', imageBase64, mimeType, prompt, options);
       case 'openai':
         return requestOpenAIJson(imageBase64, mimeType, prompt, options);
       case 'claude':

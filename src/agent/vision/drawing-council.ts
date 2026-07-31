@@ -11,7 +11,7 @@ import { toOriginalPoint, type AnalysisRegionPlan, type DrawingSnapshot, type Ev
 const PRIMARY_ROLES: readonly VLMReviewRole[] = ['symbols', 'connections', 'text', 'logic'];
 const COVERAGE_ROLE: VLMReviewRole = 'coverage-auditor';
 const VARIANT_KINDS = ['original', 'upscale-2x', 'upscale-4x', 'text-high-contrast', 'line-enhanced'] as const;
-const PROVIDERS = ['openai', 'gemini', 'claude'] as const;
+const PROVIDERS = ['openai', 'gemini', 'google-agent-platform', 'claude'] as const;
 const PREPARED_SOURCE_MIME = 'image/png';
 const MAX_REGION_CALLS_PER_ROLE = 16;
 const MAX_TOTAL_SOURCE_CALLS = 55;

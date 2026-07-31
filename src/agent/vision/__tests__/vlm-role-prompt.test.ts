@@ -3,6 +3,7 @@ import { analyzeDrawingRole, type VLMOptions } from '../vlm-client';
 
 const apiKeys = {
   gemini: 'g'.repeat(20),
+  'google-agent-platform': 'a'.repeat(24),
   openai: 'sk-test-role-prompt-key',
   claude: 'c'.repeat(20),
 };
@@ -21,7 +22,11 @@ function options(provider: VLMOptions['provider']): VLMOptions {
   return {
     provider,
     apiKey: apiKeys[provider],
-    model: provider === 'claude' ? 'claude-sonnet-5' : `${provider}-model`,
+    model: provider === 'claude'
+      ? 'claude-sonnet-5'
+      : provider === 'google-agent-platform'
+        ? 'gemini-3.6-flash'
+        : `${provider}-model`,
     maxTokens: 321,
     maxRetries: 0,
   };
@@ -29,7 +34,7 @@ function options(provider: VLMOptions['provider']): VLMOptions {
 
 function responseFor(provider: VLMOptions['provider'], text: string): Response {
   let payload: object;
-  if (provider === 'gemini') {
+  if (provider === 'gemini' || provider === 'google-agent-platform') {
     payload = { candidates: [{ content: { parts: [{ text }] } }] };
   } else if (provider === 'claude') {
     payload = { content: [{ type: 'text', text }] };
@@ -115,25 +120,39 @@ describe('role-specific VLM prompts', () => {
     expect(ROLE_PROMPTS.logic).toContain('"attributes" is a required object');
   });
 
-  it.each(['gemini', 'openai', 'claude'] as const)('sends the %s role prompt through the provider JSON transport', async (provider) => {
+  it.each(['gemini', 'google-agent-platform', 'openai', 'claude'] as const)('sends the %s role prompt through the provider JSON transport', async (provider) => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(responseFor(provider, `\`\`\`json\n${JSON.stringify(textPayload)}\n\`\`\``));
 
     const result = await analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', options(provider));
 
     expect(result).toMatchObject({
       role: 'text',
-      model: provider === 'claude' ? 'claude-sonnet-5' : `${provider}-model`,
+      model: provider === 'claude'
+        ? 'claude-sonnet-5'
+        : provider === 'google-agent-platform'
+          ? 'gemini-3.6-flash'
+          : `${provider}-model`,
       retryCount: 0,
       data: textPayload,
     });
     const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(request.body as string);
-    expect(url).toContain(provider === 'gemini' ? ':generateContent' : provider === 'openai' ? '/chat/completions' : '/messages');
+    expect(url).toContain(
+      provider === 'gemini' || provider === 'google-agent-platform'
+        ? ':generateContent'
+        : provider === 'openai'
+          ? '/chat/completions'
+          : '/messages',
+    );
     expect(request.signal).toBeInstanceOf(AbortSignal);
-    if (provider === 'gemini') {
-      expect(request.headers).toMatchObject({ 'x-goog-api-key': apiKeys.gemini });
+    if (provider === 'gemini' || provider === 'google-agent-platform') {
+      expect(request.headers).toMatchObject({ 'x-goog-api-key': apiKeys[provider] });
       expect(body.generationConfig.maxOutputTokens).toBe(321);
       expect(body.contents[0].parts[0].text).toBe(ROLE_PROMPTS.text);
+      if (provider === 'google-agent-platform') {
+        expect(url).toContain('aiplatform.googleapis.com/v1/publishers/google/models/');
+        expect(url).not.toContain(apiKeys[provider]);
+      }
     } else if (provider === 'openai') {
       expect(request.headers).toMatchObject({ Authorization: `Bearer ${apiKeys.openai}` });
       expect(body.max_completion_tokens).toBe(321);
