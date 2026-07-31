@@ -24,9 +24,9 @@ export const maxDuration = 300;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 const DEFAULT_VISION_CALL_BUDGET_PER_PAGE = 110;
-const VISION_PROVIDERS = new Set(['gemini', 'openai', 'claude'] as const);
+const VISION_PROVIDERS = new Set(['gemini', 'google-agent-platform', 'openai', 'claude'] as const);
 const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
-type VisionProvider = 'gemini' | 'openai' | 'claude';
+type VisionProvider = 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
 
 function allowedDrawing(file: File): 'image' | 'pdf' | 'dxf' | null {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -49,6 +49,7 @@ function parseRequestedPages(value: FormDataEntryValue | null): 'all' | number[]
 function serverVisionKey(provider: VisionProvider): string {
   if (provider === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
   if (provider === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
+  if (provider === 'google-agent-platform') return process.env.GOOGLE_VERTEX_API_KEY?.trim() ?? '';
   return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
 }
 

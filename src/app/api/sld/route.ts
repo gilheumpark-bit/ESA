@@ -105,7 +105,7 @@ async function POST__impl(req: NextRequest) {
     if (!apiKey) {
       return NextResponse.json({ error: 'API key required (BYOK).' }, { status: 401 });
     }
-    if (!['openai', 'claude', 'gemini'].includes(provider)) {
+    if (!['openai', 'claude', 'gemini', 'google-agent-platform'].includes(provider)) {
       return NextResponse.json({ error: 'Unsupported Vision provider.' }, { status: 400 });
     }
     if (apiKey.length > 4096 || (model && !/^[a-zA-Z0-9._:/-]{1,128}$/.test(model))) {

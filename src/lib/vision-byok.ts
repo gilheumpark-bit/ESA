@@ -1,7 +1,7 @@
 import { loadSelectedModel, loadStoredProviderKey } from '@/lib/byok-storage';
 import { getDefaultModel } from '@/lib/ai-providers';
 
-export type VisionProvider = 'openai' | 'claude' | 'gemini';
+export type VisionProvider = 'openai' | 'claude' | 'gemini' | 'google-agent-platform';
 
 export interface VisionByokSelection {
   provider: VisionProvider;
@@ -9,7 +9,7 @@ export interface VisionByokSelection {
   model: string;
 }
 
-const VISION_PROVIDERS: readonly VisionProvider[] = ['openai', 'claude', 'gemini'];
+const VISION_PROVIDERS: readonly VisionProvider[] = ['openai', 'claude', 'gemini', 'google-agent-platform'];
 const SAFE_MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/;
 
 /** 실제 OCR·도면 분석 요청에 BYOK 키와 선택 모델이 전달되는 공급자인지 판별한다. */

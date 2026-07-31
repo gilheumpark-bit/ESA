@@ -14,13 +14,14 @@ import { withRequestLog } from '@/lib/api/with-request-log';
 export const runtime = 'nodejs';
 export const maxDuration = 1800;
 
-type VisionProvider = 'gemini' | 'openai' | 'claude';
-const PROVIDERS = new Set<VisionProvider>(['gemini', 'openai', 'claude']);
+type VisionProvider = 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
+const PROVIDERS = new Set<VisionProvider>(['gemini', 'google-agent-platform', 'openai', 'claude']);
 const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
 
 function serverKey(provider: VisionProvider): string {
   if (provider === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
   if (provider === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
+  if (provider === 'google-agent-platform') return process.env.GOOGLE_VERTEX_API_KEY?.trim() ?? '';
   return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
 }
 

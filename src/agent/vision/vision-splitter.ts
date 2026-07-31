@@ -18,7 +18,7 @@ import { createImageVariants } from './image-variants';
 export interface SplitOptions {
   gridSize: number;
   overlap: number;
-  model: 'gemini' | 'openai' | 'claude';
+  model: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
   modelName?: string;
   apiKey?: string;
   maxConcurrency?: number;
@@ -144,6 +144,7 @@ function providerKey(options: SplitOptions): string {
   const explicit = options.apiKey?.trim();
   if (explicit) return explicit;
   if (options.model === 'gemini') return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
+  if (options.model === 'google-agent-platform') return process.env.GOOGLE_VERTEX_API_KEY?.trim() ?? '';
   if (options.model === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
   if (options.model === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
   return '';
@@ -199,7 +200,7 @@ async function analyzeRegion(
 ): Promise<VisionSplitResult> {
   const { analyzeDrawingWithVLM } = await import('./vlm-client');
   const result = await analyzeDrawingWithVLM(region.buffer, 'image/png', {
-    provider: options.model === 'openai' ? 'openai' : options.model === 'claude' ? 'claude' : 'gemini',
+    provider: options.model,
     apiKey,
     model: options.modelName,
   });

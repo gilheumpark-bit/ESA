@@ -68,7 +68,7 @@ export interface TeamInput {
   signal?: AbortSignal;
   /** 이미지 도면에서만 사용. API 키는 현재 요청 메모리에만 머물고 결과·로그에 포함하지 않는다. */
   vision?: {
-    provider: 'openai' | 'gemini' | 'claude';
+    provider: 'openai' | 'gemini' | 'google-agent-platform' | 'claude';
     apiKey?: string;
     model?: string;
   };
