@@ -118,6 +118,17 @@ describe('image variants', () => {
     ).rejects.toThrow();
   });
 
+  /**
+   * 이 테스트만 시간이 오래 걸린다 — 소스가 2049×2000 이라 4× 업스케일이 64MP
+   * 상한에 걸리고, 그 **약 62 메가픽셀 이미지를 lanczos3 로 6 회** 만든다
+   * (샘플 3 점 × 실제·기대). 상한 경계를 건드리는 것이 이 테스트의 목적이라
+   * 소스를 줄이면 검사 자체가 사라진다.
+   *
+   * 실측: 로컬 스위트 전체 2.4 s / CI 2 코어 러너에서 이 한 건이 30 s 초과
+   * (run 30590116639·30589828671·30529113421 연속 실패). 판정이 틀린 게 아니라
+   * 기본 30 s 가 이 하드웨어에 안 맞는 것이므로, 계산을 줄이거나 단언을
+   * 약화하지 않고 이 한 건에만 여유를 준다.
+   */
   it('uses fill resizing to preserve capped non-square source edges and transforms', async () => {
     const sourceWidth = 2049;
     const sourceHeight = 2000;
@@ -211,7 +222,7 @@ describe('image variants', () => {
     expect(bottomRight.actual[1]).toBeGreaterThan(200);
     expect(leftEdge.actual[0]).toBeGreaterThan(80);
     expect(leftEdge.actual[2]).toBeGreaterThan(80);
-  });
+  }, 180_000);
 
   it('rejects profiles that do not describe the oriented source or valid quality shape', async () => {
     const input = await sharp({
