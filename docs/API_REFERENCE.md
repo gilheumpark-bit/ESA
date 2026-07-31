@@ -1,6 +1,6 @@
 # ESA API Reference
 
-> 기준일: 2026-07-23 · ESVA v0.2.0 · 제품 코드 기준 `ad7b91c`
+> 기준일: 2026-07-31 · ESVA v0.2.0 · 제품 코드 기준 `599c741`
 
 `GET /api/openapi`는 외부에 공개할 핵심 API의 OpenAPI 3.1 계약입니다. 저장소의 모든 내부·조건부 Route Handler를 자동 수집한 문서는 아니며, 아래 인벤토리가 전체 라우트 표면을 구분합니다.
 
@@ -9,6 +9,7 @@
 - 인증이 필요한 라우트는 `Authorization: Bearer <Firebase ID token>`을 서버에서 검증합니다.
 - 브라우저 상태 변경 요청은 인증 외에 정확한 same-origin 검사를 적용합니다.
 - BYOK 키가 필요한 AI 라우트는 요청 중에만 키를 사용하며 응답·DB·로그에 키를 넣지 않습니다.
+- `chatgpt-local`은 API 키를 받지 않습니다. loopback 요청에서만 같은 PC의 Codex app-server와 공식 ChatGPT 로그인을 사용하며 원격 Host에는 404로 닫힙니다.
 - 응답 형태는 새 핵심 API의 `{ success, data | error }` 계약을 우선하지만, 일부 기존 조회 API는 도메인 객체를 바로 반환합니다. 호출자는 HTTP 상태를 먼저 확인해야 합니다.
 - 세부 요청 한도는 `src/lib/rate-limit.ts`가 정본입니다. 인메모리 제한은 단일 프로세스 보호 장치이며 분산 전역 쿼터가 아닙니다.
 
@@ -77,7 +78,7 @@
 
 ### `POST /api/chat`
 
-멀티 공급자 AI 응답을 SSE로 스트리밍합니다. 현재 공급자와 모델 ID는 `src/lib/ai-providers.ts`가 정본입니다. 클라이언트는 `provider`, `model`, `messages`, `language`, 선택적 BYOK 또는 온프레미스 전송 정보를 보냅니다. 시스템 지침은 서버가 생성하며 클라이언트가 덮어쓸 수 없습니다.
+멀티 공급자 AI 응답을 SSE로 스트리밍합니다. 현재 공급자와 모델 ID는 `src/lib/ai-providers.ts`가 정본입니다. 클라이언트는 `provider`, `model`, `messages`, `language`, 선택적 BYOK 또는 온프레미스 전송 정보를 보냅니다. `provider: "chatgpt-local"`은 loopback에서만 허용되고 `apiKey`를 보내지 않습니다. 시스템 지침은 서버가 생성하며 클라이언트가 덮어쓸 수 없습니다.
 
 완전한 계산 질문은 응답 모델을 호출하기 전에 ESVA 계산기 레지스트리를 실행합니다. 이 경우 첫 SSE 이벤트 중 하나로 다음 영수증이 전달됩니다.
 
@@ -112,7 +113,7 @@
 - JSON: `query`, `projectName`, `projectType`, `params`, 선택적 `rules`
 - multipart: 위 필드와 `file`
 - 허용 파일: PNG, JPEG, WebP, PDF, DXF
-- 이미지 분석: 지원 공급자의 BYOK 키 또는 서버 키 필요
+- 이미지 분석: 지원 공급자의 BYOK·서버 키 또는 이미지 입력을 지원하는 로컬 ChatGPT 모델 필요
 
 서로 다른 전문팀 두 곳 이상이 성공하지 않으면 합의 완료가 아니라 사람 검토 필요 상태를 반환합니다.
 
@@ -120,7 +121,7 @@
 
 | API | 역할 | 핵심 경계 |
 |---|---|---|
-| `POST /api/sld` | 이미지 SLD 인식 | BYOK/서버 Vision 키, 이미지 형식·크기 검증 |
+| `POST /api/sld` | 이미지 SLD 인식 | BYOK/서버 Vision 키 또는 로컬 ChatGPT 이미지 모델, 이미지 형식·크기 검증 |
 | `POST /api/dxf` | DXF 벡터 파싱 | `$INSUNITS` 또는 명시적 `unitScale`만 물리 길이에 사용 |
 | `POST /api/pdf-drawing` | PDF 선택 페이지 벡터 파싱 | 페이지 범위·파일 크기 검증, 래스터 전용 PDF는 실패 |
 | `POST /api/ocr` | 전기 명판 OCR | 필드 타입·길이·confidence 엄격 검증 |
@@ -191,6 +192,7 @@ SLD 전체 문서 판독은 작업 리소스를 생성한 뒤 실행·조회·�
 | `/api/rules/validate` | POST | 사용자 규칙셋 검증 |
 | `/api/settings/onpremise-test` | POST | 관리자 허용 origin의 온프레미스 연결 시험 |
 | `/api/settings/byok-test` | POST | same-origin 공급자별 고정 엔드포인트 연결 시험. 키는 요청 중에만 사용 |
+| `/api/settings/chatgpt-local` | GET, POST | loopback 전용 Codex 설치·ChatGPT 계정·모델 상태와 공식 로그인·로그아웃. 비밀번호·쿠키·토큰은 반환하지 않음 |
 | `/api/admin` | GET | Enterprise 관리자 전용 |
 | `/api/benchmark` | GET | 개발/관리 토큰으로 제한된 운영 도구 |
 | `/api/cron/crawl` | GET | 크롤링 인프라가 연결될 때만 사용하는 조건부 작업 |
