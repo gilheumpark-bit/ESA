@@ -112,7 +112,7 @@ export function calculateGroundResistance(input: GroundResistanceInput): Detaile
     formula: 'R = \\frac{\\rho}{2\\pi L} \\ln\\frac{4L}{d}',
     value: round(R_single, 2),
     unit: '\u03A9',
-    standardRef: 'KEC 142',
+    standardRef: 'KEC 142.2',
   });
 
   // Step 2: Utilization factor
@@ -143,7 +143,7 @@ export function calculateGroundResistance(input: GroundResistanceInput): Detaile
     formula: `R_{total} ${R_total <= targetResistance ? '\\leq' : '>'} R_{limit}`,
     value: targetResistance,
     unit: '\u03A9',
-    standardRef: 'KEC 142',
+    standardRef: 'KEC 142.2',
   });
 
   // PART 3 — If failing, suggest required rod count

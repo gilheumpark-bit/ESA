@@ -87,7 +87,7 @@ export function calculateSolarCable(input: SolarCableInput): DetailedCalcResult 
     formula: 'I_{design} = I_{sc} \\times 1.25',
     value: round(Idesign, 2),
     unit: 'A',
-    standardRef: 'KEC 502',
+    standardRef: 'KEC 522.1.1',
   });
 
   // Step 3: Minimum cable cross-section area

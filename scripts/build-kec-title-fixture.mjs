@@ -52,15 +52,21 @@ function walk(dir, out = []) {
   return out;
 }
 
-// `createSource('KEC', '…')` 를 포함한다. 이게 빠져 있어서 계산기 영수증의
-// 인용이 표제 대조 대상에서 통째로 빠졌다 — 픽스처에 표제가 없으니 게이트도
-// 조용히 건너뛰었고, 그 사이에 「용어의 정의」를 태양광 근거로 다는 것 같은
-// 오인용이 살아 있었다(2026-07-31 실측). 이 정규식은
-// `standards/kec/__tests__/clause-titles-match.test.ts` 의 것과 같아야 한다.
-const CITE = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-|createSource\('KEC',\s*')([\d.]+)'/g;
+// **형태를 열거하지 않는다.** `createSource` 가 빠져 있어서 계산기 영수증의
+// 인용이 표제 대조 대상에서 통째로 빠졌고, 픽스처에 표제가 없으니 게이트도
+// 조용히 건너뛰었다 — 그 사이에 「용어의 정의」를 태양광 근거로 다는 오인용이
+// 살아 있었다(2026-07-31 실측). 형태를 하나씩 보태는 한 다음 형태를 또 놓친다.
+//
+// 그래서 형태 무관 정규식을 주로 쓰고, 형태 목록은 그것이 못 잡는 꼴
+// (`buildArticle('KEC-232.3.9-MAIN'` 처럼 번호 뒤 접미사)만 보탠다.
+// 이 둘은 `standards/kec/__tests__/clause-titles-match.test.ts` 와 같아야 한다.
+const CITE_BY_FORM = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-|createSource\('KEC',\s*')([\d.]+)'/g;
+const CITE_ANY = /KEC['"]?[\s,-]*['"]?(\d{3}(?:\.\d+)*)(?!\d)(?!\s?(?:m|km|mm|cm|kV|V|A|kA|W|kW|VA)\b)(?!\s?(?:%|Ω|°C|℃))/g;
 const cited = new Set();
 for (const f of walk(join(REPO, 'src'))) {
-  for (const m of readFileSync(f, 'utf8').matchAll(CITE)) cited.add(m[1]);
+  const text = readFileSync(f, 'utf8');
+  for (const m of text.matchAll(CITE_BY_FORM)) cited.add(m[1]);
+  for (const m of text.matchAll(CITE_ANY)) cited.add(m[1]);
 }
 
 // 규격 브라우저 카탈로그의 KEC 항목. `KEC_ARTICLES` 와 별도 데이터라 위

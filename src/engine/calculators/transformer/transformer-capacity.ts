@@ -84,7 +84,7 @@ export function calculateTransformerCapacity(input: TransformerCapacityInput): D
     formula: 'S = \\frac{P_{demand}}{\\cos\\varphi \\times \\eta}',
     value: round(S_required, 2),
     unit: 'kVA',
-    standardRef: 'KEC 341',
+    standardRef: 'KEC 341.1.2',
   });
 
   // Step 3: Apply growth margin

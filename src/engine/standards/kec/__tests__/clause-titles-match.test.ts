@@ -152,8 +152,27 @@ const SUGGESTION = /text:\s*'KEC (\d+(?:\.\d+)*)',\s*subtitle:\s*'([^']*)'/g;
  *   비상발전기 용량    351 「발전소·변전소 …」      ← 244 비상용 예비전원설비다
  *
  * 번호는 전부 실재하므로 번호 게이트는 통과한다. 표제를 봐야 보인다.
+ *
+ * **형태를 하나씩 늘리는 방식은 여기서 끝낸다.** `standardRef`·`createJudgment`
+ * 도 같은 이유로 빠져 있었고, 그래서 `createSource` 만 고친 수리가 옆 필드를
+ * 낡은 번호로 남겨 뒀다(실측 6 곳). 형태를 열거하는 한 다음 형태를 또 놓친다.
+ *
+ * 그래서 `clause-citations-repo-wide` 와 같은 **형태 무관 정규식**을 합집합으로
+ * 쓴다. 형태 목록은 그것이 못 잡는 꼴(`buildArticle('KEC-232.3.9-MAIN'` 처럼
+ * 번호 뒤에 접미사가 붙는 정의부)만 보태는 역할로 남긴다.
  */
-const CITATION = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-|createSource\('KEC',\s*')([\d.]+)'/g;
+const CITATION_BY_FORM = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-|createSource\('KEC',\s*')([\d.]+)'/g;
+
+/** 형태를 보지 않고 `KEC` 뒤의 조항 번호를 잡는다. 단위·백분율·연도는 뺀다. */
+const CITATION_ANY = /KEC['"]?[\s,-]*['"]?(\d{3}(?:\.\d+)*)(?!\d)(?!\s?(?:m|km|mm|cm|kV|V|A|kA|W|kW|VA)\b)(?!\s?(?:%|Ω|°C|℃))/g;
+
+/** 한 파일에서 인용된 조항 번호 전부. */
+function citedIn(text: string): string[] {
+  return [
+    ...[...text.matchAll(CITATION_BY_FORM)].map((m) => m[1]),
+    ...[...text.matchAll(CITATION_ANY)].map((m) => m[1]),
+  ];
+}
 
 describe('KEC 조항 표제 정합', () => {
   const files = collectFiles(join(REPO, 'src'));
@@ -180,7 +199,7 @@ describe('KEC 조항 표제 정합', () => {
     );
     const cited = new Set<string>();
     for (const f of files) {
-      for (const m of readFileSync(f, 'utf8').matchAll(CITATION)) cited.add(m[1]);
+      for (const c of citedIn(readFileSync(f, 'utf8'))) cited.add(c);
     }
     const uncovered = [...cited].filter((c) => realNumbers.has(c) && !OFFICIAL.has(c)).sort();
     expect(uncovered).toEqual([]);

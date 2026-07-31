@@ -136,7 +136,7 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     formula: 'I_{base,KEC}',
     value: kecBase,
     unit: 'A',
-    standardRef: 'KEC 232.3 Table 232-1',
+    standardRef: 'KEC 232.5.2',
   });
 
   steps.push({

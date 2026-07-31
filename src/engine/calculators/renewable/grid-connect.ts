@@ -115,7 +115,7 @@ export function calculateGridConnect(input: GridConnectInput): DetailedCalcResul
     formula: 'OFR/UFR/OVR/UVR',
     value: ovrFreq,
     unit: 'Hz (OFR)',
-    standardRef: 'KEC 502',
+    standardRef: 'KEC 503.2',
   });
 
   // PART 3 -- Result assembly
