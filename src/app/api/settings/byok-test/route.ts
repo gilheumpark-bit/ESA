@@ -8,8 +8,15 @@
 
 import { NextRequest } from 'next/server';
 import { withApiHandler } from '@/lib/api/api-handler';
+import { getDefaultModel, getModelList } from '@/lib/ai-providers';
+import {
+  googleApiKeyHeaders,
+  googleGenerateContentEndpoint,
+  type GoogleModelProvider,
+} from '@/lib/google-model-transport';
 
-type CloudProvider = 'openai' | 'claude' | 'gemini' | 'groq' | 'mistral';
+type CloudProvider = 'openai' | 'claude' | 'gemini' | 'google-agent-platform' | 'groq' | 'mistral';
+type ListProvider = Exclude<CloudProvider, 'google-agent-platform'>;
 
 interface ProviderProbe {
   url: string;
@@ -102,7 +109,8 @@ function exhaustedOutputBudget(payload: Record<string, unknown> | null): boolean
   ));
 }
 
-async function probeGeminiCapability(
+async function probeGoogleCapability(
+  provider: GoogleModelProvider,
   apiKey: string,
   model: string,
   vision: boolean,
@@ -117,13 +125,12 @@ async function probeGeminiCapability(
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      googleGenerateContentEndpoint(provider, model),
       {
         method: 'POST',
         headers: {
           Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          ...googleApiKeyHeaders(apiKey),
         },
         body: JSON.stringify({
           contents: [{ role: 'user', parts }],
@@ -161,7 +168,7 @@ async function probeGeminiCapability(
   }
 }
 
-const PROVIDER_PROBES: Record<CloudProvider, ProviderProbe> = {
+const PROVIDER_PROBES: Record<ListProvider, ProviderProbe> = {
   openai: {
     url: 'https://api.openai.com/v1/models',
     headers: (apiKey) => ({ Authorization: `Bearer ${apiKey}` }),
@@ -188,7 +195,9 @@ const PROVIDER_PROBES: Record<CloudProvider, ProviderProbe> = {
 };
 
 function isCloudProvider(value: unknown): value is CloudProvider {
-  return typeof value === 'string' && Object.hasOwn(PROVIDER_PROBES, value);
+  return typeof value === 'string' && (
+    value === 'google-agent-platform' || Object.hasOwn(PROVIDER_PROBES, value)
+  );
 }
 
 export const POST = withApiHandler(
@@ -222,17 +231,37 @@ export const POST = withApiHandler(
 
     if (body.action === 'probe-model') {
       const model = safeModelId(body.model);
-      if (provider !== 'gemini' || !model) {
+      if ((provider !== 'gemini' && provider !== 'google-agent-platform') || !model) {
         return ctx.error('ESA-4003', '검사할 Google 모델이 올바르지 않습니다.', 400);
       }
       const [text, vision] = await Promise.all([
-        probeGeminiCapability(apiKey, model, false),
-        probeGeminiCapability(apiKey, model, true),
+        probeGoogleCapability(provider, apiKey, model, false),
+        probeGoogleCapability(provider, apiKey, model, true),
       ]);
       return ctx.ok({ provider, model, text, vision });
     }
 
-    const probe = PROVIDER_PROBES[provider];
+    if (provider === 'google-agent-platform') {
+      const model = getDefaultModel(provider);
+      const outcome = await probeGoogleCapability(provider, apiKey, model, false);
+      if (outcome.status === 'success') {
+        return ctx.ok({
+          provider,
+          valid: true,
+          models: getModelList(provider).map(({ id, name }) => ({ id, name })),
+        });
+      }
+      if (outcome.status === 'failed') {
+        return ctx.ok({ provider, valid: false });
+      }
+      return ctx.error(
+        'ESA-6001',
+        'Agent Platform 키 확인 서비스를 일시적으로 사용할 수 없습니다.',
+        502,
+      );
+    }
+
+    const probe = PROVIDER_PROBES[provider as ListProvider];
 
     try {
       const response = await fetch(probe.url, {

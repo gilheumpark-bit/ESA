@@ -69,6 +69,39 @@ describe('POST /api/settings/byok-test', () => {
     ]);
   });
 
+  test('validates an Agent Platform key with a fixed text call and returns its catalog', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'OK' }] } }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    const response = await POST(makeRequest('google-agent-platform'));
+    const body = await response.json() as {
+      data?: { valid?: boolean; models?: Array<{ id: string; name: string }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toBe(
+      'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.6-flash:generateContent',
+    );
+    expect(String(url)).not.toContain(requestKey);
+    expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(requestKey);
+    expect(body.data).toEqual({
+      provider: 'google-agent-platform',
+      valid: true,
+      models: [
+        { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)' },
+        { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash' },
+        { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
+        { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite' },
+        { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite' },
+      ],
+    });
+  });
+
   test('returns selectable models from OpenAI-compatible model-list responses', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({
@@ -143,6 +176,37 @@ describe('POST /api/settings/byok-test', () => {
       text: { status: 'success' },
       vision: { status: 'failed', detail: 'Image input is not supported' },
     });
+  });
+
+  test('probes Agent Platform text and image through the Agent Platform host only', async () => {
+    const providerResponse = () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'OK' }] } }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const fetchSpy = jest.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(providerResponse())
+      .mockResolvedValueOnce(providerResponse());
+
+    const response = await POST(makeRequest('google-agent-platform', requestKey, undefined, {
+      action: 'probe-model',
+      model: 'gemini-3.6-flash',
+    }));
+    const body = await response.json() as {
+      data?: { text?: { status?: string }; vision?: { status?: string } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toMatchObject({
+      text: { status: 'success' },
+      vision: { status: 'success' },
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    for (const [url, init] of fetchSpy.mock.calls) {
+      expect(String(url)).toBe(
+        'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.6-flash:generateContent',
+      );
+      expect(String(url)).not.toContain(requestKey);
+      expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(requestKey);
+    }
   });
 
   test('rejects unsafe or non-Gemini model probe targets before provider contact', async () => {
