@@ -66,11 +66,17 @@ export interface OrchestrateInput {
   /** 전체 결과 정책은 유지하면서 이번 호출에서 렌더할 페이지. */
   preparationPages?: number[];
   budget?: Partial<DocumentBudget>;
-  vision?: {
-    provider: 'gemini' | 'openai' | 'claude';
-    apiKey: string;
-    model?: string;
-  };
+  vision?:
+    | {
+        provider: 'gemini' | 'openai' | 'claude';
+        apiKey: string;
+        model?: string;
+      }
+    | {
+        provider: 'chatgpt-local';
+        apiKey?: never;
+        model?: string;
+      };
   signal?: AbortSignal;
   seedDetections?: {
     symbols?: RawSymbolHit[];

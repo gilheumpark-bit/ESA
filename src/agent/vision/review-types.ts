@@ -111,7 +111,7 @@ export interface RoleReviewData {
 export interface RoleReviewEnvelope {
   role: ReviewRole;
   drawingHash: string;
-  provider: 'openai' | 'gemini' | 'claude';
+  provider: 'openai' | 'gemini' | 'claude' | 'chatgpt-local';
   model: string;
   promptVersion: string;
   outputHash: string;

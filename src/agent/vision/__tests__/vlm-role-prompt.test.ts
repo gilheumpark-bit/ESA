@@ -1,5 +1,9 @@
 import { ROLE_PROMPTS, ROLE_PROMPT_VERSION } from '../role-prompts';
-import { analyzeDrawingRole, type VLMOptions } from '../vlm-client';
+import {
+  analyzeDrawingRole,
+  type RemoteVLMProvider,
+  type VLMOptions,
+} from '../vlm-client';
 
 const apiKeys = {
   gemini: 'g'.repeat(20),
@@ -17,7 +21,7 @@ const textPayload = {
   }],
 };
 
-function options(provider: VLMOptions['provider']): VLMOptions {
+function options(provider: RemoteVLMProvider): VLMOptions {
   return {
     provider,
     apiKey: apiKeys[provider],
@@ -27,7 +31,7 @@ function options(provider: VLMOptions['provider']): VLMOptions {
   };
 }
 
-function responseFor(provider: VLMOptions['provider'], text: string): Response {
+function responseFor(provider: RemoteVLMProvider, text: string): Response {
   let payload: object;
   if (provider === 'gemini') {
     payload = { candidates: [{ content: { parts: [{ text }] } }] };
