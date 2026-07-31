@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { getProvider, isCatalogModel } from '@/lib/ai-providers';
 import { getAvailableProviders, resolveProviderKey, validateKeyFormat } from '@/lib/server-ai';
 
@@ -47,5 +50,10 @@ describe('Google Agent Platform provider contract', () => {
   it('accepts a plausible Google Cloud API key format', () => {
     expect(validateKeyFormat('google-agent-platform', plausibleGoogleKey)).toBe(true);
     expect(validateKeyFormat('google-agent-platform', 'short')).toBe(false);
+  });
+
+  it('lets the scan-tier validation harness discover the deployment key', () => {
+    const source = readFileSync(join(process.cwd(), 'scripts', 'run-scan-tier.mjs'), 'utf8');
+    expect(source).toContain("['google-agent-platform', 'GOOGLE_VERTEX_API_KEY']");
   });
 });
