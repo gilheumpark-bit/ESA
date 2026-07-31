@@ -63,6 +63,19 @@ export const PROVIDERS: Record<string, AIProvider> = {
     ],
     capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 1_048_576, costTier: 'low' },
   },
+  'google-agent-platform': {
+    id: 'google-agent-platform',
+    name: 'Google Agent Platform (Cloud 크레딧)',
+    defaultModel: 'gemini-3.6-flash',
+    models: [
+      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview)', contextWindow: 1_048_576, costTier: 'premium' },
+      { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', contextWindow: 1_048_576, costTier: 'medium' },
+      { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', contextWindow: 1_048_576, costTier: 'medium' },
+      { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
+      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite', contextWindow: 1_048_576, costTier: 'low' },
+    ],
+    capabilities: { streaming: true, structuredOutput: true, maxContextTokens: 1_048_576, costTier: 'low' },
+  },
   openai: {
     id: 'openai',
     name: 'OpenAI',

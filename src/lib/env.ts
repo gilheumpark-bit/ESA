@@ -32,6 +32,7 @@ const AI_KEYS: EnvVarDef[] = [
   { key: 'OPENAI_API_KEY', required: false },
   { key: 'ANTHROPIC_API_KEY', required: false },
   { key: 'GOOGLE_GENERATIVE_AI_API_KEY', required: false },
+  { key: 'GOOGLE_VERTEX_API_KEY', required: false },
   { key: 'DEEPSEEK_API_KEY', required: false },
   { key: 'MISTRAL_API_KEY', required: false },
 ];

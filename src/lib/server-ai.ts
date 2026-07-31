@@ -26,6 +26,7 @@ export interface ProviderAvailability {
  */
 const ENV_KEY_MAP: Record<string, string> = {
   gemini: 'GOOGLE_GENERATIVE_AI_API_KEY',
+  'google-agent-platform': 'GOOGLE_VERTEX_API_KEY',
   openai: 'OPENAI_API_KEY',
   claude: 'ANTHROPIC_API_KEY',
   groq: 'GROQ_API_KEY',
@@ -37,6 +38,7 @@ const ENV_KEY_MAP: Record<string, string> = {
 /** Provider display names */
 const PROVIDER_NAMES: Record<string, string> = {
   gemini: 'Google Gemini',
+  'google-agent-platform': 'Google Agent Platform (Cloud 크레딧)',
   openai: 'OpenAI',
   claude: 'Anthropic Claude',
   groq: 'Groq',
@@ -242,6 +244,7 @@ export function validateKeyFormat(providerId: string, key: string): boolean {
     case 'claude':
       return key.startsWith('sk-ant-') && key.length > 20;
     case 'gemini':
+    case 'google-agent-platform':
       return key.startsWith('AI') && key.length > 20;
     case 'groq':
       return key.startsWith('gsk_') && key.length > 20;
