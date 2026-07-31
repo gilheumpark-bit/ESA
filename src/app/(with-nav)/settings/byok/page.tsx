@@ -27,6 +27,7 @@ import {
   saveStoredProviderKey,
 } from '@/lib/byok-storage';
 import { isVisionProvider, resolveSelectedModel } from '@/lib/vision-byok';
+import { ChatGPTLocalCard } from '@/components/ChatGPTLocalCard';
 
 // =============================================================================
 // PART 1 — Types & Constants
@@ -593,10 +594,10 @@ export default function BYOKPage() {
       </div>
 
       <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-        API 키 관리
+        AI 연결 관리
       </h1>
       <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-        API 키는 이 브라우저에 기기 결합 AES-256-GCM으로 저장됩니다.
+        로컬 ChatGPT 계정을 사용하거나 공급자 API 키를 등록할 수 있습니다.
       </p>
 
       {storageError && (
@@ -607,6 +608,7 @@ export default function BYOKPage() {
 
       {/* Provider cards */}
       <div className="mb-8 flex flex-col gap-4">
+        <ChatGPTLocalCard />
         {PROVIDER_ORDER.map((id) => {
           const provider = PROVIDERS[id];
           if (!provider) return null;
