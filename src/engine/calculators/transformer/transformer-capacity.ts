@@ -142,7 +142,9 @@ export function calculateTransformerCapacity(input: TransformerCapacityInput): D
     formula: 'S = \\frac{P_{total} \\times D_f}{\\cos\\varphi \\times \\eta}',
     steps,
     source: [
-      createSource('KEC', '341', { edition: '2021' }),
+      // 341 은 절 표제(「기계 및 기구」)다. 용량은 341.1.2 「특고압용 변압기의 용량」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '341.1.2', { edition: '2021' }),
       createSource('IEC', '60076', { edition: '2011' }),
     ],
     judgment,

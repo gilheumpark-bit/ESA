@@ -132,7 +132,9 @@ export function calculateBatteryCapacity(input: BatteryCapacityInput): DetailedC
     formula: 'C = \\frac{P \\times t}{V \\times DoD \\times \\eta}',
     steps,
     source: [
-      createSource('KEC', '502', { edition: '2021' }),
+      // 502 는 「용어의 정의」다. 이차전지는 511.2.4 「이차전지의 시설」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '511.2.4', { edition: '2021' }),
       createSource('IEC', '62619', { edition: '2022' }),
     ],
     judgment,

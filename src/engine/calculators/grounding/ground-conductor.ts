@@ -122,7 +122,9 @@ export function calculateGroundConductor(input: GroundConductorInput): DetailedC
     steps,
     source: [
       createSource('IEC', '60364-5-54', { edition: '2011' }),
-      createSource('KEC', '142', { edition: '2021' }),
+      // 142 는 절 표제다. 접지도체는 142.3.1
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '142.3.1', { edition: '2021' }),
     ],
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'warning'),
     additionalOutputs: {

@@ -169,7 +169,9 @@ export function calculateBreakerSizing(input: BreakerSizingInput): DetailedCalcR
     formula: 'I_b \\leq I_n \\leq I_z, \\quad I_{cu} \\geq I_{sc}',
     steps,
     source: [
-      createSource('KEC', '212.3', { edition: '2021' }),
+      // 212.3 은 「보호장치의 종류 및 특성」 — 장치 분류다. Ib≤In≤Iz 협조는 212.4.1 「도체와 과부하 보호장치 사이의 협조」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '212.4.1', { edition: '2021' }),
       createSource('IEC', '60947-2', { edition: '2020' }),
     ],
     judgment,

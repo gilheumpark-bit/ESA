@@ -107,7 +107,9 @@ export function calculatePCSCapacity(input: PCSCapacityInput): DetailedCalcResul
     formula: 'P_{pcs} = \\frac{P_{max}}{\\eta}',
     steps,
     source: [
-      createSource('KEC', '502', { edition: '2021' }),
+      // 502 는 「용어의 정의」다. ESS 의 PCS 는 511.2.6 「전력변환장치의 시설」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '511.2.6', { edition: '2021' }),
       createSource('IEC', '62933', { edition: '2018' }),
     ],
     judgment: createJudgment(

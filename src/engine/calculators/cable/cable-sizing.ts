@@ -296,7 +296,9 @@ export function calculateCableSizing(input: CableSizingInput): DetailedCalcResul
     formula: 'I_{z} \\times K_t \\times K_g \\geq I_{load}',
     steps,
     source: [
-      createSource('KEC', '232.3', { edition: '2021' }),
+      // 232.3 은 「배선설비 적용 시 고려사항」이다. 허용전류는 232.5.2 「허용전류의 결정」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '232.5.2', { edition: '2021' }),
       createSource('KEC', '232.3.9', { edition: '2021' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],

@@ -155,7 +155,9 @@ export function calculateShortCircuit(input: ShortCircuitInput): DetailedCalcRes
     steps,
     source: [
       createSource('IEC', '60909', { edition: '2016' }),
-      createSource('KEC', '213', { edition: '2021' }),
+      // 213 은 「과전압에 대한 보호」다. 단락전류 계산은 212.5.1 「예상 단락전류의 결정」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '212.5.1', { edition: '2021' }),
     ],
     judgment,
     additionalOutputs: {

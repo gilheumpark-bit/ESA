@@ -179,7 +179,9 @@ export function compareAmpacityByCountry(input: AmpacityCompareInput): DetailedC
     formula: 'I_{derated} = I_{base} \\times K_t',
     steps,
     source: [
-      createSource('KEC', '232.3', { edition: '2021' }),
+      // 232.3 은 「배선설비 적용 시 고려사항」이다. 허용전류는 232.5.2 「허용전류의 결정」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '232.5.2', { edition: '2021' }),
       createSource('NEC', '310.16', { edition: '2023' }),
       createSource('IEC', '60364-5-52', { edition: '2009' }),
     ],

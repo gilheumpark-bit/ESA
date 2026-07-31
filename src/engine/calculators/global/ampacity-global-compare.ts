@@ -175,7 +175,9 @@ export function compareGlobalAmpacity(input: AmpacityGlobalCompareInput): Detail
     source: [
       createSource('IEC', '60364-5-52', { edition: '2009' }),
       createSource('NEC', '310.16', { edition: '2023' }),
-      createSource('KEC', '232', { edition: '2021' }),
+      // 232 는 편 표제(「배선설비」)다. 허용전류는 232.5
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '232.5', { edition: '2021' }),
     ],
     judgment: createJudgment(
       true,

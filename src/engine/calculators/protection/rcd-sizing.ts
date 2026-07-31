@@ -127,7 +127,9 @@ export function calculateRCDSizing(input: RCDSizingInput): DetailedCalcResult {
     formula: 'I_{rated} \\geq I_{load},\\; V_t = I_{\\Delta n} \\times R_e \\leq V_{limit}',
     steps,
     source: [
-      createSource('KEC', '212.4', { edition: '2021' }),
+      // 212.4 는 「과부하전류에 대한 보호」다. 누전차단기는 211.2.4 「누전차단기의 시설」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '211.2.4', { edition: '2021' }),
       createSource('IEC', '61008-1', { edition: '2018' }),
     ],
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'error'),

@@ -180,7 +180,9 @@ export function calculateGroundResistance(input: GroundResistanceInput): Detaile
     formula: 'R = \\frac{\\rho}{2\\pi L} \\ln\\frac{4L}{d}',
     steps,
     source: [
-      createSource('KEC', '142', { edition: '2021' }),
+      // 142 는 절 표제(「접지시스템의 시설」)다. 접지저항은 142.2 「접지극의 시설 및 접지저항」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '142.2', { edition: '2021' }),
       createSource('IEEE', 'Std 80', { edition: '2015' }),
     ],
     judgment,

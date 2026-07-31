@@ -121,7 +121,9 @@ export function calculateEarthFault(input: EarthFaultInput): DetailedCalcResult 
     formula: faultFormula,
     steps,
     source: [
-      createSource('KEC', '142', { edition: '2021' }),
+      // 142 는 절 표제다. 접촉·보폭전압은 접지저항에 걸리므로 142.2 「접지극의 시설 및 접지저항」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '142.2', { edition: '2021' }),
       createSource('IEC', '60364-4-41', { edition: '2017' }),
     ],
     judgment: createJudgment(pass, judgmentMsg, pass ? 'info' : 'error'),

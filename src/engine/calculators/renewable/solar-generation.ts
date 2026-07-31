@@ -131,7 +131,8 @@ export function calculateSolarGeneration(input: SolarGenerationInput): DetailedC
     formula: 'E = P \\times H \\times K \\times PR',
     steps,
     source: [
-      createSource('KEC', '502', { edition: '2021' }),
+      // 502 는 「용어의 정의」다. 발전량 추정은 KEC 가 규정하지 않는다 — IEC 61724
+      // (2026-07-31 공표 전문 표제 대조).
       createSource('IEC', '61724', { edition: '2017' }),
     ],
     judgment,

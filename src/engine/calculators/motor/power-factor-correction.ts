@@ -113,7 +113,8 @@ export function calculateMotorPFCorrection(input: MotorPFCorrectionInput): Detai
     formula: 'Q_c = P \\times (\\tan\\varphi_1 - \\tan\\varphi_2)',
     steps,
     source: [
-      createSource('KEC', '232', { edition: '2021' }),
+      // 232 는 「배선설비」다. 역률은 KEC 가 규정하지 않는다 — 공표 전문에서 역률 표제는 441.4 전기철도차량뿐이다
+      // (2026-07-31 공표 전문 표제 대조).
       createSource('IEC', '60831', { edition: '2014' }),
     ],
     judgment: createJudgment(

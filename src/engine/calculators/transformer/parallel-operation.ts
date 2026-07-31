@@ -142,7 +142,8 @@ export function calculateParallelOperation(input: ParallelOperationInput): Detai
     steps,
     source: [
       createSource('IEC', '60076-1', { edition: '2011' }),
-      createSource('KEC', '311', { edition: '2021' }),
+      // 311 은 「안전보호」다. 변압기 병렬운전 조건(%Z·극성·각변위)은 IEC 60076-1 소관이다
+      // (2026-07-31 공표 전문 표제 대조).
     ],
     judgment: createJudgment(compatible, judgmentMsg, compatible ? 'info' : 'error'),
     additionalOutputs,

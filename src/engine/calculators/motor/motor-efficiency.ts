@@ -169,7 +169,8 @@ export function calculateMotorEfficiency(input: MotorEfficiencyInput): DetailedC
     steps,
     source: [
       createSource('IEC', '60034-30-1', { edition: '2014' }),
-      createSource('KEC', '232', { edition: '2021' }),
+      // 232 는 「배선설비」다. IE 효율 등급은 IEC 60034-30-1 소관이고 KEC 에 대응 조항이 없다
+      // (2026-07-31 공표 전문 표제 대조).
     ],
     judgment: createJudgment(
       true,

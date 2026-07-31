@@ -126,7 +126,9 @@ export function calculateGridConnect(input: GridConnectInput): DetailedCalcResul
     formula: 'P_{export} = \\min(P_{gen}, P_{contract})',
     steps,
     source: [
-      createSource('KEC', '502', { edition: '2021' }),
+      // 502 는 「용어의 정의」다. 계통 연계는 503.2 「시설기준」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '503.2', { edition: '2021' }),
       createSource('KEPCO', 'Technical Standards for DG Interconnection', { edition: '2022' }),
     ],
     judgment: createJudgment(

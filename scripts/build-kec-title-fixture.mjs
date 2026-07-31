@@ -52,7 +52,12 @@ function walk(dir, out = []) {
   return out;
 }
 
-const CITE = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-)([\d.]+)'/g;
+// `createSource('KEC', '…')` 를 포함한다. 이게 빠져 있어서 계산기 영수증의
+// 인용이 표제 대조 대상에서 통째로 빠졌다 — 픽스처에 표제가 없으니 게이트도
+// 조용히 건너뛰었고, 그 사이에 「용어의 정의」를 태양광 근거로 다는 것 같은
+// 오인용이 살아 있었다(2026-07-31 실측). 이 정규식은
+// `standards/kec/__tests__/clause-titles-match.test.ts` 의 것과 같아야 한다.
+const CITE = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-|createSource\('KEC',\s*')([\d.]+)'/g;
 const cited = new Set();
 for (const f of walk(join(REPO, 'src'))) {
   for (const m of readFileSync(f, 'utf8').matchAll(CITE)) cited.add(m[1]);

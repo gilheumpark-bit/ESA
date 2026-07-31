@@ -8,7 +8,7 @@
  *   Fuel:         F = Pgen x 0.75 x specificConsumption              [L/h]
  *   Tank:         V = F x hours                                      [L]
  *
- * Standards: KEC 351 (Emergency Power), NFPA 110, IEC 60034
+ * Standards: KEC 244 (비상용 예비전원설비), NFPA 110, IEC 60034
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
@@ -169,7 +169,11 @@ export function calculateEmergencyGenerator(input: EmergencyGeneratorInput): Det
     formula: 'S_{gen} = \\max(S_{base}, S_{base} + \\Delta S_{start}) \\times SF',
     steps,
     source: [
-      createSource('KEC', '351', { edition: '2021' }),
+      // 351 은 「발전소, 변전소, 개폐소 등의 전기설비」다 — 비상전원이 아니다.
+      // 비상발전기는 244 「비상용 예비전원설비」 소관이다(2026-07-31 표제 대조).
+      // 244 하위(244.1.2 조건 및 분류 · 244.2.1 시설)는 본문을 읽지 않아
+      // 좁히지 않는다 — 확인 없이 좁히면 또 다른 오인용이 된다.
+      createSource('KEC', '244', { edition: '2021' }),
       createSource('NFPA', '110', { edition: '2022' }),
     ],
     judgment: createJudgment(

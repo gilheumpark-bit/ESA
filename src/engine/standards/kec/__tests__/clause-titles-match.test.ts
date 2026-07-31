@@ -139,8 +139,21 @@ const CATALOG_ENTRY = /clause:\s*'([\d.]+)',\s*\n\s*title_ko:\s*'([^']*)'/g;
  */
 const SUGGESTION = /text:\s*'KEC (\d+(?:\.\d+)*)',\s*subtitle:\s*'([^']*)'/g;
 
-/** 조항을 **인용**하는 자리 전부 — 정의뿐 아니라 상호참조·시험데이터도 센다. */
-const CITATION = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-)([\d.]+)'/g;
+/**
+ * 조항을 **인용**하는 자리 전부 — 정의뿐 아니라 상호참조·시험데이터도 센다.
+ *
+ * `createSource('KEC', '…')` 를 포함한다. 이게 빠져 있어서 계산기 영수증의
+ * 인용 26 건이 이 게이트를 통째로 지나갔고, 그 안에 **내용이 완전히 다른
+ * 조항이 여럿** 있었다(2026-07-31 실측):
+ *
+ *   단락전류 계산      213 「과전압에 대한 보호」   ← 과전류가 아니라 과전압
+ *   누전차단기 선정    212.4 「과부하전류에 대한 보호」
+ *   태양광·ESS 5 건    502 「용어의 정의」          ← 용어집을 근거로 달았다
+ *   비상발전기 용량    351 「발전소·변전소 …」      ← 244 비상용 예비전원설비다
+ *
+ * 번호는 전부 실재하므로 번호 게이트는 통과한다. 표제를 봐야 보인다.
+ */
+const CITATION = /(?:buildArticle\('KEC-|kec\('|articleId:\s*'KEC-|createSource\('KEC',\s*')([\d.]+)'/g;
 
 describe('KEC 조항 표제 정합', () => {
   const files = collectFiles(join(REPO, 'src'));

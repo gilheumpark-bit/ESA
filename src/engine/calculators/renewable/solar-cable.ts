@@ -141,7 +141,9 @@ export function calculateSolarCable(input: SolarCableInput): DetailedCalcResult 
     formula: 'A = \\frac{2 \\rho L I}{\\Delta V_{max}}',
     steps,
     source: [
-      createSource('KEC', '502', { edition: '2021' }),
+      // 502 는 「용어의 정의」 — 용어집이다. 태양광 배선은 522.1.1 「전기배선」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '522.1.1', { edition: '2021' }),
       createSource('IEC', '62548', { edition: '2016' }),
     ],
     judgment: createJudgment(

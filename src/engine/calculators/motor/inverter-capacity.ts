@@ -99,7 +99,8 @@ export function calculateInverterCapacity(input: InverterCapacityInput): Detaile
     formula: 'S_{inv} = \\frac{P_{motor}}{\\eta \\times \\cos\\varphi} \\times SF',
     steps,
     source: [
-      createSource('KEC', '232', { edition: '2021' }),
+      // 232 는 「배선설비」다. VFD 용량 산정은 IEC 61800-2 소관이다
+      // (2026-07-31 공표 전문 표제 대조).
       createSource('IEC', '61800-2', { edition: '2021' }),
     ],
     judgment: createJudgment(

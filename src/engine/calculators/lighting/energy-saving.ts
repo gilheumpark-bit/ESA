@@ -58,7 +58,9 @@ export function calculateEnergySaving(input: EnergySavingInput): DetailedCalcRes
       unit: 'kWh',
       formula: 'E_{save} = (P_{before} - P_{after}) \\times h \\times d',
       steps: [],
-      source: [createSource('KEC', '241', { edition: '2021' })],
+      // 241 은 「특수 시설」이다. 에너지 절감량 산정은 KEC 소관이 아니다
+      // (2026-07-31 공표 전문 표제 대조).
+      source: [createSource('ISO', '50001', { edition: '2018' })],
       judgment: createJudgment(false, '개선 후 전력이 개선 전보다 크거나 같음 (No saving)', 'warning'),
     };
   }
@@ -128,7 +130,8 @@ export function calculateEnergySaving(input: EnergySavingInput): DetailedCalcRes
     formula: 'E_{save} = (P_{before} - P_{after}) \\times h \\times d',
     steps,
     source: [
-      createSource('KEC', '241', { edition: '2021' }),
+      // 241 은 「특수 시설」이다. 에너지 절감량 산정은 KEC 소관이 아니다 — ISO 50001
+      // (2026-07-31 공표 전문 표제 대조).
       createSource('ISO', '50001', { edition: '2018' }),
     ],
     judgment: createJudgment(

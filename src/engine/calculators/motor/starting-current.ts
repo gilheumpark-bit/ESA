@@ -111,7 +111,9 @@ export function calculateStartingCurrent(input: StartingCurrentInput): DetailedC
     formula: 'I_{st} = I_{rated} \\times k_{start}',
     steps,
     source: [
-      createSource('KEC', '232', { edition: '2021' }),
+      // 232 는 「배선설비」다. 전동기는 212.6.3 「저압전로 중의 전동기 보호용 과전류보호장치의 시설」
+      // (2026-07-31 공표 전문 표제 대조).
+      createSource('KEC', '212.6.3', { edition: '2021' }),
       createSource('IEC', '60034-12', { edition: '2012' }),
     ],
     judgment: createJudgment(
