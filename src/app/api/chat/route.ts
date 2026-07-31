@@ -123,6 +123,12 @@ async function buildStreamingResponse(
       sdkModel = googleProvider(model);
       break;
     }
+    case 'google-agent-platform': {
+      const { createVertex } = await import('@ai-sdk/google-vertex');
+      const vertexProvider = createVertex({ apiKey });
+      sdkModel = vertexProvider(model);
+      break;
+    }
     case 'mistral': {
       const { createMistral } = await import('@ai-sdk/mistral');
       const mistralProvider = createMistral({ apiKey });
