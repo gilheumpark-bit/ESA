@@ -407,7 +407,7 @@ export default function OCRNameplatePage() {
     try {
       const visionKey = await getFirstAvailableVisionKey();
       if (!visionKey) {
-        setError('API 키가 설정되지 않았습니다. 설정 > BYOK에서 OpenAI, Claude, 또는 Gemini API 키를 입력하세요.');
+        setError('AI 연결이 없습니다. 설정에서 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 입력하세요.');
         setLoading(false);
         return;
       }
@@ -416,7 +416,7 @@ export default function OCRNameplatePage() {
       formData.append('image', imageFile);
       formData.append('provider', visionKey.provider);
       formData.append('model', visionKey.model);
-      formData.append('apiKey', visionKey.key);
+      if (visionKey.key) formData.append('apiKey', visionKey.key);
 
       const res = await fetch('/api/ocr', { method: 'POST', body: formData });
       const data: OCRResponse = await res.json();

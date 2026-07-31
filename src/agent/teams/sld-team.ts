@@ -311,7 +311,9 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   throwIfAborted(input.signal);
   const prepared = await (deps.prepareRaster ?? preparePrecisionRegions)(input.fileBuffer, input.mimeType ?? 'image/png');
   throwIfAborted(input.signal);
-  const resolved = (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
+  const resolved = input.vision.provider === 'chatgpt-local'
+    ? { key: '', source: 'byok' as const }
+    : (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
   onResolvedKey(resolved.key);
   const selectedRoles = ['symbols', 'connections', 'text'] as const;
   const selectedVariants = Object.fromEntries(selectedRoles.map((role) => [
@@ -331,7 +333,22 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     maxConcurrentCalls: COUNCIL_MAX_CONCURRENT_CALLS,
     priorEnvelopes: input.priorDrawingReviewEnvelopes,
-    options: { provider: input.vision.provider, apiKey: resolved.key, model: input.vision.model, signal: input.signal, timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS, maxRetries: COUNCIL_SOURCE_MAX_RETRIES },
+    options: input.vision.provider === 'chatgpt-local'
+      ? {
+          provider: 'chatgpt-local',
+          model: input.vision.model,
+          signal: input.signal,
+          timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS,
+          maxRetries: COUNCIL_SOURCE_MAX_RETRIES,
+        }
+      : {
+          provider: input.vision.provider,
+          apiKey: resolved.key,
+          model: input.vision.model,
+          signal: input.signal,
+          timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS,
+          maxRetries: COUNCIL_SOURCE_MAX_RETRIES,
+        },
   });
   throwIfAborted(input.signal);
   const expectedRegionCount = precisionGridSize(prepared.snapshot.quality.recommendedScale);

@@ -21,6 +21,10 @@ import { withRequestLog } from '@/lib/api/with-request-log';
 import { checkRasterImage } from '@/lib/image-signature';
 import { measureTextQuality } from '@/lib/drawing-text-quality';
 import { deriveConstraints } from '@/engine/review/cross-constraint';
+import {
+  DrawingVisionRequestError,
+  resolveDrawingVisionRequest,
+} from '@/lib/drawing-vision-request';
 
 /**
  * 공급자 실패를 사용자가 무엇을 해야 하는지로 번역한다.
@@ -92,25 +96,24 @@ async function POST__impl(req: NextRequest) {
       return NextResponse.json({ error: imagePart.message }, { status: 400 });
     }
     const imageFile = imagePart.file;
-    const providerPart = formData.get('provider');
-    const modelPart = formData.get('model');
-    const apiKeyPart = formData.get('apiKey');
-    const provider = typeof providerPart === 'string' && providerPart ? providerPart : 'openai';
-    const model = typeof modelPart === 'string' ? modelPart.trim() : '';
-    const apiKey = typeof apiKeyPart === 'string' ? apiKeyPart.trim() : '';
-
     if (!imageFile) {
       return NextResponse.json({ error: 'No image provided.' }, { status: 400 });
     }
-    if (!apiKey) {
+    let vision;
+    try {
+      vision = await resolveDrawingVisionRequest(formData, req, false);
+    } catch (error) {
+      if (error instanceof DrawingVisionRequestError) {
+        return NextResponse.json({ error: error.message }, { status: error.status });
+      }
+      throw error;
+    }
+    if (!vision) {
       return NextResponse.json({ error: 'API key required (BYOK).' }, { status: 401 });
     }
-    if (!['openai', 'claude', 'gemini'].includes(provider)) {
-      return NextResponse.json({ error: 'Unsupported Vision provider.' }, { status: 400 });
-    }
-    if (apiKey.length > 4096 || (model && !/^[a-zA-Z0-9._:/-]{1,128}$/.test(model))) {
-      return NextResponse.json({ error: 'Invalid Vision credential parameters.' }, { status: 400 });
-    }
+    const provider = vision.provider;
+    const model = vision.model ?? '';
+    const apiKey = 'apiKey' in vision ? vision.apiKey : '';
     const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!validTypes.includes(imageFile.type)) {
       return NextResponse.json({ error: `Invalid image type: ${imageFile.type}` }, { status: 400 });

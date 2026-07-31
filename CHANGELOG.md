@@ -66,6 +66,13 @@ All notable changes to ESVA are documented in this file.
 - **Standards judgment**: articles carrying a `value: 0` placeholder threshold auto-PASS'd (`>= 0`) or always-FAIL'd (`<= 0`); now return **HOLD** with the source rule.
 
 ### Added
+- **로컬 ChatGPT 계정 공급자** — 같은 PC의 공식 Codex 로그인과 stdio app-server를
+  사용해 별도 OpenAI Platform API 키 없이 채팅·계산 영수증 설명·SLD·OCR·도면
+  전문팀 검토를 실행한다. 설정 화면에서 실제 계정 모델을 선택하며, 비-loopback
+  요청과 명령·파일·MCP·웹·승인 이벤트는 fail-closed로 차단한다.
+- **로컬 Vision 구조화 출력** — 무효한 범용 object 스키마를 SLD·OCR·전체도면의
+  완전한 스키마로 교체하고, 서로 다른 역할 출력은 JSON 전용 프롬프트와 기존
+  역할별 엄격 파서로 검증한다.
 - **AI 계산 실왕복 게이트** — `npm run gate:chat-live`가 production 서버, 정본 전압강하 계산기, 모델 입력 영수증, SSE 표시 순서를 실제 HTTP로 검증한다.
 - **SLD 구획 경계 연속성** — `Pxx-A` 논리 구획, `Pxx-C` 경계선, `Pxx-U` 미확정 끝점과 전체 도면 재합성 영수증을 추가했다.
 - **문서 정본 지도와 자동 검사** — 현재 정본, 검증 원장, 설계 참고, 역사 기록을 분류하고 로컬 링크·환경 변수 중복을 검사한다.

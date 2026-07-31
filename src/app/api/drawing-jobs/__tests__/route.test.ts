@@ -6,6 +6,7 @@ import { createSourceLease, isSourceLeaseAvailable } from '@/agent/drawing/sourc
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
 import { DELETE, GET, POST } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
@@ -30,6 +31,9 @@ jest.mock('@/agent/drawing/drawing-api-owner', () => ({
 jest.mock('@/agent/drawing/drawing-source', () => ({
   enumerateDrawingPageCount: jest.fn(async () => 18),
 }));
+jest.mock('@/lib/chatgpt-local', () => ({
+  getChatGPTLocalStatus: jest.fn(),
+}));
 
 const owner = { ownerId: 'user:test-user', authenticated: true };
 
@@ -42,7 +46,7 @@ function formRequest(
   for (const [key, value] of Object.entries(extras)) form.set(key, value);
   return new NextRequest('http://localhost:3000/api/drawing-jobs', {
     method: 'POST',
-    headers: { origin: 'http://localhost:3000' },
+    headers: { origin: 'http://localhost:3000', host: 'localhost:3000' },
     body: form,
   });
 }
@@ -54,6 +58,15 @@ describe('drawing jobs API ownership and input boundary', () => {
     jest.clearAllMocks();
     jest.mocked(resolveDrawingOwner).mockResolvedValue(owner);
     jest.mocked(isDrawingJobStoreAvailable).mockReturnValue(true);
+    jest.mocked(getChatGPTLocalStatus).mockResolvedValue({
+      available: true,
+      connected: true,
+      models: [{
+        id: 'gpt-5.6-terra',
+        name: 'GPT-5.6 Terra',
+        inputModalities: ['text', 'image'],
+      }],
+    });
   });
 
   afterAll(() => {
@@ -109,6 +122,30 @@ describe('drawing jobs API ownership and input boundary', () => {
     expect(response.status).toBe(200);
     expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
       vision: expect.objectContaining({ apiKey: 'request-owned-key' }),
+    }));
+  });
+
+  it('allows an anonymous loopback request to use its own ChatGPT account without a key', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: 'anon:session-local',
+      authenticated: false,
+    });
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job: { jobId: 'job-local', status: 'COMPLETE', estimated: {} },
+      document: { documentHash: 'a'.repeat(64), jobStatus: 'COMPLETE' },
+    } as never);
+
+    const response = await POST(formRequest({
+      provider: 'chatgpt-local',
+      model: 'gpt-5.6-terra',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      vision: {
+        provider: 'chatgpt-local',
+        model: 'gpt-5.6-terra',
+      },
     }));
   });
 

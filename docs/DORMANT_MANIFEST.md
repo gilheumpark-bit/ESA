@@ -2,12 +2,13 @@
 
 > 목록 생산 ≠ 종결. 삭제하지 않고 남기는 휴면 모듈은 아래에 상태·사유·소유자·
 > 활성 조건·재검토 조건을 기록한다. 여기 없는 휴면 모듈 발견 = 대장 위반.
-> 2026-07-23 기준. 이번 전수 점검에서는 화면·호출처가 없고 성공할 수 없던
+> 2026-07-31 기준. 이번 전수 점검에서는 화면·호출처가 없고 성공할 수 없던
 > YouTube 501 API/미구현 유틸리티와 구형 `src/services/aiProviders*` 두 파일을
 > 외부참조 0 확인 후 제거했다.
 
 | 모듈 | 상태 | 사유(왜 남기나) | 소유 | 활성 조건 | 재검토 |
 |---|---|---|---|---|---|
+| 공개 배포용 ChatGPT 로컬 연결 도우미 | DORMANT(미구현) | 현재 `chatgpt-local`은 같은 PC의 loopback ESA→Codex stdio까지만 배선됐다. 공개 ESA가 사용자 PC 세션을 직접 읽는 경로는 없고 그렇게 위장하지 않는다 | AI 연결/보안 | loopback 결박 연결 도우미, 일회용 pairing, origin allowlist, 서명 세션, 자동 업데이트·제거 절차와 독립 보안 심사가 함께 준비될 때 | 공개 배포에서 ChatGPT 계정 연결을 제품화할 때 |
 | `engine/chain/calc-chain-executor.ts` | DORMANT | 범용 계산 체인 실행기. 현행 SLD 합성은 도면에서 필수 입력이 유일하게 결박된 전압강하만 별도 정본 경로로 실행하며, 이 범용 실행기는 production caller가 없음 | 도면 파이프라인 | 토폴로지 `extractCalcParams`가 지원 계산기별 실입력을 산출하고 보고서·UI 계약이 정해질 때 | 계산 체인 확장 착수 시 |
 | `engine/topology/topology-graph.ts`의 `extractCalcParams`·`findPath`·`getUpstream/Downstream` | DORMANT(부분) | 연결 그래프는 이번에 개통(endpoint-snap). 경로 추적·파라미터 추출은 위 실행기와 세트 | 도면 파이프라인 | 동상 | 동상 |
 | `engine/verification/reverse-calc.ts` | DORMANT | 역산 검증(출력→입력 재유도)은 영수증 무결성의 다음 단계 제품 기능 후보 | 검증 엔진 | 영수증 UI에 '역산 검증' 노출 결정 시 | E/F 배치 |

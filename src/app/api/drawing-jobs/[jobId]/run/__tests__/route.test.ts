@@ -6,6 +6,7 @@ import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { claimOwnedJobRun, getOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-lease-store';
+import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
 import { maxDuration, POST } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
@@ -18,6 +19,7 @@ jest.mock('@/agent/drawing/drawing-job-store', () => ({
 jest.mock('@/agent/drawing/source-lease-store', () => ({
   readSourceLease: jest.fn(), releaseSourceLease: jest.fn(),
 }));
+jest.mock('@/lib/chatgpt-local', () => ({ getChatGPTLocalStatus: jest.fn() }));
 
 const owner = { ownerId: 'user:a', authenticated: true };
 const job = {
@@ -41,6 +43,17 @@ function byokRequest(): NextRequest {
   });
 }
 
+function localRequest(): NextRequest {
+  const form = new FormData();
+  form.set('provider', 'chatgpt-local');
+  form.set('model', 'gpt-5.6-terra');
+  return new NextRequest('http://localhost/api/drawing-jobs/job-a/run', {
+    method: 'POST',
+    headers: { origin: 'http://localhost', host: 'localhost' },
+    body: form,
+  });
+}
+
 describe('drawing job run API', () => {
   it('keeps the route execution window aligned with the full-document budget', () => {
     expect(maxDuration).toBe(1800);
@@ -54,6 +67,15 @@ describe('drawing job run API', () => {
     jest.mocked(getOwnedJob).mockReturnValue(job as never);
     jest.mocked(readSourceLease).mockReturnValue(Uint8Array.from([1, 2, 3]).buffer);
     jest.mocked(claimOwnedJobRun).mockReturnValue(job as never);
+    jest.mocked(getChatGPTLocalStatus).mockResolvedValue({
+      available: true,
+      connected: true,
+      models: [{
+        id: 'gpt-5.6-terra',
+        name: 'GPT-5.6 Terra',
+        inputModalities: ['text', 'image'],
+      }],
+    });
   });
 
   it('claims the queued owned job before executing the production path', async () => {
@@ -96,6 +118,23 @@ describe('drawing job run API', () => {
     expect(response.status).toBe(200);
     expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
       vision: expect.objectContaining({ apiKey: 'request-owned-key' }),
+    }));
+  });
+
+  it('runs a queued job with the loopback ChatGPT account and no key', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue({
+      ownerId: owner.ownerId,
+      authenticated: false,
+    });
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job, document: { documentHash: 'a'.repeat(64), jobStatus: 'PARTIAL' },
+    } as never);
+
+    const response = await POST(localRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      vision: { provider: 'chatgpt-local', model: 'gpt-5.6-terra' },
     }));
   });
 
