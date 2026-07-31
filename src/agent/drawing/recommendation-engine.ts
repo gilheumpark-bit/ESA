@@ -36,7 +36,9 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
   }
   for (const s of confirmed) {
     if (!connected.has(s.id) && !isBusLike(s)) {
-      const supported = input.coverageComplete === true;
+      // 종류가 확정되지 않았으면 «모선 제외» 판정 자체가 추측 위에 서 있다.
+      // 소견을 버리지는 않되 SUPPORTED 로 확정하지 않는다.
+      const supported = input.coverageComplete === true && hasConfirmedType(s);
       out.push(rec(++seq, {
         severity: 'major',
         problem: `${s.displayId} 장치가 확정 결선에 연결되지 않았습니다 (고아 장치).`,
@@ -44,7 +46,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
         evidenceIds: s.evidence.map((e) => e.evidenceId),
         status: supported ? 'SUPPORTED' : 'HOLD',
         recommendedAction: '결선 누락·구획 경계 잘림·페이지 참조를 확인하십시오.',
-        requiredInputs: supported ? [] : ['전체 관련 구획 판독 완료'],
+        requiredInputs: supported ? [] : missingSupportInputs(input, [s]),
         standardRefs: ['ESA-SLD-RULE:ORPHAN-CONNECTION'],
         calcReceiptIds: [],
       }));
@@ -66,7 +68,16 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
         return node ? isProtection(node) : false;
       });
       if (!hasProtection) {
-        const supported = input.coverageComplete === true;
+        // «보호기가 없다» 는 결론은 경로상 모든 기기의 종류가 확정됐을 때만
+        // 성립한다. 종류 미확정 기기가 하나라도 있으면 그것이 보호기일 수
+        // 있으므로, critical 소견은 남기되 HOLD 로 둔다.
+        const pathNodes = path
+          .map((id) => byId.get(id))
+          .filter((node): node is SymbolNode => node !== undefined);
+        const supported = input.coverageComplete === true
+          && hasConfirmedType(src)
+          && hasConfirmedType(load)
+          && pathNodes.every(hasConfirmedType);
         out.push(rec(++seq, {
           severity: 'critical',
           problem: `${src.displayId} → ${load.displayId} 경로에 보호기가 확인되지 않습니다.`,
@@ -75,7 +86,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
             byId.get(id)?.evidence.map((e) => e.evidenceId) ?? []),
           status: supported ? 'SUPPORTED' : 'HOLD',
           recommendedAction: '경로상 차단기·퓨즈 존재 여부와 도면 누락을 재확인하십시오.',
-          requiredInputs: supported ? [] : ['전체 관련 구획 판독 완료'],
+          requiredInputs: supported ? [] : missingSupportInputs(input, [src, load, ...pathNodes]),
           standardRefs: ['KEC 212 과전류에 대한 보호'],
           calcReceiptIds: [],
         }));
@@ -85,9 +96,15 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
 
   // Breaker rating without load current → HOLD not fake upsize
   for (const s of confirmed.filter(isProtection)) {
-    const calc = input.calculations.find((c) =>
-      c.evidenceIds.some((id) => s.evidence.some((e) => e.evidenceId === id)));
-    const hasLoadCurrent = input.calculations.some((c) =>
+    // **이 기기의 근거에 결박된 계산만 본다.** 예전에는 결박된 계산(`calc`)을
+    // 구해 놓고 판정은 문서 전역 `some()` 으로 했다. 그러면 도면 어딘가에
+    // 부하전류 계산이 하나만 있어도 **근거가 전혀 없는 다른 차단기 전부**의
+    // 보류 소견이 통째로 사라진다 — 주의를 누락하는 방향이라 위험하다.
+    const deviceEvidence = new Set(s.evidence.map((e) => e.evidenceId));
+    const deviceCalcs = input.calculations.filter((c) =>
+      c.evidenceIds.some((id) => deviceEvidence.has(id)));
+    const calc = deviceCalcs[0];
+    const hasLoadCurrent = deviceCalcs.some((c) =>
       /load|current|flc/i.test(c.calculatorId) && c.value != null);
     if (!hasLoadCurrent) {
       out.push(rec(++seq, {
@@ -253,6 +270,29 @@ function shortestPathsFrom(from: string, adj: Map<string, string[]>): Map<string
 
 // 분류는 device-class.ts 의 어휘 계층 한 곳에서 결정한다. 판정 지점마다 정규식을
 // 돌리면 규칙이 갈라지고, 앵커 없는 부분 문자열이 무관한 토큰 안쪽에서 걸린다.
+/**
+ * 기기 종류가 확정됐는지 판정한다.
+ *
+ * `confirmedType` 은 선택 필드다. `certainty: 'confirmed'` 인 기호라도 종류가
+ * 비어 있을 수 있고, 그때 분류 함수들은 `typeCandidates[0]`(확정되지 않은
+ * 1순위 추측)으로 내려간다. 그 추측이 critical 소견(«보호기 미확인»)의
+ * 입력이 되므로, 추측 위에 선 소견은 SUPPORTED 로 확정하지 않는다.
+ */
+function hasConfirmedType(s: SymbolNode): boolean {
+  return typeof s.confirmedType === 'string' && s.confirmedType.trim().length > 0;
+}
+
+/** SUPPORTED 로 올리지 못한 사유를 사용자가 채울 수 있는 항목으로 돌려준다. */
+function missingSupportInputs(input: RecommendationInput, nodes: SymbolNode[]): string[] {
+  const needed: string[] = [];
+  if (input.coverageComplete !== true) needed.push('전체 관련 구획 판독 완료');
+  const unconfirmed = [...new Set(
+    nodes.filter((n) => !hasConfirmedType(n)).map((n) => n.displayId),
+  )];
+  if (unconfirmed.length > 0) needed.push(`기기 종류 확정: ${unconfirmed.join(', ')}`);
+  return needed.length > 0 ? needed : ['원본 근거 재확인'];
+}
+
 const isSource = (s: SymbolNode) => hasDeviceClass(s, 'source');
 const isLoad = (s: SymbolNode) => hasDeviceClass(s, 'load');
 const isProtection = (s: SymbolNode) => hasDeviceClass(s, 'protection');

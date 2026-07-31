@@ -1,6 +1,7 @@
 import { CALCULATOR_REGISTRY } from '@/engine/calculators';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { assembleSubmitValues, makeRow, type ExtendedParamDef } from '@/components/CalculatorForm';
+import { STANDARD_ORIGINS } from '@/engine/standards/citation-registry';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 회귀 방지 — CALCULATOR_PARAMS ↔ 계산기 입력 계약 정합성 (전 57개)
@@ -72,6 +73,15 @@ describe('CALCULATOR_PARAMS ↔ 계산기 입력 계약 (전 계산기 UI 경로
       (typeof v === 'string' && v.length > 0);
     expect(valueOk).toBe(true);
     expect(Array.isArray(result.source) ? result.source.length : 0).toBeGreaterThan(0);
+
+    // 조항 번호만 주고 끝내면 사용자는 그것을 확인할 수 없다. 등록된 발행기관을
+    // 인용하면 원문 경로가 같이 나가야 한다(`createSource` 자동 부착 — 조용히
+    // 끊기기 쉬운 배선이라 실제 계산기 출력에서 확인한다).
+    const tags = (result.source ?? []) as { standard: string; clause: string; url?: string }[];
+    const missingOrigin = tags
+      .filter((t) => t.standard in STANDARD_ORIGINS && !t.url)
+      .map((t) => `${t.standard} ${t.clause}`);
+    expect(missingOrigin).toEqual([]);
   });
 
   test('모든 레지스트리 계산기가 CALCULATOR_NAMES에 있다 (죽은 링크 방지)', () => {
