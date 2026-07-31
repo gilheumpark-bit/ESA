@@ -35,7 +35,11 @@ describe('nameplate OCR local transport', () => {
       input: expect.arrayContaining([
         expect.objectContaining({ type: 'image' }),
       ]),
-      outputSchema: expect.any(Object),
+      outputSchema: expect.objectContaining({
+        type: 'object',
+        additionalProperties: false,
+        required: expect.arrayContaining(['rawText', 'confidence', 'language']),
+      }),
     }));
     expect(result).toMatchObject({
       voltage: '380V',

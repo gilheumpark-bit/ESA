@@ -38,7 +38,8 @@ describe('ChatGPT local VLM transport', () => {
       },
     );
 
-    expect(runTurnMock).toHaveBeenCalledWith(expect.objectContaining({
+    const request = runTurnMock.mock.calls[0]?.[0];
+    expect(request).toEqual(expect.objectContaining({
       model: 'gpt-5.6-terra',
       developerInstructions: expect.stringContaining('Read every equipment label'),
       input: [
@@ -52,8 +53,8 @@ describe('ChatGPT local VLM transport', () => {
           text: expect.stringContaining('Return JSON only'),
         },
       ],
-      outputSchema: expect.any(Object),
     }));
+    expect(request).not.toHaveProperty('outputSchema');
     expect(result).toMatchObject({
       role: 'text',
       model: 'gpt-5.6-terra',
@@ -88,6 +89,13 @@ describe('ChatGPT local VLM transport', () => {
       },
     );
 
+    expect(runTurnMock).toHaveBeenCalledWith(expect.objectContaining({
+      outputSchema: expect.objectContaining({
+        type: 'object',
+        additionalProperties: false,
+        required: ['components', 'connections'],
+      }),
+    }));
     expect(result.components).toHaveLength(1);
     expect(result.components[0]).toMatchObject({
       id: 'q1',

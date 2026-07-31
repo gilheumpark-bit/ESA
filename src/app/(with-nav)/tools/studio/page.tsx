@@ -252,11 +252,11 @@ function ChatPanel({ file }: ChatPanelProps) {
         if (file.type.startsWith('image/')) {
           const visionKey = await getFirstAvailableVisionKey();
           if (!visionKey) {
-            throw new Error('이미지 전문팀 검토에는 OpenAI, Claude 또는 Gemini BYOK 키가 필요합니다.');
+            throw new Error('이미지 전문팀 검토에는 로컬 ChatGPT 계정 또는 Vision API 키가 필요합니다.');
           }
           formData.append('provider', visionKey.provider);
           formData.append('model', visionKey.model);
-          formData.append('apiKey', visionKey.key);
+          if (visionKey.key) formData.append('apiKey', visionKey.key);
         }
         const { getIdToken } = await import('@/lib/firebase');
         const token = await getIdToken().catch(() => null);

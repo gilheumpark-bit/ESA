@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import type { Readable, Writable } from 'node:stream';
 
 export interface CodexAppServerProcess {
@@ -77,12 +78,13 @@ const BLOCKED_ITEM_TYPES = new Set([
 function spawnCodexAppServer(): CodexAppServerProcess {
   if (process.platform === 'win32') {
     return spawn(
-      process.env.ComSpec || 'cmd.exe',
+      'cmd.exe',
       ['/d', '/s', '/c', 'codex app-server --stdio'],
-      { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
+      { cwd: tmpdir(), stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true },
     );
   }
   return spawn('codex', ['app-server', '--stdio'], {
+    cwd: tmpdir(),
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 }

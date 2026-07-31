@@ -40,7 +40,11 @@ describe('legacy SLD recognition local transport', () => {
           url: expect.stringMatching(/^data:image\/png;base64,/),
         }),
       ]),
-      outputSchema: expect.any(Object),
+      outputSchema: expect.objectContaining({
+        type: 'object',
+        additionalProperties: false,
+        required: expect.arrayContaining(['components', 'connections', 'confidence']),
+      }),
     }));
     expect(result).toMatchObject({
       components: [],

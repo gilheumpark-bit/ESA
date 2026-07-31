@@ -162,7 +162,7 @@ export function ChatGPTLocalCard() {
         <div className="mt-4 space-y-3">
           <div className="text-sm text-zinc-700 dark:text-zinc-200">
             <span>{status.account?.email ?? '이메일 비공개'}</span>
-            <span className="mx-2 text-zinc-400">·</span>
+            <span className="mx-2 text-zinc-500 dark:text-zinc-400">·</span>
             <span>{status.account?.planType ?? 'unknown'}</span>
           </div>
           <div>
