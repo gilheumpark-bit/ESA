@@ -113,7 +113,7 @@ function validateEnvelope(normalized: NormalizedElectricalGraph, envelope: RoleR
   if (envelope.drawingHash !== normalized.drawingHash || envelope.drawingHash !== normalized.graph.drawingHash) return null;
   if (!/^[a-f0-9]{64}$/.test(envelope.outputHash)) return null;
   if (!isBoundedString(envelope.model) || !isBoundedString(envelope.promptVersion)) return null;
-  if (!['openai', 'gemini', 'claude'].includes(envelope.provider)) return null;
+  if (!['openai', 'gemini', 'google-agent-platform', 'claude'].includes(envelope.provider)) return null;
   if (!Number.isFinite(envelope.durationMs) || envelope.durationMs < 0) return null;
   const seal = {
     role: envelope.role,

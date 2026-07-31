@@ -83,9 +83,17 @@ describe('OpenAPI 선언 — 실제와 대조', () => {
   /** 맞게 적혀 있던 것들 — 되돌아가지 않도록 함께 잠근다. */
   describe('이미 정확한 선언', () => {
     it('/chat 은 messages·provider·model 을 요구한다', async () => {
-      const j = await spec() as { paths: Record<string, { post: { requestBody: { content: Record<string, { schema: { required?: string[] } }> } } }> };
-      const req = j.paths['/chat'].post.requestBody.content['application/json'].schema.required ?? [];
+      const j = await spec() as { paths: Record<string, { post: { requestBody: { content: Record<string, { schema: { required?: string[]; properties?: Record<string, { enum?: string[] }> } }> } } }> };
+      const schema = j.paths['/chat'].post.requestBody.content['application/json'].schema;
+      const req = schema.required ?? [];
       expect(req.sort()).toEqual(['messages', 'model', 'provider']);
+      expect(schema.properties?.provider.enum).toContain('google-agent-platform');
+    });
+
+    it('/sld 는 Agent Platform 도면 공급자를 선언한다', async () => {
+      const j = await spec() as { paths: Record<string, { post: { requestBody: { content: Record<string, { schema: { properties?: Record<string, { enum?: string[] }> } }> } } }> };
+      const schema = j.paths['/sld'].post.requestBody.content['multipart/form-data'].schema;
+      expect(schema.properties?.provider.enum).toContain('google-agent-platform');
     });
 
     it('/search 는 query 를 요구한다 — q 가 아니다', async () => {

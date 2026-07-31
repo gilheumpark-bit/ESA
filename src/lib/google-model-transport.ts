@@ -26,3 +26,12 @@ export function googleApiKeyHeaders(apiKey: string): {
     'x-goog-api-key': apiKey,
   };
 }
+
+export function sanitizeGoogleErrorText(
+  text: string,
+  apiKey: string,
+  maxLength = 400,
+): string {
+  const redacted = apiKey ? text.split(apiKey).join('[REDACTED]') : text;
+  return redacted.slice(0, maxLength);
+}

@@ -1,6 +1,7 @@
 import {
   googleApiKeyHeaders,
   googleGenerateContentEndpoint,
+  sanitizeGoogleErrorText,
 } from '@/lib/google-model-transport';
 
 describe('fixed Google model transport', () => {
@@ -31,5 +32,15 @@ describe('fixed Google model transport', () => {
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey,
     });
+  });
+
+  it('redacts request keys and bounds provider error text', () => {
+    const apiKey = ['provider', 'echoed', 'secret', 'key'].join('-');
+
+    const sanitized = sanitizeGoogleErrorText(`${apiKey} ${'x'.repeat(1_000)}`, apiKey);
+
+    expect(sanitized).not.toContain(apiKey);
+    expect(sanitized).toContain('[REDACTED]');
+    expect(sanitized.length).toBeLessThanOrEqual(400);
   });
 });
