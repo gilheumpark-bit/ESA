@@ -28,13 +28,25 @@ const OFFICIAL = new Set(
 );
 
 /**
- * `KEC-232.5.2` · `KEC 232.5.2` · `KEC 142조` 를 잡는다.
+ * `KEC-232.5.2` · `KEC 232.5.2` · `KEC 142조` · `createSource('KEC', '232.5.2')` 를 잡는다.
+ *
+ * 구분자에 따옴표와 쉼표가 들어간다. 이게 없어서 **`createSource('KEC', '130')`
+ * 형태 8 건이 이 게이트를 그대로 통과했다**(2026-07-31 실측). 같은 커밋
+ * 1e2aa77 이 옆줄의 `standardRef: 'KEC 130'` 은 잡아 고쳤는데, 근거를 두 필드로
+ * 나눠 들고 있다는 걸 몰라 영수증 쪽만 살아남은 것이다 — 한 형태를 막고
+ * 「전역으로 잡는다」고 적은 게 이 게이트가 처음 만들어진 이유와 똑같은 실수다.
  *
  * 안 잡는 것:
  *   `KEC 2021`   연도 (뒤에 숫자가 더 붙는다)
  *   `KEC 100m`   길이 (뒤에 단위가 붙는다 — 실측 오탐이었다)
+ *   `KEC 3%`     한도 (백분율은 조항이 아니다)
+ *
+ * 단위 배제가 둘로 갈린 이유: `\b` 는 낱말 단위(`m`·`kV`)에만 맞는다. `%`·`Ω`·
+ * `°C` 는 낱말 문자가 아니라 뒤에 공백이 오면 경계가 성립하지 않아, 한 묶음에
+ * 넣어 두면 **기호 단위가 통째로 배제되지 않는다**(2026-07-31 실측 — `KEC 130%`
+ * 가 조항 130 으로 잡혔다). 그래서 낱말과 기호를 따로 건다.
  */
-const CITATION = /KEC[\s-]*(\d{3}(?:\.\d+)*)(?!\d)(?!\s?(?:m|km|mm|cm|kV|V|A|kA|W|kW|VA|Ω|%|°C)\b)/g;
+const CITATION = /KEC['"]?[\s,-]*['"]?(\d{3}(?:\.\d+)*)(?!\d)(?!\s?(?:m|km|mm|cm|kV|V|A|kA|W|kW|VA)\b)(?!\s?(?:%|Ω|°C|℃))/g;
 
 /**
  * 인용이 아니라 **인용이 틀렸음을 적는 줄**은 통과시킨다. 이 리포는 정정
@@ -75,12 +87,40 @@ describe('KEC 조항 인용 — 리포 전역', () => {
     expect(files.length).toBeGreaterThan(100);
   });
 
+  /**
+   * 브라우저용 TS 사본이 이 정본과 어긋나지 않는지 본다.
+   *
+   * `agent/drawing/rule-basis.ts` 는 브라우저에서 돌아 이 txt 를 읽을 수 없어
+   * `standards/kec/clause-index.ts` 라는 사본이 따로 있다. 사본은 어긋나기
+   * 마련이고, 어긋난 사본은 화면에서만 조용히 틀린다 — 여기서 묶어 둔다.
+   * 갱신은 `node scripts/generate-kec-clause-index.mjs`.
+   */
+  it('브라우저용 사본이 정본과 같다', () => {
+    const copy = new Set(
+      [...readFileSync(join(REPO, 'src/engine/standards/kec/clause-index.ts'), 'utf8')
+        .matchAll(/'(\d+(?:\.\d+)*)'/g)].map((m) => m[1]),
+    );
+    expect([...OFFICIAL].filter((c) => !copy.has(c))).toEqual([]);
+    expect([...copy].filter((c) => !OFFICIAL.has(c))).toEqual([]);
+  });
+
   it('정규식이 실제로 인용을 잡는다', () => {
     const hit = [...'KEC-232.5.2 와 KEC 142조'.matchAll(CITATION)].map((m) => m[1]);
     expect(hit).toEqual(['232.5.2', '142']);
-    // 연도도 길이도 조항이 아니다
+    // 연도도 길이도 백분율도 조항이 아니다
     expect([...'KEC 2021 개정'.matchAll(CITATION)].length).toBe(0);
     expect([...'KEC 100m 가산'.matchAll(CITATION)].length).toBe(0);
+    expect([...'KEC 130% 여유'.matchAll(CITATION)].length).toBe(0);
+  });
+
+  /**
+   * 실제로 이 게이트를 뚫었던 형태를 그대로 건다. 「전역으로 잡는다」는
+   * 주장은 뚫린 형태를 케이스로 박아 두기 전까지 검증되지 않은 주장이다.
+   */
+  it('createSource 두 인자 형태도 잡는다 — 이 형태로 8 건이 통과했었다', () => {
+    const line = "      createSource('KEC', '130', { edition: '2021' }),";
+    expect([...line.matchAll(CITATION)].map((m) => m[1])).toEqual(['130']);
+    expect([...`standardRef: 'KEC 130',`.matchAll(CITATION)].map((m) => m[1])).toEqual(['130']);
   });
 
   it('인용한 KEC 번호가 전부 실재한다', () => {

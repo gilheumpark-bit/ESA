@@ -36,7 +36,7 @@ describe('rule-basis', () => {
     expect(describeStandardRef('ESA-SLD-RULE:없는-규칙')).toBeUndefined();
     expect(describeStandardRef('WHATEVER 1.2')).toBeUndefined();
     // 실재하지 않는 KEC 조항은 근거로 나가지 않는다.
-    expect(describeStandardRef('KEC 232.52')).toBeUndefined(); // kec-citation-exempt
+    expect(describeStandardRef('KEC 232.52')).toBeUndefined();
     expect(describeStandardRefs(['KEC 접지', 'KEC 142 접지시스템의 시설'])).toHaveLength(1);
   });
 

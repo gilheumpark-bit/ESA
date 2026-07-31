@@ -20,8 +20,6 @@ const convert = (from: 'KEC' | 'NEC' | 'IEC' | 'JIS', clause: string, to: 'KEC' 
 describe('조항 매칭', () => {
   it('마디 중간에서 잘린 접두사는 하위가 아니다', () => {
     // "232.52" 를 "232.5" 의 하위로 읽으면 안 된다. 마디가 끊기지 않았다.
-    // kec-citation-exempt: 232.52 는 KEC 에 없는 번호다. 없는 번호를 넣어도
-    // 232.5 의 하위로 오인되지 않는지 보는 접두사 경계 케이스.
     expect(convert('KEC', '232.52', 'NEC').notes.join(' ')).not.toContain('Short Circuit');
     // 전압강하의 실제 번호(232.3.9)도 다른 조항으로 새지 않는다.
     expect(convert('KEC', '232.3.9', 'NEC').notes.join(' ')).toContain('Voltage Drop');

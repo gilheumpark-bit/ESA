@@ -132,10 +132,9 @@ describe('분류·적용범위 조항 (KEC-111.1 / IEC-701.1 / JIS-701.1)', () =
     }
   });
 
-  // kec-citation-exempt: 250.1 이 **없다는 것**이 이 테스트의 대상이다.
   test('KEC-250.1 은 더 이상 조항으로 존재하지 않는다 — 되살아나면 빨개진다', async () => {
     const { KEC_ARTICLES } = await import('@/engine/standards/kec');
-    expect(KEC_ARTICLES.has('KEC-250.1')).toBe(false); // kec-citation-exempt
+    expect(KEC_ARTICLES.has('KEC-250.1')).toBe(false);
   });
 
   test('JIS-701.1 욕실 Zone도 동일', () => {
