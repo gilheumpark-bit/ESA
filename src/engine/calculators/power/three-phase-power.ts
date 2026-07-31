@@ -91,7 +91,11 @@ export function calculateThreePhasePower(input: ThreePhasePowerInput): DetailedC
     unit: 'W',
     formula: 'P = \\sqrt{3} \\times V_L \\times I_L \\times \\cos\\varphi',
     steps,
-    source: [createSource('KEC', '130', { edition: '2021' })],
+    // `KEC 130` 을 달고 있었으나 **130 대는 KEC 에 없다**(공표 전문 조항 색인
+    // 대조 2026-07-31). P = √3·V_L·I_L·cosφ 는 유효전력의 *정의*이지 시설
+    // 규정이 아니므로 다른 KEC 조항으로 바꾸지 않는다. 정의량의 근거는 이
+    // 저장소 관례대로 IEC 80000-6(전자기 양·단위)이다.
+    source: [createSource('IEC', '80000-6', { edition: '2022' })],
     judgment: createJudgment(
       true,
       `Active power = ${P_kW} kW, Apparent power = ${S_kVA} kVA`,

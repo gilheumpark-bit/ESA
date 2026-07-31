@@ -179,7 +179,6 @@ export function calculateSubstationCapacity(input: SubstationCapacityInput): Det
     formula: 'S_{design} = \\sum(P_i / pf_i \\times DF_i) \\times (1 + growth)',
     steps,
     source: [
-      createSource('KEC', '300', { edition: '2021' }),
       createSource('IEC', '60076', { edition: '2011' }),
     ],
     judgment: createJudgment(

@@ -114,7 +114,6 @@ export function calculateDemandDiversity(input: DemandDiversityInput): DetailedC
     steps,
     source: [
       createSource('KEC', '232.2', { edition: '2021' }),
-      createSource('KEC', '130', { edition: '2021' }),
     ],
     judgment: createJudgment(!dfWarning, message, dfWarning ? 'warning' : 'info'),
     additionalOutputs: {

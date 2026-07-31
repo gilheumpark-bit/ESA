@@ -109,7 +109,6 @@ export function calculateMaxDemand(input: MaxDemandInput): DetailedCalcResult {
     steps,
     source: [
       createSource('KEC', '232.2', { edition: '2021' }),
-      createSource('KEC', '130', { edition: '2021' }),
     ],
     judgment: createJudgment(
       true,

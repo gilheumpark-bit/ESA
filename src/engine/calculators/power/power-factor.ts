@@ -103,7 +103,6 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
       formula: '\\cos\\varphi = \\frac{P}{S}',
       steps,
       source: [
-        createSource('KEC', '130', { edition: '2021' }),
         createSource('KEC', '232', { edition: '2021' }),
       ],
       judgment: createJudgment(pass, message, severity, 'KEC 232'),
@@ -165,7 +164,6 @@ export function calculatePowerFactor(input: PowerFactorInput): DetailedCalcResul
       formula: '\\cos\\varphi = \\frac{P}{\\sqrt{P^2 + Q^2}}',
       steps,
       source: [
-        createSource('KEC', '130', { edition: '2021' }),
         createSource('KEC', '232', { edition: '2021' }),
       ],
       judgment: createJudgment(pass, message, severity, 'KEC 232'),

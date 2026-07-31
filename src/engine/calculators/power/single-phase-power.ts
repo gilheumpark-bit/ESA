@@ -79,7 +79,12 @@ export function calculateSinglePhasePower(input: SinglePhasePowerInput): Detaile
     unit: 'W',
     formula: 'P = V \\times I \\times \\cos\\varphi',
     steps,
-    source: [createSource('KEC', '130', { edition: '2021' })],
+    // `KEC 130` 을 달고 있었으나 **130 대는 KEC 에 없다**(공표 전문 조항 색인
+    // 대조 2026-07-31). 다른 KEC 조항으로 바꾸지도 않는다 — P = V·I·cosφ 는
+    // 유효전력의 *정의*이지 시설 규정이 아니고, KEC 는 전력 계산식을 규정하지
+    // 않는다. 정의량의 근거는 이 저장소 관례대로 IEC 80000-6(전자기 양·단위)
+    // 이다 — `unit-converter` 가 같은 근거를 쓴다.
+    source: [createSource('IEC', '80000-6', { edition: '2022' })],
     judgment: createJudgment(true, `Active power = ${round(P, 2)} W (pf = ${pf})`, 'info'),
     additionalOutputs: {
       apparentPower: { value: round(S, 2), unit: 'VA', formula: 'S = V \\times I' },

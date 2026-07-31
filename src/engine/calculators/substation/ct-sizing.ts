@@ -163,7 +163,6 @@ export function calculateCTSizing(input: CTSizingInput): DetailedCalcResult {
     formula: 'CT_{primary} \\geq I_{max} \\times 1.25',
     steps,
     source: [
-      createSource('KEC', '340', { edition: '2021' }),
       createSource('IEC', '61869-2', { edition: '2012' }),
     ],
     judgment: createJudgment(

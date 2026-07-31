@@ -87,6 +87,8 @@ describe('변환 질의 패턴', () => {
   });
 
   it('변환 질의가 아닌 것은 잡지 않는다', () => {
+    // kec-citation-exempt: 'KEC 140' 은 인용이 아니라 **검색 질의 문자열**이다 —
+    // 사용자가 없는 번호를 쳐도 카드가 뜨는지 보는 케이스.
     for (const q of ['KEC 140', '전압강하 계산', 'AWG 표', '12 AWG', 'to mm2']) {
       expect(regex.test(q)).toBe(false);
     }
