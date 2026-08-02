@@ -1,5 +1,6 @@
 import {
   googleApiKeyHeaders,
+  googleCandidateText,
   googleGenerateContentEndpoint,
   sanitizeGoogleErrorText,
 } from '@/lib/google-model-transport';
@@ -42,5 +43,19 @@ describe('fixed Google model transport', () => {
     expect(sanitized).not.toContain(apiKey);
     expect(sanitized).toContain('[REDACTED]');
     expect(sanitized.length).toBeLessThanOrEqual(400);
+  });
+
+  it('ignores Gemini thought parts and returns only final response text', () => {
+    expect(googleCandidateText({
+      candidates: [{
+        content: {
+          parts: [
+            { thought: true, text: 'internal reasoning' },
+            { text: '{"components":[],' },
+            { text: '"connections":[]}' },
+          ],
+        },
+      }],
+    })).toBe('{"components":[],"connections":[]}');
   });
 });

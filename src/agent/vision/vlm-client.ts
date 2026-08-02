@@ -16,6 +16,7 @@ import { ROLE_PROMPTS } from './role-prompts';
 import { parseRoleReviewData, type RoleReviewData } from './review-types';
 import {
   googleApiKeyHeaders,
+  googleCandidateText,
   googleGenerateContentEndpoint,
   type GoogleModelProvider,
 } from '@/lib/google-model-transport';
@@ -422,7 +423,10 @@ async function requestGoogleJson(
       method: 'POST',
       headers: googleApiKeyHeaders(options.apiKey),
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }] }],
+        contents: [{
+          role: 'user',
+          parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imageBase64 } }],
+        }],
         generationConfig: {
           ...(model === cfg.defaultModel ? {} : { temperature: options.temperature ?? cfg.defaultTemp }),
           maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
@@ -433,11 +437,8 @@ async function requestGoogleJson(
     const raw = await readResponseText(response, scope);
     if (!response.ok) throw new ProviderHttpError(providerName, response.status, sanitizeErrorText(raw, options.apiKey));
     const data = parseProviderPayload(providerName, raw);
-    const candidate = Array.isArray(data.candidates) ? recordValue(data.candidates[0]) : undefined;
-    const content = candidate ? recordValue(candidate.content) : undefined;
-    const firstPart = content && Array.isArray(content.parts) ? recordValue(content.parts[0]) : undefined;
-    const rawText = firstPart?.text;
-    if (typeof rawText !== 'string') throw new Error(`${providerName} Vision API returned no text response.`);
+    const rawText = googleCandidateText(data);
+    if (!rawText) throw new Error(`${providerName} Vision API returned no text response.`);
     return { rawText, model };
   });
 }

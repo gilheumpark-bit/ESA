@@ -13,6 +13,7 @@ import { CALCULATOR_PARAMS } from '@/lib/calculator-params';
 import { parseMeasuredValue } from '@/lib/calculator-lexicon';
 import {
   googleApiKeyHeaders,
+  googleCandidateText,
   googleGenerateContentEndpoint,
   sanitizeGoogleErrorText,
   type GoogleModelProvider,
@@ -1116,6 +1117,7 @@ async function callGoogleVision(
     body: JSON.stringify({
       contents: [
         {
+          role: 'user',
           parts: [
             { text: `${SLD_SYSTEM_PROMPT}\n\nAnalyze this Single Line Diagram (SLD).` },
             { inline_data: { mime_type: mimeType, data: base64 } },
@@ -1132,8 +1134,8 @@ async function callGoogleVision(
     throw new Error(`[ESA-SLD] ${label} Vision error ${res.status}: ${sanitizeGoogleErrorText(err, options.apiKey, 200)}`);
   }
 
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const data: unknown = await res.json();
+  return googleCandidateText(data);
 }
 
 async function callChatGPTLocalVision(

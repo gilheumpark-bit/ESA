@@ -8,7 +8,7 @@ const originalFetch = global.fetch;
 
 function googleResponse(text: string): Response {
   return new Response(JSON.stringify({
-    candidates: [{ content: { parts: [{ text }] } }],
+    candidates: [{ content: { parts: [{ thought: true, text: 'ignore this' }, { text }] } }],
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 }
 
@@ -54,6 +54,10 @@ describe('Agent Platform legacy vision production callers', () => {
       expect(String(url)).not.toContain(apiKey);
       expect(String(url)).not.toContain('generativelanguage.googleapis.com');
       expect((init?.headers as Record<string, string>)['x-goog-api-key']).toBe(apiKey);
+      const body = JSON.parse(String(init?.body)) as {
+        contents?: Array<{ role?: string }>;
+      };
+      expect(body.contents?.[0]?.role).toBe('user');
     }
   });
 });

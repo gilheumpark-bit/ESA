@@ -317,8 +317,20 @@ export class TopologyGraph {
 /** SLDAnalysis(VLM 출력)를 TopologyGraph로 변환 */
 export function buildTopologyFromSLD(sld: SLDAnalysis): TopologyGraph {
   const graph = new TopologyGraph();
-  for (const comp of sld.components) graph.addNode(comp);
-  for (const conn of sld.connections) graph.addEdge(conn);
+  // annotation은 도면에서 읽어 보존할 문자 근거이지 전기 노드가 아니다.
+  // 그래프에 넣으면 더 많은 문자를 정확히 읽은 모델일수록 고립 노드와
+  // connectedComponents 수가 늘어나는 역방향 판정이 된다.
+  const annotationIds = new Set(
+    sld.components
+      .filter((component) => component.type === 'annotation')
+      .map((component) => component.id),
+  );
+  for (const comp of sld.components) {
+    if (!annotationIds.has(comp.id)) graph.addNode(comp);
+  }
+  for (const conn of sld.connections) {
+    if (!annotationIds.has(conn.from) && !annotationIds.has(conn.to)) graph.addEdge(conn);
+  }
   return graph;
 }
 

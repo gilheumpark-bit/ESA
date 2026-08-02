@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import type { RoleId } from './types-v3';
 import {
   googleApiKeyHeaders,
+  googleCandidateText,
   googleGenerateContentEndpoint,
 } from '@/lib/google-model-transport';
 import {
@@ -140,6 +141,7 @@ async function analyzeRoleImage(req: RoleCallRequest, prompt: string): Promise<u
       headers: googleApiKeyHeaders(req.apiKey),
       body: JSON.stringify({
         contents: [{
+          role: 'user',
           parts: [
             { text: fullPrompt },
             { inline_data: { mime_type: mime, data: base64 } },
@@ -150,10 +152,8 @@ async function analyzeRoleImage(req: RoleCallRequest, prompt: string): Promise<u
     });
     const label = req.provider === 'gemini' ? 'Gemini' : 'Agent Platform';
     if (!res.ok) throw new Error(`${label} role call failed: ${res.status}`);
-    const json = await res.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    return json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
+    const json: unknown = await res.json();
+    return googleCandidateText(json);
   }
 
   if (req.provider === 'openai') {

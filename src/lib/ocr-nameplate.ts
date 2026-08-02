@@ -12,6 +12,7 @@
 
 import {
   googleApiKeyHeaders,
+  googleCandidateText,
   googleGenerateContentEndpoint,
   sanitizeGoogleErrorText,
   type GoogleModelProvider,
@@ -490,6 +491,7 @@ async function callGoogleVision(
     body: JSON.stringify({
       contents: [
         {
+          role: 'user',
           parts: [
             { text: `${NAMEPLATE_SYSTEM_PROMPT}\n\nAnalyze this equipment nameplate and extract all electrical parameters.` },
             {
@@ -508,8 +510,8 @@ async function callGoogleVision(
     throw new Error(`[ESA-OCR] ${label} Vision error ${res.status}: ${sanitizeGoogleErrorText(err, options.apiKey, 200)}`);
   }
 
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+  const data: unknown = await res.json();
+  return googleCandidateText(data);
 }
 
 async function callChatGPTLocalVision(
