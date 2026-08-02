@@ -62,6 +62,7 @@ async function checkWeaviate(): Promise<DepStatus> {
 function checkProviderKeys(): DepStatus[] {
   const checks: [string, string | undefined][] = [
     ['Gemini', process.env.GOOGLE_GENERATIVE_AI_API_KEY],
+    ['Agent Platform', process.env.GOOGLE_VERTEX_API_KEY],
     ['OpenAI', process.env.OPENAI_API_KEY],
     ['Anthropic', process.env.ANTHROPIC_API_KEY],
     ['Groq', process.env.GROQ_API_KEY],

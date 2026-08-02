@@ -110,9 +110,25 @@ describe('vision-byok — 모델 배선', () => {
     expect(isVisionProvider('openai')).toBe(true);
     expect(isVisionProvider('claude')).toBe(true);
     expect(isVisionProvider('gemini')).toBe(true);
+    expect(isVisionProvider('google-agent-platform')).toBe(true);
     expect(isVisionProvider('chatgpt-local')).toBe(true);
     expect(isVisionProvider('groq')).toBe(false);
     expect(isVisionProvider('mistral')).toBe(false);
+  });
+
+  it('Agent Platform만 저장된 경우 해당 키와 선택 모델을 도면 요청에 반환한다', async () => {
+    mockStorage.loadStoredProviderKey.mockImplementation(async (id) =>
+      id === 'google-agent-platform' ? 'agent-platform-request-key' : null,
+    );
+    mockStorage.loadSelectedModel.mockImplementation((id) =>
+      id === 'google-agent-platform' ? 'gemini-3.6-flash' : null,
+    );
+
+    expect(await getFirstAvailableVisionKey()).toEqual({
+      provider: 'google-agent-platform',
+      key: 'agent-platform-request-key',
+      model: 'gemini-3.6-flash',
+    });
   });
 
   it('활성 ChatGPT 계정의 이미지 모델을 원격 BYOK보다 먼저 선택한다', async () => {

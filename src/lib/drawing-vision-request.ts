@@ -4,7 +4,7 @@ import { assertLoopbackRequest } from '@/lib/chatgpt-local-loopback';
 
 export type DrawingVisionRequest =
   | {
-      provider: 'gemini' | 'openai' | 'claude';
+      provider: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
       apiKey: string;
       model?: string;
     }
@@ -15,7 +15,12 @@ export type DrawingVisionRequest =
 
 type RemoteVisionProvider = Exclude<DrawingVisionRequest['provider'], 'chatgpt-local'>;
 
-const REMOTE_PROVIDERS = new Set<RemoteVisionProvider>(['gemini', 'openai', 'claude']);
+const REMOTE_PROVIDERS = new Set<RemoteVisionProvider>([
+  'gemini',
+  'google-agent-platform',
+  'openai',
+  'claude',
+]);
 const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
 
 export class DrawingVisionRequestError extends Error {
@@ -31,6 +36,7 @@ export class DrawingVisionRequestError extends Error {
 function serverKey(provider: RemoteVisionProvider): string {
   if (provider === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
   if (provider === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
+  if (provider === 'google-agent-platform') return process.env.GOOGLE_VERTEX_API_KEY?.trim() ?? '';
   return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
 }
 

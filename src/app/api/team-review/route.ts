@@ -24,9 +24,9 @@ const RULES_MAX_BYTES = 1024 * 1024;
 const DRAWING_MAX_BYTES = 20 * 1024 * 1024;
 const VISION_KEY_MAX_CHARS = 4096;
 const VISION_MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
-const VISION_PROVIDERS = new Set(['openai', 'gemini', 'claude'] as const);
+const VISION_PROVIDERS = new Set(['openai', 'gemini', 'google-agent-platform', 'claude'] as const);
 const TEAM_REVIEW_SOFT_DEADLINE_MS = 270_000;
-type VisionProvider = 'openai' | 'gemini' | 'claude';
+type VisionProvider = 'openai' | 'gemini' | 'google-agent-platform' | 'claude';
 
 export function createRequestSignal(requestSignal: AbortSignal) {
   const controller = new AbortController();
@@ -54,6 +54,7 @@ function drawingKind(file: File): 'image' | 'pdf' | 'dxf' | null {
 function hasServerVisionKey(provider: VisionProvider): boolean {
   if (provider === 'openai') return Boolean(process.env.OPENAI_API_KEY?.trim());
   if (provider === 'gemini') return Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim());
+  if (provider === 'google-agent-platform') return Boolean(process.env.GOOGLE_VERTEX_API_KEY?.trim());
   return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 }
 

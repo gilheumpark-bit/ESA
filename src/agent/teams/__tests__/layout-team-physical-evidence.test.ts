@@ -87,4 +87,39 @@ describe('layout team physical-evidence boundary', () => {
     expect(result.calculations?.some(calc => calc.calculatorId === 'wiring-distance')).toBe(false);
     expect(result.calculations?.some(calc => calc.calculatorId === 'conduit-sizing')).toBe(false);
   });
+
+  it('selects the Agent Platform deployment key when it is the only server vision provider', async () => {
+    const previousAgent = process.env.GOOGLE_VERTEX_API_KEY;
+    const previousGemini = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const previousOpenAi = process.env.OPENAI_API_KEY;
+    const previousAnthropic = process.env.ANTHROPIC_API_KEY;
+    process.env.GOOGLE_VERTEX_API_KEY = ['agent', 'platform', 'deployment', 'key'].join('-');
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    mockSplitAndAnalyze.mockResolvedValue([]);
+
+    try {
+      await executeLayoutTeam({
+        sessionId: 'agent-platform-layout',
+        classification: 'layout_image',
+        fileBuffer: new Uint8Array([1]).buffer,
+        fileName: 'layout.png',
+        mimeType: 'image/png',
+      });
+
+      expect(mockSplitAndAnalyze).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.objectContaining({
+        model: 'google-agent-platform',
+      }));
+    } finally {
+      if (previousAgent === undefined) delete process.env.GOOGLE_VERTEX_API_KEY;
+      else process.env.GOOGLE_VERTEX_API_KEY = previousAgent;
+      if (previousGemini === undefined) delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+      else process.env.GOOGLE_GENERATIVE_AI_API_KEY = previousGemini;
+      if (previousOpenAi === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousOpenAi;
+      if (previousAnthropic === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = previousAnthropic;
+    }
+  });
 });

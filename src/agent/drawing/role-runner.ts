@@ -5,6 +5,10 @@
 import { createHash } from 'node:crypto';
 import type { RoleId } from './types-v3';
 import {
+  googleApiKeyHeaders,
+  googleGenerateContentEndpoint,
+} from '@/lib/google-model-transport';
+import {
   CONNECTIONS_PROMPT,
   COVERAGE_AUDITOR_PROMPT,
   LOGIC_PROMPT,
@@ -19,7 +23,7 @@ export interface RoleCallRequest {
   regionId: string;
   imageBuffer: ArrayBuffer;
   mimeType?: string;
-  provider: 'gemini' | 'openai' | 'claude';
+  provider: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
   apiKey: string;
   model?: string;
   /** For logic role only — sealed summary JSON string */
@@ -128,15 +132,12 @@ async function analyzeRoleImage(req: RoleCallRequest, prompt: string): Promise<u
     ? `${prompt}\n\nSEALED_SUMMARY:\n${req.sealedSummaryJson}`
     : prompt;
 
-  if (req.provider === 'gemini') {
-    const model = req.model ?? 'gemini-2.0-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  if (req.provider === 'gemini' || req.provider === 'google-agent-platform') {
+    const model = req.model ?? (req.provider === 'gemini' ? 'gemini-3.5-flash' : 'gemini-3.6-flash');
+    const url = googleGenerateContentEndpoint(req.provider, model);
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': req.apiKey,
-      },
+      headers: googleApiKeyHeaders(req.apiKey),
       body: JSON.stringify({
         contents: [{
           parts: [
@@ -147,7 +148,8 @@ async function analyzeRoleImage(req: RoleCallRequest, prompt: string): Promise<u
         generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
       }),
     });
-    if (!res.ok) throw new Error(`Gemini role call failed: ${res.status}`);
+    const label = req.provider === 'gemini' ? 'Gemini' : 'Agent Platform';
+    if (!res.ok) throw new Error(`${label} role call failed: ${res.status}`);
     const json = await res.json() as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
     };

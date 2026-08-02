@@ -68,7 +68,7 @@ export interface OrchestrateInput {
   budget?: Partial<DocumentBudget>;
   vision?:
     | {
-        provider: 'gemini' | 'openai' | 'claude';
+        provider: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
         apiKey: string;
         model?: string;
       }

@@ -43,6 +43,15 @@ function byokRequest(): NextRequest {
   });
 }
 
+function agentPlatformRequest(): NextRequest {
+  const form = new FormData();
+  form.set('provider', 'google-agent-platform');
+  form.set('model', 'gemini-3.6-flash');
+  return new NextRequest('http://localhost/api/drawing-jobs/job-a/run', {
+    method: 'POST', headers: { origin: 'http://localhost' }, body: form,
+  });
+}
+
 function localRequest(): NextRequest {
   const form = new FormData();
   form.set('provider', 'chatgpt-local');
@@ -119,6 +128,29 @@ describe('drawing job run API', () => {
     expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
       vision: expect.objectContaining({ apiKey: 'request-owned-key' }),
     }));
+  });
+
+  it('uses the Agent Platform deployment key without relabeling it as Gemini', async () => {
+    const previousKey = process.env.GOOGLE_VERTEX_API_KEY;
+    process.env.GOOGLE_VERTEX_API_KEY = ['agent', 'platform', 'server', 'key'].join('-');
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job, document: { documentHash: 'a'.repeat(64), jobStatus: 'PARTIAL' },
+    } as never);
+    try {
+      const response = await POST(agentPlatformRequest(), { params: Promise.resolve({ jobId: 'job-a' }) });
+
+      expect(response.status).toBe(200);
+      expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+        vision: {
+          provider: 'google-agent-platform',
+          apiKey: 'agent-platform-server-key',
+          model: 'gemini-3.6-flash',
+        },
+      }));
+    } finally {
+      if (previousKey === undefined) delete process.env.GOOGLE_VERTEX_API_KEY;
+      else process.env.GOOGLE_VERTEX_API_KEY = previousKey;
+    }
   });
 
   it('runs a queued job with the loopback ChatGPT account and no key', async () => {

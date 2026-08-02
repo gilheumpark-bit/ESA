@@ -10,6 +10,7 @@ describe('GET /api/health', () => {
       ...originalEnv,
       HEALTHCHECK_TOKEN: 'health-secret',
       OPENAI_API_KEY: ['configured', 'provider', 'key'].join('-'),
+      GOOGLE_VERTEX_API_KEY: ['configured', 'agent', 'platform', 'key'].join('-'),
     };
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.WEAVIATE_URL;
@@ -39,6 +40,7 @@ describe('GET /api/health', () => {
     expect(body.data.dependencies).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'Supabase' }),
       expect.objectContaining({ name: 'AI:OpenAI', detail: 'Key configured' }),
+      expect.objectContaining({ name: 'AI:Agent Platform', detail: 'Key configured' }),
     ]));
     expect(body.data.dataAssets).toEqual(expect.objectContaining({
       inspectionItems: expect.any(Number),

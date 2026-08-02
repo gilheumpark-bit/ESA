@@ -71,6 +71,19 @@ function envelope(logic: LogicEvidence[], patch: Partial<RoleReviewEnvelope> = {
 }
 
 describe('independent logic conflict comparison', () => {
+  it('accepts a sealed logic review produced by Google Agent Platform', () => {
+    const result = compareLogicToGraph(normalized(), envelope([
+      statement({
+        topic: 'DIRECTION',
+        subjectIds: ['local:a', 'local:b'],
+        attributes: { fromId: 'local:a', toId: 'local:b' },
+        evidenceBounds: [bounds(100), bounds(300)],
+      }),
+    ], { provider: 'google-agent-platform' }));
+
+    expect(result).toEqual([]);
+  });
+
   it('resolves role-local IDs only through unique spatial evidence', () => {
     const result = compareLogicToGraph(normalized(), envelope([
       statement({ topic: 'DIRECTION', subjectIds: ['local:a', 'local:b'], attributes: { fromId: 'local:a', toId: 'local:b' }, evidenceBounds: [bounds(100), bounds(300)] }),

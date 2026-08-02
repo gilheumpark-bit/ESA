@@ -6,7 +6,7 @@ import {
 } from '@/lib/chatgpt-local-selection';
 import type { ChatGPTLocalStatus } from '@/lib/chatgpt-local-contract';
 
-export type RemoteVisionProvider = 'openai' | 'claude' | 'gemini';
+export type RemoteVisionProvider = 'openai' | 'claude' | 'gemini' | 'google-agent-platform';
 export type VisionProvider = RemoteVisionProvider | 'chatgpt-local';
 
 export interface VisionByokSelection {
@@ -15,7 +15,12 @@ export interface VisionByokSelection {
   model: string;
 }
 
-const REMOTE_VISION_PROVIDERS: readonly RemoteVisionProvider[] = ['openai', 'claude', 'gemini'];
+const REMOTE_VISION_PROVIDERS: readonly RemoteVisionProvider[] = [
+  'openai',
+  'claude',
+  'gemini',
+  'google-agent-platform',
+];
 const VISION_PROVIDERS: readonly VisionProvider[] = ['chatgpt-local', ...REMOTE_VISION_PROVIDERS];
 const SAFE_MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/;
 

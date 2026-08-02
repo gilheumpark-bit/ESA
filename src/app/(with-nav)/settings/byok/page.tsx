@@ -69,6 +69,7 @@ const PROVIDER_ORDER: string[] = [
   'openai',
   'claude',
   'gemini',
+  'google-agent-platform',
   'groq',
   'mistral',
   'ollama',
@@ -225,7 +226,7 @@ function ProviderKeyCard({
             키 확인·모델 불러오기
           </button>
         )}
-        {provider.id === 'gemini' && models.length > 0 && (
+        {(provider.id === 'gemini' || provider.id === 'google-agent-platform') && models.length > 0 && (
           <button
             type="button"
             onClick={onProbeModels}
@@ -254,7 +255,7 @@ function ProviderKeyCard({
         )}
       </div>
 
-      {provider.id === 'gemini' && (state.probeRunning || state.probeResults.length > 0) && (
+      {(provider.id === 'gemini' || provider.id === 'google-agent-platform') && (state.probeRunning || state.probeResults.length > 0) && (
         <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700" aria-live="polite">
           <div className="mb-2 flex items-baseline justify-between gap-3">
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h3>
@@ -520,7 +521,7 @@ export default function BYOKPage() {
 
   const handleProbeModels = useCallback(
     async (id: string) => {
-      if (id !== 'gemini') return;
+      if (id !== 'gemini' && id !== 'google-agent-platform') return;
       const models = states[id]?.availableModels ?? [];
       if (models.length === 0) return;
 

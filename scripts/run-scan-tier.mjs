@@ -6,7 +6,7 @@
  * 성능 저하만 분리해서 측정된다. 새 라벨을 만들 필요가 없다.
  *
  * 사용 — 둘 중 하나:
- *   1) .env.local 에 GOOGLE_GENERATIVE_AI_API_KEY=<키> 한 줄 추가 후
+ *   1) .env.local 에 GOOGLE_VERTEX_API_KEY=<Agent Platform 키> 한 줄 추가 후
  *        node --env-file=.env.local scripts/run-scan-tier.mjs
  *      (키가 gitignore 된 파일에만 있고 셸 히스토리에 안 남는다 — 권장)
  *   2) 일회성이면
@@ -30,6 +30,7 @@ const BASE = process.argv[2] ?? 'http://127.0.0.1:3010';
  */
 const KEY_SOURCES = [
   ['gemini', 'GOOGLE_GENERATIVE_AI_API_KEY'],
+  ['google-agent-platform', 'GOOGLE_VERTEX_API_KEY'],
   ['openai', 'OPENAI_API_KEY'],
   ['claude', 'ANTHROPIC_API_KEY'],
 ];
@@ -55,7 +56,7 @@ const MODEL = process.env.ESA_VISION_MODEL?.trim() || '';
 if (!KEY) {
   console.error('Vision 키를 찾지 못했다. 이 스크립트는 키 값을 저장하거나 출력하지 않는다.\n');
   console.error('  방법 1 (권장) — .env.local 에 한 줄 추가하고 그 파일을 읽혀서 실행:');
-  console.error('      GOOGLE_GENERATIVE_AI_API_KEY=<키>');
+  console.error('      GOOGLE_VERTEX_API_KEY=<Agent Platform 키>');
   console.error('      node --env-file=.env.local scripts/run-scan-tier.mjs\n');
   console.error('  방법 2 — 일회성:');
   console.error('      ESA_VISION_KEY=<키> node scripts/run-scan-tier.mjs\n');

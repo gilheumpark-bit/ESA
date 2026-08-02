@@ -86,7 +86,7 @@ const OPENAPI_SPEC = {
         requestBody: {
           content: { 'application/json': { schema: { type: 'object', required: ['messages', 'provider', 'model'], properties: {
             messages: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } } },
-            provider: { type: 'string', enum: ['gemini', 'openai', 'claude', 'groq', 'mistral'] },
+            provider: { type: 'string', enum: ['gemini', 'google-agent-platform', 'openai', 'claude', 'groq', 'mistral'] },
             model: { type: 'string', example: 'gpt-5.6-luna' },
           } } } },
         },
@@ -128,7 +128,7 @@ const OPENAPI_SPEC = {
                 required: ['image', 'provider', 'apiKey'],
                 properties: {
                   image: { type: 'string', format: 'binary', description: '도면 이미지 (PNG/JPG/WEBP, 최대 20MB)' },
-                  provider: { type: 'string', enum: ['gemini', 'openai', 'claude'] },
+                  provider: { type: 'string', enum: ['gemini', 'google-agent-platform', 'openai', 'claude'] },
                   apiKey: { type: 'string', description: 'BYOK 키' },
                   model: { type: 'string', description: '생략 시 공급자 기본 모델' },
                 },

@@ -11,6 +11,12 @@
 
 import { CALCULATOR_PARAMS } from '@/lib/calculator-params';
 import { parseMeasuredValue } from '@/lib/calculator-lexicon';
+import {
+  googleApiKeyHeaders,
+  googleGenerateContentEndpoint,
+  sanitizeGoogleErrorText,
+  type GoogleModelProvider,
+} from '@/lib/google-model-transport';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -428,7 +434,10 @@ export async function analyzeSLD(
       responseText = await callClaudeVision(base64, mimeType, options);
       break;
     case 'gemini':
-      responseText = await callGeminiVision(base64, mimeType, options);
+      responseText = await callGoogleVision('gemini', base64, mimeType, options);
+      break;
+    case 'google-agent-platform':
+      responseText = await callGoogleVision('google-agent-platform', base64, mimeType, options);
       break;
     case 'chatgpt-local':
       responseText = await callChatGPTLocalVision(base64, mimeType, options);
@@ -1092,20 +1101,18 @@ async function callClaudeVision(
   return data.content?.[0]?.text ?? '';
 }
 
-async function callGeminiVision(
+async function callGoogleVision(
+  provider: GoogleModelProvider,
   base64: string,
   mimeType: string,
   options: SLDAnalysisOptions,
 ): Promise<string> {
-  const model = options.model || 'gemini-3.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const model = options.model || (provider === 'gemini' ? 'gemini-3.5-flash' : 'gemini-3.6-flash');
+  const url = googleGenerateContentEndpoint(provider, model);
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': options.apiKey,
-    },
+    headers: googleApiKeyHeaders(options.apiKey),
     body: JSON.stringify({
       contents: [
         {
@@ -1121,7 +1128,8 @@ async function callGeminiVision(
 
   if (!res.ok) {
     const err = await res.text().catch(() => '');
-    throw new Error(`[ESA-SLD] Gemini Vision error ${res.status}: ${err.slice(0, 200)}`);
+    const label = provider === 'gemini' ? 'Gemini' : 'Agent Platform';
+    throw new Error(`[ESA-SLD] ${label} Vision error ${res.status}: ${sanitizeGoogleErrorText(err, options.apiKey, 200)}`);
   }
 
   const data = await res.json();

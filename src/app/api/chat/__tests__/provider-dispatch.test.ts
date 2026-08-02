@@ -7,6 +7,8 @@ const openAIProviderMock = Object.assign(openAIResponsesModelMock, {
   chat: openAIChatModelMock,
 });
 const createOpenAIMock = jest.fn((_options?: unknown) => openAIProviderMock);
+const vertexModelMock = jest.fn((_model: string) => ({}));
+const createVertexMock = jest.fn((_options?: unknown) => vertexModelMock);
 const streamTextMock = jest.fn((_options?: unknown) => ({
   textStream: (async function* textStream() { yield 'ok'; })(),
   finishReason: Promise.resolve('stop'),
@@ -18,6 +20,10 @@ jest.mock('ai', () => ({
 
 jest.mock('@ai-sdk/openai', () => ({
   createOpenAI: (options?: unknown) => createOpenAIMock(options),
+}));
+
+jest.mock('@ai-sdk/google-vertex', () => ({
+  createVertex: (options?: unknown) => createVertexMock(options),
 }));
 
 jest.mock('@/lib/auth-helpers', () => ({
@@ -41,7 +47,7 @@ function request(
     body: JSON.stringify({
       provider,
       model,
-      apiKey: ['openai', 'groq'].includes(provider) ? `test-${provider}-key` : undefined,
+      apiKey: ['openai', 'groq', 'google-agent-platform'].includes(provider) ? `test-${provider}-key` : undefined,
       messages: [{ role: 'user', content: message }],
       systemPrompt,
     }),
@@ -53,7 +59,24 @@ describe('POST /api/chat advertised provider dispatch', () => {
     createOpenAIMock.mockClear();
     openAIResponsesModelMock.mockClear();
     openAIChatModelMock.mockClear();
+    createVertexMock.mockClear();
+    vertexModelMock.mockClear();
     streamTextMock.mockClear();
+  });
+
+  test('Agent Platform uses Vertex Express Mode without dispatching to Gemini Developer API', async () => {
+    const response = await POST(request(
+      'google-agent-platform',
+      'gemini-3.6-flash',
+      '198.51.100.60',
+    ));
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(createVertexMock).toHaveBeenCalledWith({
+      apiKey: 'test-google-agent-platform-key',
+    });
+    expect(vertexModelMock).toHaveBeenCalledWith('gemini-3.6-flash');
   });
 
   test('Groq uses its OpenAI-compatible endpoint', async () => {

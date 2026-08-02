@@ -206,9 +206,10 @@ async function parseDxfLayout(buffer: ArrayBuffer, params?: Record<string, unkno
 async function parseImageLayout(buffer: ArrayBuffer, input: TeamInput): Promise<LayoutExtraction> {
   const provider = input.vision?.provider
     ?? (process.env.GOOGLE_GENERATIVE_AI_API_KEY ? 'gemini'
-      : process.env.OPENAI_API_KEY ? 'openai'
-        : process.env.ANTHROPIC_API_KEY ? 'claude'
-          : 'gemini');
+      : process.env.GOOGLE_VERTEX_API_KEY ? 'google-agent-platform'
+        : process.env.OPENAI_API_KEY ? 'openai'
+          : process.env.ANTHROPIC_API_KEY ? 'claude'
+            : 'gemini');
   const visionResults = await splitAndAnalyze(buffer, {
     gridSize: 8,      // 8분할 (높은 해상도 평면도)
     overlap: 0.15,
