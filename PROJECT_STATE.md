@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 599c7419b4b6d5fc90bfc70206e22d0218b9885a
-updatedAt: 2026-07-31T00:00:00+09:00
+codeBaselineCommit: 418a148ece5e3ac7ff3c3f165ed32ff20380bb6b
+updatedAt: 2026-08-02T00:00:00+09:00
 trigger: architecture
-changedDomains: [app, lib, docs, scripts, ci]
+changedDomains: [app, lib, agent, engine, docs, scripts, ci]
 ---
 
 # ESA 프로젝트 상태
@@ -26,6 +26,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `src/lib/drawing-asset-store.ts`는 원본을 브라우저 IndexedDB에만 보관하고 SHA-256 재검증 뒤 같은 브라우저에서 다시 연다.
 - `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 로컬 ChatGPT·BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
 - `src/lib/chatgpt-local-*`는 loopback ESA에서 같은 PC의 Codex app-server와 공식 ChatGPT 로그인을 사용한다. ESA는 계정 토큰을 읽지 않고 ephemeral 추론과 모델 목록만 좁게 사용한다.
+- `src/lib/google-model-transport.ts`는 Gemini Developer API와 Google Agent Platform Express Mode의 고정 호스트·키 헤더·최종 응답 텍스트 정본을 분리한다.
 - `scripts/enforce.ps1`은 타입, 무경고 린트, 전체 Jest, production build, PDF fixture를 순차 차단한다.
 - 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이며, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에만 남긴다.
 
@@ -62,6 +63,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 채팅 시스템 지침은 서버가 생성해 사용자 질의와 분리한다. 완전한 계산 질의는 ESA 계산기 레지스트리를 먼저 실행하고 계산기 ID·입력·결과 영수증을 모델 답변보다 앞선 SSE 이벤트로 반환한다.
 - Groq·Ollama·LM Studio·온프렘 OpenAI 호환 공급자는 Responses API가 아닌 Chat Completions 모델을 사용한다. `gate:chat-live`가 production 서버→정본 계산기 결과→모델 입력 영수증→로컬 호환 모델 답변 순서를 검증한다.
 - `chatgpt-local` 공급자를 설정 카드, 채팅·계산 영수증, SLD V3 역할 심사, 구형 SLD·OCR, 전문팀 검토까지 연결했다. API 키를 받지 않으며 원격 Host와 same-origin 위반은 닫고, command·file change·MCP·웹·승인 이벤트가 발생한 turn은 폐기한다.
+- `google-agent-platform` 공급자를 Cloud 크레딧 키, 채팅, SLD V3, 구형 SLD·OCR, 전문팀 검토까지 별도 경로로 연결했다. 실제 Express Mode가 요구하는 `contents[].role=user`와 Gemini thought-part 제거를 모든 Google 도면 호출에 적용했다.
+- 도면의 `annotation`은 판독 결과에 보존하지만 전기 토폴로지 노드·고립 판정에서는 제외해, 문자를 더 많이 읽은 모델이 더 나쁜 연결망 점수를 받는 역전 현상을 막았다.
 
 ## 부분 완료
 
@@ -82,14 +85,14 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - Stripe 테스트 모드 Checkout→서명 웹훅→티어 반영→새 로그인→Portal 전체 흐름.
 - 실제 Weaviate 컬렉션의 insert→검색→재연결과 전용 보안 스캐너 결과.
 - 실제 Gemini·OpenAI·Claude로 초급·중급·고급 일반 전기 질문을 반복 호출한 정답성·근거성·제안 품질 비교.
-- 로컬 ChatGPT 계정에서 모델별 동일 공개 도면 반복 실행의 누락·오탐·사용량 제한·timeout 비교. 단일 연결·호출 성공과 외부 품질 평가는 분리한다.
+- `wiki-oneline.png` 한 장에서는 Agent Platform과 로컬 ChatGPT를 각 2회 비교했다. 난이도별 공개 도면 전체와 모델별 3회 반복의 누락·오탐·사용량 제한·timeout 비교는 아직 미검증이다.
 
 ## 보류
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
-- 운영 DB, 실결제, 외부 AI 키, 회사 도면을 사용하지 않았다. 도면 왕복은 출처가 기록된 공개 PDF와 비민감 합성 SLD로 수행했다.
-- 현재 제품 코드 기준선은 `ad7b91c`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
+- 현재 제품 코드 기준선은 `418a148ece5e3ac7ff3c3f165ed32ff20380bb6b`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
@@ -113,6 +116,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `npm run gate:chat-live`: HTTP 200, 입력 `3상 380V·100A·50m·35mm² Cu·PF 0.9`가 정본 `voltage-drop` 계산기에서 `4.14V·1.09%·PASS`로 실행됐고, 같은 영수증이 모델 요청에 들어간 뒤 UI용 SSE 영수증→답변 순서로 전송됐다.
 - 2026-07-31 로컬 ChatGPT 실계정: 상태 API 200·연결·마스킹 이메일·모델 8개(이미지 7개), 텍스트 답변 200, 계산 질문 이벤트 `calculation→text→filter`, 원격 Host 계정 API 404를 확인했다.
 - 같은 실계정의 공개 `wiki-oneline.png`: `gpt-5.6-terra` SLD는 HTTP 200·기기 17·연결 16·confidence 0.69·saga COMPLETE, OCR은 HTTP 200·confidence 0.98로 완료됐다. `gpt-5.4-mini` SLD는 120초 제한을 넘어 502였으며, 이 결과는 연결 완주 증거이지 외부 정답 라벨 기반 정확도 증거가 아니다.
+- 2026-08-02 동일 공개 `wiki-oneline.png` 2회 비교: Agent Platform `gemini-3.6-flash`는 2/2회 14기기·13결선·단일망(22.586/24.521초), ChatGPT `gpt-5.6-terra`는 1회 14·13과 전력 문자 5묶음, 1회 13·12(47.227/31.363초)였다. 단일 표본 구조 판독은 둘 다 80%를 넘었지만 일반화 정확도 주장은 하지 않는다. 상세는 비교 영수증을 따른다.
 
 ## 다음 첫 행동
 
@@ -128,6 +132,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
 - [최신 인수인계](docs/project/handoffs/2026-07-23-z-ai-chat-calculator-and-docs.md)
+- [Agent Platform·ChatGPT SLD 비교](docs/project/handoffs/2026-08-02-google-agent-chatgpt-sld-comparison.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
 - [경계 연속성 설계](docs/superpowers/specs/2026-07-23-sld-region-continuity-integrated-recovery-design.md)

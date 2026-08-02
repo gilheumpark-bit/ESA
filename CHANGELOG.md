@@ -13,6 +13,11 @@ All notable changes to ESVA are documented in this file.
   `scripts/__tests__/pre-commit-hook.test.ts` 가 임시 저장소에서 실행해 검증한다.
 
 ### Fixed
+- **Agent Platform 도면 실호출** — Express Mode가 필수로 요구하는
+  `contents[].role=user`가 빠져 실제 SLD가 502로 끝나던 문제를 SLD·OCR·구획
+  VLM·역할 호출 전체에서 수리했다. Gemini thought 파트는 최종 JSON에서 제외한다.
+- **주석 토폴로지 오판** — 모델이 전력 흐름 문자를 `annotation`으로 더 잘 읽으면
+  ESA가 이를 고립된 전기 노드로 세어 연결망 품질을 낮추던 역전 현상을 막았다.
 - **아크플래시 입사 에너지 단위** — IEEE 1584-2002 식 (5) 의 결과는 J/cm² 인데
   `cal/cm²` 라벨을 달고 cal 기준 PPE 표와 대조했다. 전 구간 4.184 배 과대였고,
   480V·20kA·0.2s(교과서 예제)가 "작업 금지" 로 판정됐다.
