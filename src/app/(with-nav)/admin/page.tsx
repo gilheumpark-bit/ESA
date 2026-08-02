@@ -31,6 +31,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { OPEN_BETA } from '@/lib/tier-gate';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
@@ -172,7 +173,11 @@ function TenantNotConfigured() {
         테넌트 구성이 아직 없습니다
       </p>
       <p className="mt-1 text-xs text-[var(--text-secondary)]">
-        플랜·SSO 등 테넌트 설정은 엔터프라이즈 온보딩 시 ESVA 관리팀이 구성합니다.
+        {/* 요금제 봉인(OPEN_BETA) 중에는 플랜·온보딩 표현을 쓰지 않는다 —
+            제출본에서 결제 체계를 노출하지 않기로 한 결정을 화면이 따른다. */}
+        {OPEN_BETA
+          ? 'SSO 등 테넌트 설정은 ESVA 관리팀이 구성합니다.'
+          : '플랜·SSO 등 테넌트 설정은 엔터프라이즈 온보딩 시 ESVA 관리팀이 구성합니다.'}
       </p>
     </div>
   );
@@ -534,11 +539,17 @@ export default function AdminDashboard() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <AlertCircle size={48} className="mx-auto text-[var(--text-tertiary)]" />
+        {/*
+          예전 문구는 「Enterprise 플랜 사용자만 접근할 수 있습니다」였다. 부정확하다 —
+          이 화면 뒤의 관리자 API 는 요금제가 아니라 `role === 'admin'` 을 확인한다
+          (`api/admin/route.ts` checkAdminRole). 플랜을 사서 관리자가 되지는 않는다.
+          권한 부족을 요금제 탓으로 말하면 사용자는 결제하러 간다.
+        */}
         <h1 className="mt-4 text-xl font-bold text-[var(--text-primary)]">
-          엔터프라이즈 전용 기능
+          접근 권한 없음
         </h1>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          관리자 대시보드는 Enterprise 플랜 사용자만 접근할 수 있습니다.
+          관리자 대시보드는 관리자 권한이 부여된 계정만 접근할 수 있습니다.
         </p>
       </div>
     );

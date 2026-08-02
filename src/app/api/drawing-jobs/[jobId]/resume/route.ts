@@ -8,22 +8,14 @@ import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
-import { isCatalogModel } from '@/lib/ai-providers';
 import { withRequestLog } from '@/lib/api/with-request-log';
+import {
+  DrawingVisionRequestError,
+  resolveDrawingVisionRequest,
+} from '@/lib/drawing-vision-request';
 
 export const runtime = 'nodejs';
 export const maxDuration = 1800;
-
-type VisionProvider = 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
-const PROVIDERS = new Set<VisionProvider>(['gemini', 'google-agent-platform', 'openai', 'claude']);
-const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
-
-function serverKey(provider: VisionProvider): string {
-  if (provider === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
-  if (provider === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
-  if (provider === 'google-agent-platform') return process.env.GOOGLE_VERTEX_API_KEY?.trim() ?? '';
-  return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
-}
 
 function userError(message: string, status: number) {
   return privateJson({ success: false, error: { message } }, { status });
@@ -58,19 +50,14 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
   if (!form) return userError('요청 형식이 올바르지 않습니다.', 400);
 
   try {
-    const providerRaw = String(form.get('provider') ?? 'gemini');
-    if (!PROVIDERS.has(providerRaw as VisionProvider)) return userError('지원하지 않는 Vision 제공자입니다.', 400);
-    const provider = providerRaw as VisionProvider;
-    const suppliedKey = String(form.get('apiKey') ?? '').trim();
-    if (suppliedKey.length > 4096) return userError('Vision 키 형식이 올바르지 않습니다.', 400);
-    if (!suppliedKey && !owner.authenticated) {
-      return userError('비로그인 작업 재개에는 Vision BYOK 키가 필요합니다.', 401);
-    }
-    const apiKey = suppliedKey || serverKey(provider);
-    const model = String(form.get('model') ?? '').trim();
-    if (model && !MODEL_PATTERN.test(model)) return userError('Vision 모델 이름 형식이 올바르지 않습니다.', 400);
-    if (model && !suppliedKey && !isCatalogModel(provider, model)) {
-      return userError('서버 Vision 키로 사용할 수 없는 모델입니다.', 400);
+    let vision;
+    try {
+      vision = await resolveDrawingVisionRequest(form, req, owner.authenticated);
+    } catch (error) {
+      if (error instanceof DrawingVisionRequestError) {
+        return userError(error.message, error.status);
+      }
+      throw error;
     }
     const bytes = readSourceLease(job.sourceLease.leaseId, owner.ownerId);
     if (!bytes) {
@@ -86,7 +73,7 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
       requestedPages: job.sourceMetadata.requestedPages,
       preparationPages: [nextPendingRequestedPage(job) ?? 0],
       budget: job.budget,
-      vision: apiKey ? { provider, apiKey, model: model || undefined } : undefined,
+      vision,
       ownerId: owner.ownerId,
       jobId,
       maxPagesPerRun: 1,

@@ -14,6 +14,10 @@ import { parseCustomRuleSet, type CustomRuleSet } from '@/engine/standards/custo
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { ORCHESTRATION_RESERVE, checkTokenBudget, cleanupTokenUsage, estimateTokens } from '@/lib/token-budget';
 import { isCatalogModel } from '@/lib/ai-providers';
+import {
+  DrawingVisionRequestError,
+  resolveDrawingVisionRequest,
+} from '@/lib/drawing-vision-request';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
 const RULES_MAX_BYTES = 1024 * 1024;
@@ -86,11 +90,7 @@ export const POST = withApiHandler(
     let params: Record<string, unknown> = {};
     let customRuleSet: CustomRuleSet | undefined;
     let ruleWarnings: string[] = [];
-    let vision: {
-      provider: VisionProvider;
-      apiKey?: string;
-      model?: string;
-    } | undefined;
+    let vision: NonNullable<import('@/agent/teams/types').TeamInput['vision']> | undefined;
 
     // Multipart: 도면 파일 + 메타데이터
     if (contentType.includes('multipart/form-data')) {
@@ -133,36 +133,47 @@ export const POST = withApiHandler(
 
         if (kind === 'image') {
           const providerRaw = formData.get('provider');
-          const provider = (typeof providerRaw === 'string' && providerRaw.trim()
+          const providerId = (typeof providerRaw === 'string' && providerRaw.trim()
             ? providerRaw.trim().toLowerCase()
-            : 'openai') as VisionProvider;
-          if (!VISION_PROVIDERS.has(provider)) {
+            : 'openai');
+          if (providerId === 'chatgpt-local') {
+            try {
+              vision = await resolveDrawingVisionRequest(formData, req, Boolean(userId));
+            } catch (error) {
+              if (error instanceof DrawingVisionRequestError) {
+                return ctx.error('ESVA-4400', error.message, error.status);
+              }
+              throw error;
+            }
+          } else if (!VISION_PROVIDERS.has(providerId as VisionProvider)) {
             return ctx.error('ESVA-4400', '지원하지 않는 Vision 제공자입니다', 400);
+          } else {
+            const provider = providerId as VisionProvider;
+            const apiKeyRaw = formData.get('apiKey');
+            const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : '';
+            if (apiKey.length > VISION_KEY_MAX_CHARS) {
+              return ctx.error('ESVA-4400', 'Vision API 키 형식이 올바르지 않습니다', 400);
+            }
+            if (!apiKey && !userId) {
+              return ctx.error('ESVA-9401', '비로그인 이미지 검토에는 Vision BYOK 키가 필요합니다', 401);
+            }
+            if (!apiKey && !hasServerVisionKey(provider)) {
+              return ctx.error('ESVA-9401', '이미지 전문팀 검토에는 Vision BYOK 키가 필요합니다', 401);
+            }
+            const modelRaw = formData.get('model');
+            const model = typeof modelRaw === 'string' ? modelRaw.trim() : '';
+            if (model && !VISION_MODEL_PATTERN.test(model)) {
+              return ctx.error('ESVA-4400', 'Vision 모델 이름 형식이 올바르지 않습니다', 400);
+            }
+            if (model && !apiKey && !isCatalogModel(provider, model)) {
+              return ctx.error('ESVA-4400', '서버 Vision 키로 사용할 수 없는 모델입니다', 400);
+            }
+            vision = {
+              provider,
+              ...(apiKey ? { apiKey } : {}),
+              ...(model ? { model } : {}),
+            };
           }
-          const apiKeyRaw = formData.get('apiKey');
-          const apiKey = typeof apiKeyRaw === 'string' ? apiKeyRaw.trim() : '';
-          if (apiKey.length > VISION_KEY_MAX_CHARS) {
-            return ctx.error('ESVA-4400', 'Vision API 키 형식이 올바르지 않습니다', 400);
-          }
-          if (!apiKey && !userId) {
-            return ctx.error('ESVA-9401', '비로그인 이미지 검토에는 Vision BYOK 키가 필요합니다', 401);
-          }
-          if (!apiKey && !hasServerVisionKey(provider)) {
-            return ctx.error('ESVA-9401', '이미지 전문팀 검토에는 Vision BYOK 키가 필요합니다', 401);
-          }
-          const modelRaw = formData.get('model');
-          const model = typeof modelRaw === 'string' ? modelRaw.trim() : '';
-          if (model && !VISION_MODEL_PATTERN.test(model)) {
-            return ctx.error('ESVA-4400', 'Vision 모델 이름 형식이 올바르지 않습니다', 400);
-          }
-          if (model && !apiKey && !isCatalogModel(provider, model)) {
-            return ctx.error('ESVA-4400', '서버 Vision 키로 사용할 수 없는 모델입니다', 400);
-          }
-          vision = {
-            provider,
-            ...(apiKey ? { apiKey } : {}),
-            ...(model ? { model } : {}),
-          };
         }
       }
 
@@ -219,7 +230,7 @@ export const POST = withApiHandler(
     // 서버 키로 다중 에이전트를 돌리는 비용을 계량한다. chat 만 예산을 갖고
     // 훨씬 비싼 이 경로는 무계량이었다(실측 2026-07-29). BYOK 로 온 요청은
     // 비용 주체가 호출자라 빼둔다 — 넣은 키를 또 넣으라는 안내가 되지 않게.
-    if (!vision?.apiKey) {
+    if (vision?.provider !== 'chatgpt-local' && !vision?.apiKey) {
       cleanupTokenUsage();
       const reserved = ORCHESTRATION_RESERVE
         + estimateTokens(query ?? '')

@@ -1,6 +1,6 @@
 # ESVA 아키텍처
 
-> 기준: 제품 코드 커밋 `ad7b91c` · 2026-07-23
+> 기준: 제품 코드 커밋 `599c741` · 2026-07-31
 
 이 문서는 현재 production 진입점과 신뢰 경계를 설명합니다. 파일 수, 페이지 수, 테스트 수처럼 자주 바뀌는 수치는 고정하지 않습니다. 기능별 실제 배선은 [구현 배선 지도](docs/project/IMPLEMENTATION_MAP.md)가 정본입니다.
 
@@ -61,7 +61,7 @@ Data/External: 정적 자료·파일 저장소·Supabase·AI·Stripe·Weaviate
 
 클라이언트는 시스템 지침을 지정할 수 없습니다. 서버가 답변 언어와 전기 직무 규칙을 구성하고, 사용자 질문은 대화 메시지로만 전달합니다. 계산기는 지원 의도가 식별되고 필수 입력이 완전하며 확신도 기준을 넘을 때만 실행됩니다.
 
-공식 OpenAI 공급자는 Responses API 계약을 사용합니다. Groq, Ollama, LM Studio와 관리자 허용 온프레미스 OpenAI 호환 서버는 Chat Completions 계약을 사용합니다. 공급자·모델 목록은 `src/lib/ai-providers.ts`가 정본입니다.
+공식 OpenAI 공급자는 Responses API 계약을 사용합니다. Groq, Ollama, LM Studio와 관리자 허용 온프레미스 OpenAI 호환 서버는 Chat Completions 계약을 사용합니다. `chatgpt-local`은 loopback에서 같은 PC의 `codex app-server`에 stdio로 연결하고 사용자의 공식 ChatGPT 로그인을 사용합니다. 공급자·모델 목록은 `src/lib/ai-providers.ts`와 로컬 계정의 `model/list` 응답이 각각 정본입니다.
 
 ## 4. 단일 계산과 영수증
 
@@ -122,6 +122,7 @@ Data/External: 정적 자료·파일 저장소·Supabase·AI·Stripe·Weaviate
 |---|---|---|
 | BYOK 암호화 키 | IndexedDB의 추출 불가능 `CryptoKey` | 같은 브라우저 프로필 |
 | BYOK 암호문 | 브라우저 `localStorage` | 암호화 키가 함께 있어야 복호화 |
+| 로컬 ChatGPT 선택 | 브라우저 `localStorage`의 enabled·model | 계정 세션은 Codex가 소유하며 ESA 저장소에는 없음 |
 | SLD 원본 | 브라우저 IndexedDB 또는 암호화 원본 임대 | SHA-256과 소유자 일치 필요 |
 | SLD V3 작업 | `DRAWING_JOB_STORE_DIR`의 원자적 JSON | 운영에서는 공유 내구 볼륨 필요 |
 | 비로그인 팀 보고서 | 현재 브라우저 `sessionStorage` | 다른 세션 영구 보관을 약속하지 않음 |
@@ -134,6 +135,8 @@ Data/External: 정적 자료·파일 저장소·Supabase·AI·Stripe·Weaviate
 
 - Firebase ID 토큰은 서버에서 검증하고 대상 리소스 소유권을 다시 확인합니다.
 - BYOK 평문은 요청 중 공급자 호출에만 사용하며 DB, 로그, 응답에 저장하지 않습니다.
+- 로컬 ChatGPT 연결은 loopback과 same-origin에서만 열고, 비밀번호·쿠키·access token·refresh token을 ESA가 읽거나 저장하지 않습니다.
+- 로컬 추론에서 command·file change·MCP·dynamic tool·web search·approval 요청이 발생하면 turn을 중단하고 출력을 폐기합니다.
 - 온프레미스 URL은 관리자 origin 허용 목록을 통과해야 합니다.
 - 채팅 시스템 지침은 서버가 소유하고 사용자 입력과 분리합니다.
 - 파일 업로드는 형식, 크기, 페이지, 픽셀, 실행 시간 예산을 검사합니다.
@@ -146,7 +149,7 @@ Data/External: 정적 자료·파일 저장소·Supabase·AI·Stripe·Weaviate
 
 | 서비스 | 용도 | 미설정 동작 |
 |---|---|---|
-| AI 공급자·온프레미스 | 채팅과 이미지 분석 | 결정론적 계산·로컬 검색만 사용 |
+| AI 공급자·온프레미스·로컬 ChatGPT | 채팅과 이미지 분석 | 결정론적 계산·로컬 검색만 사용 |
 | Firebase | 로그인과 ID 토큰 | 익명 기능으로 제한 |
 | Supabase | 영수증·보고서·프로젝트·알림 | 운영 저장 기능 비활성 또는 실패 |
 | Weaviate | 벡터 검색 | 로컬 검색으로 폴백 |

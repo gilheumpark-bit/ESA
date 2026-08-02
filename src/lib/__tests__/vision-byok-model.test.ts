@@ -17,14 +17,26 @@ jest.mock('../byok-storage', () => ({
 }));
 
 const mockStorage = storage as jest.Mocked<typeof storage>;
+const fallbackGeminiKey = ['AI', 'za', '-fallback-key-long-enough'].join('');
 
 describe('vision-byok — 모델 배선', () => {
+  class MemoryStorage {
+    private readonly values = new Map<string, string>();
+    getItem(key: string): string | null { return this.values.get(key) ?? null; }
+    setItem(key: string, value: string): void { this.values.set(key, value); }
+    removeItem(key: string): void { this.values.delete(key); }
+  }
+
+  const originalFetch = global.fetch;
+
   beforeAll(() => {
     // getFirstAvailableVisionKey 는 typeof window === 'undefined' 면 null 로 조기 반환한다.
     (globalThis as { window?: unknown }).window ??= {};
   });
   beforeEach(() => {
     jest.resetAllMocks();
+    (globalThis as { window?: unknown }).window = {};
+    global.fetch = originalFetch;
   });
 
   it('키가 있는 공급자에 대해 카탈로그에 존재하는 선택 모델을 그대로 반환한다', async () => {
@@ -99,6 +111,7 @@ describe('vision-byok — 모델 배선', () => {
     expect(isVisionProvider('claude')).toBe(true);
     expect(isVisionProvider('gemini')).toBe(true);
     expect(isVisionProvider('google-agent-platform')).toBe(true);
+    expect(isVisionProvider('chatgpt-local')).toBe(true);
     expect(isVisionProvider('groq')).toBe(false);
     expect(isVisionProvider('mistral')).toBe(false);
   });
@@ -114,6 +127,64 @@ describe('vision-byok — 모델 배선', () => {
     expect(await getFirstAvailableVisionKey()).toEqual({
       provider: 'google-agent-platform',
       key: 'agent-platform-request-key',
+      model: 'gemini-3.6-flash',
+    });
+  });
+
+  it('활성 ChatGPT 계정의 이미지 모델을 원격 BYOK보다 먼저 선택한다', async () => {
+    const localStorage = new MemoryStorage();
+    localStorage.setItem('esa-chatgpt-local', JSON.stringify({
+      enabled: true,
+      model: 'gpt-5.6-terra',
+    }));
+    (globalThis as { window?: unknown }).window = { localStorage };
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({
+      data: {
+        available: true,
+        connected: true,
+        models: [{
+          id: 'gpt-5.6-terra',
+          name: 'GPT-5.6 Terra',
+          inputModalities: ['text', 'image'],
+        }],
+      },
+    }), { status: 200 })) as typeof fetch;
+    mockStorage.loadStoredProviderKey.mockResolvedValue(fallbackGeminiKey);
+
+    await expect(getFirstAvailableVisionKey()).resolves.toEqual({
+      provider: 'chatgpt-local',
+      key: '',
+      model: 'gpt-5.6-terra',
+    });
+    expect(mockStorage.loadStoredProviderKey).not.toHaveBeenCalled();
+  });
+
+  it('선택 모델이 text 전용이면 image 지원 모델로 대체하고 없으면 BYOK로 내려간다', async () => {
+    const localStorage = new MemoryStorage();
+    localStorage.setItem('esa-chatgpt-local', JSON.stringify({
+      enabled: true,
+      model: 'gpt-5.3-codex-spark',
+    }));
+    (globalThis as { window?: unknown }).window = { localStorage };
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({
+      data: {
+        available: true,
+        connected: true,
+        models: [{
+          id: 'gpt-5.3-codex-spark',
+          name: 'Codex Spark',
+          inputModalities: ['text'],
+        }],
+      },
+    }), { status: 200 })) as typeof fetch;
+    mockStorage.loadStoredProviderKey.mockImplementation(async (provider) => (
+      provider === 'gemini' ? fallbackGeminiKey : null
+    ));
+    mockStorage.loadSelectedModel.mockReturnValue('gemini-3.6-flash');
+
+    await expect(getFirstAvailableVisionKey()).resolves.toEqual({
+      provider: 'gemini',
+      key: fallbackGeminiKey,
       model: 'gemini-3.6-flash',
     });
   });

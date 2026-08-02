@@ -1,7 +1,13 @@
 import { loadSelectedModel, loadStoredProviderKey } from '@/lib/byok-storage';
 import { getDefaultModel } from '@/lib/ai-providers';
+import {
+  loadChatGPTLocalSelection,
+  resolveChatGPTLocalModel,
+} from '@/lib/chatgpt-local-selection';
+import type { ChatGPTLocalStatus } from '@/lib/chatgpt-local-contract';
 
-export type VisionProvider = 'openai' | 'claude' | 'gemini' | 'google-agent-platform';
+export type RemoteVisionProvider = 'openai' | 'claude' | 'gemini' | 'google-agent-platform';
+export type VisionProvider = RemoteVisionProvider | 'chatgpt-local';
 
 export interface VisionByokSelection {
   provider: VisionProvider;
@@ -9,7 +15,13 @@ export interface VisionByokSelection {
   model: string;
 }
 
-const VISION_PROVIDERS: readonly VisionProvider[] = ['openai', 'claude', 'gemini', 'google-agent-platform'];
+const REMOTE_VISION_PROVIDERS: readonly RemoteVisionProvider[] = [
+  'openai',
+  'claude',
+  'gemini',
+  'google-agent-platform',
+];
+const VISION_PROVIDERS: readonly VisionProvider[] = ['chatgpt-local', ...REMOTE_VISION_PROVIDERS];
 const SAFE_MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/;
 
 /** 실제 OCR·도면 분석 요청에 BYOK 키와 선택 모델이 전달되는 공급자인지 판별한다. */
@@ -36,7 +48,34 @@ export async function getFirstAvailableVisionKey(
   allowedProviders: readonly VisionProvider[] = VISION_PROVIDERS,
 ): Promise<VisionByokSelection | null> {
   if (typeof window === 'undefined') return null;
-  for (const provider of VISION_PROVIDERS.filter((candidate) => allowedProviders.includes(candidate))) {
+
+  if (allowedProviders.includes('chatgpt-local')) {
+    const selection = loadChatGPTLocalSelection();
+    if (selection.enabled) {
+      const response = await fetch('/api/settings/chatgpt-local', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => null) as {
+        data?: ChatGPTLocalStatus;
+      } | null;
+      const status = payload?.data;
+      if (!response.ok || !status?.available) {
+        throw new Error('로컬 Codex를 사용할 수 없습니다. 설치 상태를 확인해 주세요.');
+      }
+      if (!status.connected) {
+        throw new Error('ChatGPT 계정 연결이 끊겼습니다. AI 연결 관리에서 다시 연결해 주세요.');
+      }
+      const model = resolveChatGPTLocalModel(selection, status.models, 'image');
+      if (model) {
+        return { provider: 'chatgpt-local', key: '', model };
+      }
+    }
+  }
+
+  for (const provider of REMOTE_VISION_PROVIDERS.filter((candidate) => (
+    allowedProviders.includes(candidate)
+  ))) {
     try {
       const key = await loadStoredProviderKey(provider);
       if (key) {
@@ -53,9 +92,15 @@ export async function getFirstAvailableVisionKey(
 export function buildVisionChatRequest(selection: VisionByokSelection | null): {
   provider: VisionProvider;
   model: string;
-  apiKey: string;
+  apiKey?: string;
 } | null {
   if (!selection) return null;
+  if (selection.provider === 'chatgpt-local') {
+    return {
+      provider: selection.provider,
+      model: selection.model,
+    };
+  }
   return {
     provider: selection.provider,
     model: selection.model || getDefaultModel(selection.provider),

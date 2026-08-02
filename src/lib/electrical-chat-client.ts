@@ -19,17 +19,13 @@ export interface ElectricalChatResponse {
 
 type ChatFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-interface ChatTransport {
+export interface ChatTransport {
   fetcher: ChatFetcher;
   providerBody: Record<string, unknown>;
 }
 
-async function resolveBrowserChatTransport(): Promise<ChatTransport> {
-  const [onpremiseStorage, visionByok] = await Promise.all([
-    import('@/lib/onpremise-storage'),
-    import('@/lib/vision-byok'),
-  ]);
-
+export async function resolveBrowserChatTransport(): Promise<ChatTransport> {
+  const onpremiseStorage = await import('@/lib/onpremise-storage');
   const raw = typeof window === 'undefined' ? null : sessionStorage.getItem('esva-onpremise');
   if (raw) {
     const onprem = await onpremiseStorage.decodeOnPremiseConfig(raw);
@@ -50,6 +46,41 @@ async function resolveBrowserChatTransport(): Promise<ChatTransport> {
     }
   }
 
+  const localSelection = await import('@/lib/chatgpt-local-selection');
+  const selectedLocal = localSelection.loadChatGPTLocalSelection();
+  if (selectedLocal.enabled) {
+    const response = await fetch('/api/settings/chatgpt-local', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    const payload = await response.json().catch(() => null) as {
+      data?: import('@/lib/chatgpt-local-contract').ChatGPTLocalStatus;
+    } | null;
+    const status = payload?.data;
+    if (!response.ok || !status?.available) {
+      throw new Error('로컬 Codex를 사용할 수 없습니다. 설치 상태를 확인해 주세요.');
+    }
+    if (!status.connected) {
+      throw new Error('ChatGPT 계정 연결이 끊겼습니다. AI 연결 관리에서 다시 연결해 주세요.');
+    }
+    const model = localSelection.resolveChatGPTLocalModel(
+      selectedLocal,
+      status.models,
+      'text',
+    );
+    if (!model) {
+      throw new Error('현재 ChatGPT 계정에 텍스트 입력 모델이 없습니다.');
+    }
+    return {
+      fetcher: (input, init) => fetch(input, init),
+      providerBody: {
+        provider: 'chatgpt-local',
+        model,
+      },
+    };
+  }
+
+  const visionByok = await import('@/lib/vision-byok');
   const browserByok = visionByok.buildVisionChatRequest(
     await visionByok.getFirstAvailableVisionKey(),
   );

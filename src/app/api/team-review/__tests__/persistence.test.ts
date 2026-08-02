@@ -2,11 +2,13 @@ import { NextRequest } from 'next/server';
 import { runOrchestrator } from '@/agent/orchestrator';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { saveReport } from '@/lib/report-store';
+import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
 import { POST, createRequestSignal, maxDuration } from '../route';
 
 jest.mock('@/agent/orchestrator', () => ({ runOrchestrator: jest.fn() }));
 jest.mock('@/lib/auth-helpers', () => ({ extractVerifiedUserId: jest.fn() }));
 jest.mock('@/lib/report-store', () => ({ saveReport: jest.fn() }));
+jest.mock('@/lib/chatgpt-local', () => ({ getChatGPTLocalStatus: jest.fn() }));
 
 const mockRunOrchestrator = jest.mocked(runOrchestrator);
 const mockExtractUser = jest.mocked(extractVerifiedUserId);
@@ -28,6 +30,15 @@ describe('POST /api/team-review report persistence', () => {
     jest.clearAllMocks();
     mockExtractUser.mockResolvedValue('firebase-user-a');
     mockSaveReport.mockResolvedValue(true);
+    jest.mocked(getChatGPTLocalStatus).mockResolvedValue({
+      available: true,
+      connected: true,
+      models: [{
+        id: 'gpt-5.6-terra',
+        name: 'GPT-5.6 Terra',
+        inputModalities: ['text', 'image'],
+      }],
+    });
     mockRunOrchestrator.mockResolvedValue({
       success: true,
       routing: {
@@ -184,6 +195,29 @@ describe('POST /api/team-review report persistence', () => {
 
     expect(response.status).toBe(401);
     expect(mockRunOrchestrator).not.toHaveBeenCalled();
+  });
+
+  test('allows anonymous loopback image review with the user ChatGPT account', async () => {
+    mockExtractUser.mockResolvedValue(null);
+    const formData = new FormData();
+    formData.append('file', new File([new Uint8Array([1, 2, 3])], 'drawing.png', { type: 'image/png' }));
+    formData.append('provider', 'chatgpt-local');
+    formData.append('model', 'gpt-5.6-terra');
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:3000',
+        Host: 'localhost:3000',
+        'X-Forwarded-For': '198.51.100.81',
+      },
+      body: formData,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockRunOrchestrator).toHaveBeenCalledWith(expect.objectContaining({
+      vision: { provider: 'chatgpt-local', model: 'gpt-5.6-terra' },
+    }));
   });
 
   test('rejects a model outside the catalog when a server Vision key is used', async () => {

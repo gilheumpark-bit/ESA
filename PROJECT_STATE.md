@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: e1a118ea9e2f2a08845a73f7f76226bd64377200
-updatedAt: 2026-07-28T00:00:00+09:00
+codeBaselineCommit: 599c7419b4b6d5fc90bfc70206e22d0218b9885a
+updatedAt: 2026-07-31T00:00:00+09:00
 trigger: architecture
 changedDomains: [app, lib, docs, scripts, ci]
 ---
@@ -24,7 +24,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `src/agent/drawing`은 V3 전체 문서 작업, PDF/DXF 전체 좌표 문자, 페이지·구획 ledger, 교차 페이지 관계, 수량·제안·정정·평가기 계약을 소유한다.
 - `DRAWING_JOB_STORE_DIR`은 다중 인스턴스가 공유하는 작업·암호화 원본 임대 볼륨이다. 운영 미설정 시 취소·재개는 503으로 닫힌다.
 - `src/lib/drawing-asset-store.ts`는 원본을 브라우저 IndexedDB에만 보관하고 SHA-256 재검증 뒤 같은 브라우저에서 다시 연다.
-- `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
+- `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 로컬 ChatGPT·BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
+- `src/lib/chatgpt-local-*`는 loopback ESA에서 같은 PC의 Codex app-server와 공식 ChatGPT 로그인을 사용한다. ESA는 계정 토큰을 읽지 않고 ephemeral 추론과 모델 목록만 좁게 사용한다.
 - `scripts/enforce.ps1`은 타입, 무경고 린트, 전체 Jest, production build, PDF fixture를 순차 차단한다.
 - 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이며, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에만 남긴다.
 
@@ -60,6 +61,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 홈의 일반 질문은 검색 결과와 함께 AI 답변 표면을 자동으로 열고, Studio의 무파일 질문은 검색 스니펫 폴백 대신 실제 `/api/chat`을 호출한다.
 - 채팅 시스템 지침은 서버가 생성해 사용자 질의와 분리한다. 완전한 계산 질의는 ESA 계산기 레지스트리를 먼저 실행하고 계산기 ID·입력·결과 영수증을 모델 답변보다 앞선 SSE 이벤트로 반환한다.
 - Groq·Ollama·LM Studio·온프렘 OpenAI 호환 공급자는 Responses API가 아닌 Chat Completions 모델을 사용한다. `gate:chat-live`가 production 서버→정본 계산기 결과→모델 입력 영수증→로컬 호환 모델 답변 순서를 검증한다.
+- `chatgpt-local` 공급자를 설정 카드, 채팅·계산 영수증, SLD V3 역할 심사, 구형 SLD·OCR, 전문팀 검토까지 연결했다. API 키를 받지 않으며 원격 Host와 same-origin 위반은 닫고, command·file change·MCP·웹·승인 이벤트가 발생한 turn은 폐기한다.
 
 ## 부분 완료
 
@@ -70,6 +72,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 비로그인 팀 검토 보고서는 현재 브라우저 `sessionStorage`에서만 다시 열 수 있다. `/api/reports/[id]` reader는 있지만 이 경로의 서버 writer는 없으며 화면도 다른 세션 보관을 약속하지 않는다.
 - 경계 위 3·4방향 junction은 현재 자동 병합 대상이 아니며, 두 조각 계약을 벗어나면 안전하게 HOLD한다. junction 자동 합산은 별도 그래프 계약과 라벨 fixture가 필요하다.
 - 일반 채팅은 계산 영수증을 결박하지만 기준서 검색 결과를 같은 모델 호출의 검색 근거로 자동 합성하는 RAG 도구 호출은 아직 분리돼 있다. 정확한 조항 답변은 원문 조회 필요 상태를 유지한다.
+- `chatgpt-local`은 현재 ESA와 Codex를 같은 PC에서 실행하는 POC만 지원한다. 공개 배포용 사용자 PC 연결 도우미와 pairing은 미구현이며 휴면 대장에 분리했다.
 
 ## 미검증
 
@@ -79,6 +82,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - Stripe 테스트 모드 Checkout→서명 웹훅→티어 반영→새 로그인→Portal 전체 흐름.
 - 실제 Weaviate 컬렉션의 insert→검색→재연결과 전용 보안 스캐너 결과.
 - 실제 Gemini·OpenAI·Claude로 초급·중급·고급 일반 전기 질문을 반복 호출한 정답성·근거성·제안 품질 비교.
+- 로컬 ChatGPT 계정에서 모델별 동일 공개 도면 반복 실행의 누락·오탐·사용량 제한·timeout 비교. 단일 연결·호출 성공과 외부 품질 평가는 분리한다.
 
 ## 보류
 
@@ -107,6 +111,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - standalone과 브라우저 공개 자산에서 `jbig2.wasm` 104,852B, `FoxitFixed.pfb` 17,597B, `78-H.bcmap` 2,379B, worker 1,304,896B를 non-empty로 확인했다.
 - 2026-07-23 답변 경로 배치: 전체 Jest, 전체 ESLint, `npx tsc --noEmit --incremental false`, production build가 모두 exit 0이었다.
 - `npm run gate:chat-live`: HTTP 200, 입력 `3상 380V·100A·50m·35mm² Cu·PF 0.9`가 정본 `voltage-drop` 계산기에서 `4.14V·1.09%·PASS`로 실행됐고, 같은 영수증이 모델 요청에 들어간 뒤 UI용 SSE 영수증→답변 순서로 전송됐다.
+- 2026-07-31 로컬 ChatGPT 실계정: 상태 API 200·연결·마스킹 이메일·모델 8개(이미지 7개), 텍스트 답변 200, 계산 질문 이벤트 `calculation→text→filter`, 원격 Host 계정 API 404를 확인했다.
+- 같은 실계정의 공개 `wiki-oneline.png`: `gpt-5.6-terra` SLD는 HTTP 200·기기 17·연결 16·confidence 0.69·saga COMPLETE, OCR은 HTTP 200·confidence 0.98로 완료됐다. `gpt-5.4-mini` SLD는 120초 제한을 넘어 502였으며, 이 결과는 연결 완주 증거이지 외부 정답 라벨 기반 정확도 증거가 아니다.
 
 ## 다음 첫 행동
 

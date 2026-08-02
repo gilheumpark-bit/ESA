@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 import type { ESAUser } from '@/lib/firebase';
+import { OPEN_BETA, OPEN_BETA_TIER } from '@/lib/tier-gate';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Context
@@ -39,9 +40,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // PART 2 — Provider
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 로그인·조회 실패 시 되돌아갈 기본 등급.
+ *
+ * OPEN_BETA 면 «전부 열림» 이 기본이다 — 비로그인 검토자도 화면 게이트에
+ * 막히지 않아야 «전체 기능» 이라는 말이 참이 된다. 플래그가 꺼져 있으면
+ * 예전 그대로 free 다(fail-closed).
+ */
+const DEFAULT_TIER: UserTier = OPEN_BETA ? OPEN_BETA_TIER : 'free';
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ESAUser | null>(null);
-  const [tier, setTier] = useState<UserTier>('free');
+  const [tier, setTier] = useState<UserTier>(DEFAULT_TIER);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,10 +78,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 : null;
               setTier(body?.data?.tier ?? 'free');
             } catch {
-              setTier('free');
+              setTier(DEFAULT_TIER);
             }
           } else {
-            setTier('free');
+            setTier(DEFAULT_TIER);
           }
           setLoading(false);
         });
@@ -81,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn('[ESVA Auth] 초기화 실패:', err instanceof Error ? err.name : 'UnknownError');
         }
         setUser(null);
-        setTier('free');
+        setTier(DEFAULT_TIER);
         setLoading(false);
         setError('로그인 서비스를 사용할 수 없습니다. 배포 관리자에게 인증 구성을 확인해 주세요.');
       }
@@ -109,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { signOut: firebaseSignOut } = await import('@/lib/firebase');
       await firebaseSignOut();
       setUser(null);
-      setTier('free');
+      setTier(DEFAULT_TIER);
     } catch (err) {
       console.warn('[ESVA Auth] 로그아웃 실패:', err instanceof Error ? err.name : 'UnknownError');
       setError('로그아웃을 완료하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');

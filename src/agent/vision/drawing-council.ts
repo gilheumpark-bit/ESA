@@ -11,7 +11,7 @@ import { toOriginalPoint, type AnalysisRegionPlan, type DrawingSnapshot, type Ev
 const PRIMARY_ROLES: readonly VLMReviewRole[] = ['symbols', 'connections', 'text', 'logic'];
 const COVERAGE_ROLE: VLMReviewRole = 'coverage-auditor';
 const VARIANT_KINDS = ['original', 'upscale-2x', 'upscale-4x', 'text-high-contrast', 'line-enhanced'] as const;
-const PROVIDERS = ['openai', 'gemini', 'google-agent-platform', 'claude'] as const;
+const PROVIDERS = ['openai', 'gemini', 'google-agent-platform', 'claude', 'chatgpt-local'] as const;
 const PREPARED_SOURCE_MIME = 'image/png';
 const MAX_REGION_CALLS_PER_ROLE = 16;
 const MAX_TOTAL_SOURCE_CALLS = 55;
@@ -185,7 +185,9 @@ function originalBoundsForVariantBounds(bounds: EvidenceBounds, variant: ImageVa
 
 function assertOptions(options: VLMOptions): void {
   if (!options || !PROVIDERS.includes(options.provider)) invalid('options.provider is unsupported.');
-  assertBoundedString(options.apiKey, 'options.apiKey', 4_096);
+  if (options.provider !== 'chatgpt-local') {
+    assertBoundedString(options.apiKey, 'options.apiKey', 4_096);
+  }
   if (options.model !== undefined) assertBoundedString(options.model, 'options.model', MAX_MODEL_LENGTH);
   if (options.maxRetries !== undefined && (!Number.isSafeInteger(options.maxRetries) || options.maxRetries < 0 || options.maxRetries > 5)) {
     invalid('options.maxRetries must be an integer from 0 to 5.');
@@ -624,7 +626,7 @@ async function runFairSourceTasks(plans: readonly PlannedRole[], input: DrawingC
 
 function buildRoleOutcome(plan: PlannedRole, successes: readonly SourceSuccess[], sourceFailures: readonly SourceFailure[], input: DrawingCouncilInput): RoleOutcome {
   const roleSuccesses = successes.filter((item) => item.role === plan.role).sort((left, right) => plan.sources.indexOf(left.source) - plan.sources.indexOf(right.source));
-  const failures = sourceFailures.filter((item) => item.role === plan.role).sort((left, right) => left.order - right.order).map((item) => ({ role: plan.role, sourceId: item.source.id, error: sanitizeFailure(item.error, input.options.apiKey), fatal: false }));
+  const failures = sourceFailures.filter((item) => item.role === plan.role).sort((left, right) => left.order - right.order).map((item) => ({ role: plan.role, sourceId: item.source.id, error: sanitizeFailure(item.error, input.options.apiKey ?? ''), fatal: false }));
   if (roleSuccesses.length === 0) {
     for (const failure of failures) failure.fatal = true;
     failures.push({ role: plan.role, sourceId: 'role', error: `${plan.role} role produced no usable review.`, fatal: true });
@@ -647,7 +649,7 @@ function buildRoleOutcome(plan: PlannedRole, successes: readonly SourceSuccess[]
       failures,
     };
   } catch (error) {
-    failures.push({ role: plan.role, sourceId: 'role', error: sanitizeFailure(error, input.options.apiKey), fatal: true });
+    failures.push({ role: plan.role, sourceId: 'role', error: sanitizeFailure(error, input.options.apiKey ?? ''), fatal: true });
     return { failures };
   }
 }

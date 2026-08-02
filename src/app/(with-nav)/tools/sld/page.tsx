@@ -521,11 +521,11 @@ export default function SLDAnalysisPage() {
       if (drawingFile.type.startsWith('image/')) {
         const visionKey = await getFirstAvailableVisionKey();
         if (!visionKey) {
-          throw new Error('이미지 전문팀 검토에는 OpenAI, Claude 또는 Gemini BYOK 키가 필요합니다.');
+          throw new Error('이미지 전문팀 검토에는 로컬 ChatGPT 계정 또는 Vision API 키가 필요합니다.');
         }
         formData.append('provider', visionKey.provider);
         formData.append('model', visionKey.model);
-        formData.append('apiKey', visionKey.key);
+        if (visionKey.key) formData.append('apiKey', visionKey.key);
       }
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
@@ -627,7 +627,7 @@ export default function SLDAnalysisPage() {
         if (visionKey) {
           runForm.append('provider', visionKey.provider);
           runForm.append('model', visionKey.model);
-          runForm.append('apiKey', visionKey.key);
+          if (visionKey.key) runForm.append('apiKey', visionKey.key);
         }
         const runResponse = await fetch(`/api/drawing-jobs/${jobId}/${endpoint}`, {
           method: 'POST',
@@ -679,7 +679,7 @@ export default function SLDAnalysisPage() {
       if (visionKey) {
         formData.append('provider', visionKey.provider);
         formData.append('model', visionKey.model);
-        formData.append('apiKey', visionKey.key);
+        if (visionKey.key) formData.append('apiKey', visionKey.key);
       }
       const resultResponse = await fetch('/api/drawing-jobs', {
         method: 'POST',
@@ -715,12 +715,12 @@ export default function SLDAnalysisPage() {
       handleImageSelect(file);
       setActiveTab('image');
       const visionKey = await getFirstAvailableVisionKey();
-      if (!visionKey) throw new Error('공개 교보재 AI 분석에는 Vision BYOK 키가 필요합니다.');
+      if (!visionKey) throw new Error('공개 교보재 AI 분석에는 로컬 ChatGPT 계정 또는 Vision API 키가 필요합니다.');
       const formData = new FormData();
       formData.append('image', file);
       formData.append('provider', visionKey.provider);
       formData.append('model', visionKey.model);
-      formData.append('apiKey', visionKey.key);
+      if (visionKey.key) formData.append('apiKey', visionKey.key);
       const resultResponse = await fetch('/api/sld', { method: 'POST', body: formData });
       const result = await resultResponse.json();
       if (!resultResponse.ok || !result.success) {
@@ -832,7 +832,7 @@ export default function SLDAnalysisPage() {
         if (visionKey) {
           formData.append('provider', visionKey.provider);
           formData.append('model', visionKey.model);
-          formData.append('apiKey', visionKey.key);
+          if (visionKey.key) formData.append('apiKey', visionKey.key);
         }
         const response = await fetch(`/api/drawing-jobs/${v3JobId}/resume`, {
           method: 'POST',
@@ -927,7 +927,7 @@ export default function SLDAnalysisPage() {
     try {
       const visionKey = await getFirstAvailableVisionKey();
       if (!visionKey) {
-        setError('API 키가 설정되지 않았습니다. BYOK 설정 페이지에서 Vision API 키를 등록하세요. → /settings/byok');
+        setError('AI 연결이 없습니다. 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 등록하세요. → /settings/byok');
         setLoading(false);
         return;
       }
@@ -936,7 +936,7 @@ export default function SLDAnalysisPage() {
       formData.append('image', imageFile);
       formData.append('provider', visionKey.provider);
       formData.append('model', visionKey.model);
-      formData.append('apiKey', visionKey.key);
+      if (visionKey.key) formData.append('apiKey', visionKey.key);
 
       const res = await fetch('/api/sld', { method: 'POST', body: formData });
       const data = await res.json();

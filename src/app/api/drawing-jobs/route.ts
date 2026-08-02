@@ -14,8 +14,11 @@ import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable, upd
 import { createSourceLease, isSourceLeaseAvailable, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyDrawingOwnerCookie, resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
-import { isCatalogModel } from '@/lib/ai-providers';
 import { withRequestLog } from '@/lib/api/with-request-log';
+import {
+  DrawingVisionRequestError,
+  resolveDrawingVisionRequest,
+} from '@/lib/drawing-vision-request';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,9 +27,6 @@ export const maxDuration = 300;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 const DEFAULT_VISION_CALL_BUDGET_PER_PAGE = 110;
-const VISION_PROVIDERS = new Set(['gemini', 'google-agent-platform', 'openai', 'claude'] as const);
-const MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
-type VisionProvider = 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
 
 function allowedDrawing(file: File): 'image' | 'pdf' | 'dxf' | null {
   const extension = file.name.split('.').pop()?.toLowerCase();
@@ -44,13 +44,6 @@ function parseRequestedPages(value: FormDataEntryValue | null): 'all' | number[]
   return pages.length > 0 && pages.length <= 500 && pages.every((page) => Number.isSafeInteger(page) && page >= 0)
     ? pages
     : null;
-}
-
-function serverVisionKey(provider: VisionProvider): string {
-  if (provider === 'openai') return process.env.OPENAI_API_KEY?.trim() ?? '';
-  if (provider === 'claude') return process.env.ANTHROPIC_API_KEY?.trim() ?? '';
-  if (provider === 'google-agent-platform') return process.env.GOOGLE_VERTEX_API_KEY?.trim() ?? '';
-  return process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ?? '';
 }
 
 function userError(message: string, status = 400) {
@@ -196,27 +189,18 @@ async function POST__impl(req: NextRequest) {
       applyDrawingOwnerCookie(response, owner);
       return response;
     }
-    const providerRaw = String(form.get('provider') ?? 'gemini');
-    if (!VISION_PROVIDERS.has(providerRaw as VisionProvider)) return userError('지원하지 않는 Vision 제공자입니다.');
-    const provider = providerRaw as VisionProvider;
-    const suppliedKey = String(form.get('apiKey') ?? '').trim();
-    if (suppliedKey.length > 4096) return userError('Vision 키 형식이 올바르지 않습니다.');
-    if (!suppliedKey && !owner.authenticated) {
-      return userError('비로그인 도면 분석에는 Vision BYOK 키가 필요합니다.', 401);
-    }
     if (form.get('leaseSource') === '1' && !owner.authenticated) {
       return userError('취소·재개용 도면 보관은 로그인이 필요합니다.', 401);
     }
-    const apiKey = suppliedKey || serverVisionKey(provider);
-    const modelRaw = String(form.get('model') ?? '').trim();
-    if (modelRaw && !MODEL_PATTERN.test(modelRaw)) return userError('Vision 모델 이름 형식이 올바르지 않습니다.');
-    if (modelRaw && !suppliedKey && !isCatalogModel(provider, modelRaw)) {
-      return userError('서버 Vision 키로 사용할 수 없는 모델입니다.');
+    let vision;
+    try {
+      vision = await resolveDrawingVisionRequest(form, req, owner.authenticated);
+    } catch (error) {
+      if (error instanceof DrawingVisionRequestError) {
+        return userError(error.message, error.status);
+      }
+      throw error;
     }
-
-    const vision = apiKey
-      ? { provider, apiKey, model: modelRaw || undefined }
-      : undefined;
 
     const { job, document } = await runDocumentAnalysis({
       bytes,

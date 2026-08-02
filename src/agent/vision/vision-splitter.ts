@@ -18,7 +18,7 @@ import { createImageVariants } from './image-variants';
 export interface SplitOptions {
   gridSize: number;
   overlap: number;
-  model: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
+  model: 'gemini' | 'google-agent-platform' | 'openai' | 'claude' | 'chatgpt-local';
   modelName?: string;
   apiKey?: string;
   maxConcurrency?: number;
@@ -199,11 +199,16 @@ async function analyzeRegion(
   apiKey: string,
 ): Promise<VisionSplitResult> {
   const { analyzeDrawingWithVLM } = await import('./vlm-client');
-  const result = await analyzeDrawingWithVLM(region.buffer, 'image/png', {
-    provider: options.model,
-    apiKey,
-    model: options.modelName,
-  });
+  const result = options.model === 'chatgpt-local'
+    ? await analyzeDrawingWithVLM(region.buffer, 'image/png', {
+        provider: 'chatgpt-local',
+        model: options.modelName,
+       })
+     : await analyzeDrawingWithVLM(region.buffer, 'image/png', {
+         provider: options.model,
+         apiKey,
+         model: options.modelName,
+       });
   return namespaceRegionResult(region, result);
 }
 
@@ -230,7 +235,7 @@ export async function splitAndAnalyze(
   options: SplitOptions,
 ): Promise<VisionSplitResult[]> {
   const apiKey = providerKey(options);
-  if (!apiKey) {
+  if (options.model !== 'chatgpt-local' && !apiKey) {
     throw new Error('이미지 도면 분석에는 Vision BYOK 키 또는 서버 Vision 키가 필요합니다.');
   }
   const regions = await cropImageIntoRegions(imageBuffer, options);

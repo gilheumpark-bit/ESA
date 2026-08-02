@@ -110,6 +110,10 @@ describe('요금제 모듈 표면', () => {
     const mod = await import('@/lib/tier-gate');
     expect(Object.keys(mod).sort()).toEqual([
       'OPEN_BETA',
+      // 호출처 2 곳과 함께 추가(2026-08-01) — 화면 게이트가 보는 등급을 여는 값이다.
+      //   src/app/api/account/tier/route.ts  클라이언트에 내려주는 등급
+      //   src/contexts/AuthContext.tsx        비로그인·조회 실패 시 기본 등급
+      'OPEN_BETA_TIER',
       'checkCalcAccess',
       'isTierAtLeast',
     ]);
