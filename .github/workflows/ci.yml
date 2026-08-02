@@ -142,7 +142,7 @@ jobs:
       # 화면에 아무것도 안 나온 이유가 API 쪽일 수 있다.
       - name: Upload E2E failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-failure-evidence
           path: |
