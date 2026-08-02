@@ -61,6 +61,7 @@
 | [IMPLEMENTATION_MAP](project/IMPLEMENTATION_MAP.md) | 현재 정본 | production entry부터 실패·재조회까지 배선 |
 | [DECISIONS](project/DECISIONS.md) | 현재 정본 | 유지해야 할 구조적 결정과 불변식 |
 | [SLD_V3_TRACEABILITY](project/SLD_V3_TRACEABILITY.md) | 현재 정본 | 설계 §1–15와 생산 코드·검증 연결 |
+| [2026-07-24 종합 감사·수리 설계도](project/design/2026-07-24-full-audit-and-remediation-blueprint.md) | 역사 기록 | 당시 리비전의 감사 결과와 수리 설계 |
 | [도면 심사 단계 설계](project/design/2026-07-21-drawing-review-ladder.md) | 설계 참고 | 심사 강도와 역할 분리 |
 | [AI 답변 품질 설계](project/design/2026-07-28-ai-answer-quality.md) | 설계 참고 | 계산기 결박·출처 태그·무근거 수치 차단 |
 | [스캔 티어 실증 설계](project/design/2026-07-28-scan-tier-validation.md) | 설계 참고 | 스캔 품질 등급과 라벨 대조 절차 |

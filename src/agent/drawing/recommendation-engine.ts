@@ -11,6 +11,7 @@ import type {
   UnresolvedItem,
 } from './types-v3';
 import { hasDeviceClass } from './device-class';
+import { describeStandardRefs } from './rule-basis';
 
 export interface RecommendationInput {
   symbols: SymbolNode[];
@@ -214,7 +215,7 @@ export function hasRequiredLinks(r: RecommendationV3): boolean {
   if (r.status === 'HOLD') return true;
   if (r.status === 'SUPPORTED') {
     return r.evidenceIds.length > 0
-      && (r.calcReceiptIds.length > 0 || r.standardRefs.length > 0);
+      && (r.calcReceiptIds.length > 0 || describeStandardRefs(r.standardRefs).length > 0);
   }
   // CONDITIONAL may lack calc but must state required inputs
   return r.requiredInputs.length > 0 || r.evidenceIds.length > 0;
