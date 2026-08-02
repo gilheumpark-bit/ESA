@@ -31,6 +31,7 @@ import { authenticatedFetch, optionalAuthenticatedFetch } from '@/lib/client-aut
 import { isFeatureEnabled } from '@/lib/feature-flags';
 import { getCachedReceipt } from '@/lib/receipt-cache';
 import { receiptLoadErrorMessage, safeReceiptLoadError } from '@/lib/receipt-load-error';
+import { OPEN_BETA } from '@/lib/tier-gate';
 
 /** 서버가 재계산으로 붙여 주는 판정. 응답에 늘 있지만 구 캐시 대비 optional. */
 type ReceiptWithIntegrity = Receipt & { integrity?: 'VALID' | 'TAMPERED' | 'UNVERIFIABLE' };
@@ -380,7 +381,11 @@ function TimestampRegistrationButton({ receiptId }: { receiptId: string }) {
         if (code === 'ESVA-1001') {
           setError('로그인이 필요합니다.');
         } else if (code === 'ESVA-2001') {
-          setError('IPFS 타임스탬프 등록은 Pro 플랜 이상에서 이용 가능합니다.');
+          // OPEN_BETA 면 서버가 등급을 안 막으므로 이 분기는 도달하지 않는다.
+          // 그래도 문구를 갈라 둔다 — 화면에 남은 문자열이 곧 제품의 주장이다.
+          setError(OPEN_BETA
+            ? 'IPFS 타임스탬프 등록에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+            : 'IPFS 타임스탬프 등록은 Pro 플랜 이상에서 이용 가능합니다.');
         } else {
           setError(errMsg);
         }
@@ -437,9 +442,15 @@ function TimestampRegistrationButton({ receiptId }: { receiptId: string }) {
       {error && (
         <p className="mt-2 text-xs text-[var(--color-error)]">{error}</p>
       )}
+      {/*
+        「Pro 플랜 이상 필요」는 요금제 게이트가 살아 있을 때만 참이다. OPEN_BETA
+        에서는 등급 제한이 없는데 이 문구만 남아 있으면 화면이 거짓을 말한다 —
+        고정 문자열이라 봉인이 닿지 않던 자리다(실측 2026-08-01).
+      */}
       <p className="mt-2 text-[10px] text-[var(--text-tertiary)]">
         계산 결과를 익명화해 IPFS에 고정하고 ESA 서버 레지스트리에 시각을 기록합니다.
-        블록체인 거래·제3자 공증·법적 서명을 의미하지 않습니다. Pro 플랜 이상 필요.
+        블록체인 거래·제3자 공증·법적 서명을 의미하지 않습니다.
+        {OPEN_BETA ? '' : ' Pro 플랜 이상 필요.'}
       </p>
     </div>
   );

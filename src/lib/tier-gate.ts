@@ -35,10 +35,31 @@ export interface AccessResult {
 // ─── PART 2: Beta Flag ───────────────────────────────────────
 
 /**
- * OPEN_BETA: when true, all users get Pro-tier access.
- * Toggle this off when ESVA launches paid plans.
+ * OPEN_BETA — 켜면 **요금제 게이트를 전부 연다.**
+ *
+ * 두 변수를 함께 본다.
+ *   `OPEN_BETA`             서버 전용. API 라우트의 판정을 연다.
+ *   `NEXT_PUBLIC_OPEN_BETA` 빌드 시 클라이언트 번들에 인라인된다.
+ *
+ * 왜 둘인가 — 서버 변수만으로는 **화면이 안 열린다.** 관리자 페이지는
+ * `tier !== 'enterprise'` 로, 설정 페이지는 `tier === 'free'` 로 클라이언트에서
+ * 막는데, 그 `tier` 는 `useAuth()` 가 들고 있고 서버 env 를 볼 수 없다.
+ * `OPEN_BETA` 만 켜면 API 는 통과하는데 화면은 「엔터프라이즈 전용 기능」을
+ * 띄운다 — 스위치가 있는데 절반만 닿는 상태다(§2.2 등록 ≠ 발화).
+ *
+ * 권한(authorization)은 열지 않는다. 관리자 API 는 `role === 'admin'` 을
+ * 따로 확인하며 이 플래그와 무관하다 — 요금제와 권한은 다른 축이다.
  */
-export const OPEN_BETA = process.env.OPEN_BETA === 'true';
+export const OPEN_BETA =
+  process.env.OPEN_BETA === 'true' || process.env.NEXT_PUBLIC_OPEN_BETA === 'true';
+
+/**
+ * OPEN_BETA 일 때 사용자에게 부여하는 등급.
+ *
+ * `pro` 가 아니라 최상위다. `pro` 로 두면 `tier !== 'enterprise'` 로 막는
+ * 화면(관리자)이 계속 닫혀 「전부 열었다」가 거짓이 된다.
+ */
+export const OPEN_BETA_TIER: Tier = 'enterprise';
 
 // ─── PART 3: Tier Definitions ─────────────────────────────────
 
@@ -136,7 +157,10 @@ const TIER_ORDER: Record<Tier, number> = {
  * Check if a tier meets the minimum required tier.
  */
 export function isTierAtLeast(current: Tier, required: Tier): boolean {
-  if (OPEN_BETA && TIER_ORDER[required] <= TIER_ORDER.pro) return true;
+  // 예전에는 `TIER_ORDER[required] <= TIER_ORDER.pro` 로 **pro 까지만** 열었다.
+  // 그 조건은 team·enterprise 를 요구하는 기능이 생기는 순간 조용히 닫는다 —
+  // 「전부 열었다」고 적어 두고 절반만 여는 스위치가 된다. 전부 연다.
+  if (OPEN_BETA) return true;
   return TIER_ORDER[current] >= TIER_ORDER[required];
 }
 
