@@ -14,7 +14,7 @@
 ## 평가 좌표와 스냅샷
 
 - 대상: ESA 도면 분석 production 경로와 V3 독립 심사 경로
-- 상태: `main` HEAD `4ed7d0e2fd14f58caee40281366af2f6feac67c5` 기반 작업 트리
+- 상태: `main` 커밋 `f481d913ec5057ece7651875ed532c4c50e42f16`
 - 검증 모드: 절대 판정이 아니라 결함 재현·수리 전후 차분
 - 렌즈: vision parsing, spatial topology, electrical review, KEC scope, UI disclosure
 - 교보재: 저장소·로컬에 확보된 공개 단선도, 북미·유럽 배전도, 실제 결선도, 국내 배전반·MCC·삼선결선도·비회로 배치도, PDF 생산 fixture

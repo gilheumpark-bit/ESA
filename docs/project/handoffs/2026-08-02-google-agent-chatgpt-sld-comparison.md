@@ -3,9 +3,9 @@
 ## 평가 좌표
 
 - 대상: ESA 생산 진입점 `POST /api/sld`의 공개 단선도 판독
-- 상태·모드·렌즈: 수리 후 working tree · benchmark/delta · technology/integration/research
+- 상태·모드·렌즈: 수리 후 커밋 스냅샷 · benchmark/delta · technology/integration/research
 - 단계: I 구현 + X 통합 실호출 + 제한된 V 실증
-- 코드 기준: `4ed7d0e2fd14f58caee40281366af2f6feac67c5` + 본 문서의 미커밋 수리
+- 코드 기준: `f481d913ec5057ece7651875ed532c4c50e42f16`
 - 실행일: 2026-08-02 (Asia/Seoul)
 - 공개 입력: `fixtures/drawings/external/wiki-oneline.png`
 - Google 경로: Agent Platform Express Mode, `GOOGLE_VERTEX_API_KEY`
