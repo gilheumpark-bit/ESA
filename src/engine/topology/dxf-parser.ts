@@ -74,6 +74,8 @@ const BLOCK_SYMBOL_MAP: Record<string, SLDComponentType> = {
   // 기타
   'bus': 'bus', 'busbar': 'bus',
   'cap': 'capacitor', 'capacitor': 'capacitor',
+  'reactor': 'reactor', 'shunt_reactor': 'reactor', 'series_reactor': 'reactor',
+  'grid_connection': 'grid_connection', 'external_grid': 'grid_connection',
   'sw': 'switch',
   // 수전 개폐기 계열 추가(2026-07-27): 22.9kV 실도면의 LBS 가 사전에 없었다.
   'lbs': 'switch',

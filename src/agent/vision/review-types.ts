@@ -3,6 +3,7 @@ import { types as utilTypes } from 'node:util';
 import type { EvidenceBounds, Point } from './evidence-types';
 
 const MAX_NORMALIZED_COORDINATE = 1000;
+const MAX_BOUNDARY_ROUNDING_OVERFLOW = 50;
 const MAX_PAGE = 10_000;
 const MAX_DETECTIONS = 10_000;
 const MAX_ID_LENGTH = 200;
@@ -160,8 +161,14 @@ function assertAllowedKeys(
   allowed: readonly string[],
 ): void {
   const allowedKeys = new Set(allowed);
-  if (ownEnumerableDataEntries(role, value, label).some(({ key }) => !allowedKeys.has(key))) {
-    invalid(role, `${label} contains an unsupported field.`);
+  const unsupported = ownEnumerableDataEntries(role, value, label)
+    .map(({ key }) => key)
+    .filter((key) => !allowedKeys.has(key));
+  if (unsupported.length > 0) {
+    const names = unsupported.slice(0, 3)
+      .map((key) => key.replace(/[^a-zA-Z0-9_.-]/g, '?').slice(0, 64))
+      .join(', ');
+    invalid(role, `${label} contains unsupported field(s): ${names}.`);
   }
 }
 
@@ -322,6 +329,22 @@ function boundedStringArray(
 }
 
 function parsePoint(role: ReviewRole, value: unknown, label: string): Point {
+  if (Array.isArray(value)) {
+    const tuple = arrayDataValues(role, value);
+    if (tuple.length !== 2) {
+      return invalid(role, `${label} point tuple must contain exactly two numbers.`);
+    }
+    const [x, y] = tuple;
+    if (
+      typeof x !== 'number' || typeof y !== 'number'
+      || !Number.isFinite(x) || !Number.isFinite(y)
+      || x < 0 || x > MAX_NORMALIZED_COORDINATE
+      || y < 0 || y > MAX_NORMALIZED_COORDINATE
+    ) {
+      return invalid(role, `${label} must be a finite normalized point.`);
+    }
+    return { x, y };
+  }
   const item = asRecord(role, value, label);
   assertAllowedKeys(role, item, label, ['x', 'y']);
   const x = item.x;
@@ -344,12 +367,28 @@ function parsePoint(role: ReviewRole, value: unknown, label: string): Point {
 
 function parseBounds(role: ReviewRole, value: unknown, label: string): ReviewBounds {
   const item = asRecord(role, value, label);
-  assertAllowedKeys(role, item, label, ['x', 'y', 'w', 'h', 'page']);
+  // Role context and the rest of the drawing pipeline use zero-based pageIndex,
+  // so models occasionally copy that harmless alias into a bounds object even
+  // though the prompt asks for one-based page. Normalize it instead of losing
+  // the entire role result; conflicting dual declarations still fail closed.
+  assertAllowedKeys(role, item, label, ['x', 'y', 'w', 'h', 'page', 'pageIndex']);
   const x = item.x;
   const y = item.y;
   const w = item.w;
   const h = item.h;
-  const page = item.page === undefined ? 1 : item.page;
+  const pageIndex = item.pageIndex;
+  if (
+    item.page !== undefined
+    && pageIndex !== undefined
+    && typeof item.page === 'number'
+    && typeof pageIndex === 'number'
+    && item.page !== pageIndex + 1
+  ) {
+    return invalid(role, `${label} page and pageIndex disagree.`);
+  }
+  const page = item.page === undefined
+    ? (typeof pageIndex === 'number' ? pageIndex + 1 : 1)
+    : item.page;
   if (
     typeof x !== 'number' ||
     typeof y !== 'number' ||
@@ -361,19 +400,34 @@ function parseBounds(role: ReviewRole, value: unknown, label: string): ReviewBou
     !Number.isFinite(w) ||
     !Number.isFinite(h) ||
     !Number.isInteger(page) ||
+    (pageIndex !== undefined && (
+      typeof pageIndex !== 'number'
+      || !Number.isFinite(pageIndex)
+      || !Number.isInteger(pageIndex)
+      || pageIndex < 0
+      || pageIndex >= MAX_PAGE
+    )) ||
     x < 0 ||
     y < 0 ||
+    x >= MAX_NORMALIZED_COORDINATE ||
+    y >= MAX_NORMALIZED_COORDINATE ||
     w <= 0 ||
     h <= 0 ||
-    x + w > MAX_NORMALIZED_COORDINATE ||
-    y + h > MAX_NORMALIZED_COORDINATE ||
+    x + w > MAX_NORMALIZED_COORDINATE + MAX_BOUNDARY_ROUNDING_OVERFLOW ||
+    y + h > MAX_NORMALIZED_COORDINATE + MAX_BOUNDARY_ROUNDING_OVERFLOW ||
     page < 1 ||
     page > MAX_PAGE
   ) {
     return invalid(role, `${label} must be finite, bounded, and have positive extents.`);
   }
 
-  return { x, y, w, h, page };
+  return {
+    x,
+    y,
+    w: Math.min(w, MAX_NORMALIZED_COORDINATE - x),
+    h: Math.min(h, MAX_NORMALIZED_COORDINATE - y),
+    page,
+  };
 }
 
 function parseConfidence(role: ReviewRole, value: unknown, label: string): number {

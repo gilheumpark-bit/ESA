@@ -82,6 +82,38 @@ describe('role review contracts', () => {
     ).toThrow();
   });
 
+  it('clips only small model rounding overflow at the image boundary', () => {
+    const symbol = {
+      id: 'edge-symbol',
+      typeCandidates: ['BREAKER'],
+      rawLabel: 'CB',
+      bounds: { x: 990, y: 980, w: 20, h: 30 },
+      ports: [],
+      confidence: 0.8,
+    };
+    expect(parseRoleReviewData('symbols', { symbols: [symbol] }).symbols?.[0].bounds)
+      .toEqual({ x: 990, y: 980, w: 10, h: 20, page: 1 });
+    expect(() => parseRoleReviewData('symbols', {
+      symbols: [{ ...symbol, bounds: { x: 900, y: 900, w: 200, h: 200 } }],
+    })).toThrow();
+  });
+
+  it('normalizes the common zero-based pageIndex bounds alias without retaining extra fields', () => {
+    const symbol = {
+      id: 'page-index-symbol',
+      typeCandidates: ['BREAKER'],
+      rawLabel: 'CB',
+      bounds: { ...bounds, pageIndex: 2 },
+      ports: [],
+      confidence: 0.8,
+    };
+    expect(parseRoleReviewData('symbols', { symbols: [symbol] }).symbols?.[0].bounds)
+      .toEqual({ ...bounds, page: 3 });
+    expect(() => parseRoleReviewData('symbols', {
+      symbols: [{ ...symbol, bounds: { ...bounds, page: 2, pageIndex: 2 } }],
+    })).toThrow(/page and pageIndex disagree/);
+  });
+
   it('requires complete line topology including start, end, junctions, and crossovers', () => {
     const line = {
       id: 'line-1',
@@ -115,6 +147,33 @@ describe('role review contracts', () => {
         lines: [{ ...line, junctions: [{ x: -1, y: 0 }] }],
       }),
     ).toThrow();
+  });
+
+  it('normalizes bounded [x,y] point tuples without weakening endpoint validation', () => {
+    const tupleLine = {
+      id: 'line-tuple',
+      lineKind: 'power',
+      path: [[10, 20], [30, 40]],
+      start: [10, 20],
+      end: [30, 40],
+      junctions: [[20, 30]],
+      crossovers: [],
+      confidence: 0.75,
+    };
+
+    expect(parseRoleReviewData('connections', { lines: [tupleLine] }).lines?.[0]).toEqual({
+      ...tupleLine,
+      path: [{ x: 10, y: 20 }, { x: 30, y: 40 }],
+      start: { x: 10, y: 20 },
+      end: { x: 30, y: 40 },
+      junctions: [{ x: 20, y: 30 }],
+    });
+    expect(() => parseRoleReviewData('connections', {
+      lines: [{ ...tupleLine, end: [31, 40] }],
+    })).toThrow();
+    expect(() => parseRoleReviewData('connections', {
+      lines: [{ ...tupleLine, path: [[10, 20, 99], [30, 40]] }],
+    })).toThrow();
   });
 
   it('accepts bounded continuation anchors and rejects invented anchor formats', () => {

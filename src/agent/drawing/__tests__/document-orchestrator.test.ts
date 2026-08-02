@@ -333,6 +333,36 @@ describe('document-orchestrator + evaluator', () => {
     expect(logicHeld.document.recommendations).toEqual(expect.arrayContaining([
       expect.objectContaining({ status: 'HOLD', problem: expect.stringContaining('ELECTRICAL_LOGIC_CONFLICT') }),
     ]));
+
+    const failedReview = {
+      ...review(true),
+      failures: [{
+        role: 'connections' as const,
+        sourceId: 'variant:line-enhanced:region:1',
+        error: 'Invalid connections review output: line.path must contain at least two points.',
+        fatal: false,
+      }],
+    };
+    const diagnosed = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-role-diagnostic',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: async () => ({
+      success: true,
+      components: [],
+      connections: [],
+      confidence: 0.95,
+      drawingReview: failedReview,
+      drawingSynthesis: { calculations: [] },
+    }) as never });
+
+    const failedRegion = diagnosed.document.coverageLedger.regions.find((region) => region.regionId === 'p0-r1');
+    expect(failedRegion?.roleCalls.connections).toEqual([
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('line.path must contain at least two points'),
+      }),
+    ]);
   });
 
   it('returns concrete re-upload guidance when low-resolution OCR remains ambiguous', async () => {

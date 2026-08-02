@@ -4,6 +4,7 @@
 
 ## 2026-08-02
 
+- [도면 누수·공개 교보재·KEC 검증](handoffs/2026-08-02-drawing-leakage-public-kec-validation.md)
 - [Google Agent Platform·ChatGPT SLD 비교](handoffs/2026-08-02-google-agent-chatgpt-sld-comparison.md)
 
 ## 2026-07-23

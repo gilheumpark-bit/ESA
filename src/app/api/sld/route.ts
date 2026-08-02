@@ -228,12 +228,16 @@ async function POST__impl(req: NextRequest) {
     // 보고 계통까지 읽힌 것으로 오해하는 것이 이 경로의 실패 모드다.
     const stats = validation!.stats;
     const danglingEdges = validation!.issues.filter((i) => i.type === 'MISSING_EDGE_TARGET').length;
+    const danglingInlineDevices = validation!.issues.filter((i) => i.type === 'DANGLING_INLINE_DEVICE').length;
+    const duplicateFlowMeasurements = validation!.issues.filter((i) => i.type === 'DUPLICATE_FLOW_MEASUREMENT').length;
     const topologyReadout = {
       nodes: stats.nodeCount,
       edges: stats.edgeCount,
       isolated: stats.isolatedNodes,
       fragments: stats.connectedComponents,
       ...(danglingEdges > 0 ? { danglingEdges } : {}),
+      ...(danglingInlineDevices > 0 ? { danglingInlineDevices } : {}),
+      ...(duplicateFlowMeasurements > 0 ? { duplicateFlowMeasurements } : {}),
     };
     const review = analyzed.confidence >= 0.5
       ? { ...reviewAnalysis(analyzed), extractionSource: 'VLM-scan (미검증·HOLD)' as const,

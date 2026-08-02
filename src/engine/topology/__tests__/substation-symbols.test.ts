@@ -20,6 +20,10 @@ describe('어휘 정본', () => {
   it('타입 목록에 중복이 없다', () => {
     expect(new Set(SLD_COMPONENT_TYPES).size).toBe(SLD_COMPONENT_TYPES.length);
   });
+
+  it('계통 경계와 리액터를 source/load/capacitor로 강제하지 않는다', () => {
+    expect(SLD_COMPONENT_TYPES).toEqual(expect.arrayContaining(['grid_connection', 'reactor']));
+  });
 });
 
 describe('벡터 경로 심볼 판정 — 도면에 인쇄된 그대로', () => {
@@ -39,6 +43,8 @@ describe('벡터 경로 심볼 판정 — 도면에 인쇄된 그대로', () => 
     ['VCB', 'breaker'],
     ['MCCB 3P 100/75', 'breaker'],
     ['TR-1', 'transformer'],
+    ['GRID CONNECTION', 'grid_connection'],
+    ['외부계통 연계점', 'grid_connection'],
   ] as const)('%s → %s', (text, expected) => {
     expect(detectComponentType(text)).toBe(expected);
   });
@@ -55,6 +61,8 @@ describe('DXF 경로 블록명 판정', () => {
     ['LBS-1', 'switch'],
     ['COS_A', 'switch'],
     ['VCB-01', 'breaker'],
+    ['SHUNT_REACTOR-1', 'reactor'],
+    ['GRID_CONNECTION-1', 'grid_connection'],
   ] as const)('%s → %s', (block, expected) => {
     expect(resolveBlockType(block)).toBe(expected);
   });
@@ -248,7 +256,9 @@ describe('ANSI 기구번호 전표', () => {
  */
 describe('교재 약호표 추가분', () => {
   it.each([
-    ['Sh.R', 'capacitor'],   // 분로리액터 — 페란티 현상 방지
+    ['Sh.R', 'reactor'],     // 분로리액터 — 페란티 현상 방지
+    ['S.R', 'reactor'],      // 직렬리액터
+    ['분로리액터', 'reactor'],
     ['T.C', 'meter'],        // 트립코일
     ['TC', 'meter'],
     ['Hz', 'meter'],         // 주파수계

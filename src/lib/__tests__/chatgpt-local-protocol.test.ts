@@ -4,6 +4,7 @@ import { PassThrough } from 'node:stream';
 import {
   CodexAppServerClient,
   type CodexAppServerProcess,
+  type LocalTurnParams,
 } from '@/lib/chatgpt-local-protocol';
 
 class FakeCodexProcess extends EventEmitter implements CodexAppServerProcess {
@@ -162,6 +163,45 @@ describe('Codex app-server JSON-RPC transport', () => {
       durationMs: 42,
     });
     expect(deltas).toEqual(['VCB는 ', '차단기입니다.']);
+    client.close();
+  });
+
+  it('forwards an explicit reasoning effort to the app-server turn', async () => {
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({
+      spawnProcess: () => process,
+      defaultTimeoutMs: 1_000,
+    });
+    const params = {
+      model: 'gpt-5.6-sol',
+      effort: 'medium',
+      developerInstructions: 'Return JSON only.',
+      input: [{ type: 'text' as const, text: 'Analyze the diagram.' }],
+      cwd: 'C:\\empty-esa-runtime',
+    } as unknown as LocalTurnParams;
+
+    const pending = client.runTurn(params);
+    const threadRequest = await nextWrittenRequest(process);
+    process.emitJson({ id: threadRequest.id, result: { thread: { id: 'thread-effort' } } });
+
+    const turnRequest = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: turnRequest.id, result: { turn: { id: 'turn-effort' } } });
+    process.emitJson({
+      method: 'turn/completed',
+      params: {
+        threadId: 'thread-effort',
+        turn: { id: 'turn-effort', status: 'completed', items: [], durationMs: 1 },
+      },
+    });
+
+    await expect(pending).resolves.toEqual(expect.objectContaining({ model: 'gpt-5.6-sol' }));
+    expect(turnRequest).toMatchObject({
+      method: 'turn/start',
+      params: {
+        threadId: 'thread-effort',
+        effort: 'medium',
+      },
+    });
     client.close();
   });
 

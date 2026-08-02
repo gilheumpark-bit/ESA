@@ -173,6 +173,7 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   { pattern: new RegExp(`\\b(GEN|GENERATOR)\\b|${ko('발전기')}`, 'i'), type: 'generator' },
   { pattern: new RegExp(`\\b(MCC|DB|DP|PANEL|SWGR)\\b|${ko('분전반', '수배전반')}`, 'i'), type: 'panel' },
   { pattern: new RegExp(`\\b(BUS|BUSBAR)\\b|${ko('모선')}`, 'i'), type: 'bus' },
+  { pattern: new RegExp(`\\b(GRID[ _-]?(?:CONNECTION|TIE)|EXTERNAL[ _-]?GRID|UTILITY[ _-]?(?:GRID|TIE))\\b|${ko('외부계통 연계점', '계통연계점')}`, 'i'), type: 'grid_connection' },
   { pattern: new RegExp(`\\b(CAP|CAPACITOR)\\b|${ko('콘덴서')}`, 'i'), type: 'capacitor' },
   // LBS·ASS·COS 추가(2026-07-27): 22.9kV 수전 실도면에서 `L.B.S 24kV 3P 1250A`
   // 가 사전에 없어 벡터 경로로는 검출되지 않았다. 기존 사전은 KIMM 분전반(저압)
@@ -232,12 +233,10 @@ const SYMBOL_KEYWORDS: Array<{ pattern: RegExp; type: SLDComponentType }> = [
   // 맨숫자(27·51·59)는 여전히 받지 않는다 — 도면의 `51` 은 치수일 수도 수량일
   // 수도 있다. 문자 접미가 붙거나 하이픈 첨자가 붙은 것만 받는다.
   { pattern: new RegExp(`\\b(OCR|OVR|UVR|UCR|OCGR|OVGR|SGR|DGR|DCR|GR|THR|RELAY)\\b|\\b(?:37|5[01]|27|59|67)[A-Z]\\b|\\b(?:64|87)(?:-[A-Z])?\\b|${ko('계전기', '지락계전기', '차동계전기')}`, 'i'), type: 'relay' },
-  // 진상콘덴서·직렬리액터는 짝으로 다닌다. 어휘에 reactor 타입이 없어 capacitor 로 둔다.
-  // Sh.R(분로리액터) 추가 — 페란티 현상 방지용. 어휘에 reactor 타입이 없어
-  // 직렬리액터와 함께 capacitor 로 둔다(콘덴서 부속설비라 실무상 짝으로 다닌다).
-  //
-  // 방전코일 `DC` 는 넣지 않았다 — 직류(Direct Current)와 같은 글자다.
-  { pattern: new RegExp(`\\b(S\\.?C|S\\.?R|Sh\\.?R)\\b|${ko('진상콘덴서', '직렬리액터', '분로리액터', '방전코일')}`, 'i'), type: 'capacitor' },
+  // 리액터는 무효전력을 흡수하고 콘덴서는 공급한다. 보호·용량 검토가 반대라
+  // 같은 타입으로 합치면 안 된다. 방전코일 `DC` 는 직류와 충돌해 넣지 않는다.
+  { pattern: new RegExp(`\\b(?:SHUNT|SERIES)[ _-]?REACTOR\\b|\\b(?:S\\.?R|Sh\\.?R)\\b|${ko('직렬리액터', '분로리액터', '리액터')}`, 'i'), type: 'reactor' },
+  { pattern: new RegExp(`\\bS\\.?C\\b|${ko('진상콘덴서')}`, 'i'), type: 'capacitor' },
   { pattern: new RegExp(`\\b(INV|INVERTER)\\b|${ko('인버터')}`, 'i'), type: 'motor' },
   { pattern: new RegExp(`\\b(C\\.?H)\\b|${ko('케이블헤드', '케이블')}`, 'i'), type: 'cable' },
   // ── 아래 셋은 타입 신설(2026-07-27). IEC 60617 분류에는 있는데 이 어휘에만

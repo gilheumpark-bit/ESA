@@ -36,12 +36,16 @@ export type LocalTurnInput =
   | { type: 'text'; text: string }
   | { type: 'image'; url: string; detail?: 'auto' | 'low' | 'high' | 'original' };
 
+export type LocalReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
+
 export interface LocalTurnParams {
   model: string;
   developerInstructions: string;
   input: LocalTurnInput[];
   cwd: string;
   outputSchema?: unknown;
+  /** Codex app-server turn/start 추론 강도. 모델 간 비교 시 반드시 명시한다. */
+  effort?: LocalReasoningEffort;
   signal?: AbortSignal;
   timeoutMs?: number;
   onDelta?: (delta: string) => void;
@@ -159,6 +163,7 @@ export class CodexAppServerClient {
         threadId: threadStart.thread.id,
         input: params.input,
         ...(params.outputSchema === undefined ? {} : { outputSchema: params.outputSchema }),
+        ...(params.effort === undefined ? {} : { effort: params.effort }),
       },
       { timeoutMs: params.timeoutMs },
     );

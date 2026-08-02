@@ -269,6 +269,45 @@ export class TopologyGraph {
       }
     }
 
+    // 차단기·개폐기·퓨즈는 선로 중간의 2단자 기기다. 한쪽 간선만 있으면
+    // 구획 경계 절단 또는 VLM 연결 누락일 가능성이 높아 정상 회로로 확정하지 않는다.
+    for (const node of this.nodes.values()) {
+      if (!['breaker', 'switch', 'fuse'].includes(node.type)) continue;
+      const incidentEdgeIds = new Set([
+        ...(this.adjacency.get(node.id) ?? []).map(({ edgeId }) => edgeId),
+        ...(this.reverseAdj.get(node.id) ?? []).map(({ edgeId }) => edgeId),
+      ]);
+      if (incidentEdgeIds.size < 2) {
+        issues.push({
+          type: 'DANGLING_INLINE_DEVICE',
+          nodeId: node.id,
+          message: `인라인 기기 "${node.label}"의 연결이 ${incidentEdgeIds.size}개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요.`,
+        });
+      }
+
+      // VLM이 기호 양쪽 선분을 별도 간선으로 만들면서, 한 번 인쇄된 MW/MVAR를
+      // 양쪽에 복제하는 경우가 있다. 같은 인라인 기기를 공유하는 간선에서만
+      // 잡아 서로 다른 동률 피더를 중복으로 오인하지 않는다.
+      const measurements = new Map<string, string[]>();
+      for (const edgeId of incidentEdgeIds) {
+        const edge = this.edges.get(edgeId);
+        const active = edge?.raw.activePower?.replace(/\s+/g, '').toUpperCase();
+        const reactive = edge?.raw.reactivePower?.replace(/\s+/g, '').toUpperCase();
+        if (!active || !reactive) continue;
+        const key = `${active}|${reactive}`;
+        measurements.set(key, [...(measurements.get(key) ?? []), edgeId]);
+      }
+      for (const [measurement, edgeIds] of measurements) {
+        if (edgeIds.length < 2) continue;
+        issues.push({
+          type: 'DUPLICATE_FLOW_MEASUREMENT',
+          nodeId: node.id,
+          edgeId: edgeIds[1],
+          message: `전력 흐름 "${measurement}"이(가) 인라인 기기 "${node.label}" 양쪽 간선에 중복 배치됐습니다. 원도면 표기 위치를 확인하세요.`,
+        });
+      }
+    }
+
     // 정격 누락 검사 (부하 노드)
     for (const node of this.nodes.values()) {
       if (['motor', 'load', 'ups'].includes(node.type) && !node.ratingValue) {

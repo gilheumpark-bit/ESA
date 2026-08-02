@@ -38,6 +38,31 @@ describe('SLD recognition response validation', () => {
       confidence: 0,
     }));
   });
+
+  it('preserves an explicitly printed parallel cable run count for KEC review', () => {
+    const parsed = parseSLDResponse(JSON.stringify({
+      components: [
+        { id: 'comp_1', type: 'breaker', label: 'MCCB 400AT', position: { x: 10, y: 20 } },
+        { id: 'comp_2', type: 'load', label: 'MCC', position: { x: 80, y: 20 } },
+      ],
+      connections: [
+        {
+          id: 'conn_1',
+          from: 'comp_1',
+          to: 'comp_2',
+          cableType: 'CV',
+          conductorSize: '150sq',
+          parallelCount: 2,
+        },
+      ],
+      confidence: 0.9,
+    }));
+
+    expect(parsed.connections[0]).toEqual(expect.objectContaining({
+      conductorSize: '150sq',
+      parallelCount: 2,
+    }));
+  });
 });
 
 describe('generateCalcChainFromSLD — dependsOn 동적 결박 (버그 사냥 F7)', () => {

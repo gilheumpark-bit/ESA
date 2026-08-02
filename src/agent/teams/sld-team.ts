@@ -140,7 +140,10 @@ const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic', 'cove
 const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_REGION_CALLS_PER_ROLE = 16;
 const COUNCIL_MAX_CONCURRENT_CALLS = 4;
-const COUNCIL_SOURCE_TIMEOUT_MS = 30_000;
+// 실도면 고밀도 심볼 판독이 31~42초에 정상 응답하는데 30초에서 잘렸다
+// (세종 MCC-101, Agent Platform 3.6 Flash 라이브). 문서 전체 deadline과
+// 호출 예산은 그대로 두고 개별 정상 응답만 받을 수 있게 여유를 둔다.
+const COUNCIL_SOURCE_TIMEOUT_MS = 45_000;
 const COUNCIL_SOURCE_MAX_RETRIES = 1;
 const RESCAN_REASONS = new Set<RescanTargetEvidence['reason']>(['empty-result', 'dense-cluster', 'boundary-clip', 'low-coverage']);
 const RESCAN_ROLES = new Set<RescanTargetEvidence['suggestedRoles'][number]>(['symbols', 'connections', 'text']);

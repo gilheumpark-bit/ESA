@@ -158,7 +158,7 @@ describe('SLD raster independent council integration', () => {
     const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), { prepareRaster, resolveVisionKey, runCouncil });
 
     expect(runCouncil).toHaveBeenCalledTimes(1);
-    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, signal: controller.signal, timeoutMs: 30_000, maxRetries: 1 }) }));
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, signal: controller.signal, timeoutMs: 45_000, maxRetries: 1 }) }));
     expect(prepareRaster).toHaveBeenCalledTimes(1);
     expect(resolveVisionKey).toHaveBeenCalledWith('openai', ` ${KEY} `);
     expect(result.success).toBe(true);

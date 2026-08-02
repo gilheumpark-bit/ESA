@@ -1,5 +1,5 @@
 import { buildRecommendations, hasRequiredLinks } from '../recommendation-engine';
-import type { SymbolNode } from '../types-v3';
+import type { SymbolNode, UnresolvedItem } from '../types-v3';
 
 const mk = (id: string, type: string, certainty: 'confirmed' | 'ambiguous' = 'confirmed'): SymbolNode => ({
   id,
@@ -145,5 +145,61 @@ describe('recommendation-engine', () => {
     expect(path).toBeDefined();
     expect(path!.status).toBe('HOLD');
     expect(path!.requiredInputs.join(' ')).toContain('기기 종류 확정: U1');
+  });
+
+  it('같은 페이지의 고아 장치를 한 제안으로 묶되 모든 도면 번호와 근거를 보존한다', () => {
+    const symbols = Array.from({ length: 25 }, (_, index) => {
+      const symbol = mk(`P01-S${String(index + 1).padStart(3, '0')}`, 'load');
+      return {
+        ...symbol,
+        evidence: [{ ...symbol.evidence[0], pageIndex: 0 }],
+      };
+    });
+    const recs = buildRecommendations({
+      symbols,
+      relations: [],
+      calculations: [],
+      unresolved: [],
+      coverageComplete: true,
+    });
+    const orphan = recs.filter((item) => item.standardRefs.includes('ESA-SLD-RULE:ORPHAN-CONNECTION'));
+    expect(orphan).toHaveLength(1);
+    expect(orphan[0].problem).toContain('25개');
+    expect(orphan[0].relatedDisplayIds).toHaveLength(25);
+    expect(orphan[0].evidenceIds).toHaveLength(25);
+  });
+
+  it('같은 페이지·같은 코드의 미해결 항목을 한 제안으로 묶고 원본 항목 번호를 보존한다', () => {
+    const unresolved: UnresolvedItem[] = Array.from({ length: 40 }, (_, index) => ({
+      id: `ocr-${index + 1}`,
+      code: 'AMBIGUOUS_OCR',
+      displayId: `P01-T${String(index + 1).padStart(3, '0')}`,
+      pageIndex: 0,
+      bounds: { x: 0, y: index, w: 10, h: 2 },
+      note: `OCR 후보 ${index + 1} 확인`,
+    }));
+    const recs = buildRecommendations({
+      symbols: [], relations: [], calculations: [], unresolved,
+      coverageComplete: false,
+    });
+    expect(recs).toHaveLength(1);
+    expect(recs[0]).toMatchObject({ status: 'HOLD', relatedDisplayIds: expect.any(Array) });
+    expect(recs[0].problem).toContain('40건');
+    expect(recs[0].relatedDisplayIds).toHaveLength(40);
+    expect(recs[0].relatedDisplayIds[0]).toBe('P01-T001');
+    expect(recs[0].relatedDisplayIds[39]).toBe('P01-T040');
+  });
+
+  it('미해결 제안은 페이지나 원인이 다르면 합치지 않는다', () => {
+    const recs = buildRecommendations({
+      symbols: [], relations: [], calculations: [],
+      unresolved: [
+        { id: 'u1', code: 'AMBIGUOUS_OCR', displayId: 'P01-T001', pageIndex: 0, bounds: { x: 0, y: 0, w: 1, h: 1 }, note: '확인 1' },
+        { id: 'u2', code: 'AMBIGUOUS_OCR', displayId: 'P02-T001', pageIndex: 1, bounds: { x: 0, y: 0, w: 1, h: 1 }, note: '확인 2' },
+        { id: 'u3', code: 'LINE_CONTINUITY_UNCERTAIN', displayId: 'P01-L001', pageIndex: 0, bounds: { x: 0, y: 0, w: 1, h: 1 }, note: '확인 3' },
+      ],
+      coverageComplete: false,
+    });
+    expect(recs).toHaveLength(3);
   });
 });

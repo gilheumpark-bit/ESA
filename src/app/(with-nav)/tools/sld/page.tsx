@@ -24,6 +24,7 @@ import {
   Zap,
   RefreshCw,
   ArrowRight,
+  ArrowLeftRight,
   X,
   AlertCircle,
   GitBranch,
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
+import { orderSLDConnectionEndpoints } from '@/lib/sld-flow-display';
 import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
@@ -74,6 +76,9 @@ interface SLDConnection {
   cableType?: string;
   length?: string;
   conductorSize?: string;
+  activePower?: string;
+  reactivePower?: string;
+  flowDirection?: 'from_to' | 'to_from' | 'bidirectional' | 'unknown';
 }
 
 interface CalcChainStep {
@@ -108,6 +113,8 @@ const COMPONENT_ICONS: Record<string, string> = {
   generator: 'GEN',
   motor: 'MOT',
   capacitor: 'CAP',
+  reactor: 'REA',
+  grid_connection: 'GRID',
   load: 'LD',
   switch: 'SW',
   relay: 'RLY',
@@ -125,6 +132,8 @@ const COMPONENT_COLORS: Record<string, string> = {
   generator: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800',
   motor: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-800',
   capacitor: 'bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-900/30 dark:text-cyan-200 dark:border-cyan-800',
+  reactor: 'bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-900/30 dark:text-violet-200 dark:border-violet-800',
+  grid_connection: 'bg-sky-100 text-sky-800 border-sky-300 dark:bg-sky-900/30 dark:text-sky-200 dark:border-sky-800',
   load: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/30 dark:text-orange-200 dark:border-orange-800',
 };
 
@@ -198,27 +207,32 @@ function ConnectionMap({
         </h3>
       </div>
       <div className="space-y-2">
-        {connections.map(conn => (
-          <div
-            key={conn.id}
-            className="flex items-center gap-2 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm"
-          >
-            <span className="font-medium text-[var(--text-primary)]">
-              {getLabel(conn.from)}
-            </span>
-            <ArrowRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />
-            <span className="font-medium text-[var(--text-primary)]">
-              {getLabel(conn.to)}
-            </span>
-            {(conn.cableType || conn.length || conn.conductorSize) && (
-              <span className="ml-auto text-xs text-[var(--text-tertiary)]">
-                {[conn.cableType, conn.conductorSize, conn.length]
-                  .filter(Boolean)
-                  .join(' / ')}
+        {connections.map(conn => {
+          const ordered = orderSLDConnectionEndpoints(conn);
+          return (
+            <div
+              key={conn.id}
+              className="flex items-center gap-2 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-sm"
+            >
+              <span className="font-medium text-[var(--text-primary)]">
+                {getLabel(ordered.from)}
               </span>
-            )}
-          </div>
-        ))}
+              {conn.flowDirection === 'bidirectional'
+                ? <ArrowLeftRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />
+                : <ArrowRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />}
+              <span className="font-medium text-[var(--text-primary)]">
+                {getLabel(ordered.to)}
+              </span>
+              {(conn.cableType || conn.length || conn.conductorSize || conn.activePower || conn.reactivePower) && (
+                <span className="ml-auto text-xs text-[var(--text-tertiary)]">
+                  {[conn.cableType, conn.conductorSize, conn.length, conn.activePower, conn.reactivePower]
+                    .filter(Boolean)
+                    .join(' / ')}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

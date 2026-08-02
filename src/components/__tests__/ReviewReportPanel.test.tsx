@@ -112,6 +112,17 @@ describe('ReviewReportPanel', () => {
         .toContain('없는 부품 참조 2');
     });
 
+    it('인라인 절단과 전력표기 중복을 판독 요약에 노출한다', () => {
+      const base = { nodes: 14, edges: 13, isolated: 0, fragments: 1 };
+      const html = renderToStaticMarkup(<ReviewReportPanel review={withTopology({
+        ...base,
+        danglingInlineDevices: 1,
+        duplicateFlowMeasurements: 2,
+      })} />);
+      expect(html).toContain('인라인 단선 의심 1');
+      expect(html).toContain('전력표기 중복 의심 2');
+    });
+
     /** 검토를 건너뛴 때야말로 판독 상태가 필요하다 — 사유만 있으면 왜인지 모른다. */
     it('검토 생략 갈래에도 판독 수치가 붙는다', () => {
       const html = renderToStaticMarkup(
@@ -163,6 +174,20 @@ describe('검토 범위 표기', () => {
     expect(html).toContain('차단기 12');
     expect(html).toContain('정격 읽음 7');
     expect(html).toContain('케이블 결속 4');
+  });
+
+  it('자동 대조 규칙과 KEC 미검토 영역을 구분해 전면 검토로 오해시키지 않는다', () => {
+    const html = renderToStaticMarkup(
+      <ReviewReportPanel review={withCoverage({ breakersTotal: 2, breakersRatedParsed: 2, breakersWithCable: 2 })} />,
+    );
+    expect(html).toContain('KEC 전면 검토 아님');
+    expect(html).toContain('자동 대조');
+    expect(html).toContain('케이블 허용전류');
+    expect(html).toContain('이번 경로 미검토');
+    expect(html).toContain('차단용량↔단락전류');
+    expect(html).toContain('보호협조');
+    expect(html).toContain('접지·감전보호');
+    expect(html).toContain('전압강하');
   });
 
   it('못 읽은 차단기가 있으면 개수와 함께 경고한다', () => {

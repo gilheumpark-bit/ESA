@@ -13,6 +13,7 @@
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { pipelineEvidenceFromPayload } from './lib/local-drawing-receipt.mjs';
 
 /**
  * 손 판독 블라인드 라벨. 각 항목은 도면에 실제로 인쇄된 것만 센다.
@@ -172,6 +173,63 @@ const LABELS = {
       arresters: 1,         // SPD 40kA/mode
     },
   },
+
+  /** Wikimedia 대표 단선도 — 결과와 무관하게 그림에서 먼저 고정한 수량. */
+  'public-wiki': {
+    file: 'fixtures/drawings/external/wiki-oneline.png',
+    mime: 'image/png',
+    what: 'Wikimedia 단선도 · 발전기·3권선 변압기·분로 리액터·차단기',
+    label: {
+      sheetType: 'single-line',
+      transformers: 1,
+      generators: 1,
+      breakers: 6,
+      reactors: 1,
+    },
+  },
+
+  /** 북미 방사형 배전 개념도 — 변전소 1 + 주상 배전변압기 9, 주택 21. */
+  'public-american': {
+    file: 'fixtures/drawings/external/american.png',
+    mime: 'image/png',
+    what: 'Wikimedia 북미 배전 계통도 · 변압기 10 · 주택 부하 21',
+    label: {
+      sheetType: 'distribution-diagram',
+      transformers: 10,
+      generators: 0,
+      breakers: 0,
+      loads: 21,
+    },
+  },
+
+  /** 유럽 배전 개념도 — 변전소 1 + 배전변압기 3, 주택 20(도시 8+8·농촌 4). */
+  'public-european': {
+    file: 'fixtures/drawings/external/european.png',
+    mime: 'image/png',
+    what: 'Wikimedia 유럽 배전 계통도 · 변압기 4 · 주택 부하 20',
+    label: {
+      sheetType: 'distribution-diagram',
+      transformers: 4,
+      generators: 0,
+      breakers: 0,
+      loads: 20,
+    },
+  },
+
+  /** FU1~FU6가 명시된 실제 결선 예시. 극별 심볼 수 대신 명명 그룹을 센다. */
+  'public-wiring': {
+    file: 'fixtures/drawings/external/wiring-real-sm.jpg',
+    mime: 'image/jpeg',
+    what: 'Wikimedia 실제 결선도 · QS1 · FU1~FU6',
+    label: {
+      sheetType: 'three-line-wiring',
+      transformers: 0,
+      generators: 0,
+      breakers: 0,
+      switches: 1,
+      namedFuseGroups: 6,
+    },
+  },
 };
 
 const which = process.argv[2] ?? 'threeline';
@@ -290,6 +348,12 @@ if (REPLAY) {
       systemType: saved.systemType ?? undefined,
       confidence: saved.confidence ?? undefined,
     },
+    textQuality: saved.textQuality ?? null,
+    constraints: saved.constraints ?? [],
+    calcChain: saved.calcChain ?? [],
+    review: saved.review ?? null,
+    topology: saved.topology ?? null,
+    saga: saved.saga ?? null,
   };
   console.log(`재생 모드 — 저장된 영수증으로 대조만 다시 돌린다 (공급자 호출 없음)\n`);
 } else {
@@ -309,6 +373,7 @@ if (res.status !== 200) {
 } else {
 
   const data = payload?.data ?? payload;
+  const pipelineEvidence = pipelineEvidenceFromPayload(payload);
   const comps = Array.isArray(data?.components) ? data.components : [];
   const conns = Array.isArray(data?.connections) ? data.connections : [];
   // 심볼 출현 수와 물리 대수는 다르다. 삼상 회로의 LA·CT·PT 는 상별 3 개를
@@ -346,6 +411,15 @@ if (res.status !== 200) {
   check('차단기', physicalByType.breaker ?? 0, spec.label.breakers);
   check('피뢰기', physicalByType.arrester ?? 0, spec.label.arresters);
   check('계기', physicalByType.meter ?? 0, spec.label.meters);
+  check('리액터', physicalByType.reactor ?? 0, spec.label.reactors);
+  check('부하', physicalByType.load ?? 0, spec.label.loads);
+  check('개폐기', physicalByType.switch ?? 0, spec.label.switches);
+
+  const namedFuseGroups = new Set(comps.flatMap((component) => {
+    const matches = String(component.label ?? '').toUpperCase().match(/\bFU\s*([1-6])\b/g) ?? [];
+    return matches.map((match) => match.replace(/\s+/g, ''));
+  })).size;
+  check('FU 명명 그룹', namedFuseGroups, spec.label.namedFuseGroups);
 
   // 손 판독 라벨 17 개 중 5 개만 대조되고 있었다(2026-07-28 실측). 특히
   // **그 픽스처가 존재하는 이유**가 안 재어졌다 — p4 의 환각 측정
@@ -374,10 +448,22 @@ if (res.status !== 200) {
   // 대조하지 못하는 라벨은 **침묵하지 않고 적는다.** SLD 어휘가 ZCT·PT·SPD 를
   // 따로 구분하지 않아(각각 meter·meter·arrester) 개수로 견줄 수 없다.
   const uncheckable = ['sheetType', 'interlocks', 'mainCircuits', 'busRating',
-    'breakersWithoutTypeLabel', 'zct', 'spd', 'pt', 'loads']
+    'breakersWithoutTypeLabel', 'zct', 'spd', 'pt']
     .filter((k) => spec.label[k] != null);
   if (uncheckable.length) {
     console.log(`   (미대조 ${uncheckable.length}: ${uncheckable.join(' · ')} — SLD 어휘가 이 구분을 갖지 않거나 손으로 확정하지 못한 항목)`);
+  }
+
+  const reviewSummary = pipelineEvidence.review?.summary;
+  console.log('\n분석 후 검토:');
+  console.log(`   상태 ${pipelineEvidence.reviewStatus}`
+    + (reviewSummary ? ` · PASS ${reviewSummary.pass ?? 0} · WARN ${reviewSummary.warn ?? 0} · FAIL ${reviewSummary.fail ?? 0} · 보류 ${reviewSummary.unknown ?? 0}` : ' · 검토 결과 없음'));
+  console.log(`   계산 체인 ${pipelineEvidence.calcChain.length}단계 · 제안 ${pipelineEvidence.proposalCount}건`
+    + (pipelineEvidence.topology ? ` · 위상 경고 ${(pipelineEvidence.topology.issues ?? []).length}건` : ' · 위상 미기록'));
+  for (const finding of pipelineEvidence.review?.findings ?? []) {
+    for (const proposal of finding.proposal ?? []) {
+      console.log(`   제안 [${finding.rule}] ${proposal.action} — ${proposal.basis}`);
+    }
   }
 
   mkdirSync('test-results', { recursive: true });
@@ -387,6 +473,7 @@ if (res.status !== 200) {
     what: spec.what, label: spec.label, byType, physicalByType,
     systemVoltage: data?.systemVoltage ?? null, systemType: data?.systemType ?? null,
     components: comps, connections: conns, confidence: data?.confidence ?? null,
+    ...pipelineEvidence,
   }, null, 2));
   console.log(`\n영수증 → ${out}`);
 

@@ -570,6 +570,90 @@ function extractJson(rawText: string): string {
   return fenced?.[1] ?? trimmed;
 }
 
+const ROLE_ROOT_COLLECTION: Record<VLMReviewRole, 'symbols' | 'lines' | 'texts' | 'logic' | 'rescanTargets'> = {
+  symbols: 'symbols',
+  connections: 'lines',
+  text: 'texts',
+  logic: 'logic',
+  'coverage-auditor': 'rescanTargets',
+};
+
+/**
+ * Recover only fully closed evidence objects from a role array that was cut off
+ * by a provider output limit. The result is explicitly partial and confidence
+ * capped; an incomplete final object is never repaired or guessed.
+ */
+function salvageCompleteRoleItems(rawText: string, collection: string): unknown[] {
+  const candidate = extractJson(rawText);
+  const marker = new RegExp(`"${collection}"\\s*:\\s*\\[`).exec(candidate);
+  if (!marker) return [];
+  let cursor = (marker.index ?? 0) + marker[0].length;
+  const items: unknown[] = [];
+
+  while (cursor < candidate.length) {
+    while (cursor < candidate.length && /[\s,]/.test(candidate[cursor])) cursor += 1;
+    if (candidate[cursor] === ']') break;
+    if (candidate[cursor] !== '{') break;
+    const start = cursor;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let completed = false;
+    for (; cursor < candidate.length; cursor += 1) {
+      const char = candidate[cursor];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === '\\') escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') inString = true;
+      else if (char === '{') depth += 1;
+      else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          const itemText = candidate.slice(start, cursor + 1);
+          try {
+            items.push(JSON.parse(itemText));
+          } catch {
+            return items;
+          }
+          cursor += 1;
+          completed = true;
+          break;
+        }
+      }
+    }
+    if (!completed) break;
+  }
+  return items;
+}
+
+export function parseRoleResponseData(role: VLMReviewRole, rawText: string): RoleReviewData {
+  const candidate = extractJson(rawText);
+  const collection = ROLE_ROOT_COLLECTION[role];
+  try {
+    const parsed: unknown = JSON.parse(candidate);
+    if (Array.isArray(parsed)) {
+      return parseRoleReviewData(role, {
+        [collection]: parsed,
+        warnings: ['ROLE_ROOT_ARRAY_PARTIAL_RECOVERY'],
+        confidence: 0.5,
+      });
+    }
+    return parseRoleReviewData(role, parsed);
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    const recovered = salvageCompleteRoleItems(candidate, collection);
+    if (recovered.length === 0) throw error;
+    return parseRoleReviewData(role, {
+      [collection]: recovered,
+      warnings: ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'],
+      confidence: 0.5,
+    });
+  }
+}
+
 function retryLimit(value: number | undefined): number {
   const limit = value ?? 2;
   if (!Number.isSafeInteger(limit) || limit < 0 || limit > 5) {
@@ -852,10 +936,9 @@ export async function analyzeDrawingRole(
   const contextLabel = role === 'coverage-auditor' ? 'COVERAGE_CONTEXT' : 'REGION_CONTEXT';
   const prompt = context ? `${ROLE_PROMPTS[role]}\n\n${contextLabel}:\n${context}` : ROLE_PROMPTS[role];
   const response = await callProviderForJson(imageBuffer, mimeType, prompt, options);
-  const parsed = JSON.parse(extractJson(response.rawText));
   return {
     role,
-    data: parseRoleReviewData(role, parsed),
+    data: parseRoleResponseData(role, response.rawText),
     rawText: response.rawText,
     model: response.model,
     durationMs: Date.now() - started,

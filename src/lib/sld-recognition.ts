@@ -50,6 +50,8 @@ export const SLD_COMPONENT_TYPES = [
   'generator',
   'motor',
   'capacitor',
+  /** 분로·직렬 리액터. 콘덴서와 목적·검토 항목이 달라 별도 기기로 보존한다. */
+  'reactor',
   'load',
   'switch',
   'relay',
@@ -69,6 +71,8 @@ export const SLD_COMPONENT_TYPES = [
   'lamp',
   /** 퓨즈 (PF / LF / FUSE) — 차단기와 다른 기기다. 그동안 breaker 에 얹혀 있었다 */
   'fuse',
+  /** 도면 밖 전력망과 이어지는 계통 경계. import/export 어느 쪽도 될 수 있다. */
+  'grid_connection',
   /**
    * 수전점·인입 (INCOMING / 수전 / 한전 인입 / UTILITY) — 도면의 전원이다.
    * 자리가 없어 `load` 에 얹히고 있었다(2026-07-28 실측: 22.9kV LBS 패널의
@@ -111,7 +115,16 @@ export interface SLDConnection {
   conductorSize?: string;
   /** 병렬 다조 수(예: 2 = "150sq x 2") — 허용전류 판정 시 조수배(버그 사냥 F5) */
   parallelCount?: number;
+  /** 도면에 명시된 유효전력 흐름. 추정값은 넣지 않는다. */
+  activePower?: string;
+  /** 도면에 명시된 무효전력 흐름. 추정값은 넣지 않는다. */
+  reactivePower?: string;
+  /** from/to 기준의 명시적 전력 흐름 방향. 화살표가 없으면 unknown. */
+  flowDirection?: SLDFlowDirection;
 }
+
+export const SLD_FLOW_DIRECTIONS = ['from_to', 'to_from', 'bidirectional', 'unknown'] as const;
+export type SLDFlowDirection = (typeof SLD_FLOW_DIRECTIONS)[number];
 
 export interface CalcSuggestion {
   calculatorId: string;
@@ -293,6 +306,23 @@ function normalizeArrester(
   return 'arrester';
 }
 
+/**
+ * 어휘가 없어서 load/capacitor로 밀려난 리액터를 라벨 근거로 복구한다.
+ * 라벨이 없는 코일 심볼은 이미지 근거가 필요하므로 여기서 추정하지 않는다.
+ */
+const REACTOR_LABEL = /\b(?:SHUNT|SERIES)\s+REACTOR\b|\bSH\.?R\b|\bS\.?R\b|분로\s*리액터|직렬\s*리액터|리액터/i;
+const REACTOR_FROM_TYPES = new Set<SLDComponentType>(['load', 'capacitor']);
+
+function normalizeReactor(
+  type: SLDComponentType,
+  label: string,
+  hits: string[],
+): SLDComponentType {
+  if (!REACTOR_FROM_TYPES.has(type) || !label || !REACTOR_LABEL.test(label)) return type;
+  hits.push(label.slice(0, 60));
+  return 'reactor';
+}
+
 const SLD_SYSTEM_PROMPT =`You are an expert electrical engineer analyzing Single Line Diagrams (SLD).
 Analyze the SLD image and extract:
 1. All components (transformers, breakers, cables, buses, generators, motors, capacitors, loads, etc.)
@@ -320,7 +350,11 @@ Return ONLY valid JSON with this structure:
       "to": "comp_2",
       "cableType": "string or null (e.g. XLPE, CV)",
       "length": "string or null (e.g. 50m)",
-      "conductorSize": "string or null (e.g. 185sq)"
+      "conductorSize": "string or null (e.g. 185sq)",
+      "parallelCount": "integer or null (only when 2 or more parallel cable runs are explicitly printed)",
+      "activePower": "string or null (e.g. 75 MW)",
+      "reactivePower": "string or null (e.g. 23 MVAR)",
+      "flowDirection": "from_to|to_from|bidirectional|unknown"
     }
   ],
   "systemVoltage": "main voltage level",
@@ -329,13 +363,23 @@ Return ONLY valid JSON with this structure:
   "rawDescription": "brief text description of the SLD"
 }
 - Use "arrester" for lightning/surge arresters (LA, SA, SPD, 피뢰기, 서지흡수기) — they are protective devices, not switches
+- Use "reactor" for shunt/series reactors (Sh.R, S.R, reactor coil, 분로리액터, 직렬리액터). A reactor is never a capacitor or a generic load
+- Use "grid_connection" for a conductor that continues to an external grid, utility, transmission line, or off-sheet network boundary. It remains a grid_connection whether the shown power flow enters or leaves this drawing; do not relabel it source/load from arrow direction alone
 - "transformer" means POWER transformers only. Instrument transformers (PT, VT, CT, ZCT, MOF, 계기용 변성기) are "meter" — they feed measurement, not load
+- Classify a drawn device by its glyph before the surrounding area label. Coupled or overlapping winding circles are one power "transformer" even when the nearby caption says "HV/MV substation". Do not replace that visible transformer with "source"; add a source or grid_connection only when a separate incoming endpoint, line boundary, or arrow is visibly drawn
 - Use "source" for the incoming supply point (INCOMING LINE, INCOMER, 수전점, 인입, 한전/KEPCO supply, utility feed, a "FROM : ..." note naming an upstream substation). It is where power ENTERS the drawing. Never type it as "load" — that inverts the direction of the whole diagram
 - A component group printed with a multiplicity marker ("LA x 3", "P.T x 3", "3EA", "3개") is that many physical devices. Keep the marker in "label" verbatim so the count is not lost
+- Do not collapse repeated feeders, breakers, contactors, overload relays, motors, or loads into one generic component such as "Motor Loads" or "Feeder Units". Emit one component per separately drawn symbol and one connection per separately drawn conductor branch, even when labels and ratings repeat. The only allowed grouping is an explicit printed multiplicity marker such as "LA x 3"
+- Before returning, rescan left-to-right and top-to-bottom by row and branch. Count every repeated device and load pictogram a second time and make the component array match the visible occurrences. An unlabeled house, motor, lamp, or other load pictogram is still one separate load; never omit the last repeated item because its shape matches its neighbors
+- On a dimension, layout, title, or schedule-only sheet, never turn the sheet title or drawing frame into a "panel" component. If no electrical device symbol with connectivity is visible, return empty components and connections
 - A cross-reference note ("FROM SV-VCS#1 PT LINE", "TO SV-TIE LBS PANEL") tells you where a line comes from or goes to on ANOTHER sheet. It is not a device on this sheet — attach it to the device it annotates via "properties", or type it "annotation". Never emit it as a meter, load, or panel
 - A voltage printed on a CABLE or BUS is its INSULATION CLASS, not the operating voltage (e.g. "600V 3P4W" on a bus of a 380V system). Never report it as systemVoltage. Take systemVoltage from the incoming-line note or from the PT ratio; if neither is present, omit systemVoltage rather than guessing
 - Position x/y must be numeric values from 0 to 100 relative to the current image
+- Every inline breaker, switch, and fuse must connect to the electrical segment on both sides. A bus-tie breaker splits a drawn bus into two bus-section nodes and connects those two sections; never leave the tie device isolated
+- Preserve every printed MW/MVAR pair on its nearest connection using activePower/reactivePower. Set flowDirection from the printed arrow relative to from/to; use unknown when no arrow is visible
+- Record each printed MW/MVAR label exactly once. Do not copy one label onto both connection segments on either side of a breaker, switch, or fuse
 - Include length only when a numeric value and unit are explicitly printed on the drawing
+- Set parallelCount only when the drawing explicitly prints two or more parallel cable runs (for example "2R", "2 RUN", "2×1C", or two parallel cable sets with a shared cable callout). Otherwise return null; never infer it from line thickness or phase conductors
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
 - If printed text is too blurred, faint, or low-resolution to read with certainty, set that field to null. Do NOT pick the most likely digit. A scanned drawing where "5" and "6" are indistinguishable must yield null, not a guess — a wrong rating on a compliance report is worse than a missing one
 - Lower "confidence" when key printed values were unreadable. A high confidence with guessed ratings is the worst outcome
@@ -394,8 +438,23 @@ const SLD_LOCAL_OUTPUT_SCHEMA = Object.freeze({
           cableType: { type: ['string', 'null'] },
           length: { type: ['string', 'null'] },
           conductorSize: { type: ['string', 'null'] },
+          parallelCount: { type: ['integer', 'null'], minimum: 2, maximum: 64 },
+          activePower: { type: ['string', 'null'] },
+          reactivePower: { type: ['string', 'null'] },
+          flowDirection: { type: 'string', enum: [...SLD_FLOW_DIRECTIONS] },
         },
-        required: ['id', 'from', 'to', 'cableType', 'length', 'conductorSize'],
+        required: [
+          'id',
+          'from',
+          'to',
+          'cableType',
+          'length',
+          'conductorSize',
+          'parallelCount',
+          'activePower',
+          'reactivePower',
+          'flowDirection',
+        ],
         additionalProperties: false,
       },
     },
@@ -543,6 +602,8 @@ export function parseSLDResponse(text: string): SLDAnalysis {
     const crossReferenceHits: string[] = [];
     /** 피뢰기를 다른 타입으로 낸 건수. */
     const arresterHits: string[] = [];
+    /** 리액터를 콘덴서·일반 부하로 낸 건수. */
+    const reactorHits: string[] = [];
     for (const row of data.components.slice(0, 2_000)) {
       if (!row || typeof row !== 'object') continue;
       const component = row as Record<string, unknown>;
@@ -560,20 +621,24 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       const label = boundedText(component.label, 256) ?? '';
       const quantity = parseMultiplicity(label);
       // 수전점 보정이 먼저다 — `FROM : … INCOMING LINE` 은 참조 주석이 아니라 전원이다.
-      const normalizedType = normalizeCrossReference(
-        normalizeArrester(
-          normalizeIncomingSource(
-            normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits),
+      const normalizedType = normalizeReactor(
+        normalizeCrossReference(
+          normalizeArrester(
+            normalizeIncomingSource(
+              normalizeInstrumentTransformer(type as SLDComponentType, label, instrumentTransformerHits),
+              label,
+              properties ? Object.values(properties).join(' ') : '',
+              incomingSourceHits,
+            ),
             label,
-            properties ? Object.values(properties).join(' ') : '',
-            incomingSourceHits,
+            arresterHits,
           ),
           label,
-          arresterHits,
+          Boolean(component.rating || component.voltage || component.current),
+          crossReferenceHits,
         ),
         label,
-        Boolean(component.rating || component.voltage || component.current),
-        crossReferenceHits,
+        reactorHits,
       );
       components.push({
         id,
@@ -602,6 +667,17 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       const length = rawLength && /^\d+(?:\.\d+)?\s*(?:mm|cm|m|km|ft|in)$/i.test(rawLength)
         ? rawLength
         : undefined;
+      const rawFlowDirection = boundedText(connection.flowDirection, 32);
+      const flowDirection = rawFlowDirection && SLD_FLOW_DIRECTION_SET.has(rawFlowDirection as SLDFlowDirection)
+        ? rawFlowDirection as SLDFlowDirection
+        : undefined;
+      const rawParallelCount = finiteNumber(connection.parallelCount);
+      const parallelCount = rawParallelCount != null
+        && Number.isInteger(rawParallelCount)
+        && rawParallelCount >= 2
+        && rawParallelCount <= 64
+        ? rawParallelCount
+        : undefined;
       connections.push({
         id,
         from,
@@ -609,6 +685,10 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ...optionalTextField('cableType', connection.cableType),
         ...(length ? { length } : {}),
         ...optionalTextField('conductorSize', connection.conductorSize),
+        ...(parallelCount ? { parallelCount } : {}),
+        ...optionalTextField('activePower', connection.activePower),
+        ...optionalTextField('reactivePower', connection.reactivePower),
+        ...(flowDirection ? { flowDirection } : {}),
       });
     }
 
@@ -644,7 +724,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ? Math.max(0, Math.min(partialRecovery ? 0.5 : 1, rawConfidence))
         : 0,
       ...(partialRecovery ? { partial: true } : {}),
-      ...((partialRecovery || instrumentTransformerHits.length || incomingSourceHits.length || crossReferenceHits.length || arresterHits.length || insulationClassSuspect) ? {
+      ...((partialRecovery || instrumentTransformerHits.length || incomingSourceHits.length || crossReferenceHits.length || arresterHits.length || reactorHits.length || insulationClassSuspect) ? {
         warnings: [
           ...(partialRecovery ? ['TRUNCATED_MODEL_OUTPUT_PARTIAL_RECOVERY'] : []),
           ...(insulationClassSuspect ? [
@@ -662,6 +742,9 @@ export function parseSLDResponse(text: string): SLDAnalysis {
           ),
           ...arresterHits.map(
             (label) => `ARRESTER_RECLASSIFIED: "${label}" 을(를) 피뢰기로 보정`,
+          ),
+          ...reactorHits.map(
+            (label) => `REACTOR_RECLASSIFIED: "${label}" 을(를) 리액터로 보정`,
           ),
         ],
       } : {}),
@@ -686,6 +769,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
  * 그 기기가 아예 없던 것처럼 보인다.
  */
 const SLD_COMPONENT_TYPE_SET: ReadonlySet<SLDComponentType> = new Set(SLD_COMPONENT_TYPES);
+const SLD_FLOW_DIRECTION_SET: ReadonlySet<SLDFlowDirection> = new Set(SLD_FLOW_DIRECTIONS);
 
 function boundedText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') return undefined;
@@ -1159,7 +1243,10 @@ async function callChatGPTLocalVision(
       },
     ],
     outputSchema: SLD_LOCAL_OUTPUT_SCHEMA,
-    timeoutMs: 120_000,
+    // 세 GPT 비교·실사용 모두 같은 추론 강도로 고정한다. 모델 기본값에 맡기면
+    // Sol=low, Terra/Luna=medium이 되어 품질 비교도 실제 분석도 흔들린다.
+    effort: 'medium',
+    timeoutMs: 180_000,
   });
   return result.text;
 }

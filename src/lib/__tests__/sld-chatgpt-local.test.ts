@@ -34,6 +34,7 @@ describe('legacy SLD recognition local transport', () => {
 
     expect(runTurnMock).toHaveBeenCalledWith(expect.objectContaining({
       model: 'gpt-5.6-terra',
+      effort: 'medium',
       input: expect.arrayContaining([
         expect.objectContaining({
           type: 'image',
@@ -46,6 +47,16 @@ describe('legacy SLD recognition local transport', () => {
         required: expect.arrayContaining(['components', 'connections', 'confidence']),
       }),
     }));
+    const request = runTurnMock.mock.calls[0][0];
+    const connectionSchema = (request.outputSchema as {
+      properties: { connections: { items: { properties: Record<string, unknown>; required: string[] } } };
+    }).properties.connections.items;
+    expect(connectionSchema.properties).toHaveProperty('parallelCount');
+    expect(connectionSchema.required).toContain('parallelCount');
+    expect(request.developerInstructions).toContain('Do not collapse repeated feeders');
+    expect(request.developerInstructions).toContain('Classify a drawn device by its glyph');
+    expect(request.developerInstructions).toContain('HV/MV substation');
+    expect(request.developerInstructions).toContain('Before returning, rescan left-to-right');
     expect(result).toMatchObject({
       components: [],
       connections: [],

@@ -47,6 +47,15 @@ describe('Agent Platform legacy vision production callers', () => {
 
     expect(role.success).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+    const sldBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      contents?: Array<{ parts?: Array<{ text?: string }> }>;
+    };
+    const sldPrompt = sldBody.contents?.[0]?.parts?.map((part) => part.text ?? '').join('\n') ?? '';
+    expect(sldPrompt).toContain('parallelCount');
+    expect(sldPrompt).toContain('Do not collapse repeated feeders');
+    expect(sldPrompt).toContain('Classify a drawn device by its glyph');
+    expect(sldPrompt).toContain('HV/MV substation');
+    expect(sldPrompt).toContain('Before returning, rescan left-to-right');
     for (const [url, init] of fetchMock.mock.calls) {
       expect(String(url)).toBe(
         'https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3.6-flash:generateContent',

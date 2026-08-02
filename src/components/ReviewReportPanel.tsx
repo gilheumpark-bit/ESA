@@ -21,6 +21,10 @@ export interface TopologyReadout {
   fragments: number;
   /** 없는 부품을 가리키는 연결 — 모델이 지어낸 참조다. */
   danglingEdges?: number;
+  /** 차단기·개폐기·퓨즈의 한쪽 연결이 누락된 수. */
+  danglingInlineDevices?: number;
+  /** 같은 전력 표기를 인라인 기기 양쪽에 복제한 의심 수. */
+  duplicateFlowMeasurements?: number;
 }
 
 export type ReviewLike =
@@ -125,6 +129,8 @@ function TopologyLine({ t }: { t: TopologyReadout }) {
       <span className="font-[family-name:var(--font-mono)]">
         계통 판독 · 부품 {t.nodes} · 연결 {t.edges} · 고립 {t.isolated} · 분리 {t.fragments}
         {t.danglingEdges ? ` · 없는 부품 참조 ${t.danglingEdges}` : ''}
+        {t.danglingInlineDevices ? ` · 인라인 단선 의심 ${t.danglingInlineDevices}` : ''}
+        {t.duplicateFlowMeasurements ? ` · 전력표기 중복 의심 ${t.duplicateFlowMeasurements}` : ''}
       </span>
       {unreadable && (
         <span className="ml-1.5 text-[var(--color-accent)]">
@@ -184,6 +190,29 @@ function CoverageLine({ c }: { c: ReviewReport['coverage'] }) {
   );
 }
 
+/**
+ * 초급 회로 검토 엔진의 규칙 경계. `FAIL 0` 이 KEC 전면 적합으로 읽히지 않게
+ * 실제 자동 대조와 아직 이 경로가 판정하지 않는 항목을 항상 함께 보여 준다.
+ * 미검토 항목은 누락 데이터와 같은 뜻이 아니다 — 별도 계산·보호협조 자료가
+ * 필요한 독립 검토 영역이다.
+ */
+function ReviewScopeLine() {
+  return (
+    <div
+      data-testid="review-rule-scope"
+      className="mt-2.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 py-2 text-[12px] leading-relaxed text-[var(--text-secondary)]"
+    >
+      <p>
+        <strong className="text-[var(--text-primary)]">KEC 전면 검토 아님</strong>
+        {' · 자동 대조: '}AF/AT 구조 · KEC 케이블 허용전류 · 변압기 2차 정격전류 상호대조
+      </p>
+      <p className="mt-1">
+        이번 경로 미검토: 차단용량↔단락전류 · 보호협조 · 접지·감전보호 · 전압강하 · 케이블 단락내량 · SPD/피뢰 · 전동기 보호
+      </p>
+    </div>
+  );
+}
+
 export default function ReviewReportPanel({ review }: { review: ReviewLike | null }) {
   if (!review) return null;
 
@@ -232,6 +261,7 @@ export default function ReviewReportPanel({ review }: { review: ReviewLike | nul
       </div>
 
       {coverage && <CoverageLine c={coverage} />}
+      <ReviewScopeLine />
       {topology && <TopologyLine t={topology} />}
 
       {sorted.length > 0 ? (

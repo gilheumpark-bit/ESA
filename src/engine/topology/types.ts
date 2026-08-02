@@ -78,7 +78,9 @@ export type ValidationIssueType =
   | 'MISSING_EDGE_TARGET'
   | 'DUPLICATE_EDGE'
   | 'LOOP_DETECTED'
-  | 'MISSING_RATING';
+  | 'MISSING_RATING'
+  | 'DANGLING_INLINE_DEVICE'
+  | 'DUPLICATE_FLOW_MEASUREMENT';
 
 export interface ValidationIssue {
   type: ValidationIssueType;

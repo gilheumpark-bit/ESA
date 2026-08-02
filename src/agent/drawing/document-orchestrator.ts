@@ -235,6 +235,25 @@ function hasSourceFailure(result: TeamResult, role: RoleId, sourceId: string): b
     failure.role === role && failure.sourceId === sourceId);
 }
 
+/**
+ * Council failures are already bounded and API-key-redacted before they reach
+ * the orchestrator. Preserve the matching diagnostic in the coverage receipt;
+ * replacing it with only "precision review failed" made live provider/schema
+ * failures impossible to distinguish from an empty region.
+ */
+function sourceFailureMessage(
+  result: TeamResult,
+  role: RoleId,
+  sourceId: string,
+  fallback: string,
+): string {
+  const failures = result.drawingReview?.failures ?? [];
+  const exact = failures.find((failure) => failure.role === role && failure.sourceId === sourceId);
+  if (exact?.error) return `${fallback}: ${exact.error}`;
+  const roleFailure = failures.find((failure) => failure.role === role && failure.sourceId === 'role');
+  return roleFailure?.error ? `${fallback}: ${roleFailure.error}` : fallback;
+}
+
 function hasReviewedSource(result: TeamResult, role: RoleId, sourceId: string): boolean {
   const envelope = councilEnvelope(result, role);
   if (!envelope) return false;
@@ -260,7 +279,7 @@ function markCouncilCoverage(
       role,
       envelope ? `${envelope.outputHash}:${sourceId}` : `${fullId}:${role}:missing`,
       success,
-      success ? undefined : `${role} full-page review failed`,
+      success ? undefined : sourceFailureMessage(result, role, sourceId, `${role} full-page review failed`),
     );
     if (success) completedRoles.push(role);
   }
@@ -284,7 +303,7 @@ function markCouncilCoverage(
         role,
         envelope ? `${envelope.outputHash}:${sourceId}` : `${regionId}:${role}:missing`,
         success,
-        success ? undefined : `${role} precision review failed`,
+        success ? undefined : sourceFailureMessage(result, role, sourceId, `${role} precision review failed`),
       );
     }
   }
@@ -303,7 +322,12 @@ function markCouncilCoverage(
     'coverage-auditor',
     coverageEnvelope?.outputHash ?? `coverage:${review?.snapshot.drawingHash ?? page.renderHash}:missing`,
     coverageSuccess,
-    coverageSuccess ? undefined : 'coverage audit found unresolved regions or graph conflicts',
+    coverageSuccess ? undefined : sourceFailureMessage(
+      result,
+      'coverage-auditor',
+      review?.coverage.roles['coverage-auditor']?.variantId ?? 'missing-source',
+      'coverage audit found unresolved regions or graph conflicts',
+    ),
   );
   if (coverageSuccess) completedRoles.push('coverage-auditor');
   const unresolvedRescans = coverageSuccess ? 0 : 1;

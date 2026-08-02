@@ -34,23 +34,33 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
     connected.add(r.from);
     connected.add(r.to);
   }
-  for (const s of confirmed) {
-    if (!connected.has(s.id) && !isBusLike(s)) {
-      // 종류가 확정되지 않았으면 «모선 제외» 판정 자체가 추측 위에 서 있다.
-      // 소견을 버리지는 않되 SUPPORTED 로 확정하지 않는다.
-      const supported = input.coverageComplete === true && hasConfirmedType(s);
-      out.push(rec(++seq, {
-        severity: 'major',
-        problem: `${s.displayId} 장치가 확정 결선에 연결되지 않았습니다 (고아 장치).`,
-        relatedDisplayIds: [s.displayId],
-        evidenceIds: s.evidence.map((e) => e.evidenceId),
-        status: supported ? 'SUPPORTED' : 'HOLD',
-        recommendedAction: '결선 누락·구획 경계 잘림·페이지 참조를 확인하십시오.',
-        requiredInputs: supported ? [] : missingSupportInputs(input, [s]),
-        standardRefs: ['ESA-SLD-RULE:ORPHAN-CONNECTION'],
-        calcReceiptIds: [],
-      }));
-    }
+  const orphanGroups = new Map<string, { symbols: SymbolNode[]; supported: boolean; pageIndex: number }>();
+  for (const s of confirmed.filter((node) => !connected.has(node.id) && !isBusLike(node))) {
+    // 종류가 확정되지 않았으면 «모선 제외» 판정 자체가 추측 위에 서 있다.
+    // 소견을 버리지는 않되 SUPPORTED 로 확정하지 않는다.
+    const supported = input.coverageComplete === true && hasConfirmedType(s);
+    const pageIndex = s.evidence[0]?.pageIndex ?? 0;
+    const key = `${pageIndex}:${supported ? 'SUPPORTED' : 'HOLD'}`;
+    const group = orphanGroups.get(key) ?? { symbols: [], supported, pageIndex };
+    group.symbols.push(s);
+    orphanGroups.set(key, group);
+  }
+  for (const group of orphanGroups.values()) {
+    const displayIds = unique(group.symbols.map((s) => s.displayId));
+    const evidenceIds = unique(group.symbols.flatMap((s) => s.evidence.map((e) => e.evidenceId)));
+    out.push(rec(++seq, {
+      severity: 'major',
+      problem: displayIds.length === 1
+        ? `${displayIds[0]} 장치가 확정 결선에 연결되지 않았습니다 (고아 장치).`
+        : `${group.pageIndex + 1}페이지의 장치 ${displayIds.length}개가 확정 결선에 연결되지 않았습니다 (고아 장치).`,
+      relatedDisplayIds: displayIds,
+      evidenceIds,
+      status: group.supported ? 'SUPPORTED' : 'HOLD',
+      recommendedAction: '결선 누락·구획 경계 잘림·페이지 참조를 확인하십시오.',
+      requiredInputs: group.supported ? [] : missingSupportInputs(input, group.symbols),
+      standardRefs: ['ESA-SLD-RULE:ORPHAN-CONNECTION'],
+      calcReceiptIds: [],
+    }));
   }
 
   // Power path without breaker
@@ -139,38 +149,41 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
     }));
   }
 
-  // Unreadable critical
-  for (const u of input.unresolved) {
-    if (u.code === 'UNREADABLE_TEXT' || u.code === 'UNREADABLE_SYMBOL' || u.code === 'LOW_RESOLUTION_HOLD') {
-      out.push(rec(++seq, {
-        severity: 'major',
-        problem: `판독 불가 항목: ${u.code}${u.displayId ? ` (${u.displayId})` : ''}.`,
-        relatedDisplayIds: u.displayId ? [u.displayId] : [],
-        evidenceIds: [],
-        status: 'HOLD',
-        recommendedAction: u.recommendedUpload?.note
-          ?? '더 높은 해상도로 재업로드하거나 사용자 확인이 필요합니다.',
-        requiredInputs: u.userConfirmItems?.map((q) => q.question) ?? ['고해상도 원본 또는 수동 확인'],
-        standardRefs: [],
-        calcReceiptIds: [],
-      }));
-    }
-  }
-
-  for (const u of input.unresolved) {
-    if (u.code === 'UNREADABLE_TEXT' || u.code === 'UNREADABLE_SYMBOL' || u.code === 'LOW_RESOLUTION_HOLD') continue;
+  // 미해결 항목은 원본 ledger 에 개별 보존된다. 제안 화면에서는 동일 페이지와
+  // 원인별로 묶어 수백 개 카드가 핵심 안전 소견을 밀어내지 않게 한다.
+  const unresolvedGroups = groupUnresolved(input.unresolved);
+  for (const group of unresolvedGroups) {
+    const [u] = group;
+    const unreadable = u.code === 'UNREADABLE_TEXT'
+      || u.code === 'UNREADABLE_SYMBOL'
+      || u.code === 'LOW_RESOLUTION_HOLD';
+    const displayIds = unique(group.flatMap((item) => item.displayId ? [item.displayId] : []));
+    const requiredInputs = unique(group.flatMap((item) =>
+      item.userConfirmItems?.map((question) => question.question) ?? []));
+    const firstAction = unreadable
+      ? u.recommendedUpload?.note ?? '더 높은 해상도로 재업로드하거나 사용자 확인이 필요합니다.'
+      : u.note;
     out.push(rec(++seq, {
-      severity: u.code === 'LINE_CONTINUITY_UNCERTAIN'
+      severity: unreadable
+        || u.code === 'LINE_CONTINUITY_UNCERTAIN'
         || u.code === 'HOLD_RESCAN_UNRESOLVED'
         || u.code === 'ELECTRICAL_LOGIC_CONFLICT'
         ? 'major'
         : 'minor',
-      problem: `미해결 항목 ${u.displayId ?? u.id}: ${u.code}.`,
-      relatedDisplayIds: u.displayId ? [u.displayId] : [],
+      problem: group.length === 1
+        ? unreadable
+          ? `판독 불가 항목: ${u.code}${u.displayId ? ` (${u.displayId})` : ''}.`
+          : `미해결 항목 ${u.displayId ?? u.id}: ${u.code}.`
+        : `${u.pageIndex + 1}페이지의 ${u.code} 미해결 항목 ${group.length}건.`,
+      relatedDisplayIds: displayIds,
       evidenceIds: [],
       status: 'HOLD',
-      recommendedAction: u.note,
-      requiredInputs: u.userConfirmItems?.map((item) => item.question) ?? ['원본 근거 재확인'],
+      recommendedAction: group.length === 1
+        ? firstAction
+        : `${firstAction} 외 ${group.length - 1}건 — 미해결 항목 목록에서 개별 번호와 근거를 확인하십시오.`,
+      requiredInputs: requiredInputs.length > 0
+        ? requiredInputs
+        : [unreadable ? '고해상도 원본 또는 수동 확인' : '원본 근거 재확인'],
       standardRefs: [],
       calcReceiptIds: [],
     }));
@@ -291,6 +304,21 @@ function missingSupportInputs(input: RecommendationInput, nodes: SymbolNode[]): 
   )];
   if (unconfirmed.length > 0) needed.push(`기기 종류 확정: ${unconfirmed.join(', ')}`);
   return needed.length > 0 ? needed : ['원본 근거 재확인'];
+}
+
+function groupUnresolved(items: UnresolvedItem[]): UnresolvedItem[][] {
+  const groups = new Map<string, UnresolvedItem[]>();
+  for (const item of items) {
+    const key = `${item.pageIndex}:${item.code}`;
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else groups.set(key, [item]);
+  }
+  return [...groups.values()];
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 const isSource = (s: SymbolNode) => hasDeviceClass(s, 'source');

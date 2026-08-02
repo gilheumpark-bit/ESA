@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 418a148ece5e3ac7ff3c3f165ed32ff20380bb6b
-updatedAt: 2026-08-02T00:00:00+09:00
+codeBaselineCommit: 4ed7d0e2fd14f58caee40281366af2f6feac67c5
+updatedAt: 2026-08-02T14:20:00+09:00
 trigger: architecture
 changedDomains: [app, lib, agent, engine, docs, scripts, ci]
 ---
@@ -65,10 +65,13 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `chatgpt-local` 공급자를 설정 카드, 채팅·계산 영수증, SLD V3 역할 심사, 구형 SLD·OCR, 전문팀 검토까지 연결했다. API 키를 받지 않으며 원격 Host와 same-origin 위반은 닫고, command·file change·MCP·웹·승인 이벤트가 발생한 turn은 폐기한다.
 - `google-agent-platform` 공급자를 Cloud 크레딧 키, 채팅, SLD V3, 구형 SLD·OCR, 전문팀 검토까지 별도 경로로 연결했다. 실제 Express Mode가 요구하는 `contents[].role=user`와 Gemini thought-part 제거를 모든 Google 도면 호출에 적용했다.
 - 도면의 `annotation`은 판독 결과에 보존하지만 전기 토폴로지 노드·고립 판정에서는 제외해, 문자를 더 많이 읽은 모델이 더 나쁜 연결망 점수를 받는 역전 현상을 막았다.
+- 반복 기호 집계, 비회로 면 phantom 기기, V3 역할 오류 은폐, 절단 JSON·루트 배열·점 좌표, `pageIndex` bounds 별칭을 수리했다. 부분 복구에는 confidence 페널티를 남기고 지원하지 않는 필드는 필드명과 함께 거부한다.
+- 동일 원인의 고아 기기·OCR·연속성 권고를 페이지별로 묶어 212건까지 폭증하던 제안을 6개 근거 묶음으로 줄이되 대상 ID는 보존했다.
+- 도면 보고서에 현재 자동화된 AF/AT·KEC 케이블 허용전류·변압기 2차 전류와 미자동화된 단락·협조·접지·전압강하·단락내량·SPD·전동기 보호를 상시 표시한다.
 
 ## 부분 완료
 
-- 이미지·DXF·PDF의 코드 경로와 공개 PDF 전체 페이지 왕복은 닫혔다. 외부 AI 공급자별 정밀 판독 정확도는 같은 공개 자료의 독립 정답 라벨과 실제 키가 준비돼야 계량할 수 있다.
+- 이미지·DXF·PDF의 코드 경로와 공개 PDF 전체 페이지 왕복은 닫혔다. 실제 Agent Platform 키로 공개 도면 4종을 추가 실행했지만, 수동 수량표는 독립 인간 정답이 아니므로 공급자별 일반화 정확도 계량에는 사용할 수 없다.
 - 이메일·푸시 알림은 수신 설정과 인앱 저장만 있으며 실제 발송자는 연결하지 않았다.
 - 기준서 화면은 저장소 스냅샷을 탐색하지만 관할 기관 최신 원문을 자동 동기화하지 않는다.
 - 공유 인메모리 레이트 리밋은 단일 프로세스 보호만 제공한다. V3 작업 저장은 내구 볼륨으로 전환했지만 전역 레이트 리밋은 별도다.
@@ -86,13 +89,15 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 실제 Weaviate 컬렉션의 insert→검색→재연결과 전용 보안 스캐너 결과.
 - 실제 Gemini·OpenAI·Claude로 초급·중급·고급 일반 전기 질문을 반복 호출한 정답성·근거성·제안 품질 비교.
 - `wiki-oneline.png` 한 장에서는 Agent Platform과 로컬 ChatGPT를 각 2회 비교했다. 난이도별 공개 도면 전체와 모델별 3회 반복의 누락·오탐·사용량 제한·timeout 비교는 아직 미검증이다.
+- 공개 북미 배전도에서 변압기 10/10, 부하 20/21만 검출하고 34기기 중 10결선만 복원했다. 반복 기호의 수량보다 관계 복원이 약한 상태다.
+- KEC 자동 검토는 AF/AT, 제한된 케이블 허용전류, 변압기 2차 전류만 다룬다. 단락전류-차단용량, 보호협조, 접지·감전, 전압강하, 케이블 단락내량, SPD·피뢰, 전동기 보호는 미검증 또는 미구현이다.
 
 ## 보류
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 제품 코드 기준선은 `418a148ece5e3ac7ff3c3f165ed32ff20380bb6b`이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 현재 작업 트리는 제품 코드 기준선 `4ed7d0e2fd14f58caee40281366af2f6feac67c5` 위의 미커밋 수리 스냅샷이다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
@@ -117,13 +122,16 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 2026-07-31 로컬 ChatGPT 실계정: 상태 API 200·연결·마스킹 이메일·모델 8개(이미지 7개), 텍스트 답변 200, 계산 질문 이벤트 `calculation→text→filter`, 원격 Host 계정 API 404를 확인했다.
 - 같은 실계정의 공개 `wiki-oneline.png`: `gpt-5.6-terra` SLD는 HTTP 200·기기 17·연결 16·confidence 0.69·saga COMPLETE, OCR은 HTTP 200·confidence 0.98로 완료됐다. `gpt-5.4-mini` SLD는 120초 제한을 넘어 502였으며, 이 결과는 연결 완주 증거이지 외부 정답 라벨 기반 정확도 증거가 아니다.
 - 2026-08-02 동일 공개 `wiki-oneline.png` 2회 비교: Agent Platform `gemini-3.6-flash`는 2/2회 14기기·13결선·단일망(22.586/24.521초), ChatGPT `gpt-5.6-terra`는 1회 14·13과 전력 문자 5묶음, 1회 13·12(47.227/31.363초)였다. 단일 표본 구조 판독은 둘 다 80%를 넘었지만 일반화 정확도 주장은 하지 않는다. 상세는 비교 영수증을 따른다.
+- 2026-08-02 Agent Platform 공개 도면 추가 실측: 단선도는 정답 수량 전부·14기기·13결선·topology valid, 유럽 배전도는 변압기 4/4·부하 20/20·28기기·27결선, 북미 배전도는 변압기 10/10·부하 20/21·34기기·10결선, 실제 결선도는 QS1과 FU1~FU6 명칭을 모두 판독했다. 전기 정격·관계가 불완전한 3종은 의도대로 HOLD다.
+- 2026-08-02 국내 추가 실측: 비회로 치수 배치도는 0기기·0결선으로 phantom panel을 제거했고, 고밀도 MCC는 반복기기 분리 수리 후 43기기·15결선으로 증가했으나 관계 누락 때문에 HOLD다.
 
 ## 다음 첫 행동
 
-1. 현재 공개 교보재 PDF의 기호·문자·관계 정답표를 별도 판정자가 작성해 자동 회귀 데이터셋으로 고정한다.
-2. V3 `runBenchmarkSuite`로 실제 BYOK 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만들고, 승인 공개키·필수 strata를 운영 설정에 결박한다.
-3. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate, AI 공급자 순으로 write→persist→새 세션 read-back을 검증한다.
-4. 초급·중급·고급 일반 전기 질문 정답 세트를 고정하고 공급자별 답변의 정답성·근거성·누락·제안 품질을 반복 채점한다.
+1. 공개 교보재의 기호·문자·관계 정답표를 전기 실무자 2인 블라인드 판정과 불일치 합의 로그로 고정한다.
+2. 북미 배전도와 고밀도 MCC를 전체 이미지→4×4 구획→반복 기호 재스캔→전역 중복 제거로 실행해 edge recall을 우선 수리한다.
+3. connection/spec 계약에 설치 방식·주위온도·집합회로 수·예상 단락전류·차단용량·보호곡선과 source ID를 추가하고, 근거가 없으면 KEC 적합을 HOLD로 닫는다.
+4. V3 `pageIndex` 정규화 수정 뒤 동일 MCC를 재실행하고, 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만든다.
+5. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate 순으로 write→persist→새 세션 read-back을 검증한다.
 
 ## 상세 문서
 
@@ -133,6 +141,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
 - [최신 인수인계](docs/project/handoffs/2026-07-23-z-ai-chat-calculator-and-docs.md)
 - [Agent Platform·ChatGPT SLD 비교](docs/project/handoffs/2026-08-02-google-agent-chatgpt-sld-comparison.md)
+- [도면 누수·공개 교보재·KEC 검증](docs/project/handoffs/2026-08-02-drawing-leakage-public-kec-validation.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
 - [경계 연속성 설계](docs/superpowers/specs/2026-07-23-sld-region-continuity-integrated-recovery-design.md)
