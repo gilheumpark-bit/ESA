@@ -38,6 +38,7 @@ import {
   type RawSymbolHit,
 } from './evidence-deduplicator';
 import { detectRasterLineHits } from './raster-line-detector';
+import { equipmentExclusionBounds } from './raster-line-exclusions';
 import { canReusePage, createJob, getJob, getOwnedJob, updateJob, type DrawingJobRecord } from './drawing-job-store';
 import { surveyPageKind } from './page-classifier';
 import { OCR_STANDARD_TERMS } from './ocr-standard-terms';
@@ -342,6 +343,11 @@ function markCouncilCoverage(
   return { regions: next, roles: completedRoles, unresolvedRescans, rescanTargets };
 }
 
+/** 재스캔이 더 필요한가. 계획·실행 중·실패 구획이 하나라도 남으면 참이다. */
+function hasCoverageGaps(regions: readonly CoverageRegionRecord[]): boolean {
+  return regions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
+}
+
 function boundsIntersect(
   left: { x: number; y: number; w: number; h: number },
   right: { x: number; y: number; w: number; h: number },
@@ -509,6 +515,331 @@ function existingEvidenceSeeds(
   return { symbols, lines, texts };
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 페이지 분석 — 문서 단위 문맥과 벡터·래스터 경로
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 페이지들이 함께 채우는 증거 누산기. 참조로 공유한다. */
+interface EvidenceAccumulator {
+  symbolHits: RawSymbolHit[];
+  lineHits: RawLineHit[];
+  textSeeds: RawTextSeed[];
+  continuityByPage: Map<number, NonNullable<AdaptedTeamResult['continuity']>>;
+  calculations: DrawingDocumentV3['calculations'];
+  logicConflictsByPage: Map<number, LogicConflict[]>;
+  unresolved: UnresolvedItem[];
+  rolesPresent: Set<RoleId>;
+  regionRecords: CoverageRegionRecord[];
+  providersUsed: Set<string>;
+  modelsUsed: Set<string>;
+}
+
+/** 소비된 예산. 값 타입이므로 객체에 담아야 페이지 간에 공유된다. */
+interface SpentBudget {
+  attemptedPages: number;
+  vlmCalls: number;
+  pixelsUsed: number;
+  unresolvedRescans: number;
+}
+
+interface DocumentRun {
+  readonly input: OrchestrateInput;
+  readonly deps: DocumentAnalysisDependencies;
+  readonly source: PreparedDrawingSource;
+  readonly budget: DocumentBudget;
+  readonly jobId: string;
+  readonly maxPagesPerRun: number;
+  readonly previousVlmCalls: number;
+  readonly deadline: number;
+  readonly analysisSignal: AbortSignal;
+  readonly executeTeam: typeof executeSLDTeam;
+  readonly evidence: EvidenceAccumulator;
+  readonly spent: SpentBudget;
+}
+
+type PageVision = NonNullable<OrchestrateInput['vision']>;
+
+const MAX_RESCAN_ATTEMPTS = 2;
+
+/** 페이지·시간·픽셀 예산 또는 취소 경계에 닿았는가. */
+function exceedsRunBoundary(run: DocumentRun, page: PreparedDrawingPage): boolean {
+  return run.spent.attemptedPages >= run.maxPagesPerRun
+    || Date.now() >= run.deadline
+    || run.spent.pixelsUsed + page.width * page.height > run.budget.maxPixels
+    || run.analysisSignal.aborted
+    || Boolean(getJob(run.jobId)?.cancelRequested);
+}
+
+function recordEnvelopeOrigins(run: DocumentRun, result: TeamResult): void {
+  for (const envelope of result.drawingReview?.envelopes ?? []) {
+    run.evidence.providersUsed.add(envelope.provider);
+    run.evidence.modelsUsed.add(envelope.model);
+  }
+}
+
+/**
+ * 벡터 파서 경로. 구획 영수증은 DXF이거나 Vision 키가 없을 때만 이 결과로
+ * 확정한다 — Vision이 있으면 아래 래스터 심사가 같은 페이지를 다시 덮는다.
+ */
+async function runVectorPass(
+  run: DocumentRun,
+  page: PreparedDrawingPage,
+  vectorPlans: CoverageRegionPlan[],
+): Promise<{ usable: boolean; regions?: CoverageRegionRecord[] }> {
+  const { input, source, evidence } = run;
+  const result = await run.executeTeam(
+    teamInputForVector(input, source, page, run.analysisSignal),
+    run.deps.teamDeps,
+  );
+  recordEnvelopeOrigins(run, result);
+  const ownsCoverage = !input.vision || source.formatClass === 'dxf';
+
+  if (!result.success || (result.components?.length ?? 0) === 0) {
+    if (ownsCoverage) {
+      addUnresolved(evidence.unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서가 설비와 관계를 확정하지 못했습니다.');
+    }
+    return { usable: false };
+  }
+
+  mergeAdapted(
+    result,
+    page,
+    source,
+    evidence.symbolHits,
+    evidence.lineHits,
+    evidence.textSeeds,
+    evidence.continuityByPage,
+  );
+  if (!ownsCoverage) return { usable: true };
+
+  const coverage = markVectorCoverage(
+    createCoverageRegions(vectorPlans),
+    result.vectorAudit,
+    `vector:${page.renderHash}`,
+  );
+  coverage.roles.forEach((role) => evidence.rolesPresent.add(role));
+  if (!result.vectorAudit?.complete) {
+    addUnresolved(evidence.unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서의 역할별 분석·검증 영수증이 완전하지 않습니다.');
+  }
+  return { usable: true, regions: coverage.regions };
+}
+
+/** 같은 출처·같은 역할 조합의 재검사 대상은 하나로 접는다. */
+function dedupeRescanTargets(targets: RescanTargetEvidence[]): RescanTargetEvidence[] {
+  return [...new Map(targets.map((target) =>
+    [`${target.sourceId ?? target.id}:${target.suggestedRoles.join(',')}`, target])).values()];
+}
+
+/** 재스캔을 한 번 더 돌릴 호출·시간 여유가 있는가. */
+function canRescan(
+  run: DocumentRun,
+  vision: PageVision,
+  page: PreparedDrawingPage,
+  attempt: number,
+  targets: RescanTargetEvidence[],
+): boolean {
+  return attempt <= MAX_RESCAN_ATTEMPTS
+    && targets.length > 0
+    && run.previousVlmCalls + run.spent.vlmCalls + plannedTargetedRetryCalls(page, targets)
+      <= run.budget.maxVlmCalls
+    && Date.now() + drawingRoleTimeoutMs(vision.provider, vision.effort)
+      + RESCAN_SETTLE_MARGIN_MS < run.deadline
+    && !run.analysisSignal.aborted
+    && !getJob(run.jobId)?.cancelRequested;
+}
+
+function recordUnresolvedRescans(
+  run: DocumentRun,
+  page: PreparedDrawingPage,
+  targets: RescanTargetEvidence[],
+): void {
+  run.spent.unresolvedRescans += 1;
+  if (targets.length === 0) {
+    addUnresolved(run.evidence.unresolved, page, 'HOLD_RESCAN_UNRESOLVED', '최대 2회 정밀 재스캔 후에도 공간 그래프 충돌 또는 구획 호출 실패가 남았습니다.');
+    return;
+  }
+  for (const target of targets) {
+    const code: UnresolvedItem['code'] = target.reason === 'boundary-clip'
+      ? 'BOUNDARY_CLIP'
+      : target.reason === 'empty-result'
+        ? 'EMPTY_REGION_RESULT'
+        : 'HOLD_RESCAN_UNRESOLVED';
+    addUnresolved(
+      run.evidence.unresolved,
+      page,
+      code,
+      `coverage-auditor가 ${target.reason} 누락 가능성을 지적했습니다. 재검사 역할: ${target.suggestedRoles.join(', ')}.`,
+      target.sourceId,
+      { x: target.bounds.x, y: target.bounds.y, w: target.bounds.w, h: target.bounds.h },
+    );
+  }
+}
+
+/** 래스터 독립 심사 경로. 구획 공백이 남으면 최대 2회까지 표적 재스캔한다. */
+async function runRasterPass(
+  run: DocumentRun,
+  state: PageAnalysisState,
+  page: PreparedDrawingPage,
+  vision: PageVision,
+  rasterPlans: CoverageRegionPlan[],
+): Promise<{ usable: boolean; regions: CoverageRegionRecord[] }> {
+  const { evidence } = run;
+  // symbols + connections + logic + three independent full-page text
+  // reads + one post-review coverage audit, plus three precision grids.
+  const plannedCalls = 7 + gridSizeFor(page) * 3;
+  if (run.previousVlmCalls + run.spent.vlmCalls + plannedCalls > run.budget.maxVlmCalls) {
+    addUnresolved(evidence.unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지 독립 심사 예상 호출 수가 문서 호출 예산을 초과합니다.');
+    return {
+      usable: false,
+      regions: markAllFailed(createCoverageRegions(rasterPlans), 'PARTIAL_BUDGET_EXCEEDED'),
+    };
+  }
+
+  let regions = createCoverageRegions(rasterPlans);
+  let usable = false;
+  let attempt = 0;
+  let targets: RescanTargetEvidence[] = [];
+  let priorEnvelopes: RoleReviewEnvelope[] = [];
+
+  while (attempt <= MAX_RESCAN_ATTEMPTS) {
+    const result = await run.executeTeam(
+      teamInputForRaster(run.input, run.source, page, targets, priorEnvelopes, run.analysisSignal),
+      run.deps.teamDeps,
+    );
+    recordEnvelopeOrigins(run, result);
+    const actualCalls = result.drawingReview?.coverage.actualCalls
+      ?? result.drawingReview?.coverage.plannedCalls
+      ?? plannedCalls;
+    run.spent.vlmCalls += actualCalls;
+    state.vlmCalls += actualCalls;
+    // 쓴 즉시 적는다. 이 경로엔 try/catch 가 없어서 아래에서 예외가 나면
+    // 다음 체크포인트까지의 호출이 잊혔고, `/run` 은 실패 시 상태를 QUEUED
+    // 로 되돌려 재시도를 허용한다 — 잊힌 만큼 문서 예산(`maxVlmCalls`)을
+    // 매번 넘어설 수 있었다. 예산 검사는 `previousVlmCalls`(= 저장된 값)에서
+    // 출발하므로 저장이 늦으면 상한이 늦게 걸린다.
+    updateJob(run.jobId, { vlmCallsUsed: run.previousVlmCalls + run.spent.vlmCalls });
+
+    if (result.success && result.drawingReview) {
+      mergeAdapted(
+        result,
+        page,
+        run.source,
+        evidence.symbolHits,
+        evidence.lineHits,
+        evidence.textSeeds,
+        evidence.continuityByPage,
+      );
+      evidence.calculations.push(...adaptDrawingCalculations(result.drawingSynthesis).map((calculation) => ({
+        ...calculation,
+        id: `P${String(page.pageIndex + 1).padStart(2, '0')}-${calculation.id}`,
+      })));
+      evidence.logicConflictsByPage.set(page.pageIndex, [...(result.drawingSynthesis?.conflicts ?? [])]);
+      usable = true;
+      const coverage = markCouncilCoverage(regions, page, result);
+      regions = coverage.regions;
+      targets = dedupeRescanTargets([...coverage.rescanTargets, ...failedRoleRescanTargets(page, result)]);
+      coverage.roles.forEach((role) => evidence.rolesPresent.add(role));
+      priorEnvelopes = [
+        ...priorEnvelopes,
+        ...result.drawingReview.envelopes.filter((envelope) => envelope.role !== 'coverage-auditor'),
+      ];
+    } else {
+      regions = markAllFailed(regions, result.error ?? 'ROLE_CALL_FAILED');
+    }
+
+    if (!hasCoverageGaps(regions)) break;
+    attempt += 1;
+    if (!canRescan(run, vision, page, attempt, targets)) break;
+  }
+
+  if (hasCoverageGaps(regions)) recordUnresolvedRescans(run, page, targets);
+  return { usable, regions };
+}
+
+/** 한 페이지의 준비 오류·예산 경계·판독 경로·최종 상태를 모두 확정한다. */
+async function analyzePage(
+  run: DocumentRun,
+  state: PageAnalysisState,
+  page: PreparedDrawingPage,
+): Promise<void> {
+  const { input, source, evidence } = run;
+  const rasterPlans = rasterCoveragePlans(page);
+  const vectorPlans = vectorCoveragePlans(page);
+
+  if (page.preparationError) {
+    state.status = 'failed';
+    state.error = page.preparationError;
+    evidence.regionRecords.push(
+      ...markAllFailed(createCoverageRegions(vectorPlans), page.preparationError),
+    );
+    addUnresolved(
+      evidence.unresolved,
+      page,
+      'PARTIAL_BUDGET_EXCEEDED',
+      page.preparationError === 'CANCELLED'
+        ? '사용자 취소로 페이지 준비를 중단했습니다.'
+        : '페이지 렌더 준비가 페이지·픽셀·시간 예산을 초과했습니다.',
+    );
+    return;
+  }
+
+  if (exceedsRunBoundary(run, page)) {
+    state.status = 'failed';
+    state.error = input.signal?.aborted || getJob(run.jobId)?.cancelRequested
+      ? 'CANCELLED'
+      : 'PARTIAL_BUDGET_EXCEEDED';
+    evidence.regionRecords.push(...markAllFailed(
+      createCoverageRegions(page.imageBuffer ? rasterPlans : vectorPlans),
+      state.error,
+    ));
+    addUnresolved(evidence.unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지·시간·픽셀 예산 또는 취소 경계에서 분석을 중단했습니다.');
+    return;
+  }
+
+  run.spent.attemptedPages += 1;
+  run.spent.pixelsUsed += page.width * page.height;
+  state.status = 'analyzing';
+
+  let usable = false;
+  let regions = createCoverageRegions(page.imageBuffer ? rasterPlans : vectorPlans);
+
+  const shouldRunVector = source.formatClass === 'dxf'
+    || page.renderMode === 'vector'
+    || page.renderMode === 'hybrid';
+  if (shouldRunVector) {
+    const vector = await runVectorPass(run, page, vectorPlans);
+    usable = vector.usable;
+    if (vector.regions) regions = vector.regions;
+  }
+
+  const shouldRunRaster = Boolean(page.imageBuffer)
+    && source.formatClass !== 'dxf'
+    && (page.renderMode === 'raster'
+      || page.renderMode === 'hybrid'
+      || source.formatClass === 'raster-image'
+      || (page.renderMode === 'vector' && Boolean(input.vision)));
+
+  if (shouldRunRaster && input.vision) {
+    const raster = await runRasterPass(run, state, page, input.vision, rasterPlans);
+    usable = usable || raster.usable;
+    regions = raster.regions;
+  } else if (shouldRunRaster && !input.vision && !usable) {
+    regions = markAllFailed(createCoverageRegions(rasterPlans), 'VISION_KEY_REQUIRED');
+    addUnresolved(evidence.unresolved, page, 'ROLE_CALL_FAILED', '래스터 도면 정밀 판독에 사용할 Vision 키가 없습니다.');
+  }
+
+  if (!shouldRunRaster && !shouldRunVector && !usable) {
+    regions = markAllFailed(regions, 'UNSUPPORTED_PAGE_MODE');
+    addUnresolved(evidence.unresolved, page, 'ROLE_CALL_FAILED', '지원되는 페이지 판독 경로가 없습니다.');
+  }
+
+  evidence.regionRecords.push(...regions);
+  const pageFailed = regions.some((region) =>
+    region.status === 'failed' || region.status === 'planned' || region.status === 'running');
+  state.status = usable && !pageFailed ? 'complete' : 'failed';
+  if (state.status === 'failed' && !state.error) state.error = 'PAGE_ANALYSIS_PARTIAL';
+}
+
 export async function runDocumentAnalysis(
   input: OrchestrateInput,
   deps: DocumentAnalysisDependencies = {},
@@ -597,11 +928,9 @@ export async function runDocumentAnalysis(
   const unresolved: UnresolvedItem[] = (previousJob?.document?.unresolvedItems ?? [])
     .filter((item) => !activeRetryPages.has(item.pageIndex));
   const rolesPresent = new Set<RoleId>(previousJob?.document?.coverageLedger.rolesPresent ?? []);
-  let regionRecords: CoverageRegionRecord[] = (previousJob?.document?.coverageLedger.regions ?? [])
+  const regionRecords: CoverageRegionRecord[] = (previousJob?.document?.coverageLedger.regions ?? [])
     .filter((region) => !activeRetryPages.has(region.pageIndex));
-  let unresolvedRescans = 0;
-  let vlmCalls = 0;
-  let pixelsUsed = 0;
+  const spent: SpentBudget = { attemptedPages: 0, vlmCalls: 0, pixelsUsed: 0, unresolvedRescans: 0 };
   const deadline = Date.now() + budget.deadlineMs;
   const deadlineSignal = AbortSignal.timeout(budget.deadlineMs);
   const analysisSignal = input.signal
@@ -610,6 +939,32 @@ export async function runDocumentAnalysis(
   const executeTeam = deps.executeTeam ?? executeSLDTeam;
   const providersUsed = new Set<string>();
   const modelsUsed = new Set<string>();
+  const run: DocumentRun = {
+    input,
+    deps,
+    source,
+    budget,
+    jobId: job.jobId,
+    maxPagesPerRun,
+    previousVlmCalls,
+    deadline,
+    analysisSignal,
+    executeTeam,
+    evidence: {
+      symbolHits,
+      lineHits,
+      textSeeds,
+      continuityByPage,
+      calculations: calculationHits,
+      logicConflictsByPage: finalLogicConflictsByPage,
+      unresolved,
+      rolesPresent,
+      regionRecords,
+      providersUsed,
+      modelsUsed,
+    },
+    spent,
+  };
 
   updateJob(job.jobId, { status: 'SURVEYING' });
   for (const state of pageStates) {
@@ -634,204 +989,14 @@ export async function runDocumentAnalysis(
   }
 
   updateJob(job.jobId, { status: 'ANALYZING_PAGES' });
-  let attemptedPages = 0;
   for (const state of pageStates) {
     if (state.status === 'complete' || state.status === 'skipped-empty') continue;
     const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
     if (!page) continue;
-    const rasterPlans = rasterCoveragePlans(page);
-    const vectorPlans = vectorCoveragePlans(page);
-
-    if (page.preparationError) {
-      state.status = 'failed';
-      state.error = page.preparationError;
-      const plans = createCoverageRegions(vectorPlans);
-      regionRecords.push(...markAllFailed(plans, page.preparationError));
-      addUnresolved(
-        unresolved,
-        page,
-        'PARTIAL_BUDGET_EXCEEDED',
-        page.preparationError === 'CANCELLED'
-          ? '사용자 취소로 페이지 준비를 중단했습니다.'
-          : '페이지 렌더 준비가 페이지·픽셀·시간 예산을 초과했습니다.',
-      );
-      continue;
-    }
-
-    if (
-      attemptedPages >= maxPagesPerRun
-      || Date.now() >= deadline
-      || pixelsUsed + page.width * page.height > budget.maxPixels
-      || analysisSignal.aborted
-      || getJob(job.jobId)?.cancelRequested
-    ) {
-      state.status = 'failed';
-      state.error = input.signal?.aborted || getJob(job.jobId)?.cancelRequested
-        ? 'CANCELLED'
-        : 'PARTIAL_BUDGET_EXCEEDED';
-      const planned = createCoverageRegions(page.imageBuffer ? rasterPlans : vectorPlans);
-      regionRecords.push(...markAllFailed(planned, state.error));
-      addUnresolved(unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지·시간·픽셀 예산 또는 취소 경계에서 분석을 중단했습니다.');
-      continue;
-    }
-
-    attemptedPages += 1;
-    state.status = 'analyzing';
-    pixelsUsed += page.width * page.height;
-    let pageHasUsableResult = false;
-    let pageRegions = createCoverageRegions(page.imageBuffer ? rasterPlans : vectorPlans);
-
-    const shouldRunVector = source.formatClass === 'dxf'
-      || page.renderMode === 'vector'
-      || page.renderMode === 'hybrid';
-    if (shouldRunVector) {
-      const vectorResult = await executeTeam(teamInputForVector(input, source, page, analysisSignal), deps.teamDeps);
-      for (const envelope of vectorResult.drawingReview?.envelopes ?? []) {
-        providersUsed.add(envelope.provider);
-        modelsUsed.add(envelope.model);
-      }
-      if (vectorResult.success && (vectorResult.components?.length ?? 0) > 0) {
-        mergeAdapted(vectorResult, page, source, symbolHits, lineHits, textSeeds, continuityByPage);
-        pageHasUsableResult = true;
-        if (!input.vision || source.formatClass === 'dxf') {
-          const vectorCoverage = markVectorCoverage(
-            createCoverageRegions(vectorPlans),
-            vectorResult.vectorAudit,
-            `vector:${page.renderHash}`,
-          );
-          pageRegions = vectorCoverage.regions;
-          vectorCoverage.roles.forEach((role) => rolesPresent.add(role));
-          if (!vectorResult.vectorAudit?.complete) {
-            addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서의 역할별 분석·검증 영수증이 완전하지 않습니다.');
-          }
-        }
-      } else if (!input.vision || source.formatClass === 'dxf') {
-        addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서가 설비와 관계를 확정하지 못했습니다.');
-      }
-    }
-
-    const shouldRunRaster = Boolean(page.imageBuffer)
-      && source.formatClass !== 'dxf'
-      && (page.renderMode === 'raster'
-        || page.renderMode === 'hybrid'
-        || source.formatClass === 'raster-image'
-        || (page.renderMode === 'vector' && Boolean(input.vision)));
-    if (shouldRunRaster && input.vision) {
-      // symbols + connections + logic + three independent full-page text
-      // reads + one post-review coverage audit, plus three precision grids.
-      const plannedCalls = 7 + gridSizeFor(page) * 3;
-      if (previousVlmCalls + vlmCalls + plannedCalls > budget.maxVlmCalls) {
-        pageRegions = markAllFailed(createCoverageRegions(rasterPlans), 'PARTIAL_BUDGET_EXCEEDED');
-        addUnresolved(unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지 독립 심사 예상 호출 수가 문서 호출 예산을 초과합니다.');
-      } else {
-        pageRegions = createCoverageRegions(rasterPlans);
-        let rescanAttempt = 0;
-        let latestRescanTargets: RescanTargetEvidence[] = [];
-        let priorDrawingReviewEnvelopes: RoleReviewEnvelope[] = [];
-        while (rescanAttempt <= 2) {
-          const rasterResult = await executeTeam(
-            teamInputForRaster(
-              input,
-              source,
-              page,
-              latestRescanTargets,
-              priorDrawingReviewEnvelopes,
-              analysisSignal,
-            ),
-            deps.teamDeps,
-          );
-          for (const envelope of rasterResult.drawingReview?.envelopes ?? []) {
-            providersUsed.add(envelope.provider);
-            modelsUsed.add(envelope.model);
-          }
-          const actualCalls = rasterResult.drawingReview?.coverage.actualCalls
-            ?? rasterResult.drawingReview?.coverage.plannedCalls
-            ?? plannedCalls;
-          vlmCalls += actualCalls;
-          state.vlmCalls += actualCalls;
-          // 쓴 즉시 적는다. 이 함수엔 try/catch 가 없어서 아래에서 예외가
-          // 나면 다음 체크포인트까지의 호출이 잊혔고, `/run` 은 실패 시
-          // 상태를 QUEUED 로 되돌려 재시도를 허용한다 — 잊힌 만큼 문서
-          // 예산(`maxVlmCalls`)을 매번 넘어설 수 있었다. 예산 검사는
-          // `previousVlmCalls`(= 저장된 값)에서 출발하므로 저장이 늦으면
-          // 상한이 늦게 걸린다.
-          updateJob(job.jobId, { vlmCallsUsed: previousVlmCalls + vlmCalls });
-          if (rasterResult.success && rasterResult.drawingReview) {
-            mergeAdapted(rasterResult, page, source, symbolHits, lineHits, textSeeds, continuityByPage);
-            calculationHits.push(...adaptDrawingCalculations(rasterResult.drawingSynthesis).map((calculation) => ({
-              ...calculation,
-              id: `P${String(page.pageIndex + 1).padStart(2, '0')}-${calculation.id}`,
-            })));
-            finalLogicConflictsByPage.set(page.pageIndex, [...(rasterResult.drawingSynthesis?.conflicts ?? [])]);
-            pageHasUsableResult = true;
-            const coverage = markCouncilCoverage(pageRegions, page, rasterResult);
-            pageRegions = coverage.regions;
-            latestRescanTargets = [...new Map([
-              ...coverage.rescanTargets,
-              ...failedRoleRescanTargets(page, rasterResult),
-            ].map((target) => [`${target.sourceId ?? target.id}:${target.suggestedRoles.join(',')}`, target])).values()];
-            coverage.roles.forEach((role) => rolesPresent.add(role));
-            priorDrawingReviewEnvelopes = [
-              ...priorDrawingReviewEnvelopes,
-              ...rasterResult.drawingReview.envelopes.filter((envelope) => envelope.role !== 'coverage-auditor'),
-            ];
-          } else {
-            pageRegions = markAllFailed(pageRegions, rasterResult.error ?? 'ROLE_CALL_FAILED');
-          }
-
-          const gapsRemain = pageRegions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
-          if (!gapsRemain) break;
-          rescanAttempt += 1;
-          const nextPlannedCalls = plannedTargetedRetryCalls(page, latestRescanTargets);
-          const canRetry = rescanAttempt <= 2
-            && latestRescanTargets.length > 0
-            && previousVlmCalls + vlmCalls + nextPlannedCalls <= budget.maxVlmCalls
-            && Date.now() + drawingRoleTimeoutMs(input.vision.provider, input.vision.effort)
-              + RESCAN_SETTLE_MARGIN_MS < deadline
-            && !analysisSignal.aborted
-            && !getJob(job.jobId)?.cancelRequested;
-          if (!canRetry) break;
-        }
-        const gapsRemain = pageRegions.some((region) => region.status !== 'complete' && region.status !== 'skipped-empty');
-        if (gapsRemain) {
-          unresolvedRescans += 1;
-          if (latestRescanTargets.length > 0) {
-            for (const target of latestRescanTargets) {
-              const code: UnresolvedItem['code'] = target.reason === 'boundary-clip'
-                ? 'BOUNDARY_CLIP'
-                : target.reason === 'empty-result'
-                  ? 'EMPTY_REGION_RESULT'
-                  : 'HOLD_RESCAN_UNRESOLVED';
-              addUnresolved(
-                unresolved,
-                page,
-                code,
-                `coverage-auditor가 ${target.reason} 누락 가능성을 지적했습니다. 재검사 역할: ${target.suggestedRoles.join(', ')}.`,
-                target.sourceId,
-                { x: target.bounds.x, y: target.bounds.y, w: target.bounds.w, h: target.bounds.h },
-              );
-            }
-          } else {
-            addUnresolved(unresolved, page, 'HOLD_RESCAN_UNRESOLVED', '최대 2회 정밀 재스캔 후에도 공간 그래프 충돌 또는 구획 호출 실패가 남았습니다.');
-          }
-        }
-      }
-    } else if (shouldRunRaster && !input.vision && !pageHasUsableResult) {
-      pageRegions = markAllFailed(createCoverageRegions(rasterPlans), 'VISION_KEY_REQUIRED');
-      addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '래스터 도면 정밀 판독에 사용할 Vision 키가 없습니다.');
-    }
-
-    if (!shouldRunRaster && !shouldRunVector && !pageHasUsableResult) {
-      pageRegions = markAllFailed(pageRegions, 'UNSUPPORTED_PAGE_MODE');
-      addUnresolved(unresolved, page, 'ROLE_CALL_FAILED', '지원되는 페이지 판독 경로가 없습니다.');
-    }
-    regionRecords.push(...pageRegions);
-    const pageFailed = pageRegions.some((region) => region.status === 'failed' || region.status === 'planned' || region.status === 'running');
-    state.status = pageHasUsableResult && !pageFailed ? 'complete' : 'failed';
-    if (state.status === 'failed' && !state.error) state.error = 'PAGE_ANALYSIS_PARTIAL';
+    await analyzePage(run, state, page);
   }
 
-  updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: previousVlmCalls + vlmCalls });
+  updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: previousVlmCalls + spent.vlmCalls });
   const texts = [...previousSeeds.texts, ...adjudicateTextSeeds(deduplicateTextSeeds(textSeeds), unresolved)]
     .sort((left, right) => (left.evidence[0]?.pageIndex ?? 0) - (right.evidence[0]?.pageIndex ?? 0)
       || left.displayId.localeCompare(right.displayId));
@@ -905,56 +1070,7 @@ export async function runDocumentAnalysis(
     // title blocks, or symbol internals. The fallback is only a complement to
     // survived symbol evidence, never a standalone recognition engine.
     if (pageSymbols.length === 0) continue;
-    const equipmentBounds = pageSymbols
-      .filter((symbol) => ![symbol.confirmedType, ...symbol.typeCandidates]
-        .filter((value): value is string => Boolean(value))
-        .some((value) => ['bus', 'busbar'].includes(value.trim().toLowerCase().replace(/[\s_-]+/g, ''))))
-      .flatMap((symbol) => {
-        const pageEvidence = symbol.evidence.filter((evidence) => evidence.pageIndex === page.pageIndex);
-        const primary = pageEvidence[0];
-        const largest = pageEvidence.reduce<(typeof pageEvidence)[number] | undefined>((best, evidence) => {
-          if (!best) return evidence;
-          const bestArea = best.bounds.w * best.bounds.h;
-          const area = evidence.bounds.w * evidence.bounds.h;
-          return area > bestArea ? evidence : best;
-        }, undefined);
-        if (!primary || !largest) return [];
-        const isLoad = [symbol.confirmedType, ...symbol.typeCandidates]
-          .filter((value): value is string => Boolean(value))
-          .some((value) => ['load', 'houseload', 'residentialload', 'house']
-            .includes(value.trim().toLowerCase().replace(/[\s_-]+/g, '')));
-        // Repetitive house/load crops can alternately report a roof, door, or
-        // padding-shifted full body. Their evidence union is the safest mask:
-        // it covers every observed internal stroke without widening into the
-        // neighbouring load. For tall transformer glyphs, keep the primary
-        // read unless it is merely a flat winding fragment.
-        const loadBounds = isLoad
-          ? pageEvidence.reduce((union, evidence) => {
-            const right = Math.max(union.x + union.w, evidence.bounds.x + evidence.bounds.w);
-            const bottom = Math.max(union.y + union.h, evidence.bounds.y + evidence.bounds.h);
-            const x = Math.min(union.x, evidence.bounds.x);
-            const y = Math.min(union.y, evidence.bounds.y);
-            return { x, y, w: right - x, h: bottom - y };
-          }, { ...primary.bounds })
-          : undefined;
-        const bounds = loadBounds
-          ?? (primary.bounds.h >= primary.bounds.w * 0.75 ? primary.bounds : largest.bounds);
-        // A crop reviewer can return only a house roof. Expand that exclusion
-        // downward around the roof so the deterministic fallback does not
-        // mistake walls/windows for conductors. The external distribution line
-        // remains longer than any one expanded house and is therefore kept.
-        if (isLoad && bounds.h < bounds.w * 0.75) {
-          const expandedWidth = bounds.w * 1.5;
-          const expandedHeight = Math.max(bounds.h, bounds.w * 1.5);
-          return [{
-            x: Math.max(0, bounds.x - (expandedWidth - bounds.w) / 2),
-            y: bounds.y,
-            w: Math.min(expandedWidth, page.width),
-            h: Math.min(expandedHeight, Math.max(1, page.height - bounds.y)),
-          }];
-        }
-        return [bounds];
-      });
+    const equipmentBounds = equipmentExclusionBounds(page, pageSymbols);
     const textBounds = textSeeds
       .filter((text) => text.pageIndex === page.pageIndex)
       .map((text) => text.bounds);
@@ -1013,7 +1129,7 @@ export async function runDocumentAnalysis(
   );
   for (const symbol of symbols) symbol.equipmentId = equipmentLinks.get(symbol.id);
 
-  const coverageLedger = buildCoverageLedger(regionRecords, [...rolesPresent], unresolvedRescans);
+  const coverageLedger = buildCoverageLedger(regionRecords, [...rolesPresent], spent.unresolvedRescans);
   const coverageComplete = coverageLedger.allPlannedFinished
     && coverageLedger.regionsFailed === 0
     && coverageLedger.unresolvedRescans === 0;
@@ -1090,7 +1206,7 @@ export async function runDocumentAnalysis(
   const finalJob = updateJob(job.jobId, {
     status: jobStatus,
     document: safeDocument,
-    vlmCallsUsed: previousVlmCalls + vlmCalls,
+    vlmCallsUsed: previousVlmCalls + spent.vlmCalls,
     pageDigests,
   })!;
   return { job: finalJob, document: safeDocument };
