@@ -75,6 +75,17 @@ describe('drawing evidence numbering and merge', () => {
     expect(symbols[0].evidence).toHaveLength(2);
   });
 
+  it('merges breaker and circuit_breaker aliases at the same coordinates', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'full', type: 'circuit_breaker', bounds: { x: 100, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'full' },
+      { localId: 'region', type: 'breaker', bounds: { x: 101, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'region' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]).toMatchObject({ typeCandidates: ['breaker'], certainty: 'ambiguous' });
+    expect(symbols[0].evidence).toHaveLength(2);
+  });
+
   it('merges colocated cross-type readings with the same label into one ambiguous candidate set', () => {
     const symbols = deduplicateSymbols([
       { localId: 'capacitor-read', type: 'capacitor', label: 'Shunt Reactor', bounds: { x: 100, y: 100, w: 30, h: 30 }, confidence: 0.79, pageIndex: 0, regionId: 'full' },
@@ -100,6 +111,20 @@ describe('drawing evidence numbering and merge', () => {
     ]);
   });
 
+  it('binds a line endpoint anywhere on a long busbar bounds, not only near its center', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'bus', type: 'busbar', bounds: { x: 0, y: 0, w: 300, h: 12 }, confidence: 0.9, pageIndex: 0, regionId: 'broad' },
+      { localId: 'breaker', type: 'breaker', bounds: { x: 360, y: 0, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'broad' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'line', lineKind: 'power', path: [{ x: 10, y: 6 }, { x: 370, y: 10 }], confidence: 0.9, pageIndex: 0, regionId: 'broad' },
+    ]);
+
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([
+      expect.objectContaining({ from: symbols[0].id, to: symbols[1].id }),
+    ]);
+  });
+
   it('keeps a spatial relation between ambiguous device candidates without promoting it to confirmed', () => {
     const symbols = deduplicateSymbols([
       { localId: 'bus-candidate', type: 'bus', label: 'Main Bus', bounds: { x: 0, y: 0, w: 10, h: 10 }, confidence: 0.79, pageIndex: 0, regionId: 'broad' },
@@ -113,5 +138,33 @@ describe('drawing evidence numbering and merge', () => {
     expect(buildPageRelations(symbols, lines, 0)).toEqual([
       expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[0].id, certainty: 'ambiguous' }),
     ]);
+  });
+
+  it('traces a device branch through a perpendicular line gap to a busbar network', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'bus', type: 'busbar', label: 'L1,L2,L3', bounds: { x: 0, y: 0, w: 50, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'fuse', type: 'fuse', label: 'FU1', bounds: { x: 240, y: 170, w: 20, h: 40 }, confidence: 0.9, pageIndex: 0, regionId: 'region' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'bus-line', lineKind: 'bus', path: [{ x: 45, y: 5 }, { x: 300, y: 5 }], confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'branch', lineKind: 'power', path: [{ x: 250, y: 50 }, { x: 250, y: 170 }], confidence: 0.9, pageIndex: 0, regionId: 'region' },
+    ]);
+
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([
+      expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[1].id, certainty: 'ambiguous' }),
+    ]);
+  });
+
+  it('does not bridge a nearby parallel line into a busbar network', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'bus', type: 'busbar', bounds: { x: 0, y: 0, w: 50, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'fuse', type: 'fuse', bounds: { x: 490, y: 40, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'region' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'bus-line', lineKind: 'bus', path: [{ x: 45, y: 5 }, { x: 800, y: 5 }], confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'parallel', lineKind: 'power', path: [{ x: 200, y: 50 }, { x: 490, y: 50 }], confidence: 0.9, pageIndex: 0, regionId: 'region' },
+    ]);
+
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([]);
   });
 });

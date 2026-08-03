@@ -19,10 +19,11 @@ import {
   DrawingVisionRequestError,
   resolveDrawingVisionRequest,
 } from '@/lib/drawing-vision-request';
+import { drawingDocumentDeadlineMs } from '@/lib/drawing-reasoning-effort';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+export const maxDuration = 600;
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
@@ -129,7 +130,10 @@ async function POST__impl(req: NextRequest) {
       maxPages: 50,
       maxVlmCalls,
       maxPixels: 40_000_000,
-      deadlineMs: 270_000,
+      deadlineMs: drawingDocumentDeadlineMs(
+        String(form.get('provider') ?? 'gemini'),
+        String(form.get('effort') ?? ''),
+      ),
     };
     if (!isDrawingJobStoreAvailable()) {
       return userError('지속형 작업 저장소가 설정되지 않아 도면 분석 작업을 시작할 수 없습니다.', 503);

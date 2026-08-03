@@ -93,6 +93,8 @@ export interface LogicEvidence {
 export interface RescanTargetEvidence {
   id: string;
   sourceId?: string;
+  /** Internal retry routing. Auditor-produced targets omit this and remain precision-region scans. */
+  retryScope?: 'full-source' | 'precision-region';
   reason: (typeof RESCAN_REASONS)[number];
   bounds: ReviewBounds;
   suggestedRoles: Array<(typeof RESCAN_ROLES)[number]>;
@@ -581,20 +583,23 @@ function parseAttributes(role: ReviewRole, value: unknown): LogicEvidence['attri
   ]);
 
   const attributes: NonNullable<LogicEvidence['attributes']> = {};
-  if (item.fromId !== undefined) attributes.fromId = boundedString(role, item.fromId, 'logic.attributes.fromId', MAX_ID_LENGTH);
-  if (item.toId !== undefined) attributes.toId = boundedString(role, item.toId, 'logic.attributes.toId', MAX_ID_LENGTH);
+  if (item.fromId !== undefined && item.fromId !== null) attributes.fromId = boundedString(role, item.fromId, 'logic.attributes.fromId', MAX_ID_LENGTH);
+  if (item.toId !== undefined && item.toId !== null) attributes.toId = boundedString(role, item.toId, 'logic.attributes.toId', MAX_ID_LENGTH);
   if (item.protectedById !== undefined) {
     attributes.protectedById = item.protectedById === null
       ? null
       : boundedString(role, item.protectedById, 'logic.attributes.protectedById', MAX_ID_LENGTH);
   }
-  if (item.voltageV !== undefined) {
-    if (typeof item.voltageV !== 'number' || !Number.isFinite(item.voltageV) || item.voltageV <= 0) {
-      return invalid(role, 'logic.attributes.voltageV must be a positive finite number.');
+  if (item.voltageV !== undefined && item.voltageV !== null) {
+    if (typeof item.voltageV !== 'number' || !Number.isFinite(item.voltageV) || item.voltageV < 0) {
+      return invalid(role, 'logic.attributes.voltageV must be a non-negative finite number or null.');
     }
-    attributes.voltageV = item.voltageV;
+    // Structured-output models occasionally use numeric zero instead of the
+    // required null sentinel. Zero is not a usable rated-voltage claim, so
+    // preserve the rest of the logic evidence while omitting that attribute.
+    if (item.voltageV > 0) attributes.voltageV = item.voltageV;
   }
-  if (item.deviceType !== undefined) attributes.deviceType = boundedString(role, item.deviceType, 'logic.attributes.deviceType');
+  if (item.deviceType !== undefined && item.deviceType !== null) attributes.deviceType = boundedString(role, item.deviceType, 'logic.attributes.deviceType');
 
   return attributes;
 }

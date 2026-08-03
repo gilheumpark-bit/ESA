@@ -35,6 +35,7 @@ import { activeDefaults } from '@/engine/calculators/country-defaults';
 import { calculateVoltageDrop } from '@/engine/calculators/voltage-drop/voltage-drop';
 import { parseSpecText } from '@/engine/topology/spec-text';
 import type { SLDComponentType } from '@/lib/sld-recognition';
+import { drawingRoleTimeoutMs } from '@/lib/drawing-reasoning-effort';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Vision Split + Parsing
@@ -139,11 +140,11 @@ export interface SLDTeamDeps {
 const REQUIRED_COUNCIL_ROLES = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as const;
 const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_REGION_CALLS_PER_ROLE = 16;
+const MAX_RESCAN_TARGETS = MAX_REGION_CALLS_PER_ROLE * GRAPH_COUNCIL_ROLES.length;
 const COUNCIL_MAX_CONCURRENT_CALLS = 4;
 // 실도면 고밀도 심볼 판독이 31~42초에 정상 응답하는데 30초에서 잘렸다
 // (세종 MCC-101, Agent Platform 3.6 Flash 라이브). 문서 전체 deadline과
 // 호출 예산은 그대로 두고 개별 정상 응답만 받을 수 있게 여유를 둔다.
-const COUNCIL_SOURCE_TIMEOUT_MS = 45_000;
 const COUNCIL_SOURCE_MAX_RETRIES = 1;
 const RESCAN_REASONS = new Set<RescanTargetEvidence['reason']>(['empty-result', 'dense-cluster', 'boundary-clip', 'low-coverage']);
 const RESCAN_ROLES = new Set<RescanTargetEvidence['suggestedRoles'][number]>(['symbols', 'connections', 'text']);
@@ -201,8 +202,8 @@ function redactSecret(value: string, secret: string | undefined): string {
 function requestedRescanTargets(input: TeamInput, snapshot: DrawingSnapshot): RescanTargetEvidence[] {
   const raw = input.params?.rescanTargets;
   if (raw === undefined) return [];
-  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_REGION_CALLS_PER_ROLE) {
-    throw new Error(`rescanTargets는 1~${MAX_REGION_CALLS_PER_ROLE}개 배열이어야 합니다.`);
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_RESCAN_TARGETS) {
+    throw new Error(`rescanTargets는 1~${MAX_RESCAN_TARGETS}개 배열이어야 합니다.`);
   }
   return raw.map((candidate, index) => {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
@@ -213,9 +214,11 @@ function requestedRescanTargets(input: TeamInput, snapshot: DrawingSnapshot): Re
     const suggestedRoles = value.suggestedRoles;
     const reason = value.reason;
     const confidence = value.confidence;
+    const retryScope = value.retryScope;
     if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 200
       || (value.sourceId !== undefined && (typeof value.sourceId !== 'string' || value.sourceId.length === 0 || value.sourceId.length > 200))
       || typeof reason !== 'string' || !RESCAN_REASONS.has(reason as RescanTargetEvidence['reason'])
+      || (retryScope !== undefined && retryScope !== 'full-source' && retryScope !== 'precision-region')
       || !Array.isArray(suggestedRoles) || suggestedRoles.length === 0
       || suggestedRoles.some((role) => typeof role !== 'string' || !RESCAN_ROLES.has(role as RescanTargetEvidence['suggestedRoles'][number]))
       || !Number.isFinite(confidence) || (confidence as number) < 0 || (confidence as number) > 1
@@ -230,6 +233,7 @@ function requestedRescanTargets(input: TeamInput, snapshot: DrawingSnapshot): Re
     return {
       id: value.id,
       ...(value.sourceId === undefined ? {} : { sourceId: value.sourceId as string }),
+      ...(retryScope === undefined ? {} : { retryScope: retryScope as NonNullable<RescanTargetEvidence['retryScope']> }),
       reason: reason as RescanTargetEvidence['reason'],
       bounds: {
         x: bounds.x as number,
@@ -324,9 +328,10 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale),
   ])) as Record<(typeof selectedRoles)[number], ImageVariant>;
   const requestedTargets = requestedRescanTargets(input, prepared.snapshot);
+  const precisionTargets = requestedTargets.filter((target) => target.retryScope !== 'full-source');
   const reviewRegions = requestedTargets.length === 0
     ? prepared.regions
-    : prepared.regions.filter((region) => requestedTargets.some((target) =>
+    : prepared.regions.filter((region) => precisionTargets.some((target) =>
       target.suggestedRoles.some((role) => selectedVariants[role].id === region.variantId)
       && boundsIntersect(region.originalBounds, target.bounds)));
   const council = await (deps.runCouncil ?? runDrawingCouncil)({
@@ -335,21 +340,24 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     regions: reviewRegions,
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     maxConcurrentCalls: COUNCIL_MAX_CONCURRENT_CALLS,
+    settleOnAbort: input.settleOnAbort,
     priorEnvelopes: input.priorDrawingReviewEnvelopes,
     options: input.vision.provider === 'chatgpt-local'
       ? {
           provider: 'chatgpt-local',
           model: input.vision.model,
+          effort: input.vision.effort,
           signal: input.signal,
-          timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS,
+          timeoutMs: drawingRoleTimeoutMs(input.vision.provider, input.vision.effort),
           maxRetries: COUNCIL_SOURCE_MAX_RETRIES,
         }
       : {
           provider: input.vision.provider,
           apiKey: resolved.key,
           model: input.vision.model,
+          effort: input.vision.effort,
           signal: input.signal,
-          timeoutMs: COUNCIL_SOURCE_TIMEOUT_MS,
+          timeoutMs: drawingRoleTimeoutMs(input.vision.provider, input.vision.effort),
           maxRetries: COUNCIL_SOURCE_MAX_RETRIES,
         },
   });
@@ -381,8 +389,19 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     })),
   } as DrawingReviewArtifact['coverage']['roles'];
   const selectedVariantIds = new Set(selectedRoles.map((role) => coverageRoles[role].variantId));
-  const everyRequestedTargetCovered = requestedTargets.every((target) => target.suggestedRoles.every((role) =>
-    reviewRegions.some((region) => region.variantId === selectedVariants[role].id && boundsIntersect(region.originalBounds, target.bounds))));
+  const everyRequestedTargetCovered = requestedTargets.every((target) => target.suggestedRoles.every((role) => {
+    if (target.retryScope !== 'full-source') {
+      return reviewRegions.some((region) => region.variantId === selectedVariants[role].id && boundsIntersect(region.originalBounds, target.bounds));
+    }
+    const envelope = council.envelopes.find((item) => item.role === role);
+    const sourceReviewed = Boolean(envelope)
+      && (target.sourceId === undefined
+        || envelope?.reviewedSourceIds === undefined
+        || envelope.reviewedSourceIds.includes(target.sourceId));
+    const sourceFailed = council.failures.some((failure) => failure.role === role
+      && (target.sourceId === undefined || failure.sourceId === target.sourceId || failure.sourceId === 'role'));
+    return sourceReviewed && !sourceFailed;
+  }));
   const precisionCoverageComplete = hasRequiredSymbolVariant
     && hasTripleTextVariants
     && everyRequestedTargetCovered
@@ -403,6 +422,8 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     coverage: {
       roles: coverageRoles,
       plannedCalls: Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
+      actualCalls: council.callCounts?.attempted
+        ?? Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
       complete: coverageComplete,
       maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     },
@@ -416,7 +437,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     ...failures.filter((failure) => !failure.fatal).map((failure) => hold(`${failure.role} region review 실패: ${failure.sourceId}`)),
     ...(!hasRequiredSymbolVariant ? [hold(`symbols precision source ${requiredSymbolVariantKind}가 없습니다.`)] : []),
     ...(!hasTripleTextVariants ? [hold('text triple-read sources original/upscale-4x/text-high-contrast가 모두 필요합니다.')] : []),
-    ...(!everyRequestedTargetCovered ? [hold('요청된 재스캔 구역과 교차하는 정밀 region이 없습니다.')] : []),
+    ...(!everyRequestedTargetCovered ? [hold('요청된 재검사 대상의 판독 근거를 확보하지 못했습니다.')] : []),
     ...rescanTargets.map((target) => hold(`coverage-auditor ${target.reason} 재스캔 필요: ${target.id}`)),
     ...(!coverageComplete ? selectedRoles.flatMap((role) => {
       const coverage = coverageRoles[role];

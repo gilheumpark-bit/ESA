@@ -1,19 +1,21 @@
 import {
+  _setChatGPTLocalServiceFactoryForTests,
   ChatGPTLocalService,
+  getChatGPTLocalStatus,
   maskChatGPTEmail,
   type ChatGPTLocalRpc,
 } from '@/lib/chatgpt-local';
 
 class FakeRpc implements ChatGPTLocalRpc {
-  readonly calls: Array<{ method: string; params: unknown }> = [];
+  readonly calls: Array<{ method: string; params: unknown; options?: { timeoutMs?: number } }> = [];
   private readonly responses: Record<string, unknown>;
 
   constructor(responses: Record<string, unknown>) {
     this.responses = responses;
   }
 
-  async request<T>(method: string, params: unknown): Promise<T> {
-    this.calls.push({ method, params });
+  async request<T>(method: string, params: unknown, options?: { timeoutMs?: number }): Promise<T> {
+    this.calls.push({ method, params, options });
     if (!(method in this.responses)) throw new Error(`missing fake response: ${method}`);
     return this.responses[method] as T;
   }
@@ -36,6 +38,9 @@ function initializedResponses(extra: Record<string, unknown>): Record<string, un
 }
 
 describe('ChatGPT local account service', () => {
+  afterEach(() => {
+    _setChatGPTLocalServiceFactoryForTests(null);
+  });
   it.each([
     ['gildong@example.com', 'g***@example.com'],
     ['a@example.com', 'a***@example.com'],
@@ -96,6 +101,11 @@ describe('ChatGPT local account service', () => {
       ],
     });
     expect(JSON.stringify(await service.getStatus())).not.toContain('gildong');
+    expect(rpc.calls.filter((call) => call.method !== 'initialize'))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ method: 'account/read', options: { timeoutMs: 10_000 } }),
+        expect.objectContaining({ method: 'model/list', options: { timeoutMs: 10_000 } }),
+      ]));
   });
 
   it('reports an installed but signed-out app-server without asking for models', async () => {
@@ -130,5 +140,33 @@ describe('ChatGPT local account service', () => {
     });
     await expect(service.cancelLogin('login-other')).rejects.toThrow('LOCAL_CODEX_LOGIN_MISMATCH');
     await expect(service.cancelLogin('login-1')).resolves.toBeUndefined();
+  });
+
+  it('replaces an unresponsive shared app-server once and returns the recovered status', async () => {
+    let closed = false;
+    const brokenRpc: ChatGPTLocalRpc & { close(): void } = {
+      request: jest.fn(async (method: string) => {
+        if (method === 'initialize') return {};
+        throw new Error('LOCAL_CODEX_TIMEOUT');
+      }) as ChatGPTLocalRpc['request'],
+      runTurn: jest.fn() as ChatGPTLocalRpc['runTurn'],
+      close: () => { closed = true; },
+    };
+    const healthyRpc = new FakeRpc(initializedResponses({
+      'account/read': {
+        account: { type: 'chatgpt', email: 'recovered@example.com', planType: 'pro' },
+        requiresOpenaiAuth: true,
+      },
+      'model/list': { data: [] },
+    }));
+    const services = [new ChatGPTLocalService(brokenRpc), new ChatGPTLocalService(healthyRpc)];
+    _setChatGPTLocalServiceFactoryForTests(() => services.shift()!);
+
+    await expect(getChatGPTLocalStatus()).resolves.toMatchObject({
+      available: true,
+      connected: true,
+      account: { email: 'r***@example.com' },
+    });
+    expect(closed).toBe(true);
   });
 });

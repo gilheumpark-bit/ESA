@@ -7,7 +7,7 @@ import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
-import { DELETE, GET, POST } from '../route';
+import { DELETE, GET, POST, maxDuration } from '../route';
 
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
 jest.mock('@/lib/request-origin', () => ({ isRequestOriginAllowed: jest.fn(() => true) }));
@@ -138,15 +138,30 @@ describe('drawing jobs API ownership and input boundary', () => {
     const response = await POST(formRequest({
       provider: 'chatgpt-local',
       model: 'gpt-5.6-terra',
+      effort: 'high',
     }));
 
     expect(response.status).toBe(200);
+    expect(maxDuration).toBe(600);
     expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      budget: expect.objectContaining({ deadlineMs: 570_000 }),
       vision: {
         provider: 'chatgpt-local',
         model: 'gpt-5.6-terra',
+        effort: 'high',
       },
     }));
+  });
+
+  it('rejects an unsupported drawing reasoning effort before analysis', async () => {
+    const response = await POST(formRequest({
+      provider: 'chatgpt-local',
+      model: 'gpt-5.6-terra',
+      effort: 'ultra',
+    }));
+
+    expect(response.status).toBe(400);
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
   });
 
   it('rejects malformed pages and providers before analysis', async () => {

@@ -1,16 +1,22 @@
 import { isCatalogModel } from '@/lib/ai-providers';
 import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
 import { assertLoopbackRequest } from '@/lib/chatgpt-local-loopback';
+import {
+  isDrawingReasoningEffort,
+  type DrawingReasoningEffort,
+} from '@/lib/drawing-reasoning-effort';
 
 export type DrawingVisionRequest =
   | {
       provider: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
       apiKey: string;
       model?: string;
+      effort?: DrawingReasoningEffort;
     }
   | {
       provider: 'chatgpt-local';
       model: string;
+      effort?: DrawingReasoningEffort;
     };
 
 type RemoteVisionProvider = Exclude<DrawingVisionRequest['provider'], 'chatgpt-local'>;
@@ -47,9 +53,16 @@ export async function resolveDrawingVisionRequest(
 ): Promise<DrawingVisionRequest | undefined> {
   const providerRaw = String(form.get('provider') ?? 'gemini');
   const model = String(form.get('model') ?? '').trim();
+  const effortRaw = String(form.get('effort') ?? '').trim();
   if (model && !MODEL_PATTERN.test(model)) {
     throw new DrawingVisionRequestError('Vision 모델 이름 형식이 올바르지 않습니다.', 400);
   }
+  if (effortRaw && !isDrawingReasoningEffort(effortRaw)) {
+    throw new DrawingVisionRequestError('도면 추론 단계는 low, medium, high 중 하나여야 합니다.', 400);
+  }
+  const effort: DrawingReasoningEffort | undefined = effortRaw
+    ? effortRaw as DrawingReasoningEffort
+    : undefined;
 
   if (providerRaw === 'chatgpt-local') {
     try {
@@ -73,6 +86,7 @@ export async function resolveDrawingVisionRequest(
     return {
       provider: 'chatgpt-local',
       model: selected.id,
+      ...(effort ? { effort } : {}),
     };
   }
 
@@ -92,6 +106,6 @@ export async function resolveDrawingVisionRequest(
   }
   const apiKey = suppliedKey || serverKey(provider);
   return apiKey
-    ? { provider, apiKey, model: model || undefined }
+    ? { provider, apiKey, model: model || undefined, ...(effort ? { effort } : {}) }
     : undefined;
 }

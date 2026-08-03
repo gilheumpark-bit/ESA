@@ -549,8 +549,14 @@ function deduplicatePoints(
 function endpointCandidates(line: SpatialLine, point: Point, symbols: readonly SpatialSymbol[], tolerance: number): SpatialSymbol[] {
   return symbols.filter((symbol) =>
     line.pages.includes(symbol.bounds.page)
-    && Math.min(distance(center(symbol.bounds), point), ...symbol.ports.map((port) => distance(port, point))) <= tolerance)
+    && Math.min(distanceToBounds(point, symbol.bounds), ...symbol.ports.map((port) => distance(port, point))) <= tolerance)
     .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function distanceToBounds(point: Point, bounds: EvidenceBounds): number {
+  const dx = Math.max(bounds.x - point.x, 0, point.x - (bounds.x + bounds.w));
+  const dy = Math.max(bounds.y - point.y, 0, point.y - (bounds.y + bounds.h));
+  return Math.hypot(dx, dy);
 }
 
 function textCandidates(text: SpatialText, symbols: readonly SpatialSymbol[], tolerance: number): SpatialSymbol[] {

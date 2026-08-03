@@ -236,7 +236,7 @@ describe('document-orchestrator + evaluator', () => {
       graph: {
         drawingHash: source.documentHash,
         symbols: [{ id: 'VCB-01', sourceIds: ['variant:original'], typeCandidates: ['VCB'], rawLabel: 'VCB-1', bounds: { x: 10, y: 10, w: 10, h: 10, page: 1 }, ports: [], confidence: 0.95 }],
-        lines: [], texts: [], edges: [], conflicts: [],
+        lines: [], texts: [], edges: [], conflicts: [] as string[],
       },
     });
     let attempt = 0;
@@ -304,6 +304,25 @@ describe('document-orchestrator + evaluator', () => {
       expect.objectContaining({ code: 'BOUNDARY_CLIP', pageIndex: 0, bounds: { x: 40, y: 0, w: 20, h: 80 } }),
     ]));
 
+    let firstPassFinished = false;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => (firstPassFinished ? 59_000 : 0));
+    const executeNearDeadline = jest.fn(async () => {
+      firstPassFinished = true;
+      return {
+        success: true, components: [], connections: [], confidence: 0.95,
+        drawingReview: review(false),
+        drawingSynthesis: { calculations: [] },
+      };
+    });
+    await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-near-deadline',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 57, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeNearDeadline as never });
+    nowSpy.mockRestore();
+
+    expect(executeNearDeadline).toHaveBeenCalledTimes(1);
+
     const executeTeamLogic = jest.fn(async () => ({
       success: true, components: [], connections: [], confidence: 0.95,
       drawingReview: review(true),
@@ -363,6 +382,154 @@ describe('document-orchestrator + evaluator', () => {
         error: expect.stringContaining('line.path must contain at least two points'),
       }),
     ]);
+
+    const conflictOnlyReview = review(true);
+    conflictOnlyReview.graph.conflicts = ['UNBOUND_LINE_ENDPOINT:LINE-1'];
+    const executeWithoutTargets = jest.fn(async () => ({
+      success: true,
+      components: [],
+      connections: [],
+      confidence: 0.95,
+      drawingReview: conflictOnlyReview,
+      drawingSynthesis: { calculations: [] },
+    }));
+    const noTargetRetry = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-no-target-retry',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 57, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeWithoutTargets as never });
+
+    expect(executeWithoutTargets).toHaveBeenCalledTimes(1);
+    expect(noTargetRetry.document.jobStatus).toBe('PARTIAL');
+    expect(noTargetRetry.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'HOLD_RESCAN_UNRESOLVED' }),
+    ]));
+    const conflictAuditCall = noTargetRetry.document.coverageLedger.regions
+      .find((region) => region.regionId === 'p0-full')
+      ?.roleCalls['coverage-auditor']
+      ?.find((call) => call.success === false);
+    expect(conflictAuditCall?.error).toContain('UNBOUND_LINE_ENDPOINT:LINE-1');
+
+    let failedRegionAttempt = 0;
+    const executeFailedRegion = jest.fn(async () => {
+      failedRegionAttempt += 1;
+      return {
+        success: true,
+        components: [],
+        connections: [],
+        confidence: 0.95,
+        drawingReview: failedRegionAttempt === 1 ? failedReview : review(true),
+        drawingSynthesis: { calculations: [] },
+      };
+    });
+    const recoveredRegion = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-failed-region-target',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 40, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeFailedRegion as never });
+
+    expect(executeFailedRegion).toHaveBeenCalledTimes(2);
+    expect((executeFailedRegion.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0]).toMatchObject({
+      params: {
+        rescanTargets: [expect.objectContaining({
+          sourceId: 'variant:line-enhanced:region:1',
+          reason: 'low-coverage',
+          suggestedRoles: ['connections'],
+        })],
+      },
+    });
+    expect(recoveredRegion.document.coverageLedger.regionsFailed).toBe(0);
+
+    const redundantFailureReview = {
+      ...review(true),
+      failures: [{
+        role: 'text' as const,
+        sourceId: 'variant:upscale-2x',
+        error: 'redundant text variant timed out',
+        fatal: false,
+      }],
+    };
+    const redundantFailure = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-redundant-failure',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: async () => ({
+      success: true,
+      components: [],
+      connections: [],
+      confidence: 0.95,
+      drawingReview: redundantFailureReview,
+      drawingSynthesis: { calculations: [] },
+    }) as never });
+
+    expect(redundantFailure.document.coverageLedger.unresolvedRescans).toBe(0);
+    expect(redundantFailure.document.jobStatus).toBe('COMPLETE');
+
+    const measuredReview = review(true);
+    const measured = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-measured-calls',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: async () => ({
+      success: true,
+      components: [],
+      connections: [],
+      confidence: 0.95,
+      drawingReview: {
+        ...measuredReview,
+        coverage: { ...measuredReview.coverage, actualCalls: 5 },
+      },
+      drawingSynthesis: { calculations: [] },
+    }) as never });
+
+    expect(measured.job.vlmCallsUsed).toBe(5);
+    expect(measured.document.pages[0].vlmCalls).toBe(5);
+
+    let fullFailureAttempt = 0;
+    const fullFailureReview = {
+      ...review(true),
+      failures: [
+        {
+          role: 'connections' as const,
+          sourceId: 'variant:line-enhanced',
+          error: 'full-page connection reader timed out',
+          fatal: false,
+        },
+        {
+          role: 'connections' as const,
+          sourceId: 'role',
+          error: 'connections role produced no usable envelope',
+          fatal: false,
+        },
+      ],
+    };
+    const executeFullFailure = jest.fn(async () => {
+      fullFailureAttempt += 1;
+      return {
+        success: true,
+        components: [],
+        connections: [],
+        confidence: 0.95,
+        drawingReview: fullFailureAttempt === 1 ? fullFailureReview : review(true, 7),
+        drawingSynthesis: { calculations: [] },
+      };
+    });
+    const recoveredFullSource = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-full-source-retry',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 26, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeFullFailure as never });
+
+    expect(executeFullFailure).toHaveBeenCalledTimes(2);
+    const fullRetryTargets = ((executeFullFailure.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0]
+      .params?.rescanTargets ?? []) as Array<Record<string, unknown>>;
+    expect(fullRetryTargets).toHaveLength(1);
+    expect(fullRetryTargets[0]).toMatchObject({
+      sourceId: 'variant:line-enhanced',
+      retryScope: 'full-source',
+      suggestedRoles: ['connections'],
+    });
+    expect(recoveredFullSource.document.jobStatus).toBe('COMPLETE');
   });
 
   it('returns concrete re-upload guidance when low-resolution OCR remains ambiguous', async () => {
@@ -558,16 +725,28 @@ describe('document-orchestrator + evaluator', () => {
       model: expect.any(String),
     });
 
-    const changedModel = await runDocumentAnalysis({
+    const changedEffort = await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-vector-vision',
       jobId: result.job.jobId,
-      vision: { provider: 'openai', model: 'gpt-4.1', apiKey: 'test-request-key' },
+      vision: { provider: 'openai', apiKey: 'test-request-key', effort: 'high' },
       budget: { maxPages: 1, maxVlmCalls: 100, maxPixels: 100_000, deadlineMs: 60_000 },
     }, { prepareSource: async () => source, executeTeam: executeTeam as never });
 
     expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification))
       .toEqual(['sld_pdf', 'sld_image', 'sld_pdf', 'sld_image']);
-    expect(changedModel.job.pageDigests[0]).toMatchObject({ provider: 'openai', model: 'gpt-4.1' });
+    expect(changedEffort.job.pageDigests[0]).toMatchObject({ effort: 'high' });
+    expect(changedEffort.document.verification.productionFingerprint).toMatchObject({ effort: 'high' });
+
+    const changedModel = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-vector-vision',
+      jobId: changedEffort.job.jobId,
+      vision: { provider: 'openai', model: 'gpt-4.1', apiKey: 'test-request-key', effort: 'high' },
+      budget: { maxPages: 1, maxVlmCalls: 100, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification))
+      .toEqual(['sld_pdf', 'sld_image', 'sld_pdf', 'sld_image', 'sld_pdf', 'sld_image']);
+    expect(changedModel.job.pageDigests[0]).toMatchObject({ provider: 'openai', model: 'gpt-4.1', effort: 'high' });
   });
 
   it('reports a source-preparation budget stop as failed instead of an empty page', async () => {
@@ -599,5 +778,76 @@ describe('document-orchestrator + evaluator', () => {
     expect(result.document.pages[0].drawingKind).not.toBe('empty');
     expect(result.document.jobStatus).toBe('PARTIAL');
     expect(executeTeam).not.toHaveBeenCalled();
+  });
+
+  it('aborts in-flight team work when the document deadline expires', async () => {
+    const imageBuffer = await makePng();
+    const source: PreparedDrawingSource = {
+      documentHash: 'a'.repeat(64),
+      mimeType: 'image/png',
+      formatClass: 'raster-image',
+      totalPageCount: 1,
+      pages: [{
+        pageIndex: 0,
+        width: 100,
+        height: 80,
+        sourceWidth: 100,
+        sourceHeight: 80,
+        renderScale: 1,
+        renderMode: 'raster',
+        textSample: '',
+        vectorOpCount: 0,
+        rasterOpCount: 1,
+        renderHash: 'deadline-raster',
+        quality: {
+          width: 100,
+          height: 80,
+          channels: 4,
+          contrast: 1,
+          edgeDensity: 0.1,
+          gradientVariance: 1,
+          lowContrast: false,
+          blurry: false,
+          recommendedScale: 1,
+          warnings: [],
+        },
+        imageBuffer,
+      }],
+    };
+    let observedSignal: AbortSignal | undefined;
+    const executeTeam = jest.fn(async (teamInput: TeamInput) => {
+      observedSignal = teamInput.signal;
+      await new Promise<void>((resolve) => {
+        const fallback = setTimeout(resolve, 800);
+        const finish = () => {
+          clearTimeout(fallback);
+          resolve();
+        };
+        if (teamInput.signal?.aborted) finish();
+        else teamInput.signal?.addEventListener('abort', finish, { once: true });
+      });
+      return {
+        success: false,
+        components: [],
+        connections: [],
+        confidence: 0,
+        error: teamInput.signal?.aborted ? 'document deadline' : 'unbounded team call',
+      };
+    });
+
+    const started = Date.now();
+    const result = await runDocumentAnalysis({
+      bytes: imageBuffer,
+      mimeType: 'image/png',
+      ownerId: 'owner-in-flight-deadline',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 200 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam).toHaveBeenCalledTimes(1);
+    expect(observedSignal).toBeDefined();
+    expect(observedSignal?.aborted).toBe(true);
+    expect(Date.now() - started).toBeLessThan(600);
+    expect(result.document.jobStatus).toBe('PARTIAL');
   });
 });

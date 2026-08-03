@@ -12,6 +12,7 @@ import type { TeamInput, TeamResult } from '@/agent/teams/types';
 import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
 import type { RescanTargetEvidence, RoleReviewEnvelope } from '@/agent/vision/review-types';
 import { resolveVlmModel } from '@/agent/vision/vlm-client';
+import { drawingRoleTimeoutMs } from '@/lib/drawing-reasoning-effort';
 
 import {
   buildCoverageLedger,
@@ -71,11 +72,13 @@ export interface OrchestrateInput {
         provider: 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
         apiKey: string;
         model?: string;
+        effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
       }
     | {
         provider: 'chatgpt-local';
         apiKey?: never;
         model?: string;
+        effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
       };
   signal?: AbortSignal;
   seedDetections?: {
@@ -104,6 +107,7 @@ const DEFAULT_BUDGET: DocumentBudget = {
 
 const ALL_ROLES: RoleId[] = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'];
 const REGION_ROLES: RoleId[] = ['symbols', 'connections', 'text'];
+const RESCAN_SETTLE_MARGIN_MS = 10_000;
 
 function normalizeBudget(input: Partial<DocumentBudget> | undefined): DocumentBudget {
   const budget = { ...DEFAULT_BUDGET, ...input };
@@ -156,6 +160,7 @@ function pageDigestFingerprint(
     graphVersion: GRAPH_ASSEMBLY_VERSION,
     provider: usesVision ? input.vision?.provider : undefined,
     model: usesVision && input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined,
+    effort: usesVision ? input.vision?.effort : undefined,
   };
 }
 
@@ -311,11 +316,12 @@ function markCouncilCoverage(
   const graphConflicts = review?.graph?.conflicts ?? [];
   const coverageEnvelope = councilEnvelope(result, 'coverage-auditor');
   const rescanTargets = coverageEnvelope?.data.rescanTargets ?? [];
+  const blockingGraphConflicts = graphConflicts.filter((conflict) => /UNBOUND|AMBIGUOUS_LINE|SELF_LINE/.test(conflict));
   const coverageSuccess = Boolean(review?.coverage.complete)
     && Boolean(coverageEnvelope)
     && rescanTargets.length === 0
-    && review?.failures.length === 0
-    && graphConflicts.every((conflict) => !/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/.test(conflict));
+    && !review?.failures.some((failure) => failure.fatal)
+    && blockingGraphConflicts.length === 0;
   next = recordRoleCall(
     next,
     fullId,
@@ -326,7 +332,9 @@ function markCouncilCoverage(
       result,
       'coverage-auditor',
       review?.coverage.roles['coverage-auditor']?.variantId ?? 'missing-source',
-      'coverage audit found unresolved regions or graph conflicts',
+      blockingGraphConflicts.length > 0
+        ? `coverage audit found graph conflicts: ${blockingGraphConflicts.slice(0, 3).join('; ').slice(0, 240)}`
+        : 'coverage audit found unresolved regions or graph conflicts',
     ),
   );
   if (coverageSuccess) completedRoles.push('coverage-auditor');
@@ -349,9 +357,36 @@ function plannedTargetedRetryCalls(page: PreparedDrawingPage, targets: RescanTar
   const regions = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
   const roles = ['symbols', 'connections', 'text'] as const;
   const precisionCalls = roles.reduce((total, role) => total + regions.filter((region) =>
-    targets.some((target) => target.suggestedRoles.includes(role) && boundsIntersect(region, target.bounds))).length, 0);
+    targets.some((target) => target.retryScope !== 'full-source'
+      && target.suggestedRoles.includes(role)
+      && boundsIntersect(region, target.bounds))).length, 0);
   // four primary full-page readers + two extra text variants + coverage auditor
   return 7 + precisionCalls;
+}
+
+function failedRoleRescanTargets(page: PreparedDrawingPage, result: TeamResult): RescanTargetEvidence[] {
+  const targetableRoles = new Set<RoleId>(['symbols', 'connections', 'text']);
+  const regions = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
+  const failures = result.drawingReview?.failures ?? [];
+  const concreteFailureRoles = new Set(failures.filter((failure) => failure.sourceId !== 'role').map((failure) => failure.role));
+  return failures.flatMap((failure, index) => {
+    if (!targetableRoles.has(failure.role as RoleId)) return [];
+    if (failure.sourceId === 'role' && concreteFailureRoles.has(failure.role)) return [];
+    const regionMatch = failure.sourceId.match(/:region:(\d+)$/);
+    const regionIndex = regionMatch ? Number(regionMatch[1]) : -1;
+    const bounds = regionIndex >= 0 && regions[regionIndex]
+      ? regions[regionIndex]
+      : { x: 0, y: 0, w: page.width, h: page.height };
+    return [{
+      id: `role-failure-${page.pageIndex}-${failure.role}-${index + 1}`,
+      sourceId: failure.sourceId,
+      retryScope: regionMatch ? 'precision-region' as const : 'full-source' as const,
+      reason: 'low-coverage' as const,
+      bounds: { ...bounds, page: page.pageIndex + 1 },
+      suggestedRoles: [failure.role as 'symbols' | 'connections' | 'text'],
+      confidence: 1,
+    }];
+  });
 }
 
 function addUnresolved(
@@ -376,6 +411,7 @@ function teamInputForVector(
   input: OrchestrateInput,
   source: PreparedDrawingSource,
   page: PreparedDrawingPage,
+  signal: AbortSignal | undefined = input.signal,
 ): TeamInput {
   const dxf = source.formatClass === 'dxf';
   return {
@@ -385,7 +421,8 @@ function teamInputForVector(
     fileName: input.fileName,
     mimeType: input.mimeType,
     params: dxf ? {} : { pageNumber: page.pageIndex + 1 },
-    signal: input.signal,
+    signal,
+    settleOnAbort: true,
   };
 }
 
@@ -395,6 +432,7 @@ function teamInputForRaster(
   page: PreparedDrawingPage,
   rescanTargets: RescanTargetEvidence[] = [],
   priorDrawingReviewEnvelopes: RoleReviewEnvelope[] = [],
+  signal: AbortSignal | undefined = input.signal,
 ): TeamInput {
   return {
     sessionId: `drawing-raster-${source.documentHash.slice(0, 12)}-${page.pageIndex}`,
@@ -404,7 +442,8 @@ function teamInputForRaster(
     mimeType: 'image/png',
     ...(rescanTargets.length === 0 ? {} : { params: { rescanTargets } }),
     ...(priorDrawingReviewEnvelopes.length === 0 ? {} : { priorDrawingReviewEnvelopes }),
-    signal: input.signal,
+    signal,
+    settleOnAbort: true,
     vision: input.vision,
   };
 }
@@ -531,7 +570,8 @@ export async function runDocumentAnalysis(
         && previousDigest.preprocessVersion === PREPROCESS_VERSION
         && previousDigest.graphVersion === GRAPH_ASSEMBLY_VERSION
         && previousDigest.provider === input.vision?.provider
-        && previousDigest.model === (input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined)));
+        && previousDigest.model === (input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined)
+        && previousDigest.effort === input.vision?.effort));
     return (previous?.status === 'complete' || previous?.status === 'skipped-empty') && reusable
       ? { ...previous }
       : !sourcePage && previous
@@ -563,6 +603,10 @@ export async function runDocumentAnalysis(
   let vlmCalls = 0;
   let pixelsUsed = 0;
   const deadline = Date.now() + budget.deadlineMs;
+  const deadlineSignal = AbortSignal.timeout(budget.deadlineMs);
+  const analysisSignal = input.signal
+    ? AbortSignal.any([input.signal, deadlineSignal])
+    : deadlineSignal;
   const executeTeam = deps.executeTeam ?? executeSLDTeam;
   const providersUsed = new Set<string>();
   const modelsUsed = new Set<string>();
@@ -618,7 +662,7 @@ export async function runDocumentAnalysis(
       attemptedPages >= maxPagesPerRun
       || Date.now() >= deadline
       || pixelsUsed + page.width * page.height > budget.maxPixels
-      || input.signal?.aborted
+      || analysisSignal.aborted
       || getJob(job.jobId)?.cancelRequested
     ) {
       state.status = 'failed';
@@ -641,7 +685,7 @@ export async function runDocumentAnalysis(
       || page.renderMode === 'vector'
       || page.renderMode === 'hybrid';
     if (shouldRunVector) {
-      const vectorResult = await executeTeam(teamInputForVector(input, source, page), deps.teamDeps);
+      const vectorResult = await executeTeam(teamInputForVector(input, source, page, analysisSignal), deps.teamDeps);
       for (const envelope of vectorResult.drawingReview?.envelopes ?? []) {
         providersUsed.add(envelope.provider);
         modelsUsed.add(envelope.model);
@@ -686,14 +730,23 @@ export async function runDocumentAnalysis(
         let priorDrawingReviewEnvelopes: RoleReviewEnvelope[] = [];
         while (rescanAttempt <= 2) {
           const rasterResult = await executeTeam(
-            teamInputForRaster(input, source, page, latestRescanTargets, priorDrawingReviewEnvelopes),
+            teamInputForRaster(
+              input,
+              source,
+              page,
+              latestRescanTargets,
+              priorDrawingReviewEnvelopes,
+              analysisSignal,
+            ),
             deps.teamDeps,
           );
           for (const envelope of rasterResult.drawingReview?.envelopes ?? []) {
             providersUsed.add(envelope.provider);
             modelsUsed.add(envelope.model);
           }
-          const actualCalls = rasterResult.drawingReview?.coverage.plannedCalls ?? plannedCalls;
+          const actualCalls = rasterResult.drawingReview?.coverage.actualCalls
+            ?? rasterResult.drawingReview?.coverage.plannedCalls
+            ?? plannedCalls;
           vlmCalls += actualCalls;
           state.vlmCalls += actualCalls;
           // 쓴 즉시 적는다. 이 함수엔 try/catch 가 없어서 아래에서 예외가
@@ -713,7 +766,10 @@ export async function runDocumentAnalysis(
             pageHasUsableResult = true;
             const coverage = markCouncilCoverage(pageRegions, page, rasterResult);
             pageRegions = coverage.regions;
-            latestRescanTargets = coverage.rescanTargets;
+            latestRescanTargets = [...new Map([
+              ...coverage.rescanTargets,
+              ...failedRoleRescanTargets(page, rasterResult),
+            ].map((target) => [`${target.sourceId ?? target.id}:${target.suggestedRoles.join(',')}`, target])).values()];
             coverage.roles.forEach((role) => rolesPresent.add(role));
             priorDrawingReviewEnvelopes = [
               ...priorDrawingReviewEnvelopes,
@@ -728,9 +784,11 @@ export async function runDocumentAnalysis(
           rescanAttempt += 1;
           const nextPlannedCalls = plannedTargetedRetryCalls(page, latestRescanTargets);
           const canRetry = rescanAttempt <= 2
+            && latestRescanTargets.length > 0
             && previousVlmCalls + vlmCalls + nextPlannedCalls <= budget.maxVlmCalls
-            && Date.now() < deadline
-            && !input.signal?.aborted
+            && Date.now() + drawingRoleTimeoutMs(input.vision.provider, input.vision.effort)
+              + RESCAN_SETTLE_MARGIN_MS < deadline
+            && !analysisSignal.aborted
             && !getJob(job.jobId)?.cancelRequested;
           if (!canRetry) break;
         }
@@ -939,6 +997,7 @@ export async function runDocumentAnalysis(
         preprocessVersion: PREPROCESS_VERSION,
         provider: input.vision ? ([...providersUsed].sort().join(',') || input.vision.provider) : undefined,
         model: input.vision ? ([...modelsUsed].sort().join(',') || resolveVlmModel(input.vision.provider, input.vision.model)) : undefined,
+        effort: input.vision?.effort,
       },
     },
   });
@@ -956,6 +1015,7 @@ export async function runDocumentAnalysis(
       graphVersion: fingerprint.graphVersion,
       provider: fingerprint.provider,
       model: fingerprint.model,
+      effort: fingerprint.effort,
       complete: state.status === 'complete' || state.status === 'skipped-empty',
     };
   }

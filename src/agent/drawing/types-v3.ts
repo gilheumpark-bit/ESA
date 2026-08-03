@@ -287,6 +287,7 @@ export interface VerificationBlock {
     preprocessVersion: string;
     model?: string;
     provider?: string;
+    effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
   };
 }
 

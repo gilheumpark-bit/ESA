@@ -19,10 +19,12 @@ export type {
 
 const SAFE_MODEL_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/;
 const RUNTIME_CWD = join(tmpdir(), 'esa-chatgpt-local-runtime');
+const STATUS_RPC_TIMEOUT_MS = 10_000;
 
 export interface ChatGPTLocalRpc {
   request<T>(method: string, params: unknown, options?: { timeoutMs?: number }): Promise<T>;
   runTurn(params: LocalTurnParams): Promise<LocalTurnResult>;
+  close?(): void;
 }
 
 interface AccountReadResponse {
@@ -79,10 +81,10 @@ export class ChatGPTLocalService {
 
   async getStatus(): Promise<ChatGPTLocalStatus> {
     try {
-      await this.initialize();
+      await this.initialize(STATUS_RPC_TIMEOUT_MS);
       const account = await this.rpc.request<AccountReadResponse>('account/read', {
         refreshToken: false,
-      });
+      }, { timeoutMs: STATUS_RPC_TIMEOUT_MS });
       if (!account.account || account.account.type !== 'chatgpt') {
         return {
           available: true,
@@ -94,7 +96,7 @@ export class ChatGPTLocalService {
       const catalog = await this.rpc.request<ModelListResponse>('model/list', {
         includeHidden: false,
         limit: 100,
-      });
+      }, { timeoutMs: STATUS_RPC_TIMEOUT_MS });
       return {
         available: true,
         connected: true,
@@ -165,7 +167,13 @@ export class ChatGPTLocalService {
     return this.rpc.runTurn({ ...params, cwd: RUNTIME_CWD });
   }
 
-  private initialize(): Promise<void> {
+  dispose(): void {
+    this.rpc.close?.();
+    this.initializePromise = null;
+    this.activeLoginId = null;
+  }
+
+  private initialize(timeoutMs?: number): Promise<void> {
     if (!this.initializePromise) {
       this.initializePromise = this.rpc.request('initialize', {
         clientInfo: {
@@ -177,7 +185,7 @@ export class ChatGPTLocalService {
           experimentalApi: true,
           requestAttestation: false,
         },
-      }).then(() => undefined).catch((error: unknown) => {
+      }, timeoutMs === undefined ? undefined : { timeoutMs }).then(() => undefined).catch((error: unknown) => {
         this.initializePromise = null;
         throw error;
       });
@@ -187,18 +195,32 @@ export class ChatGPTLocalService {
 }
 
 let sharedService: ChatGPTLocalService | null = null;
+const defaultServiceFactory = () => new ChatGPTLocalService(new CodexAppServerClient({
+  defaultTimeoutMs: 120_000,
+}));
+let sharedServiceFactory: () => ChatGPTLocalService = defaultServiceFactory;
 
 export function getSharedChatGPTLocalService(): ChatGPTLocalService {
   if (!sharedService) {
-    sharedService = new ChatGPTLocalService(new CodexAppServerClient({
-      defaultTimeoutMs: 120_000,
-    }));
+    sharedService = sharedServiceFactory();
   }
   return sharedService;
 }
 
 export async function getChatGPTLocalStatus(): Promise<ChatGPTLocalStatus> {
+  const first = await getSharedChatGPTLocalService().getStatus();
+  if (first.available) return first;
+  sharedService?.dispose();
+  sharedService = null;
   return getSharedChatGPTLocalService().getStatus();
+}
+
+export function _setChatGPTLocalServiceFactoryForTests(
+  factory: (() => ChatGPTLocalService) | null,
+): void {
+  sharedService?.dispose();
+  sharedService = null;
+  sharedServiceFactory = factory ?? defaultServiceFactory;
 }
 
 export async function startChatGPTLocalLogin(): Promise<{ authUrl: string; loginId: string }> {

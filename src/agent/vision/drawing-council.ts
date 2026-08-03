@@ -45,6 +45,8 @@ export interface DrawingCouncilInput {
   options: VLMOptions;
   maxRegionCallsPerRole?: number;
   maxConcurrentCalls?: number;
+  /** Deadline/cancellation closes queued work but keeps already sealed role receipts. */
+  settleOnAbort?: boolean;
   /** Sealed primary-role receipts from earlier attempts on the same drawing. */
   priorEnvelopes?: readonly RoleReviewEnvelope[];
 }
@@ -52,6 +54,7 @@ export interface DrawingCouncilInput {
 export interface DrawingCouncilResult {
   envelopes: RoleReviewEnvelope[];
   failures: RoleFailure[];
+  callCounts?: { planned: number; attempted: number; successful: number; failed: number };
   /** Present for production council runs; optional for injected legacy test doubles. */
   continuityPlan?: BoundaryContinuationPlan;
 }
@@ -94,6 +97,7 @@ interface SourceFailure {
   source: ReviewSource;
   order: number;
   error: unknown;
+  started: boolean;
 }
 
 interface RoleOutcome {
@@ -604,24 +608,73 @@ async function runFairSourceTasks(plans: readonly PlannedRole[], input: DrawingC
   }
   const successes: SourceSuccess[] = [];
   const failures: SourceFailure[] = [];
+  const started = new Set<number>();
   let nextTask = 0;
   const worker = async (): Promise<void> => {
     while (true) {
-      throwIfAborted(input.options.signal);
+      if (input.options.signal?.aborted) {
+        if (input.settleOnAbort) return;
+        throw abortError();
+      }
       const index = nextTask;
       nextTask += 1;
       if (index >= tasks.length) return;
       const task = tasks[index];
+      started.add(index);
       try {
         successes.push(await invokeSource(task, input, invoke));
       } catch (error) {
-        if (input.options.signal?.aborted) throw abortError();
-        failures.push({ role: task.role, source: task.source, order: task.order, error });
+        if (input.options.signal?.aborted) {
+          if (!input.settleOnAbort) throw abortError();
+          failures.push({ role: task.role, source: task.source, order: task.order, error, started: true });
+          return;
+        }
+        failures.push({ role: task.role, source: task.source, order: task.order, error, started: true });
       }
     }
   };
   await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+  if (input.options.signal?.aborted && input.settleOnAbort) {
+    for (let index = 0; index < tasks.length; index += 1) {
+      if (started.has(index)) continue;
+      const task = tasks[index];
+      failures.push({ role: task.role, source: task.source, order: task.order, error: abortError(), started: false });
+    }
+  }
   return { successes, failures };
+}
+
+function settleAbortedCouncil(
+  input: DrawingCouncilInput,
+  plans: readonly PlannedRole[],
+  settled: { successes: readonly SourceSuccess[]; failures: readonly SourceFailure[] },
+  continuityPlan: BoundaryContinuationPlan,
+  plannedCalls: number,
+): DrawingCouncilResult {
+  const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
+  const envelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
+  const failures = outcomes.flatMap((outcome) => outcome.failures);
+  failures.push({
+    role: COVERAGE_ROLE,
+    sourceId: 'role',
+    error: 'coverage-auditor was not run because the council deadline expired.',
+    fatal: true,
+  });
+  return {
+    envelopes: deepFreeze(envelopes) as RoleReviewEnvelope[],
+    failures: deepFreeze(failures) as RoleFailure[],
+    callCounts: callCounts(plannedCalls, settled),
+    continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
+  };
+}
+
+function callCounts(
+  planned: number,
+  ...settledGroups: Array<{ successes: readonly SourceSuccess[]; failures: readonly SourceFailure[] }>
+): NonNullable<DrawingCouncilResult['callCounts']> {
+  const successful = settledGroups.reduce((total, settled) => total + settled.successes.length, 0);
+  const failed = settledGroups.reduce((total, settled) => total + settled.failures.filter((failure) => failure.started).length, 0);
+  return { planned, attempted: successful + failed, successful, failed };
 }
 
 function buildRoleOutcome(plan: PlannedRole, successes: readonly SourceSuccess[], sourceFailures: readonly SourceFailure[], input: DrawingCouncilInput): RoleOutcome {
@@ -658,11 +711,7 @@ export async function runDrawingCouncil(
   input: DrawingCouncilInput,
   invoke: Invoke = analyzeDrawingRole,
   annotateRegion: AnnotateRegion = annotatePrecisionRegion,
-): Promise<{
-  envelopes: RoleReviewEnvelope[];
-  failures: RoleFailure[];
-  continuityPlan?: BoundaryContinuationPlan;
-}> {
+): Promise<DrawingCouncilResult> {
   const limits = validateInput(input);
   throwIfAborted(input.options.signal);
   const fullPlans = PRIMARY_ROLES.map((role) => ({
@@ -670,9 +719,19 @@ export async function runDrawingCouncil(
     sources: fullSourcesForRole(role, input),
     started: Date.now(),
   }));
+  const plannedCalls = fullPlans.reduce((total, plan) => total + plan.sources.length, 0)
+    + PRIMARY_ROLES.reduce((total, role) => {
+      if (role === 'logic') return total;
+      const variant = selectCouncilVariant(role, input.variants, input.snapshot.quality.recommendedScale);
+      return total + input.regions.filter((region) => region.variantId === variant.id).slice(0, limits.maxRegionCalls).length;
+    }, 0)
+    + 1;
   const fullSettled = await runFairSourceTasks(fullPlans, input, invoke, limits.maxConcurrentCalls);
-  throwIfAborted(input.options.signal);
   const continuityPlan = buildContinuationPlan(input, fullPlans, fullSettled);
+  if (input.options.signal?.aborted) {
+    if (!input.settleOnAbort) throw abortError();
+    return settleAbortedCouncil(input, fullPlans, fullSettled, continuityPlan, plannedCalls);
+  }
   const shouldAnnotate = input.regions.some((region) =>
     Boolean(region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds));
   const precisionRegions = shouldAnnotate
@@ -692,7 +751,6 @@ export async function runDrawingCouncil(
     invoke,
     limits.maxConcurrentCalls,
   );
-  throwIfAborted(input.options.signal);
   const plans = PRIMARY_ROLES.map((role, index) => ({
     role,
     sources: [...fullPlans[index].sources, ...precisionPlans[index].sources],
@@ -702,6 +760,10 @@ export async function runDrawingCouncil(
     successes: [...fullSettled.successes, ...precisionSettled.successes],
     failures: [...fullSettled.failures, ...precisionSettled.failures],
   };
+  if (input.options.signal?.aborted) {
+    if (!input.settleOnAbort) throw abortError();
+    return settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls);
+  }
   const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
   const primaryEnvelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
   const primaryFailures = outcomes.flatMap((outcome) => outcome.failures);
@@ -722,6 +784,7 @@ export async function runDrawingCouncil(
   return {
     envelopes: deepFreeze([...primaryEnvelopes, ...(auditOutcome.envelope ? [auditOutcome.envelope] : [])]) as RoleReviewEnvelope[],
     failures: deepFreeze([...primaryFailures, ...auditOutcome.failures]) as RoleFailure[],
+    callCounts: callCounts(plannedCalls, settled, auditSettled),
     continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
   };
 }

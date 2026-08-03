@@ -64,10 +64,11 @@ export function deduplicateSymbols(
     || left.localId.localeCompare(right.localId));
 
   for (const hit of ordered) {
+    const hitType = canonicalSymbolType(hit.type);
     const dup = kept.find((k) => {
       if (k.evidence[0]?.pageIndex !== hit.pageIndex) return false;
       if (!boundsNear(k.evidence[0].bounds, hit.bounds, tolerance)) return false;
-      const sameType = k.typeCandidates.some((candidate) => typesCompatible(candidate, hit.type));
+      const sameType = k.typeCandidates.some((candidate) => typesCompatible(candidate, hitType));
       return sameType || labelsEquivalent(k.rawLabel, hit.label);
     });
 
@@ -76,8 +77,8 @@ export function deduplicateSymbols(
       const incoming = evidenceRefs(hit, `${dup.id}-e${dup.evidence.length}`)
         .filter((item) => !dup.evidence.some((existing) => existing.evidenceId === item.evidenceId));
       dup.evidence.push(...incoming);
-      const typeConflict = !dup.typeCandidates.some((candidate) => typesCompatible(candidate, hit.type));
-      dup.typeCandidates = unique([...dup.typeCandidates, hit.type]);
+      const typeConflict = !dup.typeCandidates.some((candidate) => typesCompatible(candidate, hitType));
+      dup.typeCandidates = unique([...dup.typeCandidates, hitType]);
       if (typeConflict) {
         dup.confirmedType = undefined;
         dup.certainty = 'ambiguous';
@@ -85,7 +86,7 @@ export function deduplicateSymbols(
       } else if (hit.confidence > previousMaxConfidence) {
         dup.rawLabel = hit.label ?? dup.rawLabel;
         if (hit.certainty === 'confirmed' || hit.confidence >= 0.85) {
-          dup.confirmedType = hit.type;
+          dup.confirmedType = hitType;
           dup.certainty = 'confirmed';
         }
       }
@@ -96,12 +97,12 @@ export function deduplicateSymbols(
     const seq = (pageSequences.get(hit.pageIndex) ?? 0) + 1;
     pageSequences.set(hit.pageIndex, seq);
     const displayId = `P${String(page).padStart(2, '0')}-S${String(seq).padStart(3, '0')}`;
-    const id = stableId('sym', [hit.pageIndex, normalizeType(hit.type), normalizeLabel(hit.label), boundsKey(hit.bounds)]);
+    const id = stableId('sym', [hit.pageIndex, normalizeType(hitType), normalizeLabel(hit.label), boundsKey(hit.bounds)]);
     kept.push({
       id,
       displayId,
-      typeCandidates: [hit.type],
-      confirmedType: hit.certainty === 'confirmed' ? hit.type : undefined,
+      typeCandidates: [hitType],
+      confirmedType: hit.certainty === 'confirmed' ? hitType : undefined,
       rawLabel: hit.label,
       certainty: hit.certainty ?? (hit.confidence >= 0.85 ? 'confirmed' : 'ambiguous'),
       evidence: evidenceRefs(hit, `${id}-e0`),
@@ -209,14 +210,13 @@ export function buildPageRelations(
   const pageSymbols = symbols.filter((s) => s.evidence[0]?.pageIndex === pageIndex && s.certainty !== 'unread');
   const pageLines = lines.filter((l) => l.evidence[0]?.pageIndex === pageIndex && l.certainty !== 'unread');
   const relations: RelationEdge[] = [];
+  const relatedPairs = new Set<string>();
   let seq = 0;
 
-  for (const line of pageLines) {
-    const start = line.path[0];
-    const end = line.path[line.path.length - 1];
-    const from = nearestSymbol(pageSymbols, start);
-    const to = nearestSymbol(pageSymbols, end);
-    if (!from || !to || from.id === to.id) continue;
+  const appendRelation = (from: SymbolNode, to: SymbolNode, line: LineNode, certainty: Certainty): void => {
+    const pairKey = [from.id, to.id].sort().join('|');
+    if (relatedPairs.has(pairKey)) return;
+    relatedPairs.add(pairKey);
     const page = pageIndex + 1;
     const displayId = `P${String(page).padStart(2, '0')}-R${String(++seq).padStart(3, '0')}`;
     relations.push({
@@ -225,13 +225,149 @@ export function buildPageRelations(
       from: from.id,
       to: to.id,
       lineId: line.id,
-      certainty: line.certainty === 'confirmed' && from.certainty === 'confirmed' && to.certainty === 'confirmed'
-        ? 'confirmed'
-        : 'ambiguous',
+      certainty,
       evidence: [...from.evidence, ...to.evidence, ...line.evidence],
     });
+  };
+
+  const endpointSymbols = new Map(pageLines.map((line) => {
+    const start = nearestSymbol(pageSymbols, line.path[0]);
+    const end = nearestSymbol(pageSymbols, line.path[line.path.length - 1]);
+    return [line.id, { start, end }] as const;
+  }));
+
+  for (const line of pageLines) {
+    const { start: from, end: to } = endpointSymbols.get(line.id) ?? { start: null, end: null };
+    if (!from || !to || from.id === to.id) continue;
+    appendRelation(
+      from,
+      to,
+      line,
+      line.certainty === 'confirmed' && from.certainty === 'confirmed' && to.certainty === 'confirmed'
+        ? 'confirmed'
+        : 'ambiguous',
+    );
+  }
+
+  // Precision crops often leave a small gap between a branch endpoint and the
+  // bus segment seen in a neighboring crop. Trace only a perpendicular
+  // endpoint-to-segment continuation, then attach the branch device to a
+  // busbar already anchored elsewhere in that conductor component. Relations
+  // created through this inferred bridge stay ambiguous.
+  const adjacency = buildLineAdjacency(pageLines);
+  for (const line of pageLines) {
+    const direct = endpointSymbols.get(line.id);
+    const directlyBound = [...new Map([direct?.start, direct?.end]
+      .filter((symbol): symbol is SymbolNode => Boolean(symbol))
+      .map((symbol) => [symbol.id, symbol])).values()];
+    if (directlyBound.length !== 1 || isBusbar(directlyBound[0])) continue;
+    const component = connectedLineIds(line.id, adjacency);
+    const busbars = [...new Map(component.flatMap((lineId) => {
+      const bound = endpointSymbols.get(lineId);
+      return [bound?.start, bound?.end]
+        .filter((symbol): symbol is SymbolNode => symbol !== null && symbol !== undefined)
+        .filter(isBusbar);
+    }).map((symbol) => [symbol.id, symbol])).values()];
+    if (busbars.length === 0) continue;
+    const targetPoint = direct?.start?.id === directlyBound[0].id
+      ? line.path[line.path.length - 1]
+      : line.path[0];
+    const busbar = busbars.sort((left, right) => symbolDistance(left, targetPoint) - symbolDistance(right, targetPoint))[0];
+    appendRelation(busbar, directlyBound[0], line, 'ambiguous');
   }
   return relations;
+}
+
+function buildLineAdjacency(lines: LineNode[], tolerance = 55): Map<string, Set<string>> {
+  const adjacency = new Map(lines.map((line) => [line.id, new Set<string>()]));
+  for (let leftIndex = 0; leftIndex < lines.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < lines.length; rightIndex += 1) {
+      const left = lines[leftIndex];
+      const right = lines[rightIndex];
+      if (!lineKindsConnect(left.lineKind, right.lineKind) || !expandedBoundsIntersect(pathBounds(left.path), pathBounds(right.path), tolerance)) continue;
+      if (!linesMeet(left.path, right.path, tolerance)) continue;
+      adjacency.get(left.id)?.add(right.id);
+      adjacency.get(right.id)?.add(left.id);
+    }
+  }
+  return adjacency;
+}
+
+function connectedLineIds(startId: string, adjacency: Map<string, Set<string>>): string[] {
+  const visited = new Set<string>();
+  const pending = [startId];
+  while (pending.length > 0) {
+    const id = pending.pop();
+    if (!id || visited.has(id)) continue;
+    visited.add(id);
+    for (const neighbor of adjacency.get(id) ?? []) pending.push(neighbor);
+  }
+  return [...visited];
+}
+
+function linesMeet(left: LineNode['path'], right: LineNode['path'], tolerance: number): boolean {
+  return endpointMeetsPath(left[0], directionAt(left, 0), right, tolerance)
+    || endpointMeetsPath(left[left.length - 1], directionAt(left, left.length - 1), right, tolerance)
+    || endpointMeetsPath(right[0], directionAt(right, 0), left, tolerance)
+    || endpointMeetsPath(right[right.length - 1], directionAt(right, right.length - 1), left, tolerance);
+}
+
+function directionAt(path: LineNode['path'], index: number): { x: number; y: number } {
+  const adjacentIndex = index === 0 ? 1 : path.length - 2;
+  return { x: path[index].x - path[adjacentIndex].x, y: path[index].y - path[adjacentIndex].y };
+}
+
+function endpointMeetsPath(
+  point: { x: number; y: number },
+  direction: { x: number; y: number },
+  path: LineNode['path'],
+  tolerance: number,
+): boolean {
+  const directionLength = Math.hypot(direction.x, direction.y);
+  if (directionLength === 0) return false;
+  for (let index = 1; index < path.length; index += 1) {
+    const start = path[index - 1];
+    const end = path[index];
+    const vx = end.x - start.x;
+    const vy = end.y - start.y;
+    const lengthSquared = vx * vx + vy * vy;
+    if (lengthSquared === 0) continue;
+    const projection = Math.max(0, Math.min(1, ((point.x - start.x) * vx + (point.y - start.y) * vy) / lengthSquared));
+    const closest = { x: start.x + projection * vx, y: start.y + projection * vy };
+    if (dist(point, closest) > tolerance) continue;
+    if (projection <= 0.05 || projection >= 0.95) return true;
+    const segmentLength = Math.sqrt(lengthSquared);
+    const parallelRatio = Math.abs(direction.x * vx + direction.y * vy) / (directionLength * segmentLength);
+    if (parallelRatio <= 0.35) return true;
+  }
+  return false;
+}
+
+function lineKindsConnect(left: LineNode['lineKind'], right: LineNode['lineKind']): boolean {
+  if (left === right) return true;
+  const powerKinds = new Set<LineNode['lineKind']>(['power', 'bus', 'unknown']);
+  return powerKinds.has(left) && powerKinds.has(right);
+}
+
+function expandedBoundsIntersect(left: EvidenceBounds, right: EvidenceBounds, tolerance: number): boolean {
+  return left.x - tolerance <= right.x + right.w
+    && left.x + left.w + tolerance >= right.x
+    && left.y - tolerance <= right.y + right.h
+    && left.y + left.h + tolerance >= right.y;
+}
+
+function isBusbar(symbol: SymbolNode): boolean {
+  return [symbol.confirmedType, ...symbol.typeCandidates]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => ['bus', 'busbar'].includes(normalizeType(value)));
+}
+
+function symbolDistance(symbol: SymbolNode, point: { x: number; y: number }): number {
+  const bounds = symbol.evidence[0]?.bounds;
+  if (!bounds) return Number.POSITIVE_INFINITY;
+  const dx = Math.max(bounds.x - point.x, 0, point.x - (bounds.x + bounds.w));
+  const dy = Math.max(bounds.y - point.y, 0, point.y - (bounds.y + bounds.h));
+  return Math.hypot(dx, dy);
 }
 
 export function findUnboundLineItems(
@@ -260,9 +396,9 @@ function nearestSymbol(symbols: SymbolNode[], point: { x: number; y: number }, m
   for (const s of symbols) {
     const b = s.evidence[0]?.bounds;
     if (!b) continue;
-    const cx = b.x + b.w / 2;
-    const cy = b.y + b.h / 2;
-    const d = Math.hypot(cx - point.x, cy - point.y);
+    const dx = Math.max(b.x - point.x, 0, point.x - (b.x + b.w));
+    const dy = Math.max(b.y - point.y, 0, point.y - (b.y + b.h));
+    const d = Math.hypot(dx, dy);
     if (d < bestD) {
       bestD = d;
       best = s;
@@ -284,7 +420,13 @@ function labelsEquivalent(a?: string, b?: string): boolean {
 
 function typesCompatible(a: string, b: string): boolean {
   if (!a || !b) return false;
-  return normalizeType(a) === normalizeType(b);
+  return normalizeType(canonicalSymbolType(a)) === normalizeType(canonicalSymbolType(b));
+}
+
+function canonicalSymbolType(value: string): string {
+  const normalized = normalizeType(value);
+  if (normalized === 'breaker' || normalized === 'circuitbreaker') return 'breaker';
+  return value.trim();
 }
 
 function normalizeType(value: string): string {

@@ -402,6 +402,43 @@ describe('sealed independent drawing council', () => {
     expect(invoke.mock.calls.length).toBeLessThanOrEqual(4);
   });
 
+  it('settles a deadline abort with completed envelopes instead of discarding them', async () => {
+    const controller = new AbortController();
+    let releaseSecondStarted: (() => void) | undefined;
+    const secondStarted = new Promise<void>((resolve) => { releaseSecondStarted = resolve; });
+    let callCount = 0;
+    const invoke = jest.fn(async (buffer: ArrayBuffer, _mime: string, role: VLMReviewRole, callOptions: VLMOptions) => {
+      callCount += 1;
+      if (callCount === 1) return resultFor(role, buffer.byteLength);
+      releaseSecondStarted?.();
+      return new Promise<VLMRoleAnalysisResult>((_resolve, reject) => {
+        callOptions.signal?.addEventListener('abort', () => reject(new Error('deadline observed')), { once: true });
+      });
+    });
+
+    const pending = runDrawingCouncil({
+      snapshot: snapshot(),
+      variants: variants(),
+      regions: [],
+      options: { ...options, signal: controller.signal },
+      maxConcurrentCalls: 1,
+      settleOnAbort: true,
+    }, invoke);
+    await secondStarted;
+    controller.abort();
+    const result = await pending;
+
+    expect(result.envelopes).toEqual([
+      expect.objectContaining({ role: 'symbols', reviewedSourceIds: ['variant:original'] }),
+    ]);
+    expect(result.failures).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'connections', sourceId: 'variant:lines' }),
+      expect.objectContaining({ role: 'coverage-auditor', sourceId: 'role', fatal: true }),
+    ]));
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(result.callCounts).toEqual({ planned: 5, attempted: 2, successful: 1, failed: 1 });
+  });
+
   it('limits 53 calls globally and schedules every primary role full source before regions', async () => {
     const manyRegions = Array.from({ length: 16 }, (_, index) => ({
       ...regions()[0],

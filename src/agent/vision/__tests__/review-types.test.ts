@@ -234,6 +234,14 @@ describe('role review contracts', () => {
         logic: [{ ...logic, attributes: { voltageV: Infinity } }],
       }),
     ).toThrow();
+    expect(parseRoleReviewData('logic', {
+      logic: [{ ...logic, attributes: { ...logic.attributes, voltageV: 0 } }],
+    }).logic?.[0].attributes).toEqual({
+      fromId: 'breaker-1',
+      toId: 'relay-1',
+      protectedById: null,
+      deviceType: 'breaker',
+    });
     expect(() =>
       parseRoleReviewData('logic', {
         logic: [{ ...logic, evidenceBounds: [] }],

@@ -100,6 +100,19 @@ export function assignPhysicalEquipmentIds(
     if (rel.status === 'confirmed') union(rel.fromRef, rel.toRef);
   }
 
+  // A two/three-winding transformer is drawn as overlapping winding circles.
+  // Keep every circle as traceable symbol evidence, but bind the overlapping
+  // windings to one physical equipment ID for the quantity register.
+  const windings = symbols.filter((symbol) =>
+    symbol.certainty === 'confirmed' && isTransformerWinding(symbol));
+  for (let leftIndex = 0; leftIndex < windings.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < windings.length; rightIndex += 1) {
+      if (samePageBoundsOverlap(windings[leftIndex], windings[rightIndex])) {
+        union(windings[leftIndex].id, windings[rightIndex].id);
+      }
+    }
+  }
+
   // Same tag + type on different pages stays separate unless cross-page confirmed
   const roots = new Map<string, string>();
   for (const s of symbols) {
@@ -111,6 +124,24 @@ export function assignPhysicalEquipmentIds(
     map.set(s.id, roots.get(root)!);
   }
   return map;
+}
+
+function isTransformerWinding(symbol: SymbolNode): boolean {
+  const type = (symbol.confirmedType ?? symbol.typeCandidates[0] ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  return type === 'transformer_winding';
+}
+
+function samePageBoundsOverlap(left: SymbolNode, right: SymbolNode): boolean {
+  const leftEvidence = left.evidence[0];
+  const rightEvidence = right.evidence[0];
+  if (!leftEvidence || !rightEvidence || leftEvidence.pageIndex !== rightEvidence.pageIndex) return false;
+  const a = leftEvidence.bounds;
+  const b = rightEvidence.bounds;
+  return Math.min(a.x + a.w, b.x + b.w) > Math.max(a.x, b.x)
+    && Math.min(a.y + a.h, b.y + b.h) > Math.max(a.y, b.y);
 }
 
 function resolveCountStatus(input: {

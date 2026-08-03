@@ -57,12 +57,45 @@ describe('AI 호출 예산 — 쓴 즉시 기록', () => {
     });
 
     let calls = 0;
-    // 첫 시도는 실패로 끝난다 — 그래도 호출은 이미 썼다. 그러면 구획에
-    // 빈 곳이 남아 재시도로 들어가고, 두 번째에서 예외를 던진다.
+    // 첫 시도는 coverage-auditor가 실제 재스캔 대상을 남긴다. 대상이 없는
+    // 전면 재시도는 금지됐으므로, 이 영수증이 두 번째 호출의 명시 근거다.
+    // 두 번째 호출에서 예외가 나도 첫 호출 사용량은 남아야 한다.
     const executeTeam = jest.fn(async () => {
       calls += 1;
       if (calls > 1) throw new Error('PROVIDER_DOWN');
-      return { success: false, error: 'ROLE_CALL_FAILED', components: [], connections: [], confidence: 0 };
+      return {
+        success: true,
+        components: [], connections: [], confidence: 0,
+        drawingReview: {
+          snapshot: {
+            drawingHash: source.documentHash, mimeType: source.mimeType, page: 1,
+            width: 100, height: 80, quality,
+          },
+          envelopes: [{
+            role: 'coverage-auditor', outputHash: 'audit-output', drawingHash: source.documentHash,
+            provider: 'gemini', model: 'test', promptVersion: 'test', durationMs: 1,
+            data: {
+              rescanTargets: [{
+                id: 'retry-region-0', sourceId: 'variant:original:region:0',
+                reason: 'low-coverage', bounds: { x: 0, y: 0, w: 60, h: 60, page: 1 },
+                suggestedRoles: ['symbols'], confidence: 0.95,
+              }],
+              warnings: [], confidence: 0.95,
+            },
+          }],
+          failures: [],
+          coverage: {
+            roles: {
+              symbols: { variantId: 'variant:original', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+              connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+              text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 7 },
+              logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+              'coverage-auditor': { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+            },
+            plannedCalls: 19, complete: false, maxRegionCallsPerRole: 16,
+          },
+        },
+      };
     });
 
     await expect(runDocumentAnalysis({

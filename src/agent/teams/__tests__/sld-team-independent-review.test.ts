@@ -153,20 +153,47 @@ describe('SLD raster independent council integration', () => {
     const controller = new AbortController();
     const prepareRaster = jest.fn(async () => prepared());
     const resolveVisionKey = jest.fn(() => ({ key: KEY, source: 'user' as const }));
-    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const runCouncil = jest.fn(async () => ({
+      envelopes: envelopes(),
+      failures: [],
+      callCounts: { planned: 19, attempted: 5, successful: 5, failed: 0 },
+    }));
 
-    const result = await executeSLDTeam(rasterInput({ signal: controller.signal }), { prepareRaster, resolveVisionKey, runCouncil });
+    const result = await executeSLDTeam(rasterInput({
+      signal: controller.signal,
+      vision: { provider: 'openai', apiKey: ` ${KEY} `, effort: 'high' } as never,
+    }), { prepareRaster, resolveVisionKey, runCouncil });
 
     expect(runCouncil).toHaveBeenCalledTimes(1);
-    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, signal: controller.signal, timeoutMs: 45_000, maxRetries: 1 }) }));
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ snapshot, regions: expect.any(Array), maxRegionCallsPerRole: 16, maxConcurrentCalls: 4, options: expect.objectContaining({ apiKey: KEY, effort: 'high', signal: controller.signal, timeoutMs: 45_000, maxRetries: 1 }) }));
     expect(prepareRaster).toHaveBeenCalledTimes(1);
     expect(resolveVisionKey).toHaveBeenCalledWith('openai', ` ${KEY} `);
     expect(result.success).toBe(true);
     expect(result.components).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'VCB-01', type: 'breaker_vcb' }), expect.objectContaining({ id: 'TR-01', type: 'transformer' })]));
     expect(result.connections).toEqual([expect.objectContaining({ from: 'VCB-01', to: 'TR-01' })]);
     expect(result.drawingReview).toMatchObject({ snapshot: { drawingHash: DRAWING_HASH, width: 100, height: 80 }, coverage: { plannedCalls: 19, complete: true, maxRegionCallsPerRole: 16 } });
+    expect(result.drawingReview?.coverage.actualCalls).toBe(5);
     expect(result.drawingSynthesis).toMatchObject({ drawingHash: DRAWING_HASH, verdict: 'CONDITIONAL', requiresHumanReview: true });
     expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('gives a high-effort local drawing role enough time to return before marking it failed', async () => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+
+    await executeSLDTeam(rasterInput({
+      vision: { provider: 'chatgpt-local', model: 'gpt-5.6-sol', effort: 'high' },
+    }), {
+      prepareRaster: async () => prepared(),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({
+      options: expect.objectContaining({
+        provider: 'chatgpt-local',
+        effort: 'high',
+        timeoutMs: 120_000,
+      }),
+    }));
   });
 
   it('keeps the review on HOLD when the independent coverage auditor requests a rescan', async () => {
@@ -219,6 +246,49 @@ describe('SLD raster independent council integration', () => {
     expect(councilRegions).toHaveLength(4);
     expect(councilRegions.every((region) => region.variantId === 'variant:line-enhanced')).toBe(true);
     expect(result.drawingReview?.coverage.complete).toBe(true);
+  });
+
+  it('retries a failed full-page source without multiplying it across every precision region', async () => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const result = await executeSLDTeam(rasterInput({
+      params: {
+        rescanTargets: [{
+          id: 'full-source-retry', sourceId: 'variant:line-enhanced', reason: 'low-coverage',
+          retryScope: 'full-source',
+          bounds: { x: 0, y: 0, w: 100, h: 80, page: 1 },
+          suggestedRoles: ['connections'], confidence: 1,
+        }],
+      } as never,
+    }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    const councilInput = (runCouncil.mock.calls as unknown as Array<[DrawingCouncilInput]>)[0]?.[0];
+    expect(councilInput?.regions).toHaveLength(0);
+    expect(result.drawingReview?.coverage.complete).toBe(true);
+  });
+
+  it('accepts the full three-role rescan target capacity instead of capping the combined list at sixteen', async () => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const rescanTargets = Array.from({ length: 17 }, (_, index) => ({
+      id: `target-${index + 1}`,
+      sourceId: 'variant:line-enhanced',
+      reason: 'boundary-clip' as const,
+      bounds: { x: 0, y: 0, w: 25, h: 80, page: 1 },
+      suggestedRoles: ['connections'] as const,
+      confidence: 0.9,
+    }));
+
+    const result = await executeSLDTeam(rasterInput({ params: { rescanTargets } as never }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
   });
 
   it('runs the image analysis stages once in evidence order with the same normalized graph', async () => {

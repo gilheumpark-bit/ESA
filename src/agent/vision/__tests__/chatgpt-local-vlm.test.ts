@@ -11,6 +11,19 @@ jest.mock('@/lib/chatgpt-local', () => ({
 
 const runTurnMock = runChatGPTLocalTurn as jest.MockedFunction<typeof runChatGPTLocalTurn>;
 
+function expectEveryObjectPropertyRequired(schema: unknown): void {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
+  const value = schema as Record<string, unknown>;
+  if (value.type === 'object') {
+    const properties = value.properties as Record<string, unknown> | undefined;
+    expect(value.additionalProperties).toBe(false);
+    expect(new Set(value.required as string[] | undefined)).toEqual(
+      new Set(Object.keys(properties ?? {})),
+    );
+  }
+  for (const child of Object.values(value)) expectEveryObjectPropertyRequired(child);
+}
+
 describe('ChatGPT local VLM transport', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -34,13 +47,15 @@ describe('ChatGPT local VLM transport', () => {
       {
         provider: 'chatgpt-local',
         model: 'gpt-5.6-terra',
+        effort: 'high',
         maxRetries: 0,
-      },
+      } as never,
     );
 
     const request = runTurnMock.mock.calls[0]?.[0];
     expect(request).toEqual(expect.objectContaining({
       model: 'gpt-5.6-terra',
+      effort: 'high',
       developerInstructions: expect.stringContaining('Read every equipment label'),
       input: [
         {
@@ -54,7 +69,20 @@ describe('ChatGPT local VLM transport', () => {
         },
       ],
     }));
-    expect(request).not.toHaveProperty('outputSchema');
+    expect(request).toEqual(expect.objectContaining({
+      outputSchema: expect.objectContaining({
+        type: 'object',
+        additionalProperties: false,
+        required: ['texts', 'warnings', 'confidence'],
+        properties: expect.objectContaining({
+          texts: expect.any(Object),
+          warnings: expect.any(Object),
+          confidence: expect.any(Object),
+        }),
+      }),
+    }));
+    expect(request?.outputSchema).not.toHaveProperty('properties.symbols');
+    expectEveryObjectPropertyRequired(request?.outputSchema);
     expect(result).toMatchObject({
       role: 'text',
       model: 'gpt-5.6-terra',

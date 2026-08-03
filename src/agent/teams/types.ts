@@ -66,17 +66,21 @@ export interface TeamInput {
   language?: string;
   /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
   signal?: AbortSignal;
+  /** 마감 시 이미 봉인된 역할 결과를 버리지 않고 PARTIAL로 정산한다. */
+  settleOnAbort?: boolean;
   /** 이미지 도면에서만 사용. API 키는 현재 요청 메모리에만 머물고 결과·로그에 포함하지 않는다. */
   vision?:
     | {
         provider: 'openai' | 'gemini' | 'google-agent-platform' | 'claude';
         apiKey?: string;
         model?: string;
+        effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
       }
     | {
         provider: 'chatgpt-local';
         apiKey?: never;
         model?: string;
+        effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
       };
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 들어온다 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
@@ -123,6 +127,8 @@ export interface DrawingReviewArtifact {
       regionIds?: string[];
     }>;
     plannedCalls: number;
+    /** Provider invocation attempts that actually started; omitted by legacy injected councils. */
+    actualCalls?: number;
     complete: boolean;
     maxRegionCallsPerRole: number;
   };

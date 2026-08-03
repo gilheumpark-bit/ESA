@@ -21,6 +21,7 @@ import {
   type GoogleModelProvider,
 } from '@/lib/google-model-transport';
 import { runChatGPTLocalTurn } from '@/lib/chatgpt-local';
+import type { DrawingReasoningEffort } from '@/lib/drawing-reasoning-effort';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Provider Abstraction + Configurable Params
@@ -31,6 +32,8 @@ export type VLMProvider = RemoteVLMProvider | 'chatgpt-local';
 
 interface VLMSharedOptions {
   model?: string;
+  /** 모델 간 도면 비교 때 명시하는 사고 강도. */
+  effort?: DrawingReasoningEffort;
   maxTokens?: number;
   temperature?: number;
   /** 최대 재시도 횟수 (기본 2) */
@@ -429,6 +432,7 @@ async function requestGoogleJson(
         }],
         generationConfig: {
           ...(model === cfg.defaultModel ? {} : { temperature: options.temperature ?? cfg.defaultTemp }),
+          ...(options.effort ? { thinkingConfig: { thinkingLevel: options.effort } } : {}),
           maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
           responseMimeType: 'application/json',
         },
@@ -578,6 +582,114 @@ const ROLE_ROOT_COLLECTION: Record<VLMReviewRole, 'symbols' | 'lines' | 'texts' 
   'coverage-auditor': 'rescanTargets',
 };
 
+const ROLE_POINT_SCHEMA = {
+  type: 'object',
+  properties: { x: { type: 'number' }, y: { type: 'number' } },
+  required: ['x', 'y'],
+  additionalProperties: false,
+};
+const ROLE_BOUNDS_SCHEMA = {
+  type: 'object',
+  properties: {
+    x: { type: 'number' }, y: { type: 'number' },
+    w: { type: 'number' }, h: { type: 'number' },
+  },
+  required: ['x', 'y', 'w', 'h'],
+  additionalProperties: false,
+};
+const ROLE_ITEM_SCHEMAS: Record<VLMReviewRole, Record<string, unknown>> = {
+  symbols: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      typeCandidates: { type: 'array', items: { type: 'string' } },
+      rawLabel: { type: ['string', 'null'] },
+      bounds: ROLE_BOUNDS_SCHEMA,
+      ports: { type: 'array', items: ROLE_POINT_SCHEMA },
+      confidence: { type: 'number' },
+    },
+    required: ['id', 'typeCandidates', 'rawLabel', 'bounds', 'ports', 'confidence'],
+    additionalProperties: false,
+  },
+  connections: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      lineKind: { type: 'string', enum: ['power', 'bus', 'control', 'ground', 'unknown'] },
+      path: { type: 'array', items: ROLE_POINT_SCHEMA, minItems: 2 },
+      start: ROLE_POINT_SCHEMA,
+      end: ROLE_POINT_SCHEMA,
+      startAnchorId: { type: ['string', 'null'] },
+      endAnchorId: { type: ['string', 'null'] },
+      openEndReason: { type: ['string', 'null'], enum: ['page-edge', 'device-boundary', 'unresolved', null] },
+      junctions: { type: 'array', items: ROLE_POINT_SCHEMA },
+      crossovers: { type: 'array', items: ROLE_POINT_SCHEMA },
+      confidence: { type: 'number' },
+    },
+    required: ['id', 'lineKind', 'path', 'start', 'end', 'startAnchorId', 'endAnchorId', 'openEndReason', 'junctions', 'crossovers', 'confidence'],
+    additionalProperties: false,
+  },
+  text: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      raw: { type: 'string' },
+      candidates: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      bounds: ROLE_BOUNDS_SCHEMA,
+      confidence: { type: 'number' },
+    },
+    required: ['id', 'raw', 'candidates', 'bounds', 'confidence'],
+    additionalProperties: false,
+  },
+  logic: {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      topic: { type: 'string', enum: ['DIRECTION', 'PROTECTION_CHAIN', 'VOLTAGE_DOMAIN', 'DEVICE_IDENTITY', 'MISSING_RELATION'] },
+      subjectIds: { type: 'array', items: { type: 'string' }, minItems: 1 },
+      attributes: {
+        type: 'object',
+        properties: {
+          fromId: { type: ['string', 'null'] }, toId: { type: ['string', 'null'] },
+          protectedById: { type: ['string', 'null'] }, voltageV: { type: ['number', 'null'] },
+          deviceType: { type: ['string', 'null'] },
+        },
+        required: ['fromId', 'toId', 'protectedById', 'voltageV', 'deviceType'],
+        additionalProperties: false,
+      },
+      statement: { type: 'string' },
+      evidenceBounds: { type: 'array', items: ROLE_BOUNDS_SCHEMA, minItems: 1 },
+      confidence: { type: 'number' },
+    },
+    required: ['id', 'topic', 'subjectIds', 'attributes', 'statement', 'evidenceBounds', 'confidence'],
+    additionalProperties: false,
+  },
+  'coverage-auditor': {
+    type: 'object',
+    properties: {
+      id: { type: 'string' },
+      reason: { type: 'string', enum: ['empty-result', 'dense-cluster', 'boundary-clip', 'low-coverage'] },
+      bounds: ROLE_BOUNDS_SCHEMA,
+      suggestedRoles: { type: 'array', items: { type: 'string', enum: ['symbols', 'connections', 'text'] }, minItems: 1 },
+      confidence: { type: 'number' },
+    },
+    required: ['id', 'reason', 'bounds', 'suggestedRoles', 'confidence'],
+    additionalProperties: false,
+  },
+};
+const LOCAL_ROLE_OUTPUT_SCHEMAS = Object.fromEntries(
+  Object.entries(ROLE_ROOT_COLLECTION).map(([role, collection]) => [role, {
+    type: 'object',
+    properties: {
+      [collection]: { type: 'array', items: ROLE_ITEM_SCHEMAS[role as VLMReviewRole] },
+      warnings: { type: 'array', items: { type: 'string' } },
+      confidence: { type: 'number' },
+    },
+    required: [collection, 'warnings', 'confidence'],
+    additionalProperties: false,
+  }]),
+) as unknown as Record<VLMReviewRole, Record<string, unknown>>;
+
 /**
  * Recover only fully closed evidence objects from a role array that was cut off
  * by a provider output limit. The result is explicitly partial and confidence
@@ -717,6 +829,7 @@ async function requestChatGPTLocalJson(
   const model = resolveVlmModel('chatgpt-local', options.model);
   const response = await runChatGPTLocalTurn({
     model,
+    ...(options.effort ? { effort: options.effort } : {}),
     developerInstructions: prompt,
     input: [
       {
@@ -935,7 +1048,13 @@ export async function analyzeDrawingRole(
   const started = Date.now();
   const contextLabel = role === 'coverage-auditor' ? 'COVERAGE_CONTEXT' : 'REGION_CONTEXT';
   const prompt = context ? `${ROLE_PROMPTS[role]}\n\n${contextLabel}:\n${context}` : ROLE_PROMPTS[role];
-  const response = await callProviderForJson(imageBuffer, mimeType, prompt, options);
+  const response = await callProviderForJson(
+    imageBuffer,
+    mimeType,
+    prompt,
+    options,
+    LOCAL_ROLE_OUTPUT_SCHEMAS[role],
+  );
   return {
     role,
     data: parseRoleResponseData(role, response.rawText),

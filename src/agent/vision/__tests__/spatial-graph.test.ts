@@ -88,6 +88,28 @@ describe('source-linked spatial graph', () => {
     expect(graph.edges.every((item) => item.from !== item.to)).toBe(true);
   });
 
+  it('binds a line endpoint that lands on a long busbar away from its center', () => {
+    const input = fixture();
+    const symbols = input[0].data.symbols as NonNullable<RoleReviewData['symbols']>;
+    symbols[0] = {
+      ...symbols[0], typeCandidates: ['BUSBAR'], rawLabel: 'MAIN BUS',
+      bounds: { x: 0, y: 40, w: 200, h: 12, page: 1 }, ports: [],
+    };
+    symbols[1] = {
+      ...symbols[1], bounds: { x: 240, y: 40, w: 20, h: 20, page: 1 }, ports: [],
+    };
+    const line = input[1].data.lines?.[0] as NonNullable<RoleReviewData['lines']>[number];
+    line.path = [{ x: 10, y: 46 }, { x: 240, y: 50 }];
+    line.start = line.path[0];
+    line.end = line.path[1];
+    reseal(input);
+
+    const graph = assembleSpatialGraph(input, { snapTolerance: 24 });
+    expect(graph.edges).toEqual([
+      expect.objectContaining({ from: 'BUSBAR-01', to: 'TR-01' }),
+    ]);
+  });
+
   it('keeps null labels and ambiguous type candidates without asserting a first candidate as truth', () => {
     const graph = assembleSpatialGraph(fixture({ ambiguousType: true, nullLabel: true }));
 

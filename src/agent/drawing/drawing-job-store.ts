@@ -29,6 +29,7 @@ export interface DrawingJobRecord {
     pageRenderHash: string;
     model?: string;
     provider?: string;
+    effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
     promptVersion: string;
     preprocessVersion: string;
     graphVersion: string;
@@ -260,6 +261,7 @@ export function canReusePage(
     graphVersion: string;
     model?: string;
     provider?: string;
+    effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
   },
 ): boolean {
   if (job.documentHash !== fingerprint.documentHash) return false;
@@ -270,7 +272,8 @@ export function canReusePage(
     && prev.preprocessVersion === fingerprint.preprocessVersion
     && prev.graphVersion === fingerprint.graphVersion
     && prev.model === fingerprint.model
-    && prev.provider === fingerprint.provider;
+    && prev.provider === fingerprint.provider
+    && prev.effort === fingerprint.effort;
 }
 
 export function nextPendingRequestedPage(job: DrawingJobRecord): number | undefined {

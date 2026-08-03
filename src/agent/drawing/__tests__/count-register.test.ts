@@ -62,6 +62,35 @@ describe('count-register', () => {
     }]);
     expect(rows[0]).toMatchObject({ missingSuspected: 1, countStatus: 'HOLD' });
   });
+
+  it('counts overlapping transformer windings as one physical transformer', () => {
+    const winding = (id: string, x: number, y: number, w: number, h: number) => sym({
+      id,
+      displayId: `P01-${id}`,
+      confirmedType: 'transformer_winding',
+      typeCandidates: ['transformer winding'],
+      evidence: [{
+        evidenceId: `${id}-e`,
+        pageIndex: 0,
+        bounds: { x, y, w, h },
+        confidence: 0.98,
+      }],
+    });
+    const symbols = [
+      winding('upper', 10, 10, 40, 40),
+      winding('lower', 10, 30, 40, 40),
+      winding('tertiary', 35, 28, 24, 24),
+      winding('separate', 100, 10, 40, 40),
+    ];
+
+    const links = assignPhysicalEquipmentIds(symbols, []);
+    const row = buildEquipmentCounts(symbols, links, [], [])
+      .find((candidate) => candidate.equipmentKind === 'transformer');
+
+    expect(new Set([links.get('upper'), links.get('lower'), links.get('tertiary')]).size).toBe(1);
+    expect(links.get('separate')).not.toBe(links.get('upper'));
+    expect(row).toMatchObject({ symbolOccurrences: 4, physicalEquipmentCount: 2 });
+  });
 });
 
 /**

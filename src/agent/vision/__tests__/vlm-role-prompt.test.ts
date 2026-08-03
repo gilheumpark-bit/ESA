@@ -93,7 +93,7 @@ describe('role-specific VLM prompts', () => {
     expect(prompt).toContain('"warnings"');
     expect(prompt).toContain('"confidence"');
     expect(prompt).toContain('Only use the listed fields');
-    expect(prompt).toContain('bounds is { x, y, w, h, page? }');
+    expect(prompt).toContain('bounds is exactly { x, y, w, h }');
     for (const field of itemFields) expect(prompt).toContain(`"${field}"`);
   });
 
@@ -200,6 +200,22 @@ describe('role-specific VLM prompts', () => {
     const [, legacyRequest] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(JSON.parse(defaultRequest.body as string).generationConfig).not.toHaveProperty('temperature');
     expect(JSON.parse(legacyRequest.body as string).generationConfig.temperature).toBe(0.2);
+  });
+
+  it('sends an explicit high thinking level to Gemini drawing requests', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      responseFor('google-agent-platform', JSON.stringify(textPayload)),
+    );
+
+    await analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('google-agent-platform'),
+      effort: 'high',
+    } as never);
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(request.body as string).generationConfig).toMatchObject({
+      thinkingConfig: { thinkingLevel: 'high' },
+    });
   });
 
   it('fails closed for invalid JSON and oversized role inputs', async () => {

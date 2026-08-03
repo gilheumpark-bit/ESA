@@ -26,6 +26,8 @@
     "test:drawing-v3": "jest --runInBand src/agent/drawing src/app/api/drawing-jobs",
     "test:sld-benchmark": "jest --runInBand src/agent/drawing/__tests__/sld-benchmark-production.test.ts",
     "test:region-continuity": "node scripts/simulate-region-continuity.mjs",
+    "validate:drawing-stages": "node scripts/run-drawing-reasoning-stages.mjs",
+    "validate:drawing-model-matrix": "node scripts/run-drawing-model-matrix.mjs",
     "report:drawings": "jest --testPathPatterns=drawing-baseline --silent=false",
     "gate:pdf": "node scripts/pdf-fixture-gate.mjs",
     "gate:chat-live": "node scripts/chat-live-gate.mjs",
