@@ -28,6 +28,7 @@
     "test:region-continuity": "node scripts/simulate-region-continuity.mjs",
     "validate:drawing-stages": "node scripts/run-drawing-reasoning-stages.mjs",
     "validate:drawing-model-matrix": "node scripts/run-drawing-model-matrix.mjs",
+    "validate:drawing-effort-calibration": "node scripts/run-drawing-effort-calibration.mjs",
     "report:drawings": "jest --testPathPatterns=drawing-baseline --silent=false",
     "gate:pdf": "node scripts/pdf-fixture-gate.mjs",
     "gate:chat-live": "node scripts/chat-live-gate.mjs",

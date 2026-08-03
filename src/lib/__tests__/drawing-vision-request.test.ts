@@ -49,6 +49,18 @@ describe('drawing Vision request resolution', () => {
     });
   });
 
+  it.each(['xhigh', 'max'] as const)('preserves the %s calibration effort for a local image model', async (effort) => {
+    await expect(resolveDrawingVisionRequest(
+      form({ provider: 'chatgpt-local', model: 'gpt-5.6-terra', effort }),
+      request(),
+      false,
+    )).resolves.toEqual({
+      provider: 'chatgpt-local',
+      model: 'gpt-5.6-terra',
+      effort,
+    });
+  });
+
   it('hides the local provider from a non-loopback request', async () => {
     await expect(resolveDrawingVisionRequest(
       form({ provider: 'chatgpt-local', model: 'gpt-5.6-terra' }),
@@ -77,6 +89,16 @@ describe('drawing Vision request resolution', () => {
       false,
     )).rejects.toMatchObject<Partial<DrawingVisionRequestError>>({
       status: 401,
+    });
+  });
+
+  it.each(['xhigh', 'max'] as const)('rejects local-only %s effort for a remote Vision provider', async (effort) => {
+    await expect(resolveDrawingVisionRequest(
+      form({ provider: 'google-agent-platform', model: 'gemini-3.6-flash', effort, apiKey: 'test-key' }),
+      request(),
+      false,
+    )).rejects.toMatchObject<Partial<DrawingVisionRequestError>>({
+      status: 400,
     });
   });
 });

@@ -58,7 +58,7 @@ export async function resolveDrawingVisionRequest(
     throw new DrawingVisionRequestError('Vision 모델 이름 형식이 올바르지 않습니다.', 400);
   }
   if (effortRaw && !isDrawingReasoningEffort(effortRaw)) {
-    throw new DrawingVisionRequestError('도면 추론 단계는 low, medium, high 중 하나여야 합니다.', 400);
+    throw new DrawingVisionRequestError('도면 추론 단계는 low, medium, high, xhigh, max 중 하나여야 합니다.', 400);
   }
   const effort: DrawingReasoningEffort | undefined = effortRaw
     ? effortRaw as DrawingReasoningEffort
@@ -94,6 +94,9 @@ export async function resolveDrawingVisionRequest(
     throw new DrawingVisionRequestError('지원하지 않는 Vision 제공자입니다.', 400);
   }
   const provider = providerRaw as RemoteVisionProvider;
+  if (effort === 'xhigh' || effort === 'max') {
+    throw new DrawingVisionRequestError('xhigh와 max 도면 추론은 로컬 ChatGPT 모델에서만 사용할 수 있습니다.', 400);
+  }
   const suppliedKey = String(form.get('apiKey') ?? '').trim();
   if (suppliedKey.length > 4096) {
     throw new DrawingVisionRequestError('Vision 키 형식이 올바르지 않습니다.', 400);

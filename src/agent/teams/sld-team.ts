@@ -142,7 +142,7 @@ const GRAPH_COUNCIL_ROLES = ['symbols', 'connections', 'text'] as const;
 const MAX_REGION_CALLS_PER_ROLE = 16;
 const MAX_RESCAN_TARGETS = MAX_REGION_CALLS_PER_ROLE * GRAPH_COUNCIL_ROLES.length;
 const COUNCIL_MAX_CONCURRENT_CALLS = 4;
-const AGENT_PLATFORM_HIGH_MAX_CONCURRENT_CALLS = 8;
+const QUALITY_FIRST_MAX_CONCURRENT_CALLS = 8;
 // 실도면 고밀도 심볼 판독이 31~42초에 정상 응답하는데 30초에서 잘렸다
 // (세종 MCC-101, Agent Platform 3.6 Flash 라이브). 문서 전체 deadline과
 // 호출 예산은 그대로 두고 개별 정상 응답만 받을 수 있게 여유를 둔다.
@@ -340,8 +340,9 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     variants: prepared.variants,
     regions: reviewRegions,
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
-    maxConcurrentCalls: input.vision.provider === 'google-agent-platform' && input.vision.effort === 'high'
-      ? AGENT_PLATFORM_HIGH_MAX_CONCURRENT_CALLS
+    maxConcurrentCalls: input.vision.provider === 'chatgpt-local'
+      || (input.vision.provider === 'google-agent-platform' && input.vision.effort === 'high')
+      ? QUALITY_FIRST_MAX_CONCURRENT_CALLS
       : COUNCIL_MAX_CONCURRENT_CALLS,
     settleOnAbort: input.settleOnAbort,
     priorEnvelopes: input.priorDrawingReviewEnvelopes,

@@ -188,10 +188,31 @@ describe('SLD raster independent council integration', () => {
     });
 
     expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({
+      maxConcurrentCalls: 8,
       options: expect.objectContaining({
         provider: 'chatgpt-local',
         effort: 'high',
         timeoutMs: 120_000,
+      }),
+    }));
+  });
+
+  it('uses the bounded eight-call lane for low-effort local drawing calibration', async () => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+
+    await executeSLDTeam(rasterInput({
+      vision: { provider: 'chatgpt-local', model: 'gpt-5.5', effort: 'low' },
+    }), {
+      prepareRaster: async () => prepared(),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({
+      maxConcurrentCalls: 8,
+      options: expect.objectContaining({
+        provider: 'chatgpt-local',
+        effort: 'low',
+        timeoutMs: 75_000,
       }),
     }));
   });

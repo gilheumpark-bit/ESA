@@ -172,6 +172,25 @@ describe('drawing jobs API ownership and input boundary', () => {
     }));
   });
 
+  it('gives an explicit max calibration run the same ten-minute product boundary', async () => {
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job: { jobId: 'job-local-max', status: 'COMPLETE', estimated: {} },
+      document: { documentHash: 'a'.repeat(64), jobStatus: 'COMPLETE' },
+    } as never);
+
+    const response = await POST(formRequest({
+      provider: 'chatgpt-local',
+      model: 'gpt-5.6-terra',
+      effort: 'max',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      budget: expect.objectContaining({ deadlineMs: 570_000 }),
+      vision: expect.objectContaining({ effort: 'max' }),
+    }));
+  });
+
   it('rejects an unsupported drawing reasoning effort before analysis', async () => {
     const response = await POST(formRequest({
       provider: 'chatgpt-local',
