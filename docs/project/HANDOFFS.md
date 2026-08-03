@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-08-03
+
+- [구조화 출력·관계 그래프·KEC 근거 수리](handoffs/2026-08-03-drawing-schema-relations-kec-repair.md)
+
 ## 2026-08-02
 
 - [도면 누수·공개 교보재·KEC 검증](handoffs/2026-08-02-drawing-leakage-public-kec-validation.md)
