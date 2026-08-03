@@ -467,7 +467,7 @@ export function parseDxfToSLD(
 
   const rowBand = textProximityThreshold * 0.7;
 
-  for (const t of texts) {
+  for (const [textIndex, t] of texts.entries()) {
     // 컴포넌트 매핑 — ① 근접 반경, ② 실패 시 행 정렬 인출
     let closestComp: SLDComponent | null = null;
     let closestDist = textProximityThreshold;
@@ -531,6 +531,22 @@ export function parseDxfToSLD(
       if (best) {
         if (t.spec.conductorSize) best.conn.conductorSize = `${t.spec.conductorSize}sq`;
         if (t.spec.cableType) best.conn.cableType = t.spec.cableType;
+        if (t.spec.parallelCount) best.conn.parallelCount = t.spec.parallelCount;
+        if (t.spec.installationMethod) best.conn.installationMethod = t.spec.installationMethod;
+        if (t.spec.ambientTemperature !== undefined) best.conn.ambientTemperature = t.spec.ambientTemperature;
+        if (t.spec.groupedCircuitCount !== undefined) best.conn.groupedCircuitCount = t.spec.groupedCircuitCount;
+        if (t.spec.prospectiveFaultCurrentKA !== undefined) best.conn.prospectiveFaultCurrentKA = t.spec.prospectiveFaultCurrentKA;
+        if (t.spec.breakingCapacityKA !== undefined) best.conn.breakingCapacityKA = t.spec.breakingCapacityKA;
+        if (t.spec.protectionCurve) best.conn.protectionCurve = t.spec.protectionCurve;
+        const hasSourceBackedCondition = t.spec.installationMethod !== undefined
+          || t.spec.ambientTemperature !== undefined
+          || t.spec.groupedCircuitCount !== undefined
+          || t.spec.prospectiveFaultCurrentKA !== undefined
+          || t.spec.breakingCapacityKA !== undefined
+          || t.spec.protectionCurve !== undefined;
+        if (hasSourceBackedCondition) {
+          best.conn.sourceIds = [...new Set([...(best.conn.sourceIds ?? []), `dxf-text:${textIndex + 1}`])].sort();
+        }
       }
     }
   }

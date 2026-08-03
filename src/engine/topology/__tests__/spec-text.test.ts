@@ -61,6 +61,41 @@ describe('전류·케이블·단면적', () => {
   });
 });
 
+describe('KEC 판정 조건과 보호 정격', () => {
+  it('설치방법·주위온도·집합회로 수를 명시 라벨에서만 구조화한다', () => {
+    const spec = parseSpecText('CV 25sq 포설: 케이블트레이 주위온도 40°C 집합회로 3회로');
+
+    expect(spec.installationMethod).toBe('tray');
+    expect(spec.ambientTemperature).toBe(40);
+    expect(spec.groupedCircuitCount).toBe(3);
+  });
+
+  it('영문 설치 조건도 같은 정본 값으로 정규화한다', () => {
+    const spec = parseSpecText('XLPE 35mm2 installation: direct buried ambient temperature 35C grouped circuits 2');
+
+    expect(spec.installationMethod).toBe('directBuried');
+    expect(spec.ambientTemperature).toBe(35);
+    expect(spec.groupedCircuitCount).toBe(2);
+  });
+
+  it('예상 단락전류·차단용량·보호곡선을 서로 다른 필드로 보존한다', () => {
+    const spec = parseSpecText('예상 단락전류 25kA 정격 차단용량 36kA 보호곡선 VI');
+
+    expect(spec.prospectiveFaultCurrentKA).toBe(25);
+    expect(spec.breakingCapacityKA).toBe(36);
+    expect(spec.protectionCurve).toBe('VI');
+  });
+
+  it('라벨 없는 온도·회로 수·kA는 KEC 조건으로 발명하지 않는다', () => {
+    const spec = parseSpecText('CV 25sq 40°C 3회로 25kA');
+
+    expect(spec.ambientTemperature).toBeUndefined();
+    expect(spec.groupedCircuitCount).toBeUndefined();
+    expect(spec.prospectiveFaultCurrentKA).toBeUndefined();
+    expect(spec.breakingCapacityKA).toBeUndefined();
+  });
+});
+
 describe('차단기 극수·AF/AT 정격 — 실도면 분전반 일람 표기 (KIMM EE-039 골든 실측)', () => {
   // 실발주 도면의 차단기 표기는 "MCCB 3P-50/20"(bare)·"4P-400AF/400AT"(접미) 두 형태.
   // 구현 전 상태: 두 형태 모두 구조화 실패 → 정격 결속 0% (골든 파일럿 실측) → 계산 체인 기아.

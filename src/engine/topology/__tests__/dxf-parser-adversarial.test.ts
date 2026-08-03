@@ -63,6 +63,26 @@ describe('적대 — 스펙 귀속을 지어내지 않는가', () => {
     expect(tr1?.rating).toBe('500kVA');
     expect(tr2?.rating).toBeUndefined();
   });
+
+  it('연결 중앙의 명시 KEC 조건과 보호 정격을 같은 텍스트 근거에 결박한다', () => {
+    const dxf = doc([
+      I('MCCB-1', 0, 0), I('MCC-1', 1000, 0), L(0, 0, 1000, 0),
+      T('CV 25sq 포설: 트레이 주위온도 40°C 집합회로 3회로 예상 단락전류 25kA 정격 차단용량 36kA 보호곡선 VI', 500, 0),
+    ]);
+
+    const result = parseDxfToSLD(dxf, { textProximityThreshold: 100 });
+    expect(result.connections[0]).toEqual(expect.objectContaining({
+      conductorSize: '25sq',
+      cableType: 'CV',
+      installationMethod: 'tray',
+      ambientTemperature: 40,
+      groupedCircuitCount: 3,
+      prospectiveFaultCurrentKA: 25,
+      breakingCapacityKA: 36,
+      protectionCurve: 'VI',
+      sourceIds: [expect.stringMatching(/^dxf-text:/)],
+    }));
+  });
 });
 
 describe('적대 — 축척 불변', () => {

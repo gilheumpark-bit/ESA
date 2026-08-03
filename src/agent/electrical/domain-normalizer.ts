@@ -27,9 +27,14 @@ export type ElectricalField =
   | 'conductorSize_mm2'
   | 'conductorMaterial'
   | 'length_m'
-  | 'phase';
+  | 'phase'
+  | 'installationMethod'
+  | 'ambientTemperature_C'
+  | 'groupedCircuitCount'
+  | 'protectionCurve'
+  | 'insulationType';
 
-export type ElectricalUnit = 'V' | 'A' | 'kVA' | 'kA' | 'kW' | 'VA' | 'ohm' | 'factor' | 'm' | 'mm2' | 'ratio' | 'text' | 'phase' | 'material';
+export type ElectricalUnit = 'V' | 'A' | 'kVA' | 'kA' | 'kW' | 'VA' | 'ohm' | 'factor' | 'm' | 'mm2' | 'ratio' | 'text' | 'phase' | 'material' | 'method' | 'C' | 'count' | 'curve' | 'insulation';
 
 export interface NormalizedSpec {
   readonly drawingHash: string;
@@ -74,7 +79,7 @@ const MAX_SPECS = 20_000;
 const MAX_WARNINGS = 20_000;
 const OWNER_DISTANCE = 80;
 const NUMBER = '[-+]?\\d+(?:[.,]\\d+)*';
-const CABLE_FAMILY = /(?:^|[^A-Z0-9-])(F-?CV|CV|XLPE)(?:$|[^A-Z0-9-])/i;
+const CABLE_FAMILY = /(?:^|[^A-Z0-9-])(TFR-CV|FR-CV|F-CV|FCV|CV|XLPE|HFIX|HIV|IV|VV)(?:$|[^A-Z0-9-])/i;
 
 type MutableSpec = {
   drawingHash: string;
@@ -194,7 +199,8 @@ function compatible(field: ElectricalField, symbol: SpatialSymbol): boolean {
   const types = candidateTypes(symbol);
   if (field === 'capacity_kVA' || field === 'totalLoad_kW' || field === 'efficiency' || field === 'demandFactor' || field === 'safetyMargin') return /\b(TR|TRANSFORMER)\b/.test(types);
   if (field === 'ctRatio' || field === 'burden_VA' || field === 'maxLoadCurrent_A' || field === 'leadLength_m' || field === 'leadSize_mm2' || field === 'ctAccuracyClass') return /\bCT\b/.test(types);
-  if (field === 'cableSpec' || field === 'length_m' || field === 'conductorSize_mm2' || field === 'conductorMaterial') return /\b(CABLE|LINE)\b/.test(types);
+  if (field === 'cableSpec' || field === 'length_m' || field === 'conductorSize_mm2' || field === 'conductorMaterial' || field === 'insulationType' || field === 'installationMethod' || field === 'ambientTemperature_C' || field === 'groupedCircuitCount') return /\b(CABLE|LINE)\b/.test(types);
+  if (field === 'protectionCurve') return /\b(RELAY|OCR|VCB|ACB|MCCB|ELB|CB)\b/.test(types);
   if (field === 'phase') return false;
   return /\b(VCB|ACB|MCCB|ELB|CB|SWITCH|TR|TRANSFORMER)\b/.test(types);
 }
@@ -453,8 +459,43 @@ function parseText(text: SpatialText, warnings: NormalizationWarning[]): Mutable
   const materials = [...raw.matchAll(/\b(Cu|Copper|Al|Aluminium)\b|(동|알루미늄)/gi)].map((match) => { reserveParsedField(budget); return /^(Cu|Copper)$/i.test(match[1] ?? '') || match[2] === '동' ? 'Cu' : 'Al'; });
   if (cableContext && new Set(materials).size === 1) addSpec(specs, text, 'conductorMaterial', materials[0], 'material');
   if (cableContext && new Set(materials).size > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'conductorMaterial', page: text.bounds.page });
+  const insulationTypes: string[] = [];
+  if (cableContext && /(?:^|[^A-Z0-9-])(TFR-CV|FR-CV|F-CV|FCV|CV|XLPE)(?:$|[^A-Z0-9-])/i.test(raw)) insulationTypes.push('XLPE');
+  if (cableContext && /(?:^|[^A-Z0-9-])(HFIX|HIV|IV|VV)(?:$|[^A-Z0-9-])/i.test(raw)) insulationTypes.push('PVC');
+  if (new Set(insulationTypes).size === 1) { reserveParsedField(budget); addSpec(specs, text, 'insulationType', insulationTypes[0], 'insulation'); }
+  if (new Set(insulationTypes).size > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'insulationType', page: text.bounds.page });
   const lengths = readMatches(raw, new RegExp(`${bounded}\\s*(미터|m)(?!m|m2|[A-Za-z])`, 'gi'), { '미터': 1, m: 1 }, text, 'length_m', occupied, warnings, budget);
   addUniqueNumeric(specs, warnings, text, 'length_m', 'm', lengths.map((item) => item.value));
+
+  const installationMethods = [...raw.matchAll(/(?:공사\s*방법|포설(?:\s*(?:방법|방식))?|installation(?:\s*method)?)\s*[:=\-]?\s*(전선관|관로|케이블\s*트레이|트레이|직매|지중\s*직매|기중|자유\s*공기|conduit|cable\s*tray|tray|direct\s*buried|free\s*air)/gi)]
+    .map((match) => {
+      reserveParsedField(budget);
+      const method = match[1].replace(/\s+/g, ' ').toLowerCase();
+      if (/전선관|관로|conduit/.test(method)) return 'conduit';
+      if (/트레이|tray/.test(method)) return 'tray';
+      if (/직매|direct buried/.test(method)) return 'directBuried';
+      return 'freeAir';
+    });
+  const distinctMethods = [...new Set(installationMethods)];
+  if (distinctMethods.length === 1) addSpec(specs, text, 'installationMethod', distinctMethods[0], 'method');
+  if (distinctMethods.length > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'installationMethod', page: text.bounds.page });
+
+  const ambientTemperatures = [...raw.matchAll(/(?:주위\s*온도|주변\s*온도|ambient\s*temperature)\s*[:=\-]?\s*(-?\d+(?:\.\d+)?)\s*°?\s*C\b/gi)]
+    .map((match) => { reserveParsedField(budget); return Number(match[1]); })
+    .filter((value) => Number.isFinite(value) && value >= -50 && value <= 200);
+  addUniqueNumeric(specs, warnings, text, 'ambientTemperature_C', 'C', ambientTemperatures);
+
+  const groupedCircuitCounts = [...raw.matchAll(/(?:집합\s*회로(?:\s*수)?|밀집\s*회로(?:\s*수)?|grouped\s*circuits?)\s*[:=\-]?\s*(\d+)\s*(?:회로|circuits?)?/gi)]
+    .map((match) => { reserveParsedField(budget); return Number(match[1]); })
+    .filter((value) => Number.isInteger(value) && value >= 1 && value <= 200);
+  addUniqueNumeric(specs, warnings, text, 'groupedCircuitCount', 'count', groupedCircuitCounts);
+
+  const protectionCurves = [...raw.matchAll(/(?:보호\s*곡선|계전기\s*곡선|protection\s*curve|relay\s*curve|curve\s*type)\s*[:=\-]?\s*(SI|VI|EI)\b/gi)]
+    .map((match) => { reserveParsedField(budget); return match[1].toUpperCase(); });
+  const distinctCurves = [...new Set(protectionCurves)];
+  if (distinctCurves.length === 1) addSpec(specs, text, 'protectionCurve', distinctCurves[0], 'curve');
+  if (distinctCurves.length > 1) addWarning(warnings, { code: 'HOLD_AMBIGUOUS_FIELD_VALUE', evidenceId: text.id, field: 'protectionCurve', page: text.bounds.page });
+
   const phases = [...raw.matchAll(/(?:^|\s)(1|3)\s*(?:Ø|φ|상)/gi)].map((match) => { reserveParsedField(budget); return Number(match[1]); });
   addUniqueNumeric(specs, warnings, text, 'phase', 'phase', phases);
 

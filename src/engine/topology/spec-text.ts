@@ -22,6 +22,18 @@ export interface ParsedSpec {
   parallelCount?: number;
   /** 도체 재질 — AL/알루미늄 명시 시 'Al'. 미상은 undefined(판정층이 보수 처리·CRIT). */
   conductor?: 'Cu' | 'Al';
+  /** KEC 허용전류 표의 명시 설치 조건. 표기가 없으면 기본값을 발명하지 않는다. */
+  installationMethod?: 'conduit' | 'tray' | 'directBuried' | 'freeAir';
+  /** 도면·표에 라벨과 함께 명시된 주위온도(°C). */
+  ambientTemperature?: number;
+  /** 같은 포설 그룹에 포함된 회로 수. 병렬 케이블 조수와 별개다. */
+  groupedCircuitCount?: number;
+  /** 계통의 예상 단락전류(kA). 차단기 차단용량과 구분한다. */
+  prospectiveFaultCurrentKA?: number;
+  /** 차단기의 정격 차단용량(kA). 예상 단락전류와 구분한다. */
+  breakingCapacityKA?: number;
+  /** 도면에 명시된 IEC 반한시 보호곡선. */
+  protectionCurve?: 'SI' | 'VI' | 'EI';
 }
 
 export function parseSpecText(text: string): ParsedSpec {
@@ -37,6 +49,38 @@ export function parseSpecText(text: string): ParsedSpec {
   // 낙관하지 않고 보수 처리한다(도메인 심사 HIGH: Al을 Cu로 판정해 ~28% 과대평가).
   if (/\bAL\b|알루미늄|알미늄/i.test(text)) spec.conductor = 'Al';
   else if (/\bCU\b|구리|동선/i.test(text)) spec.conductor = 'Cu';
+
+  // 허용전류 보정 조건은 **라벨이 붙은 값만** 읽는다. `40°C`나 `3회로`가
+  // 단독으로 보이면 기기 온도·회로 번호일 수 있어 KEC 입력으로 승격하지 않는다.
+  const installationMatch = text.match(
+    /(?:공사\s*방법|포설(?:\s*(?:방법|방식))?|installation(?:\s*method)?)\s*[:=\-]?\s*(전선관|관로|케이블\s*트레이|트레이|직매|지중\s*직매|기중|자유\s*공기|conduit|cable\s*tray|tray|direct\s*buried|free\s*air)/i,
+  );
+  if (installationMatch) {
+    const method = installationMatch[1].replace(/\s+/g, ' ').toLowerCase();
+    if (/전선관|관로|conduit/.test(method)) spec.installationMethod = 'conduit';
+    else if (/트레이|tray/.test(method)) spec.installationMethod = 'tray';
+    else if (/직매|direct buried/.test(method)) spec.installationMethod = 'directBuried';
+    else if (/기중|자유 공기|free air/.test(method)) spec.installationMethod = 'freeAir';
+  }
+
+  const ambientMatch = text.match(/(?:주위\s*온도|주변\s*온도|ambient\s*temperature)\s*[:=\-]?\s*(-?\d+(?:\.\d+)?)\s*°?\s*C\b/i);
+  if (ambientMatch) {
+    const value = Number(ambientMatch[1]);
+    if (Number.isFinite(value) && value >= -50 && value <= 200) spec.ambientTemperature = value;
+  }
+
+  const groupedMatch = text.match(/(?:집합\s*회로(?:\s*수)?|밀집\s*회로(?:\s*수)?|grouped\s*circuits?)\s*[:=\-]?\s*(\d+)\s*(?:회로|circuits?)?/i);
+  if (groupedMatch) {
+    const value = Number(groupedMatch[1]);
+    if (Number.isInteger(value) && value >= 1 && value <= 200) spec.groupedCircuitCount = value;
+  }
+
+  const faultMatch = text.match(/(?:예상\s*단락\s*전류|추정\s*단락\s*전류|prospective\s*(?:short[- ]?circuit|fault)\s*current)\s*[:=\-]?\s*(\d+(?:\.\d+)?)\s*kA\b/i);
+  if (faultMatch) spec.prospectiveFaultCurrentKA = Number(faultMatch[1]);
+  const breakingMatch = text.match(/(?:정격\s*(?:차단\s*전류|차단\s*용량)|차단\s*용량|rated\s*(?:breaking\s*current|breaking\s*capacity)|breaking\s*capacity)\s*[:=\-]?\s*(\d+(?:\.\d+)?)\s*kA\b/i);
+  if (breakingMatch) spec.breakingCapacityKA = Number(breakingMatch[1]);
+  const curveMatch = text.match(/(?:보호\s*곡선|계전기\s*곡선|protection\s*curve|relay\s*curve|curve\s*type)\s*[:=\-]?\s*(SI|VI|EI)\b/i);
+  if (curveMatch) spec.protectionCurve = curveMatch[1].toUpperCase() as ParsedSpec['protectionCurve'];
 
   // 병렬 다조: "150sq x 2"·"150sq×2"·"2조"·"P2" — 허용전류가 조수배가 되므로
   // 무시하면 옳은 도면을 과전류로 오판(버그 사냥 F5). 단면적 뒤 배수 또는 "N조".

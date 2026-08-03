@@ -87,6 +87,7 @@ describe('normalizeElectricalGraph', () => {
       expect.objectContaining({ field: 'cableSpec', unit: 'text', ownerId: 'CABLE-01' }),
       expect.objectContaining({ field: 'conductorSize_mm2', value: 35, unit: 'mm2', ownerId: 'CABLE-01' }),
       expect.objectContaining({ field: 'conductorMaterial', value: 'Cu', unit: 'material', ownerId: 'CABLE-01' }),
+      expect.objectContaining({ field: 'insulationType', value: 'XLPE', unit: 'insulation', ownerId: 'CABLE-01' }),
       expect.objectContaining({ field: 'length_m', value: 120, unit: 'm', ownerId: 'CABLE-01' }),
       expect.objectContaining({ field: 'phase', value: 3, unit: 'phase' }),
     ]));
@@ -258,6 +259,25 @@ describe('normalizeElectricalGraph', () => {
       expect.objectContaining({ field: 'demandFactor', value: 0.8, unit: 'factor' }),
       expect.objectContaining({ field: 'safetyMargin', value: 1.25, unit: 'factor' }),
       expect.objectContaining({ field: 'burden_VA', value: 15, unit: 'VA' }),
+    ]));
+  });
+
+  it('preserves source-backed KEC installation conditions and protection curve fields', () => {
+    const result = normalizeElectricalGraph(graph({
+      symbols: [symbol('CABLE-COND', 'CABLE', 0), symbol('VCB-CURVE', 'VCB', 200)],
+      texts: [
+        text('TEXT-COND', 'CV 25mm2 포설: 트레이 주위온도 40°C 집합회로 3회로', 0),
+        text('TEXT-CURVE', '보호곡선 VI', 200),
+      ],
+    }));
+
+    expect(specsFor(result, 'TEXT-COND')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'installationMethod', value: 'tray', unit: 'method', ownerId: 'CABLE-COND' }),
+      expect.objectContaining({ field: 'ambientTemperature_C', value: 40, unit: 'C', ownerId: 'CABLE-COND' }),
+      expect.objectContaining({ field: 'groupedCircuitCount', value: 3, unit: 'count', ownerId: 'CABLE-COND' }),
+    ]));
+    expect(specsFor(result, 'TEXT-CURVE')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'protectionCurve', value: 'VI', unit: 'curve', ownerId: 'VCB-CURVE' }),
     ]));
   });
 

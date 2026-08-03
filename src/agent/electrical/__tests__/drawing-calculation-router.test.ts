@@ -76,7 +76,7 @@ function calculationGraph(): SpatialEvidenceGraph {
     symbols: [symbol('CABLE-01', 'CABLE', 0), symbol('VCB-01', 'VCB', 100), symbol('TR-01', 'TRANSFORMER', 200), symbol('CT-01', 'CT', 300)],
     lines: [line('LINE-CABLE-VCB', 20, 100)],
     texts: [
-      text('CABLE-TEXT', 'CV 3C 35mm2 Cu 80m', 0),
+      text('CABLE-TEXT', 'CV 3C 35mm2 Cu 80m 포설: 전선관 주위온도 30°C 집합회로 1회로', 0),
       text('PHASE-TEXT', '3상', 0),
       text('VCB-TEXT', '380V 부하전류 120A 단락전류 25kA 허용전류 150A 역률 0.9', 100),
       text('TR-TEXT', '총부하 500kW 역률 0.9 효율 95% 수용률 80% 안전율 0.1', 200),
@@ -108,13 +108,19 @@ function receiptFor(receipts: ReturnType<typeof routeDrawingCalculations>, calcu
 }
 
 describe('routeDrawingCalculations', () => {
-  it('calls all four real calculators only from complete graph-backed normalized evidence and keeps HOLD', () => {
+  it('calls all five real calculators only from complete graph-backed normalized evidence and keeps HOLD', () => {
     const receipts = routeDrawingCalculations(normalizeElectricalGraph(calculationGraph()));
 
     expect(receiptFor(receipts, 'voltage-drop', 'CABLE-01')).toMatchObject({ status: 'CALCULATED', judgment: 'HOLD' });
     expect(receiptFor(receipts, 'breaker-sizing', 'VCB-01')).toMatchObject({ status: 'CALCULATED', judgment: 'HOLD' });
     expect(receiptFor(receipts, 'transformer-capacity', 'TR-01')).toMatchObject({ status: 'CALCULATED', judgment: 'HOLD' });
     expect(receiptFor(receipts, 'ct-sizing', 'CT-01')).toMatchObject({ status: 'CALCULATED', judgment: 'HOLD' });
+    expect(receiptFor(receipts, 'cable-sizing', 'CABLE-01')).toMatchObject({ status: 'CALCULATED', judgment: 'HOLD' });
+    expect(receiptFor(receipts, 'cable-sizing', 'CABLE-01')?.inputEvidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ adapterField: 'installation', normalizedField: 'installationMethod', value: 'conduit' }),
+      expect.objectContaining({ adapterField: 'ambientTemp', normalizedField: 'ambientTemperature_C', value: 30 }),
+      expect.objectContaining({ adapterField: 'groupCount', normalizedField: 'groupedCircuitCount', value: 1 }),
+    ]));
     expect(receiptFor(receipts, 'voltage-drop', 'CABLE-01')?.inputEvidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ adapterField: 'voltage', normalizedField: 'voltage_V', sourceUnit: 'V', targetUnit: 'V', transform: 'identity' }),
       expect.objectContaining({ adapterField: 'conductor', normalizedField: 'conductorMaterial', value: 'Cu' }),
@@ -195,7 +201,7 @@ describe('routeDrawingCalculations', () => {
     const receipts = routeDrawingCalculations({ ...normalizedGraph, specs: [...foreign, ...crossPage, ...missing] }, { getCalculator: lookup });
 
     expect(calls).toEqual([]);
-    expect(receipts).toHaveLength(12);
+    expect(receipts).toHaveLength(15);
     expect(receipts.every((receipt) => receipt.status === 'SKIPPED' && receipt.judgment === 'HOLD')).toBe(true);
     expect(receipts.every((receipt) => receipt.scopeIssues.some((issue) => issue.startsWith('OWNER_CONTEXT_UNRESOLVED:')))).toBe(true);
   });

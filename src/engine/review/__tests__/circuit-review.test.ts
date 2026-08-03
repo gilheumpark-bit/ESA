@@ -18,6 +18,17 @@ function analysisOf(components: SLDComponent[], connections: SLDConnection[] = [
 }
 
 const pos = { x: 0, y: 0 };
+const breaker = (rating: string): SLDComponent =>
+  ({ id: 'comp_1', type: 'breaker', label: 'MCCB', rating, position: pos });
+const cableConn = (sq: string, cableType?: string): SLDConnection =>
+  ({ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: sq, cableType });
+const conditionedConn = (sq: string, cableType?: string): SLDConnection => ({
+  ...cableConn(sq, cableType),
+  installationMethod: 'conduit',
+  ambientTemperature: 30,
+  groupedCircuitCount: 1,
+  sourceIds: ['test:explicit-condition'],
+});
 
 describe('AT-LE-AF — 트립은 프레임을 넘을 수 없다', () => {
   /**
@@ -99,15 +110,45 @@ describe('AT-LE-AF — 트립은 프레임을 넘을 수 없다', () => {
 });
 
 describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
-  const breaker = (rating: string): SLDComponent =>
-    ({ id: 'comp_1', type: 'breaker', label: 'MCCB', rating, position: pos });
-  const cableConn = (sq: string, cableType?: string): SLDConnection =>
-    ({ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: sq, cableType });
+  it('단일 케이블도 설치·온도·집합회로 근거가 하나라도 없으면 UNKNOWN으로 닫는다', () => {
+    const result = reviewAnalysis(analysisOf(
+      [breaker('100AF/50AT')],
+      [cableConn('25sq', 'CV')],
+    ));
+    const finding = result.findings.find((item) => item.rule === 'CABLE-AMPACITY');
+
+    expect(finding?.severity).toBe('UNKNOWN');
+    expect(finding?.verdict).toContain('설치방법');
+    expect(finding?.verdict).toContain('주위온도');
+    expect(finding?.verdict).toContain('집합회로 수');
+  });
+
+  it('명시 조건과 출처가 모두 있으면 온도·집합 보정을 실제 판정에 적용한다', () => {
+    const uncorrected = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'tray' }).corrected;
+    const corrected = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'tray', ambientTemp: 40, groupCount: 3 }).corrected;
+    const trip = Math.floor((uncorrected + corrected) / 2);
+    const connection: SLDConnection = {
+      ...cableConn('25sq', 'CV'),
+      installationMethod: 'tray',
+      ambientTemperature: 40,
+      groupedCircuitCount: 3,
+      sourceIds: ['text:condition-1'],
+    };
+
+    const result = reviewAnalysis(analysisOf([breaker(`225AF/${trip}AT`)], [connection]));
+    const finding = result.findings.find((item) => item.rule === 'CABLE-AMPACITY');
+
+    expect(corrected).toBeLessThan(trip);
+    expect(finding?.severity).toBe('FAIL');
+    expect(finding?.limit?.source).toContain('tray');
+    expect(finding?.verdict).toContain('40°C');
+    expect(finding?.verdict).toContain('3회로');
+  });
 
   it('여유 충분(트립 ≤ 80%)은 PASS — 4sq XLPE 관로 기준', () => {
     const amp = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
     const safeTrip = Math.floor(amp * 0.5);
-    const r = reviewAnalysis(analysisOf([breaker(`50AF/${safeTrip}AT`)], [cableConn('4sq', 'CV')]));
+    const r = reviewAnalysis(analysisOf([breaker(`50AF/${safeTrip}AT`)], [conditionedConn('4sq', 'CV')]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('PASS');
     expect(f?.limit?.source).toContain('KEC');
@@ -116,7 +157,7 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
   it('트립이 허용전류 초과면 FAIL — false-PASS 금지의 핵심', () => {
     const amp = getAmpacity({ size: 4, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
     const overTrip = Math.ceil(amp) + 10;
-    const r = reviewAnalysis(analysisOf([breaker(`225AF/${overTrip}AT`)], [cableConn('4sq', 'CV')]));
+    const r = reviewAnalysis(analysisOf([breaker(`225AF/${overTrip}AT`)], [conditionedConn('4sq', 'CV')]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('FAIL');
     expect(f?.verdict).toContain('허용전류');
@@ -125,7 +166,7 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
   it('80% 초과~100%는 WARN(여유 부족)', () => {
     const amp = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
     const nearTrip = Math.floor(amp * 0.9);
-    const r = reviewAnalysis(analysisOf([breaker(`225AF/${nearTrip}AT`)], [cableConn('25sq', 'FR-CV')]));
+    const r = reviewAnalysis(analysisOf([breaker(`225AF/${nearTrip}AT`)], [conditionedConn('25sq', 'FR-CV')]));
     expect(r.findings.find((x) => x.rule === 'CABLE-AMPACITY')?.severity).toBe('WARN');
   });
 
@@ -134,7 +175,7 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     const pvc = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'PVC', installation: 'conduit' }).corrected;
     expect(pvc).toBeLessThan(xlpe);
     const trip = Math.floor((pvc + xlpe) / 2); // PVC로는 초과, XLPE로는 통과인 트립
-    const r = reviewAnalysis(analysisOf([breaker(`225AF/${trip}AT`)], [cableConn('25sq', 'HIV')]));
+    const r = reviewAnalysis(analysisOf([breaker(`225AF/${trip}AT`)], [conditionedConn('25sq', 'HIV')]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(['FAIL', 'WARN']).toContain(f?.severity); // PVC 기준으로 판정됐다는 증거
     expect(f?.limit?.source).toContain('PVC');
@@ -154,8 +195,8 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('UNKNOWN');
-    expect(f?.limit?.source).toContain('집합·배치 미반영');
-    expect(f?.verdict).toContain('포설배치');
+    expect(f?.limit).toBeUndefined();
+    expect(f?.verdict).toContain('설치방법');
   });
 
   it('병렬 조수를 집합회로 수로 오인해 0.80을 자동 적용하지 않는다', () => {
@@ -167,17 +208,17 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('UNKNOWN');
-    expect(f?.limit?.source).not.toContain('집합보정 적용');
+    expect(f?.limit).toBeUndefined();
   });
 
-  it('병렬 케이블의 집합보정 전 명목합계조차 초과하면 확정 FAIL이다', () => {
+  it('병렬 케이블도 조건 근거 없이 명목합계만으로 확정 FAIL을 만들지 않는다', () => {
     const single = getAmpacity({ size: 25, conductor: 'Cu', insulation: 'XLPE', installation: 'conduit' }).corrected;
     const trip = Math.ceil(single * 2) + 1;
     const conn: SLDConnection = { id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '25sq', cableType: 'FR-CV', parallelCount: 2 };
     const r = reviewAnalysis(analysisOf([breaker(`400AF/${trip}AT`)], [conn]));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
-    expect(f?.severity).toBe('FAIL');
-    expect(f?.verdict).toContain('명목 합계');
+    expect(f?.severity).toBe('UNKNOWN');
+    expect(f?.verdict).toContain('판정 보류');
   });
 
   it('복수 케이블 결속 시 가장 가는 것이 병목', () => {
@@ -185,11 +226,42 @@ describe('CABLE-AMPACITY — 차단기 AT vs KEC 허용전류', () => {
     const overFor4 = Math.ceil(amp4) + 5;
     const r = reviewAnalysis(analysisOf(
       [breaker(`225AF/${overFor4}AT`)],
-      [cableConn('95sq', 'CV'), { id: 'conn_2', from: 'node_at_5_5', to: 'comp_1', conductorSize: '4sq', cableType: 'CV' }],
+      [conditionedConn('95sq', 'CV'), { ...conditionedConn('4sq', 'CV'), id: 'conn_2', from: 'node_at_5_5', to: 'comp_1' }],
     ));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('FAIL');
     expect(f?.given.cable).toContain('4sq');
+  });
+});
+
+describe('BREAKING-CAPACITY — 예상 단락전류 vs 차단용량', () => {
+  it.each([
+    [25, 36, 'PASS'],
+    [36, 25, 'FAIL'],
+  ] as const)('예상 %ikA와 차단용량 %ikA를 직접 비교해 %s', (fault, breaking, severity) => {
+    const connection: SLDConnection = {
+      ...conditionedConn('25sq', 'CV'),
+      prospectiveFaultCurrentKA: fault,
+      breakingCapacityKA: breaking,
+      sourceIds: ['text:short-circuit-1'],
+    };
+
+    const result = reviewAnalysis(analysisOf([breaker('100AF/75AT')], [connection]));
+    const finding = result.findings.find((item) => item.rule === 'BREAKING-CAPACITY');
+
+    expect(finding?.severity).toBe(severity);
+    expect(finding?.limit?.source).toContain('KEC 212.5');
+  });
+
+  it('두 값이 있어도 출처 ID가 없으면 UNKNOWN으로 닫는다', () => {
+    const connection: SLDConnection = {
+      ...cableConn('25sq', 'CV'),
+      prospectiveFaultCurrentKA: 25,
+      breakingCapacityKA: 36,
+    };
+
+    const result = reviewAnalysis(analysisOf([breaker('100AF/75AT')], [connection]));
+    expect(result.findings.find((item) => item.rule === 'BREAKING-CAPACITY')?.severity).toBe('UNKNOWN');
   });
 });
 
@@ -305,7 +377,7 @@ describe('무발명 시정 제안 — 표준/KEC 역산 후보만(지어냄 금�
     const overTrip = Math.ceil(amp4) + 10;
     const r = reviewAnalysis(analysisOf(
       [{ id: 'comp_1', type: 'breaker', label: 'MCCB', rating: `225AF/${overTrip}AT`, position: pos }],
-      [{ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '4sq', cableType: 'CV' }],
+      [conditionedConn('4sq', 'CV')],
     ));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('FAIL');
@@ -331,7 +403,7 @@ describe('무발명 시정 제안 — 표준/KEC 역산 후보만(지어냄 금�
     const safeTrip = Math.floor(amp * 0.5);
     const r = reviewAnalysis(analysisOf(
       [{ id: 'comp_1', type: 'breaker', label: 'MCCB', rating: `50AF/${safeTrip}AT`, position: pos }],
-      [{ id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '4sq', cableType: 'CV' }],
+      [conditionedConn('4sq', 'CV')],
     ));
     const f = r.findings.find((x) => x.rule === 'CABLE-AMPACITY');
     expect(f?.severity).toBe('PASS');
@@ -354,7 +426,12 @@ describe('reviewScheduleTables — 케이블 스케줄 표 판정 (H7)', () => {
   // 표 행만으로 판정한다 — conf 0.55(결선 불신)여도 표 행은 판정 가능.
   const rowsOf = (cells: Record<string, string>[]) => [{
     title: 'CABLE SCHEDULE',
-    rows: cells.map((c) => ({ cells: c })),
+    rows: cells.map((c) => ({
+      cells: {
+        ...c,
+        ...(c.cable ? { cable: `${c.cable} 포설: 전선관 주위온도 30°C 집합회로 1회로` } : {}),
+      },
+    })),
   }];
 
   it('표 행의 차단기-케이블을 결선도와 동일 규칙으로 판정한다', () => {
@@ -442,7 +519,7 @@ describe('reviewScheduleTables — 케이블 스케줄 표 판정 (H7)', () => {
   it('결선도 경로도 알루미늄을 구리로 판정하지 않는다 (재심사 R1 — 양 레일 봉인)', () => {
     // conn.cableType "AL-CV" → 절연 CV(XLPE)·도체 Al 분리. 240sq Al ≈362A < 400AT → FAIL.
     const conn: SLDConnection = {
-      id: 'conn_1', from: 'comp_1', to: 'node_at_10_10', conductorSize: '240sq', cableType: 'AL-CV',
+      ...conditionedConn('240sq', 'AL-CV'),
     };
     const r = reviewAnalysis(analysisOf(
       [{ id: 'comp_1', type: 'breaker', label: 'MCCB', rating: '400AF/400AT', position: pos }],

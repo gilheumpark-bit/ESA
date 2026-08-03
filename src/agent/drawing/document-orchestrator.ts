@@ -901,13 +901,14 @@ export async function runDocumentAnalysis(
   const uniqueLogicConflicts = [...new Map([...finalLogicConflictsByPage.entries()].flatMap(([pageIndex, conflicts]) =>
     conflicts.map((conflict) => [`${pageIndex}:${conflict.id}`, { pageIndex, conflict }] as const))).values()];
   for (const { pageIndex, conflict } of uniqueLogicConflicts) {
+    const conflictPage = source.pages.find((page) => page.pageIndex === pageIndex);
     const conflictBounds = conflict.logicEvidenceBounds[0]
       ?? conflict.graphEvidenceBounds[0]
       ?? {
         x: 0,
         y: 0,
-        w: source.pages[pageIndex]?.width ?? 1,
-        h: source.pages[pageIndex]?.height ?? 1,
+        w: conflictPage?.width ?? 1,
+        h: conflictPage?.height ?? 1,
         page: pageIndex + 1,
       };
     const bounds = { x: conflictBounds.x, y: conflictBounds.y, w: conflictBounds.w, h: conflictBounds.h };

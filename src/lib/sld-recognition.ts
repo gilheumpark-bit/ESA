@@ -115,6 +115,20 @@ export interface SLDConnection {
   conductorSize?: string;
   /** 병렬 다조 수(예: 2 = "150sq x 2") — 허용전류 판정 시 조수배(버그 사냥 F5) */
   parallelCount?: number;
+  /** KEC 허용전류 표의 명시 설치 조건. */
+  installationMethod?: 'conduit' | 'tray' | 'directBuried' | 'freeAir';
+  /** 명시된 주위온도(°C). */
+  ambientTemperature?: number;
+  /** 같은 포설 그룹의 회로 수. 병렬 케이블 조수와 별개다. */
+  groupedCircuitCount?: number;
+  /** 계통 예상 단락전류(kA). */
+  prospectiveFaultCurrentKA?: number;
+  /** 차단기 정격 차단용량(kA). */
+  breakingCapacityKA?: number;
+  /** 명시된 IEC 반한시 보호곡선. */
+  protectionCurve?: 'SI' | 'VI' | 'EI';
+  /** 위 조건·정격을 읽은 원본 텍스트/역할 근거 ID. */
+  sourceIds?: string[];
   /** 도면에 명시된 유효전력 흐름. 추정값은 넣지 않는다. */
   activePower?: string;
   /** 도면에 명시된 무효전력 흐름. 추정값은 넣지 않는다. */
@@ -352,6 +366,13 @@ Return ONLY valid JSON with this structure:
       "length": "string or null (e.g. 50m)",
       "conductorSize": "string or null (e.g. 185sq)",
       "parallelCount": "integer or null (only when 2 or more parallel cable runs are explicitly printed)",
+      "installationMethod": "conduit|tray|directBuried|freeAir|null (only when explicitly printed)",
+      "ambientTemperature": "number or null in deg C (only when explicitly labeled)",
+      "groupedCircuitCount": "integer or null (grouped circuits, not parallel runs)",
+      "prospectiveFaultCurrentKA": "number or null (explicit prospective fault current in kA)",
+      "breakingCapacityKA": "number or null (explicit rated breaking capacity in kA)",
+      "protectionCurve": "SI|VI|EI|null (only when explicitly printed)",
+      "sourceIds": ["visible evidence IDs supporting the conditions above"],
       "activePower": "string or null (e.g. 75 MW)",
       "reactivePower": "string or null (e.g. 23 MVAR)",
       "flowDirection": "from_to|to_from|bidirectional|unknown"
@@ -380,6 +401,9 @@ Return ONLY valid JSON with this structure:
 - Record each printed MW/MVAR label exactly once. Do not copy one label onto both connection segments on either side of a breaker, switch, or fuse
 - Include length only when a numeric value and unit are explicitly printed on the drawing
 - Set parallelCount only when the drawing explicitly prints two or more parallel cable runs (for example "2R", "2 RUN", "2×1C", or two parallel cable sets with a shared cable callout). Otherwise return null; never infer it from line thickness or phase conductors
+- Keep parallelCount separate from groupedCircuitCount. A parallel cable run count is not a KEC grouping correction count
+- Set installationMethod, ambientTemperature, groupedCircuitCount, prospectiveFaultCurrentKA, breakingCapacityKA, and protectionCurve only when the drawing explicitly labels them. Do not fill standard defaults
+- For every populated condition or protection field, include the exact visible evidence identifier in sourceIds. If no such field is present, return an empty sourceIds array
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
 - If printed text is too blurred, faint, or low-resolution to read with certainty, set that field to null. Do NOT pick the most likely digit. A scanned drawing where "5" and "6" are indistinguishable must yield null, not a guess — a wrong rating on a compliance report is worse than a missing one
 - Lower "confidence" when key printed values were unreadable. A high confidence with guessed ratings is the worst outcome
@@ -439,6 +463,13 @@ const SLD_LOCAL_OUTPUT_SCHEMA = Object.freeze({
           length: { type: ['string', 'null'] },
           conductorSize: { type: ['string', 'null'] },
           parallelCount: { type: ['integer', 'null'], minimum: 2, maximum: 64 },
+          installationMethod: { type: ['string', 'null'], enum: ['conduit', 'tray', 'directBuried', 'freeAir', null] },
+          ambientTemperature: { type: ['number', 'null'], minimum: -50, maximum: 200 },
+          groupedCircuitCount: { type: ['integer', 'null'], minimum: 1, maximum: 200 },
+          prospectiveFaultCurrentKA: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 1_000 },
+          breakingCapacityKA: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 1_000 },
+          protectionCurve: { type: ['string', 'null'], enum: ['SI', 'VI', 'EI', null] },
+          sourceIds: { type: 'array', items: { type: 'string' }, maxItems: 32 },
           activePower: { type: ['string', 'null'] },
           reactivePower: { type: ['string', 'null'] },
           flowDirection: { type: 'string', enum: [...SLD_FLOW_DIRECTIONS] },
@@ -451,6 +482,13 @@ const SLD_LOCAL_OUTPUT_SCHEMA = Object.freeze({
           'length',
           'conductorSize',
           'parallelCount',
+          'installationMethod',
+          'ambientTemperature',
+          'groupedCircuitCount',
+          'prospectiveFaultCurrentKA',
+          'breakingCapacityKA',
+          'protectionCurve',
+          'sourceIds',
           'activePower',
           'reactivePower',
           'flowDirection',
@@ -678,6 +716,27 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         && rawParallelCount <= 64
         ? rawParallelCount
         : undefined;
+      const rawInstallationMethod = boundedText(connection.installationMethod, 32);
+      const installationMethod = rawInstallationMethod && SLD_INSTALLATION_METHOD_SET.has(rawInstallationMethod as NonNullable<SLDConnection['installationMethod']>)
+        ? rawInstallationMethod as NonNullable<SLDConnection['installationMethod']>
+        : undefined;
+      const ambientTemperature = finiteNumber(connection.ambientTemperature);
+      const groupedCircuitCount = finiteNumber(connection.groupedCircuitCount);
+      const prospectiveFaultCurrentKA = finiteNumber(connection.prospectiveFaultCurrentKA);
+      const breakingCapacityKA = finiteNumber(connection.breakingCapacityKA);
+      const rawProtectionCurve = boundedText(connection.protectionCurve, 8)?.toUpperCase();
+      const protectionCurve = rawProtectionCurve && SLD_PROTECTION_CURVE_SET.has(rawProtectionCurve as NonNullable<SLDConnection['protectionCurve']>)
+        ? rawProtectionCurve as NonNullable<SLDConnection['protectionCurve']>
+        : undefined;
+      const sourceIds = Array.isArray(connection.sourceIds)
+        ? [...new Set(connection.sourceIds
+          .slice(0, 32)
+          .map((value) => boundedText(value, 128))
+          .filter((value): value is string => value !== undefined))].sort()
+        : [];
+      // 조건값은 출처 ID와 함께일 때만 판정 계약으로 승격한다. 값만 있고 근거가
+      // 없으면 기존처럼 미기재로 남겨 KEC 적합을 낙관하지 않는다.
+      const hasConditionProvenance = sourceIds.length > 0;
       connections.push({
         id,
         from,
@@ -686,6 +745,13 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ...(length ? { length } : {}),
         ...optionalTextField('conductorSize', connection.conductorSize),
         ...(parallelCount ? { parallelCount } : {}),
+        ...(hasConditionProvenance && installationMethod ? { installationMethod } : {}),
+        ...(hasConditionProvenance && ambientTemperature != null && ambientTemperature >= -50 && ambientTemperature <= 200 ? { ambientTemperature } : {}),
+        ...(hasConditionProvenance && groupedCircuitCount != null && Number.isInteger(groupedCircuitCount) && groupedCircuitCount >= 1 && groupedCircuitCount <= 200 ? { groupedCircuitCount } : {}),
+        ...(hasConditionProvenance && prospectiveFaultCurrentKA != null && prospectiveFaultCurrentKA > 0 && prospectiveFaultCurrentKA <= 1_000 ? { prospectiveFaultCurrentKA } : {}),
+        ...(hasConditionProvenance && breakingCapacityKA != null && breakingCapacityKA > 0 && breakingCapacityKA <= 1_000 ? { breakingCapacityKA } : {}),
+        ...(hasConditionProvenance && protectionCurve ? { protectionCurve } : {}),
+        ...(hasConditionProvenance ? { sourceIds } : {}),
         ...optionalTextField('activePower', connection.activePower),
         ...optionalTextField('reactivePower', connection.reactivePower),
         ...(flowDirection ? { flowDirection } : {}),
@@ -770,6 +836,8 @@ export function parseSLDResponse(text: string): SLDAnalysis {
  */
 const SLD_COMPONENT_TYPE_SET: ReadonlySet<SLDComponentType> = new Set(SLD_COMPONENT_TYPES);
 const SLD_FLOW_DIRECTION_SET: ReadonlySet<SLDFlowDirection> = new Set(SLD_FLOW_DIRECTIONS);
+const SLD_INSTALLATION_METHOD_SET = new Set<NonNullable<SLDConnection['installationMethod']>>(['conduit', 'tray', 'directBuried', 'freeAir']);
+const SLD_PROTECTION_CURVE_SET = new Set<NonNullable<SLDConnection['protectionCurve']>>(['SI', 'VI', 'EI']);
 
 function boundedText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') return undefined;

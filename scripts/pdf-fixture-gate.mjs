@@ -255,7 +255,7 @@ await sleep(800);
 // FAIL이 review에 실려야 한다(사슬 전체: 추출→계산→기준→결론).
 const reviewFail =
   text(100, 700, 'MCCB 3P-225/200') + text(100, 500, 'MCC-1') +
-  text(130, 600, 'CV 4sq') +
+  text(130, 600, 'CV 4sq installation: conduit ambient temperature 30C grouped circuits 1') +
   stroke(103, 698, 103, 505);
 await sleep(800);
 {
@@ -284,12 +284,13 @@ await sleep(800);
 // 데이터(텍스트 0.99)로는 판정할 수 있다. 헤더 행(REMARK/CABLE SCHEDULE 열) +
 // 데이터 행(차단기·케이블 쌍)이 있으면 review가 '생략'이 아니라 표 경로로 판정을
 // 낸다. 결선도에서 UNKNOWN이던 분기 케이블-차단기 쌍이 이 표로 해소된다.
-// EE-007 실측 표기: REMARK에 "MCCB 3P 225/200", CABLE에 "FCV 4sq"(허용전류 초과).
+// EE-007 실측 표기 형식에 KEC 판정 조건을 같은 셀에 명시한다. 설치방법·온도·
+// 집합회로 수가 없는 행은 제품 계약상 UNKNOWN이며 확정 FAIL을 만들지 않는다.
 const scheduleReview =
   text(100, 760, 'CABLE SCHEDULE (B1F)') + text(300, 760, 'CABLE SCHEDULE (1F)') +
   text(100, 720, 'NO') + text(180, 720, 'REMARK') + text(300, 720, 'CABLE SCHEDULE') +
-  text(100, 690, '1') + text(180, 690, 'MCCB 3P 225/200') + text(300, 690, 'FCV 4sq') +
-  text(100, 660, '2') + text(180, 660, 'MCCB 3P 100/150') + text(300, 660, 'CV 16sq') +
+  text(100, 690, '1') + text(180, 690, 'MCCB 3P 225/200') + text(300, 690, 'FCV 4sq installation: conduit') + text(300, 690, 'ambient temperature 30C') + text(300, 690, 'grouped circuits 1') +
+  text(100, 660, '2') + text(180, 660, 'MCCB 3P 100/150') + text(300, 660, 'CV 16sq installation: conduit') + text(300, 660, 'ambient temperature 30C') + text(300, 660, 'grouped circuits 1') +
   stroke(103, 758, 103, 655) + stroke(303, 758, 303, 655);
 await sleep(800);
 {
@@ -301,7 +302,7 @@ await sleep(800);
   const atafFail = findings.some(f => f.rule === 'AT-LE-AF' && f.severity === 'FAIL');
   check('R14 표 문서→판정: conf 0.55 강등에도 표 행으로 CABLE-AMPACITY FAIL + AT>AF FAIL 산출(생략 아님)',
     r.status === 200 && review && !review.skipped && cableFail && atafFail,
-    `status ${r.status} skipped ${review?.skipped} findings ${JSON.stringify(findings.map(f => [f.rule, f.severity]))?.slice(0, 160)}`);
+    `status ${r.status} skipped ${review?.skipped} findings ${JSON.stringify(findings.map(f => [f.rule, f.severity, f.verdict]))?.slice(0, 420)}`);
 }
 
 // ── 2026-07-23 도메인 심사 수리(CRITICAL false-PASS 차단) 회귀 잠금 R15 ──────

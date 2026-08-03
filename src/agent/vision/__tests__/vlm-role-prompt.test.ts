@@ -22,6 +22,19 @@ const textPayload = {
   }],
 };
 
+const symbolPayload = {
+  symbols: [{
+    id: 'symbol-1',
+    typeCandidates: ['breaker_vcb'],
+    rawLabel: null,
+    bounds: { x: 1, y: 2, w: 3, h: 4 },
+    ports: [],
+    confidence: 0.8,
+  }],
+  warnings: [],
+  confidence: 0.8,
+};
+
 function options(provider: RemoteVLMProvider): VLMOptions {
   return {
     provider,
@@ -153,6 +166,18 @@ describe('role-specific VLM prompts', () => {
     if (provider === 'gemini' || provider === 'google-agent-platform') {
       expect(request.headers).toMatchObject({ 'x-goog-api-key': apiKeys[provider] });
       expect(body.generationConfig.maxOutputTokens).toBe(321);
+      expect(body.generationConfig.responseSchema).toMatchObject({
+        type: 'object',
+        required: ['texts', 'warnings', 'confidence'],
+        properties: {
+          texts: {
+            type: 'array',
+            items: {
+              required: ['id', 'raw', 'candidates', 'bounds', 'confidence'],
+            },
+          },
+        },
+      });
       expect(body.contents[0].parts[0].text).toBe(ROLE_PROMPTS.text);
       if (provider === 'google-agent-platform') {
         expect(url).toContain('aiplatform.googleapis.com/v1/publishers/google/models/');
@@ -162,6 +187,16 @@ describe('role-specific VLM prompts', () => {
       expect(request.headers).toMatchObject({ Authorization: `Bearer ${apiKeys.openai}` });
       expect(body.max_completion_tokens).toBe(321);
       expect(body.messages[0].content).toBe(ROLE_PROMPTS.text);
+      expect(body.response_format).toMatchObject({
+        type: 'json_schema',
+        json_schema: {
+          name: 'esa_drawing_output',
+          strict: true,
+          schema: {
+            required: ['texts', 'warnings', 'confidence'],
+          },
+        },
+      });
     } else {
       expect(request.headers).toMatchObject({ 'x-api-key': apiKeys.claude });
       expect(body.max_tokens).toBe(321);
@@ -202,6 +237,27 @@ describe('role-specific VLM prompts', () => {
     expect(JSON.parse(legacyRequest.body as string).generationConfig.temperature).toBe(0.2);
   });
 
+  it('converts nullable JSON Schema fields to the Google responseSchema dialect only', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      responseFor('google-agent-platform', JSON.stringify(symbolPayload)),
+    );
+
+    await analyzeDrawingRole(
+      new ArrayBuffer(8),
+      'image/png',
+      'symbols',
+      options('google-agent-platform'),
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const schema = JSON.parse(request.body as string).generationConfig.responseSchema;
+    expect(schema.properties.symbols.items.properties.rawLabel).toEqual({
+      type: 'string',
+      nullable: true,
+    });
+    expect(schema.properties.symbols.items).not.toHaveProperty('additionalProperties');
+  });
+
   it('sends an explicit high thinking level to Gemini drawing requests', async () => {
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       responseFor('google-agent-platform', JSON.stringify(textPayload)),
@@ -227,6 +283,57 @@ describe('role-specific VLM prompts', () => {
       maxRetries: 2,
     })).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a malformed role payload before returning a valid independent review', async () => {
+    jest.useFakeTimers();
+    const fetchMock = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(responseFor('openai', 'not-json'))
+      .mockResolvedValueOnce(responseFor('openai', JSON.stringify(textPayload)));
+
+    const settled = analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('openai'),
+      maxRetries: 1,
+    }).then(
+      (result) => ({ result }),
+      (error: Error) => ({ error: error.message }),
+    );
+    await jest.advanceTimersByTimeAsync(1_000);
+
+    await expect(settled).resolves.toMatchObject({
+      result: {
+        retryCount: 1,
+        data: textPayload,
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a malformed provider envelope before returning a valid independent review', async () => {
+    jest.useFakeTimers();
+    const fetchMock = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response('not-json', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(responseFor('openai', JSON.stringify(textPayload)));
+
+    const settled = analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', {
+      ...options('openai'),
+      maxRetries: 1,
+    }).then(
+      (result) => ({ result }),
+      (error: Error) => ({ error: error.message }),
+    );
+    await jest.advanceTimersByTimeAsync(1_000);
+
+    await expect(settled).resolves.toMatchObject({
+      result: {
+        retryCount: 1,
+        data: textPayload,
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('rejects unsupported runtime roles before issuing a request', async () => {

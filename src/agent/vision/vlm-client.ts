@@ -177,7 +177,7 @@ function validateApiKey(provider: RemoteVLMProvider, apiKey: string): void {
 
 /**
  * 지수 백오프 재시도.
- * 429 (Rate Limit) / 5xx (Server Error) 에서만 재시도.
+ * 429 (Rate Limit), 5xx (Server Error), 구조화 응답 파손에서만 재시도.
  */
 class ProviderHttpError extends Error {
   constructor(
@@ -236,8 +236,9 @@ async function withRetry<T>(
 }
 
 function isRetryableProviderError(error: Error): boolean {
-  return error instanceof ProviderHttpError
-    && (error.status === 429 || (error.status >= 500 && error.status <= 599));
+  return error instanceof RetryableProviderPayloadError
+    || (error instanceof ProviderHttpError
+      && (error.status === 429 || (error.status >= 500 && error.status <= 599)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -401,7 +402,7 @@ function parseProviderPayload(provider: string, raw: string): Record<string, unk
     if (!parsed || typeof parsed !== 'object') throw new Error('response is not an object');
     return parsed as Record<string, unknown>;
   } catch {
-    throw new Error(`${provider} Vision API returned invalid JSON.`);
+    throw new RetryableProviderPayloadError(`${provider} Vision API returned invalid JSON.`);
   }
 }
 
@@ -411,12 +412,45 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+/**
+ * Vertex generateContent의 `responseSchema`는 OpenAPI Schema 방언이다.
+ * 표준 JSON Schema의 `type: ['string', 'null']`를 그대로 보내면 400이므로
+ * nullable로 바꾸고, 이 방언이 받지 않는 엄격성 키는 클라이언트 검증에 남긴다.
+ * OpenAI와 로컬 ChatGPT에는 원본 JSON Schema를 그대로 전달한다.
+ */
+function toGoogleResponseSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toGoogleResponseSchema);
+  if (!value || typeof value !== 'object') return value;
+
+  const source = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  let nullable = false;
+  for (const [key, item] of Object.entries(source)) {
+    if (key === 'additionalProperties' || key === '$schema' || key === 'exclusiveMinimum' || key === 'exclusiveMaximum') continue;
+    if (key === 'type' && Array.isArray(item)) {
+      const nonNullTypes = item.filter((candidate) => candidate !== 'null');
+      nullable = item.length !== nonNullTypes.length;
+      if (nonNullTypes.length === 1) output.type = nonNullTypes[0];
+      else output.type = nonNullTypes;
+      continue;
+    }
+    if (key === 'enum' && Array.isArray(item)) {
+      output.enum = item.filter((candidate) => candidate !== null).map(toGoogleResponseSchema);
+      continue;
+    }
+    output[key] = toGoogleResponseSchema(item);
+  }
+  if (nullable) output.nullable = true;
+  return output;
+}
+
 async function requestGoogleJson(
   provider: GoogleModelProvider,
   imageBase64: string,
   mimeType: string,
   prompt: string,
   options: RemoteVLMOptions & { provider: GoogleModelProvider },
+  outputSchema?: unknown,
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG[provider];
   const model = resolveVlmModel(provider, options.model);
@@ -435,6 +469,7 @@ async function requestGoogleJson(
           ...(options.effort ? { thinkingConfig: { thinkingLevel: options.effort } } : {}),
           maxOutputTokens: options.maxTokens ?? cfg.defaultMaxTokens,
           responseMimeType: 'application/json',
+          ...(outputSchema === undefined ? {} : { responseSchema: toGoogleResponseSchema(outputSchema) }),
         },
       }),
     }, scope, options);
@@ -456,6 +491,7 @@ async function requestOpenAIJson(
   mimeType: string,
   prompt: string,
   options: RemoteVLMOptions & { provider: 'openai' },
+  outputSchema?: unknown,
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.openai;
   const model = resolveVlmModel('openai', options.model);
@@ -487,7 +523,16 @@ async function requestOpenAIJson(
         ],
         ...generationControls,
         max_completion_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
-        response_format: { type: 'json_object' },
+        response_format: outputSchema === undefined
+          ? { type: 'json_object' }
+          : {
+            type: 'json_schema',
+            json_schema: {
+              name: 'esa_drawing_output',
+              strict: true,
+              schema: outputSchema,
+            },
+          },
       }),
     }, scope, options);
     const raw = await readResponseText(response, scope);
@@ -766,6 +811,13 @@ export function parseRoleResponseData(role: VLMReviewRole, rawText: string): Rol
   }
 }
 
+class RetryableProviderPayloadError extends Error {
+  constructor(message = '[VLM] provider returned malformed structured output.') {
+    super(message);
+    this.name = 'RetryableProviderPayloadError';
+  }
+}
+
 function retryLimit(value: number | undefined): number {
   const limit = value ?? 2;
   if (!Number.isSafeInteger(limit) || limit < 0 || limit > 5) {
@@ -854,7 +906,8 @@ async function callProviderForJson(
   mimeType: string,
   prompt: string,
   options: VLMOptions,
-  localOutputSchema?: unknown,
+  outputSchema?: unknown,
+  validateRawText?: (rawText: string) => void,
 ): Promise<RawVLMJsonResult> {
   if (options.signal?.aborted) {
     throw new Error('[VLM] request aborted.');
@@ -870,23 +923,23 @@ async function callProviderForJson(
         mimeType,
         prompt,
         options,
-        localOutputSchema,
+        outputSchema,
       );
       break;
     case 'gemini':
       validateApiKey(options.provider, options.apiKey);
       redactionKey = options.apiKey;
-      request = () => requestGoogleJson('gemini', imageBase64, mimeType, prompt, options);
+      request = () => requestGoogleJson('gemini', imageBase64, mimeType, prompt, options, outputSchema);
       break;
     case 'google-agent-platform':
       validateApiKey(options.provider, options.apiKey);
       redactionKey = options.apiKey;
-      request = () => requestGoogleJson('google-agent-platform', imageBase64, mimeType, prompt, options);
+      request = () => requestGoogleJson('google-agent-platform', imageBase64, mimeType, prompt, options, outputSchema);
       break;
     case 'openai':
       validateApiKey(options.provider, options.apiKey);
       redactionKey = options.apiKey;
-      request = () => requestOpenAIJson(imageBase64, mimeType, prompt, options);
+      request = () => requestOpenAIJson(imageBase64, mimeType, prompt, options, outputSchema);
       break;
     case 'claude':
       validateApiKey(options.provider, options.apiKey);
@@ -896,7 +949,17 @@ async function callProviderForJson(
   }
 
   try {
-    const { result, retryCount } = await withRetry(request, retryLimit(options.maxRetries), options.signal);
+    const { result, retryCount } = await withRetry(async () => {
+      const response = await request();
+      if (validateRawText) {
+        try {
+          validateRawText(response.rawText);
+        } catch {
+          throw new RetryableProviderPayloadError();
+        }
+      }
+      return response;
+    }, retryLimit(options.maxRetries), options.signal);
     return { ...result, retryCount };
   } catch (error) {
     throw new Error(sanitizeErrorText(error, redactionKey));
@@ -1048,16 +1111,20 @@ export async function analyzeDrawingRole(
   const started = Date.now();
   const contextLabel = role === 'coverage-auditor' ? 'COVERAGE_CONTEXT' : 'REGION_CONTEXT';
   const prompt = context ? `${ROLE_PROMPTS[role]}\n\n${contextLabel}:\n${context}` : ROLE_PROMPTS[role];
+  let parsedData: RoleReviewData | undefined;
   const response = await callProviderForJson(
     imageBuffer,
     mimeType,
     prompt,
     options,
     LOCAL_ROLE_OUTPUT_SCHEMAS[role],
+    (rawText) => {
+      parsedData = parseRoleResponseData(role, rawText);
+    },
   );
   return {
     role,
-    data: parseRoleResponseData(role, response.rawText),
+    data: parsedData ?? parseRoleResponseData(role, response.rawText),
     rawText: response.rawText,
     model: response.model,
     durationMs: Date.now() - started,

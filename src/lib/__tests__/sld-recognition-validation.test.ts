@@ -63,6 +63,40 @@ describe('SLD recognition response validation', () => {
       parallelCount: 2,
     }));
   });
+
+  it('preserves source-backed KEC conditions and protection ratings on a connection', () => {
+    const parsed = parseSLDResponse(JSON.stringify({
+      components: [
+        { id: 'comp_1', type: 'breaker', label: 'VCB', position: { x: 10, y: 20 } },
+        { id: 'comp_2', type: 'load', label: 'MCC', position: { x: 80, y: 20 } },
+      ],
+      connections: [{
+        id: 'conn_1',
+        from: 'comp_1',
+        to: 'comp_2',
+        cableType: 'CV',
+        conductorSize: '25sq',
+        installationMethod: 'tray',
+        ambientTemperature: 40,
+        groupedCircuitCount: 3,
+        prospectiveFaultCurrentKA: 25,
+        breakingCapacityKA: 36,
+        protectionCurve: 'VI',
+        sourceIds: ['text:callout-1'],
+      }],
+      confidence: 0.9,
+    }));
+
+    expect(parsed.connections[0]).toEqual(expect.objectContaining({
+      installationMethod: 'tray',
+      ambientTemperature: 40,
+      groupedCircuitCount: 3,
+      prospectiveFaultCurrentKA: 25,
+      breakingCapacityKA: 36,
+      protectionCurve: 'VI',
+      sourceIds: ['text:callout-1'],
+    }));
+  });
 });
 
 describe('generateCalcChainFromSLD — dependsOn 동적 결박 (버그 사냥 F7)', () => {

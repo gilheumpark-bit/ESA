@@ -125,6 +125,22 @@ describe('drawing evidence numbering and merge', () => {
     ]);
   });
 
+  it('does not skip an inline breaker when a vision model returns one continuous conductor', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'source', type: 'load', bounds: { x: 90, y: 0, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'breaker', type: 'breaker', bounds: { x: 85, y: 90, w: 30, h: 30 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'bus', type: 'busbar', bounds: { x: 0, y: 190, w: 300, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'continuous', lineKind: 'power', path: [{ x: 100, y: 10 }, { x: 100, y: 200 }], confidence: 0.9, pageIndex: 0, regionId: 'full' },
+    ]);
+
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([
+      expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[0].id }),
+      expect.objectContaining({ from: symbols[1].id, to: symbols[2].id, lineId: lines[0].id }),
+    ]);
+  });
+
   it('keeps a spatial relation between ambiguous device candidates without promoting it to confirmed', () => {
     const symbols = deduplicateSymbols([
       { localId: 'bus-candidate', type: 'bus', label: 'Main Bus', bounds: { x: 0, y: 0, w: 10, h: 10 }, confidence: 0.79, pageIndex: 0, regionId: 'broad' },

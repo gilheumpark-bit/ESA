@@ -825,6 +825,21 @@ export async function parsePdfToSLD(
       if (spec.conductorSize) closestConn.conductorSize = `${spec.conductorSize}sq`;
       if (spec.cableType) closestConn.cableType = spec.cableType;
       if (spec.parallelCount) closestConn.parallelCount = spec.parallelCount;
+      if (spec.installationMethod) closestConn.installationMethod = spec.installationMethod;
+      if (spec.ambientTemperature !== undefined) closestConn.ambientTemperature = spec.ambientTemperature;
+      if (spec.groupedCircuitCount !== undefined) closestConn.groupedCircuitCount = spec.groupedCircuitCount;
+      if (spec.prospectiveFaultCurrentKA !== undefined) closestConn.prospectiveFaultCurrentKA = spec.prospectiveFaultCurrentKA;
+      if (spec.breakingCapacityKA !== undefined) closestConn.breakingCapacityKA = spec.breakingCapacityKA;
+      if (spec.protectionCurve) closestConn.protectionCurve = spec.protectionCurve;
+      const hasSourceBackedCondition = spec.installationMethod !== undefined
+        || spec.ambientTemperature !== undefined
+        || spec.groupedCircuitCount !== undefined
+        || spec.prospectiveFaultCurrentKA !== undefined
+        || spec.breakingCapacityKA !== undefined
+        || spec.protectionCurve !== undefined;
+      if (hasSourceBackedCondition) {
+        closestConn.sourceIds = [...new Set([...(closestConn.sourceIds ?? []), `pdf-text:${i + 1}`])].sort();
+      }
     }
   }
 

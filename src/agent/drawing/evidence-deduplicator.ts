@@ -237,16 +237,20 @@ export function buildPageRelations(
   }));
 
   for (const line of pageLines) {
-    const { start: from, end: to } = endpointSymbols.get(line.id) ?? { start: null, end: null };
-    if (!from || !to || from.id === to.id) continue;
-    appendRelation(
-      from,
-      to,
-      line,
-      line.certainty === 'confirmed' && from.certainty === 'confirmed' && to.certainty === 'confirmed'
-        ? 'confirmed'
-        : 'ambiguous',
-    );
+    const symbolsOnConductor = orderedSymbolsOnConductor(pageSymbols, line);
+    for (let index = 1; index < symbolsOnConductor.length; index += 1) {
+      const from = symbolsOnConductor[index - 1];
+      const to = symbolsOnConductor[index];
+      if (from.id === to.id) continue;
+      appendRelation(
+        from,
+        to,
+        line,
+        line.certainty === 'confirmed' && from.certainty === 'confirmed' && to.certainty === 'confirmed'
+          ? 'confirmed'
+          : 'ambiguous',
+      );
+    }
   }
 
   // Precision crops often leave a small gap between a branch endpoint and the
@@ -276,6 +280,117 @@ export function buildPageRelations(
     appendRelation(busbar, directlyBound[0], line, 'ambiguous');
   }
   return relations;
+}
+
+/**
+ * Vision models commonly return one long polyline even when it passes through
+ * one or more breakers. Binding only the two endpoints silently skips those
+ * devices. Keep the endpoint candidates, add every symbol whose actual bounds
+ * intersect the conductor, then order them by distance along the polyline so
+ * the graph contains each adjacent electrical relationship.
+ */
+function orderedSymbolsOnConductor(symbols: SymbolNode[], line: LineNode): SymbolNode[] {
+  const candidates = new Map<string, { symbol: SymbolNode; offset: number; distance: number }>();
+  const append = (symbol: SymbolNode | null): void => {
+    if (!symbol) return;
+    const bounds = symbol.evidence[0]?.bounds;
+    if (!bounds) return;
+    const center = { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
+    const projection = projectPointOnPath(center, line.path);
+    const previous = candidates.get(symbol.id);
+    if (!previous || projection.distance < previous.distance) {
+      candidates.set(symbol.id, { symbol, ...projection });
+    }
+  };
+
+  append(nearestSymbol(symbols, line.path[0]));
+  append(nearestSymbol(symbols, line.path[line.path.length - 1]));
+  for (const symbol of symbols) {
+    const bounds = symbol.evidence[0]?.bounds;
+    if (bounds && pathIntersectsBounds(line.path, bounds, 2)) append(symbol);
+  }
+
+  return [...candidates.values()]
+    .sort((left, right) => left.offset - right.offset || left.distance - right.distance || left.symbol.id.localeCompare(right.symbol.id))
+    .map(({ symbol }) => symbol);
+}
+
+function projectPointOnPath(
+  point: { x: number; y: number },
+  path: LineNode['path'],
+): { offset: number; distance: number } {
+  let traversed = 0;
+  let best = { offset: 0, distance: Number.POSITIVE_INFINITY };
+  for (let index = 1; index < path.length; index += 1) {
+    const start = path[index - 1];
+    const end = path[index];
+    const vx = end.x - start.x;
+    const vy = end.y - start.y;
+    const lengthSquared = vx * vx + vy * vy;
+    if (lengthSquared === 0) continue;
+    const segmentLength = Math.sqrt(lengthSquared);
+    const ratio = Math.max(0, Math.min(1, ((point.x - start.x) * vx + (point.y - start.y) * vy) / lengthSquared));
+    const projected = { x: start.x + ratio * vx, y: start.y + ratio * vy };
+    const distance = dist(point, projected);
+    if (distance < best.distance) best = { offset: traversed + ratio * segmentLength, distance };
+    traversed += segmentLength;
+  }
+  return best;
+}
+
+function pathIntersectsBounds(path: LineNode['path'], bounds: EvidenceBounds, tolerance: number): boolean {
+  const expanded = {
+    x: bounds.x - tolerance,
+    y: bounds.y - tolerance,
+    w: bounds.w + tolerance * 2,
+    h: bounds.h + tolerance * 2,
+  };
+  for (let index = 1; index < path.length; index += 1) {
+    if (segmentIntersectsBounds(path[index - 1], path[index], expanded)) return true;
+  }
+  return false;
+}
+
+function segmentIntersectsBounds(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  bounds: EvidenceBounds,
+): boolean {
+  const minX = Math.min(start.x, end.x);
+  const maxX = Math.max(start.x, end.x);
+  const minY = Math.min(start.y, end.y);
+  const maxY = Math.max(start.y, end.y);
+  if (maxX < bounds.x || minX > bounds.x + bounds.w || maxY < bounds.y || minY > bounds.y + bounds.h) return false;
+  if (pointInsideBounds(start, bounds) || pointInsideBounds(end, bounds)) return true;
+
+  const edges = [
+    [{ x: bounds.x, y: bounds.y }, { x: bounds.x + bounds.w, y: bounds.y }],
+    [{ x: bounds.x + bounds.w, y: bounds.y }, { x: bounds.x + bounds.w, y: bounds.y + bounds.h }],
+    [{ x: bounds.x + bounds.w, y: bounds.y + bounds.h }, { x: bounds.x, y: bounds.y + bounds.h }],
+    [{ x: bounds.x, y: bounds.y + bounds.h }, { x: bounds.x, y: bounds.y }],
+  ] as const;
+  return edges.some(([edgeStart, edgeEnd]) => segmentsIntersect(start, end, edgeStart, edgeEnd));
+}
+
+function pointInsideBounds(point: { x: number; y: number }, bounds: EvidenceBounds): boolean {
+  return point.x >= bounds.x && point.x <= bounds.x + bounds.w
+    && point.y >= bounds.y && point.y <= bounds.y + bounds.h;
+}
+
+function segmentsIntersect(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  c: { x: number; y: number },
+  d: { x: number; y: number },
+): boolean {
+  const orientation = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) =>
+    (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+  return ((o1 <= 0 && o2 >= 0) || (o1 >= 0 && o2 <= 0))
+    && ((o3 <= 0 && o4 >= 0) || (o3 >= 0 && o4 <= 0));
 }
 
 function buildLineAdjacency(lines: LineNode[], tolerance = 55): Map<string, Set<string>> {

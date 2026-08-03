@@ -6,10 +6,11 @@ import type { VoltageDropInput } from '@/engine/calculators/voltage-drop/voltage
 import type { BreakerSizingInput } from '@/engine/calculators/protection/breaker-sizing';
 import type { TransformerCapacityInput } from '@/engine/calculators/transformer/transformer-capacity';
 import type { CTSizingInput } from '@/engine/calculators/substation/ct-sizing';
+import type { CableSizingInput } from '@/engine/calculators/cable/cable-sizing';
 import { normalizeElectricalGraph } from './domain-normalizer';
 import type { NormalizationWarning, NormalizedElectricalGraph, NormalizedSpec } from './domain-normalizer';
 
-type CalculatorId = 'voltage-drop' | 'breaker-sizing' | 'transformer-capacity' | 'ct-sizing';
+type CalculatorId = 'voltage-drop' | 'breaker-sizing' | 'transformer-capacity' | 'ct-sizing' | 'cable-sizing';
 type CalculatorStatus = 'SKIPPED' | 'CALCULATED' | 'ERROR';
 
 export interface CalculationInputIssue {
@@ -319,6 +320,10 @@ const cableSize = (): Binding => ({ adapterField: 'cableSize', fields: ['conduct
 const conductor = (): Binding => ({ adapterField: 'conductor', fields: ['conductorMaterial'], unit: 'material', targetUnit: 'material', valid: exactly(['Cu', 'Al']) });
 const powerFactor = (): Binding => ({ adapterField: 'powerFactor', fields: ['powerFactor'], unit: 'factor', targetUnit: 'factor', valid: ranged(0.01, 1) });
 const phase = (): Binding => ({ adapterField: 'phase', fields: ['phase'], unit: 'phase', targetUnit: 'phase', valid: oneOfNumbers([1, 3]) });
+const insulation = (): Binding => ({ adapterField: 'insulation', fields: ['insulationType'], unit: 'insulation', targetUnit: 'insulation', valid: exactly(['XLPE', 'PVC']) });
+const installation = (): Binding => ({ adapterField: 'installation', fields: ['installationMethod'], unit: 'method', targetUnit: 'method', valid: exactly(['conduit', 'tray', 'directBuried', 'freeAir']) });
+const ambientTemp = (): Binding => ({ adapterField: 'ambientTemp', fields: ['ambientTemperature_C'], unit: 'C', targetUnit: 'C', valid: ranged(-50, 200) });
+const groupCount = (): Binding => ({ adapterField: 'groupCount', fields: ['groupedCircuitCount'], unit: 'count', targetUnit: 'count', valid: (value) => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 200 });
 const totalLoad = (): Binding => ({ adapterField: 'totalLoad', fields: ['totalLoad_kW'], unit: 'kW', targetUnit: 'kW', valid: positive });
 const efficiency = (): Binding => ({ adapterField: 'efficiency', fields: ['efficiency'], unit: 'factor', targetUnit: 'factor', valid: ranged(0.01, 1) });
 const demandFactor = (): Binding => ({ adapterField: 'demandFactor', fields: ['demandFactor'], unit: 'factor', targetUnit: 'factor', valid: ranged(0.01, 1) });
@@ -328,6 +333,12 @@ const relayBurden = (): Binding => ({ adapterField: 'relayBurden', fields: ['bur
 const leadLength = (): Binding => ({ adapterField: 'leadLength', fields: ['leadLength_m'], unit: 'm', targetUnit: 'm', valid: positive });
 const leadSize = (): Binding => ({ adapterField: 'leadSize', fields: ['leadSize_mm2'], unit: 'mm2', targetUnit: 'mm2', valid: positive });
 const accuracyClass = (): Binding => ({ adapterField: 'accuracyClass', fields: ['ctAccuracyClass'], unit: 'text', targetUnit: 'class', valid: exactly(['0.2', '0.5', '1.0', '5P', '10P']) });
+const CABLE_INSTALLATION_CODE: Readonly<Record<string, NonNullable<CableSizingInput['installation']>>> = {
+  conduit: 'A1',
+  tray: 'C',
+  directBuried: 'D',
+  freeAir: 'F',
+};
 
 function run<T>(graph: NormalizedElectricalGraph, scope: Scope, calculatorId: CalculatorId, bindings: readonly Binding[], build: (values: Map<string, Resolved>) => T, lookup: (id: string) => CalculatorRegistryEntry | undefined, optionalDefaultsUsed: readonly CalculationDefaultDisclosure[] = [], internalMechanics: readonly CalculationDefaultDisclosure[] = [], preflightMissing: readonly CalculationInputIssue[] = [], preflightAmbiguous: readonly CalculationInputIssue[] = []): DrawingCalculationReceipt {
   const values = new Map<string, Resolved>();
@@ -389,6 +400,33 @@ function routeVoltageDrop(graph: NormalizedElectricalGraph, scope: Scope, lookup
   ]);
 }
 
+function routeCableSizing(graph: NormalizedElectricalGraph, scope: Scope, lookup: (id: string) => CalculatorRegistryEntry | undefined): DrawingCalculationReceipt {
+  const defaults = activeDefaults();
+  return run(
+    graph,
+    scope,
+    'cable-sizing',
+    [voltage(), current(), length(), conductor(), insulation(), installation(), ambientTemp(), groupCount(), powerFactor(), phase()],
+    (values) => {
+      const input: CableSizingInput = {
+        voltage: numberValue(values.get('voltage')!),
+        current: numberValue(values.get('current')!),
+        length: numberValue(values.get('length')!),
+        conductor: textValue(values.get('conductor')!) as CableSizingInput['conductor'],
+        insulation: textValue(values.get('insulation')!) as CableSizingInput['insulation'],
+        installation: CABLE_INSTALLATION_CODE[textValue(values.get('installation')!)],
+        ambientTemp: numberValue(values.get('ambientTemp')!),
+        groupCount: numberValue(values.get('groupCount')!),
+        powerFactor: numberValue(values.get('powerFactor')!),
+        phase: numberValue(values.get('phase')!) as CableSizingInput['phase'],
+      };
+      return input;
+    },
+    lookup,
+    [{ name: 'dropLimitPercent', value: defaults.vdBranch, meaning: 'calculator-internal default; not drawing evidence' }],
+  );
+}
+
 function routeBreakerSizing(graph: NormalizedElectricalGraph, scope: Scope, lookup: (id: string) => CalculatorRegistryEntry | undefined): DrawingCalculationReceipt {
   const optionalResult = resolveOptional(scope, graph, cableAmpacity());
   const optional = optionalResult.state === 'resolved' ? optionalResult.resolved : undefined;
@@ -437,6 +475,7 @@ export function routeDrawingCalculations(graph: NormalizedElectricalGraph, optio
   const lookup = options.getCalculator ?? getCalculator;
   const scopes = scopesFor(graph, trustedSpecIndex(graph));
   const receipts = scopes.flatMap((scope) => [
+    routeCableSizing(graph, voltageDropScope(graph, scopes, scope), lookup),
     routeVoltageDrop(graph, voltageDropScope(graph, scopes, scope), lookup),
     routeBreakerSizing(graph, scope, lookup),
     routeTransformerCapacity(graph, scope, lookup),

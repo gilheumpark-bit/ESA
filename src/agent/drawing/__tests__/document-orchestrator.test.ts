@@ -749,6 +749,64 @@ describe('document-orchestrator + evaluator', () => {
     expect(changedModel.job.pageDigests[0]).toMatchObject({ provider: 'openai', model: 'gpt-4.1', effort: 'high' });
   });
 
+  it('uses the selected source page dimensions for a non-contiguous page conflict fallback', async () => {
+    const quality = {
+      width: 320, height: 240, channels: 4, contrast: 1, edgeDensity: 0.2,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: [],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: '7'.repeat(64), mimeType: 'image/png', formatClass: 'raster-image', totalPageCount: 3,
+      pages: [{
+        pageIndex: 2, width: 320, height: 240, sourceWidth: 320, sourceHeight: 240,
+        renderScale: 1, renderMode: 'raster', textSample: 'VCB', vectorOpCount: 0,
+        rasterOpCount: 1, renderHash: 'selected-page-3', quality, imageBuffer: await makePng(320, 240),
+      }],
+    };
+    const roles = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'] as const;
+    const drawingReview = {
+      snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 3, width: 320, height: 240, quality },
+      envelopes: roles.map((role) => ({
+        role, outputHash: `${role}-hash`, drawingHash: source.documentHash,
+        provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
+        data: role === 'coverage-auditor'
+          ? { rescanTargets: [], warnings: [], confidence: 0.95 }
+          : { warnings: [], confidence: 0.95 },
+      })),
+      failures: [],
+      coverage: {
+        roles: Object.fromEntries(roles.map((role) => [role, {
+          variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1,
+        }])),
+        plannedCalls: 19, actualCalls: 5, complete: true, maxRegionCallsPerRole: 16,
+      },
+      graph: { drawingHash: source.documentHash, symbols: [], lines: [], texts: [], edges: [], conflicts: [] },
+    };
+    const conflict = {
+      id: 'page-three-conflict', kind: 'CONTRADICTION', topic: 'PROTECTION_CHAIN', severity: 'critical',
+      status: 'open', action: 'TARGETED_REVIEW', reasonCode: 'missing-bounds', message: '근거 범위가 없습니다.',
+      graphEvidenceIds: [], graphOriginalEvidenceIds: [], graphSourceIds: [], graphEvidencePages: [3],
+      graphEvidenceBounds: [], logicEvidenceIds: [], logicEvidenceBounds: [], graphConflictIds: [],
+    };
+
+    const result = await runDocumentAnalysis({
+      bytes: await makePng(320, 240), mimeType: 'image/png', ownerId: 'owner-selected-page',
+      requestedPages: [2], preparationPages: [2],
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 19, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: async () => ({
+      success: true, components: [], connections: [], confidence: 0.95,
+      drawingReview, drawingSynthesis: { calculations: [], conflicts: [conflict] },
+    }) as never });
+
+    expect(result.document.unresolvedItems).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'ELECTRICAL_LOGIC_CONFLICT', pageIndex: 2,
+        bounds: { x: 0, y: 0, w: 320, h: 240 },
+      }),
+    ]));
+  });
+
   it('reports a source-preparation budget stop as failed instead of an empty page', async () => {
     const quality = {
       width: 1, height: 1, channels: 4, contrast: 0, edgeDensity: 0,

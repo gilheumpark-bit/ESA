@@ -36,7 +36,7 @@ export interface ReviewProposalOption {
 }
 
 export interface ReviewFinding {
-  rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
+  rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'BREAKING-CAPACITY' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
   /** INFO = 계산 참고값(부합 판정 아님) — summary.pass에 계수하지 않는다 */
   severity: 'FAIL' | 'WARN' | 'PASS' | 'UNKNOWN' | 'INFO';
   subject: string;
@@ -112,11 +112,21 @@ function smallestCableFor(
   insulation: InsulationType,
   installation: InstallationMethod,
   conductor: 'Cu' | 'Al' = 'Cu',
+  ambientTemperature = 30,
+  groupedCircuitCount = 1,
+  parallel = 1,
 ): { sq: number; ampacity: number } | null {
   for (const size of KEC_CABLE_SIZES) {
     try {
-      const r = getAmpacity({ size, conductor, insulation, installation });
-      const amp = r.corrected;
+      const r = getAmpacity({
+        size,
+        conductor,
+        insulation,
+        installation,
+        ambientTemp: ambientTemperature,
+        groupCount: groupedCircuitCount,
+      });
+      const amp = r.corrected * parallel;
       if (amp >= tripA) return { sq: size, ampacity: amp };
     } catch {
       continue;
@@ -140,6 +150,10 @@ function judgeCableAmpacity(input: {
   parallel: number;
   subject: string;
   componentId?: string;
+  installationMethod?: InstallationMethod;
+  ambientTemperature?: number;
+  groupedCircuitCount?: number;
+  sourceIds?: readonly string[];
 }): ReviewFinding {
   const { tripA, sq, cableType, parallel, subject, componentId } = input;
   const idField = componentId ? { componentId } : {};
@@ -171,16 +185,42 @@ function judgeCableAmpacity(input: {
   // 도체 재질: 미상이면 국내 관례상 Cu 기본. Al은 명시 시에만(파서가 AL 토큰 추출) —
   // Al을 Cu로 낙관하면 ~28% 과대평가(도메인 심사 HIGH).
   const conductor = input.conductor ?? 'Cu';
-  // parallelCount는 병렬 케이블 조수이지 집합 회로 수가 아니다. 포설배치·간격·집합
-  // 회로 수가 없으면 KEC 집합보정계수를 정할 수 없으므로 단조 허용전류의 조수배는
-  // '집합·배치 미반영 명목합계'로만 제시한다. 이 합계 이내는 UNKNOWN, 이 합계조차
-  // 초과한 경우에만 어떤 추가 보정을 적용해도 부합할 수 없으므로 FAIL이다.
+  // KEC 허용전류는 공사방법·주위온도·집합회로 수에 따라 달라진다. 한 항목이라도
+  // 근거가 없으면 관로·30°C·1회로를 사실처럼 채워 PASS/FAIL을 만들지 않는다.
+  const missingConditions = [
+    input.installationMethod === undefined ? '설치방법' : undefined,
+    input.ambientTemperature === undefined ? '주위온도' : undefined,
+    input.groupedCircuitCount === undefined ? '집합회로 수' : undefined,
+    !input.sourceIds || input.sourceIds.length === 0 ? '조건 출처 ID' : undefined,
+  ].filter((value): value is string => value !== undefined);
+  if (missingConditions.length > 0) {
+    return {
+      rule: 'CABLE-AMPACITY',
+      severity: 'UNKNOWN',
+      subject,
+      ...idField,
+      given: { trip: `${tripA}A`, cable: `${sq}sq ${cableType ?? ''}`.trim() },
+      verdict: `${missingConditions.join('·')} 미기재 — 온도·집합·포설 보정의 근거가 완결되지 않아 KEC 허용전류 판정 보류`,
+    };
+  }
+
+  const installationMethod = input.installationMethod!;
+  const ambientTemperature = input.ambientTemperature!;
+  const groupedCircuitCount = input.groupedCircuitCount!;
+  const conditionSourceIds = input.sourceIds!;
   let ampacity: number;
   let sourceKey: string;
   try {
-    const r = getAmpacity({ size: sq, conductor, insulation, installation: 'conduit' });
+    const r = getAmpacity({
+      size: sq,
+      conductor,
+      insulation,
+      installation: installationMethod,
+      ambientTemp: ambientTemperature,
+      groupCount: groupedCircuitCount,
+    });
     ampacity = r.corrected * parallel;
-    sourceKey = `KEC ${conductor}_${insulation}_conduit ${sq}sq${parallel > 1 ? ` ×${parallel}조(집합·배치 미반영 명목합계)` : ''}`;
+    sourceKey = `KEC ${conductor}_${insulation}_${installationMethod} ${sq}sq · ${ambientTemperature}°C · ${groupedCircuitCount}회로${parallel > 1 ? ` · 병렬 ${parallel}조` : ''} · source ${conditionSourceIds.join(',')}`;
   } catch {
     return {
       rule: 'CABLE-AMPACITY',
@@ -206,24 +246,22 @@ function judgeCableAmpacity(input: {
     limit: { value: `${ampacity}A`, source: sourceKey },
   };
 
-  if (parallel > 1) {
-    return {
-      ...base,
-      severity: tripA > ampacity ? 'FAIL' : 'UNKNOWN',
-      verdict: tripA > ampacity
-        ? `차단기 ${tripA}A > 병렬 ${parallel}조의 집합보정 전 명목 합계 ${ampacity}A — 관로·30°C 가정에서도 용량 부족`
-        : `차단기 ${tripA}A가 병렬 ${parallel}조의 명목 합계 ${ampacity}A 이내이나 포설배치·간격·집합 회로 수 미기재 — 최종 허용전류 판정 보류`,
-    };
-  }
-
   // 무발명 시정 제안: 케이블을 트립 견디는 최소 KEC 굵기로 상향(표 역산), 또는
   // 차단기 트립을 케이블 허용전류 이내 최대 표준값으로 하향(정격 사다리).
   const cableProposal: ReviewProposalOption[] = [];
-  const cableUp = smallestCableFor(tripA, insulation, 'conduit', conductor);
+  const cableUp = smallestCableFor(
+    tripA,
+    insulation,
+    installationMethod,
+    conductor,
+    ambientTemperature,
+    groupedCircuitCount,
+    parallel,
+  );
   if (cableUp && cableUp.sq > sq) {
     cableProposal.push({
       action: `케이블을 ${cableUp.sq}sq 이상으로 (허용전류 ${cableUp.ampacity}A ≥ 트립 ${tripA}A)`,
-      basis: `KEC 허용전류표 Cu_${insulation}_conduit`,
+      basis: `KEC 허용전류표 ${conductor}_${insulation}_${installationMethod} · ${ambientTemperature}°C · ${groupedCircuitCount}회로${parallel > 1 ? ` · 병렬 ${parallel}조` : ''}`,
     });
   }
   const tripDownToCable = largestTripAtMost(ampacity);
@@ -239,7 +277,7 @@ function judgeCableAmpacity(input: {
     return {
       ...base,
       severity: 'FAIL',
-      verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C)`,
+      verdict: `차단기 ${tripA}A > 케이블 허용전류 ${ampacity}A — 케이블이 차단기보다 먼저 위험 (${installationMethod}·${ambientTemperature}°C·${groupedCircuitCount}회로${parallel > 1 ? `·병렬 ${parallel}조` : ''})`,
       ...cableProposalField,
     };
   }
@@ -247,14 +285,14 @@ function judgeCableAmpacity(input: {
     return {
       ...base,
       severity: 'WARN',
-      verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (가정: 관로·30°C)`,
+      verdict: `차단기 ${tripA}A가 허용전류 ${ampacity}A의 80%를 초과 — 여유 부족 (${installationMethod}·${ambientTemperature}°C·${groupedCircuitCount}회로${parallel > 1 ? `·병렬 ${parallel}조` : ''})`,
       ...cableProposalField,
     };
   }
   return {
     ...base,
     severity: 'PASS',
-    verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 부합 (가정: 관로·30°C)`,
+    verdict: `차단기 ${tripA}A ≤ 허용전류 ${ampacity}A — 조건부 부합 (${installationMethod}·${ambientTemperature}°C·${groupedCircuitCount}회로${parallel > 1 ? `·병렬 ${parallel}조` : ''})`,
   };
 }
 
@@ -368,6 +406,10 @@ export function reviewScheduleTables(tables: ScheduleTableLike[]): ReviewReport 
         conductor: cSpec.conductor,
         parallel: cSpec.parallelCount && cSpec.parallelCount >= 2 ? cSpec.parallelCount : 1,
         subject,
+        installationMethod: cSpec.installationMethod,
+        ambientTemperature: cSpec.ambientTemperature,
+        groupedCircuitCount: cSpec.groupedCircuitCount,
+        sourceIds: [`schedule:${table.title}:${index + 1}`],
       }));
     }
   }
@@ -444,11 +486,66 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     }
   }
 
-  // ── 규칙 2: 차단기 AT ≤ 결속 케이블 KEC 허용전류 ──
+  // ── 규칙 2: 예상 단락전류 ≤ 차단용량 (KEC 212.5) ──
+  // 두 값의 이름이 비슷해도 서로 바꿔 쓰지 않는다. 연결에 명시 값과 원본 근거 ID가
+  // 함께 있을 때만 비교하고, 한쪽 또는 출처가 빠지면 UNKNOWN으로 닫는다.
+  const breakerById = new Map(breakers.map((breaker) => [breaker.id, breaker]));
+  for (const connection of analysis.connections) {
+    const connectedBreakers = [connection.from, connection.to]
+      .map((id) => breakerById.get(id))
+      .filter((breaker): breaker is SLDComponent => breaker !== undefined);
+    if (connectedBreakers.length === 0) continue;
+    const fault = connection.prospectiveFaultCurrentKA;
+    const breaking = connection.breakingCapacityKA;
+    if (fault === undefined && breaking === undefined) continue;
+
+    for (const breaker of connectedBreakers) {
+      const base = {
+        rule: 'BREAKING-CAPACITY' as const,
+        subject: subjectOf(breaker),
+        componentId: breaker.id,
+        given: {
+          예상단락전류: fault === undefined ? '미기재' : `${fault}kA`,
+          차단용량: breaking === undefined ? '미기재' : `${breaking}kA`,
+        },
+      };
+      if (fault === undefined || breaking === undefined || !connection.sourceIds || connection.sourceIds.length === 0) {
+        findings.push({
+          ...base,
+          severity: 'UNKNOWN',
+          verdict: '예상 단락전류·차단용량·출처 ID 중 일부가 없어 KEC 212.5 직접 비교 보류',
+        });
+        continue;
+      }
+      const pass = breaking >= fault;
+      findings.push({
+        ...base,
+        severity: pass ? 'PASS' : 'FAIL',
+        limit: {
+          value: `차단용량 ≥ 예상 단락전류`,
+          source: `KEC 212.5 · source ${connection.sourceIds.join(',')}`,
+        },
+        verdict: pass
+          ? `차단용량 ${breaking}kA ≥ 예상 단락전류 ${fault}kA — 부합`
+          : `차단용량 ${breaking}kA < 예상 단락전류 ${fault}kA — 차단능력 부족`,
+      });
+    }
+  }
+
+  // ── 규칙 3: 차단기 AT ≤ 결속 케이블 KEC 허용전류 ──
   // 케이블 스펙은 연결(conductorSize·cableType)에 결속돼 있다 — 차단기에 붙은
   // 연결 중 스펙 있는 것만 판정. 공사방법은 도면에 안 적히는 관례라 관로(conduit)
   // 가정 — verdict에 명시(사내규정 온보딩 시 교체 지점).
-  const connsByComp = new Map<string, Array<{ sq: number; cableType?: string; conductor?: 'Cu' | 'Al'; parallel: number }>>();
+  const connsByComp = new Map<string, Array<{
+    sq: number;
+    cableType?: string;
+    conductor?: 'Cu' | 'Al';
+    parallel: number;
+    installationMethod?: InstallationMethod;
+    ambientTemperature?: number;
+    groupedCircuitCount?: number;
+    sourceIds?: readonly string[];
+  }>>();
   for (const conn of analysis.connections) {
     const sq = parseSq(conn.conductorSize);
     if (sq == null) continue;
@@ -460,7 +557,16 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
     for (const end of [conn.from, conn.to]) {
       if (!end.startsWith('comp_')) continue;
       const arr = connsByComp.get(end) ?? [];
-      arr.push({ sq, cableType: cSpec.cableType ?? conn.cableType, conductor: cSpec.conductor, parallel });
+      arr.push({
+        sq,
+        cableType: cSpec.cableType ?? conn.cableType,
+        conductor: cSpec.conductor,
+        parallel,
+        installationMethod: conn.installationMethod,
+        ambientTemperature: conn.ambientTemperature,
+        groupedCircuitCount: conn.groupedCircuitCount,
+        sourceIds: conn.sourceIds,
+      });
       connsByComp.set(end, arr);
     }
   }
@@ -485,10 +591,14 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
       parallel: worst.parallel,
       subject: subjectOf(b),
       componentId: b.id,
+      installationMethod: worst.installationMethod,
+      ambientTemperature: worst.ambientTemperature,
+      groupedCircuitCount: worst.groupedCircuitCount,
+      sourceIds: worst.sourceIds,
     }));
   }
 
-  // ── 규칙 3: TR 정격 2차전류 vs 페이지 최대 차단기 (정보 제공 — WARN까지만) ──
+  // ── 규칙 4: TR 정격 2차전류 vs 페이지 최대 차단기 (정보 제공 — WARN까지만) ──
   // 2차전압이 같은 라벨에 무모호하게 적힌 TR만 계산한다. TR 라벨 관례:
   // 2차전압 추출 — 상간(선간) 전압을 쓴다. 3φ 정격 2차전류는 I₂=kVA/(√3·V_LL)라
   // V_LL(380)이 기준이지 상전압(220)이 아니다. "380/220V" 쌍은 선간/상전압이므로
