@@ -11,6 +11,7 @@ import { executeSLDTeam, type SLDTeamDeps } from '@/agent/teams/sld-team';
 import type { TeamInput, TeamResult } from '@/agent/teams/types';
 import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
 import type { RescanTargetEvidence, RoleReviewEnvelope } from '@/agent/vision/review-types';
+import { precisionGridSize } from '@/agent/vision/vision-splitter';
 import { resolveVlmModel } from '@/agent/vision/vlm-client';
 import { drawingRoleTimeoutMs } from '@/lib/drawing-reasoning-effort';
 
@@ -36,6 +37,7 @@ import {
   type RawLineHit,
   type RawSymbolHit,
 } from './evidence-deduplicator';
+import { detectRasterLineHits } from './raster-line-detector';
 import { canReusePage, createJob, getJob, getOwnedJob, updateJob, type DrawingJobRecord } from './drawing-job-store';
 import { surveyPageKind } from './page-classifier';
 import { OCR_STANDARD_TERMS } from './ocr-standard-terms';
@@ -136,9 +138,7 @@ function requestedPageIndexes(source: PreparedDrawingSource, requested: Orchestr
 }
 
 function gridSizeFor(page: PreparedDrawingPage): 4 | 9 | 16 {
-  if (page.quality.recommendedScale === 4) return 16;
-  if (page.quality.recommendedScale === 2) return 9;
-  return 4;
+  return precisionGridSize(page.quality.recommendedScale, page.quality.edgeDensity);
 }
 
 function pageDigestFingerprint(
@@ -893,6 +893,73 @@ export async function runDocumentAnalysis(
     }
   }
   const symbols = deduplicateSymbols(symbolHits);
+  // VLM line reads vary materially on repetitive raster networks. Add a
+  // deterministic straight-line fallback from the same page pixels, excluding
+  // equipment interiors. These hits are permanently ambiguous and therefore
+  // cannot promote a guessed relationship to confirmed.
+  for (const page of source.pages) {
+    if (!requested.includes(page.pageIndex) || !page.imageBuffer) continue;
+    const pageSymbols = symbols.filter((symbol) =>
+      symbol.evidence.some((evidence) => evidence.pageIndex === page.pageIndex));
+    // Straight pixels alone cannot distinguish a conductor from table borders,
+    // title blocks, or symbol internals. The fallback is only a complement to
+    // survived symbol evidence, never a standalone recognition engine.
+    if (pageSymbols.length === 0) continue;
+    const equipmentBounds = pageSymbols
+      .filter((symbol) => ![symbol.confirmedType, ...symbol.typeCandidates]
+        .filter((value): value is string => Boolean(value))
+        .some((value) => ['bus', 'busbar'].includes(value.trim().toLowerCase().replace(/[\s_-]+/g, ''))))
+      .flatMap((symbol) => {
+        const pageEvidence = symbol.evidence.filter((evidence) => evidence.pageIndex === page.pageIndex);
+        const primary = pageEvidence[0];
+        const largest = pageEvidence.reduce<(typeof pageEvidence)[number] | undefined>((best, evidence) => {
+          if (!best) return evidence;
+          const bestArea = best.bounds.w * best.bounds.h;
+          const area = evidence.bounds.w * evidence.bounds.h;
+          return area > bestArea ? evidence : best;
+        }, undefined);
+        if (!primary || !largest) return [];
+        const isLoad = [symbol.confirmedType, ...symbol.typeCandidates]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => ['load', 'houseload', 'residentialload', 'house']
+            .includes(value.trim().toLowerCase().replace(/[\s_-]+/g, '')));
+        // Repetitive house/load crops can alternately report a roof, door, or
+        // padding-shifted full body. Their evidence union is the safest mask:
+        // it covers every observed internal stroke without widening into the
+        // neighbouring load. For tall transformer glyphs, keep the primary
+        // read unless it is merely a flat winding fragment.
+        const loadBounds = isLoad
+          ? pageEvidence.reduce((union, evidence) => {
+            const right = Math.max(union.x + union.w, evidence.bounds.x + evidence.bounds.w);
+            const bottom = Math.max(union.y + union.h, evidence.bounds.y + evidence.bounds.h);
+            const x = Math.min(union.x, evidence.bounds.x);
+            const y = Math.min(union.y, evidence.bounds.y);
+            return { x, y, w: right - x, h: bottom - y };
+          }, { ...primary.bounds })
+          : undefined;
+        const bounds = loadBounds
+          ?? (primary.bounds.h >= primary.bounds.w * 0.75 ? primary.bounds : largest.bounds);
+        // A crop reviewer can return only a house roof. Expand that exclusion
+        // downward around the roof so the deterministic fallback does not
+        // mistake walls/windows for conductors. The external distribution line
+        // remains longer than any one expanded house and is therefore kept.
+        if (isLoad && bounds.h < bounds.w * 0.75) {
+          const expandedWidth = bounds.w * 1.5;
+          const expandedHeight = Math.max(bounds.h, bounds.w * 1.5);
+          return [{
+            x: Math.max(0, bounds.x - (expandedWidth - bounds.w) / 2),
+            y: bounds.y,
+            w: Math.min(expandedWidth, page.width),
+            h: Math.min(expandedHeight, Math.max(1, page.height - bounds.y)),
+          }];
+        }
+        return [bounds];
+      });
+    const textBounds = textSeeds
+      .filter((text) => text.pageIndex === page.pageIndex)
+      .map((text) => text.bounds);
+    lineHits.push(...await detectRasterLineHits(page.imageBuffer, page.pageIndex, equipmentBounds, textBounds));
+  }
   const lines = deduplicateLines(lineHits);
   const relations = requested.flatMap((pageIndex) => buildPageRelations(symbols, lines, pageIndex));
   const pageRefs = extractPageRefHits(texts);

@@ -23,6 +23,28 @@ const CASES = {
       minRelations: 13,
     },
   },
+  'public-american': {
+    file: 'fixtures/drawings/external/american.png',
+    mime: 'image/png',
+    description: 'Wikimedia 북미 방사형 배전 계통도 — 변압기 10·주택 부하 21·단일 연결망',
+    expected: {
+      symbolTypes: { transformer: 10, generator: 0, breaker: 0, load: 21 },
+      // 수전 변압기 1 + 버스 4 + 배전 변압기 9 + 주택 21이 이루는 트리의 간선 수.
+      // 독립 골든이 아니라 공개 그림을 사람이 직접 센 회귀 하한이며 95% 주장에는 쓰지 않는다.
+      minRelations: 34,
+    },
+  },
+  'sejong-p2': {
+    file: 'fixtures/drawings/local/sejong-swgr-db-p2-raster.png',
+    mime: 'image/png',
+    description: '공개 세종 MCC-101 고밀도 결선도 — 반복 분기·MCCB·MC·ZCT·전동기 관계',
+    expected: {
+      // 이 스캔은 독립 관계 라벨이 아직 없다. 확실히 없는 전력 변압기·발전기와
+      // 도면에 명시된 SPD만 고정하고, 관계 수는 영수증에 관측값으로만 남긴다.
+      symbolTypes: { transformer: 0, generator: 0 },
+      minimumSymbolTypes: { arrester: 1 },
+    },
+  },
 };
 
 const caseId = process.argv[2] ?? 'public-wiki';
@@ -39,6 +61,7 @@ let document;
 let provider;
 let model;
 let durationMs;
+let effort = process.env.ESA_VISION_EFFORT?.trim() || 'high';
 
 function gitSnapshot() {
   const revision = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
@@ -67,6 +90,7 @@ if (replay) {
   document = saved.document;
   provider = saved.provider;
   model = saved.model;
+  effort = saved.effort ?? effort;
   durationMs = saved.durationMs;
 } else {
   if (!existsSync(target.file)) {
@@ -105,12 +129,13 @@ if (replay) {
   form.set('file', new Blob([bytes], { type: target.mime }), target.file.split('/').pop());
   form.set('provider', provider);
   form.set('apiKey', apiKey);
+  form.set('effort', effort);
   form.set('pages', 'all');
   form.set('maxVlmCalls', '120');
   if (model) form.set('model', model);
 
   console.log(`V3 단계별 도면 검증: ${target.description}`);
-  console.log(`provider=${provider} model=${model || '(기본)'} sourceSha256=${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}…`);
+  console.log(`provider=${provider} model=${model || '(기본)'} effort=${effort} sourceSha256=${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}…`);
   const started = Date.now();
   let response;
   try {
@@ -156,6 +181,7 @@ writeFileSync(receiptPath, JSON.stringify({
   expected: target.expected,
   provider,
   model: model || '(기본)',
+  effort,
   durationMs,
   revision: snapshot.revision,
   workspaceSnapshot: snapshot,

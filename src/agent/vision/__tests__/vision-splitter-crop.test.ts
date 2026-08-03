@@ -4,6 +4,7 @@ import {
   cropImageIntoRegions,
   mergeVisionSplitResults,
   preparePrecisionRegions,
+  precisionGridSize,
   type VisionSplitResult,
 } from '../vision-splitter';
 
@@ -29,6 +30,13 @@ function quadrantImage(width: number, height: number): Buffer {
 }
 
 describe('vision image splitting', () => {
+  it('uses finer precision grids for visually dense clean drawings', () => {
+    expect(precisionGridSize(1, 0.03)).toBe(4);
+    expect(precisionGridSize(1, 0.07)).toBe(9);
+    expect(precisionGridSize(1, 0.17)).toBe(16);
+    expect(precisionGridSize(4, 0.01)).toBe(16);
+  });
+
   it('creates real cropped region buffers instead of repeating the source image', async () => {
     const width = 100;
     const height = 80;

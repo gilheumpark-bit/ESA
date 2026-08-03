@@ -60,7 +60,7 @@ const snapshot: DrawingSnapshot = {
   page: 1,
   width: 100,
   height: 80,
-  quality: { width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.2, gradientVariance: 1, lowContrast: false, blurry: false, recommendedScale: 1, warnings: [] },
+  quality: { width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.02, gradientVariance: 1, lowContrast: false, blurry: false, recommendedScale: 1, warnings: [] },
 };
 
 function prepared(scale: 1 | 2 | 4 = 1) {
@@ -193,6 +193,27 @@ describe('SLD raster independent council integration', () => {
         effort: 'high',
         timeoutMs: 120_000,
       }),
+    }));
+  });
+
+  it('uses the bounded eight-call lane for high-effort Agent Platform drawings', async () => {
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+
+    await executeSLDTeam(rasterInput({
+      vision: {
+        provider: 'google-agent-platform',
+        apiKey: KEY,
+        model: 'gemini-3.6-flash',
+        effort: 'high',
+      },
+    }), {
+      prepareRaster: async () => prepared(4),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({
+      maxConcurrentCalls: 8,
     }));
   });
 
@@ -404,6 +425,25 @@ describe('SLD raster independent council integration', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBe('요청이 중단되어 독립 도면 검토를 완료하지 않았습니다.');
+    expect(JSON.stringify(result)).not.toContain(KEY);
+  });
+
+  it('preserves council receipts that settled at the deadline when settleOnAbort is enabled', async () => {
+    const controller = new AbortController();
+    const result = await executeSLDTeam(rasterInput({
+      signal: controller.signal,
+      settleOnAbort: true,
+    }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => {
+        controller.abort();
+        return { envelopes: envelopes(), failures: [] };
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.drawingReview?.envelopes).toHaveLength(5);
     expect(JSON.stringify(result)).not.toContain(KEY);
   });
 

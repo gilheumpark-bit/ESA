@@ -36,7 +36,7 @@ export interface ReviewProposalOption {
 }
 
 export interface ReviewFinding {
-  rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'BREAKING-CAPACITY' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
+  rule: 'AT-LE-AF' | 'CABLE-AMPACITY' | 'BREAKING-CAPACITY' | 'OVERLOAD-SHORT-CIRCUIT-COORDINATION' | 'TR-MAIN-CURRENT' | 'DATA-GAP';
   /** INFO = 계산 참고값(부합 판정 아님) — summary.pass에 계수하지 않는다 */
   severity: 'FAIL' | 'WARN' | 'PASS' | 'UNKNOWN' | 'INFO';
   subject: string;
@@ -530,6 +530,70 @@ export function reviewAnalysis(analysis: SLDAnalysis): ReviewReport {
           : `차단용량 ${breaking}kA < 예상 단락전류 ${fault}kA — 차단능력 부족`,
       });
     }
+  }
+
+  // ── 규칙 2-1: 별도 과부하·단락 보호장치의 통과에너지 협조 (KEC 212.7.2) ──
+  // 212.7.2는 일반적인 상·하위 차단기 선택협조 규정이 아니다. 과부하 보호와
+  // 단락 보호를 서로 다른 장치가 맡을 때, 단락장치의 통과에너지(I²t)가 과부하
+  // 장치에 손상을 주지 않는 내량 이하인지 확인하는 조항이다. 보호곡선 한 개나
+  // 임의 시간여유로 이 판정을 대신하지 않는다.
+  const componentById = new Map(analysis.components.map((component) => [component.id, component]));
+  for (const connection of analysis.connections) {
+    const hasCoordinationEvidence = connection.overloadProtectionDeviceId !== undefined
+      || connection.shortCircuitProtectionDeviceId !== undefined
+      || connection.shortCircuitLetThroughEnergyA2s !== undefined
+      || connection.overloadProtectionWithstandEnergyA2s !== undefined;
+    if (!hasCoordinationEvidence) continue;
+
+    const overloadId = connection.overloadProtectionDeviceId;
+    const shortCircuitId = connection.shortCircuitProtectionDeviceId;
+    const overloadDevice = overloadId ? componentById.get(overloadId) : undefined;
+    const shortCircuitDevice = shortCircuitId ? componentById.get(shortCircuitId) : undefined;
+    const letThrough = connection.shortCircuitLetThroughEnergyA2s;
+    const withstand = connection.overloadProtectionWithstandEnergyA2s;
+    const endpoints = new Set([connection.from, connection.to]);
+    const missing = [
+      !overloadId || !overloadDevice ? '과부하 보호장치 식별' : undefined,
+      !shortCircuitId || !shortCircuitDevice ? '단락 보호장치 식별' : undefined,
+      overloadId && shortCircuitId && overloadId === shortCircuitId ? '서로 다른 두 장치' : undefined,
+      overloadId && !endpoints.has(overloadId) ? '과부하 장치-연결 결속' : undefined,
+      shortCircuitId && !endpoints.has(shortCircuitId) ? '단락 장치-연결 결속' : undefined,
+      overloadDevice && !['breaker', 'relay'].includes(overloadDevice.type) ? '과부하 보호장치 유형' : undefined,
+      shortCircuitDevice && !['breaker', 'fuse'].includes(shortCircuitDevice.type) ? '단락 보호장치 유형' : undefined,
+      letThrough === undefined || !Number.isFinite(letThrough) || letThrough <= 0 ? '단락장치 통과에너지 I²t' : undefined,
+      withstand === undefined || !Number.isFinite(withstand) || withstand <= 0 ? '과부하장치 내량 I²t' : undefined,
+      !connection.sourceIds || connection.sourceIds.length === 0 ? '제조사/원본 출처 ID' : undefined,
+    ].filter((value): value is string => value !== undefined);
+    const subject = `${shortCircuitDevice?.label ?? shortCircuitId ?? '(단락장치 미확정)'} → ${overloadDevice?.label ?? overloadId ?? '(과부하장치 미확정)'}`;
+    const given = {
+      '단락장치 통과에너지': letThrough === undefined ? '미기재' : `${letThrough}A²s`,
+      '과부하장치 내량': withstand === undefined ? '미기재' : `${withstand}A²s`,
+    };
+    if (missing.length > 0) {
+      findings.push({
+        rule: 'OVERLOAD-SHORT-CIRCUIT-COORDINATION',
+        severity: 'UNKNOWN',
+        subject,
+        given,
+        verdict: `${missing.join('·')} 불완전 — KEC 212.7.2 통과에너지 협조 판정 보류`,
+      });
+      continue;
+    }
+
+    const pass = (letThrough as number) <= (withstand as number);
+    findings.push({
+      rule: 'OVERLOAD-SHORT-CIRCUIT-COORDINATION',
+      severity: pass ? 'PASS' : 'FAIL',
+      subject,
+      given,
+      limit: {
+        value: '단락장치 통과에너지 I²t ≤ 과부하장치 무손상 내량 I²t',
+        source: `KEC 212.7.2 · source ${connection.sourceIds!.join(',')}`,
+      },
+      verdict: pass
+        ? `${letThrough}A²s ≤ ${withstand}A²s — 별도 보호장치 통과에너지 협조 부합`
+        : `${letThrough}A²s > ${withstand}A²s — 단락장치 통과에너지가 과부하장치 내량을 초과`,
+    });
   }
 
   // ── 규칙 3: 차단기 AT ≤ 결속 케이블 KEC 허용전류 ──

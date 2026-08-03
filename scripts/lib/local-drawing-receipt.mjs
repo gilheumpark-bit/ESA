@@ -69,6 +69,7 @@ function canonicalSymbolType(value) {
   if (['switch', 'disconnector', 'disconnectswitch', 'switchdisconnector', 'isolator', 'isolatorswitch'].includes(normalized)) {
     return 'switch';
   }
+  if (['arrester', 'surgearrester', 'spd'].includes(normalized)) return 'arrester';
   if (normalized === 'transformer' || normalized === 'powertransformer') return 'transformer';
   return raw;
 }
@@ -249,11 +250,12 @@ export function reasoningStageEvidenceFromDocument(document = {}, options = {}) 
   const uncertainRelations = relations.filter((item) => item.certainty !== 'confirmed').length
     + crossPageRelations.filter((item) => item.status !== 'confirmed').length;
   const relationshipGap = symbols.length >= 2 && relations.length === 0;
+  const noGraphEvidence = nonEmptyDrawing && symbols.length === 0;
   const expectedMinRelations = Number.isSafeInteger(expected.minRelations) ? expected.minRelations : null;
   const relationLabelMiss = expectedMinRelations !== null && relations.length < expectedMinRelations;
   const spatialStatus = invalidRelationEndpoints > 0 || duplicateDisplayIds > 0 || relationLabelMiss
     ? 'FAIL'
-    : uncertainRelations > 0 || relationshipGap ? 'HOLD' : 'PASS';
+    : uncertainRelations > 0 || relationshipGap || noGraphEvidence ? 'HOLD' : 'PASS';
   stages.push(stage(
     'spatial-reconciliation',
     '전체 재결합·중복 제거·관계 그래프',
@@ -265,6 +267,7 @@ export function reasoningStageEvidenceFromDocument(document = {}, options = {}) 
       duplicateDisplayIds,
       uncertainRelations,
       relationshipGap,
+      noGraphEvidence,
       expectedMinRelations,
       relationLabelMiss,
     },

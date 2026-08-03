@@ -53,9 +53,15 @@ export interface MergedVisionResult {
 
 const MAX_INPUT_PIXELS = 40_000_000;
 
-export function precisionGridSize(recommendedScale: 1 | 2 | 4): 4 | 9 | 16 {
-  if (recommendedScale === 4) return 16;
-  if (recommendedScale === 2) return 9;
+export function precisionGridSize(
+  recommendedScale: 1 | 2 | 4,
+  edgeDensity = 0,
+): 4 | 9 | 16 {
+  const density = Number.isFinite(edgeDensity) && edgeDensity >= 0 ? edgeDensity : 0;
+  // 해상도가 충분해도 반복 분기·고밀도 배선은 2×2 crop에서 작은 선분이
+  // 사라진다. 확대 필요도와 별개로 edge density를 정밀 구획 기준에 포함한다.
+  if (recommendedScale === 4 || density >= 0.12) return 16;
+  if (recommendedScale === 2 || density >= 0.05) return 9;
   return 4;
 }
 
@@ -76,7 +82,7 @@ export async function preparePrecisionRegions(
       || variant.kind === 'text-high-contrast'
       || variant.kind === 'line-enhanced')
     : variants.filter((variant) => variant.kind === 'original');
-  const gridSize = precision ? precisionGridSize(profile.recommendedScale) : 4;
+  const gridSize = precision ? precisionGridSize(profile.recommendedScale, profile.edgeDensity) : 4;
   const regions = [];
 
   for (const variant of selected) {

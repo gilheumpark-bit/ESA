@@ -265,6 +265,47 @@ describe('BREAKING-CAPACITY — 예상 단락전류 vs 차단용량', () => {
   });
 });
 
+describe('KEC 212.7.2 — 별도 과부하·단락 보호장치의 통과에너지 협조', () => {
+  const devices: SLDComponent[] = [
+    { id: 'olr_1', type: 'relay', label: 'THR-1', position: pos },
+    { id: 'fuse_1', type: 'fuse', label: 'PF-1', position: pos },
+  ];
+
+  const coordinated = (letThrough: number, withstand: number): SLDConnection => ({
+    id: 'coord_1',
+    from: 'fuse_1',
+    to: 'olr_1',
+    overloadProtectionDeviceId: 'olr_1',
+    shortCircuitProtectionDeviceId: 'fuse_1',
+    shortCircuitLetThroughEnergyA2s: letThrough,
+    overloadProtectionWithstandEnergyA2s: withstand,
+    sourceIds: ['manufacturer:PF-1-THR-1:I2t'],
+  });
+
+  it.each([
+    [20_000, 25_000, 'PASS'],
+    [30_000, 25_000, 'FAIL'],
+  ] as const)('통과에너지 %iA²s와 과부하장치 내량 %iA²s를 직접 비교해 %s', (letThrough, withstand, severity) => {
+    const result = reviewAnalysis(analysisOf(devices, [coordinated(letThrough, withstand)]));
+    const finding = result.findings.find((item) => item.rule === 'OVERLOAD-SHORT-CIRCUIT-COORDINATION');
+
+    expect(finding?.severity).toBe(severity);
+    expect(finding?.limit?.source).toContain('KEC 212.7.2');
+  });
+
+  it('두 에너지값이 있어도 장치 식별·출처 계약이 끊기면 UNKNOWN으로 닫는다', () => {
+    const connection = {
+      ...coordinated(20_000, 25_000),
+      overloadProtectionDeviceId: 'missing-device',
+      sourceIds: [],
+    };
+    const result = reviewAnalysis(analysisOf(devices, [connection]));
+
+    expect(result.findings.find((item) => item.rule === 'OVERLOAD-SHORT-CIRCUIT-COORDINATION'))
+      .toEqual(expect.objectContaining({ severity: 'UNKNOWN' }));
+  });
+});
+
 describe('TR-MAIN-CURRENT — 정격 2차전류 (독립 손계산 known-answer)', () => {
   it('3φ 1000kVA·380V → 1519A (kVA×1000/(√3×380) = 1519.34…) · INFO(부합 판정 아님)', () => {
     const r = reviewAnalysis(analysisOf([

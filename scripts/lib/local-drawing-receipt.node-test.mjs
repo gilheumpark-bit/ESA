@@ -143,6 +143,24 @@ test('모호성은 HOLD로 남기고 구조 계약 위반은 FAIL로 구분한�
   assert.equal(failed.summary.overall, 'FAIL');
 });
 
+test('기호 근거 없이 래스터 선만 검출된 결과는 공간 분석 PASS가 아니다', () => {
+  const document = completeDocument();
+  document.evidenceGraph.symbols = [];
+  document.evidenceGraph.texts = [];
+  document.evidenceGraph.relations = [];
+  document.evidenceGraph.lines = Array.from({ length: 20 }, (_, index) => ({
+    id: `line-${index}`,
+    displayId: `P01-L${String(index + 1).padStart(3, '0')}`,
+    certainty: 'ambiguous',
+    evidence: [{ evidenceId: `raster-${index}` }],
+  }));
+
+  const result = receipt.reasoningStageEvidenceFromDocument(document);
+  const spatial = result.stages.find((stage) => stage.id === 'spatial-reconciliation');
+  assert.equal(spatial.status, 'HOLD');
+  assert.equal(spatial.evidence.noGraphEvidence, true);
+});
+
 test('근거가 없는 SUPPORTED 제안과 허위 verified95는 최종 단계에서 실패한다', () => {
   const forged = completeDocument();
   forged.recommendations[0] = {
@@ -219,6 +237,22 @@ test('VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한�
   const recognition = result.stages.find((stage) => stage.id === 'symbol-text-adjudication');
   assert.equal(recognition.status, 'PASS');
   assert.equal(recognition.evidence.actualSymbolTypes.breaker, 2);
+  assert.deepEqual(recognition.evidence.minimumLabelMismatches, []);
+});
+
+test('surge_arrester는 arrester 골든 축으로 집계한다', () => {
+  const document = completeDocument();
+  document.evidenceGraph.symbols.push({
+    id: 's3', displayId: 'P01-S003', typeCandidates: ['surge_arrester'],
+    certainty: 'ambiguous', evidence: [{ evidenceId: 'e5' }],
+  });
+
+  const result = receipt.reasoningStageEvidenceFromDocument(document, {
+    expected: { minimumSymbolTypes: { arrester: 1 } },
+  });
+  const recognition = result.stages.find((stage) => stage.id === 'symbol-text-adjudication');
+  assert.equal(recognition.status, 'HOLD');
+  assert.equal(recognition.evidence.actualSymbolTypes.arrester, 1);
   assert.deepEqual(recognition.evidence.minimumLabelMismatches, []);
 });
 

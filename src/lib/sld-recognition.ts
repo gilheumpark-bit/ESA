@@ -127,6 +127,14 @@ export interface SLDConnection {
   breakingCapacityKA?: number;
   /** 명시된 IEC 반한시 보호곡선. */
   protectionCurve?: 'SI' | 'VI' | 'EI';
+  /** KEC 212.7.2에서 과부하 보호를 담당하는 별도 장치의 component id. */
+  overloadProtectionDeviceId?: string;
+  /** KEC 212.7.2에서 단락 보호를 담당하는 별도 장치의 component id. */
+  shortCircuitProtectionDeviceId?: string;
+  /** 단락 보호장치의 제조사 보증 통과에너지 I²t (A²s). */
+  shortCircuitLetThroughEnergyA2s?: number;
+  /** 과부하 보호장치가 손상 없이 견디는 제조사 보증 에너지 I²t (A²s). */
+  overloadProtectionWithstandEnergyA2s?: number;
   /** 위 조건·정격을 읽은 원본 텍스트/역할 근거 ID. */
   sourceIds?: string[];
   /** 도면에 명시된 유효전력 흐름. 추정값은 넣지 않는다. */
@@ -372,6 +380,10 @@ Return ONLY valid JSON with this structure:
       "prospectiveFaultCurrentKA": "number or null (explicit prospective fault current in kA)",
       "breakingCapacityKA": "number or null (explicit rated breaking capacity in kA)",
       "protectionCurve": "SI|VI|EI|null (only when explicitly printed)",
+      "overloadProtectionDeviceId": "component id or null (separate overload protection device only)",
+      "shortCircuitProtectionDeviceId": "component id or null (separate short-circuit protection device only)",
+      "shortCircuitLetThroughEnergyA2s": "number or null (manufacturer I-squared-t in A-squared-seconds only)",
+      "overloadProtectionWithstandEnergyA2s": "number or null (manufacturer withstand I-squared-t in A-squared-seconds only)",
       "sourceIds": ["visible evidence IDs supporting the conditions above"],
       "activePower": "string or null (e.g. 75 MW)",
       "reactivePower": "string or null (e.g. 23 MVAR)",
@@ -402,7 +414,8 @@ Return ONLY valid JSON with this structure:
 - Include length only when a numeric value and unit are explicitly printed on the drawing
 - Set parallelCount only when the drawing explicitly prints two or more parallel cable runs (for example "2R", "2 RUN", "2×1C", or two parallel cable sets with a shared cable callout). Otherwise return null; never infer it from line thickness or phase conductors
 - Keep parallelCount separate from groupedCircuitCount. A parallel cable run count is not a KEC grouping correction count
-- Set installationMethod, ambientTemperature, groupedCircuitCount, prospectiveFaultCurrentKA, breakingCapacityKA, and protectionCurve only when the drawing explicitly labels them. Do not fill standard defaults
+- Set installationMethod, ambientTemperature, groupedCircuitCount, prospectiveFaultCurrentKA, breakingCapacityKA, protectionCurve, and every protection-energy field only when the drawing explicitly labels them. Do not fill standard defaults
+- KEC 212.7.2 is not a generic upstream/downstream selectivity check. Populate the two device IDs and I-squared-t fields only for a documented pair of separate overload and short-circuit protection devices. Never derive I-squared-t from a curve image or invent it from device ratings
 - For every populated condition or protection field, include the exact visible evidence identifier in sourceIds. If no such field is present, return an empty sourceIds array
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
 - If printed text is too blurred, faint, or low-resolution to read with certainty, set that field to null. Do NOT pick the most likely digit. A scanned drawing where "5" and "6" are indistinguishable must yield null, not a guess — a wrong rating on a compliance report is worse than a missing one
@@ -469,6 +482,10 @@ const SLD_LOCAL_OUTPUT_SCHEMA = Object.freeze({
           prospectiveFaultCurrentKA: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 1_000 },
           breakingCapacityKA: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 1_000 },
           protectionCurve: { type: ['string', 'null'], enum: ['SI', 'VI', 'EI', null] },
+          overloadProtectionDeviceId: { type: ['string', 'null'] },
+          shortCircuitProtectionDeviceId: { type: ['string', 'null'] },
+          shortCircuitLetThroughEnergyA2s: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 1e18 },
+          overloadProtectionWithstandEnergyA2s: { type: ['number', 'null'], exclusiveMinimum: 0, maximum: 1e18 },
           sourceIds: { type: 'array', items: { type: 'string' }, maxItems: 32 },
           activePower: { type: ['string', 'null'] },
           reactivePower: { type: ['string', 'null'] },
@@ -488,6 +505,10 @@ const SLD_LOCAL_OUTPUT_SCHEMA = Object.freeze({
           'prospectiveFaultCurrentKA',
           'breakingCapacityKA',
           'protectionCurve',
+          'overloadProtectionDeviceId',
+          'shortCircuitProtectionDeviceId',
+          'shortCircuitLetThroughEnergyA2s',
+          'overloadProtectionWithstandEnergyA2s',
           'sourceIds',
           'activePower',
           'reactivePower',
@@ -728,6 +749,16 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       const protectionCurve = rawProtectionCurve && SLD_PROTECTION_CURVE_SET.has(rawProtectionCurve as NonNullable<SLDConnection['protectionCurve']>)
         ? rawProtectionCurve as NonNullable<SLDConnection['protectionCurve']>
         : undefined;
+      const rawOverloadProtectionDeviceId = boundedText(connection.overloadProtectionDeviceId, 128);
+      const overloadProtectionDeviceId = rawOverloadProtectionDeviceId && ids.has(rawOverloadProtectionDeviceId)
+        ? rawOverloadProtectionDeviceId
+        : undefined;
+      const rawShortCircuitProtectionDeviceId = boundedText(connection.shortCircuitProtectionDeviceId, 128);
+      const shortCircuitProtectionDeviceId = rawShortCircuitProtectionDeviceId && ids.has(rawShortCircuitProtectionDeviceId)
+        ? rawShortCircuitProtectionDeviceId
+        : undefined;
+      const shortCircuitLetThroughEnergyA2s = finiteNumber(connection.shortCircuitLetThroughEnergyA2s);
+      const overloadProtectionWithstandEnergyA2s = finiteNumber(connection.overloadProtectionWithstandEnergyA2s);
       const sourceIds = Array.isArray(connection.sourceIds)
         ? [...new Set(connection.sourceIds
           .slice(0, 32)
@@ -751,6 +782,14 @@ export function parseSLDResponse(text: string): SLDAnalysis {
         ...(hasConditionProvenance && prospectiveFaultCurrentKA != null && prospectiveFaultCurrentKA > 0 && prospectiveFaultCurrentKA <= 1_000 ? { prospectiveFaultCurrentKA } : {}),
         ...(hasConditionProvenance && breakingCapacityKA != null && breakingCapacityKA > 0 && breakingCapacityKA <= 1_000 ? { breakingCapacityKA } : {}),
         ...(hasConditionProvenance && protectionCurve ? { protectionCurve } : {}),
+        ...(hasConditionProvenance && overloadProtectionDeviceId ? { overloadProtectionDeviceId } : {}),
+        ...(hasConditionProvenance && shortCircuitProtectionDeviceId ? { shortCircuitProtectionDeviceId } : {}),
+        ...(hasConditionProvenance && shortCircuitLetThroughEnergyA2s != null && shortCircuitLetThroughEnergyA2s > 0 && shortCircuitLetThroughEnergyA2s <= 1e18
+          ? { shortCircuitLetThroughEnergyA2s }
+          : {}),
+        ...(hasConditionProvenance && overloadProtectionWithstandEnergyA2s != null && overloadProtectionWithstandEnergyA2s > 0 && overloadProtectionWithstandEnergyA2s <= 1e18
+          ? { overloadProtectionWithstandEnergyA2s }
+          : {}),
         ...(hasConditionProvenance ? { sourceIds } : {}),
         ...optionalTextField('activePower', connection.activePower),
         ...optionalTextField('reactivePower', connection.reactivePower),

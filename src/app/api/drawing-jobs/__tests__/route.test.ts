@@ -153,6 +153,25 @@ describe('drawing jobs API ownership and input boundary', () => {
     }));
   });
 
+  it('gives a high-effort cloud drawing enough time for a 16-region council', async () => {
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job: { jobId: 'job-cloud-high', status: 'COMPLETE', estimated: {} },
+      document: { documentHash: 'a'.repeat(64), jobStatus: 'COMPLETE' },
+    } as never);
+
+    const response = await POST(formRequest({
+      provider: 'google-agent-platform',
+      apiKey: 'request-owned-google-key',
+      model: 'gemini-3.6-flash',
+      effort: 'high',
+    }));
+
+    expect(response.status).toBe(200);
+    expect(runDocumentAnalysis).toHaveBeenCalledWith(expect.objectContaining({
+      budget: expect.objectContaining({ deadlineMs: 570_000 }),
+    }));
+  });
+
   it('rejects an unsupported drawing reasoning effort before analysis', async () => {
     const response = await POST(formRequest({
       provider: 'chatgpt-local',

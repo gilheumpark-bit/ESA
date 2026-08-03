@@ -97,6 +97,51 @@ describe('SLD recognition response validation', () => {
       sourceIds: ['text:callout-1'],
     }));
   });
+
+  it('preserves only source-backed KEC 212.7.2 device-pair energy evidence', () => {
+    const parsed = parseSLDResponse(JSON.stringify({
+      components: [
+        { id: 'olr_1', type: 'relay', label: 'THR-1', position: { x: 10, y: 20 } },
+        { id: 'fuse_1', type: 'fuse', label: 'PF-1', position: { x: 80, y: 20 } },
+      ],
+      connections: [{
+        id: 'coord_1',
+        from: 'fuse_1',
+        to: 'olr_1',
+        overloadProtectionDeviceId: 'olr_1',
+        shortCircuitProtectionDeviceId: 'fuse_1',
+        shortCircuitLetThroughEnergyA2s: 20_000,
+        overloadProtectionWithstandEnergyA2s: 25_000,
+        sourceIds: ['manufacturer:PF-1-THR-1:I2t'],
+      }],
+      confidence: 0.9,
+    }));
+
+    expect(parsed.connections[0]).toEqual(expect.objectContaining({
+      overloadProtectionDeviceId: 'olr_1',
+      shortCircuitProtectionDeviceId: 'fuse_1',
+      shortCircuitLetThroughEnergyA2s: 20_000,
+      overloadProtectionWithstandEnergyA2s: 25_000,
+      sourceIds: ['manufacturer:PF-1-THR-1:I2t'],
+    }));
+
+    const withoutSource = parseSLDResponse(JSON.stringify({
+      components: [
+        { id: 'olr_1', type: 'relay', position: { x: 10, y: 20 } },
+        { id: 'fuse_1', type: 'fuse', position: { x: 80, y: 20 } },
+      ],
+      connections: [{
+        id: 'coord_1', from: 'fuse_1', to: 'olr_1',
+        overloadProtectionDeviceId: 'olr_1', shortCircuitProtectionDeviceId: 'fuse_1',
+        shortCircuitLetThroughEnergyA2s: 20_000, overloadProtectionWithstandEnergyA2s: 25_000,
+        sourceIds: [],
+      }],
+      confidence: 0.9,
+    }));
+    expect(withoutSource.connections[0]).not.toEqual(expect.objectContaining({
+      shortCircuitLetThroughEnergyA2s: expect.any(Number),
+    }));
+  });
 });
 
 describe('generateCalcChainFromSLD — dependsOn 동적 결박 (버그 사냥 F7)', () => {

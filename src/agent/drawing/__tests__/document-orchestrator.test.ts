@@ -13,6 +13,15 @@ async function makePng(width = 100, height = 80): Promise<ArrayBuffer> {
   return Uint8Array.from(png).buffer;
 }
 
+async function makeNetworkPng(): Promise<ArrayBuffer> {
+  const png = await sharp(Buffer.from(`
+    <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+      <rect width="400" height="300" fill="white"/>
+      <path d="M40 150 H360 M200 30 V270" stroke="black" stroke-width="3"/>
+    </svg>`)).png().toBuffer();
+  return Uint8Array.from(png).buffer;
+}
+
 describe('document-orchestrator + evaluator', () => {
   beforeEach(() => {
     _resetJobsForTests();
@@ -131,7 +140,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('resumes the same owned job and calls only pages that did not complete', async () => {
     const quality = {
-      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 0.01,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
     };
@@ -202,7 +211,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('retries failed precision coverage up to the gap-rescan limit', async () => {
     const quality = {
-      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.2,
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.02,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: [],
     };
@@ -557,7 +566,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('does not claim vector coverage complete without a role audit receipt', async () => {
     const quality = {
-      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 0.01,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
     };
@@ -578,7 +587,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('credits individually completed vector roles while keeping incomplete audit coverage PARTIAL', async () => {
     const quality = {
-      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 0.01,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
     };
@@ -604,7 +613,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('enforces maxVlmCalls cumulatively across resume runs', async () => {
     const quality = {
-      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.2,
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.02,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: [],
     };
@@ -631,7 +640,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('keeps cancellation authoritative when it arrives during analysis', async () => {
     const quality = {
-      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 0.01,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
     };
@@ -656,7 +665,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('runs Vision precision review for a rendered vector PDF when a BYOK key is present', async () => {
     const quality = {
-      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 1,
+      width: 100, height: 80, channels: 4, contrast: 1, edgeDensity: 0.01,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: ['VECTOR_SOURCE'],
     };
@@ -751,7 +760,7 @@ describe('document-orchestrator + evaluator', () => {
 
   it('uses the selected source page dimensions for a non-contiguous page conflict fallback', async () => {
     const quality = {
-      width: 320, height: 240, channels: 4, contrast: 1, edgeDensity: 0.2,
+      width: 320, height: 240, channels: 4, contrast: 1, edgeDensity: 0.02,
       gradientVariance: 1, lowContrast: false, blurry: false,
       recommendedScale: 1 as const, warnings: [],
     };
@@ -862,7 +871,7 @@ describe('document-orchestrator + evaluator', () => {
           height: 80,
           channels: 4,
           contrast: 1,
-          edgeDensity: 0.1,
+          edgeDensity: 0.02,
           gradientVariance: 1,
           lowContrast: false,
           blurry: false,
@@ -907,5 +916,29 @@ describe('document-orchestrator + evaluator', () => {
     expect(observedSignal?.aborted).toBe(true);
     expect(Date.now() - started).toBeLessThan(600);
     expect(result.document.jobStatus).toBe('PARTIAL');
+  });
+
+  it('does not emit raster conductors when no symbol review survived', async () => {
+    const bytes = await makeNetworkPng();
+    const result = await runDocumentAnalysis({
+      bytes,
+      mimeType: 'image/png',
+      ownerId: 'owner-no-symbol-evidence',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 120, maxPixels: 1_000_000, deadlineMs: 60_000 },
+    }, {
+      executeTeam: async () => ({
+        teamId: 'TEAM-SLD',
+        success: false,
+        components: [],
+        connections: [],
+        confidence: 0,
+        durationMs: 0,
+        error: 'all symbol roles failed',
+      }),
+    });
+
+    expect(result.document.evidenceGraph.symbols).toHaveLength(0);
+    expect(result.document.evidenceGraph.lines).toHaveLength(0);
   });
 });

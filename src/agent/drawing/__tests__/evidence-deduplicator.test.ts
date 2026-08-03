@@ -52,6 +52,37 @@ describe('drawing evidence numbering and merge', () => {
     expect(lines).toHaveLength(2);
   });
 
+  it('does not count a labelled PTx3 instrument transformer as a power transformer', () => {
+    const symbols = deduplicateSymbols([{
+      localId: 'pt-misread',
+      type: 'transformer',
+      label: 'PTx3 380/110V',
+      bounds: { x: 10, y: 10, w: 20, h: 20 },
+      confidence: 0.94,
+      pageIndex: 0,
+      regionId: 'mcc-crop',
+    }]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]).toMatchObject({
+      typeCandidates: ['vt_pt'],
+      rawLabel: 'PTx3 380/110V',
+    });
+  });
+
+  it('merges the same conductor when reviewers disagree only between bus and power, but keeps ground separate', () => {
+    const lines = deduplicateLines([
+      { localId: 'full-bus', lineKind: 'bus', path: [{ x: 0, y: 100 }, { x: 400, y: 100 }], confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'crop-power', lineKind: 'power', path: [{ x: 2, y: 101 }, { x: 398, y: 101 }], confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      { localId: 'ground', lineKind: 'ground', path: [{ x: 0, y: 100 }, { x: 400, y: 100 }], confidence: 0.9, pageIndex: 0, regionId: 'ground' },
+    ]);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({ lineKind: 'bus' });
+    expect(lines[0].evidence.map((item) => item.regionId)).toEqual(['full', 'crop']);
+    expect(lines[1]).toMatchObject({ lineKind: 'ground' });
+  });
+
   it('merges substantially overlapping collinear line reads but keeps offset parallel lines separate', () => {
     const lines = deduplicateLines([
       { localId: 'full', lineKind: 'power', path: [{ x: 100, y: 0 }, { x: 100, y: 300 }], confidence: 0.79, pageIndex: 0, regionId: 'full' },
@@ -73,6 +104,65 @@ describe('drawing evidence numbering and merge', () => {
     expect(symbols).toHaveLength(1);
     expect(symbols[0]).toMatchObject({ typeCandidates: ['breaker'], certainty: 'ambiguous' });
     expect(symbols[0].evidence).toHaveLength(2);
+  });
+
+  it('merges strongly overlapping full-page and crop reads despite center drift but keeps adjacent repeated devices separate', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'full-a', type: 'transformer', bounds: { x: 100, y: 100, w: 58, h: 90 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'crop-a', type: 'transformer', bounds: { x: 102, y: 136, w: 55, h: 88 }, confidence: 0.88, pageIndex: 0, regionId: 'crop' },
+      { localId: 'adjacent-b', type: 'transformer', bounds: { x: 205, y: 100, w: 58, h: 90 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+    ]);
+
+    expect(symbols).toHaveLength(2);
+    expect(symbols[0].evidence.map((item) => item.regionId)).toEqual(['full', 'crop']);
+    expect(symbols[0].evidence).toHaveLength(2);
+    expect(symbols[1].evidence).toHaveLength(1);
+  });
+
+  it('merges a full-page symbol shifted by crop padding when more than half of the physical glyph overlaps', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'crop', type: 'transformer', bounds: { x: 128, y: 724, w: 59, h: 86 }, confidence: 0.95, pageIndex: 0, regionId: 'crop' },
+      { localId: 'full', type: 'transformer', bounds: { x: 130, y: 758, w: 60, h: 91 }, confidence: 0.95, pageIndex: 0, regionId: 'full' },
+      { localId: 'next-device', type: 'transformer', bounds: { x: 345, y: 724, w: 59, h: 86 }, confidence: 0.95, pageIndex: 0, regionId: 'crop' },
+    ]);
+
+    expect(symbols).toHaveLength(2);
+    expect(symbols[0].evidence.map((item) => item.regionId)).toEqual(['crop', 'full']);
+  });
+
+  it('merges the same house at the measured full-page/crop shift while keeping the next house', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'crop-house', type: 'load', bounds: { x: 85, y: 844, w: 80, h: 79 }, confidence: 0.95, pageIndex: 0, regionId: 'crop' },
+      { localId: 'full-house', type: 'load', bounds: { x: 84, y: 878, w: 78, h: 88 }, confidence: 0.95, pageIndex: 0, regionId: 'full' },
+      { localId: 'next-house', type: 'load', bounds: { x: 187, y: 844, w: 80, h: 79 }, confidence: 0.95, pageIndex: 0, regionId: 'crop' },
+    ]);
+
+    expect(symbols).toHaveLength(2);
+    expect(symbols[0].evidence.map((item) => item.regionId)).toEqual(['crop', 'full']);
+  });
+
+  it('uses every retained receipt when merging a later partial symbol read and folds transformer winding aliases into the physical transformer', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'partial', type: 'transformer_winding', bounds: { x: 100, y: 100, w: 60, h: 40 }, confidence: 0.9, pageIndex: 0, regionId: 'crop-a' },
+      { localId: 'whole', type: 'transformer', bounds: { x: 100, y: 100, w: 60, h: 90 }, confidence: 0.95, pageIndex: 0, regionId: 'full' },
+      { localId: 'lower-winding', type: 'transformer_winding', bounds: { x: 100, y: 135, w: 60, h: 55 }, confidence: 0.9, pageIndex: 0, regionId: 'crop-b' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0]).toMatchObject({ typeCandidates: ['transformer'], confirmedType: 'transformer' });
+    expect(symbols[0].evidence.map((item) => item.regionId)).toEqual(['crop-a', 'full', 'crop-b']);
+  });
+
+  it('merges a cropped roof-only load into the complete house without swallowing the adjacent house', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'adjacent', type: 'load', bounds: { x: 143, y: 530, w: 79, h: 82 }, confidence: 0.95, pageIndex: 0, regionId: 'full' },
+      { localId: 'roof-only', type: 'house_load', bounds: { x: 211, y: 524, w: 51, h: 26 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      { localId: 'complete', type: 'load', bounds: { x: 246, y: 527, w: 81, h: 82 }, confidence: 0.95, pageIndex: 0, regionId: 'full' },
+    ]);
+
+    expect(symbols).toHaveLength(2);
+    expect(symbols.find((item) => item.evidence.some((evidence) => evidence.regionId === 'crop'))?.evidence)
+      .toHaveLength(2);
   });
 
   it('merges breaker and circuit_breaker aliases at the same coordinates', () => {
@@ -109,6 +199,20 @@ describe('drawing evidence numbering and merge', () => {
     expect(buildPageRelations(symbols, lines, 0)).toEqual([
       expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[0].id, certainty: 'ambiguous' }),
     ]);
+  });
+
+  it('allows a small anti-alias gap only for ambiguous fallback lines when binding intermediate loads', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'left', type: 'load', bounds: { x: 20, y: 50, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'symbols' },
+      { localId: 'middle', type: 'load', bounds: { x: 90, y: 50, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'symbols' },
+      { localId: 'right', type: 'load', bounds: { x: 160, y: 50, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'symbols' },
+    ]);
+    const ambiguous = deduplicateLines([
+      { localId: 'fallback', lineKind: 'unknown', path: [{ x: 30, y: 42 }, { x: 170, y: 42 }], confidence: 0.65, pageIndex: 0, regionId: 'fallback', certainty: 'ambiguous' },
+    ]);
+
+    expect(buildPageRelations(symbols, ambiguous, 0)).toHaveLength(2);
+    expect(buildPageRelations(symbols, ambiguous, 0).every((relation) => relation.certainty === 'ambiguous')).toBe(true);
   });
 
   it('binds a line endpoint anywhere on a long busbar bounds, not only near its center', () => {
@@ -168,6 +272,21 @@ describe('drawing evidence numbering and merge', () => {
 
     expect(buildPageRelations(symbols, lines, 0)).toEqual([
       expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, lineId: lines[1].id, certainty: 'ambiguous' }),
+    ]);
+  });
+
+  it('reconciles two crop-edge conductor fragments into an ambiguous device relation', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'transformer', type: 'transformer', bounds: { x: 90, y: 0, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'top' },
+      { localId: 'load', type: 'load', bounds: { x: 90, y: 180, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'bottom' },
+    ]);
+    const lines = deduplicateLines([
+      { localId: 'top-fragment', lineKind: 'power', path: [{ x: 100, y: 20 }, { x: 100, y: 90 }], confidence: 0.9, pageIndex: 0, regionId: 'top' },
+      { localId: 'bottom-fragment', lineKind: 'power', path: [{ x: 100, y: 110 }, { x: 100, y: 180 }], confidence: 0.9, pageIndex: 0, regionId: 'bottom' },
+    ]);
+
+    expect(buildPageRelations(symbols, lines, 0)).toEqual([
+      expect.objectContaining({ from: symbols[0].id, to: symbols[1].id, certainty: 'ambiguous' }),
     ]);
   });
 
