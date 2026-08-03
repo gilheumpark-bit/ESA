@@ -45,6 +45,7 @@
 |---|---|---|
 | [VALIDATION_EVIDENCE](VALIDATION_EVIDENCE.md) | 검증 원장 | 공개·합성 교보재, 커밋, 재실행 명령 |
 | [2026-08-02 도면 누수·공개 교보재·KEC 검증](project/handoffs/2026-08-02-drawing-leakage-public-kec-validation.md) | 최신 작업 기록 | 공개·국내 추가 실도면, 누수 수리, KEC 자동 검토 범위와 남은 결함 |
+| [2026-08-03 고밀도 도면·KEC 212.7.2 후속 수리](project/handoffs/2026-08-03-drawing-density-kec-212-7-2-repair.md) | 최신 작업 기록 | 적응형 구획, 래스터 선 보조, 고밀도 실호출, 정확한 212.7.2 계약과 남은 HOLD |
 | [DRAWING_VALIDATION_RESULT](DRAWING_VALIDATION_RESULT.md) | 역사적 결과 스냅샷 | 당시 도면 fixture 판독 결과와 결함 |
 | [DRAWING_ANALYSIS_AUDIT](DRAWING_ANALYSIS_AUDIT.md) | 역사적 감사 | 특정 리비전의 분석 경로 점검 |
 | [DRAWING_VALIDATION_PLAN](DRAWING_VALIDATION_PLAN.md) | 역사적 계획 | 초기 교보재 검증 계획 |

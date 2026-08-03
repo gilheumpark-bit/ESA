@@ -13,6 +13,9 @@ All notable changes to ESVA are documented in this file.
   `scripts/__tests__/pre-commit-hook.test.ts` 가 임시 저장소에서 실행해 검증한다.
 
 ### Fixed
+- **고밀도 도면 관계 복원** — 페이지 밀도별 2×2·3×3·4×4 구획, 기호 심사가 살아 있는 페이지의 결정론적 래스터 직선 보조, 구획 선망 재조립과 물리 장치 중복 제거를 graph v7에 결박했다. 추론 관계는 확정으로 승격하지 않는다.
+- **도면 고추론 제한시간** — high 문서 예산을 570초로 맞추고 Agent Platform은 동시 8호출을 사용한다. 문서 기한에 도달해도 이미 완료된 독립 심사 봉투는 버리지 않는다.
+- **KEC 212.7.2 오해 방지** — 별도 과부하·단락 보호장치의 ID·통과에너지·무손상 내량·출처가 모두 있을 때만 A²s를 비교한다. 일반적인 상·하위 선택협조로 오표기하거나 보호곡선 하나에서 값을 추정하지 않는다.
 - **Agent Platform 도면 실호출** — Express Mode가 필수로 요구하는
   `contents[].role=user`가 빠져 실제 SLD가 502로 끝나던 문제를 SLD·OCR·구획
   VLM·역할 호출 전체에서 수리했다. Gemini thought 파트는 최종 JSON에서 제외한다.

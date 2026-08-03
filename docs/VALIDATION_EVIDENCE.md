@@ -117,6 +117,16 @@
 
 **수행 주체 확인**: 각 행의 커밋 작성자와 트레일러는 `git show -s --format=fuller <sha>`로 확인한다. 도구 이름이나 세션 기억은 실증 결과의 대체 근거로 사용하지 않는다.
 
+## 8차 고밀도 도면·graph v7·KEC 212.7.2 수리
+
+2026-08-03 공개 고밀도 MCC를 Agent Platform high로 다시 실행했다. 최종 실호출은 202.5초, 실제 provider 호출 55회, 기호 136개, 선 223개, 문자 212개, 관계 176개를 기록했다. 17개 계획 구획 중 16개가 완료됐고 coverage auditor 1개만 충돌했다. 호출 뒤 확정한 PT/VT와 피뢰기 별칭을 같은 봉투에 결정론적으로 재적용한 결과는 PASS 2·HOLD 7·FAIL 0이다. OCR 후보 212건, 경계 연속성 20건, 불확실 관계 152건, 근거 추적률 17.3%가 남아 전체 판정은 HOLD다.
+
+북미 반복 분기 도면은 앞선 실호출 봉투를 graph v7로 재조립해 변압기 10/10, 버스 4/4, 부하 21/21과 관계 37건을 회수했다. 다만 관계는 confirmed 2건, ambiguous 35건이다. 이는 결정론적 조립 개선 증거이며 독립 edge 정답 기반 정확도 증거가 아니다.
+
+코드 `2bf0ca6f8242c39bb3f036d529b5007a70b19ee8`에서 타입 검사, 경고 0 ESLint, 전체 Jest(332 suites·4,017 tests 통과, 1 suite·1 test skip), production build, PDF 실경로 gate 17/17, V3 계약 6/6, production SLD benchmark 1/1이 통과했다. golden gate는 독립 실도면 라벨·예측·서명 부재를 이유로 의도대로 exit 1과 `verified95=false`를 반환했다.
+
+KEC 212.7.2 판정은 별도 과부하·단락 보호장치의 ID, 단락장치 통과에너지(A²s), 과부하장치 무손상 내량(A²s), source ID가 모두 있는 경우로 제한했다. 원문은 [국가법령정보센터 KEC PDF](https://www.law.go.kr/flDownload.do?flSeq=158125635)와 [대한전기협회 KEC eBook](https://kec.kea.kr/sub_tech/regulation_book.php?cate=2024-2-2&mode=ebook)에서 대조했다.
+
 ## 재실증 레시피 (앵커 재실행)
 
 | 명령 | 전제 | 커버 |
@@ -158,4 +168,4 @@ fixtures/
 새 실증을 수행하면 이 표에 행을 추가한다(커밋 SHA·교보재 경로·결과·재실행 게이트).
 **앵커 없는 실증 주장은 이 원장에 올릴 수 없다** — 이 문서 자체에도 적용된다.
 
-> 현재 커밋 제품 기준선: `054ab0c8f9efcf6fbcf3435ba23fa535b83cd8e3`. 이번 수리의 라이브 모델 영수증은 각 파일의 `workspaceSnapshot`에 dirty snapshot 해시를 별도로 기록했다. 새 제품 코드가 착지하면 위 명령을 같은 리비전에서 다시 실행하고 결과 차이를 기록한다.
+> 현재 커밋 제품 기준선: `2bf0ca6f8242c39bb3f036d529b5007a70b19ee8`. 이번 수리의 라이브 모델 영수증은 각 파일의 `workspaceSnapshot`에 호출 당시 dirty snapshot 해시를 별도로 기록했다. 현재 결정론 재평가는 호출 결과와 분리해 기록한다.

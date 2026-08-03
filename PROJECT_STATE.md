@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: ad95dbc1379e53c6305f29f4aa36a65c84c88051
-updatedAt: 2026-08-03T11:42:54+09:00
+codeBaselineCommit: 2bf0ca6f8242c39bb3f036d529b5007a70b19ee8
+updatedAt: 2026-08-03T13:35:00+09:00
 trigger: architecture
 changedDomains: [app, lib, agent, engine, docs, scripts, ci]
 ---
@@ -78,9 +78,10 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 구획 경계에서 끊긴 수직 분기선을 버스 선망까지 추적하되 평행선은 합치지 않는 관계 보완을 추가했다. 공개 중급 결선도에서 관계 회수율이 33%에서 100%로 상승했으며, 추론 관계는 `ambiguous`로 유지한다.
 - `disconnector`·`isolator`를 switch 평가 축으로 통합하고, 구조화 모델이 null 대신 내보낸 `voltageV: 0`은 전압 주장으로 쓰지 않고 속성만 생략해 나머지 독립 논리 근거를 보존한다.
 - Google Agent Platform과 OpenAI 도면 역할 호출에 역할별 JSON Schema를 실제 provider 요청으로 전달했다. Google의 nullable dialect로 변환하고, 파손된 provider 봉투·역할 payload는 같은 검증 범위 안에서 재시도한다.
-- Vision이 차단기·변압기를 관통하는 긴 선 하나를 반환해도 선 위 중간 기기를 순서대로 찾아 인접 관계로 분해한다. 그래프 조립 버전을 `evidence-graph-continuity-v3`로 올려 이전 캐시를 재사용하지 않는다.
+- Vision이 차단기·변압기를 관통하는 긴 선 하나를 반환해도 선 위 중간 기기를 순서대로 찾아 인접 관계로 분해한다. 구획 경계의 일반 선 조각은 인접 선망과 최소 연결 트리로 재조립하되 추론 관계는 `ambiguous`를 유지한다. 그래프 조립 버전은 `evidence-graph-continuity-v7`이다.
+- 페이지 확대 비율과 선·기호 밀도에 따라 2×2·3×3·4×4 구획을 선택한다. 기호 심사가 하나 이상 살아 있는 래스터 페이지에서만 결정론적 직선 검출을 보조 근거로 사용하며, 문자·기기 내부 선과 고립된 짧은 선은 제외한다.
 - 비연속 페이지 요청의 논리 충돌 bounds가 배열 위치가 아니라 실제 `pageIndex`의 폭·높이를 사용하도록 수리했다.
-- 도면 connection/spec 계약에 설치방법·주위온도·집합회로 수·예상 단락전류·차단용량·보호곡선·출처 ID를 추가했다. 근거 없는 케이블 허용전류 판정은 UNKNOWN이고, 출처가 완결된 경우 KEC 케이블 계산기와 212.5 차단용량 비교가 실제로 실행된다.
+- 도면 connection/spec 계약에 설치방법·주위온도·집합회로 수·예상 단락전류·차단용량·보호곡선·출처 ID를 추가했다. 근거 없는 케이블 허용전류 판정은 UNKNOWN이고, 출처가 완결된 경우 KEC 케이블 계산기와 212.5 차단용량 비교가 실제로 실행된다. KEC 212.7.2는 서로 다른 과부하·단락 보호장치 ID와 양쪽 에너지값(A²s), 원본 source ID가 모두 있을 때만 단락장치 통과에너지와 과부하장치 무손상 내량을 비교한다.
 
 ## 부분 완료
 
@@ -93,6 +94,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 일반 채팅은 계산 영수증을 결박하지만 기준서 검색 결과를 같은 모델 호출의 검색 근거로 자동 합성하는 RAG 도구 호출은 아직 분리돼 있다. 정확한 조항 답변은 원문 조회 필요 상태를 유지한다.
 - `chatgpt-local`은 현재 ESA와 Codex를 같은 PC에서 실행하는 POC만 지원한다. 공개 배포용 사용자 PC 연결 도우미와 pairing은 미구현이며 휴면 대장에 분리했다.
 - 2026-08-03 동일 snapshot 3×3 high 재실행은 Gemini 72.3%/222초, Terra 72.0%/411.7초, Sol 51.0%/466.7초였고 9개 모두 엄격 최종 품질 FAIL이었다. 이후 관계 조립 수리 snapshot에서 Gemini 중급은 51%·관계 33%에서 78%·관계 100%로, 최신 초급 공개 단선도는 기호·관계 100%·116.8초·19호출로 재실행됐다. 최신 초급 결과도 OCR·경계 연속성·근거율 때문에 최종 문서는 PARTIAL/HOLD다. 서로 다른 snapshot을 섞은 모델 순위나 일반화 80%는 주장하지 않는다.
+- 고밀도 MCC Agent Platform high 재실행은 202.5초·55호출에서 136기호·223선·212문자·176관계를 회수했다. 같은 봉투를 현재 결정론 계층으로 재조립하면 FAIL 0, PASS 2, HOLD 7이며 최종 상태는 HOLD다. 북미 반복 분기 도면도 같은 실호출 봉투의 재조립에서 변압기 10/10·버스 4/4·부하 21/21과 관계 37건을 회수했지만, 35건이 추론 관계라 독립 edge 정확도로 승격하지 않는다.
 
 ## 미검증
 
@@ -103,15 +105,15 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 실제 Weaviate 컬렉션의 insert→검색→재연결과 전용 보안 스캐너 결과.
 - 실제 Gemini·OpenAI·Claude로 초급·중급·고급 일반 전기 질문을 반복 호출한 정답성·근거성·제안 품질 비교.
 - 초·중·고 도면의 모델별 1회 비교는 완료했지만, 같은 snapshot에서 모델별 3회 이상 반복한 분산·누락·오탐·비용 비교는 아직 미검증이다.
-- 공개 북미 배전도에서 변압기 10/10, 부하 20/21만 검출하고 34기기 중 10결선만 복원했다. 초급 긴 선 분할은 수리됐지만 반복 분기 도면의 관계 복원은 여전히 약하다.
-- KEC 자동 검토는 AF/AT, 출처가 완결된 케이블 허용전류, 예상 단락전류-차단용량(212.5), 변압기 2차 전류와 증거 완결 케이블 계산을 다룬다. 212.7 보호협조, 접지·감전, 케이블 단락내량, SPD·피뢰, 전동기 보호는 미검증 또는 미구현이다.
+- 공개 북미 배전도의 최신 결정론적 재조립은 수량을 맞췄지만 관계 37건 중 35건이 `ambiguous`다. 독립 정답 관계 라벨과 같은 snapshot 반복 실행이 없어 edge precision·recall은 아직 미검증이다.
+- KEC 자동 검토는 AF/AT, 출처가 완결된 케이블 허용전류, 예상 단락전류-차단용량(212.5), 별도 과부하·단락장치 통과에너지 협조(212.7.2), 변압기 2차 전류와 증거 완결 케이블 계산을 다룬다. 일반적인 상·하위 보호기 시간-전류 선택협조, 접지·감전, 케이블 단락내량, SPD·피뢰, 전동기 보호는 미검증 또는 미구현이다.
 
 ## 보류
 
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 코드 기준선은 `ad95dbc1379e53c6305f29f4aa36a65c84c88051`이고 최신 라이브 영수증은 그 직전 dirty snapshot 해시를 별도로 가진다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 현재 코드 기준선은 `2bf0ca6f8242c39bb3f036d529b5007a70b19ee8`이다. 최신 라이브 영수증은 호출 당시 dirty snapshot 해시를 별도로 가지고, 현재 결정론 계층 재채점과 혼합하지 않는다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
@@ -139,14 +141,15 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 2026-08-02 Agent Platform 공개 도면 추가 실측: 단선도는 정답 수량 전부·14기기·13결선·topology valid, 유럽 배전도는 변압기 4/4·부하 20/20·28기기·27결선, 북미 배전도는 변압기 10/10·부하 20/21·34기기·10결선, 실제 결선도는 QS1과 FU1~FU6 명칭을 모두 판독했다. 전기 정격·관계가 불완전한 3종은 의도대로 HOLD다.
 - 2026-08-02 국내 추가 실측: 비회로 치수 배치도는 0기기·0결선으로 phantom panel을 제거했고, 고밀도 MCC는 반복기기 분리 수리 후 43기기·15결선으로 증가했으나 관계 누락 때문에 HOLD다.
 - 2026-08-03 도면 분석 수리 snapshot: 타입 검사, 경고 0 ESLint, 전체 Jest(331 suites·3,979 tests 통과, 각 1개 skip), production build, 문서 검사, PDF gate 17/17, V3 전용 278 tests, Vision·팀 212 tests가 모두 exit 0이었다. Gemini 중급 표적 재실행은 관계 33%→100%, 종합 51%→78%로 개선됐으나 엄격 품질은 계속 FAIL이다.
-- 2026-08-03 `ad95dbc` 수리: 타입 검사, 경고 0 ESLint, 전체 Jest, production build, PDF 실경로 gate, V3 계약 gate가 exit 0이었다. 같은 공개 초급 단선도 Agent Platform high 실호출은 기기 100%·관계 14/13(100%)·116.8초·19호출이었고, 보수적 최종 상태는 PARTIAL/HOLD다.
+- 2026-08-03 `2bf0ca6` 수리: 타입 검사, 경고 0 ESLint, 전체 Jest(332 suites·4,017 tests 통과, 1 suite·1 test skip), production build, PDF 실경로 gate 17/17, V3 계약 6/6, production SLD benchmark 1/1이 exit 0이었다. `gate:sld-golden`은 실도면 독립 라벨·예측·서명 부재를 이유로 의도대로 exit 1과 `verified95=false`를 반환했다.
+- 같은 배치의 고밀도 MCC Agent Platform high 실호출은 202.5초·55호출·136기호·223선·212문자·176관계였고, 현재 결정론 보정 재생은 FAIL 0·PASS 2·HOLD 7이다. OCR 후보 212건, 경계 연속성 20건, 불확실 관계 152건, 근거 추적률 17.3%와 coverage auditor 충돌이 남아 전체 상태는 HOLD다.
 
 ## 다음 첫 행동
 
 1. 공개 교보재의 기호·문자·관계 정답표를 전기 실무자 2인 블라인드 판정과 불일치 합의 로그로 고정한다.
-2. 북미 배전도와 고밀도 MCC를 전체 이미지→4×4 구획→반복 기호 재스캔→전역 중복 제거로 실행해 edge recall을 우선 수리한다.
-3. 212.7 보호협조용 상·하위 두 보호곡선, 시간대별 동작값과 출처 계약을 설계하고 독립 정답 교보재로 검증한다.
-4. V3 `pageIndex`·provider schema·그래프 v3 수정 뒤 동일 MCC를 재실행하고, 공급자·모델별 동일 공개 데이터셋 3회 영수증을 만든다.
+2. 공급자·모델별로 같은 코드 snapshot과 같은 공개 데이터셋을 3회 실행해 누락·오탐·시간 분산을 분리한다.
+3. 고밀도 MCC의 OCR 후보, 경계 연속성, 불확실 관계와 낮은 근거 추적률을 독립 라벨별로 줄인다. 판정층 HOLD를 강제로 PASS로 바꾸지 않는다.
+4. 일반적인 상·하위 보호기 선택협조가 제품 범위에 필요하면 KEC 212.7.2와 별도 규칙으로 시간-전류 곡선 계약·정답 교보재를 먼저 설계한다.
 5. 스테이징 자격증명이 준비되면 Supabase, Stripe, Weaviate 순으로 write→persist→새 세션 read-back을 검증한다.
 
 ## 상세 문서
@@ -158,6 +161,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [최신 인수인계](docs/project/handoffs/2026-07-23-z-ai-chat-calculator-and-docs.md)
 - [Agent Platform·ChatGPT SLD 비교](docs/project/handoffs/2026-08-02-google-agent-chatgpt-sld-comparison.md)
 - [도면 누수·공개 교보재·KEC 검증](docs/project/handoffs/2026-08-02-drawing-leakage-public-kec-validation.md)
+- [고밀도 도면·KEC 212.7.2 후속 수리](docs/project/handoffs/2026-08-03-drawing-density-kec-212-7-2-repair.md)
 - [구조화 출력·관계 그래프·KEC 근거 수리](docs/project/handoffs/2026-08-03-drawing-schema-relations-kec-repair.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
