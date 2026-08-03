@@ -127,6 +127,38 @@
 
 KEC 212.7.2 판정은 별도 과부하·단락 보호장치의 ID, 단락장치 통과에너지(A²s), 과부하장치 무손상 내량(A²s), source ID가 모두 있는 경우로 제한했다. 원문은 [국가법령정보센터 KEC PDF](https://www.law.go.kr/flDownload.do?flSeq=158125635)와 [대한전기협회 KEC eBook](https://kec.kea.kr/sub_tech/regulation_book.php?cate=2024-2-2&mode=ebook)에서 대조했다.
 
+## 9차 로컬 모델 추론 단계 17조합 캘리브레이션
+
+2026-08-03에 `fixtures/drawings/external/wiring-real-sm.jpg` 한 장을 production `/api/drawing-jobs`에 넣어 GPT-5.5, GPT-5.6 Luna/Terra/Sol의 지원 추론 조합 17개를 같은 snapshot에서 순차 실행했다. 계정 모델 목록에 `light/minimal`이 없어 `low/medium/high/xhigh/max`를 사용했다. GPT-5.5의 max는 미지원으로 기록했고, Luna는 사용자 조건대로 high 이상만 실행했다.
+
+시간은 600초 안에서 점수화하지 않고 통과 경계로만 썼다. 후보 조건은 실제 모델·effort 지문 일치, 600초 이내, 문서 `COMPLETE`, 품질 `PASS`, 필수 역할 누락 0이다.
+
+| 모델 | effort | 라벨 | 관계 | 시간 | 누락 역할 수 | 실패 호출 | 최종 | 누락 역할 |
+|---|---|---:|---:|---:|---:|---:|---|---|
+| GPT-5.5 | low | 42% | 0% | 571.2초 | 5 | 64 | PARTIAL/FAIL | symbols, connections, text, logic, coverage-auditor |
+| GPT-5.5 | medium | 72% | 100% | 569.2초 | 1 | 7 | PARTIAL/FAIL | coverage-auditor |
+| GPT-5.5 | high | 42% | 0% | 571.5초 | 5 | 32 | PARTIAL/FAIL | symbols, connections, text, logic, coverage-auditor |
+| GPT-5.5 | xhigh | 73% | 100% | 581.4초 | 2 | 9 | PARTIAL/FAIL | symbols, coverage-auditor |
+| GPT-5.6 Luna | high | 42% | 0% | 571.0초 | 5 | 32 | PARTIAL/FAIL | symbols, connections, text, logic, coverage-auditor |
+| GPT-5.6 Luna | xhigh | 72% | 100% | 459.2초 | 3 | 10 | PARTIAL/FAIL | symbols, connections, coverage-auditor |
+| GPT-5.6 Luna | max | 42% | 0% | 571.0초 | 5 | 28 | PARTIAL/FAIL | symbols, connections, text, logic, coverage-auditor |
+| GPT-5.6 Terra | low | 74% | 100% | 398.0초 | 2 | 6 | PARTIAL/FAIL | connections, coverage-auditor |
+| GPT-5.6 Terra | medium | 42% | 0% | 570.7초 | 5 | 64 | PARTIAL/FAIL | symbols, connections, text, logic, coverage-auditor |
+| GPT-5.6 Terra | high | 88% | 100% | 421.1초 | 1 | 3 | PARTIAL/FAIL | coverage-auditor |
+| GPT-5.6 Terra | xhigh | 42% | 0% | 570.7초 | 2 | 29 | PARTIAL/FAIL | connections, coverage-auditor |
+| GPT-5.6 Terra | max | 99% | 100% | 487.5초 | 4 | 11 | PARTIAL/FAIL | symbols, connections, logic, coverage-auditor |
+| GPT-5.6 Sol | low | 92% | 100% | 571.4초 | 2 | 51 | PARTIAL/FAIL | connections, coverage-auditor |
+| GPT-5.6 Sol | medium | 76% | 100% | 454.4초 | 2 | 8 | PARTIAL/FAIL | connections, coverage-auditor |
+| GPT-5.6 Sol | high | 42% | 0% | 570.8초 | 2 | 29 | PARTIAL/FAIL | connections, coverage-auditor |
+| GPT-5.6 Sol | xhigh | 99% | 100% | 463.1초 | 3 | 7 | PARTIAL/FAIL | symbols, connections, coverage-auditor |
+| GPT-5.6 Sol | max | 56% | 0% | 571.5초 | 4 | 24 | PARTIAL/FAIL | symbols, connections, logic, coverage-auditor |
+
+**판정: 추천 후보 0/17.** Terra/high가 라벨 88%·관계 100%·누락 1역할·실패 3건으로 가장 덜 불완전했지만 coverage auditor가 없어 채택하지 않는다. Terra/max와 Sol/xhigh의 99%는 각각 필수 역할 4개와 3개가 빠진 부분 점수다.
+
+실패 기록 414건의 원인은 `LOCAL_CODEX_TIMEOUT` 281건, 문서 deadline/abort 93건, graph conflict 24건, malformed structured output 3건, 기타 13건이다. 따라서 이번 결과는 고급 모델 자체의 순수 판독 순위보다 **같은 effort를 30~48개 전체·구획 역할 호출에 일괄 적용하는 현재 구조의 포화**를 더 강하게 보여 준다. 다음 설계 안건은 단순 기호·문자 추출과 관계·논리·감사 합성의 effort를 분리하는 것이다. 이 변경은 별도 동일 snapshot A/B 없이 적용하지 않는다.
+
+실행 명령은 `npm run validate:drawing-effort-calibration -- --tiers=intermediate`이며 `--resume`, `--aggregate-only`, 모델·effort·tier 필터를 지원한다. 라이브 결과 snapshot은 `f70da7f6132ec04ec8db689385c49c1a3a4cf18c7e4d0368c77fe986d32d3b3a`, clean `0d475fc1961a3f9daab8687ae54551702590f037` 재채점은 동일 후보 0/17이다. 영수증은 `test-results/drawing-calibration-*.json`, 집계는 `test-results/drawing-effort-calibration.json`에 생성되며 Git에는 포함하지 않는다.
+
 ## 재실증 레시피 (앵커 재실행)
 
 | 명령 | 전제 | 커버 |

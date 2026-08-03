@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 2bf0ca6f8242c39bb3f036d529b5007a70b19ee8
-updatedAt: 2026-08-03T13:35:00+09:00
+codeBaselineCommit: 0d475fc1961a3f9daab8687ae54551702590f037
+updatedAt: 2026-08-03T17:04:00+09:00
 trigger: architecture
-changedDomains: [app, lib, agent, engine, docs, scripts, ci]
+changedDomains: [lib, agent, docs, scripts]
 ---
 
 # ESA 프로젝트 상태
@@ -68,7 +68,9 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 반복 기호 집계, 비회로 면 phantom 기기, V3 역할 오류 은폐, 절단 JSON·루트 배열·점 좌표, `pageIndex` bounds 별칭을 수리했다. 부분 복구에는 confidence 페널티를 남기고 지원하지 않는 필드는 필드명과 함께 거부한다.
 - 동일 원인의 고아 기기·OCR·연속성 권고를 페이지별로 묶어 212건까지 폭증하던 제안을 6개 근거 묶음으로 줄이되 대상 ID는 보존했다.
 - 도면 보고서에 현재 자동화된 AF/AT·KEC 케이블 허용전류·변압기 2차 전류와 미자동화된 단락·협조·접지·전압강하·단락내량·SPD·전동기 보호를 상시 표시한다.
-- Gemini 3.6 Flash·GPT-5.6 Terra·GPT-5.6 Sol의 도면 분석에 `low/medium/high` 추론 계약을 추가하고, API 요청부터 팀·역할 호출·지문·Google thinking level·로컬 Codex effort까지 같은 값을 결박했다.
+- 도면 추론 계약에 `low/medium/high/xhigh/max`를 추가했다. `xhigh/max`는 로컬 ChatGPT 전용으로 제한하고, 비로컬 Vision 공급자가 요청하면 잘못된 thinking level로 전달하지 않고 400으로 차단한다.
+- 로컬 도면 역할은 8개 동시 호출, low/medium 75초, high/xhigh/max 120초로 제한한다. 명시한 추론 레벨의 문서 한도는 570초이며 사용자의 10분 기준은 캘리브레이션에서 통과/실패 경계로만 사용한다.
+- GPT-5.5·GPT-5.6 Luna/Terra/Sol의 지원 조합 17개를 같은 중급 공개 결선도와 같은 snapshot에서 실행하고, 중단 재개·재채점·설정 지문·완결성 우선 후보 게이트를 가진 `validate:drawing-effort-calibration`을 추가했다.
 - 공개 초급 단선도, 중급 3상 결선도, 고급 KIMM 수변전 단선도를 사전 고정 라벨로 묶은 3×3 high 추론 실행기와 재채점 가능한 영수증을 추가했다.
 - 문서 제한시간을 실제 팀 호출에 전달하고 중단 시 완료 봉투를 보존한다. 로컬 Codex app-server가 멎으면 singleton을 폐기·재생성하며, 역할별 JSON Schema는 타 역할 컬렉션과 비엄격 선택 속성을 차단한다.
 - `physicalEquipmentCount: null`이 판독된 장치 수를 0으로 덮던 평가 결함과 변압기 권선의 물리 장치 중복 집계를 회귀 테스트로 잠갔다.
@@ -95,6 +97,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `chatgpt-local`은 현재 ESA와 Codex를 같은 PC에서 실행하는 POC만 지원한다. 공개 배포용 사용자 PC 연결 도우미와 pairing은 미구현이며 휴면 대장에 분리했다.
 - 2026-08-03 동일 snapshot 3×3 high 재실행은 Gemini 72.3%/222초, Terra 72.0%/411.7초, Sol 51.0%/466.7초였고 9개 모두 엄격 최종 품질 FAIL이었다. 이후 관계 조립 수리 snapshot에서 Gemini 중급은 51%·관계 33%에서 78%·관계 100%로, 최신 초급 공개 단선도는 기호·관계 100%·116.8초·19호출로 재실행됐다. 최신 초급 결과도 OCR·경계 연속성·근거율 때문에 최종 문서는 PARTIAL/HOLD다. 서로 다른 snapshot을 섞은 모델 순위나 일반화 80%는 주장하지 않는다.
 - 고밀도 MCC Agent Platform high 재실행은 202.5초·55호출에서 136기호·223선·212문자·176관계를 회수했다. 같은 봉투를 현재 결정론 계층으로 재조립하면 FAIL 0, PASS 2, HOLD 7이며 최종 상태는 HOLD다. 북미 반복 분기 도면도 같은 실호출 봉투의 재조립에서 변압기 10/10·버스 4/4·부하 21/21과 관계 37건을 회수했지만, 35건이 추론 관계라 독립 edge 정확도로 승격하지 않는다.
+- 17개 로컬 모델·추론 조합의 중급 도면 1차 캘리브레이션은 전부 `PARTIAL/FAIL`, 추천 후보 0개였다. Terra/high가 라벨 88%·관계 100%·421초·누락 1역할로 가장 덜 불완전했지만 coverage auditor가 빠져 기본 모델로 채택하지 않는다. Terra/max와 Sol/xhigh의 표면 99%도 필수 역할이 각각 4개·3개 빠져 후보에서 제외했다. 실패 기록 414건 중 로컬 호출 timeout 281건, 문서 deadline/abort 93건으로 단일 추론 레벨을 30~48개 역할·구획 호출 전체에 적용하는 구조가 주병목이다.
 
 ## 미검증
 
@@ -113,7 +116,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 코드 기준선은 `2bf0ca6f8242c39bb3f036d529b5007a70b19ee8`이다. 최신 라이브 영수증은 호출 당시 dirty snapshot 해시를 별도로 가지고, 현재 결정론 계층 재채점과 혼합하지 않는다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
+- 현재 코드 기준선은 `0d475fc1961a3f9daab8687ae54551702590f037`이다. 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에, 현재 후보 게이트 재채점은 clean `0d475fc`에 결박돼 있다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않았다.
 
 ## 검증
 
@@ -143,6 +146,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 2026-08-03 도면 분석 수리 snapshot: 타입 검사, 경고 0 ESLint, 전체 Jest(331 suites·3,979 tests 통과, 각 1개 skip), production build, 문서 검사, PDF gate 17/17, V3 전용 278 tests, Vision·팀 212 tests가 모두 exit 0이었다. Gemini 중급 표적 재실행은 관계 33%→100%, 종합 51%→78%로 개선됐으나 엄격 품질은 계속 FAIL이다.
 - 2026-08-03 `2bf0ca6` 수리: 타입 검사, 경고 0 ESLint, 전체 Jest(332 suites·4,017 tests 통과, 1 suite·1 test skip), production build, PDF 실경로 gate 17/17, V3 계약 6/6, production SLD benchmark 1/1이 exit 0이었다. `gate:sld-golden`은 실도면 독립 라벨·예측·서명 부재를 이유로 의도대로 exit 1과 `verified95=false`를 반환했다.
 - 같은 배치의 고밀도 MCC Agent Platform high 실호출은 202.5초·55호출·136기호·223선·212문자·176관계였고, 현재 결정론 보정 재생은 FAIL 0·PASS 2·HOLD 7이다. OCR 후보 212건, 경계 연속성 20건, 불확실 관계 152건, 근거 추적률 17.3%와 coverage auditor 충돌이 남아 전체 상태는 HOLD다.
+- 2026-08-03 로컬 추론 캘리브레이션: 같은 중급 공개 결선도·snapshot으로 지원 조합 17개를 실호출했고 모델·effort 지문은 17/17 일치했다. 비교 snapshot은 1개로 유효하지만 전부 `PARTIAL/FAIL`, 후보 게이트 0/17이었다. 이후 clean `0d475fc`에서 `--aggregate-only` 재채점 결과도 동일했다.
+- `0d475fc` 코드 배치에서 타입 검사, 경고 0 전체 ESLint, 전체 Jest(333 suites·4,038 tests 통과, 1 suite·1 test skip), production build 66페이지, 캘리브레이션 Node 계약 6건이 exit 0이었다. 비로컬 `xhigh/max` 차단 추가 후 관련 Jest 25건, 타입 검사와 수정 파일 ESLint도 exit 0이었다.
 
 ## 다음 첫 행동
 
@@ -158,11 +163,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계](docs/project/handoffs/2026-07-23-z-ai-chat-calculator-and-docs.md)
-- [Agent Platform·ChatGPT SLD 비교](docs/project/handoffs/2026-08-02-google-agent-chatgpt-sld-comparison.md)
-- [도면 누수·공개 교보재·KEC 검증](docs/project/handoffs/2026-08-02-drawing-leakage-public-kec-validation.md)
-- [고밀도 도면·KEC 212.7.2 후속 수리](docs/project/handoffs/2026-08-03-drawing-density-kec-212-7-2-repair.md)
-- [구조화 출력·관계 그래프·KEC 근거 수리](docs/project/handoffs/2026-08-03-drawing-schema-relations-kec-repair.md)
+- [최신 인수인계 — 로컬 모델 추론 단계 캘리브레이션](docs/project/handoffs/2026-08-03-sld-reasoning-calibration.md)
+- [과거 인수인계 색인](docs/project/HANDOFFS.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
 - [경계 연속성 설계](docs/superpowers/specs/2026-07-23-sld-region-continuity-integrated-recovery-design.md)

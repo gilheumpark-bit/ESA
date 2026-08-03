@@ -4,6 +4,7 @@
 
 ## 2026-08-03
 
+- [로컬 모델 추론 단계 캘리브레이션](handoffs/2026-08-03-sld-reasoning-calibration.md)
 - [고밀도 도면·KEC 212.7.2 후속 수리](handoffs/2026-08-03-drawing-density-kec-212-7-2-repair.md)
 - [구조화 출력·관계 그래프·KEC 근거 수리](handoffs/2026-08-03-drawing-schema-relations-kec-repair.md)
 
