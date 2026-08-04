@@ -359,11 +359,81 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
     expect(withTransformer).toHaveLength(2);
   });
 
-  it('크기가 4배 넘게 다르면 개폐 계열이라도 별개 기기로 남긴다', () => {
-    // 포함 관계(큰 개폐기 몸체 안의 작은 퓨즈)는 같은 글리프가 아니다.
+  it('중심이 겹치는 포함 관계는 별개 기기가 아니라 ambiguous 로 접는다', () => {
+    // 2026-08-04 중급 실측 전에는 "큰 개폐기 몸체 안의 작은 퓨즈는 별개
+    // 기기"로 두었으나, 실제 오탐 12개 중 11개가 정확히 이 형태(79px 퓨즈
+    // 몸통 + 중심이 같은 17px 상단 조각)였다. 추측이 실측과 어긋나 전제를
+    // 바꾼다. 접은 결과는 삭제가 아니라 후보 둘을 보존한 ambiguous 노드라
+    // 정보가 사라지지 않고 확인 항목으로 올라간다.
     const symbols = deduplicateSymbols([
       { localId: 'big-switch', type: 'switch', bounds: { x: 50, y: 50, w: 25, h: 25 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
       { localId: 'small-fuse', type: 'fuse', bounds: { x: 55, y: 55, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'grid' },
+    ]);
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].certainty).toBe('ambiguous');
+    expect(symbols[0].typeCandidates).toEqual(['switch', 'fuse']);
+  });
+
+  it('겹침이 얕으면 부분 판독으로 보지 않는다', () => {
+    // 나란한 두 기기가 모서리만 스치는 경우는 같은 글리프가 아니다.
+    const symbols = deduplicateSymbols([
+      { localId: 'left', type: 'switch', bounds: { x: 50, y: 50, w: 40, h: 40 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'right', type: 'fuse', bounds: { x: 88, y: 86, w: 12, h: 12 }, confidence: 0.9, pageIndex: 0, regionId: 'grid' },
+    ]);
+    expect(symbols).toHaveLength(2);
+  });
+
+  it('퓨즈 몸통의 상단 조각을 유령 차단기로 남기지 않고, 본체 확정도 강등하지 않는다', () => {
+    // 중급 실측: 전체 판독이 79px 퓨즈 몸통을, 구획 재판독이 같은 x 의
+    // 상단 17px 조각을 breaker 로 잡아 오탐 12개 중 11개를 만들었다.
+    // 면적비가 6배라 areasComparable 로는 걸러지므로 부분 판독 겹침으로 받는다.
+    // 흡수한 조각의 타입 충돌이 본체 확정을 강등하면 물리 퓨즈 카운트가
+    // 무너진다(count-register 는 confirmed 만 물리 수로 센다) — 실측에서
+    // 퓨즈 14→4 로 떨어진 기제다.
+    const symbols = deduplicateSymbols([
+      { localId: 'fu3-body', type: 'fuse', label: 'FU3', bounds: { x: 528, y: 826, w: 31, h: 79 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
+      { localId: 'fu3-top-fragment', type: 'breaker', label: '1', bounds: { x: 529, y: 829, w: 24, h: 17 }, confidence: 0.8, pageIndex: 0, regionId: 'grid' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].typeCandidates).toEqual(['fuse', 'breaker']);
+    expect(symbols[0].confirmedType).toBe('fuse');
+    expect(symbols[0].certainty).toBe('confirmed');
+    expect(symbols[0].rawLabel).toBe('FU3');
+  });
+
+  it('조각으로 태어난 노드에 본체 확정 판독이 오면 본체가 이긴다', () => {
+    // 구획 판독이 먼저 도착해 17px 조각이 breaker 노드가 된 뒤, 전체 판독의
+    // 79px 확정 퓨즈 몸통이 합류하는 순서. 실측의 S016/S017 형태다.
+    const symbols = deduplicateSymbols([
+      { localId: 'fragment-first', type: 'breaker', label: '1', bounds: { x: 872, y: 826, w: 24, h: 17 }, confidence: 0.8, pageIndex: 0, regionId: 'grid' },
+      { localId: 'body-second', type: 'fuse', label: 'FU5', bounds: { x: 872, y: 826, w: 31, h: 79 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].confirmedType).toBe('fuse');
+    expect(symbols[0].certainty).toBe('confirmed');
+    expect(symbols[0].rawLabel).toBe('FU5');
+  });
+
+  it('비슷한 크기끼리의 진짜 충돌은 여전히 ambiguous 로 내린다', () => {
+    // 비대칭 규칙은 조각↔본체에만 적용된다. 같은 크기의 두 판독이 타입으로
+    // 갈리면 어느 쪽도 확정할 근거가 없다.
+    const symbols = deduplicateSymbols([
+      { localId: 'read-a', type: 'fuse', bounds: { x: 200, y: 100, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
+      { localId: 'read-b', type: 'breaker', bounds: { x: 204, y: 106, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'grid' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].confirmedType).toBeUndefined();
+    expect(symbols[0].certainty).toBe('ambiguous');
+  });
+
+  it('떨어져 있는 개폐 계열은 부분 판독으로도 합치지 않는다', () => {
+    // 같은 줄에 늘어선 별개 퓨즈들은 중심이 멀어 부분 판독이 아니다.
+    const symbols = deduplicateSymbols([
+      { localId: 'fu3', type: 'fuse', label: 'FU3', bounds: { x: 528, y: 826, w: 31, h: 79 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'fu4', type: 'breaker', label: '1', bounds: { x: 724, y: 829, w: 24, h: 17 }, confidence: 0.8, pageIndex: 0, regionId: 'grid' },
     ]);
     expect(symbols).toHaveLength(2);
   });

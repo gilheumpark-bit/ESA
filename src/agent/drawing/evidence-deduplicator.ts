@@ -76,14 +76,21 @@ export function deduplicateSymbols(
       // 서로 다른 기기 몸체는 몸체 과반이 겹치게 그려지지 않는다(위
       // boundsStronglyOverlap 주석). 그 자리에 개폐·보호 계열끼리 타입만
       // 갈리면 별개 기기가 아니라 같은 글리프의 판독 충돌이므로 하나의
-      // ambiguous 노드로 접는다 — 라벨 없는 breaker 재판독이 퓨즈 옆에
-      // 유령 차단기를 만들던 실측(중급 breaker 오탐 5)이 근거다. 크기가
-      // 4배 넘게 다르면 포함 관계(모선 위 인라인 기기)일 수 있어 제외한다.
+      // ambiguous 노드로 접는다.
+      //
+      // 두 겹침 조건을 모두 받는다.
+      //  - 비슷한 크기의 강겹침: 같은 몸체를 두 번 읽은 경우.
+      //  - 부분 판독(boundsPartialReadOverlap): 전체 판독이 79px 퓨즈 몸통을
+      //    잡고 구획 재판독이 그 상단 17px 조각만 잡은 경우. 면적비가 6배라
+      //    areasComparable 로는 걸러진다 — 그 가드는 포함 관계(모선 위 인라인
+      //    기기)를 막으려던 것인데 정작 잡아야 할 부분 판독까지 막았다.
+      //    중급 실측에서 breaker 오탐 12개 중 11개가 이 형태였다.
       return inSwitchgearFamily(hitType)
         && k.typeCandidates.every((candidate) => inSwitchgearFamily(candidate))
         && k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex
-          && boundsStronglyOverlap(evidence.bounds, hit.bounds)
-          && areasComparable(evidence.bounds, hit.bounds));
+          && ((boundsStronglyOverlap(evidence.bounds, hit.bounds)
+            && areasComparable(evidence.bounds, hit.bounds))
+            || boundsPartialReadOverlap(evidence.bounds, hit.bounds)));
     });
 
     if (dup) {
@@ -94,9 +101,28 @@ export function deduplicateSymbols(
       const typeConflict = !dup.typeCandidates.some((candidate) => typesCompatible(candidate, hitType));
       dup.typeCandidates = unique([...dup.typeCandidates, hitType]);
       if (typeConflict) {
-        dup.confirmedType = undefined;
-        dup.certainty = 'ambiguous';
-        dup.rawLabel = dup.rawLabel ?? hit.label;
+        // 조각과 본체의 충돌은 대칭이 아니다. 79px 퓨즈 몸통을 확정으로 읽은
+        // 판독과 그 상단 17px 조각을 breaker 로 읽은 판독이 충돌하면, 조각이
+        // 본체 확정을 강등시켜선 안 된다 — 실측에서 이 강등이 물리 퓨즈
+        // 카운트를 무너뜨렸다(count-register 는 confirmed 만 물리 수로 센다).
+        // 반대로 조각으로 태어난 노드에 본체 확정 판독이 오면 본체가 이긴다.
+        // 비슷한 크기끼리의 진짜 충돌만 ambiguous 로 내린다.
+        const hitArea = hit.bounds.w * hit.bounds.h;
+        const largestArea = Math.max(...dup.evidence.map((item) => item.bounds.w * item.bounds.h));
+        const hitIsFragment = hitArea * 4 <= largestArea;
+        const hitIsBody = largestArea * 4 <= hitArea;
+        if (dup.confirmedType && hitIsFragment) {
+          // 후보와 근거는 이미 보존됐다. 확정과 라벨은 본체 판독의 것을 유지한다.
+        } else if (!dup.confirmedType && hitIsBody
+          && (hit.certainty === 'confirmed' || hit.confidence >= 0.85)) {
+          dup.confirmedType = hitType;
+          dup.certainty = 'confirmed';
+          dup.rawLabel = hit.label ?? dup.rawLabel;
+        } else {
+          dup.confirmedType = undefined;
+          dup.certainty = 'ambiguous';
+          dup.rawLabel = dup.rawLabel ?? hit.label;
+        }
       } else if (hit.confidence > previousMaxConfidence) {
         dup.rawLabel = hit.label ?? dup.rawLabel;
         if (hit.certainty === 'confirmed' || hit.confidence >= 0.85) {
