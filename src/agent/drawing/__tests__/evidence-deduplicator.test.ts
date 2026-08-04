@@ -452,6 +452,72 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
     expect(symbols[0].confirmedType).toBe('breaker');
   });
 
+  describe('같은 명판을 쪼개 읽은 것과 같은 이름의 반복 기기를 가른다', () => {
+    // 실측(KIMM 수변전 단선결선도 · 실행 6회 · 근접쌍 24건): 진짜 반복
+    // 기기는 전부 면적비 1.00 · 겹침 0% 였고, 쪼개진 판독은 1.05~5.33 이거나
+    // 겹쳤다. 조밀한 도면에서는 같은 기기를 50px 밀려 읽으면 겹침이 0이 되어
+    // 종전 근접·겹침 조건이 전부 빠져나갔다(변압기 정답 3에 판독 9).
+    const hit = (localId: string, label: string, b: { x: number; y: number; w: number; h: number }) => ({
+      localId, type: 'transformer', label, bounds: b,
+      confidence: 0.9, pageIndex: 0, regionId: localId, certainty: 'confirmed' as const,
+    });
+
+    it('명판 앞부분만 잡은 작은 재판독을 본체에 접는다', () => {
+      // 실측값 그대로: MOLD TR-3 67x64@1439 와 62x44@1491.
+      const symbols = deduplicateSymbols([
+        hit('full', 'MOLD TR-3\n6.6KV/380.220V\n3 1000KVA', { x: 1439, y: 502, w: 67, h: 64 }),
+        hit('partial', 'MOLD TR-3', { x: 1491, y: 502, w: 62, h: 44 }),
+      ]);
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0].evidence).toHaveLength(2);
+    });
+
+    it('겹치지 않고 인접한 쪼개진 판독도 접는다', () => {
+      // 실측값 그대로: DOWN TR 48x34@1870 와 25x28@1842 — 겹침 0, 면적비 2.32.
+      const symbols = deduplicateSymbols([
+        hit('a', 'DOWN TR 380/110V 3 10KVA', { x: 1870, y: 818, w: 48, h: 34 }),
+        hit('b', 'DOWN TR', { x: 1842, y: 819, w: 25, h: 28 }),
+      ]);
+      expect(symbols).toHaveLength(1);
+    });
+
+    it('같은 이름의 반복 기기 두 대는 접지 않는다', () => {
+      // 실측값 그대로: FU5 32x79@896 와 32x79@951 — 면적비 1.00, 겹침 0%.
+      // 나란한 퓨즈 두 대이지 하나가 아니다.
+      const symbols = deduplicateSymbols([
+        { localId: 'l', type: 'fuse', label: 'FU5', bounds: { x: 896, y: 824, w: 32, h: 79 }, confidence: 0.9, pageIndex: 0, regionId: 'l', certainty: 'confirmed' },
+        { localId: 'r', type: 'fuse', label: 'FU5', bounds: { x: 951, y: 824, w: 32, h: 79 }, confidence: 0.9, pageIndex: 0, regionId: 'r', certainty: 'confirmed' },
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('숫자를 가르는 접두는 같은 명판이 아니다', () => {
+      // "TR-1" 은 "TR-10" 의 접두지만 다른 기기다.
+      const symbols = deduplicateSymbols([
+        hit('a', 'TR-1', { x: 100, y: 100, w: 60, h: 60 }),
+        hit('b', 'TR-10', { x: 170, y: 100, w: 20, h: 20 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('홑 숫자 라벨은 명판이 아니라 단자 번호로 본다', () => {
+      const symbols = deduplicateSymbols([
+        hit('a', '1', { x: 100, y: 100, w: 60, h: 60 }),
+        hit('b', '1', { x: 170, y: 100, w: 20, h: 20 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('멀리 떨어진 같은 이름 기기는 접지 않는다', () => {
+      // 두 반에 하나씩 있는 TR-1 을 도면 폭을 건너뛰어 접으면 안 된다.
+      const symbols = deduplicateSymbols([
+        hit('a', 'MOLD TR-1 500kVA', { x: 100, y: 500, w: 67, h: 64 }),
+        hit('b', 'MOLD TR-1', { x: 900, y: 500, w: 30, h: 30 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+  });
+
   describe('IEC 지정문자는 판독 충돌도 이긴다', () => {
     // 실측(gemini · intermediate · 5회): 매 실행 퓨즈 후보를 14~15개 읽어
     // 놓고 확정은 11~14개였다. 손실은 판독이 아니라 판정이었고, 매번
