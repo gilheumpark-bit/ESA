@@ -449,6 +449,7 @@ describe('document-orchestrator + evaluator', () => {
     });
     expect(recoveredRegion.document.coverageLedger.regionsFailed).toBe(0);
 
+
     const redundantFailureReview = {
       ...review(true),
       failures: [{

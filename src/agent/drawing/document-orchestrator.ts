@@ -568,6 +568,8 @@ interface DocumentRun {
 type PageVision = NonNullable<OrchestrateInput['vision']>;
 
 const MAX_RESCAN_ATTEMPTS = 2;
+/** 폴백 대상 상한. 구획 전체가 실패해도 호출 예산을 한 번에 태우지 않는다. */
+const MAX_GAP_FALLBACK_TARGETS = 6;
 
 /** 페이지·시간·픽셀 예산 또는 취소 경계에 닿았는가. */
 function exceedsRunBoundary(run: DocumentRun, page: PreparedDrawingPage): boolean {
@@ -630,6 +632,46 @@ async function runVectorPass(
     addUnresolved(evidence.unresolved, page, 'ROLE_CALL_FAILED', '벡터 파서의 역할별 분석·검증 영수증이 완전하지 않습니다.');
   }
   return { usable: true, regions: coverage.regions };
+}
+
+/**
+ * 구획이 남았는데 감사기가 대상을 하나도 내지 않은 경우의 결정론적 폴백.
+ *
+ * `failedRoleRescanTargets` 는 **역할 호출 실패**만 대상으로 만든다. 구획
+ * 자체가 미완료인데 역할 실패가 없으면 대상이 0이 되고, 재스캔 조건
+ * `targets.length > 0` 에 걸려 한 번도 돌지 못한 채 HOLD_RESCAN_UNRESOLVED
+ * 로 끝난다. 2026-08-04 중급 3회에서 이 경로가 회차 편차의 실제 출처였다 —
+ * 재스캔이 돈 회차는 99%, 전체 페이지 구획이 실패했는데 대상이 없어 그냥
+ * 포기한 회차는 80%였다. 재스캔은 편차를 키우는 게 아니라 줄인다.
+ *
+ * 미완료 구획의 경계를 그대로 대상으로 삼으므로 모델 응답과 무관하게
+ * 결정론적이다.
+ *
+ * 다만 **판독 역할 호출이 실제로 실패한 구획**만 고른다. 그래프 충돌이나
+ * 감사 미해결로 미완료인 구획은 같은 입력을 다시 보내도 같은 결과가 나와
+ * 호출 예산만 3배로 태운다 — 재시도로 달라질 수 있는 것은 실패한 호출뿐이다.
+ */
+function gapRegionRescanTargets(
+  page: PreparedDrawingPage,
+  regions: readonly CoverageRegionRecord[],
+): RescanTargetEvidence[] {
+  const retryableRoles = new Set<RoleId>(['symbols', 'connections', 'text']);
+  return regions
+    .filter((region) => region.status === 'failed'
+      && Object.entries(region.roleCalls).some(([role, calls]) =>
+        retryableRoles.has(role as RoleId)
+        && (calls ?? []).length > 0
+        && (calls ?? []).every((call) => !call.success)))
+    .slice(0, MAX_GAP_FALLBACK_TARGETS)
+    .map((region, index) => ({
+      id: `gap-region-${page.pageIndex}-${index + 1}`,
+      sourceId: region.regionId,
+      retryScope: region.kind === 'full-page' ? 'full-source' as const : 'precision-region' as const,
+      reason: 'low-coverage' as const,
+      bounds: { ...region.bounds, page: page.pageIndex + 1 },
+      suggestedRoles: ['symbols', 'connections', 'text'] as Array<'symbols' | 'connections' | 'text'>,
+      confidence: 1,
+    }));
 }
 
 /** 같은 출처·같은 역할 조합의 재검사 대상은 하나로 접는다. */
@@ -746,6 +788,11 @@ async function runRasterPass(
       const coverage = markCouncilCoverage(regions, page, result);
       regions = coverage.regions;
       targets = dedupeRescanTargets([...coverage.rescanTargets, ...failedRoleRescanTargets(page, result)]);
+      // 감사기·역할 실패 어느 쪽도 대상을 내지 않았는데 구획이 남아 있으면
+      // 미완료 구획 자체를 대상으로 삼는다. 없으면 재스캔이 한 번도 못 돈다.
+      if (targets.length === 0 && hasCoverageGaps(regions)) {
+        targets = gapRegionRescanTargets(page, regions);
+      }
       coverage.roles.forEach((role) => evidence.rolesPresent.add(role));
       priorEnvelopes = [
         ...priorEnvelopes,
