@@ -75,12 +75,15 @@ export interface TeamInput {
         apiKey?: string;
         model?: string;
         effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
+        /** 역할별 추론 단계. 지정한 역할만 `effort` 를 덮는다. */
+        effortProfile?: import('@/lib/drawing-reasoning-effort').DrawingEffortProfile;
       }
     | {
         provider: 'chatgpt-local';
         apiKey?: never;
         model?: string;
         effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
+        effortProfile?: import('@/lib/drawing-reasoning-effort').DrawingEffortProfile;
       };
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 들어온다 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;

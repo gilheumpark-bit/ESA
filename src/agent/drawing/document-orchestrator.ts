@@ -13,7 +13,7 @@ import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
 import type { RescanTargetEvidence, RoleReviewEnvelope } from '@/agent/vision/review-types';
 import { precisionGridSize } from '@/agent/vision/vision-splitter';
 import { resolveVlmModel } from '@/agent/vision/vlm-client';
-import { drawingRoleTimeoutMs } from '@/lib/drawing-reasoning-effort';
+import { drawingEffortProfileKey, drawingRoleTimeoutMs } from '@/lib/drawing-reasoning-effort';
 
 import {
   buildCoverageLedger,
@@ -76,12 +76,15 @@ export interface OrchestrateInput {
         apiKey: string;
         model?: string;
         effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
+        /** 역할별 추론 단계. 지정한 역할만 `effort` 를 덮는다. */
+        effortProfile?: import('@/lib/drawing-reasoning-effort').DrawingEffortProfile;
       }
     | {
         provider: 'chatgpt-local';
         apiKey?: never;
         model?: string;
         effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
+        effortProfile?: import('@/lib/drawing-reasoning-effort').DrawingEffortProfile;
       };
   signal?: AbortSignal;
   seedDetections?: {
@@ -162,6 +165,10 @@ function pageDigestFingerprint(
     provider: usesVision ? input.vision?.provider : undefined,
     model: usesVision && input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined,
     effort: usesVision ? input.vision?.effort : undefined,
+    // 프로필을 지문에 넣지 않으면 역할별 단계를 바꿔도 이전 봉투를 재사용해
+    // A/B 자체가 성립하지 않는다. 프로필이 없으면 undefined 라 기존 지문과
+    // 같은 값이 된다.
+    effortProfile: usesVision ? drawingEffortProfileKey(input.vision?.effortProfile) : undefined,
   };
 }
 
@@ -902,7 +909,8 @@ export async function runDocumentAnalysis(
         && previousDigest.graphVersion === GRAPH_ASSEMBLY_VERSION
         && previousDigest.provider === input.vision?.provider
         && previousDigest.model === (input.vision ? resolveVlmModel(input.vision.provider, input.vision.model) : undefined)
-        && previousDigest.effort === input.vision?.effort));
+        && previousDigest.effort === input.vision?.effort
+        && previousDigest.effortProfile === drawingEffortProfileKey(input.vision?.effortProfile)));
     return (previous?.status === 'complete' || previous?.status === 'skipped-empty') && reusable
       ? { ...previous }
       : !sourcePage && previous
@@ -1200,6 +1208,7 @@ export async function runDocumentAnalysis(
       provider: fingerprint.provider,
       model: fingerprint.model,
       effort: fingerprint.effort,
+      effortProfile: fingerprint.effortProfile,
       complete: state.status === 'complete' || state.status === 'skipped-empty',
     };
   }

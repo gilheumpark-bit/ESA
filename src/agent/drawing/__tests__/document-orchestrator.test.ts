@@ -756,6 +756,25 @@ describe('document-orchestrator + evaluator', () => {
     expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification))
       .toEqual(['sld_pdf', 'sld_image', 'sld_pdf', 'sld_image', 'sld_pdf', 'sld_image']);
     expect(changedModel.job.pageDigests[0]).toMatchObject({ provider: 'openai', model: 'gpt-4.1', effort: 'high' });
+
+    // 역할별 프로필도 지문이다. 여기서 재사용이 일어나면 프로필 A/B 는
+    // 이전 봉투를 다시 채점하는 셈이라 아무것도 측정하지 못한다.
+    const changedProfile = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-vector-vision',
+      jobId: changedModel.job.jobId,
+      vision: {
+        provider: 'openai',
+        model: 'gpt-4.1',
+        apiKey: 'test-request-key',
+        effort: 'high',
+        effortProfile: { symbols: 'low' },
+      },
+      budget: { maxPages: 1, maxVlmCalls: 100, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification))
+      .toEqual(['sld_pdf', 'sld_image', 'sld_pdf', 'sld_image', 'sld_pdf', 'sld_image', 'sld_pdf', 'sld_image']);
+    expect(changedProfile.job.pageDigests[0]).toMatchObject({ effortProfile: 'symbols:low' });
   });
 
   it('uses the selected source page dimensions for a non-contiguous page conflict fallback', async () => {

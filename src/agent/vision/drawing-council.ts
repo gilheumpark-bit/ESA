@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto';
 
+import {
+  drawingRoleTimeoutMs,
+  resolveRoleEffort,
+  type DrawingEffortProfile,
+} from '@/lib/drawing-reasoning-effort';
+
 import { annotatePrecisionRegion } from './annotated-region-renderer';
 import { planBoundaryContinuations } from './boundary-continuation-planner';
 import type { BoundaryContinuationPlan, GlobalLineCandidate } from './continuity-types';
@@ -43,6 +49,12 @@ export interface DrawingCouncilInput {
   variants: readonly ImageVariant[];
   regions: readonly PrecisionRegion[];
   options: VLMOptions;
+  /**
+   * 역할별 추론 단계. 지정한 역할만 `options.effort` 를 덮고, 그 역할의
+   * 호출 시간 제한도 같은 단계에서 다시 파생한다. 비우면 기존과 동일하게
+   * 모든 역할이 `options.effort` 하나를 쓴다.
+   */
+  effortProfile?: DrawingEffortProfile;
   maxRegionCallsPerRole?: number;
   maxConcurrentCalls?: number;
   /** Deadline/cancellation closes queued work but keeps already sealed role receipts. */
@@ -586,9 +598,25 @@ function assertSourceAnchors(role: VLMReviewRole, source: ReviewSource, data: Ro
   }
 }
 
+/**
+ * 이 역할이 실제로 쓸 호출 옵션. 프로필이 이 역할의 단계를 덮으면 시간 제한도
+ * 같은 단계에서 다시 파생한다 — 낮춘 추론에 고추론 예산을 남겨두면 역할별
+ * 분리의 목적인 시간 회수가 일어나지 않는다.
+ */
+function roleOptions(input: DrawingCouncilInput, role: string): VLMOptions {
+  const effort = resolveRoleEffort(role, input.options.effort, input.effortProfile);
+  if (effort === input.options.effort) return input.options;
+  return {
+    ...input.options,
+    effort,
+    timeoutMs: drawingRoleTimeoutMs(input.options.provider, effort),
+  };
+}
+
 async function invokeSource(task: SourceTask, input: DrawingCouncilInput, invoke: Invoke): Promise<SourceSuccess> {
   throwIfAborted(input.options.signal);
-  const result = await raceExternalAbort(Promise.resolve().then(() => invoke(task.source.buffer, PREPARED_SOURCE_MIME, task.role, input.options, task.context)), input.options.signal);
+  const options = roleOptions(input, task.role);
+  const result = await raceExternalAbort(Promise.resolve().then(() => invoke(task.source.buffer, PREPARED_SOURCE_MIME, task.role, options, task.context)), input.options.signal);
   throwIfAborted(input.options.signal);
   if (result.role !== task.role) throw new Error(`review result role mismatch: expected ${task.role}.`);
   assertModel(result.model);

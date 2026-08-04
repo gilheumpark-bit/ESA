@@ -10,6 +10,11 @@
  *   node scripts/run-drawing-effort-calibration.mjs --models=terra --efforts=max
  *   node scripts/run-drawing-effort-calibration.mjs --tiers=beginner,advanced
  *   node scripts/run-drawing-effort-calibration.mjs --aggregate-only
+ *
+ * 역할별 추론 프로필 A/B (기본값은 프로필 없음 = 모든 역할이 같은 effort):
+ *   node scripts/run-drawing-effort-calibration.mjs --models=terra --efforts=high
+ *   node scripts/run-drawing-effort-calibration.mjs --models=terra --efforts=high  *     --profile='{"symbols":"low","text":"low"}'
+ * 두 실행의 영수증은 프로필 라벨로 파일이 갈리므로 서로 덮어쓰지 않는다.
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -21,7 +26,9 @@ import {
   CALIBRATION_EFFORTS,
   CALIBRATION_MODELS,
   buildDrawingCalibrationPlan,
+  calibrationProfileLabel,
   calibrationQualityGate,
+  parseCalibrationEffortProfile,
   isCalibrationDurationWithinLimit,
   selectCalibrationValues,
 } from './lib/drawing-calibration-plan.mjs';
@@ -99,8 +106,8 @@ function gitSnapshot() {
   return { revision, dirty: status.length > 0, changeHash: changeHash.digest('hex') };
 }
 
-function receiptPath(modelId, effort, tier) {
-  return `test-results/drawing-calibration-${modelId}-${effort}-${tier}.json`;
+function receiptPath(modelId, effort, tier, profileLabel) {
+  return `test-results/drawing-calibration-${modelId}-${effort}-${tier}-${profileLabel}.json`;
 }
 
 function summarizeDocument(document, expected) {
@@ -135,6 +142,8 @@ function baseReceipt(cell, drawing, sourceSha256, durationMs, snapshot) {
     provider: cell.provider,
     requestedModel: cell.model,
     requestedEffort: cell.effort,
+    requestedEffortProfile: effortProfile ?? null,
+    effortProfileLabel: profileLabel,
     source: drawing.file,
     sourceSha256,
     description: drawing.description,
@@ -155,6 +164,7 @@ async function runCell(baseUrl, cell, snapshot) {
   form.set('provider', cell.provider);
   form.set('model', cell.model);
   form.set('effort', cell.effort);
+  if (effortProfile) form.set('effortProfile', JSON.stringify(effortProfile));
   form.set('pages', 'all');
   form.set('maxVlmCalls', '120');
 
@@ -214,6 +224,8 @@ async function runCell(baseUrl, cell, snapshot) {
 const baseUrl = argValue('base') ?? DEFAULT_BASE_URL;
 const modelIds = selected(CALIBRATION_MODELS, 'models');
 const efforts = selectCalibrationValues(argValue('efforts'), CALIBRATION_EFFORTS);
+const effortProfile = parseCalibrationEffortProfile(argValue('profile'));
+const profileLabel = calibrationProfileLabel(effortProfile);
 const tiers = selected(CASES, 'tiers', ['intermediate']);
 const resume = process.argv.includes('--resume');
 const aggregateOnly = process.argv.includes('--aggregate-only');
@@ -223,7 +235,7 @@ mkdirSync('test-results', { recursive: true });
 
 const results = [];
 for (const cell of plan.cells) {
-  const out = receiptPath(cell.modelId, cell.effort, cell.tier);
+  const out = receiptPath(cell.modelId, cell.effort, cell.tier, profileLabel);
   if (aggregateOnly) {
     if (!existsSync(out)) throw new Error(`집계할 영수증이 없습니다: ${out}`);
     let prior = JSON.parse(readFileSync(out, 'utf8'));
@@ -250,6 +262,7 @@ for (const cell of plan.cells) {
       prior.status === 'COMPLETE'
       && prior.requestedModel === cell.model
       && prior.requestedEffort === cell.effort
+      && (prior.effortProfileLabel ?? 'uniform') === profileLabel
       && prior.sourceSha256 === currentSha
       && prior.workspaceSnapshot?.revision === snapshot.revision
       && prior.workspaceSnapshot?.changeHash === snapshot.changeHash
@@ -287,7 +300,7 @@ const aggregate = {
   workspaceSnapshot: snapshot,
   recordedAt: new Date().toISOString(),
   aggregateOnly,
-  requested: { modelIds, efforts, tiers },
+  requested: { modelIds, efforts, tiers, effortProfile: effortProfile ?? null, effortProfileLabel: profileLabel },
   skipped: plan.skipped,
   resultSnapshotHashes: comparison.snapshotHashes,
   comparison,

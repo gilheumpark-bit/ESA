@@ -3,6 +3,8 @@ import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
 import { assertLoopbackRequest } from '@/lib/chatgpt-local-loopback';
 import {
   isDrawingReasoningEffort,
+  parseDrawingEffortProfile,
+  type DrawingEffortProfile,
   type DrawingReasoningEffort,
 } from '@/lib/drawing-reasoning-effort';
 
@@ -12,11 +14,13 @@ export type DrawingVisionRequest =
       apiKey: string;
       model?: string;
       effort?: DrawingReasoningEffort;
+      effortProfile?: DrawingEffortProfile;
     }
   | {
       provider: 'chatgpt-local';
       model: string;
       effort?: DrawingReasoningEffort;
+      effortProfile?: DrawingEffortProfile;
     };
 
 type RemoteVisionProvider = Exclude<DrawingVisionRequest['provider'], 'chatgpt-local'>;
@@ -64,6 +68,19 @@ export async function resolveDrawingVisionRequest(
     ? effortRaw as DrawingReasoningEffort
     : undefined;
 
+  // 역할별 단계는 선택 입력이다. 알 수 없는 역할·단계는 조용히 버리지 않고
+  // 400 으로 닫는다 — 요청한 프로필과 실제 호출이 어긋나면 A/B 가 거짓말이 된다.
+  let effortProfile: DrawingEffortProfile | undefined;
+  try {
+    effortProfile = parseDrawingEffortProfile(String(form.get('effortProfile') ?? '').trim());
+  } catch {
+    throw new DrawingVisionRequestError(
+      '역할별 도면 추론 프로필 형식이 올바르지 않습니다. 역할은 symbols, connections, text, logic, coverage-auditor 중 하나여야 합니다.',
+      400,
+    );
+  }
+  const profileFields = effortProfile ? { effortProfile } : {};
+
   if (providerRaw === 'chatgpt-local') {
     try {
       assertLoopbackRequest(request);
@@ -87,6 +104,7 @@ export async function resolveDrawingVisionRequest(
       provider: 'chatgpt-local',
       model: selected.id,
       ...(effort ? { effort } : {}),
+      ...profileFields,
     };
   }
 
@@ -109,6 +127,6 @@ export async function resolveDrawingVisionRequest(
   }
   const apiKey = suppliedKey || serverKey(provider);
   return apiKey
-    ? { provider, apiKey, model: model || undefined, ...(effort ? { effort } : {}) }
+    ? { provider, apiKey, model: model || undefined, ...(effort ? { effort } : {}), ...profileFields }
     : undefined;
 }

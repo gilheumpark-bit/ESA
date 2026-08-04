@@ -6,6 +6,8 @@ import {
   CALIBRATION_EFFORTS,
   CALIBRATION_MODELS,
   buildDrawingCalibrationPlan,
+  calibrationProfileLabel,
+  parseCalibrationEffortProfile,
   calibrationQualityGate,
   isCalibrationDurationWithinLimit,
   selectCalibrationValues,
@@ -87,6 +89,27 @@ test('rejects a high surface score when required review roles are missing', () =
     auditUnresolved: true,
     auditReceiptMissing: false,
   });
+});
+
+test('역할별 프로필은 알 수 없는 역할·단계를 거부한다', () => {
+  assert.equal(parseCalibrationEffortProfile(undefined), undefined);
+  assert.equal(parseCalibrationEffortProfile(''), undefined);
+  assert.equal(parseCalibrationEffortProfile('{}'), undefined);
+  assert.deepEqual(parseCalibrationEffortProfile('{"symbols":"low"}'), { symbols: 'low' });
+  assert.throws(() => parseCalibrationEffortProfile('{"symbol":"low"}'), /UNKNOWN_CALIBRATION_PROFILE_ROLE:symbol/);
+  assert.throws(() => parseCalibrationEffortProfile('{"symbols":"ultra"}'), /UNKNOWN_CALIBRATION_PROFILE_EFFORT:symbols/);
+  assert.throws(() => parseCalibrationEffortProfile('nope'), /INVALID_CALIBRATION_PROFILE_JSON/);
+  assert.throws(() => parseCalibrationEffortProfile('[]'), /INVALID_CALIBRATION_PROFILE/);
+});
+
+test('프로필 라벨은 역할 순서와 무관하고 서로 다른 프로필을 구분한다', () => {
+  // 라벨이 같으면 A/B 두 실행이 같은 영수증 파일을 덮어쓴다.
+  assert.equal(
+    calibrationProfileLabel({ text: 'low', symbols: 'low' }),
+    calibrationProfileLabel({ symbols: 'low', text: 'low' }),
+  );
+  assert.notEqual(calibrationProfileLabel({ symbols: 'low' }), calibrationProfileLabel({ symbols: 'medium' }));
+  assert.equal(calibrationProfileLabel(undefined), 'uniform');
 });
 
 test('감사기만 빠졌을 때 판독 역할 손실로 세지 않는다', () => {

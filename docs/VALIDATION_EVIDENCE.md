@@ -186,6 +186,25 @@ KEC 212.7.2 판정은 별도 과부하·단락 보호장치의 ID, 단락장치 
 | `npm run gate:sld-golden` | 예측 산출물 + attestation 키 (아래 주의) | golden adjudicated 라벨 대조 |
 | `npm run gate:sld-v3-contract` | 없음 | evaluator 계약 |
 | `npm run gate:chat-live` | production build | 실제 `/api/chat` 계산기 실행, 모델 영수증 전달, SSE 순서 |
+| `npm run test:scripts` | 없음 | `scripts/lib` node-test (캘리브레이션 게이트·영수증 생성기·모델 채점). 2026-08-04 이전에는 어떤 게이트에도 연결돼 있지 않았다 |
+
+### 역할별 추론 프로필 A/B (2026-08-04 도입, **아직 실측 없음**)
+
+`--profile` 로 역할별 추론 단계를 지정할 수 있다. **기본값은 프로필 없음**이라 지정하지
+않으면 모든 역할이 종전대로 같은 `effort` 를 쓴다. 기본 프로필 승격은 아래 두 실행을
+같은 snapshot 에서 돌려 시간·판독 역할 손실·감사 상태를 비교한 뒤에만 한다.
+
+```bash
+npm run validate:drawing-effort-calibration -- --models=terra --efforts=high --tiers=intermediate
+```
+
+```bash
+npm run validate:drawing-effort-calibration -- --models=terra --efforts=high --tiers=intermediate --profile={"symbols":"low","text":"low"}
+```
+
+두 실행의 영수증은 프로필 라벨로 파일이 갈려 서로 덮어쓰지 않는다. 페이지 지문에도
+프로필이 들어가므로 프로필을 바꾸면 이전 페이지 봉투를 재사용하지 않는다 — 이 결박이
+없으면 A/B 가 같은 결과를 두 번 채점하게 된다.
 
 3010 서버 기동 (standalone은 static/public을 **자동 복사하지 않는다** — 재발 함정):
 

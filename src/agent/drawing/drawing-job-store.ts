@@ -30,6 +30,8 @@ export interface DrawingJobRecord {
     model?: string;
     provider?: string;
     effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
+    /** 역할별 추론 단계의 정규 문자열. 프로필이 없으면 undefined. */
+    effortProfile?: string;
     promptVersion: string;
     preprocessVersion: string;
     graphVersion: string;
@@ -262,6 +264,7 @@ export function canReusePage(
     model?: string;
     provider?: string;
     effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;
+    effortProfile?: string;
   },
 ): boolean {
   if (job.documentHash !== fingerprint.documentHash) return false;
@@ -273,7 +276,8 @@ export function canReusePage(
     && prev.graphVersion === fingerprint.graphVersion
     && prev.model === fingerprint.model
     && prev.provider === fingerprint.provider
-    && prev.effort === fingerprint.effort;
+    && prev.effort === fingerprint.effort
+    && prev.effortProfile === fingerprint.effortProfile;
 }
 
 export function nextPendingRequestedPage(job: DrawingJobRecord): number | undefined {

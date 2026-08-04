@@ -340,6 +340,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     variants: prepared.variants,
     regions: reviewRegions,
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+    effortProfile: input.vision.effortProfile,
     maxConcurrentCalls: input.vision.provider === 'chatgpt-local'
       || (input.vision.provider === 'google-agent-platform' && input.vision.effort === 'high')
       ? QUALITY_FIRST_MAX_CONCURRENT_CALLS

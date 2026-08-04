@@ -491,4 +491,43 @@ describe('sealed independent drawing council', () => {
     expect(result.envelopes.map((item) => item.role)).toEqual(['logic', 'coverage-auditor']);
     expect(result.failures.filter((item) => item.fatal).map((item) => item.role)).toEqual(['symbols', 'connections', 'text']);
   });
+
+  it('역할별 프로필이 있으면 그 역할만 다른 추론 단계와 시간 제한으로 호출한다', async () => {
+    const seen = new Map<string, { effort?: string; timeoutMs?: number }>();
+    await runDrawingCouncil(
+      {
+        snapshot: snapshot(),
+        variants: variants(),
+        regions: regions(),
+        options: { ...options, provider: 'chatgpt-local', apiKey: undefined, effort: 'high' },
+        effortProfile: { symbols: 'low', text: 'low' },
+        maxRegionCallsPerRole: 1,
+      },
+      async (buffer, _mime, role, callOptions) => {
+        if (!seen.has(role)) seen.set(role, { effort: callOptions.effort, timeoutMs: callOptions.timeoutMs });
+        return resultFor(role, buffer.byteLength);
+      },
+    );
+
+    // 낮춘 역할은 시간 제한도 함께 내려가야 한다. 고추론 예산을 남겨두면
+    // 역할별 분리의 목적인 시간 회수가 일어나지 않는다.
+    expect(seen.get('symbols')).toEqual({ effort: 'low', timeoutMs: 75_000 });
+    expect(seen.get('text')).toEqual({ effort: 'low', timeoutMs: 75_000 });
+    expect(seen.get('connections')?.effort).toBe('high');
+    expect(seen.get('logic')?.effort).toBe('high');
+    expect(seen.get('coverage-auditor')?.effort).toBe('high');
+  });
+
+  it('프로필이 없으면 모든 역할이 같은 옵션 객체를 그대로 쓴다', async () => {
+    const identities = new Set<unknown>();
+    await runDrawingCouncil(
+      { snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 },
+      async (buffer, _mime, role, callOptions) => {
+        identities.add(callOptions);
+        return resultFor(role, buffer.byteLength);
+      },
+    );
+    expect(identities.size).toBe(1);
+    expect(identities.has(options)).toBe(true);
+  });
 });
