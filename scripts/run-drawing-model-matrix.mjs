@@ -18,6 +18,9 @@ import { foldRunSpread, formatSpread } from './lib/drawing-run-spread.mjs';
 import { scoreDrawingLabelEvidence } from './lib/drawing-model-score.mjs';
 
 const EFFORT = 'high';
+// --profile='{"symbols":"low","text":"low"}' 는 역할별 단계를 덮어써 A/B 를 만든다.
+// 서버가 알 수 없는 역할·단계를 400 으로 닫으므로 오타는 조용히 통과하지 않는다.
+const EFFORT_PROFILE = process.argv.find((v) => v.startsWith('--profile='))?.slice('--profile='.length) ?? '';
 const DEFAULT_BASE_URL = 'http://127.0.0.1:3010';
 const HTTP_TIMEOUT_MS = 660_000;
 const httpAgent = new Agent({
@@ -118,8 +121,14 @@ function gitSnapshot() {
   return { revision, dirty: status.length > 0, changeHash: changeHash.digest('hex') };
 }
 
+// 프로필 A/B 두 실행의 영수증이 같은 파일에 겹치면 비교가 사라진다.
+// 프로필 문자열의 해시를 파일명에 넣어 갈라 놓는다.
+const PROFILE_SLUG = EFFORT_PROFILE
+  ? `-p${createHash('sha256').update(EFFORT_PROFILE).digest('hex').slice(0, 8)}`
+  : '';
+
 function receiptPath(modelId, tier) {
-  return `test-results/drawing-model-high-${modelId}-${tier}.json`;
+  return `test-results/drawing-model-high-${modelId}-${tier}${PROFILE_SLUG}.json`;
 }
 
 function summarizeDocument(document, expected) {
@@ -156,6 +165,7 @@ async function runCell(baseUrl, modelId, tier, snapshot) {
   form.set('provider', modelSpec.provider);
   form.set('model', modelSpec.model);
   form.set('effort', EFFORT);
+  if (EFFORT_PROFILE) form.set('effortProfile', EFFORT_PROFILE);
   form.set('pages', 'all');
   form.set('maxVlmCalls', '120');
   if (modelSpec.keyEnv) {
@@ -236,6 +246,7 @@ async function runCell(baseUrl, modelId, tier, snapshot) {
     provider: modelSpec.provider,
     requestedModel: modelSpec.model,
     requestedEffort: EFFORT,
+    requestedEffortProfile: EFFORT_PROFILE || null,
     source: drawing.file,
     sourceSha256,
     description: drawing.description,
@@ -294,6 +305,7 @@ for (const modelId of modelIds) {
         prior.status === 'COMPLETE'
         && prior.requestedModel === MODELS[modelId].model
         && prior.requestedEffort === EFFORT
+        && (prior.requestedEffortProfile ?? null) === (EFFORT_PROFILE || null)
         && prior.sourceSha256 === currentSha
         && prior.workspaceSnapshot?.revision === snapshot.revision
         && prior.workspaceSnapshot?.changeHash === snapshot.changeHash
@@ -335,6 +347,7 @@ const comparison = comparisonStatusForReceipts(results);
 const aggregate = {
   schemaVersion: 1,
   requestedEffort: EFFORT,
+  requestedEffortProfile: EFFORT_PROFILE || null,
   baseUrl,
   workspaceSnapshot: snapshot,
   recordedAt: new Date().toISOString(),
@@ -350,7 +363,7 @@ const aggregate = {
   }])),
   results: results.map(({ document: _document, ...result }) => result),
 };
-writeFileSync('test-results/drawing-model-matrix-high.json', JSON.stringify(aggregate, null, 2));
+writeFileSync(`test-results/drawing-model-matrix-high${PROFILE_SLUG}.json`, JSON.stringify(aggregate, null, 2));
 
 if (!comparison.valid) {
   console.warn(`\n비교 보류: ${comparison.reason} (${comparison.snapshotHashes.join(', ')})`);
@@ -377,7 +390,7 @@ for (const result of results) {
     console.log(`    ${type.padEnd(12)} 정답 ${String(entry.expected).padStart(2)} · 판독 ${entry.values.join('/')} · 폭 ${entry.spread}`);
   }
 }
-console.log('\n영수증: test-results/drawing-model-matrix-high.json');
+console.log(`\n영수증: test-results/drawing-model-matrix-high${PROFILE_SLUG}.json`);
 
 await httpAgent.close();
 
