@@ -14,6 +14,7 @@ import { Agent } from 'undici';
 
 import { reasoningStageEvidenceFromDocument } from './lib/local-drawing-receipt.mjs';
 import { comparisonStatusForReceipts } from './lib/drawing-model-comparison.mjs';
+import { foldRunSpread, formatSpread } from './lib/drawing-run-spread.mjs';
 import { scoreDrawingLabelEvidence } from './lib/drawing-model-score.mjs';
 
 const EFFORT = 'high';
@@ -252,6 +253,14 @@ async function runCell(baseUrl, modelId, tier, snapshot) {
 const baseUrl = argValue('base') ?? DEFAULT_BASE_URL;
 const modelIds = selected(MODELS, 'models');
 const tiers = selected(CASES, 'tiers');
+// --repeat=N 은 같은 셀을 N 회 실행해 최저점과 폭으로 접는다. 2026-08-04
+// 중급 3회에서 같은 입력이 퓨즈 14→11→5 로 흔들렸으므로(원장 10차)
+// 원장에 새로 넣는 수치는 N>=3 으로 뽑는다. 단발은 개선/악화 판정에 쓰지 않는다.
+const repeatRaw = argValue('repeat');
+const repeat = repeatRaw === undefined ? 1 : Number.parseInt(repeatRaw, 10);
+if (!Number.isSafeInteger(repeat) || repeat < 1 || repeat > 10) {
+  throw new Error('--repeat 은 1~10 의 정수여야 합니다.');
+}
 const resume = process.argv.includes('--resume');
 const aggregateOnly = process.argv.includes('--aggregate-only');
 const snapshot = gitSnapshot();
@@ -296,14 +305,28 @@ for (const modelId of modelIds) {
     }
 
     console.log(`실행   ${modelId.padEnd(10)} ${tier.padEnd(12)} ${MODELS[modelId].label} · ${EFFORT}`);
-    const receipt = await runCell(baseUrl, modelId, tier, snapshot);
+    const cellRuns = [];
+    for (let attempt = 1; attempt <= repeat; attempt += 1) {
+      const attemptReceipt = await runCell(baseUrl, modelId, tier, snapshot);
+      cellRuns.push(attemptReceipt);
+      const score = attemptReceipt.scores?.labelAccuracyPct;
+      console.log(
+        `  ${repeat > 1 ? `${attempt}/${repeat} ` : ''}${attemptReceipt.status.padEnd(22)} ${Math.round(attemptReceipt.durationMs / 1000)}s`
+        + `${score === undefined ? '' : ` · 라벨 ${score}%`}`
+        + `${attemptReceipt.vlmCalls === undefined ? '' : ` · 호출 ${attemptReceipt.vlmCalls}`}`,
+      );
+    }
+
+    const spread = foldRunSpread(cellRuns);
+    // 대표 회차 = 최저 종합. 그 문서를 남겨야 무너진 판독을 사후에 볼 수 있다.
+    const receipt = { ...cellRuns[spread.representativeIndex - 1], runSpread: spread };
     writeFileSync(out, JSON.stringify(receipt, null, 2));
-    const score = receipt.scores?.labelAccuracyPct;
-    console.log(
-      `결과   ${receipt.status.padEnd(22)} ${Math.round(receipt.durationMs / 1000)}s`
-      + `${score === undefined ? '' : ` · 라벨 ${score}%`}`
-      + `${receipt.vlmCalls === undefined ? '' : ` · 호출 ${receipt.vlmCalls}`}`,
-    );
+    if (repeat > 1) {
+      console.log(
+        `결과   ${spread.status.padEnd(22)} 라벨 ${formatSpread(spread.accuracy, '%')}`
+        + ` · 폭 ${spread.accuracy?.spread ?? '-'}p · 대표 ${spread.representativeIndex}회차`,
+      );
+    }
     results.push(receipt);
   }
 }
@@ -316,6 +339,7 @@ const aggregate = {
   workspaceSnapshot: snapshot,
   recordedAt: new Date().toISOString(),
   aggregateOnly,
+  repeat,
   resultSnapshotHashes: comparison.snapshotHashes,
   comparison,
   cases: Object.fromEntries(tiers.map((tier) => [tier, CASES[tier]])),
@@ -332,15 +356,26 @@ if (!comparison.valid) {
   console.warn(`\n비교 보류: ${comparison.reason} (${comparison.snapshotHashes.join(', ')})`);
 }
 
-console.log('\n모델            난이도         정확도  관계  시간     호출  실행      품질');
+// 2회 이상이면 최저~최고로 적는다. 단일 수치로 적으면 다음 사람이 그것을
+// 그 셀의 성능으로 읽는다 — 원장 10차가 뒤집은 바로 그 오독이다.
+console.log('\n모델            난이도         정확도     관계       시간        회차  실행      품질');
 for (const result of results) {
+  const spread = result.runSpread;
+  const duration = spread?.duration
+    ? `${Math.round(spread.duration.worst / 1000)}~${Math.round(spread.duration.best / 1000)}s`
+    : '-';
   console.log(
     `${result.modelId.padEnd(16)}${result.tier.padEnd(15)}`
-    + `${String(result.scores?.labelAccuracyPct ?? '-').padStart(3)}%  `
-    + `${String(result.scores?.relationCoveragePct ?? '-').padStart(3)}%  `
-    + `${String(Math.round(result.durationMs / 1000)).padStart(4)}s  `
-    + `${String(result.vlmCalls ?? '-').padStart(4)}  ${result.status.padEnd(9)} ${result.verdict ?? 'UNKNOWN'}`,
+    + `${formatSpread(spread?.accuracy, '%').padStart(8)}  `
+    + `${formatSpread(spread?.relation, '%').padStart(8)}  `
+    + `${duration.padStart(10)}  `
+    + `${String(spread?.runCount ?? 1).padStart(4)}  ${result.status.padEnd(9)} ${result.verdict ?? 'UNKNOWN'}`,
   );
+  // 어느 기호축이 흔들리는지가 다음 수리 대상이다. 폭이 0이면 생략한다.
+  for (const [type, entry] of Object.entries(spread?.symbolTypes ?? {})) {
+    if ((entry.spread ?? 0) === 0) continue;
+    console.log(`    ${type.padEnd(12)} 정답 ${String(entry.expected).padStart(2)} · 판독 ${entry.values.join('/')} · 폭 ${entry.spread}`);
+  }
 }
 console.log('\n영수증: test-results/drawing-model-matrix-high.json');
 
