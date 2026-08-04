@@ -75,6 +75,12 @@ const MODELS = {
     model: 'gpt-5.6-sol',
     label: 'GPT-5.6 Sol',
   },
+  claude: {
+    provider: 'claude',
+    model: 'claude-sonnet-5',
+    keyEnv: 'ANTHROPIC_API_KEY',
+    label: 'Claude Sonnet 5',
+  },
 };
 
 function argValue(name) {

@@ -444,6 +444,54 @@ function toGoogleResponseSchema(value: unknown): unknown {
   return output;
 }
 
+/**
+ * Anthropic `output_config.format`은 Google과 반대 방향의 방언이다.
+ *
+ * - `additionalProperties: false`는 **필수**다(Google은 거부해서 지웠다).
+ * - 수치·길이 제약(`minimum`, `maximum`, `multipleOf`, `minLength` 등)은
+ *   지원하지 않는다. 남겨 보내면 스키마가 거부되므로 여기서 떼고, 값 검증은
+ *   기존 클라이언트 검증에 그대로 맡긴다.
+ * - `type: ['string', 'null']` 같은 union은 `anyOf`로 편다.
+ */
+const ANTHROPIC_UNSUPPORTED_SCHEMA_KEYS = new Set([
+  '$schema',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'minItems',
+  'maxItems',
+  'uniqueItems',
+]);
+
+export function toAnthropicOutputSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(toAnthropicOutputSchema);
+  if (!value || typeof value !== 'object') return value;
+
+  const source = value as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(source)) {
+    if (ANTHROPIC_UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
+    if (key === 'type' && Array.isArray(item)) {
+      const types = item.filter((candidate): candidate is string => typeof candidate === 'string');
+      if (types.length === 1) output.type = types[0];
+      else if (types.length > 1) output.anyOf = types.map((type) => ({ type }));
+      continue;
+    }
+    output[key] = toAnthropicOutputSchema(item);
+  }
+  // 객체는 additionalProperties: false 가 없으면 거부된다. 원본에서 지워졌거나
+  // 애초에 없던 경우까지 여기서 닫는다.
+  if (output.type === 'object' && output.additionalProperties === undefined) {
+    output.additionalProperties = false;
+  }
+  return output;
+}
+
 async function requestGoogleJson(
   provider: GoogleModelProvider,
   imageBase64: string,
@@ -570,6 +618,7 @@ async function requestClaudeJson(
   mimeType: string,
   prompt: string,
   options: RemoteVLMOptions & { provider: 'claude' },
+  outputSchema?: unknown,
 ): Promise<RawProviderJsonResult> {
   const cfg = VLM_CONFIG.claude;
   const model = resolveVlmModel('claude', options.model);
@@ -577,6 +626,15 @@ async function requestClaudeJson(
   const generationControls = claudeAcceptsTemperature(model)
     ? { temperature: options.temperature ?? cfg.defaultTemp }
     : {};
+  // 역할별 스키마와 추론 단계는 같은 `output_config`에 실린다. 스키마를 보내지
+  // 않으면 다른 공급자와 달리 자유 텍스트 JSON이 되고, effort를 보내지 않으면
+  // 다른 모델만 high로 도는 불공정 비교가 된다.
+  const outputConfig: Record<string, unknown> = {
+    ...(outputSchema === undefined
+      ? {}
+      : { format: { type: 'json_schema', schema: toAnthropicOutputSchema(outputSchema) } }),
+    ...(options.effort ? { effort: options.effort } : {}),
+  };
   return withRequestScope(options, async (scope) => {
     const response = await fetchWithTimeout(cfg.endpoint, {
       method: 'POST',
@@ -589,6 +647,7 @@ async function requestClaudeJson(
         model,
         max_tokens: options.maxTokens ?? cfg.defaultMaxTokens,
         ...generationControls,
+        ...(Object.keys(outputConfig).length === 0 ? {} : { output_config: outputConfig }),
         system: prompt,
         messages: [{
           role: 'user',
@@ -944,7 +1003,7 @@ async function callProviderForJson(
     case 'claude':
       validateApiKey(options.provider, options.apiKey);
       redactionKey = options.apiKey;
-      request = () => requestClaudeJson(imageBase64, mimeType, prompt, options);
+      request = () => requestClaudeJson(imageBase64, mimeType, prompt, options, outputSchema);
       break;
   }
 
