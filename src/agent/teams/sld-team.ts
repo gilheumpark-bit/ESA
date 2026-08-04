@@ -259,6 +259,11 @@ function boundsIntersect(
     && left.y + left.h > right.y;
 }
 
+/** 사용자의 로그인된 CLI를 쓰는 공급자 — API 키가 없고 동시성도 낮게 잡는다. */
+function isLocalVisionProvider(provider: string): provider is 'chatgpt-local' | 'claude-local' {
+  return provider === 'chatgpt-local' || provider === 'claude-local';
+}
+
 function synthesizeRasterReview(artifact: DrawingReviewArtifact, deps: SLDTeamDeps): DrawingSynthesis {
   const drawingHash = artifact.snapshot.drawingHash;
   const requiredRoleSet = new Set<ReviewRole>(REQUIRED_COUNCIL_ROLES);
@@ -341,15 +346,16 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     regions: reviewRegions,
     maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
     effortProfile: input.vision.effortProfile,
-    maxConcurrentCalls: input.vision.provider === 'chatgpt-local'
+    // 로컬 CLI 공급자는 프로세스를 띄우므로 동시성을 낮춰 품질을 먼저 확보한다.
+    maxConcurrentCalls: isLocalVisionProvider(input.vision.provider)
       || (input.vision.provider === 'google-agent-platform' && input.vision.effort === 'high')
       ? QUALITY_FIRST_MAX_CONCURRENT_CALLS
       : COUNCIL_MAX_CONCURRENT_CALLS,
     settleOnAbort: input.settleOnAbort,
     priorEnvelopes: input.priorDrawingReviewEnvelopes,
-    options: input.vision.provider === 'chatgpt-local'
+    options: isLocalVisionProvider(input.vision.provider)
       ? {
-          provider: 'chatgpt-local',
+          provider: input.vision.provider as 'chatgpt-local' | 'claude-local',
           model: input.vision.model,
           effort: input.vision.effort,
           signal: input.signal,

@@ -210,10 +210,15 @@ async function parseImageLayout(buffer: ArrayBuffer, input: TeamInput): Promise<
         : process.env.OPENAI_API_KEY ? 'openai'
           : process.env.ANTHROPIC_API_KEY ? 'claude'
             : 'gemini');
+  // splitAndAnalyze 는 원격 키 기반 공급자만 받는다. 로컬 CLI 공급자는
+  // 평면도 분할 경로를 아직 지원하지 않으므로 기본 원격 공급자로 되돌린다.
+  const splitProvider = provider === 'chatgpt-local' || provider === 'claude-local'
+    ? 'gemini'
+    : provider;
   const visionResults = await splitAndAnalyze(buffer, {
     gridSize: 8,      // 8분할 (높은 해상도 평면도)
     overlap: 0.15,
-    model: provider,
+    model: splitProvider,
     modelName: input.vision?.model,
     apiKey: input.vision?.apiKey,
   });

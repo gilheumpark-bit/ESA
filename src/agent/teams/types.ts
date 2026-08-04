@@ -79,7 +79,7 @@ export interface TeamInput {
         effortProfile?: import('@/lib/drawing-reasoning-effort').DrawingEffortProfile;
       }
     | {
-        provider: 'chatgpt-local';
+        provider: 'chatgpt-local' | 'claude-local';
         apiKey?: never;
         model?: string;
         effort?: import('@/lib/drawing-reasoning-effort').DrawingReasoningEffort;

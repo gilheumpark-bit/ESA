@@ -1,5 +1,6 @@
 import { isCatalogModel } from '@/lib/ai-providers';
 import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
+import { getClaudeLocalStatus } from '@/lib/claude-local';
 import { assertLoopbackRequest } from '@/lib/chatgpt-local-loopback';
 import {
   isDrawingReasoningEffort,
@@ -21,9 +22,18 @@ export type DrawingVisionRequest =
       model: string;
       effort?: DrawingReasoningEffort;
       effortProfile?: DrawingEffortProfile;
+    }
+  | {
+      provider: 'claude-local';
+      model: string;
+      effort?: DrawingReasoningEffort;
+      effortProfile?: DrawingEffortProfile;
     };
 
-type RemoteVisionProvider = Exclude<DrawingVisionRequest['provider'], 'chatgpt-local'>;
+type RemoteVisionProvider = Exclude<
+  DrawingVisionRequest['provider'],
+  'chatgpt-local' | 'claude-local'
+>;
 
 const REMOTE_PROVIDERS = new Set<RemoteVisionProvider>([
   'gemini',
@@ -102,6 +112,34 @@ export async function resolveDrawingVisionRequest(
     }
     return {
       provider: 'chatgpt-local',
+      model: selected.id,
+      ...(effort ? { effort } : {}),
+      ...profileFields,
+    };
+  }
+
+  if (providerRaw === 'claude-local') {
+    // 로컬 CLI를 실행하는 경로다. chatgpt-local과 같은 이유로 루프백에서만 연다.
+    try {
+      assertLoopbackRequest(request);
+    } catch {
+      throw new DrawingVisionRequestError('Not found', 404);
+    }
+    const status = await getClaudeLocalStatus();
+    if (!status.available) {
+      throw new DrawingVisionRequestError('로컬 Claude CLI를 사용할 수 없습니다.', 503);
+    }
+    if (!status.connected) {
+      throw new DrawingVisionRequestError('Claude 계정 로그인이 필요합니다.', 401);
+    }
+    const selected = model
+      ? status.models.find((candidate) => candidate.id === model)
+      : status.models.find((candidate) => candidate.inputModalities.includes('image'));
+    if (!selected?.inputModalities.includes('image')) {
+      throw new DrawingVisionRequestError('선택한 Claude 모델은 이미지 분석에 사용할 수 없습니다.', 400);
+    }
+    return {
+      provider: 'claude-local',
       model: selected.id,
       ...(effort ? { effort } : {}),
       ...profileFields,

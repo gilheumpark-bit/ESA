@@ -21,6 +21,7 @@ import {
   type GoogleModelProvider,
 } from '@/lib/google-model-transport';
 import { runChatGPTLocalTurn } from '@/lib/chatgpt-local';
+import { runClaudeLocalTurn } from '@/lib/claude-local';
 import type { DrawingReasoningEffort } from '@/lib/drawing-reasoning-effort';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -28,7 +29,8 @@ import type { DrawingReasoningEffort } from '@/lib/drawing-reasoning-effort';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type RemoteVLMProvider = 'gemini' | 'google-agent-platform' | 'openai' | 'claude';
-export type VLMProvider = RemoteVLMProvider | 'chatgpt-local';
+export type LocalVLMProvider = 'chatgpt-local' | 'claude-local';
+export type VLMProvider = RemoteVLMProvider | LocalVLMProvider;
 
 interface VLMSharedOptions {
   model?: string;
@@ -51,7 +53,7 @@ export type RemoteVLMOptions = VLMSharedOptions & (
 );
 
 export type LocalVLMOptions = VLMSharedOptions & {
-  provider: 'chatgpt-local';
+  provider: LocalVLMProvider;
   apiKey?: never;
 };
 
@@ -107,6 +109,9 @@ const VLM_CONFIG = {
   },
   'chatgpt-local': {
     defaultModel: 'gpt-5.6-terra',
+  },
+  'claude-local': {
+    defaultModel: 'claude-sonnet-5',
   },
 } as const;
 
@@ -960,6 +965,31 @@ async function requestChatGPTLocalJson(
   return { rawText: response.text, model: response.model || model };
 }
 
+/**
+ * 로그인된 `claude` CLI를 역할 판독 공급자로 쓴다. API 키가 없는 환경에서도
+ * 다른 모델과 같은 파이프라인을 통과시키기 위한 경로다. 스키마는 프롬프트
+ * 계약으로 싣고, effort는 CLI의 `--effort`로 그대로 전달한다.
+ */
+async function requestClaudeLocalJson(
+  imageBase64: string,
+  mimeType: string,
+  prompt: string,
+  options: LocalVLMOptions,
+  outputSchema?: unknown,
+): Promise<RawProviderJsonResult> {
+  const model = resolveVlmModel('claude-local', options.model);
+  const response = await runClaudeLocalTurn({
+    model,
+    developerInstructions: prompt,
+    image: { base64: imageBase64, mimeType },
+    ...(outputSchema === undefined ? {} : { outputSchema }),
+    ...(options.effort ? { effort: options.effort } : {}),
+    signal: options.signal,
+    timeoutMs: validateTimeout(options.timeoutMs),
+  });
+  return { rawText: response.text, model: response.model || model };
+}
+
 async function callProviderForJson(
   imageBuffer: ArrayBuffer,
   mimeType: string,
@@ -978,6 +1008,15 @@ async function callProviderForJson(
   switch (options.provider) {
     case 'chatgpt-local':
       request = () => requestChatGPTLocalJson(
+        imageBase64,
+        mimeType,
+        prompt,
+        options,
+        outputSchema,
+      );
+      break;
+    case 'claude-local':
+      request = () => requestClaudeLocalJson(
         imageBase64,
         mimeType,
         prompt,

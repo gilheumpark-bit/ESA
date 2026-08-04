@@ -81,6 +81,12 @@ const MODELS = {
     keyEnv: 'ANTHROPIC_API_KEY',
     label: 'Claude Sonnet 5',
   },
+  // 키 없이 사용자의 로그인된 claude CLI 를 쓴다. gpt-* 로컬 항목과 같은 자리.
+  'claude-local': {
+    provider: 'claude-local',
+    model: 'claude-sonnet-5',
+    label: 'Claude Sonnet 5 (local CLI)',
+  },
 };
 
 function argValue(name) {

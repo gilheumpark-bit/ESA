@@ -17,7 +17,7 @@ import { toOriginalPoint, type AnalysisRegionPlan, type DrawingSnapshot, type Ev
 const PRIMARY_ROLES: readonly VLMReviewRole[] = ['symbols', 'connections', 'text', 'logic'];
 const COVERAGE_ROLE: VLMReviewRole = 'coverage-auditor';
 const VARIANT_KINDS = ['original', 'upscale-2x', 'upscale-4x', 'text-high-contrast', 'line-enhanced'] as const;
-const PROVIDERS = ['openai', 'gemini', 'google-agent-platform', 'claude', 'chatgpt-local'] as const;
+const PROVIDERS = ['openai', 'gemini', 'google-agent-platform', 'claude', 'chatgpt-local', 'claude-local'] as const;
 const PREPARED_SOURCE_MIME = 'image/png';
 const MAX_REGION_CALLS_PER_ROLE = 16;
 const MAX_TOTAL_SOURCE_CALLS = 55;
@@ -201,7 +201,8 @@ function originalBoundsForVariantBounds(bounds: EvidenceBounds, variant: ImageVa
 
 function assertOptions(options: VLMOptions): void {
   if (!options || !PROVIDERS.includes(options.provider)) invalid('options.provider is unsupported.');
-  if (options.provider !== 'chatgpt-local') {
+  // 로컬 공급자는 사용자의 로그인된 CLI를 쓰므로 키가 없다.
+  if (options.provider !== 'chatgpt-local' && options.provider !== 'claude-local') {
     assertBoundedString(options.apiKey, 'options.apiKey', 4_096);
   }
   if (options.model !== undefined) assertBoundedString(options.model, 'options.model', MAX_MODEL_LENGTH);
