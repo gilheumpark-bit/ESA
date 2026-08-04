@@ -120,18 +120,26 @@ export function deduplicateSymbols(
         // 실측(2026-08-04, gemini·intermediate 5회): 매 실행 퓨즈 후보를 14~15개
         // 읽어 놓고 확정은 11~14개였다. 손실은 판독이 아니라 이 판정이었고,
         // 매번 라벨 FU2 노드가 ["fuse","switch"] 로 남아 있었다.
+        //
+        // **조각 보호를 건너뛰지 않는다.** 이 분기를 조각/본체 비대칭 판정
+        // *앞*에 뒀더니 반토막 판독(26x37 · 정상 퓨즈는 31x79)까지 FU2 라벨만
+        // 보고 확정으로 올려, 퓨즈가 15개 정답에 17개로 넘쳤다(2026-08-04 실측).
+        // 지정문자는 **비슷한 크기끼리의 진짜 타입 충돌**을 푸는 데만 쓴다.
         const declaredType = designatorType(dup.rawLabel) ?? designatorType(hit.label);
-        if (declaredType && dup.typeCandidates.includes(declaredType)) {
-          dup.confirmedType = declaredType;
-          dup.certainty = 'confirmed';
-          dup.rawLabel = dup.rawLabel ?? hit.label;
-        } else if (dup.confirmedType && hitIsFragment) {
+        const designatorResolves = declaredType !== undefined
+          && dup.typeCandidates.includes(declaredType)
+          && !hitIsFragment && !hitIsBody;
+        if (dup.confirmedType && hitIsFragment) {
           // 후보와 근거는 이미 보존됐다. 확정과 라벨은 본체 판독의 것을 유지한다.
         } else if (!dup.confirmedType && hitIsBody
           && (hit.certainty === 'confirmed' || hit.confidence >= 0.85)) {
           dup.confirmedType = hitType;
           dup.certainty = 'confirmed';
           dup.rawLabel = hit.label ?? dup.rawLabel;
+        } else if (designatorResolves) {
+          dup.confirmedType = declaredType;
+          dup.certainty = 'confirmed';
+          dup.rawLabel = dup.rawLabel ?? hit.label;
         } else {
           dup.confirmedType = undefined;
           dup.certainty = 'ambiguous';

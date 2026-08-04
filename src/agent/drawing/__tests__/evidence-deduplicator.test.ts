@@ -477,6 +477,21 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
       expect(symbols[0]).toMatchObject({ certainty: 'ambiguous', confirmedType: undefined });
     });
 
+    it('반토막 조각 판독은 지정문자를 쥐고도 확정으로 올리지 않는다', () => {
+      // 실측 회귀(2026-08-04): 이 분기를 조각/본체 판정 앞에 뒀더니 26x37
+      // 반토막 판독(정상 퓨즈 31x79)이 FU2 라벨만으로 확정돼 퓨즈가 정답
+      // 15개에 17개로 넘쳤다. 지정문자는 비슷한 크기끼리의 충돌만 푼다.
+      const symbols = deduplicateSymbols([
+        { localId: 'body', type: 'fuse', label: 'FU2', bounds: { x: 100, y: 100, w: 31, h: 79 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' },
+        { localId: 'sliver', type: 'switch', label: 'FU2', bounds: { x: 103, y: 102, w: 12, h: 17 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      ]);
+
+      expect(symbols).toHaveLength(1);
+      // 본체 확정이 유지된다 — 조각이 본체를 흔들지도, 조각이 별도 퓨즈로 서지도 않는다.
+      expect(symbols[0]).toMatchObject({ confirmedType: 'fuse', certainty: 'confirmed' });
+      expect(symbols[0].evidence).toHaveLength(2);
+    });
+
     it('지정문자가 선언한 종류를 아무 판독도 내지 않았으면 강제하지 않는다', () => {
       // 라벨은 QF1(차단기)인데 두 판독 모두 변압기다. 라벨만으로 없는
       // 판독을 만들어내면 근거 없는 확정이 된다.
