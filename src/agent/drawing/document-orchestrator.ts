@@ -52,6 +52,7 @@ import type {
   DrawingDocumentV3,
   PageAnalysisState,
   RoleId,
+  SymbolNode,
   TextNode,
   UnresolvedItem,
 } from './types-v3';
@@ -847,6 +848,150 @@ async function analyzePage(
   if (state.status === 'failed' && !state.error) state.error = 'PAGE_ANALYSIS_PARTIAL';
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 페이지 간 정합 — 경계 봉합·직선 보조·확인 항목
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** 이전 실행에서 보존된 페이지의 경계 연속성 결과만 되살린다. */
+function restoredContinuity(
+  previous: DrawingDocumentV3 | undefined,
+  preservedPages: ReadonlySet<number>,
+): NonNullable<DrawingDocumentV3['continuity']> {
+  const kept = <T extends { pageIndex: number }>(items: T[] | undefined) =>
+    (items ?? []).filter((item) => preservedPages.has(item.pageIndex));
+  return {
+    regions: kept(previous?.continuity?.regions),
+    continuations: kept(previous?.continuity?.continuations),
+    unresolvedEndpoints: kept(previous?.continuity?.unresolvedEndpoints),
+    stitchReceipts: (previous?.continuity?.stitchReceipts ?? []).filter((item) => {
+      const page = item.continuationIds[0]?.match(/^P(\d+)-C/);
+      return page ? preservedPages.has(Number(page[1]) - 1) : false;
+    }),
+  };
+}
+
+/** 구획 경계에서 끊긴 선을 전역 선망과 봉합하고, 실패한 끝점은 확인 항목으로 남긴다. */
+function stitchPageBoundaries(
+  continuity: NonNullable<DrawingDocumentV3['continuity']>,
+  continuityByPage: ReadonlyMap<number, NonNullable<AdaptedTeamResult['continuity']>>,
+  lineHits: RawLineHit[],
+  unresolved: UnresolvedItem[],
+): void {
+  const ordered = [...continuityByPage.entries()].sort(([left], [right]) => left - right);
+  for (const [pageIndex, pageContinuity] of ordered) {
+    const stitched = stitchBoundaryLines({
+      continuations: pageContinuity.plan.continuations,
+      localLines: pageContinuity.localLines,
+      globalLines: pageContinuity.globalLines,
+    });
+    lineHits.push(...pageContinuity.globalLines, ...stitched.lines);
+    continuity.regions.push(...pageContinuity.plan.regions);
+    continuity.continuations.push(...stitched.continuations);
+    continuity.unresolvedEndpoints.push(...stitched.unresolvedEndpoints);
+    continuity.stitchReceipts.push(...stitched.receipts);
+    for (const endpoint of stitched.unresolvedEndpoints) {
+      unresolved.push({
+        id: endpoint.id,
+        code: 'LINE_CONTINUITY_UNCERTAIN',
+        displayId: endpoint.displayId,
+        pageIndex,
+        regionId: endpoint.regionId,
+        bounds: { x: endpoint.point.x - 6, y: endpoint.point.y - 6, w: 12, h: 12 },
+        candidates: endpoint.continuationId ? [endpoint.continuationId] : undefined,
+        userConfirmItems: [{
+          question: `${endpoint.displayId} 경계 선로의 반대편 연결과 선종을 확인하십시오.`,
+          options: endpoint.continuationId ? [endpoint.continuationId] : undefined,
+        }],
+        note: `${endpoint.continuationId ?? '경계점'}을 전체 도면과 구획 결과로 합치지 못했습니다: ${endpoint.reason}`,
+      });
+    }
+  }
+}
+
+/**
+ * VLM 선 판독은 반복 래스터 망에서 회차마다 크게 흔들린다. 같은 페이지 픽셀에서
+ * 결정론적 직선을 보조 근거로 더하되 기기 내부는 제외한다. 이 히트는 영구히
+ * ambiguous 이므로 추측 관계를 confirmed 로 승격하지 못한다.
+ */
+async function appendRasterLineFallback(
+  source: PreparedDrawingSource,
+  requested: readonly number[],
+  symbols: readonly SymbolNode[],
+  textSeeds: readonly RawTextSeed[],
+  lineHits: RawLineHit[],
+): Promise<void> {
+  for (const page of source.pages) {
+    if (!requested.includes(page.pageIndex) || !page.imageBuffer) continue;
+    const pageSymbols = symbols.filter((symbol) =>
+      symbol.evidence.some((evidence) => evidence.pageIndex === page.pageIndex));
+    // 직선 픽셀만으로는 도체와 표 테두리·표제란·기호 내부 획을 구분하지 못한다.
+    // 이 보조는 살아남은 기호 근거의 보완이지 단독 인식기가 아니다.
+    if (pageSymbols.length === 0) continue;
+    const textBounds = textSeeds
+      .filter((text) => text.pageIndex === page.pageIndex)
+      .map((text) => text.bounds);
+    lineHits.push(...await detectRasterLineHits(
+      page.imageBuffer,
+      page.pageIndex,
+      equipmentExclusionBounds(page, pageSymbols),
+      textBounds,
+    ));
+  }
+}
+
+/** 독립 논리 판독과 공간 그래프가 어긋난 관계를 확인 항목으로 남긴다. */
+function appendLogicConflictItems(
+  source: PreparedDrawingSource,
+  logicConflictsByPage: ReadonlyMap<number, LogicConflict[]>,
+  unresolved: UnresolvedItem[],
+): void {
+  const unique = [...new Map([...logicConflictsByPage.entries()].flatMap(([pageIndex, conflicts]) =>
+    conflicts.map((conflict) => [`${pageIndex}:${conflict.id}`, { pageIndex, conflict }] as const))).values()];
+  for (const { pageIndex, conflict } of unique) {
+    const conflictPage = source.pages.find((page) => page.pageIndex === pageIndex);
+    const evidenceBounds = conflict.logicEvidenceBounds[0]
+      ?? conflict.graphEvidenceBounds[0]
+      ?? { x: 0, y: 0, w: conflictPage?.width ?? 1, h: conflictPage?.height ?? 1, page: pageIndex + 1 };
+    const candidates = [...new Set([...conflict.graphEvidenceIds, ...conflict.logicEvidenceIds])];
+    unresolved.push({
+      id: `logic-conflict-${pageIndex}-${conflict.id}`,
+      code: 'ELECTRICAL_LOGIC_CONFLICT',
+      displayId: `P${String(pageIndex + 1).padStart(2, '0')}-LC${String(unresolved.length + 1).padStart(3, '0')}`,
+      pageIndex,
+      bounds: { x: evidenceBounds.x, y: evidenceBounds.y, w: evidenceBounds.w, h: evidenceBounds.h },
+      candidates,
+      userConfirmItems: [{
+        question: `${conflict.topic} 관계에서 독립 논리 판독과 공간 그래프 중 어느 근거가 맞는지 확인하십시오.`,
+        options: candidates,
+      }],
+      note: `${conflict.message} (${conflict.reasonCode})`,
+    });
+  }
+}
+
+/** 확정하지 못한 페이지 간 관계를 확인 항목으로 남긴다. */
+function appendCrossPageItems(
+  crossPageRelations: ReturnType<typeof reconcileCrossPage>,
+  unresolved: UnresolvedItem[],
+): void {
+  for (const relation of crossPageRelations.filter((item) => item.status !== 'confirmed')) {
+    const evidence = relation.evidence[0];
+    unresolved.push({
+      id: `cross-page-${relation.id}`,
+      code: 'LINE_CONTINUITY_UNCERTAIN',
+      displayId: relation.displayId,
+      pageIndex: evidence?.pageIndex ?? relation.fromPage,
+      bounds: evidence?.bounds ?? { x: 0, y: 0, w: 1, h: 1 },
+      candidates: [relation.fromRef, relation.toRef],
+      userConfirmItems: [{
+        question: `${relation.displayId} 페이지 간 연결 대상을 확인하십시오.`,
+        options: [relation.fromRef, relation.toRef],
+      }],
+      note: `페이지 간 관계를 확정하지 못했습니다: ${relation.reason ?? relation.status}`,
+    });
+  }
+}
+
 export async function runDocumentAnalysis(
   input: OrchestrateInput,
   deps: DocumentAnalysisDependencies = {},
@@ -1028,109 +1173,18 @@ export async function runDocumentAnalysis(
   }
 
   updateJob(job.jobId, { status: 'RECONCILING_PAGES' });
-  const continuity: NonNullable<DrawingDocumentV3['continuity']> = {
-    regions: (previousJob?.document?.continuity?.regions ?? []).filter((item) => preservedPages.has(item.pageIndex)),
-    continuations: (previousJob?.document?.continuity?.continuations ?? []).filter((item) => preservedPages.has(item.pageIndex)),
-    unresolvedEndpoints: (previousJob?.document?.continuity?.unresolvedEndpoints ?? []).filter((item) => preservedPages.has(item.pageIndex)),
-    stitchReceipts: (previousJob?.document?.continuity?.stitchReceipts ?? []).filter((item) => {
-      const page = item.continuationIds[0]?.match(/^P(\d+)-C/);
-      return page ? preservedPages.has(Number(page[1]) - 1) : false;
-    }),
-  };
-  for (const [pageIndex, pageContinuity] of [...continuityByPage.entries()].sort(([left], [right]) => left - right)) {
-    const stitched = stitchBoundaryLines({
-      continuations: pageContinuity.plan.continuations,
-      localLines: pageContinuity.localLines,
-      globalLines: pageContinuity.globalLines,
-    });
-    lineHits.push(...pageContinuity.globalLines, ...stitched.lines);
-    continuity.regions.push(...pageContinuity.plan.regions);
-    continuity.continuations.push(...stitched.continuations);
-    continuity.unresolvedEndpoints.push(...stitched.unresolvedEndpoints);
-    continuity.stitchReceipts.push(...stitched.receipts);
-    for (const endpoint of stitched.unresolvedEndpoints) {
-      unresolved.push({
-        id: endpoint.id,
-        code: 'LINE_CONTINUITY_UNCERTAIN',
-        displayId: endpoint.displayId,
-        pageIndex,
-        regionId: endpoint.regionId,
-        bounds: { x: endpoint.point.x - 6, y: endpoint.point.y - 6, w: 12, h: 12 },
-        candidates: endpoint.continuationId ? [endpoint.continuationId] : undefined,
-        userConfirmItems: [{
-          question: `${endpoint.displayId} 경계 선로의 반대편 연결과 선종을 확인하십시오.`,
-          options: endpoint.continuationId ? [endpoint.continuationId] : undefined,
-        }],
-        note: `${endpoint.continuationId ?? '경계점'}을 전체 도면과 구획 결과로 합치지 못했습니다: ${endpoint.reason}`,
-      });
-    }
-  }
+  const continuity = restoredContinuity(previousJob?.document, preservedPages);
+  stitchPageBoundaries(continuity, continuityByPage, lineHits, unresolved);
   const symbols = deduplicateSymbols(symbolHits);
-  // VLM line reads vary materially on repetitive raster networks. Add a
-  // deterministic straight-line fallback from the same page pixels, excluding
-  // equipment interiors. These hits are permanently ambiguous and therefore
-  // cannot promote a guessed relationship to confirmed.
-  for (const page of source.pages) {
-    if (!requested.includes(page.pageIndex) || !page.imageBuffer) continue;
-    const pageSymbols = symbols.filter((symbol) =>
-      symbol.evidence.some((evidence) => evidence.pageIndex === page.pageIndex));
-    // Straight pixels alone cannot distinguish a conductor from table borders,
-    // title blocks, or symbol internals. The fallback is only a complement to
-    // survived symbol evidence, never a standalone recognition engine.
-    if (pageSymbols.length === 0) continue;
-    const equipmentBounds = equipmentExclusionBounds(page, pageSymbols);
-    const textBounds = textSeeds
-      .filter((text) => text.pageIndex === page.pageIndex)
-      .map((text) => text.bounds);
-    lineHits.push(...await detectRasterLineHits(page.imageBuffer, page.pageIndex, equipmentBounds, textBounds));
-  }
+  await appendRasterLineFallback(source, requested, symbols, textSeeds, lineHits);
   const lines = deduplicateLines(lineHits);
   const relations = requested.flatMap((pageIndex) => buildPageRelations(symbols, lines, pageIndex));
-  const pageRefs = extractPageRefHits(texts);
-  const crossPageRelations = reconcileCrossPage(symbols, texts, pageRefs);
+  const crossPageRelations = reconcileCrossPage(symbols, texts, extractPageRefHits(texts));
+  // 순서가 곧 displayId 다. 미결속 선 → 논리 충돌 → 페이지 간 관계 순서를 바꾸면
+  // 같은 도면의 확인 항목 번호가 달라진다.
   unresolved.push(...findUnboundLineItems(lines, relations));
-  const uniqueLogicConflicts = [...new Map([...finalLogicConflictsByPage.entries()].flatMap(([pageIndex, conflicts]) =>
-    conflicts.map((conflict) => [`${pageIndex}:${conflict.id}`, { pageIndex, conflict }] as const))).values()];
-  for (const { pageIndex, conflict } of uniqueLogicConflicts) {
-    const conflictPage = source.pages.find((page) => page.pageIndex === pageIndex);
-    const conflictBounds = conflict.logicEvidenceBounds[0]
-      ?? conflict.graphEvidenceBounds[0]
-      ?? {
-        x: 0,
-        y: 0,
-        w: conflictPage?.width ?? 1,
-        h: conflictPage?.height ?? 1,
-        page: pageIndex + 1,
-      };
-    const bounds = { x: conflictBounds.x, y: conflictBounds.y, w: conflictBounds.w, h: conflictBounds.h };
-    const candidates = [...new Set([...conflict.graphEvidenceIds, ...conflict.logicEvidenceIds])];
-    unresolved.push({
-      id: `logic-conflict-${pageIndex}-${conflict.id}`,
-      code: 'ELECTRICAL_LOGIC_CONFLICT',
-      displayId: `P${String(pageIndex + 1).padStart(2, '0')}-LC${String(unresolved.length + 1).padStart(3, '0')}`,
-      pageIndex,
-      bounds,
-      candidates,
-      userConfirmItems: [{
-        question: `${conflict.topic} 관계에서 독립 논리 판독과 공간 그래프 중 어느 근거가 맞는지 확인하십시오.`,
-        options: candidates,
-      }],
-      note: `${conflict.message} (${conflict.reasonCode})`,
-    });
-  }
-  for (const relation of crossPageRelations.filter((item) => item.status !== 'confirmed')) {
-    const evidence = relation.evidence[0];
-    unresolved.push({
-      id: `cross-page-${relation.id}`,
-      code: 'LINE_CONTINUITY_UNCERTAIN',
-      displayId: relation.displayId,
-      pageIndex: evidence?.pageIndex ?? relation.fromPage,
-      bounds: evidence?.bounds ?? { x: 0, y: 0, w: 1, h: 1 },
-      candidates: [relation.fromRef, relation.toRef],
-      userConfirmItems: [{ question: `${relation.displayId} 페이지 간 연결 대상을 확인하십시오.`, options: [relation.fromRef, relation.toRef] }],
-      note: `페이지 간 관계를 확정하지 못했습니다: ${relation.reason ?? relation.status}`,
-    });
-  }
+  appendLogicConflictItems(source, finalLogicConflictsByPage, unresolved);
+  appendCrossPageItems(crossPageRelations, unresolved);
   const equipmentLinks = assignPhysicalEquipmentIds(
     symbols,
     crossPageRelations.filter((relation) => relation.status === 'confirmed'),
