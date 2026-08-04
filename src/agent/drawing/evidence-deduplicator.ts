@@ -67,15 +67,6 @@ export function deduplicateSymbols(
   for (const hit of ordered) {
     const hitType = canonicalSymbolType(hit.type, hit.label);
     const dup = kept.find((k) => {
-      // 명판이 같고 한쪽이 다른 쪽의 쪼개진 판독이면, 기존 겹침·근접 조건을
-      // 못 넘겨도 같은 기기다. 조밀한 실도면에서는 같은 기기를 50px 밀려
-      // 다시 읽으면 겹침이 0이 되어 종전 조건이 전부 빠져나갔다.
-      if (typesCompatible(k.confirmedType ?? k.typeCandidates[0] ?? '', hitType)
-        && labelsSameNameplate(k.rawLabel, hit.label)
-        && k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex
-          && sameNameplateSplitRead(evidence.bounds, hit.bounds))) {
-        return true;
-      }
       const samePhysicalBounds = k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex
         && (boundsNear(evidence.bounds, hit.bounds, tolerance)
           || boundsStronglyOverlap(evidence.bounds, hit.bounds)
@@ -814,64 +805,6 @@ function boundsNear(a: EvidenceBounds, b: EvidenceBounds, tol: number): boolean 
 function labelsEquivalent(a?: string, b?: string): boolean {
   if (!a || !b) return false;
   return normalizeLabel(a) === normalizeLabel(b);
-}
-
-/**
- * 두 라벨이 같은 명판을 가리키는가. 같은 기기를 두 번 읽으면 한쪽은
- * 명판 전체를, 다른 쪽은 앞부분만 잡는다("MOLD TR-3" vs
- * "MOLD TR-3 6.6KV/380.220V 3 1000KVA"). 그래서 동등이 아니라 접두 관계를 본다.
- *
- * 숫자를 가르는 접두는 거절한다 — "TR-1" 은 "TR-10" 의 접두지만 다른 기기다.
- */
-function labelsSameNameplate(a?: string, b?: string): boolean {
-  // `normalizeLabel` 은 공백을 지운다. 여기서는 지우면 안 된다 — 명판의
-  // 필드 경계가 사라져 "MOLD TR-3" + " 6.6KV…" 가 "TR-36.6KV" 로 붙고,
-  // 아래 숫자 가드가 이걸 "TR-3" vs "TR-36" 처럼 읽어 버린다.
-  const left = nameplateText(a);
-  const right = nameplateText(b);
-  // 홑 숫자 라벨("1")은 기기명이 아니라 단자 번호다. 명판 취급하지 않는다.
-  if (left.length < 2 || right.length < 2) return false;
-  if (!/[A-Z]/.test(left) || !/[A-Z]/.test(right)) return false;
-  if (left === right) return true;
-  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
-  if (!longer.startsWith(shorter)) return false;
-  // 짧은 쪽이 끝난 자리에서 긴 쪽이 곧바로 숫자로 이어지면 같은 명판이
-  // 아니다 — "TR-1" 은 "TR-10" 의 접두이지만 다른 기기다.
-  return !/[0-9]/.test(longer.charAt(shorter.length));
-}
-
-/** 명판 비교용 정규화. 공백은 하나로 줄이되 **없애지 않는다**(필드 경계). */
-function nameplateText(value?: string): string {
-  return value?.trim().toUpperCase().replace(/\s+/g, ' ') ?? '';
-}
-
-/**
- * 같은 명판을 두 번 읽은 것인가, 아니면 같은 이름의 반복 기기 두 대인가.
- *
- * 실측(2026-08-05, 실행 6회 · 근접쌍 24건)으로 갈렸다:
- *
- * | | 면적비 | 겹침 | |
- * |---|---|---|---|
- * | 진짜 반복(FU3~FU6 · MCCB 피더 행) 11쌍 | **1.00** | 0% | 병합 금지 |
- * | 쪼개진 판독 13쌍 | 1.05~5.33 | 0~23% | 병합 |
- *
- * 진짜 반복 기기는 같은 도장을 찍은 것이라 면적비가 정확히 1.00 이고 서로
- * 겹치지 않는다. 쪼개진 판독은 크기가 다르거나(≥1.5배) 겹친다. 이 두 신호
- * 중 하나라도 서면 같은 기기로 접는다.
- */
-function sameNameplateSplitRead(a: EvidenceBounds, b: EvidenceBounds): boolean {
-  const overlapWidth = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-  const overlapHeight = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
-  // 근접: 서로의 짧은 변만큼도 안 떨어져 있어야 한다. 도면 반대편의
-  // 같은 이름 기기(TR-1 이 두 반에 하나씩)를 접지 않기 위한 결박이다.
-  if (Math.max(0, -overlapWidth) > Math.min(a.w, b.w)) return false;
-  if (Math.max(0, -overlapHeight) > Math.min(a.h, b.h)) return false;
-
-  const areaA = a.w * a.h;
-  const areaB = b.w * b.h;
-  if (areaA <= 0 || areaB <= 0) return false;
-  const areaRatio = Math.max(areaA, areaB) / Math.min(areaA, areaB);
-  return areaRatio >= 1.5 || (overlapWidth > 0 && overlapHeight > 0);
 }
 
 function typesCompatible(a: string, b: string): boolean {
