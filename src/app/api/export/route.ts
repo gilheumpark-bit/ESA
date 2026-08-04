@@ -76,6 +76,52 @@ async function loadReceipt(receiptId: string, requesterId: string) {
 // PART 3 -- Route handler
 // ---------------------------------------------------------------------------
 
+/** RFC 5987 — 한글 파일명을 안전하게 싣는다. */
+function fileResponse(body: string, contentType: string, filename: string, asciiName: string): NextResponse {
+  const bytes = new TextEncoder().encode(body);
+  const encoded = encodeURIComponent(filename).replace(/['()]/g, escape);
+  return new NextResponse(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`,
+      'Content-Length': String(bytes.byteLength),
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+/**
+ * 검토 보고서 반출물. 진짜 PDF 바이너리를 만들지 않으므로 `pdf` 요청도
+ * 인쇄용 HTML로 내보내고 파일명도 그렇게 적는다 — "PDF 다운로드"라고
+ * 표기하면서 HTML을 주던 이전 동작이 사용자를 오도했다.
+ */
+async function reviewReportResponse(
+  report: import('@/agent/teams/types').ESVAVerifiedReport,
+  format: ExportFormat,
+): Promise<NextResponse> {
+  const mod = await import('@/lib/export-review-report');
+  const id = String(report.reportId ?? 'report').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || 'report';
+  const stamp = new Date().toISOString().slice(0, 10);
+
+  if (format === 'pdf') {
+    return fileResponse(
+      mod.reviewReportPrintableHtml(report),
+      'text/html;charset=utf-8',
+      `ESA_검토보고서_${id}_${stamp}.html`,
+      `ESA_Review_${id}_${stamp}.html`,
+    );
+  }
+  // excel 요청도 CSV 로 내보낸다. xlsx 생성기는 계산 영수증 스키마 전용이라
+  // 보고서를 넣으면 빈 표가 나온다 — 확장자만 맞춘 빈 파일을 주지 않는다.
+  return fileResponse(
+    mod.reviewReportCsv(report),
+    'text/csv;charset=utf-8',
+    `ESA_검토보고서_${id}_${stamp}.csv`,
+    `ESA_Review_${id}_${stamp}.csv`,
+  );
+}
+
 async function POST__impl(req: NextRequest): Promise<NextResponse> {
   try {
     if (!isRequestOriginAllowed(
@@ -109,19 +155,40 @@ async function POST__impl(req: NextRequest): Promise<NextResponse> {
         { status: 400 },
       );
     }
-    const body = raw as Partial<ExportRequestBody>;
-
-    // --- Validation ---
-    if (!body.receiptId && !body.receipt) {
-      return NextResponse.json(
-        { error: 'ESVA-5010: receiptId or receipt object is required' },
-        { status: 400 },
-      );
-    }
+    const body = raw as Partial<ExportRequestBody> & { reviewReport?: unknown };
 
     if (!isValidFormat(body.format)) {
       return NextResponse.json(
         { error: 'ESVA-5011: format must be one of: pdf, excel, csv' },
+        { status: 400 },
+      );
+    }
+
+    // --- 팀 검토 보고서 반출 ---
+    // 계산 영수증과 계약이 다르다. 영수증은 계산기를 재실행해 값을 대조하지만
+    // 검토 보고서는 재실행 대상이 아니라 판정·근거의 기록이다. 이전 화면은
+    // 보고서를 가짜 계산 영수증(`calculatorId: 'team-review'`)으로 감싸 보내
+    // 검증기가 요구하는 calcId·체크섬·재실행이 없어 422로 실패했다(2026-08-02).
+    // 대신 보고서 자신의 SHA-256 무결성으로 위조본 반출을 막는다.
+    if (body.reviewReport !== undefined) {
+      const { verifyReportIntegrity } = await import('@/lib/report-integrity');
+      const candidate = body.reviewReport as import('@/agent/teams/types').ESVAVerifiedReport;
+      const intact = candidate && typeof candidate === 'object'
+        ? await verifyReportIntegrity(candidate).catch(() => false)
+        : false;
+      if (!intact) {
+        return NextResponse.json(
+          { error: 'ESA-5014: 보고서 무결성 검증에 실패해 반출할 수 없습니다.' },
+          { status: 422 },
+        );
+      }
+      return reviewReportResponse(candidate, body.format);
+    }
+
+    // --- Validation ---
+    if (!body.receiptId && !body.receipt) {
+      return NextResponse.json(
+        { error: 'ESVA-5010: receiptId, receipt, or reviewReport is required' },
         { status: 400 },
       );
     }

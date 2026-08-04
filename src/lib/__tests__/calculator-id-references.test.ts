@@ -74,7 +74,10 @@ describe('계산기 id 참조', () => {
     'ampacity',              // KEC 허용전류 표 조회 — 계산기 실행이 아니다
     'voltage-drop-judgment', // 전압강하 판정 단계
     'wiring-distance',       // 배치 검토의 배선 거리 항목
-    'team-review',           // 팀 검토 묶음(내보내기 페이로드 라벨)
+    // 'team-review' 는 2026-08-04 에 뺐다. 검토 보고서를 가짜 계산 영수증으로
+    // 감싸 /api/export 에 보내던 페이로드 라벨이었고, 계산 영수증 검증기가
+    // calcId·체크섬·재실행을 요구해 422 로 실패했다. 보고서 전용 반출
+    // 계약(export-review-report)으로 바꾸면서 사용처가 사라졌다.
   ]);
 
   it('CalculationEntry 의 calculatorId 는 실재 계산기이거나 선언된 유사 id 다', () => {

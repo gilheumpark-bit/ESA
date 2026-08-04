@@ -147,38 +147,16 @@ export default function ReportPage() {
 
   async function handleExport(format: 'pdf' | 'excel') {
     if (!report) return;
-    if (format === 'pdf') {
-      const { generatePDFResponse } = await import('@/lib/report-pdf');
-      const html = generatePDFResponse(report);
-      const w = window.open('', '_blank');
-      if (w) {
-        w.opener = null;
-        w.document.write(html);
-        w.document.close();
-      }
-      return;
-    }
 
-    // Excel: POST /api/export (GET은 405)
+    // 두 형식 모두 서버의 검토 보고서 계약을 쓴다. 이전에는 PDF 를 브라우저에서
+    // JSON 덤프 HTML 로 열고, Excel 은 보고서를 가짜 계산 영수증으로 감싸 보내
+    // 422 로 실패했다(2026-08-02 실측). 서버가 보고서 해시를 검증한 뒤
+    // 인쇄용 HTML 또는 CSV 를 내려준다.
     try {
       const res = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          format: 'excel',
-          receipt: {
-            id: report.reportId,
-            calculatorId: 'team-review',
-            inputs: { reportId: report.reportId },
-            outputs: {
-              verdict: report.verdict,
-              grade: report.grade,
-              score: report.compositeScore,
-              summary: report.summary,
-            },
-            createdAt: report.createdAt,
-          },
-        }),
+        body: JSON.stringify({ format, reviewReport: report }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -190,11 +168,15 @@ export default function ReportPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `esva-report-${report.reportId}.xlsx`;
+      // 확장자는 서버가 실제로 만든 형식과 맞춘다. 인쇄용 HTML 을 .xlsx 로
+      // 받게 하면 파일이 열리지 않는다.
+      a.download = format === 'pdf'
+        ? `esa-review-${report.reportId}.html`
+        : `esa-review-${report.reportId}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Excel 내보내기 실패');
+      setError(err instanceof Error ? err.message : '보고서 내보내기 실패');
     }
   }
 

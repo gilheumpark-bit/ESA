@@ -871,6 +871,35 @@ export default function SLDAnalysisPage() {
     }
   }, [canResumeV3, v3Doc, v3JobId]);
 
+  /**
+   * 판독 결과 반출. 서버를 거치지 않는다 — 도면 문서는 이미 브라우저에
+   * 있고, 원본 이미지는 서버·보고서 JSON에 복제하지 않는다는 기존 경계를
+   * 유지해야 한다. 확정만이 아니라 모호·확인 필요 항목까지 함께 내보낸다.
+   */
+  const handleV3Export = useCallback(async (kind: 'print' | 'csv') => {
+    if (!v3Doc) return;
+    const mod = await import('@/lib/export-drawing-document');
+    const stamp = new Date().toISOString().slice(0, 10);
+    if (kind === 'print') {
+      const win = window.open('', '_blank', 'noopener,noreferrer');
+      if (!win) {
+        setError('팝업이 차단되어 인쇄용 보고서를 열 수 없습니다. 팝업을 허용해 주세요.');
+        return;
+      }
+      win.opener = null;
+      win.document.write(mod.drawingDocumentPrintableHtml(v3Doc));
+      win.document.close();
+      return;
+    }
+    const blob = new Blob([mod.drawingDocumentCsv(v3Doc)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `esa-drawing-${v3Doc.documentHash.slice(0, 12)}-${stamp}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, [v3Doc]);
+
   const handleV3Correct = useCallback(async (
     targetDisplayId: string,
     selectedValue: string,
@@ -1289,6 +1318,25 @@ export default function SLDAnalysisPage() {
                   if (position >= 0 && position < v3Doc.pages.length - 1) setV3PageIndex(v3Doc.pages[position + 1].pageIndex);
                 }} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[var(--border-default)] disabled:opacity-40"><ChevronRight size={16} aria-hidden="true" /></button>
               </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2" aria-label="판독 결과 반출">
+              <button
+                type="button"
+                onClick={() => handleV3Export('print')}
+                className="min-h-11 rounded-md border border-[var(--border-default)] px-3 text-sm text-[var(--text-primary)]"
+              >
+                인쇄용 보고서
+              </button>
+              <button
+                type="button"
+                onClick={() => handleV3Export('csv')}
+                className="min-h-11 rounded-md border border-[var(--border-default)] px-3 text-sm text-[var(--text-primary)]"
+              >
+                CSV 체크리스트
+              </button>
+              <span className="text-xs text-[var(--text-secondary)]">
+                모호·확인 필요 항목을 포함해 내보냅니다.
+              </span>
             </div>
             <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
               {v3SourceFile ? (

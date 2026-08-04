@@ -214,7 +214,7 @@ export default function VerificationReport({ report, onExport }: Props) {
           className="flex items-center gap-2 rounded-xl bg-[var(--color-primary)] px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)]"
         >
           <Download size={16} />
-          PDF 다운로드
+          인쇄용 보고서
         </button>
         <button
           type="button"
@@ -222,7 +222,7 @@ export default function VerificationReport({ report, onExport }: Props) {
           className="flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] px-6 py-3 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
         >
           <Download size={16} />
-          Excel 다운로드
+          CSV 내보내기
         </button>
       </div>
     </div>
