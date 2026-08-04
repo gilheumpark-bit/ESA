@@ -33,6 +33,7 @@ import {
   buildPageRelations,
   deduplicateLines,
   deduplicateSymbols,
+  demoteContainedMarkings,
   findUnboundLineItems,
   type RawLineHit,
   type RawSymbolHit,
@@ -1223,12 +1224,15 @@ export async function runDocumentAnalysis(
   const continuity = restoredContinuity(previousJob?.document, preservedPages);
   stitchPageBoundaries(continuity, continuityByPage, lineHits, unresolved);
   const symbols = deduplicateSymbols(symbolHits);
+  // 관계·선 조립 전에 강등한다. 조립은 확정 여부를 보고 판단하므로 순서가 곧 결과다.
+  const containedMarkingItems = demoteContainedMarkings(symbols);
   await appendRasterLineFallback(source, requested, symbols, textSeeds, lineHits);
   const lines = deduplicateLines(lineHits);
   const relations = requested.flatMap((pageIndex) => buildPageRelations(symbols, lines, pageIndex));
   const crossPageRelations = reconcileCrossPage(symbols, texts, extractPageRefHits(texts));
   // 순서가 곧 displayId 다. 미결속 선 → 논리 충돌 → 페이지 간 관계 순서를 바꾸면
   // 같은 도면의 확인 항목 번호가 달라진다.
+  unresolved.push(...containedMarkingItems);
   unresolved.push(...findUnboundLineItems(lines, relations));
   appendLogicConflictItems(source, finalLogicConflictsByPage, unresolved);
   appendCrossPageItems(crossPageRelations, unresolved);

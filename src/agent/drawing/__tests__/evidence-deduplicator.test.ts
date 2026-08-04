@@ -3,6 +3,7 @@ import {
   buildPageRelations,
   deduplicateLines,
   deduplicateSymbols,
+  demoteContainedMarkings,
   findUnboundLineItems,
 } from '../evidence-deduplicator';
 
@@ -443,5 +444,68 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
       { localId: 'qf1', type: 'fuse', label: 'QF1', bounds: { x: 10, y: 10, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
     ]);
     expect(symbols[0].confirmedType).toBe('breaker');
+  });
+
+  describe('기기 몸체에 갇힌 표기 강등', () => {
+    // 실측(저장된 판독 20회, 확정 322개 중 15개): 퓨즈 사각형 안에 인쇄된
+    // 단자 번호 "1"·"2" 를 모델이 terminal 기기로 읽었다. 원본 도면에 그
+    // 자리 단자대는 없다.
+    const fuseBody = {
+      localId: 'fuse', type: 'fuse', label: 'FU1',
+      bounds: { x: 100, y: 100, w: 40, h: 90 },
+      confidence: 0.95, pageIndex: 0, regionId: 'r1', certainty: 'confirmed' as const,
+    };
+    const insideFuse = (localId: string, type: string, label?: string) => ({
+      localId, type, label,
+      bounds: { x: 108, y: 104, w: 10, h: 12 },
+      confidence: 0.9, pageIndex: 0, regionId: 'r2', certainty: 'confirmed' as const,
+    });
+
+    it('퓨즈 몸체 안의 단자 판독을 강등하고 확인 항목을 남긴다', () => {
+      const symbols = deduplicateSymbols([fuseBody, insideFuse('term', 'terminal', '1')]);
+      expect(symbols).toHaveLength(2);
+
+      const items = demoteContainedMarkings(symbols);
+      const fuse = symbols.find((s) => s.rawLabel === 'FU1')!;
+      const terminal = symbols.find((s) => s.rawLabel === '1')!;
+
+      expect(fuse.certainty).toBe('confirmed');
+      // 노드도 근거도 지우지 않는다. 물리 수에서만 빠진다.
+      expect(terminal.certainty).toBe('ambiguous');
+      expect(terminal.confirmedType).toBeUndefined();
+      expect(terminal.evidence).toHaveLength(1);
+
+      expect(items).toHaveLength(1);
+      expect(items[0].displayId).toBe(terminal.displayId);
+      expect(items[0].candidates).toEqual(['terminal']);
+      expect(items[0].userConfirmItems?.[0].question).toContain(fuse.displayId);
+      expect(items[0].note).toContain(fuse.displayId);
+    });
+
+    it('구조 기기는 갇혀 있어도 강등하지 않는다', () => {
+      // source·protection·load·bus 분류는 "경로에 보호기 없음" critical 소견의
+      // 입력이다. 여기서 조용히 내리면 그 판정이 같이 사라진다.
+      const symbols = deduplicateSymbols([fuseBody, insideFuse('inner-cb', 'mccb', 'CB9')]);
+      const items = demoteContainedMarkings(symbols);
+      expect(symbols.every((s) => s.certainty === 'confirmed')).toBe(true);
+      expect(items).toHaveLength(0);
+    });
+
+    it('몸체가 4배 미만이면 갇힌 것으로 보지 않는다', () => {
+      const symbols = deduplicateSymbols([
+        // 400 : 120 = 3.3배. 몸체와 표기가 아니라 겹쳐 그린 두 기기일 수 있다.
+        { ...fuseBody, bounds: { x: 100, y: 100, w: 20, h: 20 } },
+        insideFuse('term', 'terminal', '1'),
+      ]);
+      expect(demoteContainedMarkings(symbols)).toHaveLength(0);
+    });
+
+    it('다른 페이지의 같은 좌표는 갇힌 것이 아니다', () => {
+      const symbols = deduplicateSymbols([
+        fuseBody,
+        { ...insideFuse('term', 'terminal', '1'), pageIndex: 1 },
+      ]);
+      expect(demoteContainedMarkings(symbols)).toHaveLength(0);
+    });
   });
 });

@@ -447,6 +447,39 @@ npm run build && cp -r .next/static .next/standalone/.next/static && cp -r publi
 npx jest src/agent/drawing/__tests__/recommendation-engine.test.ts --runInBand
 ```
 
+## 15차 기기 몸체에 갇힌 표기 강등 (2026-08-04)
+
+**실측이 먼저다**: 저장된 실제 판독 20회의 근거 그래프를 훑어 "다른 확정 심볼 안에
+사실상 갇힌(포함률 ≥0.9, 몸체 면적 ≥4배) 확정 심볼"을 셌다.
+
+| 항목 | 값 |
+|---|---|
+| 확정 심볼 합계 | 322 |
+| 갇힌 심볼 | 15 (4.7%) |
+| 갇힌 심볼의 타입 | **전부 `terminal`** |
+| 몸체의 타입 | 전부 `fuse` |
+| 20회 중 발생 실행 | 4회 (1·3·4·7개) |
+
+원본(`fixtures/drawings/external/wiring-real-sm.jpg`)을 열어 확인했다: 각 퓨즈 사각형
+위·아래에 단자 번호 **"1"·"2"** 가 인쇄돼 있고, 그 자리에 별개 단자대는 없다.
+모델이 이 숫자를 `terminal` 기기로 읽은 것이다. 확정으로 남으면 물리 기기 수가 부풀고
+검토자는 없는 단자대를 찾는다.
+
+**중복 병합기가 못 잡는 이유**: 병합 조건은 "같은 기기의 두 번 판독"이라 타입이
+호환되거나 개폐 계열끼리여야 한다. `terminal` ⊄ `fuse` 는 둘 다 아니다. 여기는 다른
+질문이다 — "겹친 두 판독이 같은 기기인가"가 아니라 "작은 판독이 큰 기기의 **표기**인가".
+
+**안전 방향**: 노드도 근거도 지우지 않는다. `ambiguous` 로 내려 물리 수에서만 빠지고
+`userConfirmItems` 확인 항목("별개 기기입니까, 표기입니까?")이 붙는다. 그리고
+source·protection·load·bus 로 분류되는 심볼은 갇혀 있어도 강등하지 않는다 — 그 분류가
+"경로에 보호기 없음" critical 소견의 입력이라 여기서 조용히 내리면 판정이 같이 사라진다.
+
+재실행:
+
+```bash
+npx jest src/agent/drawing/__tests__/evidence-deduplicator.test.ts --runInBand
+```
+
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
 ```

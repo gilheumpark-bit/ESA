@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto';
 
 import type { EvidenceBounds } from '../vision/evidence-types';
+import { hasDeviceClass } from './device-class';
 import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, UnresolvedItem } from './types-v3';
 
 export interface RawSymbolHit {
@@ -149,6 +150,81 @@ export function deduplicateSymbols(
     });
   }
   return kept;
+}
+
+/**
+ * 기기 몸체 안에 갇힌 확정 심볼을 표기 후보로 강등한다.
+ *
+ * 실측(저장된 실제 판독 20회, 확정 322개): 15개가 이 형태였다. 전부 퓨즈
+ * 사각형 안에 인쇄된 단자 번호 "1"·"2" 를 모델이 `terminal` 기기로 읽은 것이다.
+ * 원본 도면을 열어 확인했다 — 그 자리에 별개 단자대는 없다. 확정으로 남으면
+ * 물리 기기 수가 부풀고, 검토자는 없는 단자대를 찾게 된다.
+ *
+ * 중복 병합기는 이걸 못 잡는다: 병합 조건이 **같은 기기의 두 번 판독**이라
+ * 타입이 호환되거나 개폐 계열끼리여야 한다. terminal ⊄ fuse 는 둘 다 아니다.
+ * 여기는 다른 질문이다 — "겹친 두 판독이 같은 기기인가"가 아니라
+ * "작은 판독이 큰 기기의 **표기**인가".
+ *
+ * ■ 안전 방향 — 지우지 않고, 구조 기기는 건드리지 않는다
+ *
+ * 노드도 근거도 남는다. `ambiguous` 로 내려 물리 수에서 빠지고 확인 항목이
+ * 붙을 뿐이다. 그리고 source·protection·load·bus 로 분류되는 심볼은 강등하지
+ * 않는다 — 그 분류는 "경로에 보호기 없음" critical 소견의 입력이라,
+ * 여기서 조용히 지우면 그 판정이 같이 사라진다(device-class 주석의 같은 논거).
+ */
+export function demoteContainedMarkings(symbols: SymbolNode[]): UnresolvedItem[] {
+  const items: UnresolvedItem[] = [];
+  for (const inner of symbols) {
+    if (inner.certainty !== 'confirmed') continue;
+    if (isStructuralDevice(inner)) continue;
+    const innerRef = smallestEvidence(inner);
+    if (!innerRef) continue;
+
+    const host = symbols.find((outer) => outer.id !== inner.id
+      && outer.certainty === 'confirmed'
+      && outer.evidence.some((ref) => ref.pageIndex === innerRef.pageIndex
+        && boundsContain(ref.bounds, innerRef.bounds)));
+    if (!host) continue;
+
+    inner.certainty = 'ambiguous';
+    inner.confirmedType = undefined;
+    const hostType = host.confirmedType ?? host.typeCandidates[0] ?? '미상';
+    items.push({
+      id: `contained-marking-${inner.id}`,
+      code: 'UNREADABLE_SYMBOL',
+      displayId: inner.displayId,
+      pageIndex: innerRef.pageIndex,
+      bounds: innerRef.bounds,
+      candidates: unique(inner.typeCandidates),
+      note: `${host.displayId}(${hostType}) 몸체 안에 갇힌 판독이라 물리 기기 수에서 뺐습니다.`,
+      userConfirmItems: [{
+        question: `${inner.displayId} 은 ${host.displayId}(${hostType}) 몸체 안에 있습니다.`
+          + ' 별개 기기입니까, 아니면 그 기기의 표기입니까?',
+        options: ['별개 기기', `${host.displayId} 의 표기`],
+      }],
+    });
+  }
+  return items;
+}
+
+/** 강등에서 제외할 구조 기기. 이 분류가 critical 소견의 입력이다. */
+function isStructuralDevice(symbol: SymbolNode): boolean {
+  return (['source', 'protection', 'load', 'bus'] as const)
+    .some((cls) => hasDeviceClass(symbol, cls));
+}
+
+/** 가장 작은 근거 상자. 조각 판독이 섞여 있을 때 포함 판정을 낙관하지 않는다. */
+function smallestEvidence(symbol: SymbolNode): SymbolNode['evidence'][number] | undefined {
+  return [...symbol.evidence].sort((a, b) => a.bounds.w * a.bounds.h - b.bounds.w * b.bounds.h)[0];
+}
+
+/** inner 가 outer 안에 사실상 갇혀 있는가. 몸체는 조각보다 4배 이상 커야 한다. */
+function boundsContain(outer: EvidenceBounds, inner: EvidenceBounds): boolean {
+  const innerArea = inner.w * inner.h;
+  if (innerArea <= 0 || outer.w * outer.h < innerArea * 4) return false;
+  const overlapWidth = Math.max(0, Math.min(outer.x + outer.w, inner.x + inner.w) - Math.max(outer.x, inner.x));
+  const overlapHeight = Math.max(0, Math.min(outer.y + outer.h, inner.y + inner.h) - Math.max(outer.y, inner.y));
+  return (overlapWidth * overlapHeight) / innerArea >= 0.9;
 }
 
 export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[] {
