@@ -112,7 +112,20 @@ export function deduplicateSymbols(
         const largestArea = Math.max(...dup.evidence.map((item) => item.bounds.w * item.bounds.h));
         const hitIsFragment = hitArea * 4 <= largestArea;
         const hitIsBody = largestArea * 4 <= hitArea;
-        if (dup.confirmedType && hitIsFragment) {
+        // 지정문자는 충돌도 이긴다. canonicalSymbolType 은 들어오는 판독 하나를
+        // 정규화할 뿐이라, FU2 를 fuse 로 읽은 판독과 같은 자리를 switch 로 읽은
+        // 판독이 만나면 지정문자를 쥐고도 ambiguous 로 무너졌다. 도면이 스스로
+        // "FU2" 라고 선언한 것이 서로 어긋난 크롭 분류 둘보다 강한 근거다.
+        //
+        // 실측(2026-08-04, gemini·intermediate 5회): 매 실행 퓨즈 후보를 14~15개
+        // 읽어 놓고 확정은 11~14개였다. 손실은 판독이 아니라 이 판정이었고,
+        // 매번 라벨 FU2 노드가 ["fuse","switch"] 로 남아 있었다.
+        const declaredType = designatorType(dup.rawLabel) ?? designatorType(hit.label);
+        if (declaredType && dup.typeCandidates.includes(declaredType)) {
+          dup.confirmedType = declaredType;
+          dup.certainty = 'confirmed';
+          dup.rawLabel = dup.rawLabel ?? hit.label;
+        } else if (dup.confirmedType && hitIsFragment) {
           // 후보와 근거는 이미 보존됐다. 확정과 라벨은 본체 판독의 것을 유지한다.
         } else if (!dup.confirmedType && hitIsBody
           && (hit.certainty === 'confirmed' || hit.confidence >= 0.85)) {
@@ -819,6 +832,18 @@ function boundsPartialReadOverlap(a: EvidenceBounds, b: EvidenceBounds): boolean
   return dist(smallerCenter, largerCenter) <= Math.max(larger.w, larger.h) * 0.8;
 }
 
+/**
+ * IEC 60617 지정문자가 선언하는 기기 종류. 숫자가 붙은 것만 인정해
+ * "FUSE" 같은 일반 단어를 지정문자로 오인하지 않는다.
+ */
+function designatorType(label?: string): string | undefined {
+  const compact = normalizeLabel(label);
+  if (/^FU\d/.test(compact)) return 'fuse';
+  if (/^QS\d/.test(compact)) return 'switch';
+  if (/^QF\d/.test(compact)) return 'breaker';
+  return undefined;
+}
+
 function canonicalSymbolType(value: string, label?: string): string {
   const normalized = normalizeType(value);
   const compactLabel = normalizeLabel(label);
@@ -827,9 +852,8 @@ function canonicalSymbolType(value: string, label?: string): string {
   // FU* 퓨즈가 breaker로, QS1이 breaker/스위치 중복으로 오탐된 실측이 근거다
   // (docs/VALIDATION_EVIDENCE.md 7차, 기호축 69%). vt_pt 명판 우선과 같은
   // 원칙이며, 숫자가 붙은 지정문자만 인정해 FUSE 같은 일반 단어를 잡지 않는다.
-  if (/^FU\d/.test(compactLabel)) return 'fuse';
-  if (/^QS\d/.test(compactLabel)) return 'switch';
-  if (/^QF\d/.test(compactLabel)) return 'breaker';
+  const declared = designatorType(label);
+  if (declared) return declared;
   if (normalized === 'breaker' || normalized === 'circuitbreaker') return 'breaker';
   // 채점기(scripts/lib/local-drawing-receipt.mjs)와 같은 단로기 계열 접기.
   // 병합 쪽만 안 접으면 QS1이 disconnector/switch 두 노드로 남는다.

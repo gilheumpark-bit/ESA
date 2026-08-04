@@ -341,8 +341,14 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
     ]);
 
     expect(symbols).toHaveLength(1);
-    expect(symbols[0].certainty).toBe('ambiguous');
-    expect(symbols[0].confirmedType).toBeUndefined();
+    // 유령 차단기 방지가 이 시험의 목적이고 그건 위 두 줄이 지킨다 —
+    // 노드가 하나고 breaker 노드가 따로 서지 않는다.
+    //
+    // 확정 여부는 2026-08-04 에 바뀌었다. 전에는 ambiguous 로 남겼는데,
+    // 그러면 도면이 "FU5" 라고 선언한 퓨즈가 라벨 없는 크롭 재판독 하나
+    // 때문에 물리 수에서 사라진다. 실측에서 이 손실이 퓨즈 15개 중
+    // 1~4개였다. 지정문자가 이기도록 바꿨으므로 여기도 fuse 확정이다.
+    expect(symbols[0]).toMatchObject({ confirmedType: 'fuse', certainty: 'confirmed' });
     expect(symbols[0].typeCandidates).toEqual(['fuse', 'breaker']);
   });
 
@@ -444,6 +450,42 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
       { localId: 'qf1', type: 'fuse', label: 'QF1', bounds: { x: 10, y: 10, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
     ]);
     expect(symbols[0].confirmedType).toBe('breaker');
+  });
+
+  describe('IEC 지정문자는 판독 충돌도 이긴다', () => {
+    // 실측(gemini · intermediate · 5회): 매 실행 퓨즈 후보를 14~15개 읽어
+    // 놓고 확정은 11~14개였다. 손실은 판독이 아니라 판정이었고, 매번
+    // 라벨 FU2 노드가 ["fuse","switch"] 로 남아 있었다.
+    it('FU2 를 쥔 노드는 switch 판독과 충돌해도 fuse 로 확정된다', () => {
+      const symbols = deduplicateSymbols([
+        { localId: 'a', type: 'fuse', label: 'FU2', bounds: { x: 100, y: 100, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+        { localId: 'b', type: 'switch', bounds: { x: 101, y: 102, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      ]);
+
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0]).toMatchObject({ confirmedType: 'fuse', certainty: 'confirmed', rawLabel: 'FU2' });
+      // 진 판독도 후보로 남는다. 지우는 게 아니라 우선순위를 매기는 것이다.
+      expect(symbols[0].typeCandidates).toEqual(expect.arrayContaining(['fuse', 'switch']));
+    });
+
+    it('지정문자가 없으면 종전대로 ambiguous 로 남는다', () => {
+      // 라벨 "1" 은 단자 번호지 지정문자가 아니다. 근거 없이 한쪽을 고르지 않는다.
+      const symbols = deduplicateSymbols([
+        { localId: 'a', type: 'fuse', label: '1', bounds: { x: 100, y: 100, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+        { localId: 'b', type: 'breaker', label: '1', bounds: { x: 101, y: 102, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      ]);
+      expect(symbols[0]).toMatchObject({ certainty: 'ambiguous', confirmedType: undefined });
+    });
+
+    it('지정문자가 선언한 종류를 아무 판독도 내지 않았으면 강제하지 않는다', () => {
+      // 라벨은 QF1(차단기)인데 두 판독 모두 변압기다. 라벨만으로 없는
+      // 판독을 만들어내면 근거 없는 확정이 된다.
+      const symbols = deduplicateSymbols([
+        { localId: 'a', type: 'transformer', label: 'QF1', bounds: { x: 100, y: 100, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+        { localId: 'b', type: 'vt_pt', bounds: { x: 101, y: 102, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      ]);
+      expect(symbols[0].confirmedType).not.toBe('breaker');
+    });
   });
 
   describe('기기 몸체에 갇힌 표기 강등', () => {
