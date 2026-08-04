@@ -113,6 +113,8 @@ export function applyDrawingCorrection(
     calculations,
     unresolved,
     hasGroundPath: lines.some((line) => line.lineKind === 'ground' && line.certainty === 'confirmed'),
+    groundLineIds: lines.filter((line) => line.lineKind === 'ground' && line.certainty === 'confirmed')
+      .map((line) => line.id),
     coverageComplete: current.coverageLedger.allPlannedFinished
       && current.coverageLedger.regionsFailed === 0
       && current.coverageLedger.unresolvedRescans === 0,

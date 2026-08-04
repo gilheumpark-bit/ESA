@@ -411,6 +411,42 @@ npm run build && cp -r .next/static .next/standalone/.next/static && cp -r publi
 
 **`gate:sld-golden` exit 1 은 "실증 없음"이 아니다**: 이 게이트는 fail-closed 설계라 예측 파일(`test-results/sld-synthetic-predictions.json`)과 attestation 키 없이는 영수증(`test-results/sld-golden-gate.json`)에 사유를 남기고 exit 1 한다(2026-07-22 실측: `ATTESTATION_KEY_MISSING`·`PREDICTION_MISSING:synthetic-degraded`·`MANIFEST_NOT_CLAIM_ELIGIBLE`). "verified-95" **주장 자격**을 잠그는 과장 방지 장치이며, 사유는 영수증 JSON을 읽으면 나온다.
 
+## 14차 접지 소견 세분화 — 그리고 교보재 공백 실측 (2026-08-04)
+
+**한 일**: `hasGroundPath` 이진값 하나로만 판단하던 접지 소견에, "같은 종류 기기 중
+일부만 접지망에 물린" 불일치 지목을 더했다(`recommendation-engine.ts`). 판정이 아니라
+`HOLD` 확인 항목이다 — 어떤 기기가 접지 대상인지는 시공 조건이라 도면만으로 정할 수 없다.
+
+**중간에 자른 설계 — 실측이 뒤집었다.** 처음 구현은 "접지망에 안 물린 확정 기기 전부"를
+지목했다. 저장된 실제 판독 결과 20건에 규칙을 재생해 보니 매 실행 **15–23개**를 지목했다.
+전부 소음이다. 그래서 "도면 스스로가 접지를 표기한 종류 안에서의 불일치"로 좁혔고,
+같은 20건 재생에서 지목 수는 **0**이 됐다.
+
+| 규칙 | 20회 실행 지목 수(확정 기기 2–23개 중) |
+|---|---|
+| 나이브(접지 미연결 전부) | 15–23 |
+| 좁힌 규칙(동종 내 불일치) | 0 |
+
+**실측으로 드러난 별개의 공백 — 접지를 그린 교보재가 없다.**
+
+- 저장된 20회 실행의 선 **577개 중 `lineKind === 'ground'` 는 0개**. 접지로 읽히는 심볼도 0개.
+- 원본(`fixtures/drawings/external/wiring-real-sm.jpg`)을 직접 확인: QS1 단로기 + L1/L2/L3 모선 + FU1–FU6 퓨즈 분기뿐, **접지 표기가 실제로 없다**. 즉 0은 판독 실패가 아니라 정답이다.
+- `american.png` · `wiki-oneline.png` 도 접지 표기가 없다. `fixtures/drawings/realworld/results/*.json` 은 구 `components` 형식이라 근거 그래프 수준의 접지선이 없다.
+- **따라서 접지 분기(기존 critical "접지 경로 없음" 포함)는 오늘 어떤 교보재로도 라이브 실행되지 않는다.** 이 항목은 단위 시험으로만 덮여 있다. 접지를 그린 도면을 교보재에 추가하기 전까지 "실증됨"으로 올리지 않는다.
+
+**표기 형태 2종을 모두 본다**: 접지로 분류된 선, 그리고 보통 선으로 이어진 접지 심볼.
+후자가 단선도에서 더 흔하다 — `fixtures/drawings/realworld/results/rsc-p4-basic-en.json`
+에 모델이 `type: "ground"` 심볼을 낸 실제 사례가 있다. 선만 봤다면 이 표기를 통째로 놓친다.
+
+**`DeviceClass` 에 'ground' 를 더하지 않았다**: 그 열거는 "경로에 보호기 없음" critical
+소견의 입력이다. 항목을 늘리면 그 판정이 같이 흔들린다. 접지 판별은 소견 엔진 안에서만 정의했다.
+
+재실행:
+
+```bash
+npx jest src/agent/drawing/__tests__/recommendation-engine.test.ts --runInBand
+```
+
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
 ```

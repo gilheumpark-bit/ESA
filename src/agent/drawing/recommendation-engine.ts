@@ -10,7 +10,7 @@ import type {
   SymbolNode,
   UnresolvedItem,
 } from './types-v3';
-import { hasDeviceClass } from './device-class';
+import { classifyDevice, hasDeviceClass } from './device-class';
 import { describeStandardRefs } from './rule-basis';
 
 export interface RecommendationInput {
@@ -19,6 +19,12 @@ export interface RecommendationInput {
   calculations: CalculationLink[];
   unresolved: UnresolvedItem[];
   hasGroundPath?: boolean;
+  /**
+   * 확정된 접지 선의 노드 ID. 접지망이 존재할 때 어느 기기가 그 망에
+   * 닿지 않는지 지목하기 위해 쓴다. 접지 적합성 판정이 아니라 확인 요청이다 —
+   * 어떤 기기가 접지 대상인지는 시공 조건이며 도면만으로 확정할 수 없다.
+   */
+  groundLineIds?: string[];
   coverageEvidenceIds?: string[];
   coverageComplete?: boolean;
 }
@@ -148,6 +154,54 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       standardRefs: ['KEC 142 접지시스템의 시설'],
       calcReceiptIds: [],
     }));
+  }
+
+  // 접지망은 있는데 **같은 종류 기기 중 일부만** 그 망에 닿는 경우.
+  // "접지가 표현됐나" 이진값만으로는 "접지선은 있는데 이 반만 안 물려 있다"를
+  // 못 잡는다. 다만 어떤 기기가 접지 대상인지는 시공 조건이라 우리가 정하지
+  // 않는다. 그래서 "접지 안 된 기기 전부"가 아니라, 도면 스스로가 접지를
+  // 표기한 종류 안에서의 불일치만 지목한다. 같은 종류 중 아무도 접지가 없으면
+  // 그건 결함이 아니라 표기 관행이므로 침묵한다.
+  const groundLineIds = new Set(input.groundLineIds ?? []);
+  // 접지는 두 가지로 그려진다: 접지로 분류된 선, 그리고 보통 선으로 이어진
+  // 접지 심볼. 실측 픽스처에서 모델이 `type: "ground"` 심볼을 내보내므로
+  // 선만 보면 흔한 표기를 통째로 놓친다.
+  const groundSymbolIds = new Set(confirmed.filter(isGroundSymbol).map((node) => node.id));
+  if (input.hasGroundPath !== false && (groundLineIds.size > 0 || groundSymbolIds.size > 0)) {
+    const grounded = new Set<string>();
+    for (const relation of input.relations) {
+      const viaLine = relation.lineId !== undefined && groundLineIds.has(relation.lineId);
+      const viaSymbol = relation.certainty === 'confirmed'
+        && (groundSymbolIds.has(relation.from) || groundSymbolIds.has(relation.to));
+      if (!viaLine && !viaSymbol) continue;
+      grounded.add(relation.from);
+      grounded.add(relation.to);
+    }
+
+    const inconsistent = groupBy(
+      confirmed.filter((node) => !isBusLike(node)),
+      (node) => groundPeerKey(node),
+    )
+      // 접지 표기가 있는 종류만 본다. 근거 없는 기대를 만들지 않기 위해서다.
+      .filter((peers) => peers.some((node) => grounded.has(node.id)))
+      .flatMap((peers) => peers.filter((node) => !grounded.has(node.id) && !isGroundSymbol(node)))
+      .sort((left, right) => left.displayId.localeCompare(right.displayId));
+
+    if (inconsistent.length > 0) {
+      out.push(rec(++seq, {
+        // 접지 대상 여부를 우리가 정하지 않으므로 critical 로 올리지 않는다.
+        severity: 'minor',
+        problem: `동일 종류 기기 중 ${inconsistent.length}개만 판독된 접지망에 연결되어 있지 않습니다.`,
+        relatedDisplayIds: inconsistent.slice(0, 40).map((node) => node.displayId),
+        evidenceIds: unique(inconsistent.flatMap((node) => node.evidence.map((e) => e.evidenceId))),
+        // 접지 대상 판단은 도면 밖 조건이므로 확정으로 올리지 않는다.
+        status: 'HOLD',
+        recommendedAction: '원본 도면에서 해당 기기의 접지 표기를 확인하고, 접지 대상인데 누락된 경우 보완하십시오.',
+        requiredInputs: ['기기별 접지 대상 여부', '접지 표기 근거'],
+        standardRefs: ['KEC 142 접지시스템의 시설'],
+        calcReceiptIds: [],
+      }));
+    }
   }
 
   // 미해결 항목은 원본 ledger 에 개별 보존된다. 제안 화면에서는 동일 페이지와
@@ -322,9 +376,56 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
+function groupBy<T>(items: readonly T[], key: (item: T) => string): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    const group = groups.get(k);
+    if (group) group.push(item);
+    else groups.set(k, [item]);
+  }
+  return [...groups.values()];
+}
+
+/**
+ * 접지 표기를 비교할 "같은 종류" 의 정의.
+ *
+ * 확정 종류가 있으면 그것으로 묶는다. 없으면 분류 어휘가 뽑은 근거 문자열로
+ * 묶되, 그것마저 없는 기기는 각자 고유 키를 받아 비교 대상에서 빠진다 —
+ * 종류를 모르는 기기를 한 덩어리로 묶으면 없는 불일치가 생긴다.
+ */
+function groundPeerKey(node: SymbolNode): string {
+  const confirmedType = node.confirmedType?.trim().toLowerCase();
+  if (confirmedType) return `type:${confirmedType}`;
+  const basis = classifyDevice(node).basis.trim().toLowerCase();
+  return basis ? `basis:${basis}` : `unknown:${node.id}`;
+}
+
 const isSource = (s: SymbolNode) => hasDeviceClass(s, 'source');
 const isLoad = (s: SymbolNode) => hasDeviceClass(s, 'load');
 const isProtection = (s: SymbolNode) => hasDeviceClass(s, 'protection');
 const isBusLike = (s: SymbolNode) => hasDeviceClass(s, 'bus');
+
+/**
+ * 접지 심볼 판별.
+ *
+ * `DeviceClass` 에 'ground' 를 더하지 않는 이유: 그 열거는 "경로에 보호기 없음"
+ * critical 소견의 입력이라, 항목을 늘리면 그 판정의 동작이 같이 흔들린다.
+ * 접지는 여기서만 쓰므로 여기서만 정의한다.
+ *
+ * 매칭 규칙은 device-class 와 같은 규율을 따른다 — 라틴 약호는 토큰 전체
+ * 일치(`PE` 가 `PEAK` 안에서 걸리지 않게), 한국어는 복합어 부분 일치.
+ * `E1` 같은 접지극 번호는 일반 기기 태그와 구분되지 않아 제외한다.
+ */
+const GROUND_LATIN_TOKENS = new Set(['ground', 'grounding', 'earth', 'earthing', 'gnd', 'pe', 'peg', 'fg']);
+const GROUND_KOREAN_WORDS = ['접지', '대지', '등전위'];
+
+function isGroundSymbol(node: SymbolNode): boolean {
+  const basis = node.confirmedType ?? node.rawLabel ?? node.typeCandidates?.[0] ?? '';
+  if (!basis) return false;
+  if (GROUND_KOREAN_WORDS.some((word) => basis.includes(word))) return true;
+  const tokens = new Set(basis.toLowerCase().split(/[^a-z0-9]+/i).filter(Boolean));
+  return [...GROUND_LATIN_TOKENS].some((token) => tokens.has(token));
+}
 
 export type { RecommendationStatus };

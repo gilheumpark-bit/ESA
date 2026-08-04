@@ -1255,6 +1255,8 @@ export async function runDocumentAnalysis(
     calculations,
     unresolved,
     hasGroundPath: lines.some((line) => line.lineKind === 'ground' && line.certainty === 'confirmed'),
+    groundLineIds: lines.filter((line) => line.lineKind === 'ground' && line.certainty === 'confirmed')
+      .map((line) => line.id),
     coverageComplete,
     coverageEvidenceIds: coverageLedger.regions.flatMap((region) =>
       (region.roleCalls['coverage-auditor'] ?? []).filter((call) => call.success).map((call) => call.callId)),

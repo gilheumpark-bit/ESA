@@ -75,6 +75,85 @@ describe('recommendation-engine', () => {
     ]));
   });
 
+  it('같은 종류 기기 중 일부만 접지망에 물린 경우를 지목한다', () => {
+    // "접지가 표현됐나" 이진값만으로는 "접지선은 있는데 이 반만 안 물려
+    // 있다"를 못 잡는다. 지목은 하되 접지 대상 여부는 도면 밖 조건이라
+    // HOLD 로 남긴다.
+    const groundLine = (from: string) => ({
+      id: `r-${from}`, displayId: `P01-R-${from}`, from, to: 'P01-S009',
+      lineId: 'P01-L009', certainty: 'confirmed' as const, evidence: [mk('e', 'line').evidence[0]],
+    });
+    const recs = buildRecommendations({
+      symbols: [
+        mk('P01-S001', 'transformer'), mk('P01-S002', 'transformer'),
+        mk('P01-S003', 'load'), mk('P01-S009', 'ground'),
+      ],
+      relations: [groundLine('P01-S001'), groundLine('P01-S009')],
+      calculations: [], unresolved: [],
+      hasGroundPath: true,
+      groundLineIds: ['P01-L009'],
+      coverageEvidenceIds: ['coverage-call-1'], coverageComplete: true,
+    });
+    const ungrounded = recs.find((r) => r.problem.includes('접지망에 연결'));
+    expect(ungrounded).toBeDefined();
+    expect(ungrounded?.status).toBe('HOLD');
+    expect(ungrounded?.severity).toBe('minor');
+    // 접지된 변압기가 있으니 안 물린 변압기 S002 만 지목한다.
+    // 접지 표기가 아예 없는 부하(S003)는 표기 관행이므로 지목하지 않는다.
+    expect(ungrounded?.relatedDisplayIds).toEqual(['P01-S002']);
+    expect(ungrounded?.evidenceIds).toEqual(['P01-S002-e']);
+    expect(ungrounded?.requiredInputs).toContain('기기별 접지 대상 여부');
+  });
+
+  it('접지 표기가 없는 종류는 미연결로 지목하지 않는다', () => {
+    // 접지선은 있지만 부하 쪽에 접지 표기가 하나도 없는 흔한 도면.
+    // 근거 없는 기대를 만들지 않기 위해 침묵해야 한다.
+    const recs = buildRecommendations({
+      symbols: [mk('P01-S001', 'load'), mk('P01-S002', 'load')],
+      relations: [], calculations: [], unresolved: [],
+      hasGroundPath: true, groundLineIds: ['P01-L009'], coverageComplete: true,
+    });
+    expect(recs.some((r) => r.problem.includes('접지망에 연결'))).toBe(false);
+  });
+
+  it('보통 선으로 이어진 접지 심볼도 접지 연결로 센다', () => {
+    // 단선도의 흔한 표기: 접지로 분류된 선이 아니라, 접지 심볼이
+    // 일반 선으로 물려 있다. 선만 보면 이 표기를 통째로 놓친다.
+    const toGround = (from: string) => ({
+      id: `r-${from}`, displayId: `P01-R-${from}`, from, to: 'P01-S009',
+      certainty: 'confirmed' as const, evidence: [mk('e', 'line').evidence[0]],
+    });
+    const recs = buildRecommendations({
+      symbols: [
+        mk('P01-S001', 'transformer'), mk('P01-S002', 'transformer'), mk('P01-S009', 'ground'),
+      ],
+      relations: [toGround('P01-S001')],
+      calculations: [], unresolved: [],
+      hasGroundPath: true, coverageComplete: true,
+    });
+    const ungrounded = recs.find((r) => r.problem.includes('접지망에 연결'));
+    // 접지선 ID 가 하나도 없어도 접지 심볼만으로 비교가 성립한다.
+    expect(ungrounded?.relatedDisplayIds).toEqual(['P01-S002']);
+  });
+
+  it('접지 약호가 다른 낱말 안에 들어 있으면 접지로 세지 않는다', () => {
+    // PE 가 PEAK 안에서, ground 가 Underground 안에서 걸리면 없는 접지망이 생긴다.
+    const recs = buildRecommendations({
+      symbols: [mk('P01-S001', 'PEAK LOAD PANEL'), mk('P01-S002', 'Underground Feeder')],
+      relations: [], calculations: [], unresolved: [],
+      hasGroundPath: true, coverageComplete: true,
+    });
+    expect(recs.some((r) => r.problem.includes('접지망에 연결'))).toBe(false);
+  });
+
+  it('접지망 정보가 없으면 미연결 지목을 만들지 않는다', () => {
+    const recs = buildRecommendations({
+      symbols: [mk('P01-S001', 'load')], relations: [], calculations: [], unresolved: [],
+      hasGroundPath: true, coverageComplete: true,
+    });
+    expect(recs.some((r) => r.problem.includes('접지망에 연결'))).toBe(false);
+  });
+
   it('keeps absence findings on HOLD while coverage is partial', () => {
     const recs = buildRecommendations({
       symbols: [mk('s1', 'generator'), mk('s2', 'load')],
