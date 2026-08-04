@@ -474,10 +474,31 @@ npx jest src/agent/drawing/__tests__/recommendation-engine.test.ts --runInBand
 source·protection·load·bus 로 분류되는 심볼은 갇혀 있어도 강등하지 않는다 — 그 분류가
 "경로에 보호기 없음" critical 소견의 입력이라 여기서 조용히 내리면 판정이 같이 사라진다.
 
+**라이브 검증 (수리 후 번들, `wiring-real-sm.jpg` · gemini · intermediate · 3회)**:
+
+| 회차 | 강등 | 강등된 후보 | 라벨 | 호출 |
+|---|---|---|---|---|
+| 1 | 3 | 전부 `terminal` / rawLabel `"1"` | 99% | 34 |
+| 2 | 6 | 전부 `terminal` / rawLabel `"1"` | 83% | 34 |
+| 3 | 0 | — | 75% | 34 |
+
+9건 전부 퓨즈 몸체 안의 단자 번호였다. **구조 기기(fuse·breaker·switch)는 한 건도
+건드리지 않았다** — 이것이 이 변경이 하기로 한 주장의 전부다.
+
+**라벨 점수는 이 수리에 둔감하다 — 설계상 그렇다.** 채점기는 fuse·breaker·switch 를
+세고 `terminal` 은 세지 않는다. 점수가 안 움직이는 게 정상이고, 이 수리가 줄이는 것은
+**유령 기기 수**지 라벨 정확도가 아니다. 이번 3회의 75~99%(폭 24p)를 직전 3회의
+83~98%(폭 15p)와 비교해 좋다/나쁘다고 말할 수 없다 — 구간이 겹치고, 호출 수도
+34/34/34 대 64/70/34 로 조건이 달랐다(재스캔 발화 여부는 실행마다 갈린다).
+
 재실행:
 
 ```bash
 npx jest src/agent/drawing/__tests__/evidence-deduplicator.test.ts --runInBand
+```
+
+```bash
+node --env-file=.env.local scripts/run-drawing-model-matrix.mjs --tiers=intermediate --models=gemini --repeat=3
 ```
 
 ## 교보재 지도 (2026-07-22 실측 69파일)
