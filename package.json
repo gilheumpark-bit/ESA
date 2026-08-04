@@ -26,6 +26,7 @@
     "test:drawing-v3": "jest --runInBand src/agent/drawing src/app/api/drawing-jobs",
     "test:sld-benchmark": "jest --runInBand src/agent/drawing/__tests__/sld-benchmark-production.test.ts",
     "test:region-continuity": "node scripts/simulate-region-continuity.mjs",
+    "test:scripts": "node --test scripts/lib/*.node-test.mjs",
     "validate:drawing-stages": "node scripts/run-drawing-reasoning-stages.mjs",
     "validate:drawing-model-matrix": "node scripts/run-drawing-model-matrix.mjs",
     "validate:drawing-effort-calibration": "node scripts/run-drawing-effort-calibration.mjs",

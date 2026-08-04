@@ -71,11 +71,22 @@ export function selectCalibrationValues(raw, allowed) {
   return values;
 }
 
+/**
+ * 후보 게이트. 판정 강도는 그대로다 — 아래 사유가 하나라도 있으면 후보가
+ * 아니다. 다만 `coverage-auditor` 는 판독 역할이 아니라 파생 판정이므로
+ * 기호·연결·문자·논리 역할 손실과 같은 사유로 접지 않는다. 두 원인은 수리
+ * 방향이 정반대다: 판독 역할 손실은 모델·호출 문제, 감사 미해결은 재검사
+ * 대상이나 그래프 충돌이 남았다는 뜻이다.
+ */
 export function calibrationQualityGate(result) {
   const coverage = result.reasoning?.stages?.find((stage) => stage.id === 'coverage-and-roles');
-  const missingRoles = Array.isArray(coverage?.evidence?.missingRoles)
-    ? coverage.evidence.missingRoles.filter((role) => typeof role === 'string')
-    : [];
+  const stringList = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === 'string') : []);
+  const missingRoles = stringList(coverage?.evidence?.missingRoles);
+  const missingCoreRoles = coverage?.evidence?.missingCoreRoles === undefined
+    ? missingRoles.filter((role) => role !== 'coverage-auditor')
+    : stringList(coverage.evidence.missingCoreRoles);
+  const auditUnresolved = missingRoles.includes('coverage-auditor');
+  const auditReceiptMissing = coverage?.evidence?.auditReceiptMissing === true;
   const failedRoleCalls = Number.isFinite(coverage?.evidence?.failedRoleCalls)
     ? coverage.evidence.failedRoleCalls
     : 0;
@@ -85,11 +96,16 @@ export function calibrationQualityGate(result) {
   if (result.finalStatus !== 'COMPLETE') reasons.push('DOCUMENT_NOT_COMPLETE');
   if (result.verdict === 'FAIL') reasons.push('QUALITY_FAIL');
   else if (result.verdict !== 'PASS') reasons.push('QUALITY_NOT_PASS');
-  if (missingRoles.length > 0) reasons.push('REQUIRED_ROLES_MISSING');
+  if (missingCoreRoles.length > 0) reasons.push('REQUIRED_ROLES_MISSING');
+  if (auditReceiptMissing) reasons.push('COVERAGE_AUDIT_NO_RECEIPT');
+  else if (auditUnresolved) reasons.push('COVERAGE_AUDIT_UNRESOLVED');
   return {
     eligible: reasons.length === 0,
     reasons,
     failedRoleCalls,
     missingRoles,
+    missingCoreRoles,
+    auditUnresolved,
+    auditReceiptMissing,
   };
 }

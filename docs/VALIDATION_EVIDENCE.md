@@ -155,6 +155,23 @@ KEC 212.7.2 판정은 별도 과부하·단락 보호장치의 ID, 단락장치 
 
 **판정: 추천 후보 0/17.** Terra/high가 라벨 88%·관계 100%·누락 1역할·실패 3건으로 가장 덜 불완전했지만 coverage auditor가 없어 채택하지 않는다. Terra/max와 Sol/xhigh의 99%는 각각 필수 역할 4개와 3개가 빠진 부분 점수다.
 
+> **2026-08-04 정정 — 위 표의 `누락 역할` 열은 두 가지를 합쳐 세고 있다.**
+> `coverage-auditor`는 판독 역할이 아니라 파생 판정이다. 커버리지 원장의
+> `rolesPresent`에 들어가려면 다른 역할·재검사 대상·그래프 충돌이 **전부**
+> 해소돼야 한다([document-orchestrator.ts](../src/agent/drawing/document-orchestrator.ts)의
+> `markCouncilCoverage`). 따라서 감사기가 정상 응답해도 나머지가 하나만 남으면
+> "누락"으로 찍힌다. 17조합 전부에서 `coverage-auditor`가 누락으로 기록된 것은
+> 모델이 감사 역할을 못 했다는 뜻이 아니라, 어떤 조합도 완전 해소에 도달하지
+> 못했다는 뜻이다. 표의 "누락 1역할"(Terra/high)은 실제로는 **판독 역할 손실
+> 0건 + 감사 미해결**이다. 후보 자격 판정 자체는 바뀌지 않는다 — 0/17은 그대로다.
+>
+> 이후 실행부터 캘리브레이션 게이트는 두 원인을 분리해 기록한다:
+> `REQUIRED_ROLES_MISSING`(기호·연결·문자·논리 손실),
+> `COVERAGE_AUDIT_UNRESOLVED`(감사기는 응답했으나 미해결 잔존),
+> `COVERAGE_AUDIT_NO_RECEIPT`(감사기 무응답). 표 출력도 `판독누락`과 `감사`
+> 열로 나뉜다. 수리 방향이 정반대이므로 같은 칸에 세지 않는다 — 판독 손실은
+> 모델·호출 문제, 감사 미해결은 재검사·그래프 충돌 문제다.
+
 실패 기록 414건의 원인은 `LOCAL_CODEX_TIMEOUT` 281건, 문서 deadline/abort 93건, graph conflict 24건, malformed structured output 3건, 기타 13건이다. 따라서 이번 결과는 고급 모델 자체의 순수 판독 순위보다 **같은 effort를 30~48개 전체·구획 역할 호출에 일괄 적용하는 현재 구조의 포화**를 더 강하게 보여 준다. 다음 설계 안건은 단순 기호·문자 추출과 관계·논리·감사 합성의 effort를 분리하는 것이다. 이 변경은 별도 동일 snapshot A/B 없이 적용하지 않는다.
 
 실행 명령은 `npm run validate:drawing-effort-calibration -- --tiers=intermediate`이며 `--resume`, `--aggregate-only`, 모델·effort·tier 필터를 지원한다. 라이브 결과 snapshot은 `f70da7f6132ec04ec8db689385c49c1a3a4cf18c7e4d0368c77fe986d32d3b3a`, clean `0d475fc1961a3f9daab8687ae54551702590f037` 재채점은 동일 후보 0/17이다. 영수증은 `test-results/drawing-calibration-*.json`, 집계는 `test-results/drawing-effort-calibration.json`에 생성되며 Git에는 포함하지 않는다.

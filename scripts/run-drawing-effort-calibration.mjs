@@ -301,16 +301,20 @@ if (!comparison.valid) {
   console.warn(`\n비교 보류: ${comparison.reason} (${comparison.snapshotHashes.join(', ')})`);
 }
 
-console.log('\n모델    추론    난이도         라벨  관계  시간     한도  누락  실패  후보  품질');
+// `판독누락` 은 기호·연결·문자·논리 역할 손실만 센다. 감사기는 파생 판정이라
+// 별도 칸(`감사`)에 둔다 — 없음/미해결/무응답.
+console.log('\n모델    추론    난이도         라벨  관계  시간     한도  판독누락  감사    실패  후보  품질');
 for (const result of results) {
   const gate = result.calibrationGate ?? calibrationQualityGate(result);
+  const audit = gate.auditReceiptMissing ? '무응답' : gate.auditUnresolved ? '미해결' : '해소';
   console.log(
     `${result.modelId.padEnd(8)}${result.requestedEffort.padEnd(8)}${result.tier.padEnd(15)}`
     + `${String(result.scores?.labelAccuracyPct ?? '-').padStart(3)}%  `
     + `${String(result.scores?.relationCoveragePct ?? '-').padStart(3)}%  `
     + `${String(Math.round(result.durationMs / 1000)).padStart(4)}s  `
     + `${String(result.durationWithinLimit ? 'PASS' : 'FAIL').padStart(4)}  `
-    + `${String(gate.missingRoles.length).padStart(4)}  `
+    + `${String(gate.missingCoreRoles.length).padStart(8)}  `
+    + `${audit.padEnd(6)}  `
     + `${String(gate.failedRoleCalls).padStart(4)}  `
     + `${String(gate.eligible ? 'YES' : 'NO').padStart(4)}  ${result.verdict ?? 'UNKNOWN'}`,
   );

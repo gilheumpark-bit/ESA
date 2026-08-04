@@ -169,6 +169,13 @@ export function reasoningStageEvidenceFromDocument(document = {}, options = {}) 
       failedRegions: Number(coverage.regionsFailed ?? 0),
       unresolvedRescans: Number(coverage.unresolvedRescans ?? 0),
       missingRoles,
+      // coverage-auditor 는 판독 역할이 아니라 파생 판정이다. rolesPresent 에
+      // 들어가려면 다른 역할·재검사·그래프 충돌이 전부 해소돼야 하므로,
+      // 감사기가 정상 응답해도 나머지가 하나만 남으면 "누락"으로 찍힌다.
+      // 판독 역할 손실과 같은 칸에 세면 원인 진단이 뒤집힌다.
+      missingCoreRoles,
+      // 감사기가 응답조차 못 했는가(`:missing` 영수증) — 미해결 잔존과 다르다.
+      auditReceiptMissing,
       failedRoleCalls: failedRoleCalls.length,
       auditFailures: auditFailures.length,
     },

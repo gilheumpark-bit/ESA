@@ -75,10 +75,88 @@ test('rejects a high surface score when required review roles are missing', () =
     },
   }), {
     eligible: false,
-    reasons: ['DOCUMENT_NOT_COMPLETE', 'QUALITY_FAIL', 'REQUIRED_ROLES_MISSING'],
+    reasons: [
+      'DOCUMENT_NOT_COMPLETE',
+      'QUALITY_FAIL',
+      'REQUIRED_ROLES_MISSING',
+      'COVERAGE_AUDIT_UNRESOLVED',
+    ],
     failedRoleCalls: 7,
     missingRoles: ['symbols', 'connections', 'coverage-auditor'],
+    missingCoreRoles: ['symbols', 'connections'],
+    auditUnresolved: true,
+    auditReceiptMissing: false,
   });
+});
+
+test('감사기만 빠졌을 때 판독 역할 손실로 세지 않는다', () => {
+  // coverage-auditor 는 파생 판정이라 다른 역할·재검사·그래프 충돌이 하나만
+  // 남아도 rolesPresent 에서 빠진다. 이를 기호·연결 손실과 같은 칸에 세면
+  // 모델 판독력 문제로 오진하게 된다. 후보 자격은 그대로 박탈한다.
+  const gate = calibrationQualityGate({
+    configurationMatched: true,
+    durationWithinLimit: true,
+    finalStatus: 'PARTIAL',
+    verdict: 'HOLD',
+    reasoning: {
+      stages: [{
+        id: 'coverage-and-roles',
+        evidence: {
+          failedRoleCalls: 0,
+          missingRoles: ['coverage-auditor'],
+          missingCoreRoles: [],
+          auditReceiptMissing: false,
+        },
+      }],
+    },
+  });
+  assert.equal(gate.eligible, false);
+  assert.deepEqual(gate.missingCoreRoles, []);
+  assert.ok(!gate.reasons.includes('REQUIRED_ROLES_MISSING'));
+  assert.ok(gate.reasons.includes('COVERAGE_AUDIT_UNRESOLVED'));
+});
+
+test('감사기 무응답은 미해결 잔존과 다른 사유로 기록한다', () => {
+  const gate = calibrationQualityGate({
+    configurationMatched: true,
+    durationWithinLimit: true,
+    finalStatus: 'PARTIAL',
+    verdict: 'FAIL',
+    reasoning: {
+      stages: [{
+        id: 'coverage-and-roles',
+        evidence: {
+          failedRoleCalls: 1,
+          missingRoles: ['coverage-auditor'],
+          missingCoreRoles: [],
+          auditReceiptMissing: true,
+        },
+      }],
+    },
+  });
+  assert.ok(gate.reasons.includes('COVERAGE_AUDIT_NO_RECEIPT'));
+  assert.ok(!gate.reasons.includes('COVERAGE_AUDIT_UNRESOLVED'));
+  assert.equal(gate.auditReceiptMissing, true);
+});
+
+test('missingCoreRoles 가 없는 옛 영수증도 감사기를 분리한다', () => {
+  // 이전 실행이 남긴 영수증에는 missingCoreRoles 가 없다. 그 경우에도
+  // 판독 역할 손실과 감사 미해결을 합치지 않는다.
+  const gate = calibrationQualityGate({
+    configurationMatched: true,
+    durationWithinLimit: true,
+    finalStatus: 'PARTIAL',
+    verdict: 'HOLD',
+    reasoning: {
+      stages: [{
+        id: 'coverage-and-roles',
+        evidence: { failedRoleCalls: 0, missingRoles: ['coverage-auditor'] },
+      }],
+    },
+  });
+  assert.deepEqual(gate.missingCoreRoles, []);
+  assert.ok(!gate.reasons.includes('REQUIRED_ROLES_MISSING'));
+  assert.ok(gate.reasons.includes('COVERAGE_AUDIT_UNRESOLVED'));
 });
 
 test('accepts only a complete, within-limit, configuration-matched quality pass', () => {
@@ -95,5 +173,8 @@ test('accepts only a complete, within-limit, configuration-matched quality pass'
     reasons: [],
     failedRoleCalls: 0,
     missingRoles: [],
+    missingCoreRoles: [],
+    auditUnresolved: false,
+    auditReceiptMissing: false,
   });
 });
