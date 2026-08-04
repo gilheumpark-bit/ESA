@@ -303,3 +303,75 @@ describe('drawing evidence numbering and merge', () => {
     expect(buildPageRelations(symbols, lines, 0)).toEqual([]);
   });
 });
+
+// 중급 공개 결선도(wiring-real-sm.jpg)의 기록된 기호축 실패를 그대로 재현한다.
+// 정답 스위치 1·퓨즈 15·차단기 0에서 breaker 오탐 5, switch 2/1, 퓨즈 14/15가
+// 나왔다(docs/VALIDATION_EVIDENCE.md 7차, 기호축 69%).
+describe('개폐·보호 계열 판독 충돌 병합', () => {
+  it('FU 지정문자가 붙은 breaker 오독을 퓨즈로 되돌려 병합한다', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'fu3-fuse', type: 'fuse', label: 'FU3', bounds: { x: 100, y: 100, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
+      { localId: 'fu3-misread', type: 'breaker', label: 'FU3', bounds: { x: 103, y: 104, w: 20, h: 20 }, confidence: 0.8, pageIndex: 0, regionId: 'grid' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].confirmedType).toBe('fuse');
+    expect(symbols[0].typeCandidates).toEqual(['fuse']);
+  });
+
+  it('QS 지정문자와 단로기 계열 이름을 하나의 switch로 접는다', () => {
+    // 채점기는 disconnector를 switch로 접는데 병합이 안 접으면 QS1이
+    // 두 노드로 남아 switch 2/1 이 된다.
+    const symbols = deduplicateSymbols([
+      { localId: 'qs1-switch', type: 'switch', label: 'QS1', bounds: { x: 40, y: 40, w: 18, h: 18 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'qs1-disconnector', type: 'disconnector', bounds: { x: 43, y: 44, w: 18, h: 18 }, confidence: 0.85, pageIndex: 0, regionId: 'grid' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].typeCandidates).toEqual(['switch']);
+  });
+
+  it('라벨 없는 breaker 재판독이 퓨즈 위에 유령 차단기를 만들지 않는다', () => {
+    // 서로 다른 기기 몸체는 과반이 겹치게 그려지지 않는다. 같은 자리의
+    // 개폐 계열 타입 충돌은 별개 기기가 아니라 하나의 ambiguous 노드다.
+    const symbols = deduplicateSymbols([
+      { localId: 'fu5', type: 'fuse', label: 'FU5', bounds: { x: 200, y: 100, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'ghost-breaker', type: 'breaker', bounds: { x: 204, y: 106, w: 20, h: 20 }, confidence: 0.8, pageIndex: 0, regionId: 'grid' },
+    ]);
+
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].certainty).toBe('ambiguous');
+    expect(symbols[0].confirmedType).toBeUndefined();
+    expect(symbols[0].typeCandidates).toEqual(['fuse', 'breaker']);
+  });
+
+  it('개폐 계열 밖(모선·변압기)과는 타입 충돌 병합을 하지 않는다', () => {
+    const withBus = deduplicateSymbols([
+      { localId: 'bus', type: 'bus', bounds: { x: 0, y: 200, w: 300, h: 12 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'inline-breaker', type: 'breaker', bounds: { x: 140, y: 198, w: 18, h: 18 }, confidence: 0.9, pageIndex: 0, regionId: 'grid' },
+    ]);
+    expect(withBus).toHaveLength(2);
+
+    const withTransformer = deduplicateSymbols([
+      { localId: 'tr', type: 'transformer', bounds: { x: 100, y: 100, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'overlap-breaker', type: 'breaker', bounds: { x: 104, y: 105, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'grid' },
+    ]);
+    expect(withTransformer).toHaveLength(2);
+  });
+
+  it('크기가 4배 넘게 다르면 개폐 계열이라도 별개 기기로 남긴다', () => {
+    // 포함 관계(큰 개폐기 몸체 안의 작은 퓨즈)는 같은 글리프가 아니다.
+    const symbols = deduplicateSymbols([
+      { localId: 'big-switch', type: 'switch', bounds: { x: 50, y: 50, w: 25, h: 25 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'small-fuse', type: 'fuse', bounds: { x: 55, y: 55, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'grid' },
+    ]);
+    expect(symbols).toHaveLength(2);
+  });
+
+  it('QF 지정문자는 차단기를 유지한다', () => {
+    const symbols = deduplicateSymbols([
+      { localId: 'qf1', type: 'fuse', label: 'QF1', bounds: { x: 10, y: 10, w: 20, h: 20 }, confidence: 0.9, pageIndex: 0, regionId: 'full', certainty: 'confirmed' as const },
+    ]);
+    expect(symbols[0].confirmedType).toBe('breaker');
+  });
+});

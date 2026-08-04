@@ -72,7 +72,18 @@ export function deduplicateSymbols(
           || boundsPartialReadOverlap(evidence.bounds, hit.bounds)));
       if (!samePhysicalBounds) return false;
       const sameType = k.typeCandidates.some((candidate) => typesCompatible(candidate, hitType));
-      return sameType || labelsEquivalent(k.rawLabel, hit.label);
+      if (sameType || labelsEquivalent(k.rawLabel, hit.label)) return true;
+      // 서로 다른 기기 몸체는 몸체 과반이 겹치게 그려지지 않는다(위
+      // boundsStronglyOverlap 주석). 그 자리에 개폐·보호 계열끼리 타입만
+      // 갈리면 별개 기기가 아니라 같은 글리프의 판독 충돌이므로 하나의
+      // ambiguous 노드로 접는다 — 라벨 없는 breaker 재판독이 퓨즈 옆에
+      // 유령 차단기를 만들던 실측(중급 breaker 오탐 5)이 근거다. 크기가
+      // 4배 넘게 다르면 포함 관계(모선 위 인라인 기기)일 수 있어 제외한다.
+      return inSwitchgearFamily(hitType)
+        && k.typeCandidates.every((candidate) => inSwitchgearFamily(candidate))
+        && k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex
+          && boundsStronglyOverlap(evidence.bounds, hit.bounds)
+          && areasComparable(evidence.bounds, hit.bounds));
     });
 
     if (dup) {
@@ -708,9 +719,22 @@ function boundsPartialReadOverlap(a: EvidenceBounds, b: EvidenceBounds): boolean
 
 function canonicalSymbolType(value: string, label?: string): string {
   const normalized = normalizeType(value);
+  const compactLabel = normalizeLabel(label);
+  // IEC 60617 기기 지정문자는 도면 자신의 기기 선언이다. 크롭 분류가
+  // 스위치기어 계열 안에서 흔들릴 때 지정문자가 이긴다 — 중급 공개 결선도에서
+  // FU* 퓨즈가 breaker로, QS1이 breaker/스위치 중복으로 오탐된 실측이 근거다
+  // (docs/VALIDATION_EVIDENCE.md 7차, 기호축 69%). vt_pt 명판 우선과 같은
+  // 원칙이며, 숫자가 붙은 지정문자만 인정해 FUSE 같은 일반 단어를 잡지 않는다.
+  if (/^FU\d/.test(compactLabel)) return 'fuse';
+  if (/^QS\d/.test(compactLabel)) return 'switch';
+  if (/^QF\d/.test(compactLabel)) return 'breaker';
   if (normalized === 'breaker' || normalized === 'circuitbreaker') return 'breaker';
+  // 채점기(scripts/lib/local-drawing-receipt.mjs)와 같은 단로기 계열 접기.
+  // 병합 쪽만 안 접으면 QS1이 disconnector/switch 두 노드로 남는다.
+  if (['switch', 'disconnector', 'disconnectswitch', 'switchdisconnector', 'isolator', 'isolatorswitch'].includes(normalized)) {
+    return 'switch';
+  }
   if (['transformer', 'transformerwinding', 'powertransformer', 'distributiontransformer'].includes(normalized)) {
-    const compactLabel = normalizeLabel(label);
     // PTx3 / PPT / VT nameplates identify instrument transformers, not a
     // power transformer. Prefer the explicit label over a broad crop type.
     if (/^(?:PT|PPT|VT)X?\d+/.test(compactLabel)) return 'vt_pt';
@@ -718,6 +742,23 @@ function canonicalSymbolType(value: string, label?: string): string {
   }
   if (['load', 'houseload', 'residentialload', 'house'].includes(normalized)) return 'load';
   return value.trim();
+}
+
+/**
+ * 서로 오인되는 개폐·보호 기기 계열. 같은 자리에서 이 계열끼리 타입이
+ * 갈리면 별개 기기가 아니라 같은 글리프의 판독 충돌이다.
+ */
+const SWITCHGEAR_CONFUSABLE_TYPES = new Set(['breaker', 'fuse', 'switch']);
+
+function inSwitchgearFamily(type: string): boolean {
+  return SWITCHGEAR_CONFUSABLE_TYPES.has(normalizeType(canonicalSymbolType(type)));
+}
+
+function areasComparable(a: EvidenceBounds, b: EvidenceBounds): boolean {
+  const areaA = a.w * a.h;
+  const areaB = b.w * b.h;
+  if (areaA <= 0 || areaB <= 0) return false;
+  return Math.max(areaA, areaB) / Math.min(areaA, areaB) <= 4;
 }
 
 function normalizeType(value: string): string {
