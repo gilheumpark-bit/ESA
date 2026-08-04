@@ -31,6 +31,22 @@ describe('drawing reasoning calibration efforts', () => {
   it.each(['low', 'medium'] as const)('allows local %s image roles 75 seconds inside the ten-minute document boundary', (effort) => {
     expect(drawingRoleTimeoutMs('chatgpt-local', effort)).toBe(75_000);
   });
+
+  it('두 로컬 CLI 공급자에 같은 호출 예산을 준다', () => {
+    // 한쪽만 여유를 주면 3사 비교에서 그 차이가 곧 계통 오차가 된다.
+    for (const effort of ['low', 'medium', 'high', 'xhigh', 'max'] as const) {
+      expect(drawingRoleTimeoutMs('claude-local', effort))
+        .toBe(drawingRoleTimeoutMs('chatgpt-local', effort));
+    }
+    expect(drawingRoleTimeoutMs('claude-local', 'high')).toBe(120_000);
+    expect(drawingRoleTimeoutMs('claude-local', 'medium')).toBe(75_000);
+  });
+
+  it('원격 공급자는 로컬 예산을 받지 않는다', () => {
+    for (const provider of ['gemini', 'google-agent-platform', 'openai', 'claude']) {
+      expect(drawingRoleTimeoutMs(provider, 'high')).toBe(45_000);
+    }
+  });
 });
 
 describe('역할별 추론 프로필', () => {

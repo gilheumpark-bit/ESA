@@ -6,11 +6,18 @@ const DEFAULT_ROLE_TIMEOUT_MS = 45_000;
 const CALIBRATION_LOCAL_ROLE_TIMEOUT_MS = 75_000;
 const HIGH_LOCAL_ROLE_TIMEOUT_MS = 120_000;
 
+/**
+ * 사용자의 로그인된 CLI를 프로세스로 띄우는 공급자. 원격 HTTP 호출보다
+ * 정착이 느리므로 역할 호출 예산을 더 준다. 한쪽 로컬 공급자에만 여유를
+ * 주면 3사 비교에서 그 차이가 곧 계통 오차가 된다.
+ */
+const LOCAL_CLI_PROVIDERS: ReadonlySet<string> = new Set(['chatgpt-local', 'claude-local']);
+
 export function drawingRoleTimeoutMs(
   provider: string,
   effort: DrawingReasoningEffort | undefined,
 ): number {
-  if (provider !== 'chatgpt-local') return DEFAULT_ROLE_TIMEOUT_MS;
+  if (!LOCAL_CLI_PROVIDERS.has(provider)) return DEFAULT_ROLE_TIMEOUT_MS;
   return effort === 'high' || effort === 'xhigh' || effort === 'max'
     ? HIGH_LOCAL_ROLE_TIMEOUT_MS
     : effort === 'low' || effort === 'medium'
