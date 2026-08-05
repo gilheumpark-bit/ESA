@@ -825,11 +825,60 @@ node scripts/probe-pdf-pages.mjs fixtures/drawings/realworld/incoming/kimm-20210
 맞춰 고쳤다 — detach 하는 파서 모의는 이제 거짓 전제다. 보장 자체는 위 파서
 시험이 **실제 파서로** 지키므로 약화가 아니다.
 
-### 남은 질문 (미실시)
+### 정정 — 위 절의 "미실시" 두 건은 틀렸다
 
-- 도면 오케스트레이터가 벡터 PDF 를 받았을 때 실제로 벡터 경로를 타는가. 이번
-  세션의 고급 측정은 전부 **래스터 PNG 를 직접 업로드**한 것이라 그 분기를 안 탔다.
-- 벡터 경로의 정확도 채점 축(정답 대비)이 없다. 속도·결정성만 확인했다.
+이 문서 20차 초판에 "① 벡터 라우팅 미검증 ② 벡터 정확도 채점 축 없음"이라고
+적었다. **원장 앵커를 확인하지 않고 쓴 것이고, 둘 다 사실이 아니다.**
+(CLAUDE.md: "실증이 없다/필요하다"는 판단은 앵커를 확인·재실행한 뒤에만 한다.)
+
+- **정확도 채점 축은 1차 실증에 있다** — `fixtures/drawings/synthetic` 라벨 30파일.
+  재실행 green: `npm run report:drawings` → 초급·중급·고급 평균 **전부 100.0%**.
+- **벡터 라우팅도 있다** — `document-orchestrator.ts` 의 `shouldRunVector`
+  (dxf · `renderMode==='vector'` · `'hybrid'`), `document-orchestrator.test.ts` 에
+  `renderMode: 'vector'` 픽스처 다수. 라이브는 3차 앵커 `bd62fb9` 와 상시 게이트
+  `npm run gate:pdf`(이번 세션 17/17 green)가 덮는다.
+
+진짜 안 했던 것은 **KIMM PDF 를 `/api/drawing-jobs` 에 직접 넣어 보는 것** 하나였다.
+
+### KIMM p5 를 PDF 로 직접 투입 (2026-08-05)
+
+```bash
+curl -X POST http://127.0.0.1:3010/api/drawing-jobs -F "file=@fixtures/drawings/realworld/incoming/kimm-20210602-design.pdf;type=application/pdf" -F "pages=5" ...
+```
+
+| | 결과 |
+|---|---|
+| 응답 | http 200 · 288.6초 · `jobStatus: PARTIAL` |
+| 페이지 | p4(0-based) `failed` · `PAGE_ANALYSIS_PARTIAL` · vlmCalls 110 |
+| 그래프 | 확정 기기 **210** · 관계 **425** · 선 338 · 기기 종류 20종 |
+| 변압기 라벨 | `MOLD TR-1\n6.6KV/220V\n3 500kVA` · `MOLD TR-2` · `MOLD TR-3` · `TR FL&FAN` · `DOWN TR 380/110V 3~ 10KVA` |
+| 구획 | 계획 17 · 완료 14 · **실패 3** · 미해결 재스캔 1 |
+
+라우팅은 정상 발화했다(벡터+래스터 hybrid). 벡터 패스가 명판 원문을 그대로
+넣어 주고 래스터 VLM 이 나머지를 채운다 — 래스터 단독으로는 못 읽던 정보다.
+다만 110 호출·288초를 쓰고도 PARTIAL 로 끝났고, 변압기 중복(`MOLD TR-2`·
+`MOLD TR-3` 이 두 번씩)은 17차의 미병합 문제가 벡터·래스터 **두 출처로** 늘어난 형태다.
+
+### 실패 구획 3개의 원인은 하나였다 — 수리함
+
+```
+p4-full  symbols:      rescanTargets[1] 값이 현재 도면 범위를 벗어났습니다.
+p4-r8    symbols:      rescanTargets[1] 값이 현재 도면 범위를 벗어났습니다.
+p4-r9    symbols:      rescanTargets[1] 값이 현재 도면 범위를 벗어났습니다.
+```
+
+`requestedRescanTargets` 가 `map` 안에서 throw 했다. **대상 하나가 범위를
+벗어나면 역할 호출 전체가 실패**하고 같이 온 멀쩡한 대상까지 사라진다. 그
+결과 구획이 통째로 `failed` 가 됐다.
+
+수리: 유효한 대상은 살리고 거부한 것은 **사유와 함께 HOLD 로 남긴다**(조용히
+버리지 않는다). 전부 잘못됐으면 종전대로 거부한다 — 하나만 나쁜 것과 통째로
+쓰레기인 것은 다른 사건이다.
+
+**아직 안 밝힌 것**: 왜 범위를 벗어난 대상이 만들어졌는가. 이 값은 모델 출력이
+아니라 **우리가 `params.rescanTargets` 로 넣어준 것**이다. 좌표계 불일치가
+유력하지만(재스캔 대상 bounds 와 페이지 스냅샷의 배율) 증거가 없어 단정하지
+않는다. 위 수리는 원인과 무관하게 옳다 — 한 개의 실패가 전체를 죽이면 안 된다.
 
 ## 교보재 지도 (2026-07-22 실측 69파일)
 

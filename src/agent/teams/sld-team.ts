@@ -199,53 +199,86 @@ function redactSecret(value: string, secret: string | undefined): string {
   return secret ? value.split(secret).join('[REDACTED]') : value;
 }
 
-function requestedRescanTargets(input: TeamInput, snapshot: DrawingSnapshot): RescanTargetEvidence[] {
+/**
+ * 재스캔 대상 검증.
+ *
+ * **하나가 나빠도 나머지를 버리지 않는다.** 종전에는 `map` 안에서 throw 해서
+ * 대상 한 개가 범위를 벗어나면 역할 호출 전체가 실패했다 — 같이 온 멀쩡한
+ * 대상까지 사라지고, 그 구획이 통째로 `failed` 가 됐다.
+ *
+ * 실측(2026-08-05, KIMM 83p 설계세트 p5 를 PDF 로 직접 투입): 구획 17개 중
+ * 3개가 실패했고 **셋 다 원인이 `rescanTargets[1] 값이 현재 도면 범위를
+ * 벗어났습니다`** 였다. 나머지 대상은 정상이었는데 함께 버려졌다.
+ *
+ * 조용히 버리지도 않는다 — 버린 개수와 사유를 돌려주어 호출자가 경고로 남긴다.
+ * 전부 나쁘면 종전대로 throw 한다(입력이 통째로 쓰레기인 것은 다른 사건이다).
+ */
+function requestedRescanTargets(
+  input: TeamInput,
+  snapshot: DrawingSnapshot,
+): { targets: RescanTargetEvidence[]; dropped: string[] } {
   const raw = input.params?.rescanTargets;
-  if (raw === undefined) return [];
+  if (raw === undefined) return { targets: [], dropped: [] };
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_RESCAN_TARGETS) {
     throw new Error(`rescanTargets는 1~${MAX_RESCAN_TARGETS}개 배열이어야 합니다.`);
   }
-  return raw.map((candidate, index) => {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-      throw new Error(`rescanTargets[${index}] 형식이 올바르지 않습니다.`);
+  const targets: RescanTargetEvidence[] = [];
+  const dropped: string[] = [];
+  for (const [index, candidate] of raw.entries()) {
+    try {
+      targets.push(parseRescanTarget(candidate, index, snapshot));
+    } catch (error) {
+      dropped.push(error instanceof Error ? error.message : `rescanTargets[${index}] 거부됨`);
     }
-    const value = candidate as Record<string, unknown>;
-    const bounds = value.bounds as Record<string, unknown> | undefined;
-    const suggestedRoles = value.suggestedRoles;
-    const reason = value.reason;
-    const confidence = value.confidence;
-    const retryScope = value.retryScope;
-    if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 200
-      || (value.sourceId !== undefined && (typeof value.sourceId !== 'string' || value.sourceId.length === 0 || value.sourceId.length > 200))
-      || typeof reason !== 'string' || !RESCAN_REASONS.has(reason as RescanTargetEvidence['reason'])
-      || (retryScope !== undefined && retryScope !== 'full-source' && retryScope !== 'precision-region')
-      || !Array.isArray(suggestedRoles) || suggestedRoles.length === 0
-      || suggestedRoles.some((role) => typeof role !== 'string' || !RESCAN_ROLES.has(role as RescanTargetEvidence['suggestedRoles'][number]))
-      || !Number.isFinite(confidence) || (confidence as number) < 0 || (confidence as number) > 1
-      || !bounds
-      || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y) || !Number.isFinite(bounds.w) || !Number.isFinite(bounds.h)
-      || bounds.page !== snapshot.page
-      || (bounds.x as number) < 0 || (bounds.y as number) < 0 || (bounds.w as number) <= 0 || (bounds.h as number) <= 0
-      || (bounds.x as number) + (bounds.w as number) > snapshot.width
-      || (bounds.y as number) + (bounds.h as number) > snapshot.height) {
-      throw new Error(`rescanTargets[${index}] 값이 현재 도면 범위를 벗어났습니다.`);
-    }
-    return {
-      id: value.id,
-      ...(value.sourceId === undefined ? {} : { sourceId: value.sourceId as string }),
-      ...(retryScope === undefined ? {} : { retryScope: retryScope as NonNullable<RescanTargetEvidence['retryScope']> }),
-      reason: reason as RescanTargetEvidence['reason'],
-      bounds: {
-        x: bounds.x as number,
-        y: bounds.y as number,
-        w: bounds.w as number,
-        h: bounds.h as number,
-        page: bounds.page as number,
-      },
-      suggestedRoles: [...new Set(suggestedRoles as RescanTargetEvidence['suggestedRoles'])],
-      confidence: confidence as number,
-    };
-  });
+  }
+  if (targets.length === 0) throw new Error(dropped[0] ?? 'rescanTargets를 하나도 해석하지 못했습니다.');
+  return { targets, dropped };
+}
+
+function parseRescanTarget(
+  candidate: unknown,
+  index: number,
+  snapshot: DrawingSnapshot,
+): RescanTargetEvidence {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw new Error(`rescanTargets[${index}] 형식이 올바르지 않습니다.`);
+  }
+  const value = candidate as Record<string, unknown>;
+  const bounds = value.bounds as Record<string, unknown> | undefined;
+  const suggestedRoles = value.suggestedRoles;
+  const reason = value.reason;
+  const confidence = value.confidence;
+  const retryScope = value.retryScope;
+  if (typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 200
+    || (value.sourceId !== undefined && (typeof value.sourceId !== 'string' || value.sourceId.length === 0 || value.sourceId.length > 200))
+    || typeof reason !== 'string' || !RESCAN_REASONS.has(reason as RescanTargetEvidence['reason'])
+    || (retryScope !== undefined && retryScope !== 'full-source' && retryScope !== 'precision-region')
+    || !Array.isArray(suggestedRoles) || suggestedRoles.length === 0
+    || suggestedRoles.some((role) => typeof role !== 'string' || !RESCAN_ROLES.has(role as RescanTargetEvidence['suggestedRoles'][number]))
+    || !Number.isFinite(confidence) || (confidence as number) < 0 || (confidence as number) > 1
+    || !bounds
+    || !Number.isFinite(bounds.x) || !Number.isFinite(bounds.y) || !Number.isFinite(bounds.w) || !Number.isFinite(bounds.h)
+    || bounds.page !== snapshot.page
+    || (bounds.x as number) < 0 || (bounds.y as number) < 0 || (bounds.w as number) <= 0 || (bounds.h as number) <= 0
+    || (bounds.x as number) + (bounds.w as number) > snapshot.width
+    || (bounds.y as number) + (bounds.h as number) > snapshot.height) {
+    throw new Error(`rescanTargets[${index}] 값이 현재 도면 범위를 벗어났습니다.`);
+  }
+  return {
+    id: value.id,
+    ...(value.sourceId === undefined ? {} : { sourceId: value.sourceId as string }),
+    ...(retryScope === undefined ? {} : { retryScope: retryScope as NonNullable<RescanTargetEvidence['retryScope']> }),
+    reason: reason as RescanTargetEvidence['reason'],
+    bounds: {
+      x: bounds.x as number,
+      y: bounds.y as number,
+      w: bounds.w as number,
+      h: bounds.h as number,
+      page: bounds.page as number,
+    },
+    suggestedRoles: [...new Set(suggestedRoles as RescanTargetEvidence['suggestedRoles'])],
+    confidence: confidence as number,
+  };
 }
 
 function boundsIntersect(
@@ -332,7 +365,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     role,
     selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale),
   ])) as Record<(typeof selectedRoles)[number], ImageVariant>;
-  const requestedTargets = requestedRescanTargets(input, prepared.snapshot);
+  const { targets: requestedTargets, dropped: droppedTargets } = requestedRescanTargets(input, prepared.snapshot);
   const precisionTargets = requestedTargets.filter((target) => target.retryScope !== 'full-source');
   const reviewRegions = requestedTargets.length === 0
     ? prepared.regions
@@ -455,6 +488,8 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     ...(!hasRequiredSymbolVariant ? [hold(`symbols precision source ${requiredSymbolVariantKind}가 없습니다.`)] : []),
     ...(!hasTripleTextVariants ? [hold('text triple-read sources original/upscale-4x/text-high-contrast가 모두 필요합니다.')] : []),
     ...(!everyRequestedTargetCovered ? [hold('요청된 재검사 대상의 판독 근거를 확보하지 못했습니다.')] : []),
+    // 버린 대상은 조용히 사라지지 않는다 — 몇 개를 왜 버렸는지 남긴다.
+    ...droppedTargets.map((reason) => hold(`재검사 대상 거부: ${reason}`)),
     ...rescanTargets.map((target) => hold(`coverage-auditor ${target.reason} 재스캔 필요: ${target.id}`)),
     ...(!coverageComplete ? selectedRoles.flatMap((role) => {
       const coverage = coverageRoles[role];

@@ -312,6 +312,52 @@ describe('SLD raster independent council integration', () => {
     expect(result.drawingReview?.coverage.complete).toBe(true);
   });
 
+  it('범위를 벗어난 재검사 대상 하나가 나머지를 죽이지 않는다', async () => {
+    // 실측(2026-08-05, KIMM 83p p5 PDF 직접 투입): 구획 17개 중 3개가 실패했고
+    // 셋 다 원인이 `rescanTargets[1] 값이 현재 도면 범위를 벗어났습니다` 였다.
+    // 같이 온 멀쩡한 대상까지 버려지고 그 구획이 통째로 failed 가 됐다.
+    const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
+    const result = await executeSLDTeam(rasterInput({
+      params: {
+        rescanTargets: [
+          { id: 'ok', sourceId: 'variant:line-enhanced', reason: 'low-coverage',
+            bounds: { x: 0, y: 0, w: 25, h: 80, page: 1 },
+            suggestedRoles: ['connections'], confidence: 0.9 },
+          // 스냅샷은 100x80 이다 — 이 대상은 폭을 넘는다.
+          { id: 'out-of-range', sourceId: 'variant:line-enhanced', reason: 'low-coverage',
+            bounds: { x: 0, y: 0, w: 400, h: 80, page: 1 },
+            suggestedRoles: ['connections'], confidence: 0.9 },
+        ],
+      } as never,
+    }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    // 멀쩡한 대상으로 판독은 계속된다.
+    expect(result.success).toBe(true);
+    expect(runCouncil).toHaveBeenCalledTimes(1);
+    // 버린 것은 조용히 사라지지 않는다.
+    const notes = (result.standards ?? []).map((s) => s.note ?? '');
+    expect(notes.some((n) => n.includes('재검사 대상 거부') && n.includes('rescanTargets[1]'))).toBe(true);
+  });
+
+  it('재검사 대상이 전부 잘못됐으면 종전대로 거부한다', async () => {
+    // 하나만 나쁜 것과 통째로 쓰레기인 것은 다른 사건이다.
+    await expect(executeSLDTeam(rasterInput({
+      params: {
+        rescanTargets: [{ id: 'bad', reason: 'low-coverage',
+          bounds: { x: 0, y: 0, w: 400, h: 80, page: 1 },
+          suggestedRoles: ['connections'], confidence: 0.9 }],
+      } as never,
+    }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: jest.fn(async () => ({ envelopes: envelopes(), failures: [] })),
+    })).resolves.toMatchObject({ success: false });
+  });
+
   it('accepts the full three-role rescan target capacity instead of capping the combined list at sixteen', async () => {
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
     const rescanTargets = Array.from({ length: 17 }, (_, index) => ({
