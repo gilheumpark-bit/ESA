@@ -452,6 +452,60 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
     expect(symbols[0].confirmedType).toBe('breaker');
   });
 
+  describe('같은 명판을 쪼개 읽은 것과 같은 이름의 기기 두 대를 가른다', () => {
+    // 정답 라벨로 보정했다(2026-08-05). 도면의 벡터 텍스트 층에서 앵커를 만들고
+    // 근접쌍 83건(SAME 20 · DISTINCT 63)을 채점한 결과, 17차가 안전하다고 본
+    // **겹침이 오히려 해로운 신호**였다(DISTINCT 63건 중 16건이 겹친다 — 조밀한
+    // 피더 표에서는 이웃 기기 상자가 겹친다). 면적비 단독 5.0 이 오병합 0 이다.
+    const tr = (localId: string, label: string, b: { x: number; y: number; w: number; h: number }) => ({
+      localId, type: 'transformer', label, bounds: b,
+      confidence: 0.9, pageIndex: 0, regionId: localId, certainty: 'confirmed' as const,
+    });
+
+    it('명판 앞부분만 잡은 작은 재판독을 본체에 접는다', () => {
+      const symbols = deduplicateSymbols([
+        tr('full', 'MOLD TR-2 6.6kV/440V 3PH 1000kVA', { x: 996, y: 502, w: 67, h: 64 }),
+        // 실측값: 23x37 — 본체 대비 면적비 5.0배.
+        tr('partial', 'MOLD TR-2', { x: 969, y: 504, w: 23, h: 37 }),
+      ]);
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0].evidence).toHaveLength(2);
+    });
+
+    it('겹치기만 하고 크기가 비슷하면 접지 않는다 — 정답 63건 중 16건이 이 형태다', () => {
+      const symbols = deduplicateSymbols([
+        tr('left', 'SAX3', { x: 100, y: 100, w: 60, h: 60 }),
+        // 이웃 기기: 상자가 겹치지만 크기가 같다. 17차 규칙은 이것을 접었다.
+        tr('right', 'SAX3', { x: 140, y: 100, w: 60, h: 60 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('숫자를 가르는 접두는 같은 명판이 아니다', () => {
+      const symbols = deduplicateSymbols([
+        tr('a', 'TR-1', { x: 100, y: 100, w: 60, h: 60 }),
+        tr('b', 'TR-10', { x: 170, y: 100, w: 20, h: 20 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('홑 숫자 라벨은 명판이 아니라 단자 번호로 본다', () => {
+      const symbols = deduplicateSymbols([
+        tr('a', '1', { x: 100, y: 100, w: 60, h: 60 }),
+        tr('b', '1', { x: 170, y: 100, w: 20, h: 20 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('멀리 떨어진 같은 이름 기기는 접지 않는다', () => {
+      const symbols = deduplicateSymbols([
+        tr('a', 'MOLD TR-1 500kVA', { x: 100, y: 500, w: 67, h: 64 }),
+        tr('b', 'MOLD TR-1', { x: 900, y: 500, w: 20, h: 20 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+  });
+
   describe('IEC 지정문자는 판독 충돌도 이긴다', () => {
     // 실측(gemini · intermediate · 5회): 매 실행 퓨즈 후보를 14~15개 읽어
     // 놓고 확정은 11~14개였다. 손실은 판독이 아니라 판정이었고, 매번

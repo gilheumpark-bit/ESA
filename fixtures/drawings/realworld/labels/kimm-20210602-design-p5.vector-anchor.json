@@ -1,0 +1,1602 @@
+{
+ "schemaVersion": 1,
+ "source": "fixtures/drawings/realworld/incoming/kimm-20210602-design.pdf",
+ "page": 5,
+ "sourceSha256": "3b1c76c189f85469db9d3a48eab41df56e9519b0e0503e51e5ddf7959dd748d6",
+ "provenance": "pdf-vector-text-layer",
+ "provenanceNote": "CAD 가 출력한 벡터 텍스트를 그대로 읽었다. \"도면이 무엇을 어디에 적었는가\"의 정답이며, \"그 자리에 어떤 물리 기기가 있는가\"의 정답이 아니다. 사람 2인 블라인드 판정이 아니다.",
+ "coordinateSpace": "page-normalized-0-100",
+ "anchorCount": 197,
+ "excludedFallbackNote": "분류 폴백(load)은 제외했다. 이 앵커는 완전한 기기 목록이 아니라 확실한 기기 목록이다.",
+ "countsByType": {
+  "cable": 8,
+  "lamp": 3,
+  "ground": 13,
+  "breaker": 104,
+  "meter": 31,
+  "transformer": 8,
+  "panel": 4,
+  "relay": 19,
+  "capacitor": 3,
+  "arrester": 3,
+  "switch": 1
+ },
+ "anchors": [
+  {
+   "text": "CH",
+   "position": {
+    "x": 21.289672544080602,
+    "y": 7.890736342042762
+   },
+   "type": "cable"
+  },
+  {
+   "text": "PL",
+   "position": {
+    "x": 24.806045340050378,
+    "y": 9.714964370546326
+   },
+   "type": "lamp"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 18.216624685138537,
+    "y": 11.12589073634205
+   },
+   "type": "ground"
+  },
+  {
+   "text": "VCB(DRAW OUT)",
+   "position": {
+    "x": 21.541561712846345,
+    "y": 12.878859857482192
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 24.443324937027707,
+    "y": 14.275534441805233
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 21.994962216624682,
+    "y": 15.586698337292162
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 24.876574307304782,
+    "y": 15.714964370546324
+   },
+   "type": "meter"
+  },
+  {
+   "text": "VCB(DRAW OUT)",
+   "position": {
+    "x": 21.541561712846345,
+    "y": 20.4750593824228
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "VCB(DRAW OUT)",
+   "position": {
+    "x": 41.58186397984886,
+    "y": 20.4750593824228
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "VCB(DRAW OUT)",
+   "position": {
+    "x": 61.622166246851386,
+    "y": 20.4750593824228
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "VCB(DRAW OUT)",
+   "position": {
+    "x": 80.96725440806046,
+    "y": 20.4750593824228
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 25.27959697732997,
+    "y": 22.356294536817103
+   },
+   "type": "meter"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 45.3198992443325,
+    "y": 22.356294536817103
+   },
+   "type": "meter"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 65.360201511335,
+    "y": 22.356294536817103
+   },
+   "type": "meter"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 84.70528967254407,
+    "y": 22.356294536817103
+   },
+   "type": "meter"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 18.216624685138537,
+    "y": 23.32541567695962
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 38.25692695214106,
+    "y": 23.32541567695962
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 58.297229219143574,
+    "y": 23.32541567695962
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 77.64231738035264,
+    "y": 23.32541567695962
+   },
+   "type": "ground"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 21.994962216624682,
+    "y": 23.824228028503565
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 42.0352644836272,
+    "y": 23.824228028503565
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 62.07556675062972,
+    "y": 23.824228028503565
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 81.42065491183878,
+    "y": 23.824228028503565
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 25.289672544080606,
+    "y": 23.95249406175773
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 45.329974811083126,
+    "y": 23.95249406175773
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 65.37027707808564,
+    "y": 23.95249406175773
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 84.7153652392947,
+    "y": 23.95249406175773
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 21.319899244332493,
+    "y": 25.477434679334916
+   },
+   "type": "cable"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 41.360201511335006,
+    "y": 25.477434679334916
+   },
+   "type": "cable"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 61.40050377833754,
+    "y": 25.477434679334916
+   },
+   "type": "cable"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 80.73551637279597,
+    "y": 25.477434679334916
+   },
+   "type": "cable"
+  },
+  {
+   "text": "ZCT",
+   "position": {
+    "x": 19.33501259445844,
+    "y": 26.04750593824229
+   },
+   "type": "meter"
+  },
+  {
+   "text": "ZCT",
+   "position": {
+    "x": 39.37531486146095,
+    "y": 26.04750593824229
+   },
+   "type": "meter"
+  },
+  {
+   "text": "ZCT",
+   "position": {
+    "x": 59.415617128463474,
+    "y": 26.04750593824229
+   },
+   "type": "meter"
+  },
+  {
+   "text": "ZCT",
+   "position": {
+    "x": 78.76070528967254,
+    "y": 26.04750593824229
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 21.319899244332493,
+    "y": 29.011876484560567
+   },
+   "type": "cable"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 41.360201511335006,
+    "y": 29.011876484560567
+   },
+   "type": "cable"
+  },
+  {
+   "text": "CH",
+   "position": {
+    "x": 61.40050377833754,
+    "y": 29.011876484560567
+   },
+   "type": "cable"
+  },
+  {
+   "text": "TR",
+   "position": {
+    "x": 11.818639798488665,
+    "y": 30.494061757719713
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "TR",
+   "position": {
+    "x": 31.858942065491185,
+    "y": 30.494061757719713
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "TR",
+   "position": {
+    "x": 51.8992443324937,
+    "y": 30.494061757719713
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "MOLD TR-1",
+   "position": {
+    "x": 21.72292191435768,
+    "y": 30.75059382422804
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "MOLD TR-2",
+   "position": {
+    "x": 41.7632241813602,
+    "y": 30.75059382422804
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "MOLD TR-3",
+   "position": {
+    "x": 61.80352644836271,
+    "y": 30.93586698337292
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 59.88916876574307,
+    "y": 31.27790973871734
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 19.95969773299748,
+    "y": 31.776722090261288
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E1",
+   "position": {
+    "x": 40,
+    "y": 31.776722090261288
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E2",
+   "position": {
+    "x": 59.879093198992436,
+    "y": 32.14726840855108
+   },
+   "type": "ground"
+  },
+  {
+   "text": "FROM:LV-5 PANEL",
+   "position": {
+    "x": 76.51385390428212,
+    "y": 33.78622327790974
+   },
+   "type": "panel"
+  },
+  {
+   "text": "3∅PT 50VA",
+   "position": {
+    "x": 61.87405541561712,
+    "y": 36.494061757719706
+   },
+   "type": "meter"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 18.821158690176322,
+    "y": 36.66508313539193
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 38.86146095717884,
+    "y": 36.66508313539193
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 58.90176322418136,
+    "y": 36.66508313539193
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "PL",
+   "position": {
+    "x": 24.97732997481108,
+    "y": 36.96437054631829
+   },
+   "type": "lamp"
+  },
+  {
+   "text": "OVGR",
+   "position": {
+    "x": 27.808564231738035,
+    "y": 36.97862232779098
+   },
+   "type": "relay"
+  },
+  {
+   "text": "PL",
+   "position": {
+    "x": 45.00755667506297,
+    "y": 36.96437054631829
+   },
+   "type": "lamp"
+  },
+  {
+   "text": "OVGR",
+   "position": {
+    "x": 47.848866498740556,
+    "y": 36.97862232779098
+   },
+   "type": "relay"
+  },
+  {
+   "text": "3∅PT 50VA",
+   "position": {
+    "x": 78.5088161209068,
+    "y": 37.20665083135392
+   },
+   "type": "meter"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 64.93702770780855,
+    "y": 37.947743467933485
+   },
+   "type": "meter"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 24.876574307304782,
+    "y": 38.95961995249406
+   },
+   "type": "meter"
+  },
+  {
+   "text": "PTT",
+   "position": {
+    "x": 44.91687657430731,
+    "y": 38.95961995249406
+   },
+   "type": "meter"
+  },
+  {
+   "text": "ACB(DRAW OUT)",
+   "position": {
+    "x": 21.57178841309824,
+    "y": 39.88598574821853
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "ACB(DRAW OUT)",
+   "position": {
+    "x": 41.612090680100756,
+    "y": 39.88598574821853
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "ACB(DRAW OUT)",
+   "position": {
+    "x": 61.67254408060453,
+    "y": 39.843230403800476
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "SC",
+   "position": {
+    "x": 17.43073047858942,
+    "y": 40.07125890736342
+   },
+   "type": "capacitor"
+  },
+  {
+   "text": "SC",
+   "position": {
+    "x": 37.471032745591934,
+    "y": 40.07125890736342
+   },
+   "type": "capacitor"
+  },
+  {
+   "text": "SC",
+   "position": {
+    "x": 57.51133501259446,
+    "y": 40.07125890736342
+   },
+   "type": "capacitor"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 78.31738035264483,
+    "y": 40.57007125890736
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "QE 1(4P 125/50A)",
+   "position": {
+    "x": 78.32745591939546,
+    "y": 40.96912114014252
+   },
+   "type": "relay"
+  },
+  {
+   "text": "(W/OCR)",
+   "position": {
+    "x": 21.53148614609572,
+    "y": 41.15439429928742
+   },
+   "type": "relay"
+  },
+  {
+   "text": "(W/OCR)",
+   "position": {
+    "x": 41.57178841309824,
+    "y": 41.15439429928742
+   },
+   "type": "relay"
+  },
+  {
+   "text": "(W/OCR,OCGR)",
+   "position": {
+    "x": 61.65239294710327,
+    "y": 41.12589073634204
+   },
+   "type": "relay"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 18.811083123425693,
+    "y": 41.2541567695962
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 38.84130982367758,
+    "y": 41.2541567695962
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 58.8816120906801,
+    "y": 41.2541567695962
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "SPD",
+   "position": {
+    "x": 16.513853904282115,
+    "y": 41.55344418052256
+   },
+   "type": "arrester"
+  },
+  {
+   "text": "SPD",
+   "position": {
+    "x": 36.55415617128463,
+    "y": 41.55344418052256
+   },
+   "type": "arrester"
+  },
+  {
+   "text": "SPD",
+   "position": {
+    "x": 56.594458438287155,
+    "y": 41.55344418052256
+   },
+   "type": "arrester"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 18.85138539042821,
+    "y": 41.681710213776725
+   },
+   "type": "relay"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 38.89168765743073,
+    "y": 41.681710213776725
+   },
+   "type": "relay"
+  },
+  {
+   "text": "4P 125/50A",
+   "position": {
+    "x": 58.931989924433246,
+    "y": 41.681710213776725
+   },
+   "type": "relay"
+  },
+  {
+   "text": "E3",
+   "position": {
+    "x": 16.20151133501259,
+    "y": 43.163895486935864
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E3",
+   "position": {
+    "x": 36.241813602015114,
+    "y": 43.163895486935864
+   },
+   "type": "ground"
+  },
+  {
+   "text": "E3",
+   "position": {
+    "x": 56.28211586901762,
+    "y": 43.163895486935864
+   },
+   "type": "ground"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 21.924433249370278,
+    "y": 43.46318289786223
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 25.289672544080606,
+    "y": 43.57719714964371
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 41.96473551637279,
+    "y": 43.46318289786223
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 45.329974811083126,
+    "y": 43.57719714964371
+   },
+   "type": "meter"
+  },
+  {
+   "text": "CTT",
+   "position": {
+    "x": 61.97481108312343,
+    "y": 43.47743467933492
+   },
+   "type": "meter"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 65.3904282115869,
+    "y": 43.57719714964371
+   },
+   "type": "meter"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 81.20906801007555,
+    "y": 43.84798099762471
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 80.79596977329975,
+    "y": 45.41567695961996
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 16.403022670025187,
+    "y": 45.60095011876485
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 25.017632241813597,
+    "y": 45.60095011876485
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 36.443324937027704,
+    "y": 45.60095011876485
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 45.057934508816125,
+    "y": 45.60095011876485
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 56.48362720403023,
+    "y": 45.60095011876485
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 65.09823677581863,
+    "y": 45.60095011876485
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 80.79596977329975,
+    "y": 46.9833729216152
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "TR FL&FAN",
+   "position": {
+    "x": 83.21410579345087,
+    "y": 46.9833729216152
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 47.1686460807601
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 47.1686460807601
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 56.070528967254404,
+    "y": 47.1686460807601
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 47.1686460807601
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 48.736342042755346
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 48.736342042755346
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 48.736342042755346
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 56.070528967254404,
+    "y": 48.736342042755346
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 48.736342042755346
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "DOWN TR",
+   "position": {
+    "x": 78.41813602015112,
+    "y": 49.49168646080761
+   },
+   "type": "transformer"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 50.304038004750595
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 50.304038004750595
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "E3",
+   "position": {
+    "x": 76.72544080604533,
+    "y": 51.30166270783848
+   },
+   "type": "ground"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 51.87173396674585
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 51.87173396674585
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 51.87173396674585
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "DC 110V 50A",
+   "position": {
+    "x": 78.4080604534005,
+    "y": 52.712589073634206
+   },
+   "type": "relay"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 53.4394299287411
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 53.4394299287411
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 53.4394299287411
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 53.4394299287411
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "DIGITAL METER",
+   "position": {
+    "x": 82.27707808564232,
+    "y": 53.59619952494062
+   },
+   "type": "meter"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 74.31738035264483,
+    "y": 53.85273159144893
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "DC 110V 50A",
+   "position": {
+    "x": 78.24685138539043,
+    "y": 54.479809976247026
+   },
+   "type": "relay"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 55.00712589073634
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 55.00712589073634
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCC-3 (기존 L-1)",
+   "position": {
+    "x": 27.123425692695214,
+    "y": 55.00712589073634
+   },
+   "type": "panel"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 55.00712589073634
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 55.00712589073634
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 57.47268408551069
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 57.47268408551069
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 59.040380047505934
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 59.040380047505934
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 16.403022670025187,
+    "y": 59.62470308788599
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 25.017632241813597,
+    "y": 59.62470308788599
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 36.060453400503775,
+    "y": 59.667458432304045
+   },
+   "type": "relay"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 44.705289672544076,
+    "y": 59.667458432304045
+   },
+   "type": "relay"
+  },
+  {
+   "text": "DC 110V 50A",
+   "position": {
+    "x": 75.46599496221663,
+    "y": 60.67933491686461
+   },
+   "type": "relay"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 61.19239904988124
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 61.19239904988124
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 62.760095011876494
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 62.760095011876494
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 78.27707808564232,
+    "y": 63.35866983372922
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 65.09823677581863,
+    "y": 63.657957244655584
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 64.32779097387173
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 64.32779097387173
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.67506297229218,
+    "y": 65.22565320665083
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 65.89548693586698
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 65.89548693586698
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCC-2",
+   "position": {
+    "x": 27.838790931989926,
+    "y": 65.89548693586698
+   },
+   "type": "panel"
+  },
+  {
+   "text": "ATS",
+   "position": {
+    "x": 41.471032745591934,
+    "y": 65.99524940617579
+   },
+   "type": "switch"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 82.34760705289672,
+    "y": 66.33729216152018
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 36.443324937027704,
+    "y": 66.79334916864609
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 45.057934508816125,
+    "y": 66.79334916864609
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 66.79334916864609
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 67.46318289786223
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 67.46318289786223
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 81.9345088161209,
+    "y": 67.90498812351544
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "VCB 조작전원",
+   "position": {
+    "x": 84.57430730478589,
+    "y": 67.90498812351544
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCC-1",
+   "position": {
+    "x": 33.4911838790932,
+    "y": 68.36104513064133
+   },
+   "type": "panel"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 68.36104513064133
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 68.36104513064133
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.67506297229218,
+    "y": 68.36104513064133
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 81.9345088161209,
+    "y": 69.47268408551069
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "ACB 조작전원",
+   "position": {
+    "x": 84.56423173803526,
+    "y": 69.47268408551069
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 69.92874109263657
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 69.92874109263657
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 69.92874109263657
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 69.92874109263657
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "차단기",
+   "position": {
+    "x": 56.48362720403023,
+    "y": 69.92874109263657
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 69.92874109263657
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 81.9345088161209,
+    "y": 71.04038004750593
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 71.49643705463184
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 71.49643705463184
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 71.49643705463184
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 71.49643705463184
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 56.070528967254404,
+    "y": 71.49643705463184
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 71.49643705463184
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 16.02015113350126,
+    "y": 72.12351543942994
+   },
+   "type": "relay"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 24.66498740554156,
+    "y": 72.12351543942994
+   },
+   "type": "relay"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 81.9345088161209,
+    "y": 72.60807600950119
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 15.989924433249369,
+    "y": 73.06413301662708
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 24.584382871536526,
+    "y": 73.06413301662708
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 73.06413301662708
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 73.06413301662708
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 56.070528967254404,
+    "y": 73.06413301662708
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 73.06413301662708
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 16.02015113350126,
+    "y": 73.69121140142518
+   },
+   "type": "relay"
+  },
+  {
+   "text": "3P 125/50A",
+   "position": {
+    "x": 36.060453400503775,
+    "y": 73.69121140142518
+   },
+   "type": "relay"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 81.9345088161209,
+    "y": 74.17577197149643
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 36.03022670025189,
+    "y": 74.63182897862232
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 44.62468513853904,
+    "y": 74.63182897862232
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 56.070528967254404,
+    "y": 74.63182897862232
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "MCCB ABSc",
+   "position": {
+    "x": 64.66498740554157,
+    "y": 74.63182897862232
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "4P 125/50A",
+   "position": {
+    "x": 64.7455919395466,
+    "y": 75.25890736342043
+   },
+   "type": "relay"
+  },
+  {
+   "text": "1 금회 분전반 철거로 인한 SPARE 차단기",
+   "position": {
+    "x": 77.11838790931989,
+    "y": 85.42042755344418
+   },
+   "type": "breaker"
+  },
+  {
+   "text": "2 기존 차단기 철거",
+   "position": {
+    "x": 77.11838790931989,
+    "y": 86.67458432304038
+   },
+   "type": "breaker"
+  }
+ ]
+}

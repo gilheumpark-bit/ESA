@@ -67,6 +67,14 @@ export function deduplicateSymbols(
   for (const hit of ordered) {
     const hitType = canonicalSymbolType(hit.type, hit.label);
     const dup = kept.find((k) => {
+      // 같은 명판을 크게·작게 두 번 읽은 것은 같은 기기다. 조밀한 실도면에서는
+      // 50px 밀려 읽으면 겹침이 0 이 되어 아래 조건이 전부 빠져나간다.
+      if (typesCompatible(k.confirmedType ?? k.typeCandidates[0] ?? '', hitType)
+        && labelsSameNameplate(k.rawLabel, hit.label)
+        && k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex
+          && splitReadOfSameNameplate(evidence.bounds, hit.bounds))) {
+        return true;
+      }
       const samePhysicalBounds = k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex
         && (boundsNear(evidence.bounds, hit.bounds, tolerance)
           || boundsStronglyOverlap(evidence.bounds, hit.bounds)
@@ -821,6 +829,75 @@ function boundsStronglyOverlap(a: EvidenceBounds, b: EvidenceBounds): boolean {
   // bodies, so a majority-area overlap is a stronger identity signal than the
   // shifted centers while still preserving adjacent repeated devices.
   return smallerArea > 0 && (overlapWidth * overlapHeight) / smallerArea >= 0.5;
+}
+
+/**
+ * 두 라벨이 같은 명판을 가리키는가. 같은 기기를 두 번 읽으면 한쪽은 명판
+ * 전체를, 다른 쪽은 앞부분만 잡는다("MOLD TR-3" vs "MOLD TR-3 6.6KV/380.220V").
+ * 그래서 동등이 아니라 접두 관계를 본다.
+ *
+ * 공백을 지우지 않고 정규화한다 — `normalizeLabel` 처럼 지우면 명판 필드
+ * 경계가 사라져 "TR-3" + " 6.6KV…" 가 "TR-36" 로 붙고, 아래 숫자 가드가
+ * 이것을 "TR-3" vs "TR-36" 으로 읽어 버린다.
+ */
+function labelsSameNameplate(a?: string, b?: string): boolean {
+  const left = (a ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const right = (b ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  // 홑 숫자 라벨("1")은 기기명이 아니라 단자 번호다.
+  if (left.length < 2 || right.length < 2) return false;
+  if (!/[A-Z]/.test(left) || !/[A-Z]/.test(right)) return false;
+  if (left === right) return true;
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  if (!longer.startsWith(shorter)) return false;
+  // "TR-1" 은 "TR-10" 의 접두이지만 다른 기기다.
+  return !/[0-9]/.test(longer.charAt(shorter.length));
+}
+
+/**
+ * 같은 명판을 쪼개 읽은 것인가, 같은 이름의 기기 두 대인가.
+ *
+ * ■ 정답 라벨로 보정했다 (2026-08-05)
+ *
+ * 17차에서 이 판별을 **내 추론으로** 보정했다가 라이브에 기각당했다. 이번에는
+ * 도면 자신의 벡터 텍스트 층에서 정답 앵커를 만들고
+ * (`fixtures/drawings/realworld/labels/kimm-20210602-design-p5.vector-anchor.json`),
+ * 두 판독이 같은 앵커에 붙으면 같은 기기로 라벨링해 **근접쌍 83건**(SAME 20 ·
+ * DISTINCT 63)을 채점했다.
+ *
+ * | 규칙 | 맞게 병합 | **잘못 병합** | 놓친 병합 |
+ * |---|---|---|---|
+ * | 17차: 면적비≥1.5 **또는 겹침** | 18 | **19** | 2 |
+ * | 겹침 단독 | 9 | **16** | 11 |
+ * | 면적비≥1.5 단독 | 14 | 5 | 6 |
+ * | 면적비≥2.0 단독 | 13 | 3 | 7 |
+ * | **면적비≥5.0 단독** | 6 | **0** | 14 |
+ *
+ * **겹침이 해로운 신호였다.** DISTINCT 63건 중 16건이 겹친다 — 조밀한 피더
+ * 표에서는 이웃 기기의 상자가 서로 겹친다. 17차에 이것을 안전한 신호로 보고
+ * 넣은 것이 오병합을 4배(5→19)로 늘린 주범이었다.
+ *
+ * ■ 왜 보수적인 5.0 인가
+ *
+ * 두 오류의 무게가 다르다. **놓친 병합은 중복이 남아 과다 계수로 보이지만
+ * 검토자가 도면에서 확인할 수 있다. 잘못된 병합은 실재하는 기기를 조용히
+ * 지운다.** 그래서 정답 63건에 오병합 0 인 지점을 택했다.
+ *
+ * 한계: 도면 1장·페이지 1장의 83쌍으로 고른 값이다. 다른 도면에서 재보정이
+ * 필요할 수 있다.
+ */
+const NAMEPLATE_SPLIT_AREA_RATIO = 5;
+
+function splitReadOfSameNameplate(a: EvidenceBounds, b: EvidenceBounds): boolean {
+  // 근접: 서로의 짧은 변만큼도 안 떨어져 있어야 한다. 도면 반대편의 동명
+  // 기기(두 반에 하나씩 있는 TR-1)를 건너뛰어 접지 않기 위한 결박이다.
+  const gapX = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w));
+  const gapY = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.h, b.y + b.h));
+  if (gapX > Math.min(a.w, b.w) || gapY > Math.min(a.h, b.h)) return false;
+
+  const areaA = a.w * a.h;
+  const areaB = b.w * b.h;
+  if (areaA <= 0 || areaB <= 0) return false;
+  return Math.max(areaA, areaB) / Math.min(areaA, areaB) >= NAMEPLATE_SPLIT_AREA_RATIO;
 }
 
 function boundsPartialReadOverlap(a: EvidenceBounds, b: EvidenceBounds): boolean {
