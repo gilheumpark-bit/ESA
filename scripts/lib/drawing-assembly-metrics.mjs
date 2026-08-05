@@ -67,6 +67,49 @@ function median(values) {
 }
 
 /**
+ * 같은 종류 안에서 "정상 크기"의 기준을 돌려준다.
+ *
+ * 종류별 중앙값 하나로는 **이봉분포**를 못 다룬다. 실측(KIMM 수변전
+ * 단선결선도): `breaker` 의 등가 변 길이가 9~25px(피더 표의 MCCB)와
+ * 40~63px(VCB·ACB draw-out)로 뚜렷이 갈린다. 중앙값이 두 봉우리 사이에
+ * 앉으면 **작은 쪽 기기 전체가 조각으로 오탐**된다 — 실제로 그래서
+ * 조각비가 0.041 → 0.115 로 세 배 뛴 것처럼 보였고(원장 19차), 그 신호를
+ * 쫓느라 없는 회귀를 조사했다.
+ *
+ * 그래서 크기를 정렬해 가장 큰 비율 틈(면적 4배 이상)에서 두 군집으로
+ * 나누고 각자의 중앙값을 기준으로 쓴다. 틈이 없으면 종전대로 전체 중앙값이다.
+ * p25 로 낮추는 방법도 재봤지만 그건 **중급의 진짜 조각 검출을 죽였다**
+ * (7/2/4 → 0/1/0). 임계값이 아니라 기준이 하나뿐인 것이 문제였다.
+ */
+function sizeReference(areas) {
+  const sorted = [...areas].sort((left, right) => left - right);
+  const whole = () => median(sorted);
+  if (sorted.length < 4) return whole;
+
+  let gapIndex = -1;
+  let gapRatio = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const ratio = sorted[i] / Math.max(1, sorted[i - 1]);
+    if (ratio > gapRatio) { gapRatio = ratio; gapIndex = i; }
+  }
+  if (gapRatio < 4 || gapIndex < 1) return whole;
+
+  // **군집은 인원을 요구한다.** 이 결박이 없으면 홀로 떨어진 조각 하나가
+  // 자기 자신을 "작은 기기 군집"으로 선언해 스스로를 정상으로 만든다
+  // (실제로 그래서 첫 판이 진짜 조각 검출을 잃었다). 양쪽 2개 이상,
+  // 작은 쪽이 전체의 20% 이상일 때만 두 봉우리로 인정한다.
+  const lowerCount = gapIndex;
+  const upperCount = sorted.length - gapIndex;
+  const smallerSide = Math.min(lowerCount, upperCount);
+  if (smallerSide < 2 || smallerSide < sorted.length * 0.2) return whole;
+
+  const lower = median(sorted.slice(0, gapIndex));
+  const upper = median(sorted.slice(gapIndex));
+  const cut = sorted[gapIndex];
+  return (area) => (area < cut ? lower : upper);
+}
+
+/**
  * 한 실행의 조립 지표. `graph` 는 document.evidenceGraph, `unresolvedItems` 는
  * document.unresolvedItems 다. 정답 라벨을 쓰지 않는다.
  */
@@ -75,7 +118,7 @@ export function assemblyMetrics(graph, unresolvedItems = []) {
   const confirmed = symbols.filter((s) => s.certainty === 'confirmed' && s.evidence?.length);
   const total = symbols.length;
 
-  // 조각: 같은 종류 확정 심볼의 중앙 면적 대비 40% 미만.
+  // 조각: 같은 종류·같은 크기 군집의 중앙 면적 대비 40% 미만.
   const areaByType = new Map();
   for (const s of confirmed) {
     const b = s.evidence[0].bounds;
@@ -83,11 +126,12 @@ export function assemblyMetrics(graph, unresolvedItems = []) {
     if (!areaByType.has(key)) areaByType.set(key, []);
     areaByType.get(key).push(b.w * b.h);
   }
-  const medianByType = new Map([...areaByType].map(([k, v]) => [k, median(v)]));
+  const referenceByType = new Map([...areaByType].map(([k, v]) => [k, sizeReference(v)]));
   const slivers = confirmed.filter((s) => {
     const b = s.evidence[0].bounds;
-    const med = medianByType.get(s.confirmedType ?? '?') ?? 0;
-    return med > 0 && b.w * b.h < med * 0.4;
+    const area = b.w * b.h;
+    const reference = referenceByType.get(s.confirmedType ?? '?')?.(area) ?? 0;
+    return reference > 0 && area < reference * 0.4;
   });
 
   // 병합 후 남은 같은명판 근접쌍.

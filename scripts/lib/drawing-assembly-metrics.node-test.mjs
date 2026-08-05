@@ -58,6 +58,30 @@ test('조각은 같은 종류의 중앙 크기 대비로 센다 — 절대 크�
   assert.equal(metrics.confirmed, 6);
 });
 
+test('한 종류가 이봉분포면 작은 쪽 기기를 조각으로 오탐하지 않는다', () => {
+  // 실측(KIMM 수변전 단선결선도): breaker 등가 변이 9~25px(피더 표 MCCB)와
+  // 40~63px(VCB·ACB draw-out)로 갈린다. 종류 중앙값 하나를 쓰면 작은 쪽이
+  // 통째로 조각이 되어 조각비가 세 배로 뛴 것처럼 보였다(원장 19차 허상).
+  const small = Array.from({ length: 8 }, (_, i) =>
+    sym(`mccb${i}`, 'breaker', `MCCB-${i}`, { x: i * 30, y: 0, w: 9, h: 9 }));
+  const large = Array.from({ length: 7 }, (_, i) =>
+    sym(`vcb${i}`, 'breaker', `VCB-${i}`, { x: i * 80, y: 300, w: 40, h: 40 }));
+
+  const metrics = assemblyMetrics({ symbols: [...small, ...large], relations: [] });
+  assert.equal(metrics.confirmed, 15);
+  assert.equal(metrics.slivers, 0);
+});
+
+test('군집이 갈려도 그 안의 진짜 조각은 잡는다', () => {
+  const body = Array.from({ length: 6 }, (_, i) =>
+    sym(`fu${i}`, 'fuse', `FU${i}`, { x: i * 60, y: 0, w: 31, h: 79 }));
+  // 같은 군집 안에서 면적이 40% 미만인 반토막 판독.
+  const fragment = sym('frag', 'fuse', 'FU9', { x: 400, y: 0, w: 14, h: 30 });
+
+  const metrics = assemblyMetrics({ symbols: [...body, fragment], relations: [] });
+  assert.equal(metrics.slivers, 1);
+});
+
 test('미병합쌍은 겹침과 인접으로 나눠 센다', () => {
   const metrics = assemblyMetrics({
     symbols: [

@@ -209,6 +209,75 @@ describe('document-orchestrator + evaluator', () => {
     expect(executeTeam).toHaveBeenCalledTimes(3);
   });
 
+  it('첫 페이지가 아닌 페이지의 재스캔 대상도 팀 스냅샷 페이지(1)로 낸다', async () => {
+    // 실측(2026-08-05, KIMM 83p 설계세트 p5 를 PDF 로 직접 투입): 구획 17개 중
+    // 3개가 `rescanTargets[1] 값이 현재 도면 범위를 벗어났습니다` 로 실패했다.
+    // 원인은 좌표가 아니라 **페이지 번호**였다 — 팀에 넘기는 스냅샷은
+    // `createDrawingSnapshot` 이 페이지 인자 없이 불려 항상 page=1 인데,
+    // 오케스트레이터가 문서 페이지 번호(pageIndex+1)를 넣고 있었다.
+    // 즉 1페이지가 아닌 모든 페이지에서 재스캔 복구가 통째로 죽어 있었다.
+    // 이번 세션의 다른 측정은 전부 단일 페이지(pageIndex 0 → 1)라 우연히 맞았다.
+    const quality = {
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.02,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: [],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'f'.repeat(64), mimeType: 'application/pdf', formatClass: 'vector-pdf',
+      pages: [{
+        // 문서 5페이지. page.pageIndex + 1 === 5 이므로 종전 코드면 거부된다.
+        pageIndex: 4, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80,
+        renderScale: 1, renderMode: 'raster', textSample: '', vectorOpCount: 0,
+        rasterOpCount: 1, renderHash: 'render-p4', quality, imageBuffer: await makePng(),
+      }],
+    };
+    const failing = {
+      snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
+      envelopes: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'].map((role) => ({
+        role, outputHash: `${role}-hash`, drawingHash: source.documentHash, provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
+        data: role === 'coverage-auditor'
+          ? { rescanTargets: [], warnings: [], confidence: 0.95 }
+          : { warnings: [], confidence: 0.95 },
+      })),
+      failures: [{ role: 'connections' as const, sourceId: 'variant:line-enhanced:region:1', error: 'region read failed', fatal: false }],
+      coverage: {
+        roles: {
+          symbols: { variantId: 'variant:original', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+          connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 5 },
+          text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 4, actualRegionCount: 4, plannedCalls: 7 },
+          logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+          'coverage-auditor': { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+        },
+        plannedCalls: 19, complete: true, maxRegionCallsPerRole: 16,
+      },
+      graph: {
+        drawingHash: source.documentHash,
+        symbols: [], lines: [], texts: [], edges: [], conflicts: [] as string[],
+      },
+    };
+    let attempt = 0;
+    const executeTeam = jest.fn(async () => {
+      attempt += 1;
+      return {
+        success: true, components: [], connections: [], confidence: 0.95,
+        drawingReview: failing, drawingSynthesis: { calculations: [] },
+      };
+    });
+
+    await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-page5-target',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 60, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    const retry = (executeTeam.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0];
+    const targets = (retry?.params?.rescanTargets ?? []) as Array<{ bounds: { page: number } }>;
+    expect(targets.length).toBeGreaterThan(0);
+    // 회귀 지점: 종전에는 5 였고 sld-team 검증이 전부 걸러냈다.
+    expect(targets.every((target) => target.bounds.page === 1)).toBe(true);
+    void attempt;
+  });
+
   it('retries failed precision coverage up to the gap-rescan limit', async () => {
     const quality = {
       width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.02,

@@ -379,6 +379,24 @@ function plannedTargetedRetryCalls(page: PreparedDrawingPage, targets: RescanTar
   return 7 + precisionCalls;
 }
 
+/**
+ * 재검사 대상의 `bounds.page` 는 **문서 페이지 번호가 아니라 팀 스냅샷의 페이지**다.
+ *
+ * 팀에는 페이지 한 장을 래스터로 넘긴다. `createDrawingSnapshot` 은 페이지 인자
+ * 없이 불려 항상 `page = 1` 이므로, 그 스냅샷 좌표계 안에서 페이지는 1 이다.
+ * 여기에 문서 페이지 번호(`pageIndex + 1`)를 넣으면 sld-team 의 검증이
+ * `bounds.page !== snapshot.page` 로 걸러 **"현재 도면 범위를 벗어났습니다"** 를 낸다.
+ *
+ * 실측(2026-08-05, KIMM 83p 설계세트의 p5 를 PDF 로 직접 투입): 구획 17개 중
+ * 3개가 이 사유로 실패했다. 즉 **1페이지가 아닌 모든 페이지에서 오케스트레이터가
+ * 만든 재스캔 대상이 전부 거부되고 있었다.** 단일 페이지 업로드(pageIndex 0 →
+ * page 1)로만 재던 이번 세션의 다른 측정에서는 우연히 일치해 드러나지 않았다.
+ *
+ * 판독 결과의 페이지는 `team-result-adapter` 가 `context.pageIndex` 로 다시
+ * 찍으므로, 팀 안에서 1 을 쓰는 것이 문서 페이지 정보를 잃는 것은 아니다.
+ */
+const TEAM_SNAPSHOT_PAGE = 1;
+
 function failedRoleRescanTargets(page: PreparedDrawingPage, result: TeamResult): RescanTargetEvidence[] {
   const targetableRoles = new Set<RoleId>(['symbols', 'connections', 'text']);
   const regions = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
@@ -397,7 +415,7 @@ function failedRoleRescanTargets(page: PreparedDrawingPage, result: TeamResult):
       sourceId: failure.sourceId,
       retryScope: regionMatch ? 'precision-region' as const : 'full-source' as const,
       reason: 'low-coverage' as const,
-      bounds: { ...bounds, page: page.pageIndex + 1 },
+      bounds: { ...bounds, page: TEAM_SNAPSHOT_PAGE },
       suggestedRoles: [failure.role as 'symbols' | 'connections' | 'text'],
       confidence: 1,
     }];
@@ -669,7 +687,7 @@ function gapRegionRescanTargets(
       sourceId: region.regionId,
       retryScope: region.kind === 'full-page' ? 'full-source' as const : 'precision-region' as const,
       reason: 'low-coverage' as const,
-      bounds: { ...region.bounds, page: page.pageIndex + 1 },
+      bounds: { ...region.bounds, page: TEAM_SNAPSHOT_PAGE },
       suggestedRoles: ['symbols', 'connections', 'text'] as Array<'symbols' | 'connections' | 'text'>,
       confidence: 1,
     }));
