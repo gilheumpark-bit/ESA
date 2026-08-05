@@ -27,6 +27,13 @@ All notable changes to ESVA are documented in this file.
   완성된 목록으로 읽는다.
 
 ### Fixed
+- **같은 명판을 여러 번 읽어 여러 대로 계수** — 도면의 벡터 층이 `MOLD TR-2` 를
+  딱 한 번 선언했다면 그 이름을 단 판독은 몇 개든 한 대다. 크기·겹침 같은 간접
+  신호는 근본적으로 약하다(정답 채점에서 SAME 1.00~10.10 · DISTINCT 1.00~4.97 로
+  완전히 겹친다). 벡터 앵커가 여럿인 명판(`MCCB ABSc` 78개 · `VCB(DRAW OUT)` 5개)
+  은 접지 않아 실재하는 반복 기기를 지키고, 벡터 판독이 없는 래스터 업로드에서는
+  발화하지 않는다. 실측(PDF 경로 3회): 전력변압기 8/9/7 → **5/5/5(폭 0)**,
+  라벨 87~90% → **95/95/95%(폭 0)**.
 - **계기용변성기를 전력변압기 대수에 합산** — `count-register` 의 `normalizeKind` 가
   일반 분기 `includes('transformer')` 로 끝나는데 `instrument_transformer`·
   `potential_transformer`·`vt_pt` 를 앞에서 잡지 않았다. 실측(KIMM 수변전
