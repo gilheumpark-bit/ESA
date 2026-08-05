@@ -69,8 +69,14 @@ const CASES = {
     file: 'fixtures/drawings/realworld/raster/kimm-20210602-design-p5-raster.png',
     mime: 'image/png',
     description: '고급 · KIMM 공개 건축전기 수변전 단선결선도(EE-003)',
+    // 변압기 정답 정정(2026-08-05): 3 → 4. 원본 래스터를 잘라 육안 확인했다.
+    // MOLD TR-1·2·3 외에 DC반의 `DOWN TR 380/110V 3∅ 10KVA` 가 Δ-Y 심볼로
+    // 실재한다. 종전 3 은 MOLD 계열만 세어 이 한 대를 빠뜨렸고, 정답을 맞게
+    // 읽은 실행이 오히려 오답으로 채점됐다.
+    // 육각형 `TR` 마커(도면 참조 콜아웃)와 표의 `TR FL&FAN`(피더 이름)은
+    // 기기가 아니므로 세지 않는다.
     expected: {
-      symbolTypes: { transformer: 3, generator: 0 },
+      symbolTypes: { transformer: 4, generator: 0 },
       minimumSymbolTypes: { breaker: 9 },
       minRelations: 12,
     },

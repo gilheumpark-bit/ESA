@@ -318,6 +318,52 @@ export function detectComponentType(text: string): SLDComponentType {
 // 진짜 주석은 기능어가 여럿(if/you/do/not/have… 7개)이므로 2개 이상을 요구한다.
 const PROSE_FUNCTION_WORDS = /\b(if|you|do|does|not|but|have|has|the|an?|shall|should|will|must|for|with|are|is|to|of|in)\b/gi;
 const KOREAN_PROSE_MARKERS = /(하여|하십시오|할 것|해야|합니다|바랍니다|참조)/;
+/**
+ * 도면 참조 콜아웃 판별 — 육각형 안의 "번호 / 약호" 는 기기가 아니다.
+ *
+ * 실측(2026-08-05, KIMM 수변전 단선결선도 p5): 벡터 경로가 변압기를 8대로
+ * 읽었는데 실제는 4대다(MOLD TR-1·2·3 + DOWN TR). 넘친 것 중 3개가 이 형태였다.
+ *
+ *   마커   "1"@11.9,30.0 + "TR"@11.8,30.5   ← 그게 전부다
+ *   실기기 "CH" "(표준소비효율)" "MOLD TR-1" "6.6KV/220V" "E1" "3∅ 500KVA" …
+ *
+ * 참조 콜아웃은 **홑 숫자 바로 아래 붙은 짧은 약호** 라는 서명을 가진다. 도면
+ * 상세·계통 참조를 가리키는 기호지 그 자리에 기기가 있다는 뜻이 아니다.
+ *
+ * 결박 셋 — 이 규칙이 정당한 기기를 죽이지 않게:
+ *   1) 제원(전압·전류·용량)이 붙었으면 콜아웃이 아니다.
+ *   2) 약호 자체가 길면(5자 이상) 콜아웃이 아니다.
+ *   3) 홑 숫자가 **바로 위·같은 x** 에 있어야 한다. 표의 번호 열처럼 떨어져
+ *      있으면 해당 없다.
+ *
+ * 전수 확인(같은 페이지 197개 기기 텍스트): 제거 3건 — 전부 육각형 TR 마커였고
+ * `CH`·`PL`·`SC` 같은 약호 기기는 하나도 걸리지 않았다.
+ */
+function isReferenceCallout(
+  text: PdfTextItem,
+  all: readonly PdfTextItem[],
+  hasSpecEvidence: boolean,
+  pageW: number,
+  pageH: number,
+): boolean {
+  if (hasSpecEvidence) return false;
+  const label = text.text.trim();
+  if (label.length > 4 || BARE_NUMBER.test(label)) return false;
+  // 좌표는 페이지 원단위다. 허용오차는 페이지 크기에 비례해야 도면 크기가
+  // 달라져도 같은 규칙이 된다.
+  const xTolerance = pageW * CALLOUT_X_FRACTION;
+  const ySpan = pageH * CALLOUT_Y_FRACTION;
+  return all.some((other) => BARE_NUMBER.test(other.text.trim())
+    && Math.abs(other.x - text.x) <= xTolerance
+    && other.y < text.y
+    && text.y - other.y <= ySpan);
+}
+
+const BARE_NUMBER = /^[0-9]{1,3}$/;
+// 육각형 콜아웃 하나는 페이지 높이의 대략 1% 다(실측 0.5%).
+const CALLOUT_X_FRACTION = 0.005;
+const CALLOUT_Y_FRACTION = 0.015;
+
 function isProseText(text: string): boolean {
   if (text.trim().split(/\s+/).length < 5) return false;
   if (KOREAN_PROSE_MARKERS.test(text)) return true;
@@ -756,7 +802,11 @@ export async function parsePdfToSLD(
     const specProbe = parseSpecText(t.text);
     const hasSpecEvidence = Boolean(specProbe.voltage || specProbe.current || specProbe.power);
     // 주석 문장은 키워드를 품어도 장치가 아니다(isProseText — RSC 노트 환각 수리).
-    const promote = type !== 'load' && (!detection.weak || hasSpecEvidence) && !isProseText(t.text);
+    // 도면 참조 콜아웃(육각형 안 "번호/약호")도 장치가 아니다(isReferenceCallout).
+    const promote = type !== 'load'
+      && (!detection.weak || hasSpecEvidence)
+      && !isProseText(t.text)
+      && !isReferenceCallout(t, texts, hasSpecEvidence, pageW, pageH);
     if (promote) {
       const spec = specProbe;
       rawAnchors.push({ id: `comp_${compIdx + 1}`, x: t.x, y: t.y });
