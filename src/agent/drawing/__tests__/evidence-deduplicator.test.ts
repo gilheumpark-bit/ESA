@@ -506,6 +506,53 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
     });
   });
 
+  describe('도면이 한 번만 선언한 명판은 몇 번을 읽어도 한 대다', () => {
+    // 실측(2026-08-06, KIMM 수변전 단선결선도 p5): 잔여 과다 계수는 전부 같은
+    // 명판을 1~3% 거리에서 두세 번 읽은 것이었다(`MOLD TR-2` ×3, `DOWN TR` ×2).
+    // 크기가 비슷해 면적비 규칙(≥5)에 안 걸렸다. 벡터 앵커 다중도로 가르면
+    // 전력변압기가 7/9/8 → 5/5/5 로 접힌다.
+    const vector = (localId: string, label: string, x: number) => ({
+      localId, type: 'transformer', label, bounds: { x, y: 500, w: 42, h: 42 },
+      confidence: 0.9, pageIndex: 0, regionId: 'vector-full', certainty: 'confirmed' as const,
+    });
+    const raster = (localId: string, label: string, b: { x: number; y: number; w: number; h: number }) => ({
+      localId, type: 'transformer', label, bounds: b,
+      confidence: 0.9, pageIndex: 0, regionId: 'variant:original', certainty: 'confirmed' as const,
+    });
+
+    it('벡터 앵커가 하나뿐인 명판의 여러 판독을 한 대로 접는다', () => {
+      const symbols = deduplicateSymbols([
+        vector('v', 'MOLD TR-2', 1000),
+        // 크기도 비슷하고 겹치지도 않는다 — 종전 규칙 어느 것도 안 걸린다.
+        raster('r1', 'MOLD TR-2 6.6kV/440V 3PH 1000kVA', { x: 996, y: 502, w: 67, h: 64 }),
+        raster('r2', 'MOLD TR-2 1000kVA', { x: 1120, y: 505, w: 62, h: 60 }),
+      ]);
+      expect(symbols).toHaveLength(1);
+      expect(symbols[0].evidence).toHaveLength(3);
+    });
+
+    it('벡터 앵커가 여럿인 명판은 접지 않는다 — 실재하는 반복 기기다', () => {
+      // 실도면의 `MCCB ABSc` 는 앵커가 78개(피더 표 행마다 하나)다.
+      const symbols = deduplicateSymbols([
+        vector('v1', 'MCCB ABSc', 100),
+        vector('v2', 'MCCB ABSc', 400),
+        raster('r1', 'MCCB ABSc', { x: 96, y: 502, w: 40, h: 40 }),
+        raster('r2', 'MCCB ABSc', { x: 396, y: 502, w: 40, h: 40 }),
+      ]);
+      // 벡터 2 + 라스터 2 가 각자 자리에서만 붙어 2대로 남는다.
+      expect(symbols).toHaveLength(2);
+    });
+
+    it('벡터 판독이 없으면 이 규칙은 발화하지 않는다', () => {
+      // 래스터 이미지 업로드에는 앵커가 없다. 도면이 말해 주지 않으면 추측하지 않는다.
+      const symbols = deduplicateSymbols([
+        raster('r1', 'MOLD TR-2 6.6kV/440V', { x: 996, y: 502, w: 67, h: 64 }),
+        raster('r2', 'MOLD TR-2 1000kVA', { x: 1120, y: 505, w: 62, h: 60 }),
+      ]);
+      expect(symbols).toHaveLength(2);
+    });
+  });
+
   describe('IEC 지정문자는 판독 충돌도 이긴다', () => {
     // 실측(gemini · intermediate · 5회): 매 실행 퓨즈 후보를 14~15개 읽어
     // 놓고 확정은 11~14개였다. 손실은 판독이 아니라 판정이었고, 매번

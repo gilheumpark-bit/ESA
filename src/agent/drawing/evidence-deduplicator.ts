@@ -52,10 +52,55 @@ function evidenceRefs(
   }));
 }
 
+/**
+ * 벡터 층이 **딱 한 번** 선언한 명판을 모은다.
+ *
+ * 도면에 `MOLD TR-2` 가 하나뿐이면, 그 이름을 단 판독이 몇 개든 같은 기기다.
+ * 크기·겹침·거리 같은 간접 신호를 볼 필요가 없다 — 도면이 직접 말해 준다.
+ *
+ * 실측(2026-08-06, KIMM 수변전 단선결선도 p5): 잔여 과다 계수는 전부 같은
+ * 명판을 1~3% 거리에서 두세 번 읽은 것이었고(`MOLD TR-2` ×3, `DOWN TR` ×2),
+ * 크기가 비슷해 면적비 규칙(≥5)에 걸리지 않았다. 벡터 앵커 다중도로 가르면
+ * 전력변압기가 7/9/8 → 5/5/5 로 접힌다.
+ *
+ * 반대 방향도 지켜진다: `MCCB ABSc` 는 앵커가 **78개**(피더 표의 행마다 하나),
+ * `VCB(DRAW OUT)` 은 5개다. 유일하지 않으므로 이 규칙이 발화하지 않는다 —
+ * 실재하는 반복 기기를 접지 않는다.
+ *
+ * 벡터 판독이 없는 원본(래스터 이미지 업로드)에서는 비어 있고, 그때는 종전
+ * 규칙만 동작한다. 도면이 말해 주지 않으면 추측하지 않는다.
+ */
+function uniqueVectorNameplates(hits: readonly RawSymbolHit[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const hit of hits) {
+    if (hit.regionId !== VECTOR_SOURCE_REGION) continue;
+    const key = nameplateText(hit.label);
+    if (key.length < 2 || !/[A-Z]/.test(key)) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return new Set([...counts].filter(([, n]) => n === 1).map(([key]) => key));
+}
+
+/** 판독 라벨이 품고 있는 유일 명판. 가장 긴 것을 고른다(`TR` 보다 `MOLD TR-2`). */
+function resolveUniqueNameplate(label: string | undefined, unique: ReadonlySet<string>): string | undefined {
+  const text = nameplateText(label);
+  if (!text) return undefined;
+  let best: string | undefined;
+  for (const candidate of unique) {
+    if (text !== candidate && !text.includes(candidate)) continue;
+    if (!best || candidate.length > best.length) best = candidate;
+  }
+  return best;
+}
+
+const VECTOR_SOURCE_REGION = 'vector-full';
+
 export function deduplicateSymbols(
   hits: RawSymbolHit[],
   tolerance = 24,
 ): SymbolNode[] {
+  const uniqueNameplates = uniqueVectorNameplates(hits);
+  const nameplateOfNode = new Map<string, string>();
   const kept: SymbolNode[] = [];
   const pageSequences = new Map<number, number>();
   const ordered = [...hits].sort((left, right) =>
@@ -66,7 +111,14 @@ export function deduplicateSymbols(
 
   for (const hit of ordered) {
     const hitType = canonicalSymbolType(hit.type, hit.label);
+    const hitNameplate = resolveUniqueNameplate(hit.label, uniqueNameplates);
     const dup = kept.find((k) => {
+      // 도면이 딱 한 번 선언한 명판이면, 그 이름을 단 판독은 몇 개든 같은
+      // 기기다. 크기·겹침 같은 간접 신호보다 강하다 — 도면이 직접 말해 준다.
+      if (hitNameplate !== undefined && nameplateOfNode.get(k.id) === hitNameplate
+        && typesCompatible(k.confirmedType ?? k.typeCandidates[0] ?? '', hitType)) {
+        return true;
+      }
       // 같은 명판을 크게·작게 두 번 읽은 것은 같은 기기다. 조밀한 실도면에서는
       // 50px 밀려 읽으면 겹침이 0 이 되어 아래 조건이 전부 빠져나간다.
       if (typesCompatible(k.confirmedType ?? k.typeCandidates[0] ?? '', hitType)
@@ -177,6 +229,7 @@ export function deduplicateSymbols(
       certainty: hit.certainty ?? (hit.confidence >= 0.85 ? 'confirmed' : 'ambiguous'),
       evidence: evidenceRefs(hit, `${id}-e0`),
     });
+    if (hitNameplate !== undefined) nameplateOfNode.set(id, hitNameplate);
   }
   return kept;
 }
@@ -840,9 +893,14 @@ function boundsStronglyOverlap(a: EvidenceBounds, b: EvidenceBounds): boolean {
  * 경계가 사라져 "TR-3" + " 6.6KV…" 가 "TR-36" 로 붙고, 아래 숫자 가드가
  * 이것을 "TR-3" vs "TR-36" 으로 읽어 버린다.
  */
+/** 명판 비교용 정규화. 공백은 하나로 줄이되 **없애지 않는다**(필드 경계 보존). */
+function nameplateText(value?: string): string {
+  return (value ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
+
 function labelsSameNameplate(a?: string, b?: string): boolean {
-  const left = (a ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
-  const right = (b ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const left = nameplateText(a);
+  const right = nameplateText(b);
   // 홑 숫자 라벨("1")은 기기명이 아니라 단자 번호다.
   if (left.length < 2 || right.length < 2) return false;
   if (!/[A-Z]/.test(left) || !/[A-Z]/.test(right)) return false;
