@@ -147,7 +147,7 @@ SLD 전체 문서 판독은 작업 리소스를 생성한 뒤 실행·조회·�
 | `GET /api/calculate/[id]` | 서버 검증 사용자 소유 계산 조회 |
 | `GET /api/receipt/[id]` | 공개 또는 소유 계산 영수증 조회·해시 검증 |
 | `GET /api/reports/[id]` | 공개 또는 소유 팀 검토 보고서 조회·해시 검증 |
-| `POST /api/export` | PDF, XLSX, CSV 내보내기 |
+| `POST /api/export` | PDF, XLSX, CSV 내보내기. `reviewReport` 변형은 SHA-256 무결성 검사를 통과한 팀 검토 보고서만 받아 CSV·인쇄용 HTML 로 낸다(확정 항목만 추리지 않는다 — 반출물을 완성된 목록으로 읽게 되기 때문) |
 
 ### 상태와 계약
 

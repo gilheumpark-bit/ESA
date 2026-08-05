@@ -104,6 +104,17 @@ npm run dev
 `npm run gate:chatgpt-local-live`입니다. 계정 사용량을 소비하므로 자동 CI에는 넣지
 않습니다.
 
+### 로컬 Claude 계정 (`claude-local`)
+
+같은 방식으로 이 PC에 로그인된 `claude` CLI 를 도면 판독에 쓸 수 있습니다. Anthropic
+API 키가 필요하지 않습니다. 프롬프트는 stdin 으로만 전달하고, 이미지는 격리 임시
+폴더에 두고 `--allowedTools=Read` 로 좁히며, 계정 상태는 토큰을 쓰지 않는
+`claude auth status --json` 으로만 확인합니다. ChatGPT 연결과 마찬가지로 루프백에서
+연 ESA 에만 제공됩니다.
+
+라이브 게이트는 `npm run gate:claude-local-live` 입니다. 계정 사용량을 소비하므로
+자동 CI 에는 넣지 않습니다.
+
 ## 검증
 
 ```bash
@@ -122,6 +133,14 @@ npm run gate:chat-live
 npm run gate:sld-v3-contract
 npm run test:sld-benchmark
 npm run gate:sld-golden
+```
+
+도면 조립기의 회귀는 라벨 점수만으로는 잡히지 않습니다(고급 도면에서는 같은 코드로도
+회차 간 폭이 큽니다). 정답 라벨 없이 조립 품질을 재는 보조 자를 함께 씁니다.
+
+```bash
+npm run test:scripts
+node scripts/measure-assembly-quality.mjs <DRAWING_JOB_STORE_DIR>
 ```
 
 `gate:sld-golden`은 승인된 독립 라벨, 예측, 서명 키가 없으면 의도적으로 실패합니다. 실패를 구현 회귀와 95% 주장 자격 부족으로 구분해 영수증을 확인해야 합니다.

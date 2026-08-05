@@ -53,6 +53,14 @@
 | [REPAIR_PLAN_2026-07-19](REPAIR_PLAN_2026-07-19.md) | 역사적 수리 계획 | 2026-07-19 수리 지시 |
 | [CUSTOM_RULES_DESIGN](CUSTOM_RULES_DESIGN.md) | 설계 참고 | 사용자 규칙셋 형식과 검증 경계 |
 
+도면 조립 품질은 정답 라벨 없이도 잴 수 있습니다 — `node scripts/measure-assembly-quality.mjs <DRAWING_JOB_STORE_DIR>`. 라벨 점수가 모델 변동에 묻히는 고급 티어에서 조립기 회귀를 잡는 용도이며, 정확도를 증명하지 않으므로 라벨 점수와 함께 읽습니다(근거: [VALIDATION_EVIDENCE](VALIDATION_EVIDENCE.md) 19·21차).
+
+고급 교보재 래스터(`fixtures/drawings/realworld/raster/`)는 재배포 금지라 커밋하지 않습니다. 다음으로 재생성하십시오.
+
+```bash
+node scripts/fixtures/rasterize-golden-scan.mjs fixtures/drawings/realworld/incoming/kimm-20210602-design.pdf 5 fixtures/drawings/realworld/raster 2
+```
+
 교보재 자체의 출처와 사용 조건은 [외부 자료 출처](../fixtures/drawings/external/SOURCES.md), [공개 fixture 안내](../fixtures/drawings/public/README.md), [커밋하지 않는 로컬 자료 정책](../fixtures/drawings/local/README.md)을 함께 확인하십시오.
 
 ## 프로젝트 구조 기록

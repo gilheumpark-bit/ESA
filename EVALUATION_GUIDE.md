@@ -108,6 +108,7 @@ E3는 구현 회귀를 잡는 근거지만 외부 현장 정확도를 증명하�
 | 구조 결정 | `docs/project/DECISIONS.md` |
 | 도면 §1–15 배선 | `docs/project/SLD_V3_TRACEABILITY.md` |
 | 교보재·게이트 원장 | `docs/VALIDATION_EVIDENCE.md` |
+| 조립 품질(정답 불요) | `scripts/lib/drawing-assembly-metrics.mjs`, `scripts/measure-assembly-quality.mjs` |
 | 휴면·미구현 | `docs/DORMANT_MANIFEST.md` |
 | 현재 한계와 다음 검증 | `PROJECT_STATE.md`, `docs/REALIZATION_PLAN.md` |
 | 공개 API 계약 | `docs/API_REFERENCE.md`, `GET /api/openapi` |
@@ -135,6 +136,16 @@ npm run build
 npm run gate:pdf
 npm run gate:chat-live
 npm run gate:sld-v3-contract
+npm run test:scripts
+```
+
+라벨 점수가 잡음에 묻히는 구간(고급 티어·조립기 변경)에서는 정답을 쓰지 않는 조립
+지표를 함께 읽습니다. 이 값들은 **정확도를 증명하지 않습니다** — 조립기가 자기 입력을
+얼마나 정리했는지만 잽니다. 세 비율을 모두 0 으로 만드는 가장 쉬운 방법은 아무것도
+확정하지 않는 것이므로 라벨 점수와 반드시 같이 보십시오.
+
+```bash
+node scripts/measure-assembly-quality.mjs <DRAWING_JOB_STORE_DIR>
 ```
 
 `npm run gate:sld-golden`은 외부 독립 라벨과 서명 자격을 확인하는 fail-closed 게이트입니다. 필요한 평가 자료가 없으면 exit 1이 정상일 수 있으므로 생성된 영수증 사유를 함께 읽으십시오.
