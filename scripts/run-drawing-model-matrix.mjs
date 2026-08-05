@@ -15,6 +15,7 @@ import { Agent } from 'undici';
 import { reasoningStageEvidenceFromDocument } from './lib/local-drawing-receipt.mjs';
 import { comparisonStatusForReceipts } from './lib/drawing-model-comparison.mjs';
 import { foldRunSpread, formatSpread } from './lib/drawing-run-spread.mjs';
+import { assemblyMetrics, foldAssemblyMetrics, formatRatio } from './lib/drawing-assembly-metrics.mjs';
 import { scoreDrawingLabelEvidence } from './lib/drawing-model-score.mjs';
 
 const EFFORT = 'high';
@@ -247,6 +248,9 @@ async function runCell(baseUrl, modelId, tier, snapshot) {
     requestedModel: modelSpec.model,
     requestedEffort: EFFORT,
     requestedEffortProfile: EFFORT_PROFILE || null,
+    // 정답 없이 재는 조립 품질. 라벨 점수는 모델이 무엇을 읽었는가에
+    // 지배되어 조립기 변경을 못 본다(원장 19차).
+    assembly: assemblyMetrics(document.evidenceGraph, document.unresolvedItems ?? []),
     source: drawing.file,
     sourceSha256,
     description: drawing.description,
@@ -330,6 +334,10 @@ for (const modelId of modelIds) {
     }
 
     const spread = foldRunSpread(cellRuns);
+    // 조립 지표도 같이 접는다. 대표 회차 하나만 남기면 팔끼리 비교가 안 된다 —
+    // 라벨 점수가 잡음에 묻히는 고급 티어에서 이쪽이 유일한 신호다.
+    const assemblyRuns = cellRuns.map((run) => run.assembly).filter(Boolean);
+    if (assemblyRuns.length > 0) spread.assembly = foldAssemblyMetrics(assemblyRuns);
     // 대표 회차 = 최저 종합. 그 문서를 남겨야 무너진 판독을 사후에 볼 수 있다.
     const receipt = { ...cellRuns[spread.representativeIndex - 1], runSpread: spread };
     writeFileSync(out, JSON.stringify(receipt, null, 2));
@@ -388,6 +396,18 @@ for (const result of results) {
   for (const [type, entry] of Object.entries(spread?.symbolTypes ?? {})) {
     if ((entry.spread ?? 0) === 0) continue;
     console.log(`    ${type.padEnd(12)} 정답 ${String(entry.expected).padStart(2)} · 판독 ${entry.values.join('/')} · 폭 ${entry.spread}`);
+  }
+  // 조립 지표는 정답을 안 쓰므로 라벨 점수가 잡음에 묻힐 때도 갈린다(원장 19차).
+  // 셋 다 낮을수록 좋다. 모호비는 단독으로 읽지 말 것 — 근거 없이 확정하면
+  // 이 값이 내려가면서 오탐이 오른다.
+  const assembly = spread?.assembly;
+  if (assembly) {
+    console.log(
+      `    조립         미병합비 ${formatRatio(assembly.unmergedPairRatio?.worst)}`
+      + ` · 조각비 ${formatRatio(assembly.sliverRatio?.worst)}`
+      + ` · 모호비 ${formatRatio(assembly.ambiguousRatio?.worst)}`
+      + `  (최악 기준, 폭 ${formatRatio(assembly.sliverRatio?.spread)})`,
+    );
   }
 }
 console.log(`\n영수증: test-results/drawing-model-matrix-high${PROFILE_SLUG}.json`);
