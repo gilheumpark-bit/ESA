@@ -164,7 +164,20 @@ function normalizeKind(type: string): string {
   if (t === 'transformer_ct' || t === 'ct' || t.includes('current_transformer')) return 'CT';
   if (t === 'transformer_zct' || t === 'zct') return 'ZCT';
   if (t === 'transformer_gpt' || t === 'gpt') return 'GPT';
-  if (t === 'transformer_vt' || t === 'vt' || t === 'pt' || t === 'ppt' || t.includes('voltage_transformer')) return 'PT/PPT';
+  // `potential_transformer`·`vt_pt` 를 여기서 잡지 않으면 아래 일반 분기의
+  // `includes('transformer')` 에 걸려 **전력변압기 대수로 합산**된다.
+  // `vt_pt` 는 중복 병합기가 PTx3·PPT 명판에 붙이는 정본 타입이다
+  // (evidence-deduplicator 의 canonicalSymbolType).
+  if (t === 'transformer_vt' || t === 'vt' || t === 'pt' || t === 'ppt' || t === 'vt_pt'
+    || t.includes('voltage_transformer') || t.includes('potential_transformer')) return 'PT/PPT';
+  // 계기용변성기 총칭. 전력변압기가 아니므로 대수에 섞으면 안 되지만, CT/PT 로
+  // 특정할 근거도 없으므로 자기 종류로 남긴다.
+  //
+  // 실측(2026-08-05, KIMM 수변전 단선결선도 p5 · PDF 경로): 그래프의 전력변압기
+  // 노드는 5~8개인데 `physicalEquipmentCount` 가 11 로 나왔다. 차이는
+  // `instrument_transformer` 4 + `potential_transformer` 3 이 여기 합산된 것이었다.
+  // 계기용변성기를 전력변압기로 세면 검토자는 없는 변압기를 찾게 된다.
+  if (t === 'instrument_transformer' || t.includes('instrument_transformer')) return 'instrument transformer';
   if (t === 'metering_outfit' || t === 'mof') return 'MOF';
   // 건식·유입·단권은 모두 전력변압기라 함께 센다.
   if (t.includes('transformer') || t === 'tr') return 'transformer';

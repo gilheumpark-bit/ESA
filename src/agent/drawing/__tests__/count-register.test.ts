@@ -121,6 +121,23 @@ describe('count-register — 계량·계측 기기는 전력변압기와 따로 
     expect(new Set(rows.map((r) => r.equipmentKind)).size).toBe(4);
   });
 
+  it('instrument_transformer·potential_transformer·vt_pt 도 전력변압기가 아니다', () => {
+    // 실측(2026-08-05, KIMM 수변전 단선결선도 p5 · PDF 경로): 그래프의 전력변압기
+    // 노드는 5~8개인데 physicalEquipmentCount 가 11 로 나왔다. 차이는
+    // instrument_transformer 4 + potential_transformer 3 이 합산된 것이었다.
+    //
+    // 위 CT·VT 수리와 같은 결함인데 이름이 달라 남아 있었다 — 일반 분기
+    // `includes('transformer')` 가 이 셋을 전부 삼킨다.
+    const rows = kindsOf([
+      'transformer', 'instrument_transformer', 'potential_transformer', 'vt_pt',
+    ]);
+    const power = rows.find((r) => r.equipmentKind === 'transformer');
+    expect(power!.symbolOccurrences).toBe(1);
+    // potential_transformer 와 vt_pt 는 같은 계기용변압기라 한 행이다.
+    expect(rows.find((r) => r.equipmentKind === 'PT/PPT')!.symbolOccurrences).toBe(2);
+    expect(rows.find((r) => r.equipmentKind === 'instrument transformer')!.symbolOccurrences).toBe(1);
+  });
+
   it('건식·유입 변압기는 전력변압기로 함께 센다', () => {
     const rows = kindsOf(['transformer', 'transformer_dry']);
     const power = rows.find((r) => r.equipmentKind === 'transformer');

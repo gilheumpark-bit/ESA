@@ -67,6 +67,22 @@ const CASES = {
       minRelations: 12,
     },
   },
+  'advanced-pdf': {
+    id: 'kimm-p5-pdf',
+    file: 'fixtures/drawings/realworld/incoming/kimm-20210602-design.pdf',
+    mime: 'application/pdf',
+    pages: '5',
+    description: '고급 · 같은 KIMM 도면을 **PDF 원본**으로 — 벡터+래스터 hybrid 경로',
+    // `advanced` 는 같은 페이지를 래스터 PNG 로 올려 벡터 패스를 타지 않는다.
+    // 실제 사용 흐름(CAD 가 출력한 PDF 업로드)은 이쪽이고, 벡터 앵커가 살아
+    // 있는지 여부가 조립 결과를 크게 바꾼다(원장 23차). 측정할 수 없으면
+    // 고칠 수도 없으므로 티어로 세운다.
+    expected: {
+      symbolTypes: { transformer: 4, generator: 0 },
+      minimumSymbolTypes: { breaker: 9 },
+      minRelations: 12,
+    },
+  },
 };
 
 const MODELS = {
@@ -173,7 +189,7 @@ async function runCell(baseUrl, modelId, tier, snapshot) {
   form.set('model', modelSpec.model);
   form.set('effort', EFFORT);
   if (EFFORT_PROFILE) form.set('effortProfile', EFFORT_PROFILE);
-  form.set('pages', 'all');
+  form.set('pages', drawing.pages ?? 'all');
   form.set('maxVlmCalls', '120');
   if (modelSpec.keyEnv) {
     const key = process.env[modelSpec.keyEnv]?.trim();
