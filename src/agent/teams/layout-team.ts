@@ -255,9 +255,10 @@ async function parseImageLayout(buffer: ArrayBuffer, input: TeamInput): Promise<
 async function parsePdfLayout(buffer: ArrayBuffer, params?: Record<string, unknown>): Promise<LayoutExtraction> {
   // PDF 벡터 추출 후 레이아웃 요소 분류
   const { parsePdfToSLD } = await import('@/engine/topology/pdf-vector-parser');
-  const bytes = new Uint8Array(buffer);
   const pageNumber = typeof params?.pageNumber === 'number' ? params.pageNumber : 1;
-  const analysis = await parsePdfToSLD(bytes.buffer as ArrayBuffer, { pageNumber });
+  // 종전에는 `new Uint8Array(buffer).buffer` 를 넘겼다 — 사본이 아니라 뷰라서
+  // 호출자의 버퍼가 detach 됐다. 이제 파서가 사본을 뜬다.
+  const analysis = await parsePdfToSLD(buffer, { pageNumber });
 
   const elements: LayoutElement[] = (analysis.components ?? []).map((c, i) => ({
     id: `layout-${i}`,

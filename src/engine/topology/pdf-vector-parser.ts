@@ -491,7 +491,18 @@ export async function parsePdfToSLD(
   let page: Awaited<ReturnType<typeof doc.getPage>>;
   try {
     loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(pdfBytes),
+      // **호출자의 버퍼를 소유한 사본으로 바꿔 넘긴다.**
+      //
+      // pdf.js 는 받은 ArrayBuffer 를 워커로 transfer 해 **detach** 시킨다.
+      // `new Uint8Array(pdfBytes)` 는 사본이 아니라 뷰라서, 이 함수가 끝나면
+      // 호출자의 버퍼는 byteLength 0 이 된다. 그러면 같은 버퍼로 다음 페이지를
+      // 파싱할 때 예외도 경고도 없이 **components: [] 를 돌려준다** — "이 장에는
+      // 기기가 없다"와 구분되지 않는 조용한 실패다(실측: KIMM 83p 설계세트,
+      // 1회차 기기 236 → 2회차 0, warnings 없음).
+      //
+      // 방어를 호출부에 맡기면 아는 곳만 산다. 실제로 sld-team 은 사본을 떴고
+      // layout-team 은 뜨지 않았다. 계약을 지키는 자리는 여기다.
+      data: Uint8Array.from(new Uint8Array(pdfBytes)),
       ...pdfjsNodeDocumentOptions(),
     });
     doc = await boundedPdfWork(

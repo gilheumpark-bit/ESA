@@ -706,8 +706,17 @@ describe('SLD raster independent council integration', () => {
   });
 
   it('keeps the caller-owned PDF buffer intact across multi-page parser calls', async () => {
-    jest.mocked(parsePdfToSLD).mockImplementation(async (buffer) => {
-      structuredClone(buffer, { transfer: [buffer] });
+    // 이 보장의 자리가 2026-08-05 에 옮겨졌다. 종전에는 sld-team 이 스스로 사본을
+    // 떴는데, 방어가 호출부에 흩어져 있어 layout-team 은 빠져 있었다(실측: 같은
+    // 버퍼 2회차 파싱이 경고 없이 기기 0개). 이제 `parsePdfToSLD` 가 사본을
+    // 소유하고, detach 하는 pdf.js 를 상대로 그 계약을 지키는지는
+    // `pdf-vector-parser-buffer-ownership.test.ts` 가 실제 파서로 검증한다.
+    //
+    // 그래서 여기 모의는 더 이상 detach 하지 않는다 — 파서 계약이 "당신 버퍼를
+    // 건드리지 않는다" 이므로, detach 하는 모의는 이제 거짓 전제다. 이 시험이
+    // 지키는 것은 sld-team 이 페이지마다 같은 원본을 넘겨도 두 호출 모두
+    // 성공하는가다.
+    jest.mocked(parsePdfToSLD).mockImplementation(async () => {
       return {
         components: [{ id: 'PDF-VCB-01', type: 'breaker', label: 'VCB-1', position: { x: 20, y: 20 } }],
         connections: [],
