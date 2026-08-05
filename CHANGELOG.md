@@ -27,6 +27,16 @@ All notable changes to ESVA are documented in this file.
   완성된 목록으로 읽는다.
 
 ### Fixed
+- **계기용변성기를 전력변압기 대수에 합산** — `count-register` 의 `normalizeKind` 가
+  일반 분기 `includes('transformer')` 로 끝나는데 `instrument_transformer`·
+  `potential_transformer`·`vt_pt` 를 앞에서 잡지 않았다. 실측(KIMM 수변전
+  단선결선도): 그래프의 전력변압기 노드는 5~8개인데 집계는 11 이었다. 검토자가
+  없는 변압기를 찾게 된다. 같은 결함이 `transformer_ct`·`transformer_vt` 에
+  대해 이미 수리됐는데 이름이 다른 셋이 남아 있었다.
+- **도면 참조 콜아웃을 기기로 계수** — 육각형 안 "번호/약호"(예: `1`/`TR`)는
+  도면 상세 참조 기호지 그 자리에 기기가 있다는 뜻이 아니다. 제원이 붙거나
+  숫자가 멀리 있으면 콜아웃이 아니다. 전수 확인(기기 텍스트 197건): 제거 3건,
+  전부 육각형 마커였고 `CH`·`PL`·`SC` 같은 약호 기기는 걸리지 않았다.
 - **PDF 파서가 호출자 버퍼를 detach** — pdf.js 는 받은 ArrayBuffer 를 워커로
   transfer 한다. 파서가 넘기던 `new Uint8Array(pdfBytes)` 는 사본이 아니라 뷰라서,
   같은 버퍼로 두 번째 페이지를 파싱하면 **예외도 경고도 없이 기기 0개**가 나왔다
