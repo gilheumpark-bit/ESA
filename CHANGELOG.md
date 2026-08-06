@@ -27,6 +27,15 @@ All notable changes to ESVA are documented in this file.
   완성된 목록으로 읽는다.
 
 ### Fixed
+- **문자 중복 제거 부재** — `assignDisplayIdsForTexts` 가 정렬 후 ID 만 붙였다.
+  구획이 겹치게 잘리므로 같은 명판이 2~3 노드로 남았다(실측: `MOLD TR-2` 가
+  `989,511 42x6` 과 `1027,514 67x10` 로 두 번). 같은 자리의 같은 글자를 접고
+  더 넓게 읽은 쪽을 남긴다. 멀리 떨어진 반복 표기는 접지 않는다.
+- **타입 이름 구분자 차이로 CT·ZCT 가 전력변압기로 계수** — `normalizeKind` 가
+  `current_transformer`(밑줄)만 검사해 `current transformer`(공백)가 일반 분기
+  `includes('transformer')` 로 떨어졌다. 실측: 한 회차에서 CT·ZCT 7개가
+  전력변압기로 세어져 5 대신 12 가 나왔다. **모델이 회차마다 어느 형태를 내느냐로
+  값이 흔들렸으므로 계수 변동의 출처이기도 하다.**
 - **같은 명판을 여러 번 읽어 여러 대로 계수** — 도면의 벡터 층이 `MOLD TR-2` 를
   딱 한 번 선언했다면 그 이름을 단 판독은 몇 개든 한 대다. 크기·겹침 같은 간접
   신호는 근본적으로 약하다(정답 채점에서 SAME 1.00~10.10 · DISTINCT 1.00~4.97 로
