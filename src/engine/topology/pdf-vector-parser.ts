@@ -364,9 +364,33 @@ const BARE_NUMBER = /^[0-9]{1,3}$/;
 const CALLOUT_X_FRACTION = 0.005;
 const CALLOUT_Y_FRACTION = 0.015;
 
+/**
+ * 한국어 조사·접속사로 끝나는 토큰. 한국어는 교착어라 문장 안의 낱말이
+ * `계통은`·`인입선의`·`경우에` 처럼 조사를 달고 나온다. 설비 라벨은 그렇지
+ * 않다(`MOLD TR-2 6.6kV/440V`·`수전용 변압기`·`PF 10[kA]이상`).
+ */
+const KOREAN_PARTICLE_TAIL = /(?:은|는|이|가|을|를|의|에|에서|으로|와|과|또는|및)$/;
+
 function isProseText(text: string): boolean {
-  if (text.trim().split(/\s+/).length < 5) return false;
+  const tokens = text.trim().split(/\s+/);
+  if (tokens.length < 5) return false;
   if (KOREAN_PROSE_MARKERS.test(text)) return true;
+
+  // 한국어 주석은 줄바꿈으로 잘린다. 종결 표현(`…하여야 한다`)은 **마지막 줄에만**
+  // 있으므로, 앞줄은 위 마커를 통과해 설비로 승격됐다.
+  //
+  // 실측(2026-08-06, 교재형 22.9kV 수변전 단선결선도 p6): 주 6 이 두 줄로 잘려
+  //   ① "…계통은 CNCV-W 케이블(수밀형) 또는 TR CNCV-W"   ← 마커 없음 → 승격
+  //   ② "(트리억제형)을 사용하여야 한다. 다만, 전력구"      ← 마커 있음
+  // ① 의 `TR`(트리억제형 케이블 약호)이 **전력변압기로 계수**돼 정답 3 에 4 가 나왔다.
+  //
+  // 조사로 끝나는 토큰이 둘 이상이면 문장이다. 전수 확인: 이 교재 페이지의
+  // 기기 분류 문자 5건이 전부(도면 제목·해설·주석 3줄) 걸리고, KIMM 실도면
+  // p5 의 기기 문자 **197건은 하나도 걸리지 않았다.**
+  const particleTokens = tokens.filter((token) =>
+    KOREAN_PARTICLE_TAIL.test(token.replace(/[.,)\]]+$/, ''))).length;
+  if (particleTokens >= 2) return true;
+
   const hits = text.match(PROSE_FUNCTION_WORDS);
   return hits !== null && hits.length >= 2;
 }

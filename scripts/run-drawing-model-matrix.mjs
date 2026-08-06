@@ -83,6 +83,29 @@ const CASES = {
       minRelations: 12,
     },
   },
+  // ── 로컬 전용 티어 ────────────────────────────────────────────────────
+  // 이 교보재는 재배포할 수 없어 `fixtures/drawings/local/`(gitignore)에 있다.
+  // 파일이 없으면 이 티어는 실행할 수 없다 — `--tiers` 로 명시할 때만 쓴다.
+  //
+  // 왜 세우나: 여기까지의 도면 수리가 전부 KIMM 실도면 한 장으로 보정됐다.
+  // 성격이 다른 도면(한글 라벨 교재형 22.9kV 수변전 단선결선도)에서 그 수리가
+  // 통하는지 보는 **일반화 시험**이다.
+  //
+  // 정답은 원본 p6 을 확대해 육안으로 셌다: 수전용 변압기 3(Δ-Y 3쌍) ·
+  // 부하 3 · CB 1 · MOF 1 · PT 1 · CT 1 · LA 1 · DS 2 · PF/COS 2 ·
+  // OCR 3 · OCGR 1 · A 1 · V 1.
+  'reference-textbook': {
+    id: 'dsan-p6',
+    file: 'fixtures/drawings/local/dsan-substation.pdf',
+    mime: 'application/pdf',
+    pages: '6',
+    description: '참조 · 한글 교재형 22.9kV 수변전 단선결선도 (로컬 전용)',
+    expected: {
+      symbolTypes: { transformer: 3, generator: 0 },
+      minimumSymbolTypes: { breaker: 1 },
+      minRelations: 10,
+    },
+  },
 };
 
 const MODELS = {

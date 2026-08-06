@@ -90,3 +90,33 @@ describe('도면 참조 콜아웃은 기기가 아니다', () => {
     expect(result.components.filter((c) => c.type === 'capacitor')).toHaveLength(1);
   });
 });
+
+describe('줄바꿈된 한국어 주석은 기기가 아니다', () => {
+  beforeEach(() => { items.length = 0; });
+
+  it('종결 표현이 다음 줄로 넘어간 주석 앞줄도 주석으로 본다', async () => {
+    // 실측(2026-08-06, 교재형 22.9kV 수변전 단선결선도 p6): 주 6 이 두 줄로 잘려
+    //   ① "…계통은 CNCV-W 케이블(수밀형) 또는 TR CNCV-W"   ← 마커 없음
+    //   ② "(트리억제형)을 사용하여야 한다. 다만, 전력구"      ← 마커 있음
+    // ① 의 `TR`(트리억제형 케이블 약호)이 전력변압기로 계수돼 정답 3 에 4 가 나왔다.
+    items.push(textItem('지중 인입선의 경우에 22.9[kV-Y] 계통은 CNCV-W 케이블(수밀형) 또는 TR CNCV-W', 100, 900));
+
+    const result = await parse();
+    expect(result.components.filter((c) => c.type === 'transformer')).toHaveLength(0);
+  });
+
+  it('조사가 없는 설비 명판은 그대로 센다', async () => {
+    // 토큰 5개 이상이어도 조사로 끝나는 토큰이 없으면 설비 라벨이다.
+    items.push(textItem('MOLD TR-2 6.6kV/440V 3PH 1000kVA', 300, 400));
+
+    const result = await parse();
+    expect(result.components.filter((c) => c.type === 'transformer')).toHaveLength(1);
+  });
+
+  it('짧은 한글 명판은 주석 판정에 걸리지 않는다', async () => {
+    items.push(textItem('수전용 변압기', 300, 600));
+
+    const result = await parse();
+    expect(result.components.filter((c) => c.type === 'transformer')).toHaveLength(1);
+  });
+});
