@@ -70,14 +70,27 @@ function evidenceRefs(
  * 벡터 판독이 없는 원본(래스터 이미지 업로드)에서는 비어 있고, 그때는 종전
  * 규칙만 동작한다. 도면이 말해 주지 않으면 추측하지 않는다.
  */
-function uniqueVectorNameplates(hits: readonly RawSymbolHit[]): Set<string> {
+function uniqueVectorNameplates(
+  hits: readonly RawSymbolHit[],
+  textSeeds: ReadonlyArray<{ text: string }>,
+): Set<string> {
   const counts = new Map<string, number>();
-  for (const hit of hits) {
-    if (hit.regionId !== VECTOR_SOURCE_REGION) continue;
-    const key = nameplateText(hit.label);
-    if (key.length < 2 || !/[A-Z]/.test(key)) continue;
+  const bump = (raw: string | undefined) => {
+    const key = nameplateText(raw);
+    if (key.length < 2 || !/[A-Z]/.test(key)) return;
     counts.set(key, (counts.get(key) ?? 0) + 1);
+  };
+
+  // 벡터 판독이 있으면 그것이 정본이다 — 도면이 직접 선언한 값이다.
+  const vectorHits = hits.filter((hit) => hit.regionId === VECTOR_SOURCE_REGION);
+  if (vectorHits.length > 0) {
+    for (const hit of vectorHits) bump(hit.label);
+    return new Set([...counts].filter(([, n]) => n === 1).map(([key]) => key));
   }
+
+  // 라스터 원본에는 벡터 층이 없다. 판독된 문자 층으로 대신 센다. 문자 중복
+  // 제거를 거친 뒤라 같은 자리의 반복 판독은 이미 하나로 접혀 있다.
+  for (const seed of textSeeds) bump(seed.text);
   return new Set([...counts].filter(([, n]) => n === 1).map(([key]) => key));
 }
 
@@ -98,8 +111,14 @@ const VECTOR_SOURCE_REGION = 'vector-full';
 export function deduplicateSymbols(
   hits: RawSymbolHit[],
   tolerance = 24,
+  /**
+   * 판독된 문자 층. 라스터 원본에는 벡터 앵커가 없으므로 "이 명판이 도면에 몇 번
+   * 적혔나" 를 여기서 센다. 중복 제거를 거친 문자여야 값이 맞는다
+   * (`mergeRepeatedTextReads`).
+   */
+  textSeeds: ReadonlyArray<{ text: string }> = [],
 ): SymbolNode[] {
-  const uniqueNameplates = uniqueVectorNameplates(hits);
+  const uniqueNameplates = uniqueVectorNameplates(hits, textSeeds);
   const nameplateOfNode = new Map<string, string>();
   const kept: SymbolNode[] = [];
   const pageSequences = new Map<number, number>();
@@ -367,6 +386,46 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
   return kept;
 }
 
+/**
+ * 같은 글자를 겹친 크롭에서 여러 번 읽은 것을 하나로 접는다.
+ *
+ * 종전에는 **중복 제거가 아예 없었다** — 정렬 후 ID 만 붙였다. 구획이 겹치게
+ * 잘리므로 같은 명판이 2~3개 노드로 남았다(실측: `MOLD TR-2` 가
+ * `989,511 42x6` 과 `1027,514 67x10` 로 두 번, x 가 4px 겹치고 y 는 같다).
+ *
+ * 그 여파가 계수까지 간다. 라스터 원본에는 벡터 앵커가 없어 "이 명판이 도면에
+ * 몇 번 선언됐나" 를 문자 층에서 세야 하는데, 중복이 그 값을 부풀려 유일 명판
+ * 판정을 못 쓰게 만든다.
+ *
+ * 진짜 반복 기기는 지킨다: 피더 표의 `MCCB ABSc` 78 행은 서로 멀리 떨어져 있어
+ * 겹치지도 인접하지도 않는다. 여기서 접는 것은 **같은 자리의 같은 글자**뿐이다.
+ */
+function mergeRepeatedTextReads<T extends { text: string; bounds: EvidenceBounds; pageIndex: number }>(
+  sorted: readonly T[],
+): T[] {
+  const kept: T[] = [];
+  for (const item of sorted) {
+    const key = normalizeLabel(item.text);
+    const duplicate = kept.find((existing) => normalizeLabel(existing.text) === key
+      && existing.pageIndex === item.pageIndex
+      && sameTextPlacement(existing.bounds, item.bounds));
+    // 더 넓게 읽은 쪽을 남긴다 — 잘린 조각보다 온전한 판독이다.
+    if (!duplicate) { kept.push(item); continue; }
+    if (item.bounds.w * item.bounds.h > duplicate.bounds.w * duplicate.bounds.h) {
+      kept[kept.indexOf(duplicate)] = item;
+    }
+  }
+  return kept;
+}
+
+/** 같은 글줄의 같은 자리인가. 겹치거나 글자 높이 한 칸 안쪽이면 같은 자리다. */
+function sameTextPlacement(a: EvidenceBounds, b: EvidenceBounds): boolean {
+  const gapX = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.w, b.x + b.w));
+  const gapY = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.h, b.y + b.h));
+  const lineHeight = Math.min(a.h, b.h);
+  return gapX <= lineHeight && gapY <= lineHeight;
+}
+
 export function assignDisplayIdsForTexts(
   texts: Array<{
     text: string;
@@ -378,11 +437,11 @@ export function assignDisplayIdsForTexts(
   }>,
 ): TextNode[] {
   const pageSequences = new Map<number, number>();
-  return [...texts].sort((left, right) =>
+  return mergeRepeatedTextReads([...texts].sort((left, right) =>
     left.pageIndex - right.pageIndex
     || left.bounds.y - right.bounds.y
     || left.bounds.x - right.bounds.x
-    || left.text.localeCompare(right.text)).map((t) => {
+    || left.text.localeCompare(right.text))).map((t) => {
     const page = t.pageIndex + 1;
     const seq = (pageSequences.get(t.pageIndex) ?? 0) + 1;
     pageSequences.set(t.pageIndex, seq);

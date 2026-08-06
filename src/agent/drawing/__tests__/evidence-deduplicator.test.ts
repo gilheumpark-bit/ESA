@@ -543,13 +543,65 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
       expect(symbols).toHaveLength(2);
     });
 
-    it('벡터 판독이 없으면 이 규칙은 발화하지 않는다', () => {
-      // 래스터 이미지 업로드에는 앵커가 없다. 도면이 말해 주지 않으면 추측하지 않는다.
+    it('벡터도 문자도 없으면 이 규칙은 발화하지 않는다', () => {
+      // 근거가 없으면 추측하지 않는다.
       const symbols = deduplicateSymbols([
         raster('r1', 'MOLD TR-2 6.6kV/440V', { x: 996, y: 502, w: 67, h: 64 }),
         raster('r2', 'MOLD TR-2 1000kVA', { x: 1120, y: 505, w: 62, h: 60 }),
       ]);
       expect(symbols).toHaveLength(2);
+    });
+
+    it('라스터 원본에서는 판독된 문자 층으로 명판 다중도를 센다', () => {
+      // 벡터 앵커가 없는 이미지 업로드. 문자 층이 `MOLD TR-2` 를 한 번만 적었으면
+      // 그 이름의 판독은 한 대다.
+      const symbols = deduplicateSymbols(
+        [
+          raster('r1', 'MOLD TR-2 6.6kV/440V', { x: 996, y: 502, w: 67, h: 64 }),
+          raster('r2', 'MOLD TR-2 1000kVA', { x: 1120, y: 505, w: 62, h: 60 }),
+        ],
+        undefined,
+        [{ text: 'MOLD TR-2' }, { text: 'MCCB ABSc' }, { text: 'MCCB ABSc' }],
+      );
+      expect(symbols).toHaveLength(1);
+    });
+
+    it('문자 층에 여러 번 적힌 이름은 라스터에서도 접지 않는다', () => {
+      const symbols = deduplicateSymbols(
+        [
+          raster('r1', 'MCCB ABSc', { x: 100, y: 500, w: 40, h: 40 }),
+          raster('r2', 'MCCB ABSc', { x: 400, y: 500, w: 40, h: 40 }),
+        ],
+        undefined,
+        [{ text: 'MCCB ABSc' }, { text: 'MCCB ABSc' }],
+      );
+      expect(symbols).toHaveLength(2);
+    });
+  });
+
+  describe('같은 자리의 같은 글자는 한 번만 센다', () => {
+    // 종전에는 문자 중복 제거가 **아예 없었다** — 정렬 후 ID 만 붙였다. 구획이
+    // 겹치게 잘리므로 같은 명판이 2~3 노드로 남았다(실측: `MOLD TR-2` 가
+    // 989,511 42x6 과 1027,514 67x10 로 두 번, x 가 4px 겹치고 y 는 같다).
+    const text = (s: string, b: { x: number; y: number; w: number; h: number }) => ({
+      text: s, bounds: b, pageIndex: 0, certainty: 'confirmed' as const, confidence: 1,
+    });
+
+    it('겹쳐 읽힌 같은 글자를 하나로 접고 더 넓은 판독을 남긴다', () => {
+      const nodes = assignDisplayIdsForTexts([
+        text('MOLD TR-2', { x: 989, y: 511, w: 42, h: 6 }),
+        text('MOLD TR-2', { x: 1027, y: 514, w: 67, h: 10 }),
+      ]);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0].evidence[0].bounds.w).toBe(67);
+    });
+
+    it('멀리 떨어진 같은 글자는 각자 센다 — 피더 표의 반복 행이다', () => {
+      const nodes = assignDisplayIdsForTexts([
+        text('MCCB ABSc', { x: 100, y: 500, w: 60, h: 10 }),
+        text('MCCB ABSc', { x: 400, y: 500, w: 60, h: 10 }),
+      ]);
+      expect(nodes).toHaveLength(2);
     });
   });
 

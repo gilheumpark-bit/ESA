@@ -1241,7 +1241,9 @@ export async function runDocumentAnalysis(
   updateJob(job.jobId, { status: 'RECONCILING_PAGES' });
   const continuity = restoredContinuity(previousJob?.document, preservedPages);
   stitchPageBoundaries(continuity, continuityByPage, lineHits, unresolved);
-  const symbols = deduplicateSymbols(symbolHits);
+  // 라스터 원본에는 벡터 앵커가 없다. 판독된 문자 층을 넘겨 명판 다중도를
+  // 세게 한다 — 도면이 한 번만 적은 이름은 몇 번을 읽어도 한 대다.
+  const symbols = deduplicateSymbols(symbolHits, undefined, textSeeds);
   // 관계·선 조립 전에 강등한다. 조립은 확정 여부를 보고 판단하므로 순서가 곧 결과다.
   const containedMarkingItems = demoteContainedMarkings(symbols);
   await appendRasterLineFallback(source, requested, symbols, textSeeds, lineHits);

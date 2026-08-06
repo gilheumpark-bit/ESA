@@ -156,7 +156,16 @@ function resolveCountStatus(input: {
 }
 
 function normalizeKind(type: string): string {
-  const t = type.toLowerCase();
+  // **구분자를 먼저 통일한다.** 모델은 같은 기기를 `current_transformer` 로도
+  // `current transformer` 로도 낸다. 종전에는 밑줄형만 검사해서 공백형이
+  // 아래 일반 분기 `includes('transformer')` 로 떨어졌고, **CT·ZCT 가
+  // 전력변압기 대수에 합산**됐다.
+  //
+  // 실측(2026-08-06, KIMM p5 · PDF 3회): 한 회차에서 `current transformer`
+  // 7개(`CTx3 160/5A`·`ZCT 200/1.5mA` 등)가 전력변압기로 세어져 5 대신 12 가
+  // 나왔다. 회차마다 모델이 어느 형태를 내느냐에 따라 값이 흔들렸으므로
+  // **이 결함이 계수 변동의 출처이기도 하다.**
+  const t = type.toLowerCase().replace(/[\s-]+/g, '_');
   if (t.includes('vcb') || t === 'breaker') return 'VCB/breaker';
   // 계량·계측 기기를 전력변압기보다 **먼저** 가른다. 일반 분기가 앞에 있으면
   // `transformer_ct`·`transformer_vt` 가 `includes('transformer')` 에 걸려

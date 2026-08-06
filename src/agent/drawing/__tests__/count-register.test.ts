@@ -138,6 +138,23 @@ describe('count-register — 계량·계측 기기는 전력변압기와 따로 
     expect(rows.find((r) => r.equipmentKind === 'instrument transformer')!.symbolOccurrences).toBe(1);
   });
 
+  it('밑줄형·공백형 타입 이름을 같게 취급한다', () => {
+    // 실측(2026-08-06, KIMM p5 · PDF): 모델이 `current transformer`(공백)를 내면
+    // 밑줄형만 검사하던 특수 분기를 빠져나가 일반 분기 `includes('transformer')`
+    // 로 떨어졌다. CT·ZCT 7개가 전력변압기로 세어져 5 대신 12 가 나왔다.
+    // 회차마다 모델이 어느 형태를 내느냐로 값이 흔들렸으므로 이 결함이
+    // 계수 변동의 출처이기도 했다.
+    const rows = kindsOf([
+      'transformer',
+      'current transformer', 'current_transformer',
+      'potential transformer', 'instrument transformer',
+    ]);
+    expect(rows.find((r) => r.equipmentKind === 'transformer')!.symbolOccurrences).toBe(1);
+    expect(rows.find((r) => r.equipmentKind === 'CT')!.symbolOccurrences).toBe(2);
+    expect(rows.find((r) => r.equipmentKind === 'PT/PPT')!.symbolOccurrences).toBe(1);
+    expect(rows.find((r) => r.equipmentKind === 'instrument transformer')!.symbolOccurrences).toBe(1);
+  });
+
   it('건식·유입 변압기는 전력변압기로 함께 센다', () => {
     const rows = kindsOf(['transformer', 'transformer_dry']);
     const power = rows.find((r) => r.equipmentKind === 'transformer');
