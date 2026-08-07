@@ -27,6 +27,19 @@ All notable changes to ESVA are documented in this file.
   완성된 목록으로 읽는다.
 
 ### Fixed
+- **골든 축 별칭 표의 구멍 둘** — `canonicalSymbolType` 이 `lightning_arrester`
+  와 `disconnecting_switch` 를 접지 못했다. 실측(교재형 수변전 p6): 피뢰기가
+  `lightning_arrester|surge_arrester|arrester` 로 **읽혔는데도** 첫 후보만
+  정본화돼 arrester 축이 0 이었다. 단로기는 반대로 switch 축에서 빠져 **과다
+  계수가 줄어 점수가 올라갔다** — 누락이 스스로를 감춘다. 26차
+  `current transformer`(공백형)까지 같은 결함의 세 번째 사례다. 별칭을 넣고
+  **양방향 시험**(빼면 red)을 걸었다. 참조 티어 라벨 45~86%(폭 41p) →
+  **85~100%(폭 15p)**, transformer·breaker·arrester 는 3회 전부 정답 일치.
+- **참조 티어 정답표가 얇았다** — 육안 정답 13종 중 3종만 걸려 있어 27차의
+  `100/100/100 · 폭 0p` 은 실질 정확 축 하나 위의 값이었다. 정본 어휘가 있는 축
+  (breaker 하한 1 → **정확 1**, switch 2, arrester 1)까지 넓혔다. MOF·PT·CT·
+  OCR 등은 어휘가 정본화되지 않아 넣으면 판독이 아니라 이름 불일치를 채점하게
+  되므로 뺐다.
 - **채점기가 과다 계수에 상을 주고 있었다** — `scripts/lib/drawing-model-score.mjs`
   가 종합을 `기호 정확도 70% + 관계 회수율 30%` 로 냈는데, 관계축이
   `min(1, 실측/하한)` 이었다. `minRelations` 는 정답이 아니라 사람이 센 **회귀

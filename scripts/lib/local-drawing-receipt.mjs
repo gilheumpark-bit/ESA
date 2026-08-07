@@ -66,10 +66,22 @@ function canonicalSymbolType(value) {
     || ['vcb', 'acb', 'mccb', 'mcb', 'elb', 'rcd'].includes(normalized)
     || /^(?:breaker|circuitbreaker)(?:vcb|acb|mccb|mcb|elb|rcd)$/.test(normalized)
   ) return 'breaker';
-  if (['switch', 'disconnector', 'disconnectswitch', 'switchdisconnector', 'isolator', 'isolatorswitch'].includes(normalized)) {
+  if ([
+    'switch', 'disconnector', 'disconnectswitch', 'switchdisconnector',
+    // 2026-08-07 실측(교재형 수변전 p6): 모델이 단로기를 `disconnecting_switch`
+    // 로도 낸다. 별칭에 없어 switch 축에서 조용히 빠졌다 — 같은 페이지에서
+    // 피뢰기(`lightning_arrester`)와 함께 나온 **같은 결함의 세 번째 사례**다.
+    // 축에서 빠지면 점수가 좋아지므로 이 누락은 스스로 드러나지 않는다.
+    'disconnectingswitch', 'ds',
+    'isolator', 'isolatorswitch',
+  ].includes(normalized)) {
     return 'switch';
   }
-  if (['arrester', 'surgearrester', 'spd'].includes(normalized)) return 'arrester';
+  // 2026-08-07 실측(교재형 수변전 p6): 모델이 피뢰기를
+  // `lightning_arrester|surge_arrester|arrester` 로 냈는데 첫 후보만 정본화되어
+  // `lightningarrester` 가 어느 별칭에도 안 맞았다. 읽기는 성공했는데 골든 축이
+  // 0 이 됐다 — 26차 `current transformer` 구분자 결함과 같은 자리다.
+  if (['arrester', 'surgearrester', 'lightningarrester', 'la', 'spd'].includes(normalized)) return 'arrester';
   if (normalized === 'transformer' || normalized === 'powertransformer') return 'transformer';
   return raw;
 }

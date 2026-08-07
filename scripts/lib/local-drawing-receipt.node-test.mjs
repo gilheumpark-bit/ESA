@@ -240,6 +240,45 @@ test('VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한�
   assert.deepEqual(recognition.evidence.minimumLabelMismatches, []);
 });
 
+test('disconnecting_switch·DS 도 switch 골든 축으로 집계한다', () => {
+  // 실측(교재형 수변전 p6): 단로기가 `disconnecting_switch` 로 나왔는데 별칭에
+  // 없어 switch 축에서 빠졌다. **축에서 빠지면 과다 계수가 줄어 점수가 좋아지므로
+  // 이 누락은 스스로 드러나지 않는다** — 별칭 표는 반드시 양방향으로 시험한다.
+  for (const raw of ['disconnecting_switch', 'DS', 'Disconnecting Switch']) {
+    const document = completeDocument();
+    document.evidenceGraph.symbols.push({
+      id: 's4', displayId: 'P01-S004', typeCandidates: [raw],
+      certainty: 'ambiguous', evidence: [{ evidenceId: 'e6' }],
+    });
+
+    const result = receipt.reasoningStageEvidenceFromDocument(document, {
+      expected: { minimumSymbolTypes: { switch: 1 } },
+    });
+    const recognition = result.stages.find((stage) => stage.id === 'symbol-text-adjudication');
+    assert.equal(recognition.evidence.actualSymbolTypes.switch, 1, `${raw} → switch`);
+  }
+});
+
+test('lightning_arrester·LA 도 arrester 골든 축으로 집계한다', () => {
+  // 실측(교재형 수변전 p6): 피뢰기 라벨 "LA" 를 모델이
+  // `lightning_arrester|surge_arrester|arrester` 로 냈다. 첫 후보만 보므로
+  // `lightningarrester` 가 별칭에 없어 arrester 축이 0 이 됐다 — 읽기 실패가
+  // 아니라 이름 불일치였다.
+  for (const raw of ['lightning_arrester', 'LA', 'Lightning Arrester']) {
+    const document = completeDocument();
+    document.evidenceGraph.symbols.push({
+      id: 's3', displayId: 'P01-S003', typeCandidates: [raw],
+      certainty: 'ambiguous', evidence: [{ evidenceId: 'e5' }],
+    });
+
+    const result = receipt.reasoningStageEvidenceFromDocument(document, {
+      expected: { minimumSymbolTypes: { arrester: 1 } },
+    });
+    const recognition = result.stages.find((stage) => stage.id === 'symbol-text-adjudication');
+    assert.equal(recognition.evidence.actualSymbolTypes.arrester, 1, `${raw} → arrester`);
+  }
+});
+
 test('surge_arrester는 arrester 골든 축으로 집계한다', () => {
   const document = completeDocument();
   document.evidenceGraph.symbols.push({

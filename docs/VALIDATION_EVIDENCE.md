@@ -1450,6 +1450,100 @@ KIMM 한 장으로 보정한 수리들이 **성격이 전혀 다른 도면에서
   이전 커밋 판으로 되돌리면 5개 중 4개 red).
 - 재채점 입력: `test-results/drawing-model-high-gemini-*.json` (27차 실행 영수증).
 
+## 29차 얇은 정답표와 별칭 표의 구멍 (2026-08-07)
+
+28차에서 참조 교재 티어만 100% 로 남았다. 그런데 그 100% 가 무엇을 재고 있었는지
+보니 **정확 축이 사실상 하나**였다 — `transformer 3` 과 `generator 0`(자명한 축),
+그리고 하한 관문 둘. 27차에 육안으로 센 정답은 13종인데 정답표는 그중 3종만
+걸고 있었다.
+
+### 정본 어휘가 있는 축만 넓혔다
+
+`canonicalSymbolType` 이 별칭을 접는 축은 breaker·switch·arrester·transformer
+넷뿐이다. MOF·PT·CT·PF/COS·OCR·OCGR·A·V 는 모델이 부르는 대로 흘러나오므로
+정답표에 넣으면 판독이 아니라 **이름 불일치**를 채점하게 된다(26차 구분자 결함과
+같은 함정). `부하 3` 도 뺐다 — `load` 는 분류 실패의 흡수통이다.
+
+그래서 `breaker` 를 하한 1 → **정확 1** 로 조이고, `switch 2`(DS)·`arrester 1`(LA)
+을 더했다. 정답표는 채점에만 쓰이고 요청에는 들어가지 않으므로(`runCell` 이 보내는
+것은 파일·공급자·모델·effort·페이지뿐) 판독에는 영향이 없다.
+
+### 넓히자 무너졌다
+
+| | 라벨 | 폭 |
+|---|---|---|
+| 27차 (얇은 정답표) | 100 / 100 / 100% | 0p |
+| **넓힌 정답표** | **45 / 86 / 65%** | **41p** |
+
+`transformer 3/1/3` · `breaker 1/2/1` · `switch 8/5/7` · `arrester 0/0/1`.
+**27차의 "폭 0p" 는 실질 축 하나짜리 정답표 위에서 나온 값이었다.**
+
+### 원인은 판독이 아니라 별칭 표였다 — 같은 결함 셋
+
+영수증의 `evidenceGraph.symbols` 를 열어 보니 피뢰기는 **읽혀 있었다**.
+
+```
+lightning_arrester|surge_arrester|arrester   ambiguous   "LA"
+```
+
+`actualSymbolTypes` 는 `typeCandidates[0]` 만 정본화한다 → `lightning_arrester`
+→ 정규화 `lightningarrester` → 별칭 `['arrester','surgearrester','spd']` 에 없음
+→ 골든 축 0. **후보 목록 안에 `arrester` 가 있는데 무시됐다.**
+
+같은 페이지에 하나 더 있었다 — 단로기가 `disconnecting_switch` 로 나오는데 그것도
+별칭에 없어 switch 축에서 빠진다. 26차 `current transformer`(공백형)까지 합치면
+**같은 결함의 세 번째 사례**다.
+
+> 이 둘은 성격이 반대라 발견 난이도가 다르다. 피뢰기는 축이 **0 이 되어** 눈에
+> 띄었지만, 단로기는 축에서 빠지면 **과다 계수가 줄어 점수가 올라간다.**
+> 즉 **누락이 스스로를 감춘다.** 별칭 표는 반드시 양방향으로 시험해야 한다.
+
+### 수리와 재측정
+
+`lightningarrester`·`la` 를 arrester 에, `disconnectingswitch`·`ds` 를 switch 에
+넣었다. 판별 A/B: 각 별칭을 빼면 해당 시험이 red(각 1건), 넣으면 56/56 green.
+
+| 단계 | 라벨 | 폭 | 어긋난 축 |
+|---|---|---|---|
+| 넓힌 정답표 · 별칭 결함 | 45~86% | 41p | transformer·breaker·switch·arrester |
+| + 피뢰기 별칭 | 86~100% | 14p | switch 7/2/2 |
+| **+ 단로기 별칭** | **85~100%** | **15p** | **switch 4/2/8** |
+
+단로기 별칭을 넣으면 축 인원이 늘어 점수가 내려간다. 그 방향이 맞으므로 그대로 뒀다.
+transformer·breaker·arrester 는 세 축 모두 3회 전부 정답과 일치한다.
+한 회차는 **switch 까지 정확히 2 로 100%** 다 — 파이프라인이 이 페이지를 정확히
+읽을 수 있다는 뜻이고, 다만 **그것을 매번 하지는 못한다**(폭 15p).
+
+### 남은 결함 — 진단됐고 미수리
+
+**① `typeCandidates[0]` 임의 채택.** 모델이 스스로 못 정한 후보의 첫 번째를 쓴다.
+
+```
+switch|fuse   confirmed   "PF 10[kA]이상"   ← 전력퓨즈인데 switch 로 세어진다
+```
+
+피뢰기는 별칭으로 우회했지만 이건 구조 문제다. 후보 중 골든 축에 맞는 것을 고르게
+바꾸면 `switch|fuse` 처럼 **둘 다 골든인 경우**에 다시 임의 선택이 된다.
+
+**② 공백 차이로 같은 기기가 둘로 남는다.**
+
+```
+switch|fuse   ambiguous   "COS 또는 PF"
+fuse          confirmed   "COS또는PF"     ← 공백만 다르다
+```
+
+**③ 라벨 없는 switch 유령.** 실측 8 회차의 8개 중 라벨이 있는 것은 DS 2 개뿐이다.
+정답표가 틀린 게 아니라 빈 라벨 기기를 만들어 내고 있다.
+
+### 앵커
+
+- 커밋: 이 항목과 같은 커밋.
+- 재실행: `npm run test:scripts`(별칭 양방향 시험 포함).
+  라이브는 `node --env-file=<.env.local> scripts/run-drawing-model-matrix.mjs
+  --models=gemini --tiers=reference-textbook --repeat=3`
+  (교보재는 로컬 전용 gitignore 자산이라 이 티어는 명시할 때만 돈다).
+- 영수증: `test-results/drawing-model-matrix-high.json`.
+
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
 ```
