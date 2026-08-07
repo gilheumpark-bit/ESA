@@ -71,6 +71,29 @@ const GROUND_TYPES = new Set(['ground_rod']);
 const GROUND_LABELS = new Set(['GND', 'GROUND', 'EARTH', '접지', '접지봉']);
 const BLOCKING_GRAPH_CONFLICTS = new Set(['UNBOUND_LINE_ENDPOINT', 'SELF_LINE_ENDPOINT']);
 const HOLDING_GRAPH_CONFLICTS = new Set(['AMBIGUOUS_LINE_ENDPOINT', 'AMBIGUOUS_NEAR_PARALLEL_LINE', 'AMBIGUOUS_SYMBOL_TYPE', 'AMBIGUOUS_TEXT_LINK']);
+
+/** 충돌 문자열은 `PREFIX:대상` 꼴이다. 판정은 접두사로만 한다. */
+export function graphConflictPrefix(conflict: string): string {
+  const separator = conflict.indexOf(':');
+  return separator < 0 ? conflict : conflict.slice(0, separator);
+}
+
+/**
+ * 그래프 충돌이 **판독을 버려야 할 구조 위반**인지 판정한다.
+ *
+ * 2026-08-07: 이 판정이 두 곳에 따로 있었고 서로 반대였다.
+ * `document-orchestrator` 가 사설 정규식 `/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/`
+ * 로 **모호성까지 차단**으로 분류해, 실질 역할(symbols·connections·text·logic)
+ * 이 모두 성공한 전면 판독이 `AMBIGUOUS_LINE_ENDPOINT` 3건 때문에 통째로
+ * failed 가 됐다(실측: 교재형 수변전 p6, 회차 2/3). 모호성은 HOLD 다 —
+ * 위 두 집합이 그렇게 선언하고 있는데 정규식이 그것을 무시했다.
+ *
+ * 24차(계수 등록기 vs 채점기)·26차(타입 구분자)·29차(별칭 표)와 같은 결함군이다:
+ * 같은 개념의 독립 정본이 둘 있으면 반드시 어긋난다.
+ */
+export function isBlockingGraphConflict(conflict: string): boolean {
+  return BLOCKING_GRAPH_CONFLICTS.has(graphConflictPrefix(conflict));
+}
 const EXPLICIT_UNPROTECTED = new Set(['UNPROTECTED', 'NO PROTECTION', 'WITHOUT PROTECTION', '무보호', '보호 없음']);
 
 type Role = 'source' | 'protection' | 'load' | 'ground';
@@ -245,9 +268,9 @@ function translateGraphConflicts(context: Context): ElectricalIssue[] {
   const issues: ElectricalIssue[] = [];
   for (const conflict of [...context.graph.conflicts].sort(compareText)) {
     const separator = conflict.indexOf(':');
-    const prefix = separator < 0 ? conflict : conflict.slice(0, separator);
+    const prefix = graphConflictPrefix(conflict);
     const suffix = separator < 0 ? '' : conflict.slice(separator + 1);
-    const judgment: ElectricalIssueJudgment = BLOCKING_GRAPH_CONFLICTS.has(prefix) ? 'BLOCK' : 'HOLD';
+    const judgment: ElectricalIssueJudgment = isBlockingGraphConflict(conflict) ? 'BLOCK' : 'HOLD';
     const severity: ElectricalIssue['severity'] = judgment === 'BLOCK' ? 'critical' : 'major';
     const required = HOLDING_GRAPH_CONFLICTS.has(prefix) ? ['unambiguous graph review'] : judgment === 'HOLD' ? ['graph conflict resolution'] : ['repair graph structure'];
     issues.push(makeIssue(context, 'GRAPH_CONFLICT', judgment, severity, `그래프 충돌: ${conflict}`, conflictTargets(context, suffix), required));

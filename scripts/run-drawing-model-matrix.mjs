@@ -100,15 +100,24 @@ const CASES = {
     mime: 'application/pdf',
     pages: '6',
     description: '참조 · 한글 교재형 22.9kV 수변전 단선결선도 (로컬 전용)',
-    // 정답은 원본을 확대해 육안으로 셌다(VALIDATION_EVIDENCE 27차): 변압기 3 ·
-    // 부하 3 · CB 1 · MOF 1 · PT 1 · CT 1 · LA 1 · DS 2 · PF/COS 2 · OCR 3 ·
-    // OCGR 1 · A 1 · V 1.
+    // 정답(2026-08-07 원본 확대 재검수): 변압기 3 · 부하 3 · CB 1 · T.C 1 ·
+    // MOF 1 · 전력량계 1 · PT 1 · V 1 · CT 1 · OCR 3 · OCGR 1 · A 1 · LA 1 ·
+    // E 1 · DS 2(직선 블레이드) · 곡선 블레이드 5(PF 10[kA] 1 + COS또는PF 1 +
+    // 피더 3).
     //
-    // 그중 **정본 어휘가 있는 축만** 정확 수량으로 건다. `canonicalSymbolType`
-    // 이 별칭을 접는 축은 breaker·switch·arrester·transformer 넷뿐이고,
-    // MOF·PT·CT·PF/COS·OCR·OCGR·A·V 는 모델이 뭐라 부르든 그대로 흘러나온다.
-    // 그것들을 정답표에 넣으면 판독 실패가 아니라 **이름 불일치**를 채점하게
-    // 된다(26차 타입 구분자 결함과 같은 함정). 어휘를 정본화한 뒤에 넣는다.
+    // 29차의 `PF/COS 2` 는 오답이었다 — 모선에서 갈라진 **피더 3개의 개폐기를
+    // 통째로 빠뜨렸다.** 그것들을 "유령"으로 적었으나 실재한다.
+    //
+    // 정확 수량으로 걸 수 있는 축의 조건은 둘이다.
+    //   ① `canonicalSymbolType` 이 별칭을 접는 축일 것
+    //      → breaker·switch·arrester·transformer 넷뿐. MOF·PT·CT·OCR·OCGR·A·V
+    //        는 모델이 부르는 대로 흘러나오므로 넣으면 판독이 아니라 이름
+    //        불일치를 채점하게 된다(26차 구분자 결함과 같은 함정).
+    //   ② **도면이 그 클래스를 결정할 것.**
+    //      → `switch` 는 여기서 탈락한다. 이 교재는 PF·COS·피더 개폐기에 전부
+    //        같은 곡선 블레이드 기호를 쓰고, 라벨이 `COS또는PF`(둘 중 하나)다.
+    //        도면만으로 switch/fuse 를 가를 수 없으므로 어느 수를 걸어도 자가
+    //        아니라 추측이다. 파이프라인이 ambiguous 로 남기는 것이 맞는 동작이다.
     //
     // 부하 3 도 뺐다 — `load` 는 분류 실패의 흡수통이라 정확 수량 축이 못 된다.
     expected: {
@@ -116,7 +125,6 @@ const CASES = {
         transformer: 3,   // 수전용 변압기 (Δ-Y 3쌍)
         generator: 0,
         breaker: 1,       // CB 1. 27차까지 하한이었던 것을 정확 수량으로 조인다.
-        switch: 2,        // DS 2 (단로기 → disconnector/isolator 별칭이 접힌다)
         arrester: 1,      // LA 1
       },
       minRelations: 10,

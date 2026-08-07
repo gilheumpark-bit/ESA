@@ -6,6 +6,7 @@
  * deterministic reconciliation and the V3 report contract.
  */
 
+import { isBlockingGraphConflict } from '@/agent/electrical/electrical-invariants';
 import type { LogicConflict } from '@/agent/electrical/logic-conflicts';
 import { executeSLDTeam, type SLDTeamDeps } from '@/agent/teams/sld-team';
 import type { TeamInput, TeamResult } from '@/agent/teams/types';
@@ -326,7 +327,10 @@ function markCouncilCoverage(
   const graphConflicts = review?.graph?.conflicts ?? [];
   const coverageEnvelope = councilEnvelope(result, 'coverage-auditor');
   const rescanTargets = coverageEnvelope?.data.rescanTargets ?? [];
-  const blockingGraphConflicts = graphConflicts.filter((conflict) => /UNBOUND|AMBIGUOUS_LINE|SELF_LINE/.test(conflict));
+  // 정본은 `electrical-invariants` 의 집합이다. 여기서 정규식으로 다시 판정하지
+  // 않는다 — 그렇게 했을 때 모호성(AMBIGUOUS_*)이 차단으로 분류돼, 실질 역할이
+  // 모두 성공한 전면 판독이 통째로 버려졌다.
+  const blockingGraphConflicts = graphConflicts.filter(isBlockingGraphConflict);
   const coverageSuccess = Boolean(review?.coverage.complete)
     && Boolean(coverageEnvelope)
     && rescanTargets.length === 0

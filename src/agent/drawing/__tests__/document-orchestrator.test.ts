@@ -488,6 +488,39 @@ describe('document-orchestrator + evaluator', () => {
       ?.find((call) => call.success === false);
     expect(conflictAuditCall?.error).toContain('UNBOUND_LINE_ENDPOINT:LINE-1');
 
+    // 모호성은 구조 위반이 아니다 — 전면 판독을 버리지 않는다.
+    //
+    // 실측(2026-08-07, 교재형 수변전 p6): 오케스트레이터가 사설 정규식
+    // `/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/` 으로 판정해, symbols·connections·
+    // text·logic 이 **모두 성공한** 전면 판독이 AMBIGUOUS_LINE_ENDPOINT 3건
+    // 때문에 failed 가 됐다. 3회 중 2회가 이 경로로 무너져 변압기를 3 대신
+    // 1 로 읽었다. 정본은 electrical-invariants 의 BLOCKING/HOLDING 집합이다.
+    const ambiguousOnlyReview = review(true);
+    ambiguousOnlyReview.graph.conflicts = [
+      'AMBIGUOUS_LINE_ENDPOINT:LINE-1',
+      'AMBIGUOUS_LINE_ENDPOINT:LINE-2',
+      'AMBIGUOUS_SYMBOL_TYPE:SYM-1',
+    ];
+    const executeAmbiguousOnly = jest.fn(async () => ({
+      success: true,
+      components: [],
+      connections: [],
+      confidence: 0.95,
+      drawingReview: ambiguousOnlyReview,
+      drawingSynthesis: { calculations: [] },
+    }));
+    const ambiguousRun = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-ambiguous-only',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 57, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeAmbiguousOnly as never });
+
+    const ambiguousAudit = ambiguousRun.document.coverageLedger.regions
+      .find((region) => region.regionId === 'p0-full')
+      ?.roleCalls['coverage-auditor'] ?? [];
+    expect(ambiguousAudit.some((call) => call.success === false)).toBe(false);
+    expect(ambiguousRun.document.coverageLedger.rolesPresent).toContain('coverage-auditor');
+
     let failedRegionAttempt = 0;
     const executeFailedRegion = jest.fn(async () => {
       failedRegionAttempt += 1;

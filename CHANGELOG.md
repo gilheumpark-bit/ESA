@@ -27,6 +27,24 @@ All notable changes to ESVA are documented in this file.
   완성된 목록으로 읽는다.
 
 ### Fixed
+- **감사 소견이 판독을 통째로 버리고 있었다** — `document-orchestrator` 가 사설
+  정규식 `/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/` 으로 차단 충돌을 판정해 **모호성까지
+  차단**으로 분류했다. `electrical-invariants` 의 정본 집합은
+  `AMBIGUOUS_LINE_ENDPOINT` 를 `HOLDING` 으로 선언하는데 정규식이 무시했다.
+  실측(교재형 수변전 p6): symbols·connections·text·logic 이 **모두 성공한**
+  전면 판독이 `AMBIGUOUS_LINE_ENDPOINT` 3건 때문에 failed 가 되고, 변압기 3대를
+  한 시야에 보는 유일한 패스가 버려져 3회 중 2회가 변압기를 1 로 읽었다.
+  정본 집합을 쓰는 `isBlockingGraphConflict()` 하나로 합쳤다(`translateGraphConflicts`
+  도 같은 함수 사용). 참조 티어 83~100%(폭 17p) → **100/100/100%(폭 0p)**,
+  품질 FAIL → **HOLD**. 24차·26차·29차와 같은 결함군 — 같은 개념의 독립 정본이
+  둘 있으면 어긋난다.
+- **참조 티어 정답표 오류(자기 정정)** — 27차 육안 계수가 **모선에서 갈라진 피더
+  3개의 개폐기를 통째로 빠뜨려** `PF/COS 2`(실제 5)로 적혔다. 29차에 그것을
+  "라벨 없는 유령"이라 기록했으나 **실재 기기이며, 파이프라인의 정상 판독을
+  오류로 채점하고 있었다.** 아울러 `switch` 를 정확 수량 축에서 뺐다 — 이 교재는
+  PF·COS·피더 개폐기에 같은 기호를 쓰고 라벨이 `COS또는PF` 라 **도면이 클래스를
+  결정하지 않는다.** 정확 수량 축의 조건에 "어휘가 정본화될 것" 외에 "도면이
+  클래스를 결정할 것"을 더했다.
 - **골든 축 별칭 표의 구멍 둘** — `canonicalSymbolType` 이 `lightning_arrester`
   와 `disconnecting_switch` 를 접지 못했다. 실측(교재형 수변전 p6): 피뢰기가
   `lightning_arrester|surge_arrester|arrester` 로 **읽혔는데도** 첫 후보만

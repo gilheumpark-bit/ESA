@@ -1535,6 +1535,12 @@ fuse          confirmed   "COS또는PF"     ← 공백만 다르다
 **③ 라벨 없는 switch 유령.** 실측 8 회차의 8개 중 라벨이 있는 것은 DS 2 개뿐이다.
 정답표가 틀린 게 아니라 빈 라벨 기기를 만들어 내고 있다.
 
+> **30차 정정: ③ 은 오판이다.** 원본을 확대해 보니 그 "유령"들은 **모선에서 갈라진
+> 피더 3개의 개폐기로 실재한다.** 정답표가 틀린 게 맞았고(27차 `PF/COS 2` 가
+> 오답), 파이프라인의 정상 판독을 오류로 채점하고 있었다. ① 도 재검토했다 —
+> `normalizeLabel` 은 이미 공백을 지우므로 병합을 막은 것은 공백이 아니라
+> 타입 불일치다. 아래 30차 참조.
+
 ### 앵커
 
 - 커밋: 이 항목과 같은 커밋.
@@ -1543,6 +1549,124 @@ fuse          confirmed   "COS또는PF"     ← 공백만 다르다
   --models=gemini --tiers=reference-textbook --repeat=3`
   (교보재는 로컬 전용 gitignore 자산이라 이 티어는 명시할 때만 돈다).
 - 영수증: `test-results/drawing-model-matrix-high.json`.
+
+## 30차 정답표를 원본으로 재검수하고, 감사 소견이 판독을 버리던 것을 고친다 (2026-08-07)
+
+29차의 `switch 8/5/7` 을 결함으로 적었는데, 원본을 확대해 확인하니 **내 정답표가
+틀렸다.**
+
+### ① 내가 기기를 빠뜨렸다
+
+모선에서 갈라진 **피더 3개의 개폐기**를 27차 육안 계수에서 통째로 놓쳤다. 각
+피더가 개폐기 → 변압기 → 부하로 이어지는데, 그 개폐기 3대가 `PF/COS 2` 안에
+없었다. 실제는 **곡선 블레이드 5대**(PF 10[kA] 1 + COS또는PF 1 + 피더 3)다.
+
+**나는 파이프라인의 정상 판독을 오류로 채점하고 있었다.** 29차에 "유령"이라고
+쓴 것은 실재하는 기기다.
+
+### ② `switch` 축은 이 도면에서 잴 수 없다
+
+정확 수량 축의 조건은 어휘만이 아니었다.
+
+| 조건 | 내용 |
+|---|---|
+| ① 어휘 | `canonicalSymbolType` 이 별칭을 접는 축일 것 (29차에서 세운 조건) |
+| ② **결정성** | **도면이 그 클래스를 결정할 것** (30차에서 추가) |
+
+이 교재는 PF·COS·피더 개폐기에 **전부 같은 곡선 블레이드 기호**를 쓰고, 라벨이
+`COS또는PF`(둘 중 하나)다. 도면만으로 switch/fuse 를 가를 수 없으므로 어느 수를
+걸어도 자가 아니라 추측이다. **파이프라인이 `ambiguous` 로 남기는 것이 맞는
+동작이다.** 축에서 뺐다.
+
+정답표는 `transformer 3 · generator 0 · breaker 1 · arrester 1` 넷이 됐다.
+이것으로 재측정하니 **83~100%(폭 17p)**, 어긋난 축은 `transformer 1/3/1` 하나였다.
+
+### ③ 원인 — 감사 소견이 판독을 버리고 있었다
+
+호출 수가 원인을 지목했다.
+
+| 회차 | 호출 | 라벨 | 변압기 |
+|---|---|---|---|
+| 1 | **34** | 83% | **1** |
+| 2 | 66 | 100% | 3 |
+| 3 | **34** | 83% | **1** |
+
+34호출 회차의 전면 판독(`p5-full`) 기록:
+
+```
+symbols           success: true
+connections       success: true
+text              success: true
+logic             success: true
+coverage-auditor  success: false
+    "AMBIGUOUS_LINE_ENDPOINT:LINE-001; LINE-002; LINE-003"
+```
+
+**실질 역할 넷이 전부 성공했는데 감사자 하나 때문에 전면 판독 전체가 failed** 가
+되고 페이지가 `PAGE_ANALYSIS_PARTIAL` 이 된다. 전면 판독은 변압기 3대를 한 시야에
+보는 유일한 패스인데 그것이 버려지니 구획 조각만 남아 1대가 된다.
+
+그리고 판정이 **두 곳에 따로 있고 서로 반대**였다.
+
+```ts
+// electrical-invariants.ts:72-73 — 정본
+BLOCKING = {UNBOUND_LINE_ENDPOINT, SELF_LINE_ENDPOINT}
+HOLDING  = {AMBIGUOUS_LINE_ENDPOINT, AMBIGUOUS_SYMBOL_TYPE, …}
+
+// document-orchestrator.ts:329 — 사설 정규식
+/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/          ← 모호성을 차단으로
+```
+
+정본 집합이 "모호성은 HOLD" 라고 선언하는데 정규식이 무시했다. 이 저장소에
+`모호성은 HOLD로 남기고 구조 계약 위반은 FAIL로 구분한다` 는 시험이 **이미
+있는데도** 그 규칙이 오케스트레이터에 닿지 않았다.
+
+> **24차**(계수 등록기 vs 채점기) · **26차**(타입 구분자) · **29차**(별칭 표) ·
+> **30차**(충돌 분류) — 전부 같은 결함군이다.
+> **같은 개념의 독립 정본이 둘 있으면 반드시 어긋난다.**
+
+**수리**: 정규식을 지우고 정본 집합을 쓰는 `isBlockingGraphConflict()` 하나로
+합쳤다. `translateGraphConflicts` 도 같은 함수를 쓴다(세 번째 사본 방지).
+판별 A/B: 옛 정규식으로 되돌리면 red 1, 새 코드에서 16/16.
+
+### 결과
+
+| 단계 | 라벨 | 폭 | 품질 |
+|---|---|---|---|
+| 29차 (정답표 오류) | 85~100% | 15p | FAIL |
+| 정답표 재검수 | 83~100% | 17p | FAIL |
+| **+ 충돌 분류 수리** | **100 / 100 / 100%** | **0p** | **HOLD** |
+
+34호출 회차도 100% 다 — **호출 수가 원인이 아니었다. 전면 판독을 버린 것이
+원인이었다.** 조립 지표는 미병합비 0.136 · 조각비 0.091 · 모호비 0.633.
+
+### 남은 것 — 이제 결선축에 신호가 있다
+
+페이지는 여전히 `failed` 인데 사유가 바뀌었다.
+
+```
+coverage-auditor  false  "UNBOUND_LINE_ENDPOINT:LINE-004, LINE-006, LINE-007"
+coverage-auditor  false  "SELF_LINE_ENDPOINT:LINE-022, LINE-027, LINE-038"
+```
+
+이것들은 정본 집합이 **차단이라고 규정한 진짜 구조 위반**이다. 감사자가 제 일을
+하고 있다. 28차에 "결선축은 잴 자가 없다" 고 적었는데, **감사자의 차단 충돌이
+바로 그 신호다** — 선 조립이 어디에도 닿지 않는 끝점과 자기 자신으로 돌아오는
+끝점을 만들고 있다. 다음 수리 대상이다.
+
+미수리로 남긴 것:
+- **단자 분리 중복**: 피더 3대 중 2대가 위·아래 단자로 갈려 두 기호가 됐다
+  (IoU 0.145 라 어떤 상식적 임계값도 안 넘고, 라벨이 없어 명판 병합도 못 쓴다).
+- **`typeCandidates[0]` 임의 채택**: 모델이 못 정한 후보의 첫 번째를 쓴다.
+
+### 앵커
+
+- 커밋: 이 항목과 같은 커밋.
+- 재실행: `npx jest src/agent/drawing/__tests__/document-orchestrator.test.ts`
+  (판별은 `document-orchestrator.ts` 의 `filter(isBlockingGraphConflict)` 를
+  옛 정규식으로 되돌리면 red 1).
+- 라이브: `node --env-file=<.env.local> scripts/run-drawing-model-matrix.mjs
+  --models=gemini --tiers=reference-textbook --repeat=3`.
 
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
