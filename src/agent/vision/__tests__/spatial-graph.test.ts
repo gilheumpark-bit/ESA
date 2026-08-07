@@ -310,3 +310,70 @@ describe('source-linked spatial graph', () => {
     expect(graph.texts[0].candidates).toEqual(['PT', 'PPT']);
   });
 });
+
+/**
+ * 2026-08-07(33차) 진단: 이 층의 관계 조립기가 **단일 선분의 양끝이 각각 정확히
+ * 한 기기에 닿을 때만** 관계로 인정했다. 실제 단선결선도는 기기 → 분기점 →
+ * 모선 → 분기점 → 기기로 가므로 모선 구간처럼 양끝이 기기가 아닌 정상 도선이
+ * 전부 `UNBOUND_LINE_ENDPOINT` 로 신고됐고, 감사자가 페이지를 실패시켰다
+ * (교재형 수변전 p6: UNBOUND ×3 + SELF ×3 → `PAGE_ANALYSIS_PARTIAL`).
+ *
+ * 제품 경로의 조립기(`evidence-deduplicator.buildPageRelations`)는 7차에 이미
+ * 선망 추적으로 고쳤다. **같은 개념의 조립기가 둘인데 한쪽만 고쳐져 있었다.**
+ */
+describe('선망에 이어진 끝점은 부유 끝점이 아니다', () => {
+  function graphWith(lines: NonNullable<RoleReviewData['lines']>, symbols?: NonNullable<RoleReviewData['symbols']>) {
+    const input = fixture();
+    if (symbols) input[0].data.symbols = symbols;
+    input[1].data.lines = lines;
+    reseal(input);
+    return assembleSpatialGraph(input, { snapTolerance: 24 });
+  }
+
+  it('끝점이 분기점에 닿으면 UNBOUND 가 아니다', () => {
+    // 모선 구간: 한쪽 끝은 기기(VCB 포트 20,50), 다른 끝은 분기점(50,50)이다.
+    const graph = graphWith([{
+      id: 'bus-seg', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 20, y: 50 }, { x: 50, y: 50 }],
+      start: { x: 20, y: 50 }, end: { x: 50, y: 50 },
+      junctions: [{ x: 50, y: 50 }], crossovers: [], confidence: 0.95,
+    }]);
+    expect(graph.conflicts.filter((item) => item.startsWith('UNBOUND'))).toEqual([]);
+  });
+
+  it('어디에도 닿지 않은 진짜 부유 끝점은 그대로 신고한다', () => {
+    // 차단 신호를 죽이지 않는다는 보장. 기기도 분기점도 없는 허공이다.
+    const graph = graphWith([{
+      id: 'floating', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 500, y: 500 }, { x: 600, y: 500 }],
+      start: { x: 500, y: 500 }, end: { x: 600, y: 500 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }]);
+    expect(graph.conflicts).toContain('UNBOUND_LINE_ENDPOINT:LINE-001');
+  });
+
+  it('모선 위를 지나는 구간은 자기 참조가 아니다', () => {
+    // 양끝이 같은 모선에 닿는 것은 모선 구간이지 SELF 가 아니다.
+    const busbar: NonNullable<RoleReviewData['symbols']> = [{
+      id: 'sym-bus', sourceId: 'variant:original', typeCandidates: ['BUSBAR'], rawLabel: 'MAIN BUS',
+      bounds: { x: 0, y: 40, w: 200, h: 6, page: 1 }, ports: [], confidence: 0.99,
+    }];
+    const graph = graphWith([{
+      id: 'on-bus', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 20, y: 43 }, { x: 120, y: 43 }],
+      start: { x: 20, y: 43 }, end: { x: 120, y: 43 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }], busbar);
+    expect(graph.conflicts.filter((item) => item.startsWith('SELF'))).toEqual([]);
+  });
+
+  it('모선이 아닌 기기에서 시작해 같은 기기로 돌아오면 SELF 다', () => {
+    const graph = graphWith([{
+      id: 'loop', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 20, y: 50 }, { x: 22, y: 52 }],
+      start: { x: 20, y: 50 }, end: { x: 22, y: 52 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }]);
+    expect(graph.conflicts).toContain('SELF_LINE_ENDPOINT:LINE-001');
+  });
+});

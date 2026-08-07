@@ -568,6 +568,28 @@ function deduplicatePoints(
   }));
 }
 
+/**
+ * 끝점이 도선망에 닿아 있는가. 기기가 아니어도 분기점·교차점에 닿으면 이어진
+ * 것이다 — 실제 도면에서 모선 구간의 양끝은 기기가 아니라 분기점이다.
+ */
+function touchesNetwork(
+  line: SpatialLine,
+  point: Point,
+  junctions: readonly SpatialJunction[],
+  crossovers: readonly SpatialJunction[],
+  tolerance: number,
+): boolean {
+  for (const node of [...junctions, ...crossovers]) {
+    if (line.pages.includes(node.page) && distance(node.point, point) <= tolerance) return true;
+  }
+  return false;
+}
+
+/** 모선인가. 모선 위를 지나는 구간은 양끝이 같은 모선에 닿는 것이 정상이다. */
+function isBusbarSymbol(symbol: SpatialSymbol): boolean {
+  return symbol.typeCandidates.some((candidate) => canonicalDeviceType(candidate) === 'busbar');
+}
+
 function endpointCandidates(line: SpatialLine, point: Point, symbols: readonly SpatialSymbol[], tolerance: number): SpatialSymbol[] {
   return symbols.filter((symbol) =>
     line.pages.includes(symbol.bounds.page)
@@ -677,11 +699,37 @@ export function assembleSpatialGraph(
   for (const line of lines) {
     const from = endpointCandidates(line, line.start, symbols, snapTolerance);
     const to = endpointCandidates(line, line.end, symbols, snapTolerance);
-    if (from.length === 0 || to.length === 0) {
+    // 도선은 기기에서 기기로 한 선분에 가지 않는다. 기기 → 분기점 → 모선 →
+    // 분기점 → 기기로 간다. 끝점이 분기점·교차점에 닿으면 그것은 **선망에
+    // 이어진 것**이지 허공에 뜬 것이 아니다.
+    //
+    // 2026-08-07 진단(33차): 이 검사가 "단일 선분의 양끝이 각각 정확히 한
+    // 기기에 닿을 때만" 관계로 인정해, 모선 구간처럼 양끝이 기기가 아닌
+    // **정상 도선을 전부 UNBOUND 로** 신고했다. 그 결과 감사자가 페이지를
+    // 실패시켰다(교재형 수변전 p6, `UNBOUND_LINE_ENDPOINT` ×3 + `SELF` ×3).
+    //
+    // 제품 경로의 관계 조립기(`evidence-deduplicator.buildPageRelations`)는
+    // 7차에 이미 이 문제를 고쳐 선망을 추적한다(`orderedSymbolsOnConductor` ·
+    // `buildLineAdjacency`). **같은 개념의 조립기가 둘인데 한쪽만 고쳐져
+    // 있었다** — 24·26·29·30·31·32차와 같은 결함군이다.
+    //
+    // 여기서는 조립기를 옮겨오지 않는다(자료형이 다르다). 대신 **거짓
+    // UNBOUND 를 없앤다** — 선망에 닿았는지만 본다. 어디에도 닿지 않은 진짜
+    // 부유 끝점은 그대로 신고하므로 차단 신호는 살아 있다.
+    const fromOnNetwork = from.length > 0 || touchesNetwork(line, line.start, junctions, crossovers, snapTolerance);
+    const toOnNetwork = to.length > 0 || touchesNetwork(line, line.end, junctions, crossovers, snapTolerance);
+    if (!fromOnNetwork || !toOnNetwork) {
       conflicts.push(`UNBOUND_LINE_ENDPOINT:${line.id}`);
+    } else if (from.length === 0 || to.length === 0) {
+      // 선망에는 이어졌지만 이 선분만으로는 기기 쌍을 못 만든다. 결함이 아니라
+      // **이 층이 낼 수 있는 관계가 아닌 것**이므로 충돌로 올리지 않는다.
+      continue;
     } else if (from.length !== 1 || to.length !== 1) {
       conflicts.push(`AMBIGUOUS_LINE_ENDPOINT:${line.id}`);
     } else if (from[0].id === to[0].id) {
+      // 모선 위를 지나는 구간은 양끝이 같은 모선에 닿는다. 그것은 자기 참조가
+      // 아니라 모선 구간이다.
+      if (isBusbarSymbol(from[0])) continue;
       conflicts.push(`SELF_LINE_ENDPOINT:${line.id}`);
     } else {
       edges.push({

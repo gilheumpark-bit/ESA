@@ -2,6 +2,7 @@
  * Merge overlapping region detections into original-coordinate entities.
  */
 
+import { canonicalDeviceType, deviceFamilyOf, type DeviceFamily } from './device-vocabulary';
 import { createHash } from 'node:crypto';
 
 import type { EvidenceBounds } from '../vision/evidence-types';
@@ -927,9 +928,30 @@ function labelsEquivalent(a?: string, b?: string): boolean {
   return normalizeLabel(a) === normalizeLabel(b);
 }
 
+/**
+ * 병합 가능한 타입인가. **계열로 판단한다.**
+ *
+ * 같은 물리 기기를 두 구획이 읽으면 세부 종류가 갈릴 수 있다 — 전면 판독은
+ * `transformer`, 구획 재판독은 `transformer_winding`(권선 원 하나만 잡음).
+ * 세부까지 같아야 붙는다고 하면 2권선 변압기가 3 노드로 남는다.
+ *
+ * 반대로 계열이 다르면 붙이지 않는다 — `transformer`(전력용)와
+ * `current_transformer`(계기용)는 계열이 달라 절대 안 붙는다. 24차에 이 둘을
+ * 섞어 세다가 없는 변압기를 만들었다.
+ *
+ * 어휘가 모르는 값(`other`)끼리는 계열이 같다고 다 붙이면 안 되므로 날 문자열로
+ * 비교한다 — 모르는 것 둘을 같다고 단정하지 않는다.
+ */
 function typesCompatible(a: string, b: string): boolean {
   if (!a || !b) return false;
-  return normalizeType(canonicalSymbolType(a)) === normalizeType(canonicalSymbolType(b));
+  const left = canonicalSymbolType(a);
+  const right = canonicalSymbolType(b);
+  const leftFamily = deviceFamilyOf(left);
+  const rightFamily = deviceFamilyOf(right);
+  if (leftFamily === 'other' || rightFamily === 'other') {
+    return normalizeType(left) === normalizeType(right);
+  }
+  return leftFamily === rightFamily;
 }
 
 function boundsStronglyOverlap(a: EvidenceBounds, b: EvidenceBounds): boolean {
@@ -1046,8 +1068,18 @@ function designatorType(label?: string): string | undefined {
   return undefined;
 }
 
+/**
+ * 병합 판단용 타입. **철자 정규화는 하지 않는다** — 그것은
+ * `device-vocabulary` 가 하고, 여기는 그 위에 도면 고유의 우선순위만 얹는다.
+ *
+ * 2026-08-07(31차)에 어휘를 그래프 입구에서 닫았다고 적었으나 **여기까지는 오지
+ * 않았다.** 이 병합기는 `document-orchestrator` 가 날 판독(`RawSymbolHit`)에
+ * 대해 직접 부르므로 그래프 입구를 거치지 않는다. 그래서 사설 별칭 표가 남아
+ * 있었고, `current_transformer`(전면 판독) 와 `ct`(구획 재판독) 가 서로 다른
+ * 값으로 정규화되어 **같은 CT 가 두 노드로 남았다.** 31차에 닫았다고 한 바로
+ * 그 구멍이 하나 더 있었다.
+ */
 function canonicalSymbolType(value: string, label?: string): string {
-  const normalized = normalizeType(value);
   const compactLabel = normalizeLabel(label);
   // IEC 60617 기기 지정문자는 도면 자신의 기기 선언이다. 크롭 분류가
   // 스위치기어 계열 안에서 흔들릴 때 지정문자가 이긴다 — 중급 공개 결선도에서
@@ -1056,30 +1088,29 @@ function canonicalSymbolType(value: string, label?: string): string {
   // 원칙이며, 숫자가 붙은 지정문자만 인정해 FUSE 같은 일반 단어를 잡지 않는다.
   const declared = designatorType(label);
   if (declared) return declared;
-  if (normalized === 'breaker' || normalized === 'circuitbreaker') return 'breaker';
-  // 채점기(scripts/lib/local-drawing-receipt.mjs)와 같은 단로기 계열 접기.
-  // 병합 쪽만 안 접으면 QS1이 disconnector/switch 두 노드로 남는다.
-  if (['switch', 'disconnector', 'disconnectswitch', 'switchdisconnector', 'isolator', 'isolatorswitch'].includes(normalized)) {
-    return 'switch';
-  }
-  if (['transformer', 'transformerwinding', 'powertransformer', 'distributiontransformer'].includes(normalized)) {
-    // PTx3 / PPT / VT nameplates identify instrument transformers, not a
-    // power transformer. Prefer the explicit label over a broad crop type.
-    if (/^(?:PT|PPT|VT)X?\d+/.test(compactLabel)) return 'vt_pt';
-    return 'transformer';
-  }
-  if (['load', 'houseload', 'residentialload', 'house'].includes(normalized)) return 'load';
-  return value.trim();
+  // 철자 정규화는 정본에 맡긴다. 종전에는 여기서 `['switch','disconnector',…]`
+  // 같은 사설 목록을 돌렸고, 목록에 없는 철자(`ct` vs `current_transformer`)는
+  // 서로 다른 값이 되어 같은 기기가 두 노드로 남았다.
+  const canonical = canonicalDeviceType(value);
+  // PTx3 / PPT / VT 명판은 계기용변성기를 가리킨다. 넓은 크롭 분류보다
+  // 도면이 직접 적은 이름이 우선이다.
+  if (canonical === 'transformer' && /^(?:PT|PPT|VT)X?\d+/.test(compactLabel)) return 'voltage_transformer';
+  // 어휘가 모르는 값만 날 문자열로 남긴다 — 추측해서 버킷에 넣지 않는다.
+  return canonical === 'other' ? value.trim() : canonical;
 }
 
 /**
  * 서로 오인되는 개폐·보호 기기 계열. 같은 자리에서 이 계열끼리 타입이
  * 갈리면 별개 기기가 아니라 같은 글리프의 판독 충돌이다.
+ *
+ * 계열 판정도 정본(`deviceFamily`)에 맡긴다. 종전에는 `{breaker,fuse,switch}`
+ * 문자열 집합이라 `breaker_vcb`·`cutout_switch` 처럼 세부 종류가 들어오면
+ * 계열에서 빠졌다.
  */
-const SWITCHGEAR_CONFUSABLE_TYPES = new Set(['breaker', 'fuse', 'switch']);
+const SWITCHGEAR_CONFUSABLE_FAMILIES = new Set<DeviceFamily>(['breaker', 'fuse', 'switch']);
 
 function inSwitchgearFamily(type: string): boolean {
-  return SWITCHGEAR_CONFUSABLE_TYPES.has(normalizeType(canonicalSymbolType(type)));
+  return SWITCHGEAR_CONFUSABLE_FAMILIES.has(deviceFamilyOf(canonicalSymbolType(type)));
 }
 
 function areasComparable(a: EvidenceBounds, b: EvidenceBounds): boolean {

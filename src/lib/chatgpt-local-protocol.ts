@@ -79,6 +79,61 @@ const BLOCKED_ITEM_TYPES = new Set([
   'collabAgentToolCall',
 ]);
 
+/** 실패 사유로 쓸 만한 짧은 코드만 고른다. 자유 서술은 받지 않는다. */
+const TURN_FAILURE_REASON = /^[A-Za-z][A-Za-z0-9 ._-]{0,79}$/;
+
+/**
+ * CLI 가 stderr 에 적는 조건 중 **우리가 아는 것만** 코드로 바꾼다.
+ *
+ * 원문을 그대로 넘기지 않는 이유: 공급자 산문에는 키·URL·계정 식별자가 섞여
+ * 나온다(실측된 usage-limit 메시지에도 결제 URL 이 있다). 아는 조건을 코드로
+ * 바꾸면 원인 구분이라는 목적은 달성하면서 원문은 새지 않는다.
+ */
+const STDERR_CONDITIONS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/hit your usage limit|usage limit reached|quota exceeded/i, 'LOCAL_CODEX_USAGE_LIMIT'],
+  [/rate limit|too many requests/i, 'LOCAL_CODEX_RATE_LIMIT'],
+  [/not logged in|please log in|authentication required|unauthorized/i, 'LOCAL_CODEX_NOT_LOGGED_IN'],
+  [/unknown model|model not found|unsupported model/i, 'LOCAL_CODEX_UNKNOWN_MODEL'],
+];
+
+/** stderr 조각에서 아는 조건을 찾는다. 못 알아보면 `null` — 지어내지 않는다. */
+export function classifyCodexStderr(chunk: string): string | null {
+  for (const [pattern, code] of STDERR_CONDITIONS) {
+    if (pattern.test(chunk)) return code;
+  }
+  return null;
+}
+
+/**
+ * 턴 실패 사유를 **경계 지어** 문자열로 만든다.
+ *
+ * 공급자 응답 전문을 그대로 싣지 않는다(CLAUDE.md: 오류 응답에 공급자 응답
+ * 전문·키를 노출하지 않는다). `status` 와 짧은 사유 코드만, 길이를 잘라서 넣는다.
+ * 목적은 **할당량 소진·미로그인·모델 거부를 구분**하는 것이지 원문 전달이 아니다.
+ */
+function turnFailureMessage(turn: Record<string, unknown>, stderrCondition: string | null = null): string {
+  const parts = ['LOCAL_CODEX_TURN_FAILED'];
+  // stderr 로 알아본 조건이 있으면 그것이 가장 쓸모 있다 — CLI 는 여기에만 적는다.
+  if (stderrCondition) parts.push(stderrCondition);
+  const status = typeof turn.status === 'string' ? turn.status : null;
+  if (status && TURN_FAILURE_REASON.test(status)) parts.push(`status=${status}`);
+  for (const key of ['reason', 'errorCode', 'code', 'failureReason']) {
+    const value = turn[key];
+    if (typeof value === 'string' && TURN_FAILURE_REASON.test(value)) {
+      parts.push(`${key}=${value}`);
+      break;
+    }
+    if (value && typeof value === 'object') {
+      const nested = (value as Record<string, unknown>).code ?? (value as Record<string, unknown>).type;
+      if (typeof nested === 'string' && TURN_FAILURE_REASON.test(nested)) {
+        parts.push(`${key}=${nested}`);
+        break;
+      }
+    }
+  }
+  return parts.join(' · ');
+}
+
 function spawnCodexAppServer(): CodexAppServerProcess {
   if (process.platform === 'win32') {
     return spawn(
@@ -101,6 +156,8 @@ export class CodexAppServerClient {
   private readonly notificationBacklog: RpcResponse[] = [];
   private nextId = 1;
   private stdoutBuffer = '';
+  /** 최근 stderr 에서 알아본 조건. 원문이 아니라 분류 코드만 담는다. */
+  private stderrCondition: string | null = null;
   private closed = false;
 
   constructor(options: CodexAppServerClientOptions = {}) {
@@ -108,7 +165,15 @@ export class CodexAppServerClient {
     this.child = (options.spawnProcess ?? spawnCodexAppServer)();
     this.child.stdout.setEncoding('utf8');
     this.child.stdout.on('data', (chunk) => this.consumeStdout(String(chunk)));
-    this.child.stderr.resume();
+    // stderr 를 흘려버리지 않는다. CLI 는 실패 이유를 여기에 적는데
+    // (`You've hit your usage limit …`) `turn/completed` 페이로드에는 `status`
+    // 만 온다. 2026-08-07 실측: 68호출이 전부 실패했는데 영수증만으로는 원인을
+    // 못 찾아 CLI 를 손으로 두드려서야 할당량 소진임을 알았다.
+    //
+    // **원문을 싣지는 않는다.** 아는 조건으로 분류만 하고 코드를 낸다 —
+    // 공급자 산문에는 키·URL 이 섞여 나올 수 있다(CLAUDE.md).
+    this.child.stderr.setEncoding('utf8');
+    this.child.stderr.on('data', (chunk) => this.consumeStderr(String(chunk)));
     this.child.on('error', () => {
       this.rejectPending('LOCAL_CODEX_EXITED');
       this.rejectActiveTurns('LOCAL_CODEX_EXITED');
@@ -202,6 +267,15 @@ export class CodexAppServerClient {
     this.rejectPending('LOCAL_CODEX_CLOSED');
     this.rejectActiveTurns('LOCAL_CODEX_CLOSED');
     this.child.kill();
+  }
+
+  /**
+   * stderr 를 분류만 하고 버린다. 원문은 어디에도 남기지 않는다 —
+   * 목적은 "왜 실패했나" 를 가르는 것이지 로그 수집이 아니다.
+   */
+  private consumeStderr(chunk: string): void {
+    const condition = classifyCodexStderr(chunk);
+    if (condition) this.stderrCondition = condition;
   }
 
   private consumeStdout(chunk: string): void {
@@ -321,7 +395,12 @@ export class CodexAppServerClient {
     if (message.method !== 'turn/completed') return;
     const turn = params.turn as Record<string, unknown>;
     if (turn.status !== 'completed') {
-      this.finishTurn(active.turnId, new Error('LOCAL_CODEX_TURN_FAILED'));
+      // 공급자가 말한 사유를 버리지 않는다. 종전에는 `LOCAL_CODEX_TURN_FAILED`
+      // 만 남아서 **할당량 소진인지·미로그인인지·모델 거부인지 구분할 수
+      // 없었다.** 2026-08-07 실측: 교재형 도면 68호출이 전부 이 오류였는데
+      // 영수증만으로는 원인을 못 찾았다. 원장 6차의 스키마 일괄 실패도 같은
+      // 형태로 23%·관계 0% 를 냈다 — 성능 수치처럼 보이지만 실행 실패다.
+      this.finishTurn(active.turnId, new Error(turnFailureMessage(turn, this.stderrCondition)));
       return;
     }
     if (!active.text) {

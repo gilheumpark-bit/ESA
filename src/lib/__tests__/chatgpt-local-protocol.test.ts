@@ -100,6 +100,111 @@ describe('Codex app-server JSON-RPC transport', () => {
     client.close();
   });
 
+  it('턴 실패 사유를 버리지 않고 경계 지어 싣는다', async () => {
+    // 2026-08-07 실측: 교재형 도면 68호출이 전부 `LOCAL_CODEX_TURN_FAILED` 였는데
+    // 사유가 없어 **할당량 소진인지·미로그인인지·모델 거부인지 구분할 수 없었다.**
+    // 원장 6차의 스키마 일괄 실패도 같은 형태로 23%·관계 0% 를 냈다 — 성능
+    // 수치처럼 보이지만 실행 실패다. 사유가 없으면 그 둘을 못 가른다.
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({ spawnProcess: () => process, defaultTimeoutMs: 1_000 });
+    const pending = client.runTurn({
+      model: 'gpt-5.6-terra',
+      developerInstructions: 'Return only the requested electrical answer.',
+      input: [{ type: 'text', text: '판독' }],
+      cwd: 'C:\empty-esa-runtime',
+    });
+    const threadRequest = await nextWrittenRequest(process);
+    process.emitJson({ id: threadRequest.id, result: { thread: { id: 'thread-1' } } });
+    const turnRequest = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: turnRequest.id, result: { turn: { id: 'turn-1' } } });
+    process.emitJson({
+      method: 'turn/completed',
+      params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'failed', reason: 'usage_limit_reached', items: [] } },
+    });
+
+    await expect(pending).rejects.toThrow(/LOCAL_CODEX_TURN_FAILED/);
+    client.close();
+  });
+
+  it('턴 실패 사유에 status 와 reason 코드가 함께 남는다', async () => {
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({ spawnProcess: () => process, defaultTimeoutMs: 1_000 });
+    const pending = client.runTurn({
+      model: 'gpt-5.6-terra',
+      developerInstructions: 'Return only the requested electrical answer.',
+      input: [{ type: 'text', text: '판독' }],
+      cwd: 'C:\empty-esa-runtime',
+    });
+    const threadRequest = await nextWrittenRequest(process);
+    process.emitJson({ id: threadRequest.id, result: { thread: { id: 'thread-1' } } });
+    const turnRequest = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: turnRequest.id, result: { turn: { id: 'turn-1' } } });
+    process.emitJson({
+      method: 'turn/completed',
+      params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'failed', reason: 'usage_limit_reached', items: [] } },
+    });
+
+    const error = await pending.then(() => null, (caught: Error) => caught);
+    expect(error?.message).toContain('status=failed');
+    expect(error?.message).toContain('reason=usage_limit_reached');
+    client.close();
+  });
+
+  it('stderr 의 할당량 소진을 코드로 분류해 실패에 싣는다', async () => {
+    // 실측(2026-08-07): CLI 는 `You've hit your usage limit …` 을 stderr 에 적는데
+    // `turn/completed` 페이로드에는 status 만 온다. 종전에는 stderr 를
+    // `resume()` 으로 흘려버려서, 68호출 전부 실패한 원인을 영수증으로 못 찾고
+    // CLI 를 손으로 두드려서야 알았다.
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({ spawnProcess: () => process, defaultTimeoutMs: 1_000 });
+    const pending = client.runTurn({
+      model: 'gpt-5.6-terra',
+      developerInstructions: 'Return only the requested electrical answer.',
+      input: [{ type: 'text', text: '판독' }],
+      cwd: 'C:\empty-esa-runtime',
+    });
+    const threadRequest = await nextWrittenRequest(process);
+    process.emitJson({ id: threadRequest.id, result: { thread: { id: 'thread-1' } } });
+    const turnRequest = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: turnRequest.id, result: { turn: { id: 'turn-1' } } });
+    process.stderr.emit('data', "ERROR: You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits.");
+    process.emitJson({
+      method: 'turn/completed',
+      params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'failed', items: [] } },
+    });
+
+    const error = await pending.then(() => null, (caught: Error) => caught);
+    expect(error?.message).toContain('LOCAL_CODEX_USAGE_LIMIT');
+    // 원문·URL 은 싣지 않는다.
+    expect(error?.message).not.toContain('chatgpt.com');
+    client.close();
+  });
+
+  it('공급자 자유 서술은 오류 문구에 싣지 않는다', async () => {
+    // 응답 전문·키가 오류로 새지 않게 짧은 코드 형태만 받는다.
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({ spawnProcess: () => process, defaultTimeoutMs: 1_000 });
+    const pending = client.runTurn({
+      model: 'gpt-5.6-terra',
+      developerInstructions: 'Return only the requested electrical answer.',
+      input: [{ type: 'text', text: '판독' }],
+      cwd: 'C:\empty-esa-runtime',
+    });
+    const threadRequest = await nextWrittenRequest(process);
+    process.emitJson({ id: threadRequest.id, result: { thread: { id: 'thread-1' } } });
+    const turnRequest = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: turnRequest.id, result: { turn: { id: 'turn-1' } } });
+    process.emitJson({
+      method: 'turn/completed',
+      params: { threadId: 'thread-1', turn: { id: 'turn-1', status: 'failed', reason: 'Your API key sk-abc123 was rejected: see https://example.com', items: [] } },
+    });
+
+    const error = await pending.then(() => null, (caught: Error) => caught);
+    expect(error?.message).toContain('LOCAL_CODEX_TURN_FAILED');
+    expect(error?.message).not.toContain('sk-abc123');
+    client.close();
+  });
+
   it('collects only the selected turn deltas and completes on turn/completed', async () => {
     const process = new FakeCodexProcess();
     const client = new CodexAppServerClient({

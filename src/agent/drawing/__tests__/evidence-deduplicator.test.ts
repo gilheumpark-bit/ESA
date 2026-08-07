@@ -40,10 +40,15 @@ describe('drawing evidence numbering and merge', () => {
     ]));
   });
 
-  it('does not merge overlapping PT/PPT symbols or power/ground lines', () => {
+  it('계열이 다르면 같은 자리라도 병합하지 않는다', () => {
+    // 2026-08-07 정정: 이 시험은 원래 `pt` 와 `ppt` 를 "다른 타입" 예시로 썼는데
+    // 둘 다 계기용변압기다. **완전히 같은 좌표를 두 구획이 읽은 것**이므로
+    // 병합이 맞다. 옛 사설 별칭 표에 둘 다 없어서 서로 다른 값이 되는 바람에
+    // 우연히 통과하고 있었다. 이 시험이 지키려던 것 — 계열이 다르면 겹쳐도
+    // 안 붙는다 — 을 실제로 검사하도록 입력을 바꾼다.
     const symbols = deduplicateSymbols([
-      { localId: 'pt', type: 'pt', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'a' },
-      { localId: 'ppt', type: 'ppt', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'b' },
+      { localId: 'tr', type: 'transformer', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'a' },
+      { localId: 'ct', type: 'current_transformer', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'b' },
     ]);
     const lines = deduplicateLines([
       { localId: 'p', lineKind: 'power', path: [{ x: 0, y: 0 }, { x: 50, y: 0 }], confidence: 0.9, pageIndex: 0, regionId: 'a' },
@@ -51,6 +56,28 @@ describe('drawing evidence numbering and merge', () => {
     ]);
     expect(symbols).toHaveLength(2);
     expect(lines).toHaveLength(2);
+  });
+
+  it('같은 기기를 두 구획이 다른 철자로 읽으면 하나로 접는다', () => {
+    // 실측(2026-08-07): 전면 판독이 `current_transformer`, 구획 재판독이 `ct`.
+    // 병합기가 자기 별칭 표를 들고 있어 두 값이 달라졌고 같은 CT 가 두 노드로
+    // 남았다. 어휘 정본을 쓰면 계열이 같아 붙는다.
+    const symbols = deduplicateSymbols([
+      { localId: 'a', type: 'current_transformer', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'b', type: 'ct', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+      { localId: 'c', type: 'currentTransformer', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'crop2' },
+    ]);
+    expect(symbols).toHaveLength(1);
+    expect(symbols[0].evidence).toHaveLength(3);
+  });
+
+  it('계기용변성기는 전력변압기와 같은 자리에서도 붙지 않는다', () => {
+    // 24차 결함의 반대 방향 보장. 계열이 다르므로 겹쳐도 별개다.
+    const symbols = deduplicateSymbols([
+      { localId: 'a', type: 'transformer', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
+      { localId: 'b', type: 'instrument_transformer', bounds: { x: 10, y: 10, w: 10, h: 10 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+    ]);
+    expect(symbols).toHaveLength(2);
   });
 
   it('does not count a labelled PTx3 instrument transformer as a power transformer', () => {
@@ -66,7 +93,7 @@ describe('drawing evidence numbering and merge', () => {
 
     expect(symbols).toHaveLength(1);
     expect(symbols[0]).toMatchObject({
-      typeCandidates: ['vt_pt'],
+      typeCandidates: ['voltage_transformer'],
       rawLabel: 'PTx3 380/110V',
     });
   });
@@ -150,7 +177,13 @@ describe('drawing evidence numbering and merge', () => {
     ]);
 
     expect(symbols).toHaveLength(1);
-    expect(symbols[0]).toMatchObject({ typeCandidates: ['transformer'], confirmedType: 'transformer' });
+    // 후보에 `transformer_winding` 이 함께 남는다. 그것이 실제 증거다 —
+    // 전면 판독은 변압기 몸체를, 구획 재판독은 권선 원 하나를 봤다. 계열이
+    // 같아 하나로 접히고, 무엇을 보고 접었는지는 후보가 기록한다.
+    expect(symbols[0]).toMatchObject({
+      typeCandidates: ['transformer_winding', 'transformer'],
+      confirmedType: 'transformer',
+    });
     expect(symbols[0].evidence.map((item) => item.regionId)).toEqual(['crop-a', 'full', 'crop-b']);
   });
 
@@ -329,7 +362,9 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
     ]);
 
     expect(symbols).toHaveLength(1);
-    expect(symbols[0].typeCandidates).toEqual(['switch']);
+    // 지정문자(QS)는 일반 `switch`, 이름은 `switch_disconnector` 로 정본화된다.
+    // 계열이 같으므로 하나로 접히고, 두 근거가 후보에 그대로 남는다.
+    expect(symbols[0].typeCandidates).toEqual(['switch', 'switch_disconnector']);
   });
 
   it('라벨 없는 breaker 재판독이 퓨즈 위에 유령 차단기를 만들지 않는다', () => {
@@ -650,7 +685,7 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
       // 판독을 만들어내면 근거 없는 확정이 된다.
       const symbols = deduplicateSymbols([
         { localId: 'a', type: 'transformer', label: 'QF1', bounds: { x: 100, y: 100, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'full' },
-        { localId: 'b', type: 'vt_pt', bounds: { x: 101, y: 102, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
+        { localId: 'b', type: 'voltage_transformer', bounds: { x: 101, y: 102, w: 30, h: 70 }, confidence: 0.9, pageIndex: 0, regionId: 'crop' },
       ]);
       expect(symbols[0].confirmedType).not.toBe('breaker');
     });
