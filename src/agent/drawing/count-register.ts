@@ -2,6 +2,7 @@
  * symbolOccurrences vs physicalEquipmentCount — never mix into confirmed totals.
  */
 
+import { canonicalDeviceType } from './device-vocabulary';
 import type {
   CountStatus,
   CrossPageRelation,
@@ -155,42 +156,39 @@ function resolveCountStatus(input: {
   return 'COMPLETE';
 }
 
+/**
+ * 닫힌 어휘 → 계수 버킷.
+ *
+ * 종전에는 이 함수가 날 문자열의 철자를 직접 알았다. 그래서 모델이 새 철자를
+ * 낼 때마다 여기서 새는 구멍이 생겼다 —
+ *
+ *   24차  `instrument_transformer` 가 전력변압기 대수에 합산
+ *   26차  `current transformer`(공백형)이 밑줄형 검사를 빠져나가 CT 가 전력변압기로
+ *
+ * 이제 철자를 아는 곳은 `device-vocabulary` 하나이고, 여기는 **닫힌 어휘에서
+ * 버킷으로만** 옮긴다. 어휘에 없는 값은 `'other'` 로 오고, 그때는 추측하지 않고
+ * 날 문자열을 그대로 보여 준다.
+ */
 function normalizeKind(type: string): string {
-  // **구분자를 먼저 통일한다.** 모델은 같은 기기를 `current_transformer` 로도
-  // `current transformer` 로도 낸다. 종전에는 밑줄형만 검사해서 공백형이
-  // 아래 일반 분기 `includes('transformer')` 로 떨어졌고, **CT·ZCT 가
-  // 전력변압기 대수에 합산**됐다.
-  //
-  // 실측(2026-08-06, KIMM p5 · PDF 3회): 한 회차에서 `current transformer`
-  // 7개(`CTx3 160/5A`·`ZCT 200/1.5mA` 등)가 전력변압기로 세어져 5 대신 12 가
-  // 나왔다. 회차마다 모델이 어느 형태를 내느냐에 따라 값이 흔들렸으므로
-  // **이 결함이 계수 변동의 출처이기도 하다.**
-  const t = type.toLowerCase().replace(/[\s-]+/g, '_');
-  if (t.includes('vcb') || t === 'breaker') return 'VCB/breaker';
-  // 계량·계측 기기를 전력변압기보다 **먼저** 가른다. 일반 분기가 앞에 있으면
-  // `transformer_ct`·`transformer_vt` 가 `includes('transformer')` 에 걸려
-  // 전력변압기 대수에 합산되고, 아래 PT 분기는 도달조차 못 한다.
-  if (t === 'transformer_ct' || t === 'ct' || t.includes('current_transformer')) return 'CT';
-  if (t === 'transformer_zct' || t === 'zct') return 'ZCT';
-  if (t === 'transformer_gpt' || t === 'gpt') return 'GPT';
-  // `potential_transformer`·`vt_pt` 를 여기서 잡지 않으면 아래 일반 분기의
-  // `includes('transformer')` 에 걸려 **전력변압기 대수로 합산**된다.
-  // `vt_pt` 는 중복 병합기가 PTx3·PPT 명판에 붙이는 정본 타입이다
-  // (evidence-deduplicator 의 canonicalSymbolType).
-  if (t === 'transformer_vt' || t === 'vt' || t === 'pt' || t === 'ppt' || t === 'vt_pt'
-    || t.includes('voltage_transformer') || t.includes('potential_transformer')) return 'PT/PPT';
-  // 계기용변성기 총칭. 전력변압기가 아니므로 대수에 섞으면 안 되지만, CT/PT 로
-  // 특정할 근거도 없으므로 자기 종류로 남긴다.
-  //
-  // 실측(2026-08-05, KIMM 수변전 단선결선도 p5 · PDF 경로): 그래프의 전력변압기
-  // 노드는 5~8개인데 `physicalEquipmentCount` 가 11 로 나왔다. 차이는
-  // `instrument_transformer` 4 + `potential_transformer` 3 이 여기 합산된 것이었다.
-  // 계기용변성기를 전력변압기로 세면 검토자는 없는 변압기를 찾게 된다.
-  if (t === 'instrument_transformer' || t.includes('instrument_transformer')) return 'instrument transformer';
-  if (t === 'metering_outfit' || t === 'mof') return 'MOF';
-  // 건식·유입·단권은 모두 전력변압기라 함께 센다.
-  if (t.includes('transformer') || t === 'tr') return 'transformer';
-  return type;
+  const canonical = canonicalDeviceType(type);
+  switch (canonical) {
+    case 'breaker': return 'VCB/breaker';
+    // 계기용변성기는 전력변압기 대수에 절대 섞지 않는다. 섞으면 검토자가
+    // 없는 변압기를 찾는다(24차 실측: 그래프 5~8대인데 계수 11).
+    case 'current_transformer': return 'CT';
+    case 'zero_sequence_ct': return 'ZCT';
+    case 'ground_potential_transformer': return 'GPT';
+    case 'voltage_transformer': return 'PT/PPT';
+    case 'instrument_transformer': return 'instrument transformer';
+    case 'metering_outfit': return 'MOF';
+    // 건식·유입·단권은 모두 전력변압기라 함께 센다. 권선 기호도 여기다 —
+    // 2권선 변압기는 원 두 개로 그려지고 `assignPhysicalEquipmentIds` 가 그
+    // 원들을 한 대로 묶으므로, 버킷이 갈리면 묶을 대상이 사라진다.
+    case 'transformer': case 'transformer_winding': return 'transformer';
+    // 모르는 것은 아는 척하지 않는다 — 날 문자열 그대로 남긴다.
+    case 'other': return type;
+    default: return canonical;
+  }
 }
 
 function boundsOverlapNote(s: SymbolNode, u: UnresolvedItem): boolean {

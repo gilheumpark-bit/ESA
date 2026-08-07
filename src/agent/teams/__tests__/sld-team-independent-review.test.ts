@@ -701,7 +701,7 @@ describe('SLD raster independent council integration', () => {
     owner.outputHash = createHash('sha256').update(canonicalize(seal)).digest('hex');
     const result = await executeSLDTeam(rasterInput(), { prepareRaster: async () => prepared(), resolveVisionKey: () => ({ key: KEY, source: 'user' }), runCouncil: async () => ({ envelopes: ambiguous, failures: [] }) });
     expect(result.components?.find((item) => item.id === 'AMB-01')).toMatchObject({ type: 'unknown', label: 'VCB-A' });
-    expect(result.drawingReview?.graph?.symbols.find((item) => item.id === 'AMB-01')?.typeCandidates).toEqual(['VCB', 'ACB']);
+    expect(result.drawingReview?.graph?.symbols.find((item) => item.id === 'AMB-01')?.typeCandidates).toEqual(['breaker_vcb', 'breaker_acb']);
   });
 
   it('never touches council dependencies for DXF/PDF inputs', async () => {

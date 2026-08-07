@@ -26,6 +26,23 @@ All notable changes to ESVA are documented in this file.
   보고서만 받는다. **확정 항목만 추리지 않는다** — 그러면 검토자가 반출물을
   완성된 목록으로 읽는다.
 
+### Added
+- **`src/agent/drawing/device-vocabulary.ts` — 기기 어휘의 유일한 정본.**
+  진단(31차): 모델이 실제로 낸 타입 문자열은 **52종 614회**인데 실제 기기 종류는
+  절반도 안 됐다(CT 5철자·피뢰기 5철자·PT 6철자·MOF 3철자, `metering_out_fit` 과
+  `metering_outfit` 은 각각 1회씩 — 회차마다 철자를 새로 짓는다). 그 열린 어휘를
+  **8개 함수가 각자 정규화**했고, 24·26·29·30차 결함이 전부 "그중 하나가 한 철자를
+  빠뜨림" 이었다. 별칭 추가는 비용이 철자 × 소비자라 수렴하지 않는다.
+  이제 `spatial-graph` 가 그래프 입구에서 정본화하므로 저장 문서의
+  `typeCandidates` 자체가 닫힌 어휘이고, 하류는 별칭 표가 필요 없다(채점기의
+  별칭 표를 지웠다). 정규화는 목록이 아니라 **생성 규칙**이다 — 영숫자만 남겨
+  평탄화하면 `current_transformer`·`current transformer`·`currentTransformer` 가
+  한 토큰이 되어 24·26차 결함이 재발 불가능해진다. 어휘는 두 층이다:
+  `DeviceType`(세부 보존 — 진공·기중·배선용 차단기는 다른 기기다) /
+  `DeviceFamily`(병합·골든 축). 표시 ID 는 날 약호 그대로 둔다(`VCB-01`).
+  라이브: 참조 교재 **모호비 0.633 → 0.412**(어휘 통일만 바뀐 격리 구간),
+  KIMM PDF 라벨 75% → **90~100%**, 변압기 정답 4 에 **8 → 4/5/5**.
+
 ### Fixed
 - **감사 소견이 판독을 통째로 버리고 있었다** — `document-orchestrator` 가 사설
   정규식 `/UNBOUND|AMBIGUOUS_LINE|SELF_LINE/` 으로 차단 충돌을 판정해 **모호성까지

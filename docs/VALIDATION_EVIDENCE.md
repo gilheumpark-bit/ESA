@@ -1668,6 +1668,132 @@ coverage-auditor  false  "SELF_LINE_ENDPOINT:LINE-022, LINE-027, LINE-038"
 - 라이브: `node --env-file=<.env.local> scripts/run-drawing-model-matrix.mjs
   --models=gemini --tiers=reference-textbook --repeat=3`.
 
+## 31차 진단 — 다섯 개의 버그가 아니라 하나였다 (2026-08-07)
+
+24·26·29·30차를 연달아 고치고도 계속 새 결함이 나오길래, 수리를 멈추고 **결함들이
+같은 것인지** 셌다.
+
+### ① 실측 — 모델의 타입 어휘는 열려 있고 회차마다 자란다
+
+영수증 전체(`test-results/drawing-model-high-*.json`)에서 모델이 실제로 낸 타입
+문자열을 셌다: **52종 614회.** 그런데 실제 기기 종류는 그 절반도 안 됐다.
+
+| 실제 기기 | 모델이 쓴 철자 | 횟수 |
+|---|---|---|
+| CT | `current_transformer` · `ct` · `currentTransformer` · `zero_sequence_current_transformer` · `zero_phase_current_transformer` | 42 |
+| 피뢰기 | `surge_arrester` · `arrester` · `surgeArrester` · `lightning_arrester` · `surge_absorber` | 21 |
+| PT/VT | `instrument_transformer` · `vt_pt` · `potential_transformer` · `potentialTransformer` · `voltage_transformer` · `vt` | 18 |
+| MOF | `metering_out_fit` · `metering_outfit` · `mof` | 3 |
+
+`metering_out_fit` 과 `metering_outfit` 은 **각각 한 번씩** 나왔다. 모델이 회차마다
+철자를 새로 짓는다는 직접 증거다.
+
+### ② 그 열린 어휘를 8곳이 각자 정규화하고 있었다
+
+```
+spatial-graph.ts          displayType()
+count-register.ts         normalizeKind()
+local-drawing-receipt.mjs canonicalSymbolType()      ← 채점용 별도 구현
+evidence-deduplicator.ts  canonicalSymbolType() · normalizeType() · designatorType()
+device-class.ts           classifyDevice()
+raster-line-exclusions.ts normalizeTypeToken()
++ PROTECTION_TYPES · PROTECTION_LABELS · SWITCHGEAR_CONFUSABLE_TYPES
+```
+
+**이번 세션의 결함 전부가 "이 8개 중 하나가 52개 철자 중 하나를 빠뜨림" 이다.**
+
+| 차수 | 빠뜨린 철자 | 빠뜨린 곳 |
+|---|---|---|
+| 24차 | `instrument_transformer` | count-register |
+| 26차 | `current transformer`(공백형) | count-register |
+| 29차 | `lightning_arrester` · `disconnecting_switch` | 채점기 |
+| 30차 | `AMBIGUOUS_LINE_ENDPOINT` | orchestrator 사설 정규식 |
+
+별칭을 더 넣는 방식은 **수렴하지 않는다** — 비용이 철자 × 소비자이고 철자는
+회차마다 늘어난다.
+
+### ③ 두 번째 진단 — 모호성의 정체
+
+| | 수 |
+|---|---|
+| 기호 총계 | 554 |
+| 확정 | 325 (59%) |
+| 비확정 | 229 |
+| ├ 후보 2개 이상 (진짜 클래스 충돌) | 55 |
+| └ **후보 1개인데 모호** | **195 (85%)** |
+
+**모호의 85%는 클래스 충돌이 아니라 단일 후보 저확신이다.** 중재할 대상이 없다.
+병합·판별·타입충돌 기계 전체가 229건 중 55건만 다루고 있었다. 26차에 중급 붕괴를
+보며 "후보가 하나뿐인데도 모호" 를 이상 현상으로 적었는데 **그게 정상이고 85%다.**
+
+### ④ 수리 — 어휘를 그래프 입구에서 닫는다
+
+```
+device-vocabulary.ts        철자를 아는 유일한 곳
+   ↓ canonicalDeviceType()
+spatial-graph unionCandidates()   날 문자열이 들어오는 유일한 지점
+   ↓ 저장 문서의 typeCandidates 가 이미 정본
+count-register · 채점기 · 병합기   별칭 표 불필요
+```
+
+핵심은 목록이 아니라 **생성 규칙**이다. 영숫자만 남겨 평탄화하면
+`current_transformer` · `current transformer` · `currentTransformer` ·
+`CURRENT-TRANSFORMER` 가 한 토큰이 된다. **24·26차 결함이 이 한 줄로 재발
+불가능해진다.**
+
+**도중에 설계 결함 하나를 잡았다.** 첫 판은 `VCB`·`ACB`·`MCCB` 를 전부 `breaker`
+로 접었다가 시험 7건이 깨졌고, 그중 하나가 옳았다 — **진공·기중·배선용 차단기는
+엔지니어에게 다른 기기다.** 어휘를 없애려다 도메인 정보를 없앨 뻔했다. 두 층으로
+나눴다: `DeviceType`(보존·보고서) / `DeviceFamily`(병합·골든 축). 표시 ID 는 날
+약호 그대로 둔다(`VCB-01`) — ID 는 검토자가 도면과 눈으로 맞추는 것이고 어휘는
+기계가 판정하는 것이라 목적이 다르다.
+
+채점기의 별칭 표는 **지웠다.** 29차에 넣은 `lightningarrester`·`disconnectingswitch`
+가 이제 불필요하다. 남은 `LEGACY_` 항목은 31차 이전 영수증 재채점용이다.
+
+### 라이브 (gemini · 3회)
+
+| | 30차 후 | **31차 후** |
+|---|---|---|
+| 참조 교재 라벨 | 100/100/100% 폭 0p | **100/100/100% 폭 0p** |
+| 참조 교재 **모호비** | 0.633 | **0.412** |
+| 참조 교재 미병합비 | 0.136 | **0.105** |
+| KIMM PDF 라벨 | 75%(28차 재채점) | **90~100%** 폭 10p |
+| KIMM PDF 변압기(정답 4) | **8** | **4 / 5 / 5** |
+
+참조 티어는 30차와 31차 사이에 **어휘 통일 말고 바뀐 것이 없다.** 따라서 모호비
+0.633 → 0.412 는 **격리된 효과**다 — 철자가 달라 두 노드로 남던 같은 기기가
+병합되면서 모호 판정 자체가 줄었다.
+
+KIMM 변압기 **8 → 4/5/5** 는 17차부터 쫓던 과다 계수다. 다만 그 사이에 29·30·31차
+수리가 모두 들어갔고 **격리 실행은 하지 않았으므로** 세 수리의 합으로 기록한다.
+
+### 남은 것 — 그리고 이것이 천장이다
+
+| 축 | 판정 | 근거 |
+|---|---|---|
+| **A. 어휘** | **고침** | 정본 1곳. 규칙이라 못 본 철자도 흡수 |
+| **B. 확신도** | **우리 결함 아님. 지렛대 없음** | 비확정 229건 중 195건이 단일후보 저확신. 26차에 재스캔 증가는 조밀 도면 악화로 확인 |
+| **C. 측정** | **28차에 고침** | 이전 수치는 하한이 점수여서 전부 부풀어 있었다 |
+
+**A 를 고쳐도 B 는 남고, B 가 아키텍처의 천장이다.** 판독의 41% 가 저확신인 채로
+나오는데 우리 쪽에서 메울 방법을 못 찾았다. 이는 수리로 넘을 벽이 아니다.
+
+따라서 산출물의 성격은 **검토 보조**다 — 확신도를 표면에 그대로 노출하고 검토자가
+전수 확인하는 전제에서 쓴다. 무인 판정("이 경로에 보호기기 없음" 류 단정)은
+이 확신도 분포로는 안 된다. CLAUDE.md 의 경계와 같은 자리이되, 지금까지는 법적
+면책 문구였고 **이제는 측정된 사실이다.**
+
+### 앵커
+
+- 커밋: 이 항목과 같은 커밋.
+- 재실행: `npx jest src/agent/drawing/__tests__/device-vocabulary.test.ts`
+  (판별은 `device-vocabulary.ts` 에서 별칭 하나를 빼면 red).
+- 라이브: `node --env-file=<.env.local> scripts/run-drawing-model-matrix.mjs
+  --models=gemini --tiers=reference-textbook,advanced-pdf --repeat=3`.
+- 진단 재현: 영수증의 `document.evidenceGraph.symbols[].typeCandidates` 를 세면
+  어휘 분포가, `certainty` 를 세면 확신도 분포가 나온다.
+
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
 ```

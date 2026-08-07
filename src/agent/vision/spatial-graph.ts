@@ -1,3 +1,4 @@
+import { canonicalDeviceType } from '@/agent/drawing/device-vocabulary';
 import type { EvidenceBounds, Point } from './evidence-types';
 import type { LineEvidence, RoleReviewData, RoleReviewEnvelope, SymbolEvidence, TextEvidence } from './review-types';
 import { createHash } from 'node:crypto';
@@ -295,8 +296,13 @@ function validateInput(envelopes: readonly RoleReviewEnvelope[], options: Spatia
   return { drawingHash: drawingHash as string, snapTolerance, dedupeIou, lineEndpointTolerance, lineInteriorTolerance };
 }
 
+/**
+ * 병합 판단용 비교 키. 정본 어휘로 옮긴 뒤 비교하므로 `current_transformer` ·
+ * `ct` · `currentTransformer` 가 한 값이 된다 — 철자가 다르다는 이유로 같은
+ * 기기가 두 노드로 남지 않는다.
+ */
 function normalizedCandidates(values: readonly string[]): string[] {
-  return [...new Set(values.map((item) => item.trim().toUpperCase()).filter(Boolean))].sort();
+  return [...new Set(values.map((item) => canonicalDeviceType(item).toUpperCase()).filter(Boolean))].sort();
 }
 
 function displayType(symbol: SymbolEvidence): string {
@@ -319,8 +325,24 @@ function overlapsCandidates(left: readonly SymbolEvidence[], right: SymbolEviden
   return normalizedCandidates(right.typeCandidates).some((candidate) => known.has(candidate));
 }
 
+/**
+ * **어휘가 닫히는 지점.** 모델의 날 타입 문자열이 그래프로 들어오는 곳은 여기뿐이고,
+ * 여기서 정본 어휘로 옮긴 뒤로는 저장 문서·계수 등록기·채점기 어디에도 날
+ * 문자열이 흐르지 않는다.
+ *
+ * 2026-08-07 진단(31차): 영수증 전체에서 모델이 낸 타입 문자열은 52종인데 실제
+ * 기기 종류는 그 절반도 안 됐다(CT 5철자·피뢰기 5철자·PT 6철자·MOF 3철자,
+ * `metering_out_fit` 과 `metering_outfit` 은 각각 1회씩). 그 열린 어휘를 하류
+ * 8곳이 각자 정규화했고, 24·26·29·30차 결함이 전부 "그중 하나가 한 철자를
+ * 빠뜨림" 이었다. 별칭을 더 넣는 방식은 비용이 철자 × 소비자라 수렴하지 않는다.
+ *
+ * 부수 효과가 하나 더 있다: `overlapsCandidates` 가 정본끼리 비교하게 되어
+ * `current_transformer` 와 `ct` 가 같은 기기로 병합된다. 종전에는 철자가 달라
+ * 후보를 공유하지 않았고 두 노드로 남았다.
+ */
 function unionCandidates(evidence: readonly SymbolEvidence[]): string[] {
-  return [...new Set(evidence.flatMap((item) => item.typeCandidates))];
+  return [...new Set(evidence.flatMap((item) =>
+    item.typeCandidates.map((candidate) => canonicalDeviceType(candidate))))];
 }
 
 function compareSymbols(left: SymbolEvidence, right: SymbolEvidence): number {
@@ -581,7 +603,11 @@ export function assembleSpatialGraph(
   const typeCounts = new Map<string, number>();
   const symbols: SpatialSymbol[] = symbolRecords.map((record) => {
     const typeCandidates = unionCandidates(record.evidence);
-    const type = displayType({ ...record.item, typeCandidates });
+    // 표시 ID 는 **날 후보**로 만든다. 도면 위 약호(VCB·TR)가 그대로 ID 가 되어야
+    // 검토자가 보고서와 도면을 눈으로 맞출 수 있다. 정본화는 저장되는
+    // `typeCandidates` 쪽에서만 한다 — ID 는 사람이 읽는 것이고, 어휘는
+    // 기계가 판정하는 것이라 목적이 다르다.
+    const type = displayType(record.item);
     const count = (typeCounts.get(type) ?? 0) + 1;
     typeCounts.set(type, count);
     const originalEvidenceIds = stableIds(record.evidence.map((item) => item.id));

@@ -57,33 +57,39 @@ function list(value) {
   return Array.isArray(value) ? value : [];
 }
 
+/**
+ * 정본 세부 종류 → 골든 축.
+ *
+ * **여기에는 별칭 표가 없다.** 2026-08-07(31차) 이후 어휘는 `spatial-graph` 가
+ * 그래프 입구에서 닫으므로, 이 함수가 받는 값은 이미 `device-vocabulary` 의
+ * 정본 세부 종류다(`breaker_vcb`·`current_transformer`·`arrester`…).
+ *
+ * 종전에는 이 파일이 **제품과 별개로 자기 별칭 표를 들고** 있었고, 그것이
+ * 24차·29차 결함의 원인이었다 — 같은 개념의 정본이 둘이면 반드시 어긋난다.
+ * 채점기는 별도 런타임이라 제품 모듈을 import 하지 못하지만, **파일이 아니라
+ * 값이 공유되면 충분하다.**
+ *
+ * 아래 `LEGACY_` 접두 항목은 31차 이전에 저장된 영수증을 다시 채점할 때만 쓴다.
+ * 새 영수증에는 이 형태가 나오지 않는다.
+ */
 function canonicalSymbolType(value) {
-  const raw = String(value ?? '').trim().toLowerCase();
-  const normalized = raw.replace(/[^a-z0-9]+/g, '');
-  if (
-    normalized.includes('breaker')
-    || normalized === 'circuitbreaker'
-    || ['vcb', 'acb', 'mccb', 'mcb', 'elb', 'rcd'].includes(normalized)
-    || /^(?:breaker|circuitbreaker)(?:vcb|acb|mccb|mcb|elb|rcd)$/.test(normalized)
-  ) return 'breaker';
-  if ([
-    'switch', 'disconnector', 'disconnectswitch', 'switchdisconnector',
-    // 2026-08-07 실측(교재형 수변전 p6): 모델이 단로기를 `disconnecting_switch`
-    // 로도 낸다. 별칭에 없어 switch 축에서 조용히 빠졌다 — 같은 페이지에서
-    // 피뢰기(`lightning_arrester`)와 함께 나온 **같은 결함의 세 번째 사례**다.
-    // 축에서 빠지면 점수가 좋아지므로 이 누락은 스스로 드러나지 않는다.
-    'disconnectingswitch', 'ds',
-    'isolator', 'isolatorswitch',
-  ].includes(normalized)) {
-    return 'switch';
-  }
-  // 2026-08-07 실측(교재형 수변전 p6): 모델이 피뢰기를
-  // `lightning_arrester|surge_arrester|arrester` 로 냈는데 첫 후보만 정본화되어
-  // `lightningarrester` 가 어느 별칭에도 안 맞았다. 읽기는 성공했는데 골든 축이
-  // 0 이 됐다 — 26차 `current transformer` 구분자 결함과 같은 자리다.
-  if (['arrester', 'surgearrester', 'lightningarrester', 'la', 'spd'].includes(normalized)) return 'arrester';
-  if (normalized === 'transformer' || normalized === 'powertransformer') return 'transformer';
-  return raw;
+  const raw = String(value ?? '').trim();
+  const flat = raw.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // 정본 세부 종류 → 골든 축. 계열 접기와 같은 사상이다.
+  if (flat.startsWith('breaker')) return 'breaker';
+  if (flat.startsWith('switch')) return 'switch';
+  if (flat === 'arrester') return 'arrester';
+  if (flat === 'transformer' || flat === 'transformerwinding') return 'transformer';
+  // ── 31차 이전 영수증 호환. 그때는 날 문자열이 그대로 저장됐다.
+  const LEGACY_BREAKER = ['vcb', 'acb', 'mccb', 'mcb', 'elb', 'rcd', 'circuitbreaker'];
+  const LEGACY_SWITCH = ['disconnector', 'disconnectswitch', 'switchdisconnector',
+    'disconnectingswitch', 'ds', 'isolator', 'isolatorswitch'];
+  const LEGACY_ARRESTER = ['surgearrester', 'lightningarrester', 'la', 'spd'];
+  if (LEGACY_BREAKER.includes(flat) || flat.includes('breaker')) return 'breaker';
+  if (LEGACY_SWITCH.includes(flat)) return 'switch';
+  if (LEGACY_ARRESTER.includes(flat)) return 'arrester';
+  if (flat === 'powertransformer') return 'transformer';
+  return raw.toLowerCase();
 }
 
 function hasTraceableStandardRef(refs) {

@@ -113,7 +113,10 @@ describe('source-linked spatial graph', () => {
   it('keeps null labels and ambiguous type candidates without asserting a first candidate as truth', () => {
     const graph = assembleSpatialGraph(fixture({ ambiguousType: true, nullLabel: true }));
 
-    expect(graph.symbols[0]).toMatchObject({ id: 'AMB-01', rawLabel: null, typeCandidates: ['VCB', 'ACB'] });
+    // 저장되는 typeCandidates 는 정본 어휘다(입력은 모델 날 문자열 'VCB'/'ACB').
+    // 후보 2개가 그대로 남는 것이 이 시험의 계약이며 — 첫 후보를 진실로 단정하지
+    // 않는다 — 정본화는 세부 종류를 보존하므로 그 계약이 유지된다.
+    expect(graph.symbols[0]).toMatchObject({ id: 'AMB-01', rawLabel: null, typeCandidates: ['breaker_vcb', 'breaker_acb'] });
     expect(graph.conflicts).toContain('AMBIGUOUS_SYMBOL_TYPE:sym-a');
   });
 
@@ -300,7 +303,7 @@ describe('source-linked spatial graph', () => {
     const graph = assembleSpatialGraph(input);
 
     expect(graph.symbols.filter((item) => item.originalEvidenceIds.includes('sym-a'))).toHaveLength(1);
-    expect(graph.symbols.find((item) => item.originalEvidenceIds.includes('sym-a'))).toMatchObject({ typeCandidates: ['VCB', 'ACB'], originalEvidenceIds: ['sym-a', 'sym-a-region'] });
+    expect(graph.symbols.find((item) => item.originalEvidenceIds.includes('sym-a'))).toMatchObject({ typeCandidates: ['breaker_vcb', 'breaker_acb'], originalEvidenceIds: ['sym-a', 'sym-a-region'] });
     expect(graph.conflicts).toContain('AMBIGUOUS_SYMBOL_TYPE:sym-a');
     expect(graph.texts).toHaveLength(1);
     expect(graph.texts[0].originalEvidenceIds).toEqual(['text-a', 'text-a-region']);
