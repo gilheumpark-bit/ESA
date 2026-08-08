@@ -1,6 +1,6 @@
 # 실증 증거 원장 — Validation Evidence Ledger
 
-최종 갱신 2026-08-03 · 이 저장소의 실증과 production 실왕복이 **언제·무엇으로·어떤 결과로** 수행됐는지 기록하는 원장.
+최종 갱신 2026-08-09 · 이 저장소의 실증과 production 실왕복이 **언제·무엇으로·어떤 결과로** 수행됐는지 기록하는 원장.
 
 **사용법이 곧 목적이다**: "실증이 없다 / 실증이 필요하다"는 판단을 내리기 전에
 ① 이 원장의 해당 행을 찾고 ② 그 행의 앵커(커밋 SHA·교보재 경로·게이트 명령)를 **직접 재실행**한다.
@@ -1912,6 +1912,28 @@ Gemini 키 삭제 + GPT 할당량 소진으로 라이브 모델이 없다. 기�
 
 **이 항목은 단위 시험까지만 실증됐고 라이브 실증은 없다.** 그렇게 읽어야 한다.
 
+## 2026-08-09 전역 선행·표적 재검사 압축 실증
+
+### 대상과 판정 경계
+
+- 교보재: `fixtures/drawings/realworld/raster/kimm-20210602-design-p5-raster.png`
+- 모델: 로컬 ChatGPT `gpt-5.6-terra`, 명시 추론 `high`
+- 실행: `node --env-file=.env.local scripts/run-drawing-model-matrix.mjs --models=gpt-terra --tiers=advanced --repeat=1`
+- 기준선: clean `b285776`(high 이상 역할 제한 180초)과 clean `8dc018b`(감사·충돌 재검사 대상 압축)
+- 정답 축: 변압기 정확히 4, 발전기 정확히 0, 차단기 최소 9, 관계 최소 12
+- 영수증: 로컬 `test-results/drawing-model-high-gpt-terra-advanced-before-compaction.json`, `test-results/drawing-model-high-gpt-terra-advanced.json`. 두 파일의 `workspaceSnapshot.dirty=false`와 커밋 SHA를 확인했다. `test-results/`는 Git 제외이므로 아래 수치는 재현 요약이며 원본 영수증은 로컬 보존물이다.
+
+| clean snapshot | 시간 | 실제 VLM 호출 | 라벨/관계 | 기호 판독 | 미해결 | 역할 실패 | 최종 |
+|---|---:|---:|---:|---|---|---:|---|
+| `b285776` 압축 전 | 384.8초 | 26 | 90% / 100% | 변압기 5/4, 차단기 11/≥9 | 재검사 108, OCR 182, 선 연속성 89 | 18 | PARTIAL / FAIL |
+| `8dc018b` 압축 후 | 427.8초 | 19 | 83% / 100% | 변압기 6/4, 차단기 7/≥9 | 재검사 9, OCR 164, 선 연속성 19, 판독불가 기호 1 | 2 | PARTIAL / FAIL |
+
+### 확인된 효과와 남은 실패
+
+압축 전에는 `rescanTargets는 1~48개 배열이어야 합니다.`가 `symbols`·`connections`·`text`·`logic`·coverage audit 후속 호출에 반복됐고, 감사기가 요청한 108개 재검사가 실행 전에 막혔다. 압축 후 같은 오류 문자열은 0건이며 재검사 미해결은 108→9, 실패 역할 호출은 18→2, 실제 호출은 26→19로 줄었다. 이는 **재검사 배선 결함 수리의 라이브 증거**다.
+
+최종 품질은 통과하지 않았다. 압축 후 실행에서 전체 페이지 `connections` 역할이 구조화 출력 파손으로 한 번 실패했고 coverage auditor는 self-line endpoint 충돌 3건을 남겼다. 변압기 과계수와 차단기 미달, OCR 164건, 근거 추적률 13.1% 때문에 `PARTIAL/FAIL`이 맞다. 압축 전 라벨 90%와 압축 후 83%의 차이는 각각 단발이므로 모델 편차와 코드 효과를 분리할 수 없다. 공급자 정확도나 일반화 80%를 주장하려면 같은 clean snapshot에서 티어별 최소 3회와 독립 라벨 대조가 필요하다.
+
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
 ```
@@ -1934,4 +1956,4 @@ fixtures/
 새 실증을 수행하면 이 표에 행을 추가한다(커밋 SHA·교보재 경로·결과·재실행 게이트).
 **앵커 없는 실증 주장은 이 원장에 올릴 수 없다** — 이 문서 자체에도 적용된다.
 
-> 현재 커밋 제품 기준선: `2bf0ca6f8242c39bb3f036d529b5007a70b19ee8`. 이번 수리의 라이브 모델 영수증은 각 파일의 `workspaceSnapshot`에 호출 당시 dirty snapshot 해시를 별도로 기록했다. 현재 결정론 재평가는 호출 결과와 분리해 기록한다.
+> 이 항목의 최신 라이브 코드 기준선: `8dc018b7997218f7090a2db3530b231e82a494c0`. 각 라이브 영수증은 `workspaceSnapshot`에 호출 당시 HEAD·dirty 여부·변경 해시를 기록한다. 현재 결정론 재평가는 호출 결과와 분리해 기록한다.
