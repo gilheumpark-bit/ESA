@@ -209,6 +209,73 @@ describe('document-orchestrator + evaluator', () => {
     expect(executeTeam).toHaveBeenCalledTimes(3);
   });
 
+  it('compacts more than 48 audit targets into the precision regions they can actually call', async () => {
+    const quality = {
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.02,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: [],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'c'.repeat(64), mimeType: 'image/png', formatClass: 'raster-image',
+      pages: [{
+        pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80,
+        renderScale: 1, renderMode: 'raster', textSample: '', vectorOpCount: 0,
+        rasterOpCount: 1, renderHash: 'render-target-compaction', quality, imageBuffer: await makePng(),
+      }],
+    };
+    const auditTargets = Array.from({ length: 60 }, (_, index) => ({
+      id: `audit-${index + 1}`,
+      sourceId: `line-${index + 1}`,
+      reason: 'low-coverage' as const,
+      bounds: { x: (index % 10) * 9, y: (index % 8) * 9, w: 8, h: 8, page: 1 },
+      suggestedRoles: [(['symbols', 'connections', 'text'] as const)[index % 3]],
+      confidence: 0.9,
+    }));
+    const review = (targets: typeof auditTargets) => ({
+      snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
+      envelopes: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'].map((role) => ({
+        role, outputHash: `${role}-hash`, drawingHash: source.documentHash, provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
+        data: role === 'coverage-auditor'
+          ? { rescanTargets: targets, warnings: [], confidence: 0.95 }
+          : { warnings: [], confidence: 0.95 },
+      })),
+      failures: [],
+      coverage: {
+        roles: {
+          symbols: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1, regionIds: [] },
+          connections: { variantId: 'variant:line-enhanced', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1, regionIds: [] },
+          text: { variantId: 'variant:text-high-contrast', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 3, regionIds: [] },
+          logic: { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+          'coverage-auditor': { variantId: 'variant:original', expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+        },
+        plannedCalls: 7, actualCalls: 7, complete: true, maxRegionCallsPerRole: 16,
+      },
+      graph: { drawingHash: source.documentHash, symbols: [], lines: [], texts: [], edges: [], conflicts: [] as string[] },
+    });
+    let attempt = 0;
+    const executeTeam = jest.fn(async () => {
+      attempt += 1;
+      return {
+        success: true, components: [], connections: [], confidence: 0.95,
+        drawingReview: review(attempt === 1 ? auditTargets : []),
+        drawingSynthesis: { calculations: [] },
+      };
+    });
+
+    await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-target-compaction',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 60, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    const retry = (executeTeam.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0];
+    const targets = retry?.params?.rescanTargets as Array<{ suggestedRoles: string[] }>;
+    expect(executeTeam).toHaveBeenCalledTimes(2);
+    expect(targets.length).toBeLessThanOrEqual(4);
+    expect(new Set(targets.flatMap((target) => target.suggestedRoles)))
+      .toEqual(new Set(['symbols', 'connections', 'text']));
+  });
+
   it('첫 페이지가 아닌 페이지의 재스캔 대상도 팀 스냅샷 페이지(1)로 낸다', async () => {
     // 실측(2026-08-05, KIMM 83p 설계세트 p5 를 PDF 로 직접 투입): 구획 17개 중
     // 3개가 `rescanTargets[1] 값이 현재 도면 범위를 벗어났습니다` 로 실패했다.
@@ -346,11 +413,14 @@ describe('document-orchestrator + evaluator', () => {
     expect(executeTeam).toHaveBeenCalledTimes(2);
     const secondAttemptInput = (executeTeam.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0];
     expect(secondAttemptInput).toMatchObject({
-      params: { rescanTargets: [expect.objectContaining({ id: 'boundary-1', reason: 'boundary-clip' })] },
+      params: { rescanTargets: expect.arrayContaining([
+        expect.objectContaining({ id: 'precision-region-0-0', reason: 'boundary-clip' }),
+      ]) },
       priorDrawingReviewEnvelopes: expect.arrayContaining([
         expect.objectContaining({ role: 'connections', outputHash: 'connections-hash' }),
       ]),
     });
+    expect((secondAttemptInput?.params?.rescanTargets as unknown[])).toHaveLength(4);
     expect(result.document.coverageLedger.regionsFailed).toBe(0);
     expect(result.document.coverageLedger.unresolvedRescans).toBe(0);
     expect(result.document.jobStatus).toBe('COMPLETE');
@@ -516,15 +586,13 @@ describe('document-orchestrator + evaluator', () => {
     }, { prepareSource: async () => source, executeTeam: executeTargetedConflict as never });
 
     expect(executeTargetedConflict).toHaveBeenCalledTimes(2);
-    expect((executeTargetedConflict.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0]).toMatchObject({
-      params: {
-        rescanTargets: [expect.objectContaining({
-          id: expect.stringContaining('graph-conflict'),
-          suggestedRoles: ['connections', 'symbols'],
-          bounds: expect.objectContaining({ page: 1 }),
-        })],
-      },
-    });
+    const conflictTargets = (executeTargetedConflict.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0]
+      .params?.rescanTargets as Array<{ id: string; suggestedRoles: string[]; bounds: { page: number } }>;
+    expect(conflictTargets).toHaveLength(2);
+    expect(conflictTargets.every((target) => target.id.startsWith('precision-region-0-'))).toBe(true);
+    expect(conflictTargets.every((target) => target.bounds.page === 1)).toBe(true);
+    expect(conflictTargets.every((target) =>
+      target.suggestedRoles.includes('symbols') && target.suggestedRoles.includes('connections'))).toBe(true);
     expect(recoveredConflict.document.coverageLedger.unresolvedRescans).toBe(0);
 
     // 모호성은 구조 위반이 아니다 — 전면 판독을 버리지 않는다.
@@ -582,7 +650,7 @@ describe('document-orchestrator + evaluator', () => {
     expect((executeFailedRegion.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0]).toMatchObject({
       params: {
         rescanTargets: [expect.objectContaining({
-          sourceId: 'variant:line-enhanced:region:1',
+          sourceId: 'p0-r1',
           reason: 'low-coverage',
           suggestedRoles: ['connections'],
         })],
@@ -676,7 +744,7 @@ describe('document-orchestrator + evaluator', () => {
       .params?.rescanTargets ?? []) as Array<Record<string, unknown>>;
     expect(fullRetryTargets).toHaveLength(1);
     expect(fullRetryTargets[0]).toMatchObject({
-      sourceId: 'variant:line-enhanced',
+      sourceId: 'p0-full',
       retryScope: 'full-source',
       suggestedRoles: ['connections'],
     });

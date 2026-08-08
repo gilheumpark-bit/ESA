@@ -761,10 +761,72 @@ function gapRegionRescanTargets(
     }));
 }
 
-/** 같은 출처·같은 역할 조합의 재검사 대상은 하나로 접는다. */
-function dedupeRescanTargets(targets: RescanTargetEvidence[]): RescanTargetEvidence[] {
-  return [...new Map(targets.map((target) =>
+/**
+ * 감사기·그래프 충돌이 낸 세부 대상을 실제 호출 단위인 후보 구획으로 접는다.
+ * 한 구획은 역할을 합쳐 한 번만 전달하므로 16구획+전체 소스 1건을 넘지 않는다.
+ */
+function compactRescanTargets(
+  page: PreparedDrawingPage,
+  targets: RescanTargetEvidence[],
+): RescanTargetEvidence[] {
+  const roles = ['symbols', 'connections', 'text'] as const;
+  const deduped = [...new Map(targets.map((target) =>
     [`${target.sourceId ?? target.id}:${target.suggestedRoles.join(',')}`, target])).values()];
+  const compacted: RescanTargetEvidence[] = [];
+  const fullTargets = deduped.filter((target) => target.retryScope === 'full-source');
+  if (fullTargets.length > 0) {
+    const suggestedRoles = roles.filter((role) =>
+      fullTargets.some((target) => target.suggestedRoles.includes(role)));
+    compacted.push({
+      id: `full-source-${page.pageIndex}`,
+      sourceId: `p${page.pageIndex}-full`,
+      retryScope: 'full-source',
+      reason: fullTargets[0].reason,
+      bounds: { x: 0, y: 0, w: page.width, h: page.height, page: TEAM_SNAPSHOT_PAGE },
+      suggestedRoles,
+      confidence: Math.max(...fullTargets.map((target) => target.confidence)),
+    });
+  }
+
+  const precisionTargets = deduped.filter((target) => target.retryScope !== 'full-source');
+  const regions = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
+  const matchesByRegion = regions.map(() => [] as RescanTargetEvidence[]);
+  for (const target of precisionTargets) {
+    const sourceRegion = target.sourceId?.match(/(?::region:|^p\d+-r)(\d+)$/);
+    const sourceRegionIndex = sourceRegion ? Number(sourceRegion[1]) : -1;
+    if (Number.isSafeInteger(sourceRegionIndex) && matchesByRegion[sourceRegionIndex]) {
+      matchesByRegion[sourceRegionIndex].push(target);
+      continue;
+    }
+    regions.forEach((bounds, index) => {
+      if (boundsIntersect(bounds, target.bounds)) matchesByRegion[index].push(target);
+    });
+  }
+  regions.forEach((bounds, index) => {
+    const matches = matchesByRegion[index];
+    if (matches.length === 0) return;
+    const suggestedRoles = roles.filter((role) =>
+      matches.some((target) => target.suggestedRoles.includes(role)));
+    const mergedBounds = matches.length === 1 ? matches[0].bounds : {
+      x: Math.min(...matches.map((target) => target.bounds.x)),
+      y: Math.min(...matches.map((target) => target.bounds.y)),
+      w: Math.max(...matches.map((target) => target.bounds.x + target.bounds.w))
+        - Math.min(...matches.map((target) => target.bounds.x)),
+      h: Math.max(...matches.map((target) => target.bounds.y + target.bounds.h))
+        - Math.min(...matches.map((target) => target.bounds.y)),
+      page: TEAM_SNAPSHOT_PAGE,
+    };
+    compacted.push({
+      id: `precision-region-${page.pageIndex}-${index}`,
+      sourceId: `p${page.pageIndex}-r${index}`,
+      retryScope: 'precision-region',
+      reason: matches[0].reason,
+      bounds: { ...mergedBounds, page: TEAM_SNAPSHOT_PAGE },
+      suggestedRoles,
+      confidence: Math.max(...matches.map((target) => target.confidence)),
+    });
+  });
+  return compacted;
 }
 
 /** 재스캔을 한 번 더 돌릴 호출·시간 여유가 있는가. */
@@ -890,7 +952,7 @@ async function runRasterPass(
       usable = true;
       const coverage = markCouncilCoverage(regions, page, result);
       regions = coverage.regions;
-      targets = dedupeRescanTargets([
+      targets = compactRescanTargets(page, [
         ...coverage.rescanTargets,
         ...graphConflictRescanTargets(page, result),
         ...failedRoleRescanTargets(page, result),
