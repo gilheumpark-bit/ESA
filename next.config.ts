@@ -43,8 +43,6 @@ const nextConfig: NextConfig = {
       '@supabase/supabase-js',
       'exceljs',
     ],
-    // View Transitions API — 지원 브라우저에서 페이지 전환 애니메이션
-    viewTransition: true,
   },
 
   // 정적 자산 압축
