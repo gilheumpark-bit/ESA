@@ -8,7 +8,7 @@
 |---|---|---|---|
 | §1 목표·완료 정의 | `document-orchestrator.ts` → `drawing-document-report.ts`가 페이지·구획·미확정 항목을 합산하고 COMPLETE/PARTIAL을 결정 | `document-orchestrator.test.ts`, `drawing-document-report.test.ts` | 완료 |
 | §2 역할 분리 | `drawing-council.ts`가 symbols, connections, text, logic을 별도 호출하고 `sld-team.ts`가 봉투를 합산 | `drawing-council.test.ts`, `sld-team-independent-review.test.ts` | 완료 |
-| §3 전체·정밀 스캔 | `drawing-source.ts`가 이미지·PDF·DXF를 준비하고 전체 이미지와 4/9/16 정밀 구획을 실행한다. PDF 총 픽셀 예산은 요청 페이지 전체에 분배해 뒤 페이지가 탈락하지 않게 하고, 요청 페이지·시간·취소 예산 안에서 순차 렌더한다 | `drawing-source.test.ts`, `drawing-council.test.ts`, 공개 PDF 11/11·18/18 왕복 | 완료 |
+| §3 전체·정밀 스캔 | `drawing-source.ts`가 이미지·PDF·DXF와 4/9/16 후보 구획을 준비한다. `drawing-council.ts`는 4역할 전체 페이지를 먼저 읽고 저확신·복수 후보·고밀도 위치의 구획만 역할별로 선택한다. 조립 그래프 감사 뒤 재검사는 봉인된 이전 축을 재사용하고 실패 축·충돌 위치만 호출한다. PDF 총 픽셀 예산은 요청 페이지 전체에 분배해 뒤 페이지가 탈락하지 않게 하고, 요청 페이지·시간·취소 예산 안에서 순차 렌더한다 | `drawing-source.test.ts`, `drawing-council.test.ts`, `sld-team-independent-review.test.ts`, `document-orchestrator.test.ts`, 공개 PDF 11/11·18/18 왕복 | 완료 |
 | §4 OCR·사용자 수정 | original, 4x, high-contrast의 서로 다른 호출만 3중 판독으로 인정한다. PDF/DXF의 전체 좌표 문자를 근거 그래프에 전달하고, 수정 종류·버전·고유키를 검증한 뒤 전후 파생값 영수증을 남긴다 | `ocr-adjudicator.test.ts`, `team-result-adapter.test.ts`, `apply-drawing-correction.test.ts`, correction API tests | 완료 |
 | §5 번호 체계 | `evidence-deduplicator.ts`가 Pxx-S/L/T 번호를 결정적으로 부여하고 원본 근거 ID를 보존 | `evidence-deduplicator.test.ts` | 완료 |
 | §6 수량 체크 | `count-register.ts`가 기호 출현, 확정, 모호, 누락 의심, 물리 장치 수를 분리 | `count-register.test.ts` | 완료 |
@@ -27,7 +27,7 @@
 | 기준 | 생산 근거 | 직접 회귀 |
 |---|---|---|
 | FR-AC-01 모든 요청 페이지 상태 | `document-orchestrator.ts` pageStates | `builds V3 document...`, 실PDF 18/18 상태 |
-| FR-AC-02 전체·예정 구획 누락 시 COMPLETE 금지 | `coverage-ledger.ts`, `drawing-document-report.ts` | `marks a region complete only...` |
+| FR-AC-02 전체·선택 구획 누락 시 COMPLETE 금지 | `drawing-council.ts::precisionPlan`, `coverage-ledger.ts`, `drawing-document-report.ts` | 선택된 역할별 구획만 ledger에 만들고 실제 reviewed source가 빠지면 COMPLETE를 금지하는 council·team·orchestrator tests |
 | FR-AC-03 PT/PPT 임의 확정 금지 | `ocr-adjudicator.ts`, `cross-page-graph.ts`, `evidence-deduplicator.ts` | OCR 충돌, PT/PPT 교차 페이지·중복 병합 적대 tests |
 | FR-AC-04 확정·모호·누락 분리 | `count-register.ts` | `never puts ambiguous into confirmed` |
 | FR-AC-05 출현 수·물리 장치 수 분리 | `count-register.ts` | `separates symbolOccurrences...` |
