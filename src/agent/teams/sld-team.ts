@@ -361,6 +361,12 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     : (deps.resolveVisionKey ?? resolveProviderKey)(input.vision.provider, input.vision.apiKey);
   onResolvedKey(resolved.key);
   const selectedRoles = ['symbols', 'connections', 'text'] as const;
+  const maxRegionCallsPerRole = input.maxPrecisionRegionCallsPerRole ?? MAX_REGION_CALLS_PER_ROLE;
+  if (!Number.isSafeInteger(maxRegionCallsPerRole)
+    || maxRegionCallsPerRole < 0
+    || maxRegionCallsPerRole > MAX_REGION_CALLS_PER_ROLE) {
+    throw new Error(`정밀 구획 호출 상한은 0~${MAX_REGION_CALLS_PER_ROLE} 정수여야 합니다.`);
+  }
   const selectedVariants = Object.fromEntries(selectedRoles.map((role) => [
     role,
     selectCouncilVariant(role, prepared.variants, prepared.snapshot.quality.recommendedScale),
@@ -372,11 +378,22 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     : prepared.regions.filter((region) => precisionTargets.some((target) =>
       target.suggestedRoles.some((role) => selectedVariants[role].id === region.variantId)
       && boundsIntersect(region.originalBounds, target.bounds)));
+  const priorPrimaryRoles = new Set((input.priorDrawingReviewEnvelopes ?? []).map((envelope) => envelope.role));
+  const canReusePriorAxes = ['symbols', 'connections', 'text', 'logic']
+    .every((role) => priorPrimaryRoles.has(role as RoleReviewEnvelope['role']));
+  const targetedReviewRoles = requestedTargets.length > 0 && canReusePriorAxes
+    ? [...new Set(requestedTargets.flatMap((target) => target.suggestedRoles))]
+    : undefined;
+  const fullSourceReviewRoles = targetedReviewRoles
+    ? [...new Set(requestedTargets
+        .filter((target) => target.retryScope === 'full-source')
+        .flatMap((target) => target.suggestedRoles))]
+    : undefined;
   const council = await (deps.runCouncil ?? runDrawingCouncil)({
     snapshot: prepared.snapshot,
     variants: prepared.variants,
     regions: reviewRegions,
-    maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+    maxRegionCallsPerRole,
     effortProfile: input.vision.effortProfile,
     // 로컬 CLI 공급자는 프로세스를 띄우므로 동시성을 낮춰 품질을 먼저 확보한다.
     maxConcurrentCalls: isLocalVisionProvider(input.vision.provider)
@@ -385,6 +402,8 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
       : COUNCIL_MAX_CONCURRENT_CALLS,
     settleOnAbort: input.settleOnAbort,
     priorEnvelopes: input.priorDrawingReviewEnvelopes,
+    ...(targetedReviewRoles ? { reviewRoles: targetedReviewRoles } : {}),
+    ...(fullSourceReviewRoles && fullSourceReviewRoles.length > 0 ? { fullSourceReviewRoles } : {}),
     options: isLocalVisionProvider(input.vision.provider)
       ? {
           provider: input.vision.provider as 'chatgpt-local' | 'claude-local',
@@ -409,7 +428,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
   // source erases every role that already finished. Interactive callers that
   // did not opt into settling still fail closed on cancellation.
   if (!input.settleOnAbort) throwIfAborted(input.signal);
-  const expectedRegionCount = precisionGridSize(
+  const legacyExpectedRegionCount = precisionGridSize(
     prepared.snapshot.quality.recommendedScale,
     prepared.snapshot.quality.edgeDensity,
   );
@@ -427,14 +446,23 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     ...Object.fromEntries(selectedRoles.map((role) => {
       const variantId = selectedVariants[role].id;
       const roleRegions = reviewRegions.filter((region) => region.variantId === variantId);
-      const actualRegionCount = roleRegions.length;
-      const roleExpectedRegionCount = requestedTargets.length === 0 ? expectedRegionCount : actualRegionCount;
+      const selectedRegionIds = council.precisionPlan?.[role]
+        ?? roleRegions.map((region) => region.id);
+      const selectedRegionSet = new Set(selectedRegionIds);
+      const envelope = council.envelopes.find((item) => item.role === role);
+      const reviewedRegionIds = envelope?.reviewedSourceIds === undefined
+        ? selectedRegionIds
+        : envelope.reviewedSourceIds.filter((sourceId) => selectedRegionSet.has(sourceId));
+      const roleExpectedRegionCount = council.precisionPlan === undefined
+        ? (requestedTargets.length === 0 ? legacyExpectedRegionCount : roleRegions.length)
+        : selectedRegionIds.length;
+      const actualRegionCount = new Set(reviewedRegionIds).size;
       return [role, {
         variantId,
         expectedRegionCount: roleExpectedRegionCount,
         actualRegionCount,
-        plannedCalls: 1 + actualRegionCount + (role === 'text' && hasTripleTextVariants ? 2 : 0),
-        regionIds: roleRegions.map((region) => region.id),
+        plannedCalls: 1 + roleExpectedRegionCount + (role === 'text' && hasTripleTextVariants ? 2 : 0),
+        regionIds: selectedRegionIds,
       }];
     })),
   } as DrawingReviewArtifact['coverage']['roles'];
@@ -456,7 +484,8 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     && hasTripleTextVariants
     && everyRequestedTargetCovered
     && selectedRoles.every((role) => coverageRoles[role].actualRegionCount === coverageRoles[role].expectedRegionCount)
-    && reviewRegions.length === Object.values(coverageRoles).reduce((total, role) => total + role.expectedRegionCount, 0)
+    && selectedRoles.every((role) => (coverageRoles[role].regionIds ?? []).every((regionId) =>
+      reviewRegions.some((region) => region.id === regionId && region.variantId === coverageRoles[role].variantId)))
     && reviewRegions.every((region) => selectedVariantIds.has(region.variantId));
   const failures = council.failures.map((failure) => ({ ...failure, error: redactSecret(failure.error, resolved.key) }));
   const coverageEnvelope = council.envelopes.find((envelope) => envelope.role === 'coverage-auditor');
@@ -471,11 +500,12 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     failures,
     coverage: {
       roles: coverageRoles,
-      plannedCalls: Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
+      plannedCalls: council.callCounts?.planned
+        ?? Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
       actualCalls: council.callCounts?.attempted
         ?? Object.values(coverageRoles).reduce((total, role) => total + role.plannedCalls, 0),
       complete: coverageComplete,
-      maxRegionCallsPerRole: MAX_REGION_CALLS_PER_ROLE,
+      maxRegionCallsPerRole,
     },
   };
   const roleSet = new Set(council.envelopes.map((item) => item.role));

@@ -11,10 +11,11 @@ import { planBoundaryContinuations } from './boundary-continuation-planner';
 import type { BoundaryContinuationPlan, GlobalLineCandidate } from './continuity-types';
 import { ROLE_PROMPT_VERSION } from './role-prompts';
 import { parseRoleReviewData, type RoleReviewData, type RoleReviewEnvelope } from './review-types';
+import { assembleSpatialGraph } from './spatial-graph';
 import { analyzeDrawingRole, type VLMOptions, type VLMReviewRole } from './vlm-client';
 import { toOriginalPoint, type AnalysisRegionPlan, type DrawingSnapshot, type EvidenceBounds, type ImageVariant, type Point, type PrecisionRegion } from './evidence-types';
 
-const PRIMARY_ROLES: readonly VLMReviewRole[] = ['symbols', 'connections', 'text', 'logic'];
+const PRIMARY_ROLES = ['symbols', 'connections', 'text', 'logic'] as const satisfies readonly VLMReviewRole[];
 const COVERAGE_ROLE: VLMReviewRole = 'coverage-auditor';
 const VARIANT_KINDS = ['original', 'upscale-2x', 'upscale-4x', 'text-high-contrast', 'line-enhanced'] as const;
 const PROVIDERS = ['openai', 'gemini', 'google-agent-platform', 'claude', 'chatgpt-local', 'claude-local'] as const;
@@ -33,6 +34,13 @@ const MAX_COMBINED_EVIDENCE_PER_ROLE = 10_000;
 const MAX_COMBINED_WARNINGS_PER_ROLE = 2_000;
 const MAX_FAILURE_LENGTH = 300;
 const COORDINATE_EPSILON = 1e-6;
+const PRECISION_CONFIDENCE_THRESHOLD = 0.85;
+const PRECISION_ROLES = ['symbols', 'connections', 'text'] as const;
+const MAX_AUDIT_GRAPH_ITEMS = 200;
+
+type PrecisionRole = (typeof PRECISION_ROLES)[number];
+export type CouncilReviewRole = (typeof PRIMARY_ROLES)[number];
+export type PrecisionPlan = Record<PrecisionRole, string[]>;
 
 type Invoke = typeof analyzeDrawingRole;
 type AnnotateRegion = typeof annotatePrecisionRegion;
@@ -61,12 +69,18 @@ export interface DrawingCouncilInput {
   settleOnAbort?: boolean;
   /** Sealed primary-role receipts from earlier attempts on the same drawing. */
   priorEnvelopes?: readonly RoleReviewEnvelope[];
+  /** Targeted retries call only these primary axes and reuse sealed prior axes. */
+  reviewRoles?: readonly CouncilReviewRole[];
+  /** Targeted axes that must refresh their full-page source instead of only precision crops. */
+  fullSourceReviewRoles?: readonly CouncilReviewRole[];
 }
 
 export interface DrawingCouncilResult {
   envelopes: RoleReviewEnvelope[];
   failures: RoleFailure[];
   callCounts?: { planned: number; attempted: number; successful: number; failed: number };
+  /** Regions selected after the full-page survey, by the role that needs them. */
+  precisionPlan?: PrecisionPlan;
   /** Present for production council runs; optional for injected legacy test doubles. */
   continuityPlan?: BoundaryContinuationPlan;
 }
@@ -240,6 +254,24 @@ function validateInput(input: DrawingCouncilInput): CouncilLimits {
   if (!Number.isSafeInteger(maxConcurrentCalls) || maxConcurrentCalls < 1 || maxConcurrentCalls > MAX_CONCURRENT_CALLS) {
     invalid(`maxConcurrentCalls must be an integer from 1 to ${MAX_CONCURRENT_CALLS}.`);
   }
+  if (input.reviewRoles !== undefined) {
+    const reviewRoles = [...input.reviewRoles];
+    if (reviewRoles.length === 0
+      || new Set(reviewRoles).size !== reviewRoles.length
+      || reviewRoles.some((role) => !PRIMARY_ROLES.includes(role))) {
+      invalid('reviewRoles must be a non-empty unique subset of primary roles.');
+    }
+    const priorRoles = new Set((input.priorEnvelopes ?? []).map((envelope) => envelope.role));
+    const missingPrior = PRIMARY_ROLES.filter((role) => !reviewRoles.includes(role) && !priorRoles.has(role));
+    if (missingPrior.length > 0) invalid(`targeted retry is missing prior roles: ${missingPrior.join(',')}.`);
+    const fullSourceRoles = [...(input.fullSourceReviewRoles ?? [])];
+    if (new Set(fullSourceRoles).size !== fullSourceRoles.length
+      || fullSourceRoles.some((role) => !reviewRoles.includes(role))) {
+      invalid('fullSourceReviewRoles must be a unique subset of reviewRoles.');
+    }
+  } else if ((input.fullSourceReviewRoles?.length ?? 0) > 0) {
+    invalid('fullSourceReviewRoles requires reviewRoles.');
+  }
   const hasTripleTextSources = ['original', 'upscale-4x', 'text-high-contrast']
     .every((kind) => input.variants.some((variant) => variant.kind === kind));
   const textFullCallDelta = hasTripleTextSources ? 2 : 0;
@@ -388,21 +420,22 @@ function fullEnvelopeFor(
 
 function buildContinuationPlan(
   input: DrawingCouncilInput,
+  precisionRegions: readonly PrecisionRegion[],
   plans: readonly PlannedRole[],
   settled: { successes: SourceSuccess[]; failures: SourceFailure[] },
 ): BoundaryContinuationPlan {
-  const regions = analysisPlansFromRegions(input.regions, input.snapshot.page - 1);
+  const regions = analysisPlansFromRegions(precisionRegions, input.snapshot.page - 1);
   if (regions.length < 2) {
     return { regions, continuations: [], seamAlignedLineIds: [], warnings: [] };
   }
   const connectionPlan = plans.find((plan) => plan.role === 'connections');
   const symbolPlan = plans.find((plan) => plan.role === 'symbols');
-  const connectionEnvelope = connectionPlan
+  const connectionEnvelope = (connectionPlan
     ? fullEnvelopeFor('connections', connectionPlan, settled, input)
-    : undefined;
-  const symbolEnvelope = symbolPlan
+    : undefined) ?? latestPriorPrimary(input, 'connections');
+  const symbolEnvelope = (symbolPlan
     ? fullEnvelopeFor('symbols', symbolPlan, settled, input)
-    : undefined;
+    : undefined) ?? latestPriorPrimary(input, 'symbols');
   const lines: GlobalLineCandidate[] = (connectionEnvelope?.data.lines ?? []).map((line) => ({
     id: line.id,
     path: line.path.map((point) => ({ ...point })),
@@ -422,6 +455,176 @@ function buildContinuationPlan(
       h: symbol.bounds.h,
     })),
   });
+}
+
+function intersects(left: EvidenceBounds, right: EvidenceBounds): boolean {
+  return left.x < right.x + right.w
+    && left.x + left.w > right.x
+    && left.y < right.y + right.h
+    && left.y + left.h > right.y;
+}
+
+function lineBounds(points: readonly Point[]): EvidenceBounds | null {
+  if (points.length === 0) return null;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const minY = Math.min(...ys);
+  const maxX = Math.max(...xs);
+  const maxY = Math.max(...ys);
+  return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
+}
+
+function precisionEvidence(
+  role: PrecisionRole,
+  envelope: RoleReviewEnvelope,
+): Array<{ bounds: EvidenceBounds; uncertain: boolean }> {
+  if (role === 'symbols') {
+    return (envelope.data.symbols ?? []).map((item) => ({
+      bounds: item.bounds,
+      uncertain: item.confidence < PRECISION_CONFIDENCE_THRESHOLD || item.typeCandidates.length !== 1,
+    }));
+  }
+  if (role === 'text') {
+    return (envelope.data.texts ?? []).map((item) => ({
+      bounds: item.bounds,
+      uncertain: item.confidence < PRECISION_CONFIDENCE_THRESHOLD || item.candidates.length !== 1,
+    }));
+  }
+  return (envelope.data.lines ?? []).flatMap((item) => {
+    const bounds = lineBounds(item.path);
+    return bounds ? [{ bounds, uncertain: item.confidence < PRECISION_CONFIDENCE_THRESHOLD }] : [];
+  });
+}
+
+function initialPrecisionCap(regionCount: number, maxRegionCalls: number): number {
+  if (regionCount === 0 || maxRegionCalls === 0) return 0;
+  return Math.min(maxRegionCalls, Math.max(1, Math.ceil(Math.sqrt(regionCount))));
+}
+
+function selectPrecisionPlan(
+  input: DrawingCouncilInput,
+  fullEnvelopes: readonly RoleReviewEnvelope[],
+  fullFailures: readonly RoleFailure[],
+  maxRegionCalls: number,
+  activeRoles: readonly CouncilReviewRole[] = PRIMARY_ROLES,
+): PrecisionPlan {
+  const explicitRetry = (input.priorEnvelopes?.length ?? 0) > 0;
+  return Object.fromEntries(PRECISION_ROLES.map((role) => {
+    if (!activeRoles.includes(role)) return [role, []];
+    const variant = selectCouncilVariant(role, input.variants, input.snapshot.quality.recommendedScale);
+    const regions = input.regions
+      .filter((region) => region.variantId === variant.id)
+      .slice()
+      .sort((left, right) => left.originalBounds.y - right.originalBounds.y
+        || left.originalBounds.x - right.originalBounds.x
+        || left.id.localeCompare(right.id));
+    if (explicitRetry) return [role, regions.slice(0, maxRegionCalls).map((region) => region.id)];
+
+    const cap = initialPrecisionCap(regions.length, maxRegionCalls);
+    if (cap === 0) return [role, []];
+    const envelope = fullEnvelopes.find((item) => item.role === role);
+    const fullFailed = !envelope || fullFailures.some((failure) => failure.role === role);
+    if (fullFailed) return [role, regions.slice(0, cap).map((region) => region.id)];
+
+    const evidence = precisionEvidence(role, envelope);
+    const denseThreshold = role === 'symbols' ? 6 : role === 'connections' ? 8 : 12;
+    const ranked = regions.flatMap((region) => {
+      const hits = evidence.filter((item) => intersects(item.bounds, region.originalBounds));
+      const uncertain = hits.filter((item) => item.uncertain).length;
+      if (uncertain === 0 && hits.length < denseThreshold) return [];
+      return [{ region, score: uncertain * 100 + hits.length }];
+    }).sort((left, right) => right.score - left.score || left.region.id.localeCompare(right.region.id));
+    return [role, ranked.slice(0, cap).map((item) => item.region.id)];
+  })) as PrecisionPlan;
+}
+
+function latestPriorPrimary(input: DrawingCouncilInput, role: CouncilReviewRole): RoleReviewEnvelope | undefined {
+  return [...(input.priorEnvelopes ?? [])].reverse().find((envelope) => envelope.role === role);
+}
+
+function mergePrimaryEnvelopes(
+  input: DrawingCouncilInput,
+  current: readonly RoleReviewEnvelope[],
+  activeRoles: readonly CouncilReviewRole[],
+): RoleReviewEnvelope[] {
+  return PRIMARY_ROLES.flatMap((role) => {
+    const currentEnvelope = current.find((envelope) => envelope.role === role);
+    const prior = latestPriorPrimary(input, role);
+    if (activeRoles.includes(role)) {
+      if (!currentEnvelope) return [];
+      if (input.reviewRoles === undefined
+        || input.fullSourceReviewRoles?.includes(role)
+        || !prior
+        || role === 'logic') return [currentEnvelope];
+      const model = [...new Set([...prior.model.split(','), ...currentEnvelope.model.split(',')])].sort().join(',');
+      return [sealEnvelope(
+        role,
+        input.snapshot,
+        input.options,
+        model,
+        prior.durationMs + currentEnvelope.durationMs,
+        [...(prior.reviewedSourceIds ?? []), ...(currentEnvelope.reviewedSourceIds ?? [])],
+        combineRoleData(role, [prior.data, currentEnvelope.data], []),
+      )];
+    }
+    return prior ? [prior] : [];
+  });
+}
+
+function graphSummary(envelopes: readonly RoleReviewEnvelope[], drawingWidth: number) {
+  const graphEnvelopes = envelopes.filter((item) =>
+    item.role === 'symbols' || item.role === 'connections' || item.role === 'text');
+  if (graphEnvelopes.length !== 3) return {
+    available: false, symbols: 0, lines: 0, texts: 0, edges: 0,
+    nodes: [], relations: [], openLines: [], textLinks: [], conflicts: [] as string[],
+  };
+  try {
+    const graph = assembleSpatialGraph(graphEnvelopes, { drawingWidth });
+    return {
+      available: true,
+      symbols: graph.symbols.length,
+      lines: graph.lines.length,
+      texts: graph.texts.length,
+      edges: graph.edges.length,
+      nodes: graph.symbols.slice(0, MAX_AUDIT_GRAPH_ITEMS).map((item) => ({
+        id: item.id,
+        types: item.typeCandidates,
+        label: item.rawLabel,
+        bounds: item.bounds,
+        confidence: item.confidence,
+      })),
+      relations: graph.edges.slice(0, MAX_AUDIT_GRAPH_ITEMS).map((item) => ({
+        from: item.from,
+        to: item.to,
+        lineId: item.lineId,
+        confidence: item.confidence,
+      })),
+      openLines: graph.lines
+        .filter((item) => item.openEndReason || !graph.edges.some((edge) => edge.lineId === item.id))
+        .slice(0, MAX_AUDIT_GRAPH_ITEMS)
+        .map((item) => ({
+          id: item.id,
+          start: item.start,
+          end: item.end,
+          startAnchorId: item.startAnchorId,
+          endAnchorId: item.endAnchorId,
+          openEndReason: item.openEndReason,
+          confidence: item.confidence,
+        })),
+      textLinks: graph.textLinks.slice(0, MAX_AUDIT_GRAPH_ITEMS).map((item) => ({
+        textId: item.textId,
+        symbolId: item.symbolId,
+        confidence: item.confidence,
+      })),
+      conflicts: graph.conflicts.slice(0, 50),
+    };
+  } catch {
+    return {
+      available: false, symbols: 0, lines: 0, texts: 0, edges: 0,
+      nodes: [], relations: [], openLines: [], textLinks: [], conflicts: ['GRAPH_ASSEMBLY_FAILED'],
+    };
+  }
 }
 
 function sanitizeFailure(error: unknown, apiKey: string): string {
@@ -679,6 +882,7 @@ function settleAbortedCouncil(
   settled: { successes: readonly SourceSuccess[]; failures: readonly SourceFailure[] },
   continuityPlan: BoundaryContinuationPlan,
   plannedCalls: number,
+  precisionPlan: PrecisionPlan = { symbols: [], connections: [], text: [] },
 ): DrawingCouncilResult {
   const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
   const envelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
@@ -693,6 +897,7 @@ function settleAbortedCouncil(
     envelopes: deepFreeze(envelopes) as RoleReviewEnvelope[],
     failures: deepFreeze(failures) as RoleFailure[],
     callCounts: callCounts(plannedCalls, settled),
+    precisionPlan: deepFreeze(precisionPlan) as PrecisionPlan,
     continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
   };
 }
@@ -743,35 +948,52 @@ export async function runDrawingCouncil(
 ): Promise<DrawingCouncilResult> {
   const limits = validateInput(input);
   throwIfAborted(input.options.signal);
-  const fullPlans = PRIMARY_ROLES.map((role) => ({
+  const activeRoles = input.reviewRoles ?? PRIMARY_ROLES;
+  const targetedRetry = input.reviewRoles !== undefined;
+  const fullPlans = activeRoles.map((role) => ({
     role,
-    sources: fullSourcesForRole(role, input),
+    sources: targetedRetry
+      && role !== 'logic'
+      && !input.fullSourceReviewRoles?.includes(role)
+      ? []
+      : fullSourcesForRole(role, input),
     started: Date.now(),
   }));
-  const plannedCalls = fullPlans.reduce((total, plan) => total + plan.sources.length, 0)
-    + PRIMARY_ROLES.reduce((total, role) => {
-      if (role === 'logic') return total;
-      const variant = selectCouncilVariant(role, input.variants, input.snapshot.quality.recommendedScale);
-      return total + input.regions.filter((region) => region.variantId === variant.id).slice(0, limits.maxRegionCalls).length;
-    }, 0)
-    + 1;
+  const fullPlannedCalls = fullPlans.reduce((total, plan) => total + plan.sources.length, 0);
   const fullSettled = await runFairSourceTasks(fullPlans, input, invoke, limits.maxConcurrentCalls);
-  const continuityPlan = buildContinuationPlan(input, fullPlans, fullSettled);
+  const fullOutcomes = fullPlans
+    .filter((plan) => plan.sources.length > 0)
+    .map((plan) => buildRoleOutcome(plan, fullSettled.successes, fullSettled.failures, input));
+  const fullEnvelopes = fullOutcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
+  const fullFailures = fullOutcomes.flatMap((outcome) => outcome.failures);
+  const precisionPlan = selectPrecisionPlan(input, fullEnvelopes, fullFailures, limits.maxRegionCalls, activeRoles);
+  const selectedRegionIds = new Set(Object.values(precisionPlan).flat());
+  const selectedRegions = input.regions.filter((region) => selectedRegionIds.has(region.id));
+  const plannedCalls = fullPlannedCalls
+    + Object.values(precisionPlan).reduce((total, regionIds) => total + regionIds.length, 0)
+    + 1;
+  const continuityPlan = buildContinuationPlan(input, selectedRegions, fullPlans, fullSettled);
   if (input.options.signal?.aborted) {
     if (!input.settleOnAbort) throw abortError();
-    return settleAbortedCouncil(input, fullPlans, fullSettled, continuityPlan, plannedCalls);
+    return settleAbortedCouncil(input, fullPlans, fullSettled, continuityPlan, plannedCalls, precisionPlan);
   }
-  const shouldAnnotate = input.regions.some((region) =>
+  const shouldAnnotate = selectedRegions.some((region) =>
     Boolean(region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds));
   const precisionRegions = shouldAnnotate
-    ? await Promise.all(input.regions.map((region) =>
+    ? await Promise.all(selectedRegions.map((region) =>
       region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds
         ? annotateRegion(region, continuityPlan.continuations)
         : Promise.resolve(region)))
-    : [...input.regions];
-  const precisionPlans = PRIMARY_ROLES.map((role) => ({
+    : [...selectedRegions];
+  const precisionPlans = activeRoles.map((role) => ({
     role,
-    sources: precisionSourcesForRole(role, input, precisionRegions, continuityPlan, limits.maxRegionCalls),
+    sources: precisionSourcesForRole(
+      role,
+      input,
+      precisionRegions.filter((region) => role === 'logic' || precisionPlan[role as PrecisionRole]?.includes(region.id)),
+      continuityPlan,
+      limits.maxRegionCalls,
+    ),
     started: Date.now(),
   }));
   const precisionSettled = await runFairSourceTasks(
@@ -780,7 +1002,7 @@ export async function runDrawingCouncil(
     invoke,
     limits.maxConcurrentCalls,
   );
-  const plans = PRIMARY_ROLES.map((role, index) => ({
+  const plans = activeRoles.map((role, index) => ({
     role,
     sources: [...fullPlans[index].sources, ...precisionPlans[index].sources],
     started: fullPlans[index].started,
@@ -791,10 +1013,11 @@ export async function runDrawingCouncil(
   };
   if (input.options.signal?.aborted) {
     if (!input.settleOnAbort) throw abortError();
-    return settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls);
+    return settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls, precisionPlan);
   }
   const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
-  const primaryEnvelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
+  const currentEnvelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
+  const primaryEnvelopes = mergePrimaryEnvelopes(input, currentEnvelopes, activeRoles);
   const primaryFailures = outcomes.flatMap((outcome) => outcome.failures);
   const original = selectCouncilVariant(COVERAGE_ROLE, input.variants, input.snapshot.quality.recommendedScale);
   const auditPlan: PlannedRole = {
@@ -806,7 +1029,13 @@ export async function runDrawingCouncil(
       originalBounds: { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height },
     }],
     started: Date.now(),
-    context: buildCoverageContext(input, [...(input.priorEnvelopes ?? []), ...primaryEnvelopes], primaryFailures),
+    context: buildCoverageContext(
+      input,
+      [...(input.priorEnvelopes ?? []), ...primaryEnvelopes],
+      primaryFailures,
+      precisionPlan,
+      graphSummary(primaryEnvelopes, input.snapshot.width),
+    ),
   };
   const auditSettled = await runFairSourceTasks([auditPlan], input, invoke, 1);
   const auditOutcome = buildRoleOutcome(auditPlan, auditSettled.successes, auditSettled.failures, input);
@@ -814,6 +1043,7 @@ export async function runDrawingCouncil(
     envelopes: deepFreeze([...primaryEnvelopes, ...(auditOutcome.envelope ? [auditOutcome.envelope] : [])]) as RoleReviewEnvelope[],
     failures: deepFreeze([...primaryFailures, ...auditOutcome.failures]) as RoleFailure[],
     callCounts: callCounts(plannedCalls, settled, auditSettled),
+    precisionPlan: deepFreeze(precisionPlan) as PrecisionPlan,
     continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
   };
 }
@@ -822,6 +1052,8 @@ function buildCoverageContext(
   input: DrawingCouncilInput,
   envelopes: readonly RoleReviewEnvelope[],
   failures: readonly RoleFailure[],
+  precisionPlan: PrecisionPlan,
+  graph: ReturnType<typeof graphSummary>,
 ): string {
   const byRole = Object.fromEntries(PRIMARY_ROLES.map((role) => {
     const attempts = envelopes.filter((envelope) => envelope.role === role).map((envelope) => ({
@@ -841,7 +1073,11 @@ function buildCoverageContext(
   }));
   return canonicalize({
     page: input.snapshot.page,
-    plannedRegions: input.regions.map((region) => ({ id: region.id, bounds: region.originalBounds })),
+    plannedRegions: input.regions
+      .filter((region) => Object.values(precisionPlan).some((ids) => ids.includes(region.id)))
+      .map((region) => ({ id: region.id, bounds: region.originalBounds })),
+    precisionPlan,
+    graph,
     byRole,
     failures: failures.map((failure) => ({ role: failure.role, sourceId: failure.sourceId, fatal: failure.fatal })),
   });

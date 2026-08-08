@@ -488,6 +488,45 @@ describe('document-orchestrator + evaluator', () => {
       ?.find((call) => call.success === false);
     expect(conflictAuditCall?.error).toContain('UNBOUND_LINE_ENDPOINT:LINE-1');
 
+    const conflictWithLineEvidence = review(true);
+    conflictWithLineEvidence.graph.conflicts = ['UNBOUND_LINE_ENDPOINT:LINE-1'];
+    conflictWithLineEvidence.graph.lines = [{
+      id: 'LINE-1', originalEvidenceId: 'original:LINE-1', originalEvidenceIds: ['original:LINE-1'],
+      sourceIds: ['variant:line-enhanced'], lineKind: 'power',
+      path: [{ x: 70, y: 10 }, { x: 90, y: 30 }],
+      start: { x: 70, y: 10 }, end: { x: 90, y: 30 },
+      junctions: [], crossovers: [], confidence: 0.9, pages: [1],
+    }] as never;
+    let targetedConflictAttempt = 0;
+    const executeTargetedConflict = jest.fn(async () => {
+      targetedConflictAttempt += 1;
+      return {
+        success: true,
+        components: [],
+        connections: [],
+        confidence: 0.95,
+        drawingReview: targetedConflictAttempt === 1 ? conflictWithLineEvidence : review(true),
+        drawingSynthesis: { calculations: [] },
+      };
+    });
+    const recoveredConflict = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-targeted-graph-conflict',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 57, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTargetedConflict as never });
+
+    expect(executeTargetedConflict).toHaveBeenCalledTimes(2);
+    expect((executeTargetedConflict.mock.calls as unknown as Array<[TeamInput]>)[1]?.[0]).toMatchObject({
+      params: {
+        rescanTargets: [expect.objectContaining({
+          id: expect.stringContaining('graph-conflict'),
+          suggestedRoles: ['connections', 'symbols'],
+          bounds: expect.objectContaining({ page: 1 }),
+        })],
+      },
+    });
+    expect(recoveredConflict.document.coverageLedger.unresolvedRescans).toBe(0);
+
     // 모호성은 구조 위반이 아니다 — 전면 판독을 버리지 않는다.
     //
     // 실측(2026-08-07, 교재형 수변전 p6): 오케스트레이터가 사설 정규식
@@ -878,6 +917,73 @@ describe('document-orchestrator + evaluator', () => {
     expect(executeTeam.mock.calls.map(([teamInput]) => teamInput.classification))
       .toEqual(['sld_pdf', 'sld_image', 'sld_pdf', 'sld_image', 'sld_pdf', 'sld_image', 'sld_pdf', 'sld_image']);
     expect(changedProfile.job.pageDigests[0]).toMatchObject({ effortProfile: 'symbols:low' });
+  });
+
+  it('keeps the coverage ledger to the full page when the council selects no precision regions', async () => {
+    const image = await makePng();
+    const quality = {
+      width: 100, height: 80, channels: 3, contrast: 1, edgeDensity: 0.01,
+      gradientVariance: 1, lowContrast: false, blurry: false,
+      recommendedScale: 1 as const, warnings: [],
+    };
+    const source: PreparedDrawingSource = {
+      documentHash: 'a'.repeat(64), mimeType: 'image/png', formatClass: 'raster-image',
+      pages: [{
+        pageIndex: 0, width: 100, height: 80, sourceWidth: 100, sourceHeight: 80,
+        renderScale: 1, renderMode: 'raster', textSample: '', vectorOpCount: 0,
+        rasterOpCount: 1, renderHash: 'adaptive-full-only', quality, imageBuffer: image,
+      }],
+    };
+    const fullSources = {
+      symbols: 'variant:original', connections: 'variant:line-enhanced',
+      text: 'variant:text-high-contrast', logic: 'variant:original',
+      'coverage-auditor': 'variant:original',
+    } as const;
+    const envelopes = Object.entries(fullSources).map(([role, sourceId]) => ({
+      role, outputHash: `${role}-hash`, drawingHash: source.documentHash,
+      provider: 'openai', model: 'test', promptVersion: 'test', durationMs: 1,
+      reviewedSourceIds: [sourceId],
+      data: role === 'coverage-auditor'
+        ? { rescanTargets: [], warnings: [], confidence: 0.95 }
+        : { warnings: [], confidence: 0.95 },
+    }));
+    const executeTeam = jest.fn(async (_teamInput: TeamInput) => ({
+      success: true, components: [], connections: [], confidence: 0.95,
+      drawingReview: {
+        snapshot: { drawingHash: source.documentHash, mimeType: 'image/png', page: 1, width: 100, height: 80, quality },
+        envelopes,
+        failures: [],
+        coverage: {
+          roles: {
+            symbols: { variantId: fullSources.symbols, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1, regionIds: [] },
+            connections: { variantId: fullSources.connections, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1, regionIds: [] },
+            text: { variantId: fullSources.text, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 3, regionIds: [] },
+            logic: { variantId: fullSources.logic, expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+            'coverage-auditor': { variantId: fullSources['coverage-auditor'], expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1 },
+          },
+          plannedCalls: 7, actualCalls: 7, complete: true, maxRegionCallsPerRole: 16,
+        },
+        graph: { drawingHash: source.documentHash, symbols: [], lines: [], texts: [], edges: [], conflicts: [] },
+      },
+      drawingSynthesis: { calculations: [], conflicts: [] },
+    }));
+
+    const result = await runDocumentAnalysis({
+      bytes: image, mimeType: 'image/png', ownerId: 'owner-adaptive-full-only',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 7, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeTeam as never });
+
+    expect(executeTeam).toHaveBeenCalledTimes(1);
+    expect(executeTeam.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ maxPrecisionRegionCallsPerRole: 0 }));
+    expect(result.job.vlmCallsUsed).toBe(7);
+    expect(result.document.coverageLedger).toMatchObject({
+      plannedRegionCount: 1,
+      regionsComplete: 1,
+      regionsFailed: 0,
+      unresolvedRescans: 0,
+    });
+    expect(result.document.coverageLedger.regions.map((region) => region.regionId)).toEqual(['p0-full']);
   });
 
   it('uses the selected source page dimensions for a non-contiguous page conflict fallback', async () => {

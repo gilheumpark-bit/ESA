@@ -1,5 +1,6 @@
 import { runDrawingCouncil } from '../drawing-council';
 import type { DrawingSnapshot, ImageVariant, PrecisionRegion } from '../evidence-types';
+import type { RoleReviewEnvelope } from '../review-types';
 import type { VLMOptions, VLMReviewRole, VLMRoleAnalysisResult } from '../vlm-client';
 
 const options: VLMOptions = { provider: 'openai', apiKey: 'sk-council-test-key', maxRetries: 0 };
@@ -88,6 +89,20 @@ function resultFor(role: VLMReviewRole, sourceByteLength = 1): VLMRoleAnalysisRe
   };
 }
 
+function priorEnvelope(role: 'symbols' | 'connections' | 'text' | 'logic' = 'connections'): RoleReviewEnvelope {
+  return {
+    role,
+    drawingHash: snapshot().drawingHash,
+    provider: 'openai',
+    model: 'prior-model',
+    promptVersion: 'prior-prompt',
+    outputHash: 'prior-output',
+    durationMs: 1,
+    reviewedSourceIds: [role === 'connections' ? 'variant:lines' : role === 'text' ? 'variant:text' : 'variant:original'],
+    data: resultFor(role).data,
+  };
+}
+
 describe('sealed independent drawing council', () => {
   it('finishes the full connection survey before annotated region calls and allowlists C anchors', async () => {
     const precisionRegions: PrecisionRegion[] = [
@@ -117,7 +132,10 @@ describe('sealed independent drawing council', () => {
     const annotatedPorts: string[][] = [];
 
     const result = await runDrawingCouncil(
-      { snapshot: snapshot(), variants: variants(), regions: precisionRegions, options, maxRegionCallsPerRole: 2 },
+      {
+        snapshot: snapshot(), variants: variants(), regions: precisionRegions, options,
+        maxRegionCallsPerRole: 2, priorEnvelopes: [priorEnvelope()],
+      },
       async (buffer, _mime, role, _options, context) => {
         if (role === 'symbols') {
           return {
@@ -153,7 +171,10 @@ describe('sealed independent drawing council', () => {
 
   it('runs a post-review coverage auditor with coverage context and returns rescan targets', async () => {
     let auditContext = '';
-    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 }, async (buffer, _mime, role, _options, context) => {
+    const result = await runDrawingCouncil({
+      snapshot: snapshot(), variants: variants(), regions: regions(), options,
+      maxRegionCallsPerRole: 1, priorEnvelopes: [priorEnvelope()],
+    }, async (buffer, _mime, role, _options, context) => {
       if ((role as string) === 'coverage-auditor') {
         auditContext = context ?? '';
         return {
@@ -256,9 +277,138 @@ describe('sealed independent drawing council', () => {
     expect([...new Set(started)].sort()).toEqual(['connections', 'logic', 'symbols', 'text']);
     release?.();
     const result = await pending;
-    expect(invoke).toHaveBeenCalledTimes(6);
+    expect(invoke).toHaveBeenCalledTimes(5);
     expect(result.envelopes.map((item) => item.role)).toEqual(['symbols', 'connections', 'text', 'logic', 'coverage-auditor']);
     expect(result.envelopes.find((item) => item.role === 'logic')?.data.logic).toHaveLength(1);
+  });
+
+  it('does not split a sparse high-confidence full-page read into precision regions', async () => {
+    const seen: Array<{ role: VLMReviewRole; bytes: number }> = [];
+
+    const result = await runDrawingCouncil(
+      { snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 16 },
+      async (buffer, _mime, role) => {
+        seen.push({ role, bytes: buffer.byteLength });
+        return resultFor(role, buffer.byteLength);
+      },
+    );
+
+    expect(seen).toEqual([
+      { role: 'symbols', bytes: 1 },
+      { role: 'connections', bytes: 4 },
+      { role: 'text', bytes: 3 },
+      { role: 'logic', bytes: 1 },
+      { role: 'coverage-auditor', bytes: 1 },
+    ]);
+    expect(result.precisionPlan).toEqual({ symbols: [], connections: [], text: [] });
+  });
+
+  it('precision-scans only the role and region containing uncertain full-page evidence', async () => {
+    const inputRegions: PrecisionRegion[] = [
+      {
+        id: 'region:left',
+        variantId: 'variant:original',
+        variantBounds: { x: 0, y: 0, w: 50, h: 80 },
+        originalBounds: { x: 0, y: 0, w: 50, h: 80 },
+        buffer: new ArrayBuffer(2),
+      },
+      regions()[0],
+    ];
+    const seen: Array<{ role: VLMReviewRole; bytes: number }> = [];
+
+    const result = await runDrawingCouncil(
+      { snapshot: snapshot(), variants: variants(), regions: inputRegions, options, maxRegionCallsPerRole: 16 },
+      async (buffer, _mime, role) => {
+        seen.push({ role, bytes: buffer.byteLength });
+        if (role === 'symbols' && buffer.byteLength === 1) {
+          return {
+            ...resultFor(role, buffer.byteLength),
+            data: {
+              symbols: [{
+                id: 'uncertain-right', typeCandidates: ['VCB'], rawLabel: 'VCB?',
+                bounds: { x: 600, y: 100, w: 100, h: 100, page: 1 }, ports: [], confidence: 0.6,
+              }],
+              warnings: [], confidence: 0.6,
+            },
+          };
+        }
+        return resultFor(role, buffer.byteLength);
+      },
+    );
+
+    expect(result.precisionPlan).toEqual({
+      symbols: ['region:right'],
+      connections: [],
+      text: [],
+    });
+    expect(seen.filter((call) => call.bytes === 2)).toEqual([{ role: 'symbols', bytes: 2 }]);
+  });
+
+  it('precision-scans a dense region even when its full-page symbols are individually confident', async () => {
+    const denseSymbols = Array.from({ length: 6 }, (_, index) => ({
+      id: `dense-${index}`,
+      typeCandidates: ['VCB'],
+      rawLabel: `VCB-${index + 1}`,
+      bounds: { x: 600 + index * 20, y: 100, w: 10, h: 10, page: 1 },
+      ports: [],
+      confidence: 1,
+    }));
+
+    const result = await runDrawingCouncil(
+      { snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 16 },
+      async (buffer, _mime, role) => role === 'symbols' && buffer.byteLength === 1
+        ? {
+            ...resultFor(role, buffer.byteLength),
+            data: { symbols: denseSymbols, warnings: [], confidence: 1 },
+          }
+        : resultFor(role, buffer.byteLength),
+    );
+
+    expect(result.precisionPlan).toEqual({
+      symbols: ['region:right'],
+      connections: [],
+      text: [],
+    });
+  });
+
+  it('gives the final coverage auditor the remapped and assembled primary graph summary', async () => {
+    let auditContext = '';
+
+    await runDrawingCouncil(
+      { snapshot: snapshot(), variants: variants(), regions: [], options },
+      async (buffer, _mime, role, _options, context) => {
+        if (role === 'coverage-auditor') auditContext = context ?? '';
+        return resultFor(role, buffer.byteLength);
+      },
+    );
+
+    expect(auditContext).toContain('"graph"');
+    expect(auditContext).toContain('"available":true');
+    expect(auditContext).toContain('"symbols":1');
+    expect(auditContext).toContain('"nodes"');
+    expect(auditContext).toContain('"relations"');
+  });
+
+  it('reuses sealed prior roles and calls only the requested missing axis on a targeted retry', async () => {
+    const seen: VLMReviewRole[] = [];
+    const result = await runDrawingCouncil({
+      snapshot: snapshot(),
+      variants: [variants()[0]],
+      regions: regions(),
+      options,
+      reviewRoles: ['connections'],
+      maxRegionCallsPerRole: 1,
+      priorEnvelopes: [priorEnvelope('symbols'), priorEnvelope('text'), priorEnvelope('logic')],
+    }, async (buffer, _mime, role) => {
+      seen.push(role);
+      return resultFor(role, buffer.byteLength);
+    });
+
+    expect(seen).toEqual(['connections', 'coverage-auditor']);
+    expect(result.envelopes.map((item) => item.role)).toEqual([
+      'symbols', 'connections', 'text', 'logic', 'coverage-auditor',
+    ]);
+    expect(result.callCounts).toEqual({ planned: 2, attempted: 2, successful: 2, failed: 0 });
   });
 
   it.each([
@@ -281,7 +431,10 @@ describe('sealed independent drawing council', () => {
   });
 
   it('remaps normalized geometry to original pixels, namespaces source ids, and rewrites logic references', async () => {
-    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 }, async (buffer, _mime, role) => resultFor(role, buffer.byteLength));
+    const result = await runDrawingCouncil({
+      snapshot: snapshot(), variants: variants(), regions: regions(), options,
+      maxRegionCallsPerRole: 1, priorEnvelopes: [priorEnvelope()],
+    }, async (buffer, _mime, role) => resultFor(role, buffer.byteLength));
     const symbols = result.envelopes.find((item) => item.role === 'symbols')?.data.symbols ?? [];
     const logic = result.envelopes.find((item) => item.role === 'logic')?.data.logic?.[0];
 
@@ -334,7 +487,10 @@ describe('sealed independent drawing council', () => {
       return resultFor(role, buffer.byteLength);
     });
 
-    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: variants(), regions: regions(), options, maxRegionCallsPerRole: 1 }, invoke);
+    const result = await runDrawingCouncil({
+      snapshot: snapshot(), variants: variants(), regions: regions(), options,
+      maxRegionCallsPerRole: 1, priorEnvelopes: [priorEnvelope()],
+    }, invoke);
 
     expect(result.envelopes.map((item) => item.role)).toEqual(['symbols', 'logic', 'coverage-auditor']);
     expect(result.envelopes[0].data.warnings).toContain('REGION_REVIEW_FAILED:region:right');
@@ -439,7 +595,7 @@ describe('sealed independent drawing council', () => {
     expect(result.callCounts).toEqual({ planned: 5, attempted: 2, successful: 1, failed: 1 });
   });
 
-  it('limits 53 calls globally and schedules every primary role full source before regions', async () => {
+  it('caps an uncertain first pass to four precision regions and schedules every primary role first', async () => {
     const manyRegions = Array.from({ length: 16 }, (_, index) => ({
       ...regions()[0],
       id: `region:${index}`,
@@ -464,8 +620,14 @@ describe('sealed independent drawing council', () => {
     expect(maximum).toBeLessThanOrEqual(4);
     expect(started).toEqual(['symbols:1', 'connections:1', 'text:1', 'logic:1']);
     release?.();
-    await pending;
-    expect(invoke).toHaveBeenCalledTimes(53);
+    const result = await pending;
+    expect(invoke).toHaveBeenCalledTimes(9);
+    expect(result.precisionPlan).toEqual({
+      symbols: [],
+      connections: [],
+      text: ['region:0', 'region:1', 'region:10', 'region:11'],
+    });
+    expect(result.callCounts).toEqual({ planned: 9, attempted: 9, successful: 9, failed: 0 });
   });
 
   it('rejects unsafe provider configuration, duplicate kinds, and input-count overflow before invoking', async () => {
@@ -483,13 +645,17 @@ describe('sealed independent drawing council', () => {
       id: `region:${index}`,
       buffer: new ArrayBuffer(index + 2),
     }));
-    const result = await runDrawingCouncil({ snapshot: snapshot(), variants: [variants()[0]], regions: manyRegions, options }, async (buffer, _mime, role) => ({
+    const result = await runDrawingCouncil({
+      snapshot: snapshot(), variants: [variants()[0]], regions: manyRegions, options,
+      priorEnvelopes: [priorEnvelope()],
+    }, async (buffer, _mime, role) => ({
       ...resultFor(role, buffer.byteLength),
       model: `${role}-${buffer.byteLength}-${'m'.repeat(180)}`,
     }));
 
     expect(result.envelopes.map((item) => item.role)).toEqual(['logic', 'coverage-auditor']);
     expect(result.failures.filter((item) => item.fatal).map((item) => item.role)).toEqual(['symbols', 'connections', 'text']);
+    expect(result.callCounts).toEqual({ planned: 53, attempted: 53, successful: 53, failed: 0 });
   });
 
   it('역할별 프로필이 있으면 그 역할만 다른 추론 단계와 시간 제한으로 호출한다', async () => {

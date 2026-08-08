@@ -62,6 +62,8 @@ export interface TeamInput {
   params?: Record<string, unknown>;
   /** Orchestrator-internal sealed receipts from earlier gap-rescan attempts. */
   priorDrawingReviewEnvelopes?: import('@/agent/vision/review-types').RoleReviewEnvelope[];
+  /** 남은 문서 호출 예산에서 파생한 역할별 정밀 구획 상한(0~16). */
+  maxPrecisionRegionCallsPerRole?: number;
   countryCode?: string;
   language?: string;
   /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */

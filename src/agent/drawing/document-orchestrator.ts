@@ -115,8 +115,8 @@ const DEFAULT_BUDGET: DocumentBudget = {
 };
 
 const ALL_ROLES: RoleId[] = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'];
-const REGION_ROLES: RoleId[] = ['symbols', 'connections', 'text'];
 const RESCAN_SETTLE_MARGIN_MS = 10_000;
+const MAX_PRECISION_REGION_CALLS_PER_ROLE = 16;
 
 function normalizeBudget(input: Partial<DocumentBudget> | undefined): DocumentBudget {
   const budget = { ...DEFAULT_BUDGET, ...input };
@@ -176,23 +176,13 @@ function pageDigestFingerprint(
 }
 
 function rasterCoveragePlans(page: PreparedDrawingPage): CoverageRegionPlan[] {
-  const gridSize = gridSizeFor(page);
-  const plans: CoverageRegionPlan[] = [{
+  return [{
     regionId: `p${page.pageIndex}-full`,
     pageIndex: page.pageIndex,
     kind: 'full-page',
     bounds: { x: 0, y: 0, w: page.width, h: page.height },
     requiredRoles: ALL_ROLES,
   }];
-  const bounds = planAdaptiveBounds(page.width, page.height, gridSize, 0.18);
-  bounds.forEach((item, index) => plans.push({
-    regionId: `p${page.pageIndex}-r${index}`,
-    pageIndex: page.pageIndex,
-    kind: 'grid',
-    bounds: item,
-    requiredRoles: REGION_ROLES,
-  }));
-  return plans;
 }
 
 function vectorCoveragePlans(page: PreparedDrawingPage): CoverageRegionPlan[] {
@@ -281,7 +271,41 @@ function markCouncilCoverage(
   page: PreparedDrawingPage,
   result: TeamResult,
 ): { regions: CoverageRegionRecord[]; roles: RoleId[]; unresolvedRescans: number; rescanTargets: RescanTargetEvidence[] } {
-  let next = regions;
+  const bounds = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
+  const selectedRolesByRegion = new Map<number, Set<RoleId>>();
+  for (const role of ['symbols', 'connections', 'text'] as const) {
+    const coverage = result.drawingReview?.coverage.roles[role];
+    const selectedIds = coverage?.regionIds
+      ?? Array.from({ length: coverage?.expectedRegionCount ?? 0 }, (_, index) => `${coverage?.variantId}:region:${index}`);
+    for (const sourceId of selectedIds) {
+      const match = sourceId.match(/:region:(\d+)$/);
+      const index = match ? Number(match[1]) : -1;
+      if (!Number.isSafeInteger(index) || index < 0 || index >= bounds.length) continue;
+      const roles = selectedRolesByRegion.get(index) ?? new Set<RoleId>();
+      roles.add(role);
+      selectedRolesByRegion.set(index, roles);
+    }
+  }
+  const selectedLedgerIds = new Set([...selectedRolesByRegion.keys()].map((index) => `p${page.pageIndex}-r${index}`));
+  let next = regions.filter((region) => region.kind !== 'grid' || selectedLedgerIds.has(region.regionId));
+  for (const [index, roles] of selectedRolesByRegion) {
+    const regionId = `p${page.pageIndex}-r${index}`;
+    const existingIndex = next.findIndex((region) => region.regionId === regionId);
+    if (existingIndex >= 0) {
+      next[existingIndex] = {
+        ...next[existingIndex],
+        requiredRoles: [...new Set([...next[existingIndex].requiredRoles, ...roles])],
+      };
+    } else {
+      next.push(...createCoverageRegions([{
+        regionId,
+        pageIndex: page.pageIndex,
+        kind: 'grid',
+        bounds: bounds[index],
+        requiredRoles: [...roles],
+      }]));
+    }
+  }
   const completedRoles: RoleId[] = [];
   const review = result.drawingReview;
   const fullId = `p${page.pageIndex}-full`;
@@ -300,7 +324,6 @@ function markCouncilCoverage(
     if (success) completedRoles.push(role);
   }
 
-  const bounds = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
   for (let index = 0; index < bounds.length; index += 1) {
     const regionId = `p${page.pageIndex}-r${index}`;
     for (const role of ['symbols', 'connections', 'text'] as const) {
@@ -371,16 +394,24 @@ function boundsIntersect(
     && left.y + left.h > right.y;
 }
 
+function targetedRetryFullSourceCalls(targets: readonly RescanTargetEvidence[]): number {
+  const fullSourceRoles = new Set(targets
+    .filter((target) => target.retryScope === 'full-source')
+    .flatMap((target) => target.suggestedRoles));
+  return [...fullSourceRoles].reduce((total, role) => total + (role === 'text' ? 3 : 1), 0);
+}
+
 function plannedTargetedRetryCalls(page: PreparedDrawingPage, targets: RescanTargetEvidence[]): number {
   if (targets.length === 0) return 7 + gridSizeFor(page) * 3;
   const regions = planAdaptiveBounds(page.width, page.height, gridSizeFor(page), 0.18);
   const roles = ['symbols', 'connections', 'text'] as const;
+  const fullSourceCalls = targetedRetryFullSourceCalls(targets);
   const precisionCalls = roles.reduce((total, role) => total + regions.filter((region) =>
     targets.some((target) => target.retryScope !== 'full-source'
       && target.suggestedRoles.includes(role)
       && boundsIntersect(region, target.bounds))).length, 0);
-  // four primary full-page readers + two extra text variants + coverage auditor
-  return 7 + precisionCalls;
+  // 재검사는 봉인된 이전 축을 재사용한다. 전체 소스 실패 축 + 선택 구획 + 감사만 호출한다.
+  return 1 + fullSourceCalls + precisionCalls;
 }
 
 /**
@@ -421,6 +452,37 @@ function failedRoleRescanTargets(page: PreparedDrawingPage, result: TeamResult):
       reason: 'low-coverage' as const,
       bounds: { ...bounds, page: TEAM_SNAPSHOT_PAGE },
       suggestedRoles: [failure.role as 'symbols' | 'connections' | 'text'],
+      confidence: 1,
+    }];
+  });
+}
+
+/** 조립기가 위치까지 아는 차단 충돌은 해당 축만 재검사할 수 있는 대상으로 바꾼다. */
+function graphConflictRescanTargets(page: PreparedDrawingPage, result: TeamResult): RescanTargetEvidence[] {
+  const graph = result.drawingReview?.graph;
+  if (!graph) return [];
+  const padding = Math.max(8, Math.min(page.width, page.height) * 0.02);
+  return graph.conflicts.filter(isBlockingGraphConflict).flatMap((conflict, index) => {
+    const lineId = conflict.split(':').at(-1);
+    const line = graph.lines.find((candidate) => candidate.id === lineId);
+    if (!line || line.path.length === 0) return [];
+    const xs = line.path.map((point) => point.x);
+    const ys = line.path.map((point) => point.y);
+    const x = Math.max(0, Math.min(...xs) - padding);
+    const y = Math.max(0, Math.min(...ys) - padding);
+    const right = Math.min(page.width, Math.max(...xs) + padding);
+    const bottom = Math.min(page.height, Math.max(...ys) + padding);
+    if (right <= x || bottom <= y) return [];
+    const suggestedRoles: Array<'symbols' | 'connections' | 'text'> = conflict.startsWith('UNBOUND_LINE_ENDPOINT:')
+      ? ['connections', 'symbols']
+      : ['connections'];
+    return [{
+      id: `graph-conflict-${page.pageIndex}-${index + 1}`,
+      sourceId: line.id,
+      retryScope: 'precision-region' as const,
+      reason: 'low-coverage' as const,
+      bounds: { x, y, w: right - x, h: bottom - y, page: TEAM_SNAPSHOT_PAGE },
+      suggestedRoles,
       confidence: 1,
     }];
   });
@@ -469,6 +531,7 @@ function teamInputForRaster(
   page: PreparedDrawingPage,
   rescanTargets: RescanTargetEvidence[] = [],
   priorDrawingReviewEnvelopes: RoleReviewEnvelope[] = [],
+  maxPrecisionRegionCallsPerRole = MAX_PRECISION_REGION_CALLS_PER_ROLE,
   signal: AbortSignal | undefined = input.signal,
 ): TeamInput {
   return {
@@ -479,6 +542,7 @@ function teamInputForRaster(
     mimeType: 'image/png',
     ...(rescanTargets.length === 0 ? {} : { params: { rescanTargets } }),
     ...(priorDrawingReviewEnvelopes.length === 0 ? {} : { priorDrawingReviewEnvelopes }),
+    maxPrecisionRegionCallsPerRole,
     signal,
     settleOnAbort: true,
     vision: input.vision,
@@ -757,9 +821,9 @@ async function runRasterPass(
   rasterPlans: CoverageRegionPlan[],
 ): Promise<{ usable: boolean; regions: CoverageRegionRecord[] }> {
   const { evidence } = run;
-  // symbols + connections + logic + three independent full-page text
-  // reads + one post-review coverage audit, plus three precision grids.
-  const plannedCalls = 7 + gridSizeFor(page) * 3;
+  // 전체 판독 4역할 + text 보조 원본 2회 + 조립 후 coverage audit.
+  // 정밀 구획은 전체 판독 결과가 선택하므로 여기서 선결제하지 않는다.
+  const plannedCalls = 7;
   if (run.previousVlmCalls + run.spent.vlmCalls + plannedCalls > run.budget.maxVlmCalls) {
     addUnresolved(evidence.unresolved, page, 'PARTIAL_BUDGET_EXCEEDED', '페이지 독립 심사 예상 호출 수가 문서 호출 예산을 초과합니다.');
     return {
@@ -775,8 +839,24 @@ async function runRasterPass(
   let priorEnvelopes: RoleReviewEnvelope[] = [];
 
   while (attempt <= MAX_RESCAN_ATTEMPTS) {
+    const remainingCalls = run.budget.maxVlmCalls - run.previousVlmCalls - run.spent.vlmCalls;
+    const attemptBaseCalls = targets.length === 0
+      ? plannedCalls
+      : 1 + targetedRetryFullSourceCalls(targets);
+    const maxPrecisionRegionCallsPerRole = Math.min(
+      MAX_PRECISION_REGION_CALLS_PER_ROLE,
+      Math.max(0, Math.floor((remainingCalls - attemptBaseCalls) / 3)),
+    );
     const result = await run.executeTeam(
-      teamInputForRaster(run.input, run.source, page, targets, priorEnvelopes, run.analysisSignal),
+      teamInputForRaster(
+        run.input,
+        run.source,
+        page,
+        targets,
+        priorEnvelopes,
+        maxPrecisionRegionCallsPerRole,
+        run.analysisSignal,
+      ),
       run.deps.teamDeps,
     );
     recordEnvelopeOrigins(run, result);
@@ -810,7 +890,11 @@ async function runRasterPass(
       usable = true;
       const coverage = markCouncilCoverage(regions, page, result);
       regions = coverage.regions;
-      targets = dedupeRescanTargets([...coverage.rescanTargets, ...failedRoleRescanTargets(page, result)]);
+      targets = dedupeRescanTargets([
+        ...coverage.rescanTargets,
+        ...graphConflictRescanTargets(page, result),
+        ...failedRoleRescanTargets(page, result),
+      ]);
       // 감사기·역할 실패 어느 쪽도 대상을 내지 않았는데 구획이 남아 있으면
       // 미완료 구획 자체를 대상으로 삼는다. 없으면 재스캔이 한 번도 못 돈다.
       if (targets.length === 0 && hasCoverageGaps(regions)) {

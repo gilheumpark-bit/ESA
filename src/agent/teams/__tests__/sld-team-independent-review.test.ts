@@ -177,6 +177,58 @@ describe('SLD raster independent council integration', () => {
     expect(JSON.stringify(result)).not.toContain(KEY);
   });
 
+  it('treats a high-confidence full-page survey as complete without inventing precision coverage', async () => {
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({
+        envelopes: envelopes(),
+        failures: [],
+        precisionPlan: { symbols: [], connections: [], text: [] },
+        callCounts: { planned: 7, attempted: 7, successful: 7, failed: 0 },
+      }),
+    });
+
+    expect(result.drawingReview?.coverage).toMatchObject({
+      plannedCalls: 7,
+      actualCalls: 7,
+      complete: true,
+      roles: {
+        symbols: { expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1, regionIds: [] },
+        connections: { expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 1, regionIds: [] },
+        text: { expectedRegionCount: 0, actualRegionCount: 0, plannedCalls: 3, regionIds: [] },
+      },
+    });
+  });
+
+  it('records only the role-specific precision region selected after the full survey', async () => {
+    const raster = prepared();
+    const symbolRegionId = raster.regions.find((region) => region.variantId === 'variant:original')?.id ?? '';
+    const reviewed = envelopes().map((envelope) => envelope.role === 'symbols'
+      ? { ...envelope, reviewedSourceIds: ['variant:original', symbolRegionId] }
+      : envelope);
+    const result = await executeSLDTeam(rasterInput(), {
+      prepareRaster: async () => raster,
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil: async () => ({
+        envelopes: reviewed,
+        failures: [],
+        precisionPlan: { symbols: [symbolRegionId], connections: [], text: [] },
+        callCounts: { planned: 8, attempted: 8, successful: 8, failed: 0 },
+      }),
+    });
+
+    expect(result.drawingReview?.coverage).toMatchObject({
+      plannedCalls: 8,
+      complete: true,
+      roles: {
+        symbols: { expectedRegionCount: 1, actualRegionCount: 1, regionIds: [symbolRegionId] },
+        connections: { expectedRegionCount: 0, actualRegionCount: 0, regionIds: [] },
+        text: { expectedRegionCount: 0, actualRegionCount: 0, regionIds: [] },
+      },
+    });
+  });
+
   it('gives a high-effort local drawing role enough time to return before marking it failed', async () => {
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
 
@@ -238,6 +290,23 @@ describe('SLD raster independent council integration', () => {
     }));
   });
 
+  it('passes the orchestrator precision-call allowance through to the council and receipt', async () => {
+    const runCouncil = jest.fn(async () => ({
+      envelopes: envelopes(), failures: [],
+      precisionPlan: { symbols: [], connections: [], text: [] },
+      callCounts: { planned: 7, attempted: 7, successful: 7, failed: 0 },
+    }));
+
+    const result = await executeSLDTeam(rasterInput({ maxPrecisionRegionCallsPerRole: 0 }), {
+      prepareRaster: async () => prepared(),
+      resolveVisionKey: () => ({ key: KEY, source: 'user' }),
+      runCouncil,
+    });
+
+    expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({ maxRegionCallsPerRole: 0 }));
+    expect(result.drawingReview?.coverage.maxRegionCallsPerRole).toBe(0);
+  });
+
   it('keeps the review on HOLD when the independent coverage auditor requests a rescan', async () => {
     const auditTarget = sealed('coverage-auditor', {
       rescanTargets: [{
@@ -267,6 +336,7 @@ describe('SLD raster independent council integration', () => {
   it('limits a follow-up council pass to auditor-requested roles and intersecting regions', async () => {
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
     const result = await executeSLDTeam(rasterInput({
+      priorDrawingReviewEnvelopes: envelopes().filter((envelope) => envelope.role !== 'coverage-auditor'),
       params: {
         rescanTargets: [{
           id: 'target-1', sourceId: 'variant:original', reason: 'boundary-clip',
@@ -282,6 +352,7 @@ describe('SLD raster independent council integration', () => {
 
     expect(runCouncil).toHaveBeenCalledWith(expect.objectContaining({
       regions: expect.arrayContaining([expect.objectContaining({ variantId: 'variant:line-enhanced' })]),
+      reviewRoles: ['connections'],
     }));
     const councilInput = (runCouncil.mock.calls as unknown as Array<[DrawingCouncilInput]>)[0]?.[0];
     const councilRegions = councilInput?.regions ?? [];
@@ -293,6 +364,7 @@ describe('SLD raster independent council integration', () => {
   it('retries a failed full-page source without multiplying it across every precision region', async () => {
     const runCouncil = jest.fn(async () => ({ envelopes: envelopes(), failures: [] }));
     const result = await executeSLDTeam(rasterInput({
+      priorDrawingReviewEnvelopes: envelopes().filter((envelope) => envelope.role !== 'coverage-auditor'),
       params: {
         rescanTargets: [{
           id: 'full-source-retry', sourceId: 'variant:line-enhanced', reason: 'low-coverage',
@@ -309,6 +381,8 @@ describe('SLD raster independent council integration', () => {
 
     const councilInput = (runCouncil.mock.calls as unknown as Array<[DrawingCouncilInput]>)[0]?.[0];
     expect(councilInput?.regions).toHaveLength(0);
+    expect(councilInput?.reviewRoles).toEqual(['connections']);
+    expect(councilInput?.fullSourceReviewRoles).toEqual(['connections']);
     expect(result.drawingReview?.coverage.complete).toBe(true);
   });
 
