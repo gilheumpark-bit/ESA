@@ -68,6 +68,11 @@ interface ActiveTurn {
   timeout: ReturnType<typeof setTimeout>;
   signal?: AbortSignal;
   abort?: () => void;
+  stderrCondition: string | null;
+}
+
+interface StartingTurn {
+  stderrCondition: string | null;
 }
 
 const BLOCKED_ITEM_TYPES = new Set([
@@ -79,8 +84,21 @@ const BLOCKED_ITEM_TYPES = new Set([
   'collabAgentToolCall',
 ]);
 
-/** 실패 사유로 쓸 만한 짧은 코드만 고른다. 자유 서술은 받지 않는다. */
-const TURN_FAILURE_REASON = /^[A-Za-z][A-Za-z0-9 ._-]{0,79}$/;
+/** 공급자 자유 문자열은 길이에 관계없이 싣지 않고, 알려진 상태·코드만 통과시킨다. */
+const TURN_FAILURE_STATUSES = new Set(['failed', 'cancelled', 'canceled', 'interrupted', 'incomplete', 'aborted']);
+const TURN_FAILURE_CODES = new Set([
+  'usage_limit', 'usage_limit_reached', 'quota_exceeded',
+  'rate_limit', 'rate_limit_reached', 'too_many_requests',
+  'not_logged_in', 'authentication_required', 'unauthorized',
+  'unknown_model', 'model_not_found', 'unsupported_model',
+  'invalid_request', 'invalid_output_schema',
+]);
+
+function knownFailureValue(value: unknown, allowed: ReadonlySet<string>): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase().replace(/[ .-]+/g, '_');
+  return allowed.has(normalized) ? normalized : null;
+}
 
 /**
  * CLI 가 stderr 에 적는 조건 중 **우리가 아는 것만** 코드로 바꾼다.
@@ -115,18 +133,20 @@ function turnFailureMessage(turn: Record<string, unknown>, stderrCondition: stri
   const parts = ['LOCAL_CODEX_TURN_FAILED'];
   // stderr 로 알아본 조건이 있으면 그것이 가장 쓸모 있다 — CLI 는 여기에만 적는다.
   if (stderrCondition) parts.push(stderrCondition);
-  const status = typeof turn.status === 'string' ? turn.status : null;
-  if (status && TURN_FAILURE_REASON.test(status)) parts.push(`status=${status}`);
+  const status = knownFailureValue(turn.status, TURN_FAILURE_STATUSES);
+  if (status) parts.push(`status=${status}`);
   for (const key of ['reason', 'errorCode', 'code', 'failureReason']) {
     const value = turn[key];
-    if (typeof value === 'string' && TURN_FAILURE_REASON.test(value)) {
-      parts.push(`${key}=${value}`);
+    const code = knownFailureValue(value, TURN_FAILURE_CODES);
+    if (code) {
+      parts.push(`${key}=${code}`);
       break;
     }
     if (value && typeof value === 'object') {
       const nested = (value as Record<string, unknown>).code ?? (value as Record<string, unknown>).type;
-      if (typeof nested === 'string' && TURN_FAILURE_REASON.test(nested)) {
-        parts.push(`${key}=${nested}`);
+      const nestedCode = knownFailureValue(nested, TURN_FAILURE_CODES);
+      if (nestedCode) {
+        parts.push(`${key}=${nestedCode}`);
         break;
       }
     }
@@ -153,11 +173,10 @@ export class CodexAppServerClient {
   private readonly defaultTimeoutMs: number;
   private readonly pending = new Map<number, PendingRequest>();
   private readonly activeTurns = new Map<string, ActiveTurn>();
+  private readonly startingTurns = new Set<StartingTurn>();
   private readonly notificationBacklog: RpcResponse[] = [];
   private nextId = 1;
   private stdoutBuffer = '';
-  /** 최근 stderr 에서 알아본 조건. 원문이 아니라 분류 코드만 담는다. */
-  private stderrCondition: string | null = null;
   private closed = false;
 
   constructor(options: CodexAppServerClientOptions = {}) {
@@ -208,30 +227,40 @@ export class CodexAppServerClient {
   }
 
   async runTurn(params: LocalTurnParams): Promise<LocalTurnResult> {
-    const threadStart = await this.request<{ thread: { id: string } }>(
-      'thread/start',
-      {
-        model: params.model,
-        ephemeral: true,
-        approvalPolicy: 'untrusted',
-        permissions: ':read-only',
-        cwd: params.cwd,
-        developerInstructions: params.developerInstructions,
-        dynamicTools: [],
-        experimentalRawEvents: false,
-      },
-      { timeoutMs: params.timeoutMs },
-    );
-    const turnStart = await this.request<{ turn: { id: string } }>(
-      'turn/start',
-      {
-        threadId: threadStart.thread.id,
-        input: params.input,
-        ...(params.outputSchema === undefined ? {} : { outputSchema: params.outputSchema }),
-        ...(params.effort === undefined ? {} : { effort: params.effort }),
-      },
-      { timeoutMs: params.timeoutMs },
-    );
+    const starting: StartingTurn = { stderrCondition: null };
+    this.startingTurns.add(starting);
+    let threadStart: { thread: { id: string } };
+    let turnStart: { turn: { id: string } };
+    try {
+      threadStart = await this.request<{ thread: { id: string } }>(
+        'thread/start',
+        {
+          model: params.model,
+          ephemeral: true,
+          approvalPolicy: 'untrusted',
+          permissions: ':read-only',
+          cwd: params.cwd,
+          developerInstructions: params.developerInstructions,
+          dynamicTools: [],
+          experimentalRawEvents: false,
+        },
+        { timeoutMs: params.timeoutMs },
+      );
+      turnStart = await this.request<{ turn: { id: string } }>(
+        'turn/start',
+        {
+          threadId: threadStart.thread.id,
+          input: params.input,
+          ...(params.outputSchema === undefined ? {} : { outputSchema: params.outputSchema }),
+          ...(params.effort === undefined ? {} : { effort: params.effort }),
+        },
+        { timeoutMs: params.timeoutMs },
+      );
+    } catch (error) {
+      this.startingTurns.delete(starting);
+      throw error;
+    }
+    this.startingTurns.delete(starting);
 
     return new Promise<LocalTurnResult>((resolve, reject) => {
       const turnId = turnStart.turn.id;
@@ -248,6 +277,7 @@ export class CodexAppServerClient {
           params.timeoutMs ?? this.defaultTimeoutMs,
         ),
         signal: params.signal,
+        stderrCondition: starting.stderrCondition,
       };
       if (params.signal) {
         active.abort = () => {
@@ -275,7 +305,10 @@ export class CodexAppServerClient {
    */
   private consumeStderr(chunk: string): void {
     const condition = classifyCodexStderr(chunk);
-    if (condition) this.stderrCondition = condition;
+    if (!condition) return;
+    const candidates = [...this.activeTurns.values(), ...this.startingTurns.values()];
+    if (candidates.length !== 1) return;
+    candidates[0].stderrCondition = condition;
   }
 
   private consumeStdout(chunk: string): void {
@@ -400,7 +433,7 @@ export class CodexAppServerClient {
       // 없었다.** 2026-08-07 실측: 교재형 도면 68호출이 전부 이 오류였는데
       // 영수증만으로는 원인을 못 찾았다. 원장 6차의 스키마 일괄 실패도 같은
       // 형태로 23%·관계 0% 를 냈다 — 성능 수치처럼 보이지만 실행 실패다.
-      this.finishTurn(active.turnId, new Error(turnFailureMessage(turn, this.stderrCondition)));
+      this.finishTurn(active.turnId, new Error(turnFailureMessage(turn, active.stderrCondition)));
       return;
     }
     if (!active.text) {

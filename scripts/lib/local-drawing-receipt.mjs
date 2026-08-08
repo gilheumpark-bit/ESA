@@ -72,12 +72,13 @@ function list(value) {
  * 아래 `LEGACY_` 접두 항목은 31차 이전에 저장된 영수증을 다시 채점할 때만 쓴다.
  * 새 영수증에는 이 형태가 나오지 않는다.
  */
-function canonicalSymbolType(value) {
+export function canonicalSymbolType(value) {
   const raw = String(value ?? '').trim();
   const flat = raw.toLowerCase().replace(/[^a-z0-9]+/g, '');
   // 정본 세부 종류 → 골든 축. 계열 접기와 같은 사상이다.
   if (flat.startsWith('breaker')) return 'breaker';
   if (flat.startsWith('switch')) return 'switch';
+  if (flat === 'fuse' || flat === 'cutoutswitch') return 'fuse';
   if (flat === 'arrester') return 'arrester';
   if (flat === 'transformer' || flat === 'transformerwinding') return 'transformer';
   // ── 31차 이전 영수증 호환. 그때는 날 문자열이 그대로 저장됐다.
@@ -90,6 +91,26 @@ function canonicalSymbolType(value) {
   if (LEGACY_ARRESTER.includes(flat)) return 'arrester';
   if (flat === 'powertransformer') return 'transformer';
   return raw.toLowerCase();
+}
+
+/**
+ * `--resume` 영수증이 현재 셀과 같은 실행 계약인지 판정한다.
+ * 반복 실행은 회차 수 자체가 실험 조건이므로, 3회 요청에 1회 영수증을 재사용하지 않는다.
+ */
+export function isReusableModelMatrixReceipt(prior = {}, expected = {}) {
+  const requestedRepeat = Number(expected.requestedRepeat ?? 1);
+  const recordedRepeat = Number(prior?.runSpread?.runCount);
+  const repeatMatches = requestedRepeat === 1
+    ? prior?.runSpread === undefined || recordedRepeat === 1
+    : recordedRepeat === requestedRepeat;
+  return prior?.status === 'COMPLETE'
+    && prior.requestedModel === expected.requestedModel
+    && prior.requestedEffort === expected.requestedEffort
+    && (prior.requestedEffortProfile ?? null) === (expected.requestedEffortProfile ?? null)
+    && prior.sourceSha256 === expected.sourceSha256
+    && prior.workspaceSnapshot?.revision === expected.workspaceSnapshot?.revision
+    && prior.workspaceSnapshot?.changeHash === expected.workspaceSnapshot?.changeHash
+    && repeatMatches;
 }
 
 function hasTraceableStandardRef(refs) {

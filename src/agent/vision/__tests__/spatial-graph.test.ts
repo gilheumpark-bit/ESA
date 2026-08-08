@@ -129,6 +129,29 @@ describe('source-linked spatial graph', () => {
     expect(breaker?.confidence).toBe(0.99);
   });
 
+  it('서로 다른 미등록 기기 타입은 other라는 이유만으로 병합하지 않는다', () => {
+    const input = fixture();
+    input[0].data.symbols = [
+      {
+        id: 'unknown-sensor', sourceId: 'variant:original', typeCandidates: ['mystery_sensor'], rawLabel: null,
+        bounds: { x: 0, y: 40, w: 20, h: 20, page: 1 }, ports: [], confidence: 0.99,
+      },
+      {
+        id: 'unknown-actuator', sourceId: 'region:1', typeCandidates: ['custom_actuator'], rawLabel: null,
+        bounds: { x: 1, y: 41, w: 20, h: 20, page: 1 }, ports: [], confidence: 0.8,
+      },
+    ];
+    reseal(input);
+
+    const graph = assembleSpatialGraph(input, { dedupeIou: 0.5 });
+
+    expect(graph.symbols).toHaveLength(2);
+    expect(graph.symbols).toEqual(expect.arrayContaining([
+      expect.objectContaining({ typeCandidates: ['other'], unrecognizedTypeCandidates: ['mystery_sensor'] }),
+      expect.objectContaining({ typeCandidates: ['other'], unrecognizedTypeCandidates: ['custom_actuator'] }),
+    ]));
+  });
+
   it('deduplicates near forward/reverse full and region polylines while retaining provenance, junctions, and crossovers separately', () => {
     const input = fixture();
     const connections = input[1];

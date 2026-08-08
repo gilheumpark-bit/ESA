@@ -1,4 +1,4 @@
-import { canonicalDeviceType } from '@/agent/drawing/device-vocabulary';
+import { canonicalDeviceType, flattenTypeToken } from '@/agent/drawing/device-vocabulary';
 import type { EvidenceBounds, Point } from './evidence-types';
 import type { LineEvidence, RoleReviewData, RoleReviewEnvelope, SymbolEvidence, TextEvidence } from './review-types';
 import { createHash } from 'node:crypto';
@@ -30,6 +30,8 @@ export interface SpatialSymbol extends SymbolEvidence {
   originalEvidenceId: string;
   originalEvidenceIds: string[];
   sourceIds: string[];
+  /** 정본 어휘에 없어서 `other`로 닫힌 모델 원문. 병합 근거로는 서로 구분한다. */
+  unrecognizedTypeCandidates?: string[];
 }
 
 export interface SpatialLine extends LineEvidence {
@@ -302,7 +304,14 @@ function validateInput(envelopes: readonly RoleReviewEnvelope[], options: Spatia
  * 기기가 두 노드로 남지 않는다.
  */
 function normalizedCandidates(values: readonly string[]): string[] {
-  return [...new Set(values.map((item) => canonicalDeviceType(item).toUpperCase()).filter(Boolean))].sort();
+  return [...new Set(values.map((item) => {
+    const canonical = canonicalDeviceType(item);
+    if (canonical !== 'other') return canonical.toUpperCase();
+    const rawToken = flattenTypeToken(item);
+    return rawToken && !['other', 'unknown', 'unk'].includes(rawToken)
+      ? `OTHER:${rawToken.toUpperCase()}`
+      : 'OTHER';
+  }))].sort();
 }
 
 function displayType(symbol: SymbolEvidence): string {
@@ -343,6 +352,17 @@ function overlapsCandidates(left: readonly SymbolEvidence[], right: SymbolEviden
 function unionCandidates(evidence: readonly SymbolEvidence[]): string[] {
   return [...new Set(evidence.flatMap((item) =>
     item.typeCandidates.map((candidate) => canonicalDeviceType(candidate))))];
+}
+
+function unrecognizedCandidates(evidence: readonly SymbolEvidence[]): string[] {
+  const values = new Map<string, string>();
+  for (const candidate of evidence.flatMap((item) => item.typeCandidates)) {
+    const raw = candidate.trim();
+    const token = flattenTypeToken(raw);
+    if (!raw || !token || canonicalDeviceType(raw) !== 'other' || ['other', 'unknown', 'unk'].includes(token)) continue;
+    if (!values.has(token)) values.set(token, raw);
+  }
+  return [...values.values()].sort((left, right) => left.localeCompare(right));
 }
 
 function compareSymbols(left: SymbolEvidence, right: SymbolEvidence): number {
@@ -625,6 +645,7 @@ export function assembleSpatialGraph(
   const typeCounts = new Map<string, number>();
   const symbols: SpatialSymbol[] = symbolRecords.map((record) => {
     const typeCandidates = unionCandidates(record.evidence);
+    const rawUnknownTypes = unrecognizedCandidates(record.evidence);
     // 표시 ID 는 **날 후보**로 만든다. 도면 위 약호(VCB·TR)가 그대로 ID 가 되어야
     // 검토자가 보고서와 도면을 눈으로 맞출 수 있다. 정본화는 저장되는
     // `typeCandidates` 쪽에서만 한다 — ID 는 사람이 읽는 것이고, 어휘는
@@ -633,7 +654,9 @@ export function assembleSpatialGraph(
     const count = (typeCounts.get(type) ?? 0) + 1;
     typeCounts.set(type, count);
     const originalEvidenceIds = stableIds(record.evidence.map((item) => item.id));
-    if (normalizedCandidates(typeCandidates).length > 1) conflicts.push(`AMBIGUOUS_SYMBOL_TYPE:${originalEvidenceIds[0]}`);
+    if (normalizedCandidates(record.evidence.flatMap((item) => item.typeCandidates)).length > 1) {
+      conflicts.push(`AMBIGUOUS_SYMBOL_TYPE:${originalEvidenceIds[0]}`);
+    }
     return {
       ...record.item,
       id: `${type}-${String(count).padStart(2, '0')}`,
@@ -641,6 +664,7 @@ export function assembleSpatialGraph(
       originalEvidenceIds,
       sourceIds: stableIds(record.evidence.map((item) => item.sourceId ?? '')),
       typeCandidates: [...typeCandidates],
+      ...(rawUnknownTypes.length > 0 ? { unrecognizedTypeCandidates: rawUnknownTypes } : {}),
       ports: record.item.ports.map((point) => ({ ...point })),
       bounds: { ...record.item.bounds },
     };

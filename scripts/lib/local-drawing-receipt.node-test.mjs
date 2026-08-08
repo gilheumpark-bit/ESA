@@ -1,9 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 
 import * as receipt from './local-drawing-receipt.mjs';
 
 const { pipelineEvidenceFromPayload } = receipt;
+
+function productDeviceVocabulary() {
+  const source = readFileSync(new URL('../../src/agent/drawing/device-vocabulary.ts', import.meta.url), 'utf8');
+  const javascript = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const compiledModule = { exports: {} };
+  Function('module', 'exports', javascript)(compiledModule, compiledModule.exports);
+  return compiledModule.exports;
+}
 
 test('benchmark receipt preserves review, KEC proposals, calculations, and topology', () => {
   const evidence = pipelineEvidenceFromPayload({
@@ -238,6 +250,59 @@ test('VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한�
   assert.equal(recognition.status, 'PASS');
   assert.equal(recognition.evidence.actualSymbolTypes.breaker, 2);
   assert.deepEqual(recognition.evidence.minimumLabelMismatches, []);
+});
+
+test('cutout_switch는 제품 정본과 같이 fuse 골든 축으로 집계한다', () => {
+  const document = completeDocument();
+  document.evidenceGraph.symbols.push({
+    id: 's3', displayId: 'P01-S003', confirmedType: 'cutout_switch',
+    certainty: 'confirmed', evidence: [{ evidenceId: 'e5' }],
+  });
+
+  const result = receipt.reasoningStageEvidenceFromDocument(document, {
+    expected: { minimumSymbolTypes: { fuse: 1 } },
+  });
+  const recognition = result.stages.find((stage) => stage.id === 'symbol-text-adjudication');
+  assert.equal(recognition.evidence.actualSymbolTypes.fuse, 1);
+  assert.deepEqual(recognition.evidence.minimumLabelMismatches, []);
+});
+
+test('모든 닫힌 DeviceType의 골든 축이 계열 접기 규칙과 일치한다', () => {
+  assert.equal(typeof receipt.canonicalSymbolType, 'function');
+  const product = productDeviceVocabulary();
+  for (const type of product.DEVICE_TYPES) {
+    const family = product.deviceFamily(type);
+    const expected = ['breaker', 'switch', 'fuse', 'transformer'].includes(family) ? family : type;
+    assert.equal(receipt.canonicalSymbolType(type), expected, type);
+  }
+});
+
+test('repeat=3 resume은 같은 설정의 1회 영수증을 재사용하지 않는다', () => {
+  assert.equal(typeof receipt.isReusableModelMatrixReceipt, 'function');
+  const prior = {
+    status: 'COMPLETE',
+    requestedModel: 'gpt-5.6-terra',
+    requestedEffort: 'high',
+    requestedEffortProfile: null,
+    sourceSha256: 'source-hash',
+    workspaceSnapshot: { revision: 'abc123', changeHash: 'clean' },
+  };
+  const expected = {
+    requestedModel: 'gpt-5.6-terra',
+    requestedEffort: 'high',
+    requestedEffortProfile: null,
+    sourceSha256: 'source-hash',
+    workspaceSnapshot: { revision: 'abc123', changeHash: 'clean' },
+    requestedRepeat: 3,
+  };
+
+  assert.equal(receipt.isReusableModelMatrixReceipt(prior, expected), false);
+  assert.equal(receipt.isReusableModelMatrixReceipt({
+    ...prior, runSpread: { runCount: 3 },
+  }, expected), true);
+  assert.equal(receipt.isReusableModelMatrixReceipt(prior, {
+    ...expected, requestedRepeat: 1,
+  }), true);
 });
 
 test('disconnecting_switch·DS 도 switch 골든 축으로 집계한다', () => {

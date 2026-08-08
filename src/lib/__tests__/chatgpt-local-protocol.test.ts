@@ -205,6 +205,71 @@ describe('Codex app-server JSON-RPC transport', () => {
     client.close();
   });
 
+  it('키처럼 생긴 짧은 공급자 사유도 오류 문구에서 제거한다', async () => {
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({ spawnProcess: () => process, defaultTimeoutMs: 1_000 });
+    const pending = client.runTurn({
+      model: 'gpt-5.6-terra',
+      developerInstructions: 'Return only the requested electrical answer.',
+      input: [{ type: 'text', text: '판독' }],
+      cwd: 'C:\\empty-esa-runtime',
+    });
+    const threadRequest = await nextWrittenRequest(process);
+    process.emitJson({ id: threadRequest.id, result: { thread: { id: 'thread-secret' } } });
+    const turnRequest = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: turnRequest.id, result: { turn: { id: 'turn-secret' } } });
+    process.emitJson({
+      method: 'turn/completed',
+      params: {
+        threadId: 'thread-secret',
+        turn: { id: 'turn-secret', status: 'failed', reason: 'sk-proj-THISISASECRET1234567890', items: [] },
+      },
+    });
+
+    const error = await pending.then(() => null, (caught: Error) => caught);
+    expect(error?.message).toContain('LOCAL_CODEX_TURN_FAILED');
+    expect(error?.message).not.toContain('sk-proj-THISISASECRET1234567890');
+    client.close();
+  });
+
+  it('이전 턴의 stderr 조건을 다음 실패 턴에 재사용하지 않는다', async () => {
+    const process = new FakeCodexProcess();
+    const client = new CodexAppServerClient({ spawnProcess: () => process, defaultTimeoutMs: 1_000 });
+
+    const first = client.runTurn({
+      model: 'gpt-5.6-terra', developerInstructions: 'Return JSON only.',
+      input: [{ type: 'text', text: '첫 번째' }], cwd: 'C:\\empty-esa-runtime',
+    });
+    const firstThread = await nextWrittenRequest(process, 0);
+    process.emitJson({ id: firstThread.id, result: { thread: { id: 'thread-first' } } });
+    const firstTurn = await nextWrittenRequest(process, 1);
+    process.emitJson({ id: firstTurn.id, result: { turn: { id: 'turn-first' } } });
+    process.stderr.emit('data', "ERROR: You've hit your usage limit.");
+    process.emitJson({
+      method: 'turn/completed',
+      params: { threadId: 'thread-first', turn: { id: 'turn-first', status: 'failed', items: [] } },
+    });
+    await expect(first).rejects.toThrow('LOCAL_CODEX_USAGE_LIMIT');
+
+    const second = client.runTurn({
+      model: 'gpt-5.6-terra', developerInstructions: 'Return JSON only.',
+      input: [{ type: 'text', text: '두 번째' }], cwd: 'C:\\empty-esa-runtime',
+    });
+    const secondThread = await nextWrittenRequest(process, 2);
+    process.emitJson({ id: secondThread.id, result: { thread: { id: 'thread-second' } } });
+    const secondTurn = await nextWrittenRequest(process, 3);
+    process.emitJson({ id: secondTurn.id, result: { turn: { id: 'turn-second' } } });
+    process.emitJson({
+      method: 'turn/completed',
+      params: { threadId: 'thread-second', turn: { id: 'turn-second', status: 'failed', items: [] } },
+    });
+
+    const secondError = await second.then(() => null, (caught: Error) => caught);
+    expect(secondError?.message).toContain('LOCAL_CODEX_TURN_FAILED');
+    expect(secondError?.message).not.toContain('LOCAL_CODEX_USAGE_LIMIT');
+    client.close();
+  });
+
   it('collects only the selected turn deltas and completes on turn/completed', async () => {
     const process = new FakeCodexProcess();
     const client = new CodexAppServerClient({

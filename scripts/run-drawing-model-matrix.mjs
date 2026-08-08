@@ -12,7 +12,10 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { Agent } from 'undici';
 
-import { reasoningStageEvidenceFromDocument } from './lib/local-drawing-receipt.mjs';
+import {
+  isReusableModelMatrixReceipt,
+  reasoningStageEvidenceFromDocument,
+} from './lib/local-drawing-receipt.mjs';
 import { comparisonStatusForReceipts } from './lib/drawing-model-comparison.mjs';
 import { foldRunSpread, formatSpread } from './lib/drawing-run-spread.mjs';
 import { assemblyMetrics, foldAssemblyMetrics, formatRatio } from './lib/drawing-assembly-metrics.mjs';
@@ -374,15 +377,14 @@ for (const modelId of modelIds) {
       const prior = JSON.parse(readFileSync(out, 'utf8'));
       prior.verdict ??= prior.reasoning?.summary?.overall ?? prior.finalStatus ?? 'UNKNOWN';
       const currentSha = createHash('sha256').update(readFileSync(CASES[tier].file)).digest('hex');
-      if (
-        prior.status === 'COMPLETE'
-        && prior.requestedModel === MODELS[modelId].model
-        && prior.requestedEffort === EFFORT
-        && (prior.requestedEffortProfile ?? null) === (EFFORT_PROFILE || null)
-        && prior.sourceSha256 === currentSha
-        && prior.workspaceSnapshot?.revision === snapshot.revision
-        && prior.workspaceSnapshot?.changeHash === snapshot.changeHash
-      ) {
+      if (isReusableModelMatrixReceipt(prior, {
+        requestedModel: MODELS[modelId].model,
+        requestedEffort: EFFORT,
+        requestedEffortProfile: EFFORT_PROFILE || null,
+        sourceSha256: currentSha,
+        workspaceSnapshot: snapshot,
+        requestedRepeat: repeat,
+      })) {
         console.log(`재사용 ${modelId.padEnd(10)} ${tier.padEnd(12)} ${prior.status}`);
         results.push(prior);
         continue;
