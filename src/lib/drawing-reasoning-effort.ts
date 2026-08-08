@@ -4,7 +4,7 @@ export type DrawingReasoningEffort = (typeof DRAWING_REASONING_EFFORTS)[number];
 
 const DEFAULT_ROLE_TIMEOUT_MS = 45_000;
 const CALIBRATION_LOCAL_ROLE_TIMEOUT_MS = 75_000;
-const HIGH_LOCAL_ROLE_TIMEOUT_MS = 120_000;
+const HIGH_LOCAL_ROLE_TIMEOUT_MS = 180_000;
 
 /**
  * 사용자의 로그인된 CLI를 프로세스로 띄우는 공급자. 원격 HTTP 호출보다

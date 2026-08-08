@@ -223,8 +223,8 @@ function assertOptions(options: VLMOptions): void {
   if (options.maxRetries !== undefined && (!Number.isSafeInteger(options.maxRetries) || options.maxRetries < 0 || options.maxRetries > 5)) {
     invalid('options.maxRetries must be an integer from 0 to 5.');
   }
-  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 120_000)) {
-    invalid('options.timeoutMs must be a positive integer no greater than 120000.');
+  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs < 1 || options.timeoutMs > 180_000)) {
+    invalid('options.timeoutMs must be a positive integer no greater than 180000.');
   }
   if (options.maxTokens !== undefined && (!Number.isSafeInteger(options.maxTokens) || options.maxTokens < 1 || options.maxTokens > 32_768)) {
     invalid('options.maxTokens must be an integer from 1 to 32768.');

@@ -25,7 +25,7 @@ describe('drawing reasoning calibration efforts', () => {
   });
 
   it.each(['high', 'xhigh', 'max'] as const)('allows deep local role calls at %s to settle', (effort) => {
-    expect(drawingRoleTimeoutMs('chatgpt-local', effort)).toBe(120_000);
+    expect(drawingRoleTimeoutMs('chatgpt-local', effort)).toBe(180_000);
   });
 
   it.each(['low', 'medium'] as const)('allows local %s image roles 75 seconds inside the ten-minute document boundary', (effort) => {
@@ -38,7 +38,7 @@ describe('drawing reasoning calibration efforts', () => {
       expect(drawingRoleTimeoutMs('claude-local', effort))
         .toBe(drawingRoleTimeoutMs('chatgpt-local', effort));
     }
-    expect(drawingRoleTimeoutMs('claude-local', 'high')).toBe(120_000);
+    expect(drawingRoleTimeoutMs('claude-local', 'high')).toBe(180_000);
     expect(drawingRoleTimeoutMs('claude-local', 'medium')).toBe(75_000);
   });
 

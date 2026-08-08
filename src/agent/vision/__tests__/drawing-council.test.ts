@@ -665,7 +665,7 @@ describe('sealed independent drawing council', () => {
         snapshot: snapshot(),
         variants: variants(),
         regions: regions(),
-        options: { ...options, provider: 'chatgpt-local', apiKey: undefined, effort: 'high' },
+        options: { ...options, provider: 'chatgpt-local', apiKey: undefined, effort: 'high', timeoutMs: 180_000 },
         effortProfile: { symbols: 'low', text: 'low' },
         maxRegionCallsPerRole: 1,
       },
@@ -679,9 +679,9 @@ describe('sealed independent drawing council', () => {
     // 역할별 분리의 목적인 시간 회수가 일어나지 않는다.
     expect(seen.get('symbols')).toEqual({ effort: 'low', timeoutMs: 75_000 });
     expect(seen.get('text')).toEqual({ effort: 'low', timeoutMs: 75_000 });
-    expect(seen.get('connections')?.effort).toBe('high');
-    expect(seen.get('logic')?.effort).toBe('high');
-    expect(seen.get('coverage-auditor')?.effort).toBe('high');
+    expect(seen.get('connections')).toEqual({ effort: 'high', timeoutMs: 180_000 });
+    expect(seen.get('logic')).toEqual({ effort: 'high', timeoutMs: 180_000 });
+    expect(seen.get('coverage-auditor')).toEqual({ effort: 'high', timeoutMs: 180_000 });
   });
 
   it('프로필이 없으면 모든 역할이 같은 옵션 객체를 그대로 쓴다', async () => {

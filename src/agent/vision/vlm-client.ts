@@ -146,7 +146,7 @@ Rules:
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 30_000;
-const MAX_TIMEOUT_MS = 120_000;
+const MAX_TIMEOUT_MS = 180_000;
 
 interface RawProviderJsonResult {
   rawText: string;

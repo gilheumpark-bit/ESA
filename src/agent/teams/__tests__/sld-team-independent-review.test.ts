@@ -244,7 +244,7 @@ describe('SLD raster independent council integration', () => {
       options: expect.objectContaining({
         provider: 'chatgpt-local',
         effort: 'high',
-        timeoutMs: 120_000,
+        timeoutMs: 180_000,
       }),
     }));
   });
