@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-08-08
+
+- [8월 7일 Claude 작업 검증 결함 수리](handoffs/2026-08-08-aug7-verified-defect-repair.md)
+
 ## 2026-08-03
 
 - [로컬 모델 추론 단계 캘리브레이션](handoffs/2026-08-03-sld-reasoning-calibration.md)

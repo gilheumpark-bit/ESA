@@ -3,9 +3,9 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: c82f9f8ac2cc5114aa264a67ffdccbc5c8b35a6c
-updatedAt: 2026-08-05T09:00:00+09:00
-trigger: repair
+codeBaselineCommit: 43384c8daeba01446a2fc3a318e1d92e3a029826
+updatedAt: 2026-08-08T16:09:35+09:00
+trigger: commits
 changedDomains: [agent, engine, lib, docs, scripts]
 ---
 
@@ -32,6 +32,11 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 ## 완료
 
+- 로컬 ChatGPT 실패 응답은 허용된 상태·오류 코드만 노출하며 키 모양의 공급자 문자열을 제거한다. stderr 분류는 해당 단일 활성 턴에만 귀속되어 다음 턴이나 동시 턴으로 전파되지 않는다.
+- 서로 다른 미등록 기기 타입은 정본 `other`로 닫히더라도 원래 타입 식별자를 보존하고 서로 합치지 않는다.
+- 닫힌 기기 어휘의 골든 평가 축을 제품 계열 접기 규칙과 교차검증하고 `cutout_switch`를 `fuse` 수량에 포함한다.
+- 모델 매트릭스 `--resume`은 요청 반복 횟수와 기존 `runSpread.runCount`가 일치할 때만 영수증을 재사용한다.
+- PDF.js 임의 JavaScript 실행 취약 범위를 벗어난 `pdfjs-dist 6.2.108`과 안전한 PostCSS·간접 의존성 패치 버전을 잠갔다. Next.js 16.3에서 폐기된 실험 플래그도 제거해 빌드 계약을 맞췄다.
 - `symbols`·`connections`·`text`·`logic`을 서로 다른 호출·프롬프트·소스 계획으로 실행하고, 역할 누락·봉투 해시 불일치·출처 격리 실패를 합산 단계에서 HOLD로 차단했다.
 - 기호, 선, 문자, 페이지, 원본 ID를 정규화한 뒤 전원-부하 방향, 다중 경로, 보호기, 전압 영역, 접지 경로와 논리 판독을 상호 대조한다.
 - 실제 계산기는 현재 도면의 유일한 owner·page·edge 근거로 필수 입력이 모두 결박된 경우에만 호출하며, 모호하거나 거부된 선택 입력도 조용히 버리지 않는다.
@@ -148,6 +153,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 같은 배치의 고밀도 MCC Agent Platform high 실호출은 202.5초·55호출·136기호·223선·212문자·176관계였고, 현재 결정론 보정 재생은 FAIL 0·PASS 2·HOLD 7이다. OCR 후보 212건, 경계 연속성 20건, 불확실 관계 152건, 근거 추적률 17.3%와 coverage auditor 충돌이 남아 전체 상태는 HOLD다.
 - 2026-08-03 로컬 추론 캘리브레이션: 같은 중급 공개 결선도·snapshot으로 지원 조합 17개를 실호출했고 모델·effort 지문은 17/17 일치했다. 비교 snapshot은 1개로 유효하지만 전부 `PARTIAL/FAIL`, 후보 게이트 0/17이었다. 이후 clean `0d475fc`에서 `--aggregate-only` 재채점 결과도 동일했다.
 - `0d475fc` 코드 배치에서 타입 검사, 경고 0 전체 ESLint, 전체 Jest(333 suites·4,038 tests 통과, 1 suite·1 test skip), production build 66페이지, 캘리브레이션 Node 계약 6건이 exit 0이었다. 비로컬 `xhigh/max` 차단 추가 후 관련 Jest 25건, 타입 검사와 수정 파일 ESLint도 exit 0이었다.
+- 2026-08-08 검증 결함·의존성 수리 배치에서 전체 Jest 341 suites·4,164 tests, Node 스크립트 59 tests, 타입 검사, 경고 0 ESLint, 문서 검사 73파일, production build 66페이지, PDF 실경로 17/17이 exit 0이었다. `npm audit --audit-level=moderate`는 취약점 0건이다.
 
 ## 다음 첫 행동
 
@@ -163,7 +169,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계 — 로컬 모델 추론 단계 캘리브레이션](docs/project/handoffs/2026-08-03-sld-reasoning-calibration.md)
+- [최신 인수인계 — 8월 7일 검증 결함 수리](docs/project/handoffs/2026-08-08-aug7-verified-defect-repair.md)
 - [과거 인수인계 색인](docs/project/HANDOFFS.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
