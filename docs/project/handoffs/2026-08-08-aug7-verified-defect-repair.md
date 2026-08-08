@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 43384c8daeba01446a2fc3a318e1d92e3a029826
-updatedAt: 2026-08-08T16:09:35+09:00
+codeBaselineCommit: 76b85b804f8ea6fb86e10a5e55fa999a4883ef56
+updatedAt: 2026-08-08T16:16:33+09:00
 trigger: commits
 changedDomains: [agent, engine, lib, docs, scripts]
 ---
@@ -20,6 +20,7 @@ changedDomains: [agent, engine, lib, docs, scripts]
 - 모델 매트릭스 재개 조건에 요청 반복 횟수를 포함했다.
 - PDF.js 임의 JavaScript 실행 취약 범위를 벗어나도록 `pdfjs-dist`를 6.2.108로 올리고, PostCSS와 취약 간접 의존성을 안전 패치 버전으로 갱신했다.
 - Next.js 16.3에서 제거된 `experimental.viewTransition` 플래그를 삭제했다. 앱은 View Transition 컴포넌트를 사용하지 않고 CSS의 브라우저 지원 가상 요소만 유지한다.
+- GitHub 공식 최신 `actions/checkout` v7을 두 CI job에 적용해 Node 20 지원 종료 경고를 제거했다.
 
 ## 이유
 

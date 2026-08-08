@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 43384c8daeba01446a2fc3a318e1d92e3a029826
-updatedAt: 2026-08-08T16:09:35+09:00
+codeBaselineCommit: 76b85b804f8ea6fb86e10a5e55fa999a4883ef56
+updatedAt: 2026-08-08T16:16:33+09:00
 trigger: commits
 changedDomains: [agent, engine, lib, docs, scripts]
 ---
@@ -37,6 +37,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 닫힌 기기 어휘의 골든 평가 축을 제품 계열 접기 규칙과 교차검증하고 `cutout_switch`를 `fuse` 수량에 포함한다.
 - 모델 매트릭스 `--resume`은 요청 반복 횟수와 기존 `runSpread.runCount`가 일치할 때만 영수증을 재사용한다.
 - PDF.js 임의 JavaScript 실행 취약 범위를 벗어난 `pdfjs-dist 6.2.108`과 안전한 PostCSS·간접 의존성 패치 버전을 잠갔다. Next.js 16.3에서 폐기된 실험 플래그도 제거해 빌드 계약을 맞췄다.
+- GitHub Actions의 Node 20 런타임 종료 경고를 없애기 위해 두 CI job의 공식 `actions/checkout`을 v7로 갱신했다.
 - `symbols`·`connections`·`text`·`logic`을 서로 다른 호출·프롬프트·소스 계획으로 실행하고, 역할 누락·봉투 해시 불일치·출처 격리 실패를 합산 단계에서 HOLD로 차단했다.
 - 기호, 선, 문자, 페이지, 원본 ID를 정규화한 뒤 전원-부하 방향, 다중 경로, 보호기, 전압 영역, 접지 경로와 논리 판독을 상호 대조한다.
 - 실제 계산기는 현재 도면의 유일한 owner·page·edge 근거로 필수 입력이 모두 결박된 경우에만 호출하며, 모호하거나 거부된 선택 입력도 조용히 버리지 않는다.
