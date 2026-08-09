@@ -14,7 +14,13 @@
 import { NextRequest } from 'next/server';
 import { esaResponseHeaders, jsonWithEsa } from '@/lib/esa-http';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
-import { DAILY_TOKEN_BUDGET, checkTokenBudget, cleanupTokenUsage, settleTokenUsage } from '@/lib/token-budget';
+import {
+  DAILY_TOKEN_BUDGET,
+  checkTokenBudget,
+  cleanupTokenUsage,
+  estimateTokens,
+  settleTokenUsage,
+} from '@/lib/token-budget';
 import { resolveProviderKey, validateLocalProviderUrl, getLocalProviderUrl } from '@/lib/server-ai';
 import { checkPromptInjectionSafety } from '@/lib/safety-policies';
 import { PROVIDERS, type ChatMessage } from '@/lib/ai-providers';
@@ -34,6 +40,11 @@ import {
   runChatGPTLocalTurn,
 } from '@/lib/chatgpt-local';
 import { assertLoopbackRequest } from '@/lib/chatgpt-local-loopback';
+import {
+  buildDecisionContractFallback,
+  buildDecisionRepairPrompt,
+  inspectDecisionContract,
+} from '@/lib/chat-decision-contract';
 
 // ─── PART 1: Types & Constants ──────────────────────────────────
 
@@ -62,7 +73,29 @@ interface ChatRequestBody {
 
 // ─── PART 4: Provider-Specific Streaming ────────────────────────
 
-async function buildStreamingResponse(
+interface ChatGenerationResult {
+  text: string;
+  finishReason: unknown;
+  totalTokens?: number;
+}
+
+interface DecisionContractState {
+  passed: boolean;
+  repairAttempted: boolean;
+  repairSucceeded: boolean;
+  violationCount: number;
+}
+
+type RepairBudgetSettlement = (actualTokens?: number) => void;
+type ReserveRepairBudget = (estimatedTokens: number) => RepairBudgetSettlement | null;
+
+const DECISION_REPAIR_MAX_TOKENS = 2_048;
+
+/**
+ * 첫 답변과 판단 책임 교정이 같은 공급자 배선을 사용하도록 생성만 분리한다.
+ * 결과는 아직 클라이언트에 보내지 않는다. 최종 선택 뒤 출력 필터가 한 번 더 돈다.
+ */
+async function generateChatText(
   provider: string,
   model: string,
   messages: ChatMessage[],
@@ -71,15 +104,11 @@ async function buildStreamingResponse(
   temperature: number,
   maxTokens: number,
   onpremBaseUrl?: string,
-  calculationEvidence: ChatCalculationEvidence | null = null,
-  /** 생성이 끝나면 공급자가 보고한 실사용 토큰을 넘긴다 — 예산 정산용. */
-  onUsage?: (totalTokens: number) => void,
   signal?: AbortSignal,
-): Promise<ReadableStream<Uint8Array>> {
-  const encoder = new TextEncoder();
-
-  let fullText = '';
+): Promise<ChatGenerationResult> {
+  let text = '';
   let finishReason: unknown = 'stop';
+
   if (provider === 'chatgpt-local') {
     const conversation = messages
       .map((message) => `[${message.role.toUpperCase()}]\n${message.content}`)
@@ -94,98 +123,204 @@ async function buildStreamingResponse(
       signal,
       timeoutMs: 120_000,
     });
-    fullText = local.text;
-  } else {
-    // Use Vercel AI SDK for remote and OpenAI-compatible providers.
-    const { streamText } = await import('ai');
-    let sdkModel: Parameters<typeof streamText>[0]['model'];
-    switch (provider) {
-      case 'onpremise': {
-        // 사설 LLM 서버(ollama/vllm/localai/openai-compat) — 전부 OpenAI 호환
-        // /v1 엔드포인트를 노출한다(onpremise-test의 chat 경로와 동일 규약).
-        const { createOpenAI } = await import('@ai-sdk/openai');
-        const base = (onpremBaseUrl ?? '').replace(/\/+$/, '');
-        const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
-        const compatibleProvider = createOpenAI({ apiKey, baseURL });
-        sdkModel = compatibleProvider.chat(model);
-        break;
-      }
-      case 'openai': {
-        const { createOpenAI } = await import('@ai-sdk/openai');
-        const openaiProvider = createOpenAI({ apiKey });
-        sdkModel = openaiProvider(model);
-        break;
-      }
-      case 'groq': {
-        const { createOpenAI } = await import('@ai-sdk/openai');
-        const groqProvider = createOpenAI({
-          apiKey,
-          baseURL: 'https://api.groq.com/openai/v1',
-        });
-        sdkModel = groqProvider.chat(model);
-        break;
-      }
-      case 'ollama':
-      case 'lmstudio': {
-        const { createOpenAI } = await import('@ai-sdk/openai');
-        const base = getLocalProviderUrl(provider).replace(/\/+$/, '');
-        const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
-        const localProvider = createOpenAI({ apiKey: 'local-provider', baseURL });
-        sdkModel = localProvider.chat(model);
-        break;
-      }
-      case 'claude': {
-        const { createAnthropic } = await import('@ai-sdk/anthropic');
-        const anthropicProvider = createAnthropic({ apiKey });
-        sdkModel = anthropicProvider(model);
-        break;
-      }
-      case 'gemini': {
-        const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
-        const googleProvider = createGoogleGenerativeAI({ apiKey });
-        sdkModel = googleProvider(model);
-        break;
-      }
-      case 'google-agent-platform': {
-        const { createVertex } = await import('@ai-sdk/google-vertex');
-        const vertexProvider = createVertex({ apiKey });
-        sdkModel = vertexProvider(model);
-        break;
-      }
-      case 'mistral': {
-        const { createMistral } = await import('@ai-sdk/mistral');
-        const mistralProvider = createMistral({ apiKey });
-        sdkModel = mistralProvider(model);
-        break;
-      }
-      case 'deepseek': {
-        const { createDeepSeek } = await import('@ai-sdk/deepseek');
-        const deepseekProvider = createDeepSeek({ apiKey });
-        sdkModel = deepseekProvider(model);
-        break;
-      }
-      default: {
-        throw new Error(`Unsupported provider: ${provider}`);
-      }
-    }
+    return { text: local.text, finishReason };
+  }
 
-    const result = streamText({
-      model: sdkModel,
-      instructions: systemPrompt,
-      messages: messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-      temperature,
-      maxOutputTokens: maxTokens,
-    });
-    for await (const part of result.textStream) {
-      fullText += part;
+  // Use Vercel AI SDK for remote and OpenAI-compatible providers.
+  const { streamText } = await import('ai');
+  let sdkModel: Parameters<typeof streamText>[0]['model'];
+  switch (provider) {
+    case 'onpremise': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const base = (onpremBaseUrl ?? '').replace(/\/+$/, '');
+      const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
+      const compatibleProvider = createOpenAI({ apiKey, baseURL });
+      sdkModel = compatibleProvider.chat(model);
+      break;
     }
-    finishReason = await result.finishReason;
-    if (onUsage) {
-      const usage = await result.usage;
-      if (usage && Number.isFinite(usage.totalTokens)) onUsage(usage.totalTokens as number);
+    case 'openai': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const openaiProvider = createOpenAI({ apiKey });
+      sdkModel = openaiProvider(model);
+      break;
+    }
+    case 'groq': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const groqProvider = createOpenAI({
+        apiKey,
+        baseURL: 'https://api.groq.com/openai/v1',
+      });
+      sdkModel = groqProvider.chat(model);
+      break;
+    }
+    case 'ollama':
+    case 'lmstudio': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
+      const base = getLocalProviderUrl(provider).replace(/\/+$/, '');
+      const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
+      const localProvider = createOpenAI({ apiKey: 'local-provider', baseURL });
+      sdkModel = localProvider.chat(model);
+      break;
+    }
+    case 'claude': {
+      const { createAnthropic } = await import('@ai-sdk/anthropic');
+      const anthropicProvider = createAnthropic({ apiKey });
+      sdkModel = anthropicProvider(model);
+      break;
+    }
+    case 'gemini': {
+      const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
+      const googleProvider = createGoogleGenerativeAI({ apiKey });
+      sdkModel = googleProvider(model);
+      break;
+    }
+    case 'google-agent-platform': {
+      const { createVertex } = await import('@ai-sdk/google-vertex');
+      const vertexProvider = createVertex({ apiKey });
+      sdkModel = vertexProvider(model);
+      break;
+    }
+    case 'mistral': {
+      const { createMistral } = await import('@ai-sdk/mistral');
+      const mistralProvider = createMistral({ apiKey });
+      sdkModel = mistralProvider(model);
+      break;
+    }
+    case 'deepseek': {
+      const { createDeepSeek } = await import('@ai-sdk/deepseek');
+      const deepseekProvider = createDeepSeek({ apiKey });
+      sdkModel = deepseekProvider(model);
+      break;
+    }
+    default: {
+      throw new Error(`Unsupported provider: ${provider}`);
+    }
+  }
+
+  const result = streamText({
+    model: sdkModel,
+    instructions: systemPrompt,
+    messages: messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+    })),
+    temperature,
+    maxOutputTokens: maxTokens,
+  });
+  for await (const part of result.textStream) text += part;
+  finishReason = await result.finishReason;
+  const usage = await result.usage;
+  const totalTokens = usage && Number.isFinite(usage.totalTokens)
+    ? usage.totalTokens as number
+    : undefined;
+  return { text, finishReason, totalTokens };
+}
+
+async function buildStreamingResponse(
+  provider: string,
+  model: string,
+  messages: ChatMessage[],
+  systemPrompt: string | undefined,
+  apiKey: string,
+  temperature: number,
+  maxTokens: number,
+  onpremBaseUrl?: string,
+  calculationEvidence: ChatCalculationEvidence | null = null,
+  language: 'ko' | 'en' = 'ko',
+  /** 서버 키일 때만 존재한다. null 반환은 추가 호출 금지다. */
+  reserveRepairBudget?: ReserveRepairBudget,
+  /** 생성이 끝나면 공급자가 보고한 실사용 토큰을 넘긴다 — 예산 정산용. */
+  onUsage?: (totalTokens: number) => void,
+  signal?: AbortSignal,
+): Promise<ReadableStream<Uint8Array>> {
+  const encoder = new TextEncoder();
+  const primary = await generateChatText(
+    provider,
+    model,
+    messages,
+    systemPrompt,
+    apiKey,
+    temperature,
+    maxTokens,
+    onpremBaseUrl,
+    signal,
+  );
+  if (onUsage && primary.totalTokens !== undefined) onUsage(primary.totalTokens);
+
+  const primaryInspection = inspectDecisionContract(primary.text, language);
+  let selected = primary;
+  const decisionContract: DecisionContractState = {
+    passed: primaryInspection.passed,
+    repairAttempted: false,
+    repairSucceeded: false,
+    violationCount: primaryInspection.violations.length,
+  };
+
+  if (!primaryInspection.passed) {
+    if (signal?.aborted) {
+      selected = {
+        text: buildDecisionContractFallback(language),
+        finishReason: 'decision-contract-request-aborted',
+      };
+    } else {
+      const lastUserQuery = [...messages]
+        .reverse()
+        .find((message) => message.role === 'user')?.content ?? '';
+      const repairPrompt = buildDecisionRepairPrompt(lastUserQuery, primary.text, language);
+      const repairMaxTokens = Math.min(maxTokens, DECISION_REPAIR_MAX_TOKENS);
+      const repairEstimatedTokens = estimateTokens(repairPrompt.instructions)
+        + estimateTokens(repairPrompt.input)
+        + repairMaxTokens;
+      const repairSettlement = reserveRepairBudget
+        ? reserveRepairBudget(repairEstimatedTokens)
+        : undefined;
+
+      if (reserveRepairBudget && repairSettlement === null) {
+        selected = {
+          text: buildDecisionContractFallback(language),
+          finishReason: 'decision-contract-budget-unavailable',
+        };
+      } else {
+        decisionContract.repairAttempted = true;
+        try {
+          const repaired = await generateChatText(
+            provider,
+            model,
+            [{ role: 'user', content: repairPrompt.input }],
+            repairPrompt.instructions,
+            apiKey,
+            temperature,
+            repairMaxTokens,
+            onpremBaseUrl,
+            signal,
+          );
+          repairSettlement?.(repaired.totalTokens);
+          const repairedInspection = inspectDecisionContract(repaired.text, language);
+          decisionContract.violationCount += repairedInspection.violations.length;
+          if (repairedInspection.passed) {
+            selected = repaired;
+            decisionContract.passed = true;
+            decisionContract.repairSucceeded = true;
+          } else {
+            selected = {
+              text: buildDecisionContractFallback(language),
+              finishReason: 'decision-contract-repair-rejected',
+            };
+          }
+        } catch (error) {
+          console.warn(JSON.stringify({
+            level: 'warn',
+            event: 'chat_decision_repair_failed',
+            provider,
+            model,
+            errorType: error instanceof Error ? error.name : 'unknown',
+          }));
+          selected = {
+            text: buildDecisionContractFallback(language),
+            finishReason: 'decision-contract-repair-failed',
+          };
+        }
+      }
     }
   }
 
@@ -224,7 +359,7 @@ async function buildStreamingResponse(
           attestedSources.add(calculationEvidence.calculatorId);
         }
         const filtered = filterLLMOutput(
-          fullText,
+          selected.text,
           [],
           `${trustedUserInput}\n${calculationEvidence?.trustedText ?? ''}`,
           attestedSources,
@@ -235,11 +370,16 @@ async function buildStreamingResponse(
           event: 'chat_generation_complete',
           provider,
           model,
-          rawChars: fullText.length,
+          rawChars: primary.text.length,
+          selectedChars: selected.text.length,
           safeChars: safeText.length,
           blockedCount: filtered.blocked.length,
           calculatorId: calculationEvidence?.calculatorId ?? null,
-          finishReason,
+          finishReason: selected.finishReason,
+          decisionContractPassed: decisionContract.passed,
+          decisionRepairAttempted: decisionContract.repairAttempted,
+          decisionRepairSucceeded: decisionContract.repairSucceeded,
+          decisionViolationCount: decisionContract.violationCount,
         }));
         for (let offset = 0; offset < safeText.length; offset += 512) {
           controller.enqueue(
@@ -249,18 +389,22 @@ async function buildStreamingResponse(
           );
         }
 
+        const filterPayload = {
+          ...(filtered.passed
+            ? { passed: true }
+            : {
+                passed: false,
+                blockedCount: filtered.blocked.length,
+                filteredText: safeText,
+                notice:
+                  '출력 필터: 출처 없는 수치·확률적 표현이 차단되었습니다. 계산기·기준서 도구 경로를 사용하세요.',
+              }),
+          decisionContract,
+        };
         controller.enqueue(
           encoder.encode(
             `data: ${JSON.stringify({
-              filter: filtered.passed
-                ? { passed: true }
-                : {
-                    passed: false,
-                    blockedCount: filtered.blocked.length,
-                    filteredText: safeText,
-                    notice:
-                      '출력 필터: 출처 없는 수치·확률적 표현이 차단되었습니다. 계산기·기준서 도구 경로를 사용하세요.',
-                  },
+              filter: filterPayload,
             })}\n\n`,
           ),
         );
@@ -525,6 +669,19 @@ async function POST__impl(request: NextRequest) {
       }
     }
 
+    const reserveRepairBudget: ReserveRepairBudget | undefined = usesServerKey
+      ? (estimatedTokens) => {
+          const budget = checkTokenBudget(ip, estimatedTokens);
+          budgetRemaining = budget.remaining;
+          if (!budget.allowed) return null;
+          return (actualTokens) => {
+            if (actualTokens !== undefined && Number.isFinite(actualTokens)) {
+              settleTokenUsage(ip, estimatedTokens, actualTokens);
+            }
+          };
+        }
+      : undefined;
+
     let stream: ReadableStream<Uint8Array>;
     try {
       stream = await buildStreamingResponse(
@@ -537,6 +694,8 @@ async function POST__impl(request: NextRequest) {
         maxTokens,
         onpremiseBaseUrl,
         calculationEvidence,
+        responseLanguage,
+        reserveRepairBudget,
         usesServerKey ? (used) => settleTokenUsage(ip, reservedTokens, used) : undefined,
         request.signal,
       );

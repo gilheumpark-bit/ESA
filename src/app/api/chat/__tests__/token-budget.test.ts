@@ -1,6 +1,13 @@
 import { NextRequest } from 'next/server';
 
 import { POST } from '../route';
+import { buildDecisionRepairPrompt } from '@/lib/chat-decision-contract';
+import { buildElectricalAssistantPrompt } from '@/lib/electrical-chat';
+import {
+  DAILY_TOKEN_BUDGET,
+  checkTokenBudget,
+  estimateTokens,
+} from '@/lib/token-budget';
 
 /**
  * 토큰 예산은 **배포자의 청구서**를 지키는 장치다. 그 목적에서 두 가지가
@@ -23,11 +30,19 @@ import { POST } from '../route';
 
 /** 공급자가 보고할 실사용 토큰 — 검사마다 바꾼다. */
 let reportedUsage = 100;
-const streamTextMock = jest.fn((_options?: unknown) => ({
-  textStream: (async function* textStream() { yield 'ok'; })(),
-  finishReason: Promise.resolve('stop'),
-  usage: Promise.resolve({ totalTokens: reportedUsage }),
-}));
+interface MockGeneration {
+  text: string;
+  totalTokens: number;
+}
+const generations: MockGeneration[] = [];
+const streamTextMock = jest.fn((_options?: unknown) => {
+  const generation = generations.shift() ?? { text: 'ok', totalTokens: reportedUsage };
+  return {
+    textStream: (async function* textStream() { yield generation.text; })(),
+    finishReason: Promise.resolve('stop'),
+    usage: Promise.resolve({ totalTokens: generation.totalTokens }),
+  };
+});
 
 jest.mock('ai', () => ({
   streamText: (options: unknown) => streamTextMock(options),
@@ -85,6 +100,7 @@ describe('챗 토큰 예산 — 지키는 것은 배포자의 지갑이다', () 
     // 이 변수로 켠다 — 안 켜면 모든 익명 요청이 한 바구니를 나눠 쓴다.
     process.env.TRUSTED_CLIENT_IP_HEADER = 'x-forwarded-for';
     reportedUsage = 100;
+    generations.length = 0;
   });
 
   afterAll(() => {
@@ -174,6 +190,92 @@ describe('챗 토큰 예산 — 지키는 것은 배포자의 지갑이다', () 
     await drain(res2);
     // 정산이 없으면 두 번째 요청 시점에 8192×2 가 빠져 있다.
     expect(afterSettle).toBeGreaterThan(500_000 - 8_192 - 1_000);
+  });
+
+  it('서버 키 교정 호출은 첫 생성과 별도 사용량으로 계량한다', async () => {
+    const ip = freshIp();
+    generations.push(
+      { text: '사용자가 판단해 주세요.', totalTokens: 100 },
+      {
+        text: 'ESA 잠정 판단: 현재 자료에서는 구성이 적합합니다. 근거: 표기와 연결 관계가 일치합니다. 결론 변경 조건: 원본 표기가 다르게 확인되는 경우.',
+        totalTokens: 50,
+      },
+    );
+
+    await drain(await POST(chat({ ip, message: '이 회로를 판단해줘', maxTokens: 2048 })));
+
+    // 1차 100 + 교정 50 = 150 토큰이어야 한다. 교정이 무계량이면 이 예약은 통과한다.
+    const probe = checkTokenBudget(ip, DAILY_TOKEN_BUDGET - 149);
+    expect(probe.allowed).toBe(false);
+  });
+
+  it('서버 키 교정 예약은 실제 사용량으로 독립 정산한다', async () => {
+    const ip = freshIp();
+    generations.push(
+      { text: '사용자가 판단해 주세요.', totalTokens: 100 },
+      {
+        text: 'ESA 잠정 판단: 현재 자료에서는 구성이 적합합니다. 근거: 표기와 연결 관계가 일치합니다. 결론 변경 조건: 원본 표기가 다르게 확인되는 경우.',
+        totalTokens: 50,
+      },
+    );
+
+    await drain(await POST(chat({ ip, message: '이 회로를 판단해줘', maxTokens: 2048 })));
+
+    // 두 예약이 각각 100·50으로 정산됐다면 정확히 일일 한도까지 추가 예약할 수 있다.
+    const probe = checkTokenBudget(ip, DAILY_TOKEN_BUDGET - 150);
+    expect(probe.allowed).toBe(true);
+    expect(probe.remaining).toBe(0);
+  });
+
+  it('교정 예산이 없으면 추가 모델 호출 없이 판단 미완결로 닫는다', async () => {
+    const ip = freshIp();
+    const message = '이 회로를 판단해줘';
+    const maxTokens = 2048;
+    const primaryAnswer = '사용자가 판단해 주세요.';
+    const primaryReserve = estimateTokens(message)
+      + estimateTokens(buildElectricalAssistantPrompt('ko'))
+      + maxTokens;
+    const repairPrompt = buildDecisionRepairPrompt(message, primaryAnswer, 'ko');
+    const repairReserve = estimateTokens(repairPrompt.instructions)
+      + estimateTokens(repairPrompt.input)
+      + maxTokens;
+    const preconsume = DAILY_TOKEN_BUDGET - primaryReserve - repairReserve + 1;
+    expect(checkTokenBudget(ip, preconsume).allowed).toBe(true);
+    generations.push({ text: primaryAnswer, totalTokens: primaryReserve });
+    const before = streamTextMock.mock.calls.length;
+
+    const response = await POST(chat({ ip, message, maxTokens }));
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(streamTextMock.mock.calls.length).toBe(before + 1);
+    expect(body).toContain('판단 미완결');
+    expect(body).not.toContain(primaryAnswer);
+  });
+
+  it('BYOK 교정은 서버 예산이 소진돼도 같은 모델을 한 번 더 호출한다', async () => {
+    const ip = freshIp();
+    expect(checkTokenBudget(ip, DAILY_TOKEN_BUDGET).allowed).toBe(true);
+    generations.push(
+      { text: '사용자가 판단해 주세요.', totalTokens: 100 },
+      {
+        text: 'ESA 잠정 판단: 현재 자료에서는 구성이 적합합니다. 근거: 표기와 연결 관계가 일치합니다. 결론 변경 조건: 원본 표기가 다르게 확인되는 경우.',
+        totalTokens: 50,
+      },
+    );
+    const before = streamTextMock.mock.calls.length;
+
+    const response = await POST(chat({
+      ip,
+      apiKey: 'user-own-key',
+      message: '이 회로를 판단해줘',
+      maxTokens: 2048,
+    }));
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(streamTextMock.mock.calls.length).toBe(before + 2);
+    expect(body).toContain('ESA 잠정 판단');
   });
 
 });

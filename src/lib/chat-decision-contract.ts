@@ -31,11 +31,11 @@ const EN_DELEGATED_JUDGMENT = /\byou\s+(?:need|have|must|should)\s+to\s+(?:decid
 const EN_REVERSE_INPUT = /\b(?:tell|give|provide)\s+me\b[^.!?\n]{0,48}\b(?:and|then)\s+I(?:'ll|\s+will)\s+(?:decide|determine|calculate|analy[sz]e|answer)\b[^.!?\n]*/gi;
 
 const QUOTED_SEGMENTS = [
-  /“[^”]*”/gs,
-  /‘[^’]*’/gs,
-  /"(?:\\.|[^"\\])*"/gs,
-  /'(?:\\.|[^'\\])*'/gs,
-  /`[^`]*`/gs,
+  /“[^”]*”/g,
+  /‘[^’]*’/g,
+  /"(?:\\.|[^"\\])*"/g,
+  /'(?:\\.|[^'\\])*'/g,
+  /`[^`]*`/g,
 ] as const;
 
 function maskQuotedSegments(text: string): string {
