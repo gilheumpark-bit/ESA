@@ -723,7 +723,11 @@ describe('개폐·보호 계열 판독 충돌 병합', () => {
       expect(items).toHaveLength(1);
       expect(items[0].displayId).toBe(terminal.displayId);
       expect(items[0].candidates).toEqual(['terminal']);
-      expect(items[0].userConfirmItems?.[0].question).toContain(fuse.displayId);
+      const verificationItems = (items[0] as typeof items[number] & {
+        verificationItems?: Array<{ target: string; options?: string[] }>;
+      }).verificationItems;
+      expect(verificationItems?.[0].target).toContain(fuse.displayId);
+      expect(items[0].userConfirmItems).toBeUndefined();
       expect(items[0].note).toContain(fuse.displayId);
     });
 

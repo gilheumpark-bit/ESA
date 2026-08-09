@@ -443,7 +443,7 @@ async function POST__impl(request: NextRequest) {
       ? resolveChatCalculationEvidence(lastUser.content, priorUserTexts)
       : null;
     // 영수증이 없으면 모델이 스스로 계산하고 출력 필터가 그 수치를 지워 문장이
-    // 깨진다. 그럴 땐 계산 대신 필요한 입력을 되묻게 한다.
+    // 깨진다. 그럴 땐 가능한 조건부 판단과 결론 변경 입력을 분리해 준다.
     const calculationShortfall = !calculationEvidence && lastUser && typeof lastUser.content === 'string'
       ? resolveChatCalculationShortfall(lastUser.content)
       : null;

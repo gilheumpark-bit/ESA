@@ -92,10 +92,10 @@ export class UnsupportedSynthesisClaimError extends Error {
 }
 
 const REQUIRED_ROLES: readonly ReviewRole[] = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'];
-const HOLD_CLAIM_QUESTION = '종합 판단에 필요한 현재 도면 근거를 확인해야 합니다.';
-const HOLD_RECOMMENDATION_TITLE = '도면 근거 확인 필요';
-const HOLD_RECOMMENDATION_DESCRIPTION = '제안 판단에 필요한 현재 도면 근거를 확인해야 합니다.';
-const CURRENT_DRAWING_EVIDENCE = 'current drawing evidence';
+const HOLD_CLAIM_QUESTION = 'ESA 판단: 현재 도면 근거로 이 주장은 채택하지 않습니다. 해당 주장만 보류하고 나머지 분석은 유지합니다.';
+const HOLD_RECOMMENDATION_TITLE = 'ESA 잠정 판단';
+const HOLD_RECOMMENDATION_DESCRIPTION = '현재 도면 근거로 이 제안은 채택하지 않습니다. 해당 제안만 보류하고 나머지 분석은 유지합니다.';
+const CURRENT_DRAWING_EVIDENCE = '결론을 바꾸는 현재 도면 근거';
 
 type Registry = {
   readonly records: Map<string, SynthesisEvidenceRecord>;

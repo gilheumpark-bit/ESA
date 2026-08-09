@@ -26,7 +26,7 @@ function cell(value: unknown, fallback = '미기재'): string {
 
 function certaintyLabel(certainty: string | undefined): string {
   if (certainty === 'confirmed') return '확정';
-  if (certainty === 'ambiguous') return '모호(확인 필요)';
+  if (certainty === 'ambiguous') return 'ESA 잠정 판독';
   if (certainty === 'unread') return '미판독';
   return '미기재';
 }
@@ -70,20 +70,25 @@ export function drawingDocumentRows(document: DrawingDocumentV3): DrawingExportR
 
   for (const item of document.unresolvedItems ?? []) {
     rows.push({
-      section: '확인 필요',
+      section: '잠정 보류',
       displayId: cell(item.displayId, cell(item.id)),
       kind: cell(item.code),
       detail: cell(item.note, '사유 미기재'),
-      certainty: '확인 필요',
+      certainty: 'ESA 잠정 보류',
     });
   }
 
   for (const recommendation of document.recommendations ?? []) {
+    const decision = cell(recommendation.aiDecision, 'ESA 판단 미기재');
+    const action = cell(recommendation.recommendedAction, '권장 조치 미기재');
+    const conditions = recommendation.requiredInputs?.length > 0
+      ? ` · 결론 변경 조건: ${recommendation.requiredInputs.map((item) => cell(item)).join(' / ')}`
+      : '';
     rows.push({
       section: '제안',
       displayId: cell(recommendation.id),
       kind: cell(recommendation.severity ?? recommendation.status),
-      detail: cell(recommendation.problem),
+      detail: cell(`${decision} · 권장 조치: ${action}${conditions}`),
       certainty: cell(recommendation.status, '미기재'),
     });
   }
@@ -103,7 +108,7 @@ export function drawingDocumentSummary(document: DrawingDocumentV3): Array<[stri
     ['페이지 수', String(document.pages?.length ?? 0)],
     ['기기(확정/전체)', `${confirmedSymbols} / ${symbols.length}`],
     ['연결(확정/전체)', `${confirmedRelations} / ${relations.length}`],
-    ['확인 필요 항목', String(document.unresolvedItems?.length ?? 0)],
+    ['잠정 보류 항목', String(document.unresolvedItems?.length ?? 0)],
     ['구획 완료/계획', `${cell(ledger?.regionsComplete, '0')} / ${cell(ledger?.plannedRegionCount, '0')}`],
     ['미해결 재검사', cell(ledger?.unresolvedRescans, '0')],
   ];
@@ -173,8 +178,8 @@ export function drawingDocumentPrintableHtml(document: DrawingDocumentV3): strin
   <div class="meta">출력 시각: ${escapeHtml(generated)}</div>
   <div class="notice">
     이 표는 AI 판독 결과이며 설계 승인이나 법적 적합성 인증서가 아닙니다.
-    같은 도면을 다시 판독하면 결과가 달라질 수 있으므로, <strong>모호·확인 필요
-    항목은 원본 도면과 대조</strong>한 뒤 사용하십시오.
+    같은 도면을 다시 판독하면 결과가 달라질 수 있으므로, <strong>잠정·미판독
+    항목은 결론 변경 조건과 원본 도면을 대조</strong>한 뒤 사용하십시오.
   </div>
   <h2>판독 상태 요약</h2>
   <table class="summary">

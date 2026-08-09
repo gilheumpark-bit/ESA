@@ -26,7 +26,7 @@ function doc(overrides: Partial<DrawingDocumentV3> = {}): DrawingDocumentV3 {
       { id: 'u1', code: 'AMBIGUOUS_OCR', pageIndex: 0, bounds: { x: 0, y: 0, w: 1, h: 1 }, note: 'FU3 판독 후보 2개' },
     ],
     recommendations: [
-      { id: 'rec-1', severity: 'critical', priority: 1, problem: '접지 경로가 확정 그래프에서 확인되지 않았습니다.', relatedDisplayIds: [], evidenceIds: [], calcReceiptIds: [], standardRefs: [], requiredInputs: [], recommendedAction: '접지 표기를 확인하십시오.', status: 'HOLD' },
+      { id: 'rec-1', severity: 'critical', priority: 1, problem: '접지 경로가 확정 그래프에서 확인되지 않았습니다.', relatedDisplayIds: [], evidenceIds: [], calcReceiptIds: [], standardRefs: [], requiredInputs: [], aiDecision: 'ESA 잠정 판단: 접지 표기 누락 가능성이 있습니다.', recommendedAction: '접지 표기 보완 후보로 유지합니다.', status: 'HOLD' },
     ],
     coverageLedger: { regions: [], rolesPresent: [], plannedRegionCount: 10, regionsComplete: 9, regionsFailed: 1, unresolvedRescans: 1, allPlannedFinished: true },
     ...overrides,
@@ -38,21 +38,23 @@ describe('도면 문서 반출', () => {
     // 확정만 뽑으면 검토자가 반출물을 완성된 목록으로 읽는다.
     const rows = drawingDocumentRows(doc());
     const ambiguous = rows.find((row) => row.displayId === 'P01-S002');
-    expect(ambiguous?.certainty).toBe('모호(확인 필요)');
+    expect(ambiguous?.certainty).toBe('ESA 잠정 판독');
     expect(ambiguous?.detail).toContain('후보: fuse/breaker');
   });
 
-  it('확인 필요 항목과 제안을 함께 싣는다', () => {
+  it('잠정 보류 항목과 ESA 판단·조치를 함께 싣는다', () => {
     const rows = drawingDocumentRows(doc());
-    expect(rows.some((row) => row.section === '확인 필요' && row.detail === 'FU3 판독 후보 2개')).toBe(true);
-    expect(rows.some((row) => row.section === '제안' && row.certainty === 'HOLD')).toBe(true);
+    expect(rows.some((row) => row.section === '잠정 보류' && row.detail === 'FU3 판독 후보 2개')).toBe(true);
+    const recommendation = rows.find((row) => row.section === '제안' && row.certainty === 'HOLD');
+    expect(recommendation?.detail).toContain('ESA 잠정 판단: 접지 표기 누락 가능성이 있습니다.');
+    expect(recommendation?.detail).toContain('권장 조치: 접지 표기 보완 후보로 유지합니다.');
   });
 
   it('요약에 확정/전체를 분리해 적는다', () => {
     const summary = Object.fromEntries(drawingDocumentSummary(doc()));
     expect(summary['기기(확정/전체)']).toBe('1 / 2');
     expect(summary['연결(확정/전체)']).toBe('1 / 1');
-    expect(summary['확인 필요 항목']).toBe('1');
+    expect(summary['잠정 보류 항목']).toBe('1');
     expect(summary['구획 완료/계획']).toBe('9 / 10');
     expect(summary['미해결 재검사']).toBe('1');
   });

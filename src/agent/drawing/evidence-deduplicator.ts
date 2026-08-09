@@ -299,9 +299,8 @@ export function demoteContainedMarkings(symbols: SymbolNode[]): UnresolvedItem[]
       bounds: innerRef.bounds,
       candidates: unique(inner.typeCandidates),
       note: `${host.displayId}(${hostType}) 몸체 안에 갇힌 판독이라 물리 기기 수에서 뺐습니다.`,
-      userConfirmItems: [{
-        question: `${inner.displayId} 은 ${host.displayId}(${hostType}) 몸체 안에 있습니다.`
-          + ' 별개 기기입니까, 아니면 그 기기의 표기입니까?',
+      verificationItems: [{
+        target: `${inner.displayId}와 ${host.displayId}(${hostType})의 물리적 분리 여부`,
         options: ['별개 기기', `${host.displayId} 의 표기`],
       }],
     });
@@ -894,7 +893,7 @@ export function findUnboundLineItems(
       pageIndex: evidence?.pageIndex ?? 0,
       regionId: evidence?.regionId,
       bounds: evidence?.bounds ?? pathBounds(line.path),
-      userConfirmItems: [{ question: `${line.displayId} 선로의 양쪽 연결 장치를 확인하십시오.` }],
+      verificationItems: [{ target: `${line.displayId} 선로의 양쪽 연결 장치` }],
       note: '선로의 양쪽 종단 장치를 모두 확정하지 못해 관계 설명을 보류했습니다.',
     };
   });

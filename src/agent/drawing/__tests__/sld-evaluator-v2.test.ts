@@ -29,7 +29,7 @@ function fixture(): DrawingDocumentV3 {
       relations: [{ id: 'r1', displayId: 'P01-R001', from: 's1', to: 's2', lineId: 'l1', certainty: 'confirmed', evidence: [{ evidenceId: 'le1', pageIndex: 0, bounds: { x: 30, y: 20, w: 40, h: 1 }, confidence: 1 }] }],
     },
     crossPageRelations: [], equipmentCounts: [], ratedValues: [], calculations: [],
-    recommendations: [{ id: 'rec1', severity: 'major', priority: 1, problem: '접지 경로 누락', relatedDisplayIds: ['P01-S001'], evidenceIds: [], calcReceiptIds: [], standardRefs: [], requiredInputs: [], recommendedAction: '접지 확인', status: 'SUPPORTED' }],
+    recommendations: [{ id: 'rec1', severity: 'major', priority: 1, problem: '접지 경로 누락', relatedDisplayIds: ['P01-S001'], evidenceIds: [], calcReceiptIds: [], standardRefs: [], requiredInputs: [], aiDecision: 'ESA 판단: 접지 경로가 누락됐습니다.', recommendedAction: '접지 보완', status: 'SUPPORTED' }],
     unresolvedItems: [], userCorrections: [],
     verification: { claimsComplete: true, documentStatus: 'COMPLETE', holdReasons: [], evidenceTraceRate: 1, verified95: false, productionFingerprint: { engineVersion: ENGINE_VERSION, promptVersion: PROMPT_VERSION, preprocessVersion: PREPROCESS_VERSION } },
     title: '전체 도면 판독표', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',

@@ -30,6 +30,9 @@ describe('electrical chat calibration contract', () => {
     expect(prompt).toContain('25.8kV→22.9kV');
     expect(prompt).toContain('판정 보류');
     expect(prompt).toContain('로컬 태그');
+    expect(prompt).toContain('역질문으로 넘기지');
+    expect(prompt).toContain('가장 타당한 잠정 결론');
+    expect(prompt).toContain('결론을 바꾸는 최소 정보');
     expect(prompt).not.toContain('현재 사용자 질문');
   });
 

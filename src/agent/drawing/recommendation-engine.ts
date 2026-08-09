@@ -63,7 +63,10 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       relatedDisplayIds: displayIds,
       evidenceIds,
       status: group.supported ? 'SUPPORTED' : 'HOLD',
-      recommendedAction: '결선 누락·구획 경계 잘림·페이지 참조를 확인하십시오.',
+      aiDecision: group.supported
+        ? 'ESA 판단: 결선 누락으로 분류합니다.'
+        : 'ESA 잠정 판단: 결선 누락 가능성이 높지만 판독 범위 또는 기기 종류가 미확정입니다.',
+      recommendedAction: '결선 누락을 우선 보완 대상으로 두고, 구획 경계와 페이지 참조 근거로 결론을 갱신합니다.',
       requiredInputs: group.supported ? [] : missingSupportInputs(input, group.symbols),
       standardRefs: ['ESA-SLD-RULE:ORPHAN-CONNECTION'],
       calcReceiptIds: [],
@@ -102,7 +105,10 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
           evidenceIds: path.flatMap((id) =>
             byId.get(id)?.evidence.map((e) => e.evidenceId) ?? []),
           status: supported ? 'SUPPORTED' : 'HOLD',
-          recommendedAction: '경로상 차단기·퓨즈 존재 여부와 도면 누락을 재확인하십시오.',
+          aiDecision: supported
+            ? 'ESA 판단: 확정 전원-부하 경로에 보호기가 누락됐습니다.'
+            : 'ESA 잠정 판단: 보호기 누락 가능성이 높지만 미확정 기기가 보호기일 가능성은 남아 있습니다.',
+          recommendedAction: '보호기 누락을 우선 보완 대상으로 두고, 미확정 기기 종류가 결론을 바꾸는 경우에만 갱신합니다.',
           requiredInputs: supported ? [] : missingSupportInputs(input, [src, load, ...pathNodes]),
           standardRefs: ['KEC 212 과전류에 대한 보호'],
           calcReceiptIds: [],
@@ -130,8 +136,9 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
         relatedDisplayIds: [s.displayId],
         evidenceIds: s.evidence.map((e) => e.evidenceId),
         status: 'HOLD',
+        aiDecision: 'ESA 판단: 현재 근거로 보호기 정격 적합성은 확정할 수 없으며 용량 증설 필요로도 단정하지 않습니다.',
         recommendedAction:
-          '부하전류, 케이블 허용전류, 예상 단락전류가 필요합니다. 용량 증설을 단정하지 않습니다.',
+          '현재 정격은 유지하고, 부하전류·케이블 허용전류·예상 단락전류가 갖춰지면 계산 영수증으로 재판정합니다.',
         requiredInputs: ['부하전류', '케이블 허용전류', '예상 단락전류'],
         standardRefs: [],
         calcReceiptIds: calc?.receiptHash ? [calc.receiptHash] : [],
@@ -149,7 +156,10 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       relatedDisplayIds: [],
       evidenceIds: coverageEvidence,
       status: supported ? 'SUPPORTED' : 'HOLD',
-      recommendedAction: '접지 기호·접지선 표기를 확인하고 필요 시 재스캔하십시오.',
+      aiDecision: supported
+        ? 'ESA 판단: 전체 판독 범위에서 접지 표기가 누락됐습니다.'
+        : 'ESA 잠정 판단: 접지 표기 누락 가능성이 있지만 전체 판독 근거가 완결되지 않았습니다.',
+      recommendedAction: '접지 표기 누락을 보완 후보로 유지하고, 전체 구획 판독 근거가 결론을 바꿀 때만 갱신합니다.',
       requiredInputs: supported ? [] : ['접지 표기 근거', '전체 구획 판독 완료 증거'],
       standardRefs: ['KEC 142 접지시스템의 시설'],
       calcReceiptIds: [],
@@ -196,7 +206,8 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
         evidenceIds: unique(inconsistent.flatMap((node) => node.evidence.map((e) => e.evidenceId))),
         // 접지 대상 판단은 도면 밖 조건이므로 확정으로 올리지 않는다.
         status: 'HOLD',
-        recommendedAction: '원본 도면에서 해당 기기의 접지 표기를 확인하고, 접지 대상인데 누락된 경우 보완하십시오.',
+        aiDecision: 'ESA 잠정 판단: 동일 종류의 다른 기기와 비교할 때 접지 표기 누락 후보입니다.',
+        recommendedAction: '해당 기기만 접지 표기 보완 후보로 유지하고, 접지 대상 여부가 다르면 결론에서 제외합니다.',
         requiredInputs: ['기기별 접지 대상 여부', '접지 표기 근거'],
         standardRefs: ['KEC 142 접지시스템의 시설'],
         calcReceiptIds: [],
@@ -213,11 +224,8 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       || u.code === 'UNREADABLE_SYMBOL'
       || u.code === 'LOW_RESOLUTION_HOLD';
     const displayIds = unique(group.flatMap((item) => item.displayId ? [item.displayId] : []));
-    const requiredInputs = unique(group.flatMap((item) =>
-      item.userConfirmItems?.map((question) => question.question) ?? []));
-    const firstAction = unreadable
-      ? u.recommendedUpload?.note ?? '더 높은 해상도로 재업로드하거나 사용자 확인이 필요합니다.'
-      : u.note;
+    const requiredInputs = unique(group.flatMap(unresolvedVerificationInputs));
+    const aiDecision = unresolvedAiDecision(u);
     out.push(rec(++seq, {
       severity: unreadable
         || u.code === 'LINE_CONTINUITY_UNCERTAIN'
@@ -233,12 +241,13 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       relatedDisplayIds: displayIds,
       evidenceIds: [],
       status: 'HOLD',
+      aiDecision,
       recommendedAction: group.length === 1
-        ? firstAction
-        : `${firstAction} 외 ${group.length - 1}건 — 미해결 항목 목록에서 개별 번호와 근거를 확인하십시오.`,
+        ? '해당 항목만 확정 관계·안전 계산에서 보류하고 나머지 분석은 유지합니다.'
+        : `같은 원인의 ${group.length}건만 확정 관계·안전 계산에서 보류하고 나머지 분석은 유지합니다.`,
       requiredInputs: requiredInputs.length > 0
         ? requiredInputs
-        : [unreadable ? '고해상도 원본 또는 수동 확인' : '원본 근거 재확인'],
+        : [unreadable ? '판독 결론을 바꾸는 고해상도 원본 근거' : '판정 결론을 바꾸는 원본 근거'],
       standardRefs: [],
       calcReceiptIds: [],
     }));
@@ -253,7 +262,8 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       relatedDisplayIds: [],
       evidenceIds: c.evidenceIds,
       status: 'CONDITIONAL',
-      recommendedAction: c.note ?? '필수 입력을 보완한 뒤 재계산하십시오.',
+      aiDecision: 'ESA 판단: 현재 입력만으로 계산 결과를 확정하지 않으며 임의 수치로 대체하지 않습니다.',
+      recommendedAction: c.note ?? '결론 변경 입력이 완결되면 검증된 계산기로 재계산합니다.',
       requiredInputs: ['계산 필수 파라미터'],
       standardRefs: [],
       calcReceiptIds: c.receiptHash ? [c.receiptHash] : [],
@@ -265,6 +275,7 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
 
 /** Reject proposals that lack evidence and calc/standard links when claiming SUPPORTED. */
 export function hasRequiredLinks(r: RecommendationV3): boolean {
+  if (r.aiDecision.trim().length === 0) return false;
   if (r.status === 'REJECTED') return true;
   if (r.status === 'HOLD') return true;
   if (r.status === 'SUPPORTED') {
@@ -350,7 +361,7 @@ function hasConfirmedType(s: SymbolNode): boolean {
   return typeof s.confirmedType === 'string' && s.confirmedType.trim().length > 0;
 }
 
-/** SUPPORTED 로 올리지 못한 사유를 사용자가 채울 수 있는 항목으로 돌려준다. */
+/** SUPPORTED 로 올리지 못한 사유를 결론 변경 조건으로 돌려준다. */
 function missingSupportInputs(input: RecommendationInput, nodes: SymbolNode[]): string[] {
   const needed: string[] = [];
   if (input.coverageComplete !== true) needed.push('전체 관련 구획 판독 완료');
@@ -359,6 +370,35 @@ function missingSupportInputs(input: RecommendationInput, nodes: SymbolNode[]): 
   )];
   if (unconfirmed.length > 0) needed.push(`기기 종류 확정: ${unconfirmed.join(', ')}`);
   return needed.length > 0 ? needed : ['원본 근거 재확인'];
+}
+
+/**
+ * 새 결과는 선언형 verificationItems 만 쓴다. 이전 저장 결과의 질문 문구는
+ * 그대로 노출하지 않고 도면 번호·후보로 최소 확인 대상을 재구성한다.
+ */
+function unresolvedVerificationInputs(item: UnresolvedItem): string[] {
+  const declared = item.verificationItems
+    ?.map((verification) => verification.target.trim())
+    .filter(Boolean) ?? [];
+  if (declared.length > 0) return declared;
+
+  const identity = item.displayId ?? item.id;
+  const candidates = unique((item.candidates ?? []).map((candidate) => candidate.trim()).filter(Boolean));
+  return candidates.length > 0
+    ? [`${identity} 판독 후보 (${candidates.join(' / ')})를 가르는 원본 근거`]
+    : [`${identity} 결론 변경 근거`];
+}
+
+function unresolvedAiDecision(item: UnresolvedItem): string {
+  const identity = item.displayId ?? item.id;
+  const candidates = unique((item.candidates ?? []).map((candidate) => candidate.trim()).filter(Boolean));
+  if (candidates.length > 0) {
+    return `ESA 잠정 판독: ${identity}의 우선 후보는 ${candidates[0]}입니다. 안전 판정 입력에는 확정값으로 사용하지 않습니다.`;
+  }
+  if (item.code === 'LINE_CONTINUITY_UNCERTAIN') {
+    return `ESA 판단: ${identity} 선로의 연결 관계는 현재 근거로 확정할 수 없어 해당 선만 보류합니다.`;
+  }
+  return `ESA 판단: ${identity}은 현재 근거로 판독 불가이며 해당 항목만 보류합니다.`;
 }
 
 function groupUnresolved(items: UnresolvedItem[]): UnresolvedItem[][] {

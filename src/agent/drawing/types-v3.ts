@@ -184,6 +184,8 @@ export interface RecommendationV3 {
   calcReceiptIds: string[];
   standardRefs: string[];
   requiredInputs: string[];
+  /** 현재 근거로 ESA가 내린 기술적 판단. HOLD여도 가능한 범위의 잠정 판단을 적는다. */
+  aiDecision: string;
   recommendedAction: string;
   expectedEffect?: string;
   status: RecommendationStatus;
@@ -202,6 +204,9 @@ export interface UnresolvedItem {
     minCharHeightPx?: number;
     note: string;
   };
+  /** 결론을 바꿀 수 있는 최소 확인 대상. 질문이 아니라 선언형 표적이다. */
+  verificationItems?: Array<{ target: string; options?: string[] }>;
+  /** @deprecated 이전 저장 결과 호환 전용. 새 분석에서는 생성하거나 사용자에게 노출하지 않는다. */
   userConfirmItems?: Array<{ question: string; options?: string[] }>;
   note: string;
 }

@@ -50,10 +50,12 @@ describe('표 조회 질문 — 수치 발명 차단 지시', () => {
    * 계산 요청은 원래 경로 그대로여야 한다 — 조회 지시가 계산 지시를
    * 밀어내면 회귀다.
    */
-  it('계산기가 잡힌 계산 요청에는 입력 되묻기 지시가 붙는다', () => {
+  it('계산기가 잡힌 계산 요청에는 조건부 결론과 결론 변경 입력 지시가 붙는다', () => {
     const sf = resolveChatCalculationShortfall('전압강하 계산해줘');
     expect(sf).toBeTruthy();
-    expect(sf).toContain('필요한 입력');
+    expect(sf).toContain('가장 타당한 조건부 결론');
+    expect(sf).toContain('결론을 바꾸는 핵심 입력');
+    expect(sf).not.toContain('필요한 입력을 구체적으로 되물');
     expect(sf).not.toContain('표·규정에서 수치를 꺼내는 조회');
   });
 
@@ -106,12 +108,12 @@ describe('계산기 이름표', () => {
   });
 
   /**
-   * 계산기가 이미 지목된 되묻기에는 목록을 싣지 않는다 — 모델이 고를 일이
+   * 계산기가 이미 지목된 결론 변경 입력 안내에는 목록을 싣지 않는다 — 모델이 고를 일이
    * 없는데 840 여 토큰을 매번 태우면 낭비다.
    */
-  it('계산기가 지목된 되묻기에는 목록을 싣지 않는다', () => {
+  it('계산기가 지목된 결론 변경 입력 안내에는 목록을 싣지 않는다', () => {
     const out = roster('전압강하 계산해줘');
-    expect(out).toContain('필요한 입력');
+    expect(out).toContain('결론을 바꾸는 핵심 입력');
     expect(out).not.toContain('앱에 있는 계산기:');
   });
 });

@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 8dc018b7997218f7090a2db3530b231e82a494c0
-updatedAt: 2026-08-09T06:42:29+09:00
+codeBaselineCommit: 775d6e418f80df9ad86a9756301d4cc175955a6e
+updatedAt: 2026-08-09T15:44:30+09:00
 trigger: commits
 changedDomains: [agent, engine, lib, docs, scripts]
 ---
@@ -75,6 +75,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 반복 기호 집계, 비회로 면 phantom 기기, V3 역할 오류 은폐, 절단 JSON·루트 배열·점 좌표, `pageIndex` bounds 별칭을 수리했다. 부분 복구에는 confidence 페널티를 남기고 지원하지 않는 필드는 필드명과 함께 거부한다.
 - 동일 원인의 고아 기기·OCR·연속성 권고를 페이지별로 묶어 212건까지 폭증하던 제안을 6개 근거 묶음으로 줄이되 대상 ID는 보존했다.
 - 도면 보고서에 현재 자동화된 AF/AT·KEC 케이블 허용전류·변압기 2차 전류와 미자동화된 단락·협조·접지·전압강하·단락내량·SPD·전동기 보호를 상시 표시한다.
+- 도면의 모호·미판독 항목은 사용자 질문으로 넘기지 않고 ESA의 우선 후보 또는 판독 불가 판단을 낸다. 해당 항목만 확정 관계·안전 계산에서 보류하고 나머지 분석은 유지하며, 화면과 CSV·인쇄 반출물에 `ESA 판단`·`권장 조치`·`결론 변경 조건`을 함께 보존한다. 일반 채팅의 계산 입력 부족도 역질문 대신 조건부 결론과 결론 변경 입력으로 출력한다.
 - 도면 추론 계약에 `low/medium/high/xhigh/max`를 추가했다. `xhigh/max`는 로컬 ChatGPT 전용으로 제한하고, 비로컬 Vision 공급자가 요청하면 잘못된 thinking level로 전달하지 않고 400으로 차단한다.
 - 로컬 도면 역할은 8개 동시 호출, low/medium 75초, high/xhigh/max 180초로 제한한다. 명시한 추론 레벨의 문서 한도는 570초이며 사용자의 10분 기준은 캘리브레이션에서 통과/실패 경계로만 사용한다.
 - GPT-5.5·GPT-5.6 Luna/Terra/Sol의 지원 조합 17개를 같은 중급 공개 결선도와 같은 snapshot에서 실행하고, 중단 재개·재채점·설정 지문·완결성 우선 후보 게이트를 가진 `validate:drawing-effort-calibration`을 추가했다.

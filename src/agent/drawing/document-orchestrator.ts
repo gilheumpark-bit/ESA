@@ -1114,8 +1114,8 @@ function stitchPageBoundaries(
         regionId: endpoint.regionId,
         bounds: { x: endpoint.point.x - 6, y: endpoint.point.y - 6, w: 12, h: 12 },
         candidates: endpoint.continuationId ? [endpoint.continuationId] : undefined,
-        userConfirmItems: [{
-          question: `${endpoint.displayId} 경계 선로의 반대편 연결과 선종을 확인하십시오.`,
+        verificationItems: [{
+          target: `${endpoint.displayId} 경계 선로의 반대편 연결 장치와 선종`,
           options: endpoint.continuationId ? [endpoint.continuationId] : undefined,
         }],
         note: `${endpoint.continuationId ?? '경계점'}을 전체 도면과 구획 결과로 합치지 못했습니다: ${endpoint.reason}`,
@@ -1176,8 +1176,8 @@ function appendLogicConflictItems(
       pageIndex,
       bounds: { x: evidenceBounds.x, y: evidenceBounds.y, w: evidenceBounds.w, h: evidenceBounds.h },
       candidates,
-      userConfirmItems: [{
-        question: `${conflict.topic} 관계에서 독립 논리 판독과 공간 그래프 중 어느 근거가 맞는지 확인하십시오.`,
+      verificationItems: [{
+        target: `${conflict.topic} 관계의 공간 그래프·독립 논리 근거 우선순위`,
         options: candidates,
       }],
       note: `${conflict.message} (${conflict.reasonCode})`,
@@ -1199,8 +1199,8 @@ function appendCrossPageItems(
       pageIndex: evidence?.pageIndex ?? relation.fromPage,
       bounds: evidence?.bounds ?? { x: 0, y: 0, w: 1, h: 1 },
       candidates: [relation.fromRef, relation.toRef],
-      userConfirmItems: [{
-        question: `${relation.displayId} 페이지 간 연결 대상을 확인하십시오.`,
+      verificationItems: [{
+        target: `${relation.displayId} 페이지 간 연결 대상`,
         options: [relation.fromRef, relation.toRef],
       }],
       note: `페이지 간 관계를 확정하지 못했습니다: ${relation.reason ?? relation.status}`,
@@ -1535,7 +1535,7 @@ function adjudicateTextSeeds(textSeeds: RawTextSeed[], unresolved: UnresolvedIte
         pageIndex: seed.pageIndex,
         bounds: seed.bounds,
         candidates,
-        userConfirmItems: [{ question: '표기 후보를 선택하십시오.', options: candidates }],
+        verificationItems: [{ target: `${displayId} 표기 후보를 가르는 원본 근거`, options: candidates }],
         note: candidates.length > 0 ? `표기 후보: ${candidates.join(' | ')}` : '문자를 판독하지 못했습니다.',
       });
     }

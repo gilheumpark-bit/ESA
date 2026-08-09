@@ -36,6 +36,7 @@ describe('recommendation-engine', () => {
       calcReceiptIds: [],
       standardRefs: ['KEC'],
       requiredInputs: [],
+      aiDecision: 'ESA 판단',
       recommendedAction: 'y',
       status: 'SUPPORTED',
     })).toBe(false);
@@ -281,6 +282,38 @@ describe('recommendation-engine', () => {
     });
     expect(recs).toHaveLength(3);
   });
+
+  it('모호한 도면 항목을 사용자 질문으로 넘기지 않고 ESA 잠정 판단과 최소 확인점으로 바꾼다', () => {
+    const recs = buildRecommendations({
+      symbols: [], relations: [], calculations: [], coverageComplete: false,
+      unresolved: [{
+        id: 'u-choice', code: 'AMBIGUOUS_OCR', displayId: 'P01-T007', pageIndex: 0,
+        bounds: { x: 10, y: 10, w: 20, h: 5 }, candidates: ['VCB', 'VGB'],
+        userConfirmItems: [{ question: '이게 몇 개인지 사용자가 판단해 주세요?', options: ['VCB', 'VGB'] }],
+        note: '두 후보가 겹칩니다.',
+      }],
+    });
+
+    expect(recs).toHaveLength(1);
+    expect((recs[0] as typeof recs[number] & { aiDecision?: string }).aiDecision)
+      .toContain('VCB');
+    expect(recs[0].recommendedAction).toContain('나머지 분석은 유지');
+    expect(recs[0].requiredInputs.join(' ')).toContain('P01-T007');
+    expect(`${recs[0].recommendedAction} ${recs[0].requiredInputs.join(' ')}`)
+      .not.toMatch(/몇\s*개|사용자가 판단|확인하십시오|선택하십시오|\?/);
+  });
+
+  it('모든 제안은 상태 라벨만 던지지 않고 ESA의 기술 판단을 포함한다', () => {
+    const recs = buildRecommendations({
+      symbols: [mk('P01-S001', 'vcb')], relations: [], calculations: [], unresolved: [],
+      coverageComplete: true,
+    });
+    expect(recs.length).toBeGreaterThan(0);
+    for (const item of recs) {
+      expect((item as typeof item & { aiDecision?: string }).aiDecision?.trim().length)
+        .toBeGreaterThan(0);
+    }
+  });
 });
 
 // ============================================================
@@ -355,6 +388,7 @@ describe('recommendation-engine — 근거 결박 회귀', () => {
       evidenceIds: ['e1'],
       calcReceiptIds: [],
       requiredInputs: [],
+      aiDecision: 'ESA 판단',
       recommendedAction: 'y',
       status: 'SUPPORTED' as const,
     };

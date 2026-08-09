@@ -30,11 +30,13 @@ describe('계산 근거가 없을 때의 지시', () => {
     }
   });
 
-  it('계산 요청인데 입력이 부족하면 되묻게 하고, 직접 계산을 금지한다', () => {
+  it('계산 요청인데 입력이 부족해도 역질문하지 않고 조건부 판단과 최소 입력만 제시한다', () => {
     const out = resolveChatCalculationShortfall('전압강하 계산해줘');
     expect(out).not.toBeNull();
     expect(out).toContain('직접 계산');
-    expect(out).toMatch(/되물|필요한 입력/);
+    expect(out).toContain('가장 타당한 조건부 결론');
+    expect(out).toContain('결론을 바꾸는 핵심 입력');
+    expect(out).not.toMatch(/되물|질문하세요|알려\s*주세요/);
   });
 
   it('맞는 계산기를 못 지목해도 침묵하지 않는다 — 공식과 필요한 입력을 설명하게 한다', () => {

@@ -263,9 +263,9 @@ describe('synthesizeDrawingReview', () => {
 
     expect(result.recommendations).toEqual([expect.objectContaining({
       status: 'HOLD',
-      title: '도면 근거 확인 필요',
-      description: '제안 판단에 필요한 현재 도면 근거를 확인해야 합니다.',
-      requiredInputs: ['current drawing evidence'],
+      title: 'ESA 잠정 판단',
+      description: '현재 도면 근거로 이 제안은 채택하지 않습니다. 해당 제안만 보류하고 나머지 분석은 유지합니다.',
+      requiredInputs: ['결론을 바꾸는 현재 도면 근거'],
     })]);
     expect(JSON.stringify(result.recommendations)).not.toContain(unsupportedText);
   });
@@ -349,10 +349,10 @@ describe('synthesizeDrawingReview', () => {
 
     expect(result.claims).toEqual([{
       id: 'hold-claim',
-      text: '종합 판단에 필요한 현재 도면 근거를 확인해야 합니다.',
+      text: 'ESA 판단: 현재 도면 근거로 이 주장은 채택하지 않습니다. 해당 주장만 보류하고 나머지 분석은 유지합니다.',
       evidenceIds: [],
       status: 'hold',
-      requiredInputs: ['current drawing evidence'],
+      requiredInputs: ['결론을 바꾸는 현재 도면 근거'],
     }]);
     expect(result.evidenceRegistry).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: calculation().id, kind: 'derived', parentEvidenceIds: ['TEXT-1'] }),
