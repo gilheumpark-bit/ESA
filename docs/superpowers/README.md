@@ -21,5 +21,6 @@
 - [2026-07-23 구획 경계 연속성 복구](plans/2026-07-23-sld-region-continuity-integrated-recovery.md)
 - [2026-07-31 Google Agent Platform 공급자 구현](plans/2026-07-31-google-agent-platform-provider.md)
 - [2026-07-31 ChatGPT 로컬 공급자 구현](plans/2026-07-31-chatgpt-local-provider.md)
+- [2026-08-09 일반 AI 판단 책임 계약 수리](plans/2026-08-09-chat-decision-contract-repair.md)
 
 설계와 코드가 다르면 코드를 확인하고 `DECISIONS.md`에 변경 이유가 있는지 찾으십시오.
