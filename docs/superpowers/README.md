@@ -9,6 +9,7 @@
 - [2026-07-23 구획 경계 연속성 통합 복구 설계](specs/2026-07-23-sld-region-continuity-integrated-recovery-design.md)
 - [2026-07-31 Google Agent Platform 공급자 설계](specs/2026-07-31-google-agent-platform-provider-design.md)
 - [2026-07-31 ChatGPT 계정 로컬 자동 전환 설계](specs/2026-07-31-chatgpt-local-provider-design.md)
+- [2026-08-09 일반 AI 판단 책임 계약 수리 설계](specs/2026-08-09-chat-decision-contract-repair-design.md)
 
 ## 실행 계획
 
