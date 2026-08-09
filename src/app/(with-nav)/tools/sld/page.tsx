@@ -783,15 +783,53 @@ export default function SLDAnalysisPage() {
   useEffect(() => {
     if (!v3Loading || !v3JobId) return;
     let disposed = false;
+    // 연속 실패 계수 — 일시 장애 한 번에 세션을 버리지 않되, 계속 실패하면 멈춘다.
+    let transientFailures = 0;
+
+    /**
+     * 폴링을 끝내고 사용자에게 사유를 보여준다.
+     *
+     * 예전에는 실패 시 `return` 만 했다 — setInterval 은 살아서 1.5초마다
+     * 401 을 계속 받고, v3Loading 이 true 로 고정돼 스피너가 안 사라지고
+     * 업로드 버튼(disabled={v3Loading})이 영구 비활성이었다. 에러도 안 떠서
+     * 새로고침 외 탈출 경로가 없었다(실측 2026-07-31: 만료 jobId 조회는
+     * 401「작업 세션이 만료되었습니다」). 같은 파일의 복원 경로는 동일 조건에서
+     * 세션을 지우고 멈추는데 폴링만 안 그랬다 — 같은 조건을 두 경로가 다르게
+     * 처리하고 있었다.
+     */
+    const stop = (message: string) => {
+      sessionStorage.removeItem(V3_JOB_SESSION_KEY);
+      setV3Loading(false);
+      setV3Error(message);
+    };
+
     const poll = async () => {
-      const { getIdToken } = await import('@/lib/firebase');
-      const token = await getIdToken().catch(() => null);
-      const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        cache: 'no-store',
-      });
+      let response: Response;
+      try {
+        const { getIdToken } = await import('@/lib/firebase');
+        const token = await getIdToken().catch(() => null);
+        response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          cache: 'no-store',
+        });
+      } catch {
+        // 네트워크 단절은 일시적일 수 있다 — 연속 3회까지만 참는다.
+        if (!disposed && ++transientFailures >= 3) stop('서버와의 연결이 끊겼습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+        return;
+      }
       const json = await response.json().catch(() => null);
-      if (disposed || !response.ok || !json?.success) return;
+      if (disposed) return;
+      if (!response.ok || !json?.success) {
+        // 4xx 는 확정 실패(세션 만료·권한)라 즉시 멈춘다. 5xx·파싱 실패는
+        // 서버가 곧 돌아올 수 있으므로 연속 3회까지 참는다.
+        if (response.status >= 400 && response.status < 500) {
+          stop(json?.error?.message ?? '작업 세션이 만료되었습니다. 도면을 다시 업로드해 주세요.');
+        } else if (++transientFailures >= 3) {
+          stop(json?.error?.message ?? '분석 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+        }
+        return;
+      }
+      transientFailures = 0;
       setV3JobStatus(String(json.data.status));
       if (json.data.document) {
         const polled = json.data.document as DrawingDocumentV3;

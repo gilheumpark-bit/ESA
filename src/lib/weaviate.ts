@@ -11,13 +11,17 @@
  * PART 5: Collection management
  */
 
-import type {
+import type {
   Collection,
   FilterValue,
   WeaviateClass,
   WeaviateClient,
   WeaviateField,
 } from 'weaviate-client';
+
+import { createLogger } from '@/lib/logger';
+
+const wlog = createLogger('weaviate');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
@@ -133,7 +137,7 @@ export async function getWeaviateClient(): Promise<WeaviateClient | null> {
     // Verify connection
     const ready = await client.isReady();
     if (!ready) {
-      console.warn('[ESA/Weaviate] Server not ready at', url);
+      wlog.warn('Server not ready', { url });
       await client.close().catch(() => undefined);
       _nextConnectionAttemptAt = Date.now() + 30_000;
       return null;
@@ -143,7 +147,7 @@ export async function getWeaviateClient(): Promise<WeaviateClient | null> {
     _nextConnectionAttemptAt = 0;
     return _client;
   } catch (err) {
-    console.warn('[ESA/Weaviate] Connection failed:', (err as Error).message);
+    wlog.warn('Connection failed', { error: (err as Error).message });
     _nextConnectionAttemptAt = Date.now() + 30_000;
     return null;
   }
@@ -324,11 +328,11 @@ export async function ensureCollection(
     }
 
     await client.collections.createFromJson(classDef as WeaviateClass);
-    console.log(`[ESA/Weaviate] Created collection: ${name}`);
+    wlog.info('Created collection', { name });
     return { success: true };
   } catch (err) {
     const msg = (err as Error).message;
-    console.error(`[ESA/Weaviate] Failed to ensure collection ${name}:`, msg);
+    wlog.error('Failed to ensure collection', { name, error: msg });
     return { success: false, error: msg };
   }
 }
@@ -383,7 +387,7 @@ export async function upsertObject(
     });
     return { id };
   } catch (err) {
-    console.error(`[ESA/Weaviate] Upsert failed for ${collectionName}:`, (err as Error).message);
+    wlog.error('Upsert failed', { collectionName, error: (err as Error).message });
     return null;
   }
 }
@@ -418,7 +422,7 @@ export async function batchUpsert(
       failed += batchFailed;
       succeeded += batch.length - batchFailed;
     } catch (err) {
-      console.error(`[ESA/Weaviate] Batch upsert error:`, (err as Error).message);
+      wlog.error('Batch upsert error', { error: (err as Error).message });
       failed += batch.length;
     }
   }
@@ -522,7 +526,7 @@ export async function hybridSearch(
       },
     }));
   } catch (err) {
-    console.warn(`[ESA/Weaviate] Hybrid search failed on ${collectionName}:`, (err as Error).message);
+    wlog.warn('Hybrid search failed', { collectionName, error: (err as Error).message });
     return [];
   }
 }

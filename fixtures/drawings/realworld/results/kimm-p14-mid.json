@@ -4086,6 +4086,91 @@
           "type": "ISOLATED_NODE",
           "nodeId": "junction_797.88_769.76",
           "message": "노드 \"junction_797.88_769.76\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_3",
+          "message": "인라인 기기 \"1층 MCCB\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_8",
+          "message": "인라인 기기 \"MCCB 3P-50/50\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_11",
+          "message": "인라인 기기 \"0FF - SW\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_13",
+          "message": "인라인 기기 \"MCCB 3P-50/30\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_18",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_20",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_22",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_24",
+          "message": "인라인 기기 \"MCCB 3P-60/60\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_25",
+          "message": "인라인 기기 \"MCCB 3P-100/75\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_26",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_28",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_30",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_31",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_33",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_35",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_37",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_39",
+          "message": "인라인 기기 \"MCCB 3P-100/75\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
         }
       ]
     },
@@ -4093,7 +4178,7 @@
       "method": "pdf-vector",
       "confidence": 0.85,
       "description": "PDF vector parsed (page 14): 74 components, 129 connections (snapped 317, junctions 35, dropped 120), 220 text items, 498 line segments",
-      "durationMs": 126
+      "durationMs": 116
     }
   }
 }

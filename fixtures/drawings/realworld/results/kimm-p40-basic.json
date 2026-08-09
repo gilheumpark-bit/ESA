@@ -4706,6 +4706,51 @@
           "type": "ISOLATED_NODE",
           "nodeId": "junction_797.88_769.76",
           "message": "노드 \"junction_797.88_769.76\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_16",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_20",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_22",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_24",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_31",
+          "message": "인라인 기기 \"MCCB 4P-50/30\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_37",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_41",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_43",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_45",
+          "message": "인라인 기기 \"ELB 2P-30/20\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
         }
       ]
     },
@@ -4713,7 +4758,7 @@
       "method": "pdf-vector",
       "confidence": 0.85,
       "description": "PDF vector parsed (page 40): 78 components, 190 connections (snapped 409, junctions 32, dropped 98), 237 text items, 556 line segments",
-      "durationMs": 134
+      "durationMs": 383
     }
   }
 }

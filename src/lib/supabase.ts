@@ -5,6 +5,7 @@
  */
 
 import { createClient as createSupabaseClient, type SupabaseClient } from '@supabase/supabase-js';
+import { log } from '@/lib/logger';
 
 /**
  * 저장소를 **쓸 수 없는 상태** — 우리 코드가 깨진 게 아니라 의존성이 없다.
@@ -172,13 +173,30 @@ export async function getUserTier(userId: string): Promise<UserTier> {
       .eq('id', userId)
       .single();
 
-    if (error || !data) return 'free';
+    // «프로필 없음»(신규 유저·정상)과 «조회 실패»(장애)는 다른 사건이다.
+    // 예전엔 한 줄로 뭉개고 로그도 없어서, Supabase 장애가 지표상 「free
+    // 사용자가 유료 기능을 시도했다」로만 보였다 — 결제 고객이 강등을 겪어도
+    // 아무 데도 안 잡혔다. 방향은 그대로 fail-closed(free)로 두되, 장애는
+    // 장애로 기록한다. 에러 시 pro 를 돌려주는 식으로 «고치면» 안 된다.
+    if (error) {
+      log.error('supabase', 'getUserTier 조회 실패 — free 로 강등 응답', {
+        userId,
+        code: error.code,
+        message: error.message,
+      });
+      return 'free';
+    }
+    if (!data) return 'free';
     const tier = data.tier as string;
     if (['free', 'pro', 'team', 'enterprise'].includes(tier)) {
       return tier as UserTier;
     }
     return 'free';
-  } catch {
+  } catch (err) {
+    log.error('supabase', 'getUserTier 예외 — free 로 강등 응답', {
+      userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return 'free';
   }
 }

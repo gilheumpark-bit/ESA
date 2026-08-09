@@ -282,7 +282,10 @@ export default function SearchBar({
           }}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--text-tertiary)]"
+          // min-h-6(24px): 모바일 375px 실측에서 입력 높이가 23px 로 WCAG 2.2
+          // SC 2.5.8 최소 타깃(24×24)에 1px 미달했다(2026-08-01). 글꼴을 키우지
+          // 않고 최소 높이만 보장한다.
+          className="min-h-6 min-w-0 flex-1 bg-transparent outline-none placeholder:text-[var(--text-tertiary)]"
         />
         {query.length > 0 && (
           <button

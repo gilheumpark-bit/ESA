@@ -14387,30 +14387,13 @@
         },
         {
           "rule": "CABLE-AMPACITY",
+          "severity": "UNKNOWN",
           "subject": "PNL 6 6-2 지하변전실 LV2 P-B-C",
           "given": {
             "trip": "150A",
             "cable": "4sq FCV"
           },
-          "computed": {
-            "허용전류": "36A"
-          },
-          "limit": {
-            "value": "36A",
-            "source": "KEC Cu_XLPE_conduit 4sq"
-          },
-          "severity": "FAIL",
-          "verdict": "차단기 150A > 케이블 허용전류 36A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C)",
-          "proposal": [
-            {
-              "action": "케이블을 50sq 이상으로 (허용전류 168A ≥ 트립 150A)",
-              "basis": "KEC 허용전류표 Cu_XLPE_conduit"
-            },
-            {
-              "action": "차단기 트립을 32AT 이하로 (케이블 허용전류 36A 이내)",
-              "basis": "IEC 60947-1 표준 트립 정격(선호수) + KEC 허용전류"
-            }
-          ]
+          "verdict": "설치방법·주위온도·집합회로 수 미기재 — 온도·집합·포설 보정의 근거가 완결되지 않아 KEC 허용전류 판정 보류"
         },
         {
           "rule": "AT-LE-AF",
@@ -14565,30 +14548,13 @@
         },
         {
           "rule": "CABLE-AMPACITY",
+          "severity": "UNKNOWN",
           "subject": "MCCB 3P 36 36 PP-2 3Φ3W 220V 분전함",
           "given": {
             "trip": "225A",
             "cable": "4sq FCV"
           },
-          "computed": {
-            "허용전류": "36A"
-          },
-          "limit": {
-            "value": "36A",
-            "source": "KEC Cu_XLPE_conduit 4sq"
-          },
-          "severity": "FAIL",
-          "verdict": "차단기 225A > 케이블 허용전류 36A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C)",
-          "proposal": [
-            {
-              "action": "케이블을 95sq 이상으로 (허용전류 258A ≥ 트립 225A)",
-              "basis": "KEC 허용전류표 Cu_XLPE_conduit"
-            },
-            {
-              "action": "차단기 트립을 32AT 이하로 (케이블 허용전류 36A 이내)",
-              "basis": "IEC 60947-1 표준 트립 정격(선호수) + KEC 허용전류"
-            }
-          ]
+          "verdict": "설치방법·주위온도·집합회로 수 미기재 — 온도·집합·포설 보정의 근거가 완결되지 않아 KEC 허용전류 판정 보류"
         },
         {
           "rule": "AT-LE-AF",
@@ -14605,30 +14571,13 @@
         },
         {
           "rule": "CABLE-AMPACITY",
+          "severity": "UNKNOWN",
           "subject": "MCCB 3P PNL 39-1 3Φ3W 220V P-2-B",
           "given": {
             "trip": "225A",
             "cable": "4sq FCV"
           },
-          "computed": {
-            "허용전류": "36A"
-          },
-          "limit": {
-            "value": "36A",
-            "source": "KEC Cu_XLPE_conduit 4sq"
-          },
-          "severity": "FAIL",
-          "verdict": "차단기 225A > 케이블 허용전류 36A — 케이블이 차단기보다 먼저 위험 (가정: 관로·30°C)",
-          "proposal": [
-            {
-              "action": "케이블을 95sq 이상으로 (허용전류 258A ≥ 트립 225A)",
-              "basis": "KEC 허용전류표 Cu_XLPE_conduit"
-            },
-            {
-              "action": "차단기 트립을 32AT 이하로 (케이블 허용전류 36A 이내)",
-              "basis": "IEC 60947-1 표준 트립 정격(선호수) + KEC 허용전류"
-            }
-          ]
+          "verdict": "설치방법·주위온도·집합회로 수 미기재 — 온도·집합·포설 보정의 근거가 완결되지 않아 KEC 허용전류 판정 보류"
         },
         {
           "rule": "AT-LE-AF",
@@ -14680,8 +14629,8 @@
       "summary": {
         "pass": 16,
         "warn": 0,
-        "fail": 3,
-        "unknown": 12,
+        "fail": 0,
+        "unknown": 15,
         "info": 0
       },
       "coverage": {
@@ -14852,6 +14801,306 @@
           "type": "ISOLATED_NODE",
           "nodeId": "junction_532.32_769.76",
           "message": "노드 \"junction_532.32_769.76\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_4",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_5",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_8",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_11",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_16",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_19",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_20",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_21",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_22",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_23",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_25",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_28",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_31",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_34",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_36",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_37",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_38",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_39",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_40",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_41",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_43",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_44",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_48",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_52",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_53",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_54",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_55",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_56",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_58",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_59",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_60",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_62",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_66",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_67",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_68",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_69",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_71",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_74",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_75",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_78",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_79",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_84",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_85",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_88",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_91",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_95",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_97",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_99",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_102",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_104",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_105",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_107",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_112",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_116",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_117",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_119",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_120",
+          "message": "인라인 기기 \"MCCB 2P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_123",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_125",
+          "message": "인라인 기기 \"MCCB 3P\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_127",
+          "message": "인라인 기기 \"MCCB 4P\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
         }
       ]
     },
@@ -14859,7 +15108,7 @@
       "method": "pdf-vector",
       "confidence": 0.55,
       "description": "PDF vector parsed (page 9): 171 components, 304 connections (snapped 523, junctions 40, dropped 56), 1238 text items, 588 line segments — 표 문서 판정(표제 10회): 행렬 괘선이 결선 행세, topology 신뢰 불가·텍스트/배치만 참고",
-      "durationMs": 196
+      "durationMs": 175
     }
   }
 }

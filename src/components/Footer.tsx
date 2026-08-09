@@ -24,7 +24,10 @@ export default function Footer() {
             <Link
               key={href}
               href={href}
-              className="text-sm text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
+              // py-1 + inline-flex(24px+): 링크 실높이가 20px 로 WCAG 2.2 SC 2.5.8
+              // 최소 타깃(24×24) 미달이었다(2026-08-01 모바일 375px 실측). 글자
+              // 크기는 그대로 두고 세로 히트 영역만 넓힌다.
+              className="inline-flex min-h-6 items-center py-1 text-sm text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
             >
               {label}
             </Link>

@@ -2734,6 +2734,51 @@
           "type": "ISOLATED_NODE",
           "nodeId": "comp_41",
           "message": "노드 \"comp_41\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_2",
+          "message": "인라인 기기 \"MCCB\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_7",
+          "message": "인라인 기기 \"MCCB\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_9",
+          "message": "인라인 기기 \"ACB\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_13",
+          "message": "인라인 기기 \"MCCB\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_21",
+          "message": "인라인 기기 \"FUSE-30A\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_22",
+          "message": "인라인 기기 \"MCCB\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_28",
+          "message": "인라인 기기 \"MCCB\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_33",
+          "message": "인라인 기기 \"(30A FUSE)\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_34",
+          "message": "인라인 기기 \"LBS 630 A\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
         }
       ]
     },
@@ -2741,7 +2786,7 @@
       "method": "pdf-vector",
       "confidence": 0.85,
       "description": "PDF vector parsed (page 4): 76 components, 73 connections (snapped 78, junctions 35, dropped 14), 165 text items, 149 line segments",
-      "durationMs": 127
+      "durationMs": 113
     }
   }
 }

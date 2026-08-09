@@ -436,33 +436,6 @@
         {
           "id": "comp_39",
           "type": "transformer",
-          "label": "TR",
-          "position": {
-            "x": 12,
-            "y": 30
-          }
-        },
-        {
-          "id": "comp_40",
-          "type": "transformer",
-          "label": "TR",
-          "position": {
-            "x": 32,
-            "y": 30
-          }
-        },
-        {
-          "id": "comp_41",
-          "type": "transformer",
-          "label": "TR",
-          "position": {
-            "x": 52,
-            "y": 30
-          }
-        },
-        {
-          "id": "comp_42",
-          "type": "transformer",
           "label": "MOLD TR-1",
           "position": {
             "x": 22,
@@ -473,7 +446,7 @@
           }
         },
         {
-          "id": "comp_43",
+          "id": "comp_40",
           "type": "transformer",
           "label": "MOLD TR-2",
           "position": {
@@ -485,7 +458,7 @@
           }
         },
         {
-          "id": "comp_44",
+          "id": "comp_41",
           "type": "transformer",
           "label": "MOLD TR-3",
           "position": {
@@ -497,7 +470,7 @@
           }
         },
         {
-          "id": "comp_45",
+          "id": "comp_42",
           "type": "ground",
           "label": "E1",
           "position": {
@@ -509,7 +482,7 @@
           }
         },
         {
-          "id": "comp_46",
+          "id": "comp_43",
           "type": "ground",
           "label": "E1",
           "position": {
@@ -521,7 +494,7 @@
           }
         },
         {
-          "id": "comp_47",
+          "id": "comp_44",
           "type": "ground",
           "label": "E1",
           "position": {
@@ -533,7 +506,7 @@
           }
         },
         {
-          "id": "comp_48",
+          "id": "comp_45",
           "type": "ground",
           "label": "E2",
           "position": {
@@ -542,7 +515,7 @@
           }
         },
         {
-          "id": "comp_49",
+          "id": "comp_46",
           "type": "panel",
           "label": "FROM:LV-5 PANEL",
           "position": {
@@ -554,7 +527,7 @@
           }
         },
         {
-          "id": "comp_50",
+          "id": "comp_47",
           "type": "meter",
           "label": "3∅PT 50VA",
           "position": {
@@ -567,7 +540,7 @@
           }
         },
         {
-          "id": "comp_51",
+          "id": "comp_48",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -579,7 +552,7 @@
           }
         },
         {
-          "id": "comp_52",
+          "id": "comp_49",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -591,7 +564,7 @@
           }
         },
         {
-          "id": "comp_53",
+          "id": "comp_50",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -603,7 +576,7 @@
           }
         },
         {
-          "id": "comp_54",
+          "id": "comp_51",
           "type": "lamp",
           "label": "PL",
           "position": {
@@ -615,7 +588,7 @@
           }
         },
         {
-          "id": "comp_55",
+          "id": "comp_52",
           "type": "relay",
           "label": "OVGR",
           "position": {
@@ -627,7 +600,7 @@
           }
         },
         {
-          "id": "comp_56",
+          "id": "comp_53",
           "type": "lamp",
           "label": "PL",
           "position": {
@@ -639,7 +612,7 @@
           }
         },
         {
-          "id": "comp_57",
+          "id": "comp_54",
           "type": "relay",
           "label": "OVGR",
           "position": {
@@ -651,7 +624,7 @@
           }
         },
         {
-          "id": "comp_58",
+          "id": "comp_55",
           "type": "meter",
           "label": "3∅PT 50VA",
           "position": {
@@ -664,7 +637,7 @@
           }
         },
         {
-          "id": "comp_59",
+          "id": "comp_56",
           "type": "meter",
           "label": "PTT",
           "position": {
@@ -673,7 +646,7 @@
           }
         },
         {
-          "id": "comp_60",
+          "id": "comp_57",
           "type": "meter",
           "label": "PTT",
           "position": {
@@ -682,7 +655,7 @@
           }
         },
         {
-          "id": "comp_61",
+          "id": "comp_58",
           "type": "meter",
           "label": "PTT",
           "position": {
@@ -691,7 +664,7 @@
           }
         },
         {
-          "id": "comp_62",
+          "id": "comp_59",
           "type": "breaker",
           "label": "ACB(DRAW OUT)",
           "position": {
@@ -703,7 +676,7 @@
           }
         },
         {
-          "id": "comp_63",
+          "id": "comp_60",
           "type": "breaker",
           "label": "ACB(DRAW OUT)",
           "position": {
@@ -715,7 +688,7 @@
           }
         },
         {
-          "id": "comp_64",
+          "id": "comp_61",
           "type": "breaker",
           "label": "ACB(DRAW OUT)",
           "position": {
@@ -727,7 +700,7 @@
           }
         },
         {
-          "id": "comp_65",
+          "id": "comp_62",
           "type": "capacitor",
           "label": "SC",
           "position": {
@@ -739,7 +712,7 @@
           }
         },
         {
-          "id": "comp_66",
+          "id": "comp_63",
           "type": "capacitor",
           "label": "SC",
           "position": {
@@ -751,7 +724,7 @@
           }
         },
         {
-          "id": "comp_67",
+          "id": "comp_64",
           "type": "capacitor",
           "label": "SC",
           "position": {
@@ -763,7 +736,7 @@
           }
         },
         {
-          "id": "comp_68",
+          "id": "comp_65",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -775,7 +748,7 @@
           }
         },
         {
-          "id": "comp_69",
+          "id": "comp_66",
           "type": "relay",
           "label": "QE 1(4P 125/50A)",
           "position": {
@@ -790,7 +763,7 @@
           }
         },
         {
-          "id": "comp_70",
+          "id": "comp_67",
           "type": "relay",
           "label": "(W/OCR)",
           "position": {
@@ -802,7 +775,7 @@
           }
         },
         {
-          "id": "comp_71",
+          "id": "comp_68",
           "type": "relay",
           "label": "(W/OCR)",
           "position": {
@@ -814,7 +787,7 @@
           }
         },
         {
-          "id": "comp_72",
+          "id": "comp_69",
           "type": "relay",
           "label": "(W/OCR,OCGR)",
           "position": {
@@ -826,7 +799,7 @@
           }
         },
         {
-          "id": "comp_73",
+          "id": "comp_70",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -838,7 +811,7 @@
           }
         },
         {
-          "id": "comp_74",
+          "id": "comp_71",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -850,7 +823,7 @@
           }
         },
         {
-          "id": "comp_75",
+          "id": "comp_72",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -862,7 +835,7 @@
           }
         },
         {
-          "id": "comp_76",
+          "id": "comp_73",
           "type": "arrester",
           "label": "SPD",
           "position": {
@@ -874,7 +847,7 @@
           }
         },
         {
-          "id": "comp_77",
+          "id": "comp_74",
           "type": "arrester",
           "label": "SPD",
           "position": {
@@ -886,7 +859,7 @@
           }
         },
         {
-          "id": "comp_78",
+          "id": "comp_75",
           "type": "arrester",
           "label": "SPD",
           "position": {
@@ -898,7 +871,7 @@
           }
         },
         {
-          "id": "comp_79",
+          "id": "comp_76",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -913,7 +886,7 @@
           }
         },
         {
-          "id": "comp_80",
+          "id": "comp_77",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -928,7 +901,7 @@
           }
         },
         {
-          "id": "comp_81",
+          "id": "comp_78",
           "type": "relay",
           "label": "4P 125/50A",
           "position": {
@@ -943,7 +916,7 @@
           }
         },
         {
-          "id": "comp_82",
+          "id": "comp_79",
           "type": "ground",
           "label": "E3",
           "position": {
@@ -955,7 +928,7 @@
           }
         },
         {
-          "id": "comp_83",
+          "id": "comp_80",
           "type": "ground",
           "label": "E3",
           "position": {
@@ -967,7 +940,7 @@
           }
         },
         {
-          "id": "comp_84",
+          "id": "comp_81",
           "type": "ground",
           "label": "E3",
           "position": {
@@ -979,7 +952,7 @@
           }
         },
         {
-          "id": "comp_85",
+          "id": "comp_82",
           "type": "meter",
           "label": "CTT",
           "position": {
@@ -991,7 +964,7 @@
           }
         },
         {
-          "id": "comp_86",
+          "id": "comp_83",
           "type": "meter",
           "label": "DIGITAL METER",
           "position": {
@@ -1003,7 +976,7 @@
           }
         },
         {
-          "id": "comp_87",
+          "id": "comp_84",
           "type": "meter",
           "label": "CTT",
           "position": {
@@ -1015,7 +988,7 @@
           }
         },
         {
-          "id": "comp_88",
+          "id": "comp_85",
           "type": "meter",
           "label": "DIGITAL METER",
           "position": {
@@ -1027,7 +1000,7 @@
           }
         },
         {
-          "id": "comp_89",
+          "id": "comp_86",
           "type": "meter",
           "label": "CTT",
           "position": {
@@ -1039,7 +1012,7 @@
           }
         },
         {
-          "id": "comp_90",
+          "id": "comp_87",
           "type": "meter",
           "label": "DIGITAL METER",
           "position": {
@@ -1051,7 +1024,7 @@
           }
         },
         {
-          "id": "comp_91",
+          "id": "comp_88",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1063,7 +1036,7 @@
           }
         },
         {
-          "id": "comp_92",
+          "id": "comp_89",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1075,11 +1048,47 @@
           }
         },
         {
-          "id": "comp_93",
+          "id": "comp_90",
           "type": "breaker",
           "label": "차단기",
           "position": {
             "x": 16,
+            "y": 46
+          },
+          "properties": {
+            "load": "정격전류"
+          }
+        },
+        {
+          "id": "comp_91",
+          "type": "breaker",
+          "label": "차단기",
+          "position": {
+            "x": 25,
+            "y": 46
+          },
+          "properties": {
+            "load": "정격전류"
+          }
+        },
+        {
+          "id": "comp_92",
+          "type": "breaker",
+          "label": "차단기",
+          "position": {
+            "x": 36,
+            "y": 46
+          },
+          "properties": {
+            "load": "정격전류"
+          }
+        },
+        {
+          "id": "comp_93",
+          "type": "breaker",
+          "label": "차단기",
+          "position": {
+            "x": 45,
             "y": 46
           },
           "properties": {
@@ -1091,7 +1100,7 @@
           "type": "breaker",
           "label": "차단기",
           "position": {
-            "x": 25,
+            "x": 56,
             "y": 46
           },
           "properties": {
@@ -1103,42 +1112,6 @@
           "type": "breaker",
           "label": "차단기",
           "position": {
-            "x": 36,
-            "y": 46
-          },
-          "properties": {
-            "load": "정격전류"
-          }
-        },
-        {
-          "id": "comp_96",
-          "type": "breaker",
-          "label": "차단기",
-          "position": {
-            "x": 45,
-            "y": 46
-          },
-          "properties": {
-            "load": "정격전류"
-          }
-        },
-        {
-          "id": "comp_97",
-          "type": "breaker",
-          "label": "차단기",
-          "position": {
-            "x": 56,
-            "y": 46
-          },
-          "properties": {
-            "load": "정격전류"
-          }
-        },
-        {
-          "id": "comp_98",
-          "type": "breaker",
-          "label": "차단기",
-          "position": {
             "x": 65,
             "y": 46
           },
@@ -1147,7 +1120,7 @@
           }
         },
         {
-          "id": "comp_99",
+          "id": "comp_96",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1159,7 +1132,7 @@
           }
         },
         {
-          "id": "comp_100",
+          "id": "comp_97",
           "type": "transformer",
           "label": "TR FL&FAN",
           "position": {
@@ -1171,7 +1144,7 @@
           }
         },
         {
-          "id": "comp_101",
+          "id": "comp_98",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1183,7 +1156,7 @@
           }
         },
         {
-          "id": "comp_102",
+          "id": "comp_99",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1195,7 +1168,7 @@
           }
         },
         {
-          "id": "comp_103",
+          "id": "comp_100",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1207,7 +1180,7 @@
           }
         },
         {
-          "id": "comp_104",
+          "id": "comp_101",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1219,7 +1192,7 @@
           }
         },
         {
-          "id": "comp_105",
+          "id": "comp_102",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1231,7 +1204,7 @@
           }
         },
         {
-          "id": "comp_106",
+          "id": "comp_103",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1243,7 +1216,7 @@
           }
         },
         {
-          "id": "comp_107",
+          "id": "comp_104",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1255,7 +1228,7 @@
           }
         },
         {
-          "id": "comp_108",
+          "id": "comp_105",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1267,7 +1240,7 @@
           }
         },
         {
-          "id": "comp_109",
+          "id": "comp_106",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1279,7 +1252,7 @@
           }
         },
         {
-          "id": "comp_110",
+          "id": "comp_107",
           "type": "transformer",
           "label": "DOWN TR",
           "position": {
@@ -1291,7 +1264,7 @@
           }
         },
         {
-          "id": "comp_111",
+          "id": "comp_108",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1303,7 +1276,7 @@
           }
         },
         {
-          "id": "comp_112",
+          "id": "comp_109",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1315,7 +1288,7 @@
           }
         },
         {
-          "id": "comp_113",
+          "id": "comp_110",
           "type": "ground",
           "label": "E3",
           "position": {
@@ -1327,7 +1300,7 @@
           }
         },
         {
-          "id": "comp_114",
+          "id": "comp_111",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1339,7 +1312,7 @@
           }
         },
         {
-          "id": "comp_115",
+          "id": "comp_112",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1351,7 +1324,7 @@
           }
         },
         {
-          "id": "comp_116",
+          "id": "comp_113",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1363,7 +1336,7 @@
           }
         },
         {
-          "id": "comp_117",
+          "id": "comp_114",
           "type": "relay",
           "label": "DC 110V 50A",
           "position": {
@@ -1374,7 +1347,7 @@
           "current": "50A"
         },
         {
-          "id": "comp_118",
+          "id": "comp_115",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1386,7 +1359,7 @@
           }
         },
         {
-          "id": "comp_119",
+          "id": "comp_116",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1398,7 +1371,7 @@
           }
         },
         {
-          "id": "comp_120",
+          "id": "comp_117",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1410,7 +1383,7 @@
           }
         },
         {
-          "id": "comp_121",
+          "id": "comp_118",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1422,7 +1395,7 @@
           }
         },
         {
-          "id": "comp_122",
+          "id": "comp_119",
           "type": "meter",
           "label": "DIGITAL METER",
           "position": {
@@ -1434,7 +1407,7 @@
           }
         },
         {
-          "id": "comp_123",
+          "id": "comp_120",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1446,7 +1419,7 @@
           }
         },
         {
-          "id": "comp_124",
+          "id": "comp_121",
           "type": "relay",
           "label": "DC 110V 50A",
           "position": {
@@ -1457,7 +1430,7 @@
           "current": "50A"
         },
         {
-          "id": "comp_125",
+          "id": "comp_122",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1469,7 +1442,7 @@
           }
         },
         {
-          "id": "comp_126",
+          "id": "comp_123",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1481,7 +1454,7 @@
           }
         },
         {
-          "id": "comp_127",
+          "id": "comp_124",
           "type": "panel",
           "label": "MCC-3 (기존 L-1)",
           "position": {
@@ -1493,7 +1466,7 @@
           }
         },
         {
-          "id": "comp_128",
+          "id": "comp_125",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1505,7 +1478,7 @@
           }
         },
         {
-          "id": "comp_129",
+          "id": "comp_126",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1517,55 +1490,55 @@
           }
         },
         {
+          "id": "comp_127",
+          "type": "breaker",
+          "label": "MCCB ABSc",
+          "position": {
+            "x": 36,
+            "y": 57
+          },
+          "properties": {
+            "load": "3P 125/100A"
+          }
+        },
+        {
+          "id": "comp_128",
+          "type": "breaker",
+          "label": "MCCB ABSc",
+          "position": {
+            "x": 45,
+            "y": 57
+          },
+          "properties": {
+            "load": "3P 125/100A"
+          }
+        },
+        {
+          "id": "comp_129",
+          "type": "breaker",
+          "label": "MCCB ABSc",
+          "position": {
+            "x": 36,
+            "y": 59
+          },
+          "properties": {
+            "load": "3P 125/50A"
+          }
+        },
+        {
           "id": "comp_130",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
-            "x": 36,
-            "y": 57
+            "x": 45,
+            "y": 59
           },
           "properties": {
-            "load": "3P 125/100A"
+            "load": "3P 125/50A"
           }
         },
         {
           "id": "comp_131",
-          "type": "breaker",
-          "label": "MCCB ABSc",
-          "position": {
-            "x": 45,
-            "y": 57
-          },
-          "properties": {
-            "load": "3P 125/100A"
-          }
-        },
-        {
-          "id": "comp_132",
-          "type": "breaker",
-          "label": "MCCB ABSc",
-          "position": {
-            "x": 36,
-            "y": 59
-          },
-          "properties": {
-            "load": "3P 125/50A"
-          }
-        },
-        {
-          "id": "comp_133",
-          "type": "breaker",
-          "label": "MCCB ABSc",
-          "position": {
-            "x": 45,
-            "y": 59
-          },
-          "properties": {
-            "load": "3P 125/50A"
-          }
-        },
-        {
-          "id": "comp_134",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1577,7 +1550,7 @@
           }
         },
         {
-          "id": "comp_135",
+          "id": "comp_132",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1589,7 +1562,7 @@
           }
         },
         {
-          "id": "comp_136",
+          "id": "comp_133",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -1603,7 +1576,7 @@
           }
         },
         {
-          "id": "comp_137",
+          "id": "comp_134",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -1617,7 +1590,7 @@
           }
         },
         {
-          "id": "comp_138",
+          "id": "comp_135",
           "type": "relay",
           "label": "DC 110V 50A",
           "position": {
@@ -1628,7 +1601,7 @@
           "current": "50A"
         },
         {
-          "id": "comp_139",
+          "id": "comp_136",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1640,7 +1613,7 @@
           }
         },
         {
-          "id": "comp_140",
+          "id": "comp_137",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1652,7 +1625,7 @@
           }
         },
         {
-          "id": "comp_141",
+          "id": "comp_138",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1664,7 +1637,7 @@
           }
         },
         {
-          "id": "comp_142",
+          "id": "comp_139",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1676,7 +1649,7 @@
           }
         },
         {
-          "id": "comp_143",
+          "id": "comp_140",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1688,7 +1661,7 @@
           }
         },
         {
-          "id": "comp_144",
+          "id": "comp_141",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1700,7 +1673,7 @@
           }
         },
         {
-          "id": "comp_145",
+          "id": "comp_142",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1712,7 +1685,7 @@
           }
         },
         {
-          "id": "comp_146",
+          "id": "comp_143",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1724,7 +1697,7 @@
           }
         },
         {
-          "id": "comp_147",
+          "id": "comp_144",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1736,7 +1709,7 @@
           }
         },
         {
-          "id": "comp_148",
+          "id": "comp_145",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1748,7 +1721,7 @@
           }
         },
         {
-          "id": "comp_149",
+          "id": "comp_146",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1760,7 +1733,7 @@
           }
         },
         {
-          "id": "comp_150",
+          "id": "comp_147",
           "type": "panel",
           "label": "MCC-2",
           "position": {
@@ -1772,7 +1745,7 @@
           }
         },
         {
-          "id": "comp_151",
+          "id": "comp_148",
           "type": "switch",
           "label": "ATS",
           "position": {
@@ -1784,7 +1757,7 @@
           }
         },
         {
-          "id": "comp_152",
+          "id": "comp_149",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1796,7 +1769,7 @@
           }
         },
         {
-          "id": "comp_153",
+          "id": "comp_150",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1808,7 +1781,7 @@
           }
         },
         {
-          "id": "comp_154",
+          "id": "comp_151",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -1820,7 +1793,7 @@
           }
         },
         {
-          "id": "comp_155",
+          "id": "comp_152",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1832,7 +1805,7 @@
           }
         },
         {
-          "id": "comp_156",
+          "id": "comp_153",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1844,7 +1817,7 @@
           }
         },
         {
-          "id": "comp_157",
+          "id": "comp_154",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1856,7 +1829,7 @@
           }
         },
         {
-          "id": "comp_158",
+          "id": "comp_155",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1868,7 +1841,7 @@
           }
         },
         {
-          "id": "comp_159",
+          "id": "comp_156",
           "type": "breaker",
           "label": "VCB 조작전원",
           "position": {
@@ -1880,7 +1853,7 @@
           }
         },
         {
-          "id": "comp_160",
+          "id": "comp_157",
           "type": "panel",
           "label": "MCC-1",
           "position": {
@@ -1892,7 +1865,7 @@
           }
         },
         {
-          "id": "comp_161",
+          "id": "comp_158",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1904,7 +1877,7 @@
           }
         },
         {
-          "id": "comp_162",
+          "id": "comp_159",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1916,7 +1889,7 @@
           }
         },
         {
-          "id": "comp_163",
+          "id": "comp_160",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1928,7 +1901,7 @@
           }
         },
         {
-          "id": "comp_164",
+          "id": "comp_161",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1940,7 +1913,7 @@
           }
         },
         {
-          "id": "comp_165",
+          "id": "comp_162",
           "type": "breaker",
           "label": "ACB 조작전원",
           "position": {
@@ -1952,7 +1925,7 @@
           }
         },
         {
-          "id": "comp_166",
+          "id": "comp_163",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1964,7 +1937,7 @@
           }
         },
         {
-          "id": "comp_167",
+          "id": "comp_164",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1976,7 +1949,7 @@
           }
         },
         {
-          "id": "comp_168",
+          "id": "comp_165",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -1988,7 +1961,7 @@
           }
         },
         {
-          "id": "comp_169",
+          "id": "comp_166",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2000,7 +1973,7 @@
           }
         },
         {
-          "id": "comp_170",
+          "id": "comp_167",
           "type": "breaker",
           "label": "차단기",
           "position": {
@@ -2012,7 +1985,7 @@
           }
         },
         {
-          "id": "comp_171",
+          "id": "comp_168",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2024,7 +1997,7 @@
           }
         },
         {
-          "id": "comp_172",
+          "id": "comp_169",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2036,7 +2009,7 @@
           }
         },
         {
-          "id": "comp_173",
+          "id": "comp_170",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2048,7 +2021,7 @@
           }
         },
         {
-          "id": "comp_174",
+          "id": "comp_171",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2060,7 +2033,7 @@
           }
         },
         {
-          "id": "comp_175",
+          "id": "comp_172",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2072,7 +2045,7 @@
           }
         },
         {
-          "id": "comp_176",
+          "id": "comp_173",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2084,7 +2057,7 @@
           }
         },
         {
-          "id": "comp_177",
+          "id": "comp_174",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2096,7 +2069,7 @@
           }
         },
         {
-          "id": "comp_178",
+          "id": "comp_175",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2108,7 +2081,7 @@
           }
         },
         {
-          "id": "comp_179",
+          "id": "comp_176",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -2123,7 +2096,7 @@
           }
         },
         {
-          "id": "comp_180",
+          "id": "comp_177",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -2138,7 +2111,7 @@
           }
         },
         {
-          "id": "comp_181",
+          "id": "comp_178",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2150,7 +2123,7 @@
           }
         },
         {
-          "id": "comp_182",
+          "id": "comp_179",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2162,7 +2135,7 @@
           }
         },
         {
-          "id": "comp_183",
+          "id": "comp_180",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2174,7 +2147,7 @@
           }
         },
         {
-          "id": "comp_184",
+          "id": "comp_181",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2186,7 +2159,7 @@
           }
         },
         {
-          "id": "comp_185",
+          "id": "comp_182",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2198,7 +2171,7 @@
           }
         },
         {
-          "id": "comp_186",
+          "id": "comp_183",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2210,7 +2183,7 @@
           }
         },
         {
-          "id": "comp_187",
+          "id": "comp_184",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2222,7 +2195,7 @@
           }
         },
         {
-          "id": "comp_188",
+          "id": "comp_185",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -2236,7 +2209,7 @@
           }
         },
         {
-          "id": "comp_189",
+          "id": "comp_186",
           "type": "relay",
           "label": "3P 125/50A",
           "position": {
@@ -2251,7 +2224,7 @@
           }
         },
         {
-          "id": "comp_190",
+          "id": "comp_187",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2263,7 +2236,7 @@
           }
         },
         {
-          "id": "comp_191",
+          "id": "comp_188",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2275,7 +2248,7 @@
           }
         },
         {
-          "id": "comp_192",
+          "id": "comp_189",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2287,7 +2260,7 @@
           }
         },
         {
-          "id": "comp_193",
+          "id": "comp_190",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2299,7 +2272,7 @@
           }
         },
         {
-          "id": "comp_194",
+          "id": "comp_191",
           "type": "breaker",
           "label": "MCCB ABSc",
           "position": {
@@ -2311,7 +2284,7 @@
           }
         },
         {
-          "id": "comp_195",
+          "id": "comp_192",
           "type": "relay",
           "label": "4P 125/50A",
           "position": {
@@ -2325,7 +2298,7 @@
           }
         },
         {
-          "id": "comp_196",
+          "id": "comp_193",
           "type": "breaker",
           "label": "1 금회 분전반 철거로 인한 SPARE 차단기",
           "position": {
@@ -2334,7 +2307,7 @@
           }
         },
         {
-          "id": "comp_197",
+          "id": "comp_194",
           "type": "breaker",
           "label": "2 기존 차단기 철거",
           "position": {
@@ -2571,6 +2544,30 @@
           }
         },
         {
+          "id": "junction_132.36_231.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 11,
+            "y": 27
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_367.56_231.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 31,
+            "y": 27
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
           "id": "junction_1070.52_231.2",
           "type": "bus",
           "label": "접점 (junction)",
@@ -2649,6 +2646,18 @@
           "position": {
             "x": 71,
             "y": 29
+          },
+          "properties": {
+            "synthetic": "junction"
+          }
+        },
+        {
+          "id": "junction_609.72_231.2",
+          "type": "bus",
+          "label": "접점 (junction)",
+          "position": {
+            "x": 51,
+            "y": 27
           },
           "properties": {
             "synthetic": "junction"
@@ -2824,7 +2833,7 @@
         },
         {
           "id": "conn_4",
-          "from": "comp_197",
+          "from": "comp_194",
           "to": "junction_967.92_805.16"
         },
         {
@@ -3009,28 +3018,28 @@
         },
         {
           "id": "conn_47",
-          "from": "comp_196",
+          "from": "comp_193",
           "to": "junction_1053_769.76"
         },
         {
           "id": "conn_48",
           "from": "junction_1070.52_699.56",
-          "to": "comp_196"
+          "to": "comp_193"
         },
         {
           "id": "conn_49",
-          "from": "comp_196",
+          "from": "comp_193",
           "to": "junction_1053_769.76"
         },
         {
           "id": "conn_51",
           "from": "junction_1053_769.76",
-          "to": "comp_197"
+          "to": "comp_194"
         },
         {
           "id": "conn_52",
-          "from": "comp_197",
-          "to": "comp_196"
+          "from": "comp_194",
+          "to": "comp_193"
         },
         {
           "id": "conn_53",
@@ -3056,7 +3065,7 @@
         },
         {
           "id": "conn_60",
-          "from": "comp_39",
+          "from": "junction_132.36_231.2",
           "to": "comp_16"
         },
         {
@@ -3067,11 +3076,11 @@
         {
           "id": "conn_62",
           "from": "comp_36",
-          "to": "comp_40"
+          "to": "junction_367.56_231.2"
         },
         {
           "id": "conn_63",
-          "from": "comp_40",
+          "from": "junction_367.56_231.2",
           "to": "comp_33"
         },
         {
@@ -3084,11 +3093,11 @@
         {
           "id": "conn_65",
           "from": "comp_25",
-          "to": "comp_41"
+          "to": "comp_18"
         },
         {
           "id": "conn_66",
-          "from": "comp_41",
+          "from": "comp_18",
           "to": "comp_38"
         },
         {
@@ -3203,7 +3212,7 @@
         },
         {
           "id": "conn_89",
-          "from": "comp_39",
+          "from": "junction_132.36_231.2",
           "to": "comp_32"
         },
         {
@@ -3216,49 +3225,49 @@
         {
           "id": "conn_91",
           "from": "comp_24",
-          "to": "comp_40"
+          "to": "junction_367.56_231.2"
         },
         {
           "id": "conn_92",
-          "from": "comp_40",
+          "from": "junction_367.56_231.2",
           "to": "comp_37"
         },
         {
           "id": "conn_93",
           "from": "comp_37",
-          "to": "comp_41"
+          "to": "comp_25"
         },
         {
           "id": "conn_94",
-          "from": "comp_41",
+          "from": "comp_25",
           "to": "comp_34"
         },
         {
           "id": "conn_95",
           "from": "comp_34",
-          "to": "comp_44",
+          "to": "comp_41",
           "conductorSize": "35sq",
           "cableType": "F-CV"
         },
         {
           "id": "conn_96",
-          "from": "comp_44",
+          "from": "comp_41",
           "to": "junction_848.4_244.4"
         },
         {
           "id": "conn_97",
-          "from": "comp_46",
-          "to": "comp_62"
+          "from": "comp_43",
+          "to": "comp_59"
         },
         {
           "id": "conn_98",
-          "from": "comp_183",
-          "to": "comp_70"
+          "from": "comp_180",
+          "to": "comp_67"
         },
         {
           "id": "conn_99",
-          "from": "comp_126",
-          "to": "comp_101"
+          "from": "comp_123",
+          "to": "comp_98"
         },
         {
           "id": "conn_100",
@@ -3268,7 +3277,7 @@
         {
           "id": "conn_101",
           "from": "junction_132.36_147.44",
-          "to": "comp_39"
+          "to": "junction_132.36_231.2"
         },
         {
           "id": "conn_102",
@@ -3276,19 +3285,19 @@
           "to": "junction_367.56_147.44"
         },
         {
-          "id": "conn_104",
-          "from": "comp_40",
-          "to": "comp_55"
+          "id": "conn_103",
+          "from": "junction_367.56_231.2",
+          "to": "comp_52"
         },
         {
           "id": "conn_105",
-          "from": "comp_83",
-          "to": "comp_127"
+          "from": "comp_80",
+          "to": "comp_124"
         },
         {
           "id": "conn_106",
-          "from": "comp_127",
-          "to": "comp_150"
+          "from": "comp_124",
+          "to": "comp_147"
         },
         {
           "id": "conn_107",
@@ -3297,18 +3306,18 @@
         },
         {
           "id": "conn_108",
-          "from": "comp_94",
-          "to": "comp_86"
+          "from": "comp_91",
+          "to": "comp_83"
         },
         {
           "id": "conn_109",
-          "from": "comp_94",
-          "to": "comp_86"
+          "from": "comp_91",
+          "to": "comp_83"
         },
         {
           "id": "conn_110",
-          "from": "comp_101",
-          "to": "comp_94"
+          "from": "comp_98",
+          "to": "comp_91"
         },
         {
           "id": "conn_113",
@@ -3317,18 +3326,18 @@
         },
         {
           "id": "conn_114",
-          "from": "comp_101",
-          "to": "comp_94"
+          "from": "comp_98",
+          "to": "comp_91"
         },
         {
           "id": "conn_115",
-          "from": "comp_101",
-          "to": "comp_94"
+          "from": "comp_98",
+          "to": "comp_91"
         },
         {
           "id": "conn_116",
-          "from": "comp_105",
-          "to": "comp_94"
+          "from": "comp_102",
+          "to": "comp_91"
         },
         {
           "id": "conn_117",
@@ -3342,18 +3351,18 @@
         },
         {
           "id": "conn_119",
-          "from": "comp_105",
-          "to": "comp_127"
+          "from": "comp_102",
+          "to": "comp_124"
         },
         {
           "id": "conn_120",
-          "from": "comp_105",
-          "to": "comp_94"
+          "from": "comp_102",
+          "to": "comp_91"
         },
         {
           "id": "conn_121",
-          "from": "comp_111",
-          "to": "comp_127"
+          "from": "comp_108",
+          "to": "comp_124"
         },
         {
           "id": "conn_122",
@@ -3373,17 +3382,17 @@
         {
           "id": "conn_127",
           "from": "junction_644.04_147.44",
-          "to": "comp_41"
+          "to": "junction_609.72_231.2"
         },
         {
-          "id": "conn_129",
-          "from": "comp_41",
-          "to": "comp_57"
+          "id": "conn_128",
+          "from": "junction_609.72_231.2",
+          "to": "comp_54"
         },
         {
           "id": "conn_130",
-          "from": "comp_57",
-          "to": "comp_108"
+          "from": "comp_54",
+          "to": "comp_105"
         },
         {
           "id": "conn_131",
@@ -3393,11 +3402,11 @@
         {
           "id": "conn_132",
           "from": "junction_609.72_531.68",
-          "to": "comp_193"
+          "to": "comp_190"
         },
         {
           "id": "conn_133",
-          "from": "comp_193",
+          "from": "comp_190",
           "to": "junction_609.72_683.6"
         },
         {
@@ -3442,232 +3451,232 @@
         },
         {
           "id": "conn_146",
-          "from": "comp_39",
-          "to": "comp_51"
+          "from": "junction_132.36_231.2",
+          "to": "comp_48"
         },
         {
           "id": "conn_147",
-          "from": "comp_46",
-          "to": "comp_54",
+          "from": "comp_43",
+          "to": "comp_51",
           "conductorSize": "185sq",
           "cableType": "F-CV"
         },
         {
           "id": "conn_148",
-          "from": "comp_54",
-          "to": "comp_40"
+          "from": "comp_51",
+          "to": "junction_367.56_231.2"
         },
         {
           "id": "conn_149",
-          "from": "comp_40",
-          "to": "comp_47"
+          "from": "comp_49",
+          "to": "comp_44"
         },
         {
           "id": "conn_150",
-          "from": "comp_47",
-          "to": "comp_57"
+          "from": "comp_44",
+          "to": "comp_54"
         },
         {
           "id": "conn_151",
-          "from": "comp_57",
-          "to": "comp_53"
+          "from": "comp_54",
+          "to": "comp_50"
         },
         {
           "id": "conn_152",
-          "from": "comp_53",
-          "to": "comp_44",
+          "from": "comp_50",
+          "to": "comp_41",
           "conductorSize": "240sq",
           "cableType": "F-CV"
         },
         {
           "id": "conn_153",
-          "from": "comp_59",
-          "to": "comp_49"
+          "from": "comp_56",
+          "to": "comp_46"
         },
         {
           "id": "conn_154",
-          "from": "comp_85",
-          "to": "comp_86"
+          "from": "comp_82",
+          "to": "comp_83"
         },
         {
           "id": "conn_157",
-          "from": "comp_86",
-          "to": "comp_60"
-        },
-        {
-          "id": "conn_158",
-          "from": "comp_86",
-          "to": "comp_55"
-        },
-        {
-          "id": "conn_159",
-          "from": "comp_39",
-          "to": "comp_51"
-        },
-        {
-          "id": "conn_160",
-          "from": "comp_51",
-          "to": "comp_54"
-        },
-        {
-          "id": "conn_161",
-          "from": "comp_54",
-          "to": "comp_40"
-        },
-        {
-          "id": "conn_162",
-          "from": "comp_40",
-          "to": "comp_52"
-        },
-        {
-          "id": "conn_163",
-          "from": "comp_47",
+          "from": "comp_83",
           "to": "comp_57"
         },
         {
-          "id": "conn_164",
-          "from": "comp_57",
-          "to": "comp_53"
+          "id": "conn_158",
+          "from": "comp_83",
+          "to": "comp_52"
         },
         {
-          "id": "conn_165",
-          "from": "comp_53",
-          "to": "comp_59"
+          "id": "conn_159",
+          "from": "junction_132.36_231.2",
+          "to": "comp_48"
         },
         {
-          "id": "conn_166",
-          "from": "comp_59",
+          "id": "conn_160",
+          "from": "comp_48",
+          "to": "comp_51"
+        },
+        {
+          "id": "conn_161",
+          "from": "comp_51",
+          "to": "comp_52"
+        },
+        {
+          "id": "conn_162",
+          "from": "comp_63",
           "to": "comp_49"
         },
         {
-          "id": "conn_167",
-          "from": "comp_46",
+          "id": "conn_163",
+          "from": "comp_44",
           "to": "comp_54"
         },
         {
+          "id": "conn_164",
+          "from": "comp_54",
+          "to": "comp_50"
+        },
+        {
+          "id": "conn_165",
+          "from": "comp_50",
+          "to": "comp_56"
+        },
+        {
+          "id": "conn_166",
+          "from": "comp_56",
+          "to": "comp_46"
+        },
+        {
+          "id": "conn_167",
+          "from": "comp_43",
+          "to": "comp_51"
+        },
+        {
           "id": "conn_168",
-          "from": "comp_167",
-          "to": "comp_166"
+          "from": "comp_164",
+          "to": "comp_163"
         },
         {
           "id": "conn_169",
-          "from": "comp_167",
-          "to": "comp_140"
+          "from": "comp_164",
+          "to": "comp_137"
         },
         {
           "id": "conn_170",
-          "from": "comp_135",
-          "to": "comp_127"
+          "from": "comp_132",
+          "to": "comp_124"
         },
         {
           "id": "conn_171",
-          "from": "comp_135",
-          "to": "comp_127"
+          "from": "comp_132",
+          "to": "comp_124"
         },
         {
           "id": "conn_172",
-          "from": "comp_140",
-          "to": "comp_150"
+          "from": "comp_137",
+          "to": "comp_147"
         },
         {
           "id": "conn_173",
-          "from": "comp_126",
-          "to": "comp_127"
+          "from": "comp_123",
+          "to": "comp_124"
         },
         {
           "id": "conn_174",
-          "from": "comp_126",
-          "to": "comp_127"
+          "from": "comp_123",
+          "to": "comp_124"
         },
         {
           "id": "conn_175",
-          "from": "comp_126",
-          "to": "comp_127"
+          "from": "comp_123",
+          "to": "comp_124"
         },
         {
           "id": "conn_176",
-          "from": "comp_149",
-          "to": "comp_150"
+          "from": "comp_146",
+          "to": "comp_147"
         },
         {
           "id": "conn_177",
-          "from": "comp_149",
-          "to": "comp_150"
+          "from": "comp_146",
+          "to": "comp_147"
         },
         {
           "id": "conn_178",
-          "from": "comp_157",
-          "to": "comp_150"
+          "from": "comp_154",
+          "to": "comp_147"
         },
         {
           "id": "conn_179",
-          "from": "comp_140",
-          "to": "comp_150"
+          "from": "comp_137",
+          "to": "comp_147"
         },
         {
           "id": "conn_180",
-          "from": "comp_140",
-          "to": "comp_150"
+          "from": "comp_137",
+          "to": "comp_147"
         },
         {
           "id": "conn_181",
-          "from": "comp_142",
-          "to": "comp_150"
+          "from": "comp_139",
+          "to": "comp_147"
         },
         {
           "id": "conn_182",
-          "from": "comp_183",
-          "to": "comp_160"
+          "from": "comp_180",
+          "to": "comp_157"
         },
         {
           "id": "conn_183",
-          "from": "comp_183",
-          "to": "comp_160"
+          "from": "comp_180",
+          "to": "comp_157"
         },
         {
           "id": "conn_184",
-          "from": "comp_183",
-          "to": "comp_160"
+          "from": "comp_180",
+          "to": "comp_157"
         },
         {
           "id": "conn_185",
-          "from": "comp_166",
-          "to": "comp_134"
+          "from": "comp_163",
+          "to": "comp_131"
         },
         {
           "id": "conn_186",
-          "from": "comp_134",
-          "to": "comp_139"
+          "from": "comp_131",
+          "to": "comp_136"
         },
         {
           "id": "conn_187",
-          "from": "comp_134",
-          "to": "comp_139"
+          "from": "comp_131",
+          "to": "comp_136"
         },
         {
           "id": "conn_188",
-          "from": "comp_134",
-          "to": "comp_139"
+          "from": "comp_131",
+          "to": "comp_136"
         },
         {
           "id": "conn_193",
-          "from": "comp_134",
-          "to": "comp_139"
+          "from": "comp_131",
+          "to": "comp_136"
         },
         {
           "id": "conn_198",
-          "from": "comp_188",
-          "to": "comp_182"
+          "from": "comp_185",
+          "to": "comp_179"
         },
         {
           "id": "conn_199",
-          "from": "comp_179",
-          "to": "comp_182"
+          "from": "comp_176",
+          "to": "comp_179"
         },
         {
           "id": "conn_201",
           "from": "junction_100.08_688.4",
-          "to": "comp_188"
+          "to": "comp_185"
         },
         {
           "id": "conn_202",
@@ -3677,533 +3686,533 @@
         {
           "id": "conn_203",
           "from": "junction_302.64_683.6",
-          "to": "comp_191"
+          "to": "comp_188"
         },
         {
           "id": "conn_204",
-          "from": "comp_191",
+          "from": "comp_188",
           "to": "junction_486.84_683.6"
         },
         {
           "id": "conn_205",
-          "from": "comp_192",
+          "from": "comp_189",
           "to": "junction_609.72_683.6"
         },
         {
           "id": "conn_206",
           "from": "junction_609.72_683.6",
-          "to": "comp_193"
+          "to": "comp_190"
         },
         {
           "id": "conn_207",
-          "from": "comp_193",
-          "to": "comp_195"
+          "from": "comp_190",
+          "to": "comp_192"
         },
         {
           "id": "conn_208",
-          "from": "comp_195",
+          "from": "comp_192",
           "to": "junction_848.4_683.6"
         },
         {
           "id": "conn_210",
-          "from": "comp_39",
-          "to": "comp_82"
+          "from": "junction_132.36_231.2",
+          "to": "comp_79"
         },
         {
           "id": "conn_211",
-          "from": "comp_82",
-          "to": "comp_118"
+          "from": "comp_79",
+          "to": "comp_115"
         },
         {
           "id": "conn_212",
-          "from": "comp_118",
-          "to": "comp_141"
+          "from": "comp_115",
+          "to": "comp_138"
         },
         {
           "id": "conn_213",
-          "from": "comp_145",
-          "to": "comp_188"
+          "from": "comp_142",
+          "to": "comp_185"
         },
         {
           "id": "conn_214",
-          "from": "comp_188",
+          "from": "comp_185",
           "to": "junction_100.08_688.4"
         },
         {
           "id": "conn_215",
-          "from": "comp_47",
-          "to": "comp_63"
+          "from": "comp_44",
+          "to": "comp_60"
         },
         {
           "id": "conn_216",
-          "from": "comp_133",
-          "to": "comp_71"
+          "from": "comp_130",
+          "to": "comp_68"
         },
         {
           "id": "conn_217",
-          "from": "comp_87",
-          "to": "comp_88"
+          "from": "comp_84",
+          "to": "comp_85"
         },
         {
           "id": "conn_220",
-          "from": "comp_88",
-          "to": "comp_61"
+          "from": "comp_85",
+          "to": "comp_58"
         },
         {
           "id": "conn_221",
-          "from": "comp_88",
-          "to": "comp_57"
+          "from": "comp_85",
+          "to": "comp_54"
         },
         {
           "id": "conn_222",
-          "from": "comp_47",
-          "to": "comp_56",
+          "from": "comp_44",
+          "to": "comp_53",
           "conductorSize": "185sq",
           "cableType": "F-CV"
         },
         {
           "id": "conn_223",
-          "from": "comp_131",
-          "to": "comp_102"
+          "from": "comp_128",
+          "to": "comp_99"
         },
         {
           "id": "conn_224",
-          "from": "comp_96",
-          "to": "comp_88"
+          "from": "comp_93",
+          "to": "comp_85"
         },
         {
           "id": "conn_225",
-          "from": "comp_96",
-          "to": "comp_88"
+          "from": "comp_93",
+          "to": "comp_85"
         },
         {
           "id": "conn_226",
-          "from": "comp_102",
-          "to": "comp_96"
+          "from": "comp_99",
+          "to": "comp_93"
         },
         {
           "id": "conn_232",
-          "from": "comp_133",
-          "to": "comp_137"
+          "from": "comp_130",
+          "to": "comp_134"
         },
         {
           "id": "conn_233",
-          "from": "comp_130",
-          "to": "comp_106"
+          "from": "comp_127",
+          "to": "comp_103"
         },
         {
           "id": "conn_236",
-          "from": "comp_95",
-          "to": "comp_106"
+          "from": "comp_92",
+          "to": "comp_103"
         },
         {
           "id": "conn_243",
-          "from": "comp_89",
-          "to": "comp_90"
+          "from": "comp_86",
+          "to": "comp_87"
         },
         {
           "id": "conn_246",
-          "from": "comp_90",
-          "to": "comp_59"
+          "from": "comp_87",
+          "to": "comp_56"
         },
         {
           "id": "conn_247",
-          "from": "comp_50",
-          "to": "comp_59"
+          "from": "comp_47",
+          "to": "comp_56"
         },
         {
           "id": "conn_248",
-          "from": "comp_50",
-          "to": "comp_64"
+          "from": "comp_47",
+          "to": "comp_61"
         },
         {
           "id": "conn_249",
-          "from": "comp_72",
-          "to": "comp_194"
+          "from": "comp_69",
+          "to": "comp_191"
         },
         {
           "id": "conn_250",
-          "from": "comp_98",
-          "to": "comp_90"
+          "from": "comp_95",
+          "to": "comp_87"
         },
         {
           "id": "conn_251",
-          "from": "comp_98",
-          "to": "comp_90"
+          "from": "comp_95",
+          "to": "comp_87"
         },
         {
           "id": "conn_252",
-          "from": "comp_104",
-          "to": "comp_98"
+          "from": "comp_101",
+          "to": "comp_95"
         },
         {
           "id": "conn_253",
-          "from": "comp_97",
-          "to": "comp_103"
+          "from": "comp_94",
+          "to": "comp_100"
         },
         {
           "id": "conn_254",
-          "from": "comp_97",
-          "to": "comp_103"
+          "from": "comp_94",
+          "to": "comp_100"
         },
         {
           "id": "conn_255",
-          "from": "comp_97",
-          "to": "comp_103"
+          "from": "comp_94",
+          "to": "comp_100"
         },
         {
           "id": "conn_257",
-          "from": "comp_97",
-          "to": "comp_103"
+          "from": "comp_94",
+          "to": "comp_100"
         },
         {
           "id": "conn_259",
           "from": "junction_848.4_244.4",
-          "to": "comp_49"
+          "to": "comp_46"
         },
         {
           "id": "conn_260",
-          "from": "comp_49",
+          "from": "comp_46",
           "to": "junction_848.4_347.36"
         },
         {
           "id": "conn_261",
           "from": "junction_848.4_347.36",
-          "to": "comp_123"
+          "to": "comp_120"
         },
         {
           "id": "conn_262",
-          "from": "comp_123",
-          "to": "comp_138"
+          "from": "comp_120",
+          "to": "comp_135"
         },
         {
           "id": "conn_263",
-          "from": "comp_138",
+          "from": "comp_135",
           "to": "junction_848.4_683.6"
         },
         {
           "id": "conn_272",
-          "from": "comp_107",
-          "to": "comp_96"
+          "from": "comp_104",
+          "to": "comp_93"
         },
         {
           "id": "conn_280",
-          "from": "comp_133",
-          "to": "comp_137"
+          "from": "comp_130",
+          "to": "comp_134"
         },
         {
           "id": "conn_281",
-          "from": "comp_133",
-          "to": "comp_137"
+          "from": "comp_130",
+          "to": "comp_134"
         },
         {
           "id": "conn_286",
-          "from": "comp_104",
-          "to": "comp_98"
+          "from": "comp_101",
+          "to": "comp_95"
         },
         {
           "id": "conn_287",
-          "from": "comp_104",
-          "to": "comp_98"
+          "from": "comp_101",
+          "to": "comp_95"
         },
         {
           "id": "conn_288",
-          "from": "comp_109",
-          "to": "comp_98"
+          "from": "comp_106",
+          "to": "comp_95"
         },
         {
           "id": "conn_289",
-          "from": "comp_109",
-          "to": "comp_123"
+          "from": "comp_106",
+          "to": "comp_120"
         },
         {
           "id": "conn_290",
-          "from": "comp_109",
-          "to": "comp_98"
+          "from": "comp_106",
+          "to": "comp_95"
         },
         {
           "id": "conn_291",
-          "from": "comp_109",
-          "to": "comp_123"
+          "from": "comp_106",
+          "to": "comp_120"
         },
         {
           "id": "conn_292",
-          "from": "comp_111",
-          "to": "comp_127"
+          "from": "comp_108",
+          "to": "comp_124"
         },
         {
           "id": "conn_293",
-          "from": "comp_111",
-          "to": "comp_127"
+          "from": "comp_108",
+          "to": "comp_124"
         },
         {
           "id": "conn_294",
-          "from": "comp_114",
-          "to": "comp_127"
+          "from": "comp_111",
+          "to": "comp_124"
         },
         {
           "id": "conn_295",
-          "from": "comp_119",
-          "to": "comp_127"
+          "from": "comp_116",
+          "to": "comp_124"
         },
         {
           "id": "conn_296",
-          "from": "comp_119",
-          "to": "comp_127"
+          "from": "comp_116",
+          "to": "comp_124"
         },
         {
           "id": "conn_297",
-          "from": "comp_126",
-          "to": "comp_127"
+          "from": "comp_123",
+          "to": "comp_124"
         },
         {
           "id": "conn_298",
-          "from": "comp_142",
-          "to": "comp_150"
+          "from": "comp_139",
+          "to": "comp_147"
         },
         {
           "id": "conn_299",
-          "from": "comp_142",
-          "to": "comp_150"
+          "from": "comp_139",
+          "to": "comp_147"
         },
         {
           "id": "conn_300",
-          "from": "comp_146",
-          "to": "comp_150"
+          "from": "comp_143",
+          "to": "comp_147"
         },
         {
           "id": "conn_301",
-          "from": "comp_157",
-          "to": "comp_150"
+          "from": "comp_154",
+          "to": "comp_147"
         },
         {
           "id": "conn_302",
-          "from": "comp_157",
-          "to": "comp_150"
+          "from": "comp_154",
+          "to": "comp_147"
         },
         {
           "id": "conn_303",
-          "from": "comp_157",
-          "to": "comp_150"
+          "from": "comp_154",
+          "to": "comp_147"
         },
         {
           "id": "conn_304",
-          "from": "comp_167",
-          "to": "comp_160"
+          "from": "comp_164",
+          "to": "comp_157"
         },
         {
           "id": "conn_305",
-          "from": "comp_167",
-          "to": "comp_150"
+          "from": "comp_164",
+          "to": "comp_147"
         },
         {
           "id": "conn_306",
-          "from": "comp_174",
-          "to": "comp_160"
+          "from": "comp_171",
+          "to": "comp_157"
         },
         {
           "id": "conn_316",
-          "from": "comp_183",
-          "to": "comp_188"
+          "from": "comp_180",
+          "to": "comp_185"
         },
         {
           "id": "conn_317",
-          "from": "comp_174",
-          "to": "comp_160"
+          "from": "comp_171",
+          "to": "comp_157"
         },
         {
           "id": "conn_318",
-          "from": "comp_174",
-          "to": "comp_160"
+          "from": "comp_171",
+          "to": "comp_157"
         },
         {
           "id": "conn_319",
-          "from": "comp_180",
-          "to": "comp_160"
+          "from": "comp_177",
+          "to": "comp_157"
         },
         {
           "id": "conn_320",
-          "from": "comp_179",
-          "to": "comp_173"
+          "from": "comp_176",
+          "to": "comp_170"
         },
         {
           "id": "conn_323",
-          "from": "comp_166",
-          "to": "comp_188"
+          "from": "comp_163",
+          "to": "comp_185"
         },
         {
           "id": "conn_324",
-          "from": "comp_167",
-          "to": "comp_183"
+          "from": "comp_164",
+          "to": "comp_180"
         },
         {
           "id": "conn_325",
-          "from": "comp_136",
-          "to": "comp_132"
+          "from": "comp_133",
+          "to": "comp_129"
         },
         {
           "id": "conn_329",
-          "from": "comp_125",
-          "to": "comp_126"
+          "from": "comp_122",
+          "to": "comp_123"
         },
         {
           "id": "conn_330",
-          "from": "comp_126",
-          "to": "comp_127"
+          "from": "comp_123",
+          "to": "comp_124"
         },
         {
           "id": "conn_331",
-          "from": "comp_151",
-          "to": "comp_192"
+          "from": "comp_148",
+          "to": "comp_189"
         },
         {
           "id": "conn_332",
-          "from": "comp_150",
-          "to": "comp_151"
+          "from": "comp_147",
+          "to": "comp_148"
         },
         {
           "id": "conn_333",
-          "from": "comp_192",
-          "to": "comp_191"
+          "from": "comp_189",
+          "to": "comp_188"
         },
         {
           "id": "conn_334",
-          "from": "comp_192",
-          "to": "comp_162"
+          "from": "comp_189",
+          "to": "comp_159"
         },
         {
           "id": "conn_337",
-          "from": "comp_162",
-          "to": "comp_154"
+          "from": "comp_159",
+          "to": "comp_151"
         },
         {
           "id": "conn_338",
-          "from": "comp_162",
-          "to": "comp_154"
+          "from": "comp_159",
+          "to": "comp_151"
         },
         {
           "id": "conn_339",
-          "from": "comp_162",
-          "to": "comp_154"
+          "from": "comp_159",
+          "to": "comp_151"
         },
         {
           "id": "conn_340",
-          "from": "comp_169",
-          "to": "comp_154"
+          "from": "comp_166",
+          "to": "comp_151"
         },
         {
           "id": "conn_342",
-          "from": "comp_169",
-          "to": "comp_154"
+          "from": "comp_166",
+          "to": "comp_151"
         },
         {
           "id": "conn_350",
-          "from": "comp_191",
-          "to": "comp_153"
+          "from": "comp_188",
+          "to": "comp_150"
         },
         {
           "id": "conn_351",
-          "from": "comp_153",
-          "to": "comp_160"
+          "from": "comp_150",
+          "to": "comp_157"
         },
         {
           "id": "conn_352",
-          "from": "comp_153",
-          "to": "comp_160"
+          "from": "comp_150",
+          "to": "comp_157"
         },
         {
           "id": "conn_353",
-          "from": "comp_153",
-          "to": "comp_160"
+          "from": "comp_150",
+          "to": "comp_157"
         },
         {
           "id": "conn_354",
-          "from": "comp_168",
-          "to": "comp_160"
+          "from": "comp_165",
+          "to": "comp_157"
         },
         {
           "id": "conn_355",
-          "from": "comp_168",
-          "to": "comp_160"
+          "from": "comp_165",
+          "to": "comp_157"
         },
         {
           "id": "conn_356",
-          "from": "comp_175",
-          "to": "comp_160"
+          "from": "comp_172",
+          "to": "comp_157"
         },
         {
           "id": "conn_357",
-          "from": "comp_175",
-          "to": "comp_160"
+          "from": "comp_172",
+          "to": "comp_157"
         },
         {
           "id": "conn_358",
-          "from": "comp_175",
-          "to": "comp_160"
+          "from": "comp_172",
+          "to": "comp_157"
         },
         {
           "id": "conn_359",
-          "from": "comp_184",
-          "to": "comp_160"
+          "from": "comp_181",
+          "to": "comp_157"
         },
         {
           "id": "conn_360",
-          "from": "comp_189",
-          "to": "comp_160"
+          "from": "comp_186",
+          "to": "comp_157"
         },
         {
           "id": "conn_361",
-          "from": "comp_184",
-          "to": "comp_160"
+          "from": "comp_181",
+          "to": "comp_157"
         },
         {
           "id": "conn_363",
-          "from": "comp_161",
-          "to": "comp_160"
+          "from": "comp_158",
+          "to": "comp_157"
         },
         {
           "id": "conn_364",
-          "from": "comp_153",
-          "to": "comp_160"
+          "from": "comp_150",
+          "to": "comp_157"
         },
         {
           "id": "conn_365",
-          "from": "comp_168",
-          "to": "comp_160"
+          "from": "comp_165",
+          "to": "comp_157"
         },
         {
           "id": "conn_366",
-          "from": "comp_137",
-          "to": "comp_131"
+          "from": "comp_134",
+          "to": "comp_128"
         },
         {
           "id": "conn_367",
-          "from": "comp_102",
-          "to": "comp_96"
+          "from": "comp_99",
+          "to": "comp_93"
         },
         {
           "id": "conn_368",
-          "from": "comp_102",
-          "to": "comp_96"
+          "from": "comp_99",
+          "to": "comp_93"
         },
         {
           "id": "conn_369",
-          "from": "comp_107",
-          "to": "comp_96"
+          "from": "comp_104",
+          "to": "comp_93"
         },
         {
           "id": "conn_376",
-          "from": "comp_150",
-          "to": "comp_136"
+          "from": "comp_147",
+          "to": "comp_133"
         },
         {
           "id": "conn_377",
-          "from": "comp_136",
-          "to": "comp_137"
+          "from": "comp_133",
+          "to": "comp_134"
         },
         {
           "id": "conn_378",
-          "from": "comp_137",
+          "from": "comp_134",
           "to": "junction_609.72_531.68"
         },
         {
@@ -4214,17 +4223,17 @@
         {
           "id": "conn_380",
           "from": "junction_698.28_518.84",
-          "to": "comp_144"
+          "to": "comp_141"
         },
         {
           "id": "conn_381",
-          "from": "comp_144",
-          "to": "comp_138"
+          "from": "comp_141",
+          "to": "comp_135"
         },
         {
           "id": "conn_382",
-          "from": "comp_150",
-          "to": "comp_191"
+          "from": "comp_147",
+          "to": "comp_188"
         },
         {
           "id": "conn_383",
@@ -4253,207 +4262,207 @@
         },
         {
           "id": "conn_388",
-          "from": "comp_69",
-          "to": "comp_110"
+          "from": "comp_66",
+          "to": "comp_107"
         },
         {
           "id": "conn_390",
-          "from": "comp_152",
-          "to": "comp_143"
+          "from": "comp_149",
+          "to": "comp_140"
         },
         {
           "id": "conn_391",
-          "from": "comp_49",
-          "to": "comp_68"
+          "from": "comp_46",
+          "to": "comp_65"
         },
         {
           "id": "conn_392",
-          "from": "comp_124",
-          "to": "comp_122"
+          "from": "comp_121",
+          "to": "comp_119"
         },
         {
           "id": "conn_393",
-          "from": "comp_124",
-          "to": "comp_138"
+          "from": "comp_121",
+          "to": "comp_135"
         },
         {
           "id": "conn_394",
-          "from": "comp_123",
-          "to": "comp_122"
+          "from": "comp_120",
+          "to": "comp_119"
         },
         {
           "id": "conn_395",
-          "from": "comp_123",
+          "from": "comp_120",
           "to": "junction_848.4_683.6"
         },
         {
           "id": "conn_396",
-          "from": "comp_190",
+          "from": "comp_187",
           "to": "junction_848.4_683.6"
         },
         {
           "id": "conn_397",
-          "from": "comp_91",
-          "to": "comp_100"
+          "from": "comp_88",
+          "to": "comp_97"
         },
         {
           "id": "conn_398",
-          "from": "comp_91",
-          "to": "comp_100"
+          "from": "comp_88",
+          "to": "comp_97"
         },
         {
           "id": "conn_399",
-          "from": "comp_92",
-          "to": "comp_100"
+          "from": "comp_89",
+          "to": "comp_97"
         },
         {
           "id": "conn_400",
-          "from": "comp_190",
-          "to": "comp_165"
+          "from": "comp_187",
+          "to": "comp_162"
         },
         {
           "id": "conn_401",
-          "from": "comp_190",
-          "to": "comp_165"
+          "from": "comp_187",
+          "to": "comp_162"
         },
         {
           "id": "conn_402",
-          "from": "comp_190",
-          "to": "comp_165"
+          "from": "comp_187",
+          "to": "comp_162"
         },
         {
           "id": "conn_403",
-          "from": "comp_92",
-          "to": "comp_100"
+          "from": "comp_89",
+          "to": "comp_97"
         },
         {
           "id": "conn_404",
-          "from": "comp_92",
-          "to": "comp_100"
+          "from": "comp_89",
+          "to": "comp_97"
         },
         {
           "id": "conn_405",
-          "from": "comp_99",
-          "to": "comp_100"
+          "from": "comp_96",
+          "to": "comp_97"
         },
         {
           "id": "conn_406",
-          "from": "comp_100",
-          "to": "comp_69"
+          "from": "comp_97",
+          "to": "comp_66"
         },
         {
           "id": "conn_407",
-          "from": "comp_143",
-          "to": "comp_190"
+          "from": "comp_140",
+          "to": "comp_187"
         },
         {
           "id": "conn_408",
-          "from": "comp_164",
-          "to": "comp_165"
+          "from": "comp_161",
+          "to": "comp_162"
         },
         {
           "id": "conn_409",
-          "from": "comp_164",
-          "to": "comp_165"
+          "from": "comp_161",
+          "to": "comp_162"
         },
         {
           "id": "conn_410",
-          "from": "comp_172",
-          "to": "comp_165"
+          "from": "comp_169",
+          "to": "comp_162"
         },
         {
           "id": "conn_411",
-          "from": "comp_158",
-          "to": "comp_159"
+          "from": "comp_155",
+          "to": "comp_156"
         },
         {
           "id": "conn_412",
-          "from": "comp_158",
-          "to": "comp_159"
+          "from": "comp_155",
+          "to": "comp_156"
         },
         {
           "id": "conn_413",
-          "from": "comp_164",
-          "to": "comp_159"
+          "from": "comp_161",
+          "to": "comp_156"
         },
         {
           "id": "conn_414",
-          "from": "comp_172",
-          "to": "comp_165"
+          "from": "comp_169",
+          "to": "comp_162"
         },
         {
           "id": "conn_415",
-          "from": "comp_172",
-          "to": "comp_165"
+          "from": "comp_169",
+          "to": "comp_162"
         },
         {
           "id": "conn_416",
-          "from": "comp_181",
-          "to": "comp_165"
+          "from": "comp_178",
+          "to": "comp_162"
         },
         {
           "id": "conn_417",
-          "from": "comp_181",
-          "to": "comp_165"
+          "from": "comp_178",
+          "to": "comp_162"
         },
         {
           "id": "conn_418",
-          "from": "comp_181",
-          "to": "comp_165"
+          "from": "comp_178",
+          "to": "comp_162"
         },
         {
           "id": "conn_419",
-          "from": "comp_190",
-          "to": "comp_165"
+          "from": "comp_187",
+          "to": "comp_162"
         },
         {
           "id": "conn_420",
-          "from": "comp_152",
-          "to": "comp_159"
+          "from": "comp_149",
+          "to": "comp_156"
         },
         {
           "id": "conn_421",
-          "from": "comp_152",
-          "to": "comp_159"
+          "from": "comp_149",
+          "to": "comp_156"
         },
         {
           "id": "conn_422",
-          "from": "comp_158",
-          "to": "comp_159"
+          "from": "comp_155",
+          "to": "comp_156"
         },
         {
           "id": "conn_425",
-          "from": "comp_122",
-          "to": "comp_152"
+          "from": "comp_119",
+          "to": "comp_149"
         },
         {
           "id": "conn_426",
-          "from": "comp_122",
-          "to": "comp_100"
+          "from": "comp_119",
+          "to": "comp_97"
         },
         {
           "id": "conn_427",
-          "from": "comp_100",
+          "from": "comp_97",
           "to": "junction_1070.52_347.36"
         },
         {
           "id": "conn_428",
-          "from": "comp_58",
+          "from": "comp_55",
           "to": "junction_1070.52_347.36"
         },
         {
           "id": "conn_429",
-          "from": "comp_122",
+          "from": "comp_119",
           "to": "junction_1070.52_347.36"
         },
         {
           "id": "conn_430",
-          "from": "comp_58",
+          "from": "comp_55",
           "to": "junction_1070.52_347.36"
         },
         {
           "id": "conn_434",
-          "from": "comp_49",
+          "from": "comp_46",
           "to": "junction_1008.48_294.68"
         },
         {
@@ -4463,188 +4472,188 @@
         },
         {
           "id": "conn_436",
-          "from": "comp_49",
+          "from": "comp_46",
           "to": "junction_848.4_347.36"
         },
         {
           "id": "conn_437",
           "from": "junction_848.4_347.36",
-          "to": "comp_123"
+          "to": "comp_120"
         },
         {
           "id": "conn_438",
-          "from": "comp_123",
-          "to": "comp_138"
+          "from": "comp_120",
+          "to": "comp_135"
         },
         {
           "id": "conn_439",
-          "from": "comp_138",
+          "from": "comp_135",
           "to": "junction_848.4_683.6"
         },
         {
           "id": "conn_442",
           "from": "junction_1070.52_699.56",
-          "to": "comp_196"
+          "to": "comp_193"
         },
         {
           "id": "conn_443",
-          "from": "comp_196",
+          "from": "comp_193",
           "to": "junction_848.4_683.6"
         },
         {
           "id": "conn_444",
-          "from": "comp_99",
-          "to": "comp_100"
+          "from": "comp_96",
+          "to": "comp_97"
         },
         {
           "id": "conn_445",
-          "from": "comp_99",
-          "to": "comp_100"
+          "from": "comp_96",
+          "to": "comp_97"
         },
         {
           "id": "conn_446",
-          "from": "comp_99",
-          "to": "comp_100"
+          "from": "comp_96",
+          "to": "comp_97"
         },
         {
           "id": "conn_453",
-          "from": "comp_131",
-          "to": "comp_130"
+          "from": "comp_128",
+          "to": "comp_127"
         },
         {
           "id": "conn_454",
-          "from": "comp_137",
-          "to": "comp_136"
+          "from": "comp_134",
+          "to": "comp_133"
         },
         {
           "id": "conn_455",
-          "from": "comp_136",
-          "to": "comp_130"
+          "from": "comp_133",
+          "to": "comp_127"
         },
         {
           "id": "conn_456",
-          "from": "comp_191",
-          "to": "comp_183"
+          "from": "comp_188",
+          "to": "comp_180"
         },
         {
           "id": "conn_457",
-          "from": "comp_146",
-          "to": "comp_150"
-        },
-        {
-          "id": "conn_458",
-          "from": "comp_146",
-          "to": "comp_150"
-        },
-        {
-          "id": "conn_459",
-          "from": "comp_149",
-          "to": "comp_150"
-        },
-        {
-          "id": "conn_463",
-          "from": "comp_114",
-          "to": "comp_127"
-        },
-        {
-          "id": "conn_464",
-          "from": "comp_114",
-          "to": "comp_127"
-        },
-        {
-          "id": "conn_465",
-          "from": "comp_119",
-          "to": "comp_127"
-        },
-        {
-          "id": "conn_466",
-          "from": "comp_195",
+          "from": "comp_143",
           "to": "comp_147"
         },
         {
-          "id": "conn_469",
-          "from": "comp_147",
+          "id": "conn_458",
+          "from": "comp_143",
+          "to": "comp_147"
+        },
+        {
+          "id": "conn_459",
+          "from": "comp_146",
+          "to": "comp_147"
+        },
+        {
+          "id": "conn_463",
+          "from": "comp_111",
+          "to": "comp_124"
+        },
+        {
+          "id": "conn_464",
+          "from": "comp_111",
+          "to": "comp_124"
+        },
+        {
+          "id": "conn_465",
+          "from": "comp_116",
+          "to": "comp_124"
+        },
+        {
+          "id": "conn_466",
+          "from": "comp_192",
           "to": "comp_144"
+        },
+        {
+          "id": "conn_469",
+          "from": "comp_144",
+          "to": "comp_141"
         },
         {
           "id": "conn_470",
-          "from": "comp_147",
-          "to": "comp_144"
+          "from": "comp_144",
+          "to": "comp_141"
         },
         {
           "id": "conn_471",
-          "from": "comp_147",
-          "to": "comp_144"
+          "from": "comp_144",
+          "to": "comp_141"
         },
         {
           "id": "conn_472",
-          "from": "comp_155",
-          "to": "comp_144"
+          "from": "comp_152",
+          "to": "comp_141"
         },
         {
           "id": "conn_474",
-          "from": "comp_155",
-          "to": "comp_144"
+          "from": "comp_152",
+          "to": "comp_141"
         },
         {
           "id": "conn_476",
-          "from": "comp_193",
-          "to": "comp_170"
+          "from": "comp_190",
+          "to": "comp_167"
         },
         {
           "id": "conn_477",
-          "from": "comp_170",
-          "to": "comp_177"
+          "from": "comp_167",
+          "to": "comp_174"
         },
         {
           "id": "conn_478",
-          "from": "comp_170",
-          "to": "comp_177"
+          "from": "comp_167",
+          "to": "comp_174"
         },
         {
           "id": "conn_479",
-          "from": "comp_170",
-          "to": "comp_177"
+          "from": "comp_167",
+          "to": "comp_174"
         },
         {
           "id": "conn_485",
-          "from": "comp_194",
-          "to": "comp_195"
+          "from": "comp_191",
+          "to": "comp_192"
         },
         {
           "id": "conn_487",
-          "from": "comp_170",
-          "to": "comp_177"
+          "from": "comp_167",
+          "to": "comp_174"
         },
         {
           "id": "conn_492",
-          "from": "comp_195",
-          "to": "comp_193"
+          "from": "comp_192",
+          "to": "comp_190"
         },
         {
           "id": "conn_493",
-          "from": "comp_194",
-          "to": "comp_195"
+          "from": "comp_191",
+          "to": "comp_192"
         },
         {
           "id": "conn_494",
-          "from": "comp_194",
-          "to": "comp_195"
+          "from": "comp_191",
+          "to": "comp_192"
         },
         {
           "id": "conn_496",
-          "from": "comp_109",
-          "to": "comp_108"
+          "from": "comp_106",
+          "to": "comp_105"
         },
         {
           "id": "conn_499",
-          "from": "comp_171",
-          "to": "comp_163"
+          "from": "comp_168",
+          "to": "comp_160"
         },
         {
           "id": "conn_510",
-          "from": "comp_189",
-          "to": "comp_191"
+          "from": "comp_186",
+          "to": "comp_188"
         },
         {
           "id": "conn_512",
@@ -11527,12 +11536,6 @@
         {
           "calculatorId": "short-circuit",
           "inputs": {},
-          "reason": "변압기 TR 단락전류 계산",
-          "priority": 1
-        },
-        {
-          "calculatorId": "short-circuit",
-          "inputs": {},
           "reason": "변압기 MOLD TR-1 단락전류 계산",
           "priority": 1
         },
@@ -11559,12 +11562,6 @@
           "inputs": {},
           "reason": "변압기 DOWN TR 단락전류 계산",
           "priority": 1
-        },
-        {
-          "calculatorId": "transformer-capacity",
-          "inputs": {},
-          "reason": "변압기 TR 용량 검증 (도면 명판 ?)",
-          "priority": 2
         },
         {
           "calculatorId": "transformer-capacity",
@@ -11652,7 +11649,7 @@
         }
       ],
       "confidence": 0.85,
-      "rawDescription": "PDF vector parsed (page 5): 236 components, 366 connections (snapped 860, junctions 39, dropped 147), 858 text items, 1987 line segments"
+      "rawDescription": "PDF vector parsed (page 5): 236 components, 366 connections (snapped 844, junctions 42, dropped 147), 858 text items, 1987 line segments"
     },
     "calcChain": [
       {
@@ -11677,7 +11674,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/100A]",
-          "componentId": "comp_51",
+          "componentId": "comp_48",
           "given": {
             "rating": "250AF/100AT"
           },
@@ -11691,7 +11688,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/75A]",
-          "componentId": "comp_52",
+          "componentId": "comp_49",
           "given": {
             "rating": "125AF/75AT"
           },
@@ -11705,7 +11702,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/100A]",
-          "componentId": "comp_53",
+          "componentId": "comp_50",
           "given": {
             "rating": "250AF/100AT"
           },
@@ -11719,7 +11716,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [QE 1(4P 125/50A)]",
-          "componentId": "comp_68",
+          "componentId": "comp_65",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -11733,7 +11730,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_73",
+          "componentId": "comp_70",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -11747,7 +11744,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_74",
+          "componentId": "comp_71",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -11761,7 +11758,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 125/50A]",
-          "componentId": "comp_75",
+          "componentId": "comp_72",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -11775,7 +11772,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_92",
+          "componentId": "comp_89",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -11789,7 +11786,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_99",
+          "componentId": "comp_96",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -11803,7 +11800,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 400/400A]",
-          "componentId": "comp_101",
+          "componentId": "comp_98",
           "given": {
             "rating": "400AF/400AT"
           },
@@ -11817,7 +11814,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 630/500A]",
-          "componentId": "comp_102",
+          "componentId": "comp_99",
           "given": {
             "rating": "630AF/500AT"
           },
@@ -11831,7 +11828,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 250/175A]",
-          "componentId": "comp_103",
+          "componentId": "comp_100",
           "given": {
             "rating": "250AF/175AT"
           },
@@ -11845,7 +11842,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 250/150A]",
-          "componentId": "comp_104",
+          "componentId": "comp_101",
           "given": {
             "rating": "250AF/150AT"
           },
@@ -11859,7 +11856,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 400/400A]",
-          "componentId": "comp_105",
+          "componentId": "comp_102",
           "given": {
             "rating": "400AF/400AT"
           },
@@ -11873,7 +11870,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 400/300A]",
-          "componentId": "comp_106",
+          "componentId": "comp_103",
           "given": {
             "rating": "400AF/300AT"
           },
@@ -11887,7 +11884,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 400/300A]",
-          "componentId": "comp_107",
+          "componentId": "comp_104",
           "given": {
             "rating": "400AF/300AT"
           },
@@ -11901,7 +11898,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 250/225A]",
-          "componentId": "comp_108",
+          "componentId": "comp_105",
           "given": {
             "rating": "250AF/225AT"
           },
@@ -11915,7 +11912,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 250/225A]",
-          "componentId": "comp_109",
+          "componentId": "comp_106",
           "given": {
             "rating": "250AF/225AT"
           },
@@ -11924,6 +11921,34 @@
             "source": "IEC 60947-2 표준 프레임 정격"
           },
           "verdict": "트립 225AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 400/400A]",
+          "componentId": "comp_108",
+          "given": {
+            "rating": "400AF/400AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 400AT ≤ 프레임 400AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 400/300A]",
+          "componentId": "comp_109",
+          "given": {
+            "rating": "400AF/300AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 300AT ≤ 프레임 400AF — 적합"
         },
         {
           "rule": "AT-LE-AF",
@@ -11942,36 +11967,8 @@
         {
           "rule": "AT-LE-AF",
           "severity": "PASS",
-          "subject": "MCCB ABSc [3P 400/300A]",
-          "componentId": "comp_112",
-          "given": {
-            "rating": "400AF/300AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 300AT ≤ 프레임 400AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 400/400A]",
-          "componentId": "comp_114",
-          "given": {
-            "rating": "400AF/400AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 400AT ≤ 프레임 400AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/125A]",
-          "componentId": "comp_115",
+          "componentId": "comp_112",
           "given": {
             "rating": "250AF/125AT"
           },
@@ -11985,7 +11982,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/225A]",
-          "componentId": "comp_116",
+          "componentId": "comp_113",
           "given": {
             "rating": "250AF/225AT"
           },
@@ -11994,6 +11991,48 @@
             "source": "IEC 60947-2 표준 프레임 정격"
           },
           "verdict": "트립 225AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 250/225A]",
+          "componentId": "comp_115",
+          "given": {
+            "rating": "250AF/225AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 225AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 250/125A]",
+          "componentId": "comp_116",
+          "given": {
+            "rating": "250AF/125AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 250/200A]",
+          "componentId": "comp_117",
+          "given": {
+            "rating": "250AF/200AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 200AT ≤ 프레임 250AF — 적합"
         },
         {
           "rule": "AT-LE-AF",
@@ -12012,50 +12051,8 @@
         {
           "rule": "AT-LE-AF",
           "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/125A]",
-          "componentId": "comp_119",
-          "given": {
-            "rating": "250AF/125AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/200A]",
-          "componentId": "comp_120",
-          "given": {
-            "rating": "250AF/200AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 200AT ≤ 프레임 250AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/225A]",
-          "componentId": "comp_121",
-          "given": {
-            "rating": "250AF/225AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 225AT ≤ 프레임 250AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
           "subject": "MCCB ABSc [QE 3(2P 125/100A)]",
-          "componentId": "comp_123",
+          "componentId": "comp_120",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12069,7 +12066,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/125A]",
-          "componentId": "comp_125",
+          "componentId": "comp_122",
           "given": {
             "rating": "250AF/125AT"
           },
@@ -12083,7 +12080,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/225A]",
-          "componentId": "comp_126",
+          "componentId": "comp_123",
           "given": {
             "rating": "250AF/225AT"
           },
@@ -12092,6 +12089,48 @@
             "source": "IEC 60947-2 표준 프레임 정격"
           },
           "verdict": "트립 225AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 125/100A]",
+          "componentId": "comp_125",
+          "given": {
+            "rating": "125AF/100AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 100AT ≤ 프레임 125AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 125/75A]",
+          "componentId": "comp_126",
+          "given": {
+            "rating": "125AF/75AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 75AT ≤ 프레임 125AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 125/100A]",
+          "componentId": "comp_127",
+          "given": {
+            "rating": "125AF/100AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 100AT ≤ 프레임 125AF — 적합"
         },
         {
           "rule": "AT-LE-AF",
@@ -12110,65 +12149,23 @@
         {
           "rule": "AT-LE-AF",
           "severity": "PASS",
-          "subject": "MCCB ABSc [3P 125/75A]",
+          "subject": "MCCB ABSc [3P 125/50A]",
           "componentId": "comp_129",
           "given": {
-            "rating": "125AF/75AT"
+            "rating": "125AF/50AT"
           },
           "limit": {
             "value": "트립 ≤ 프레임",
             "source": "IEC 60947-2 표준 프레임 정격"
           },
-          "verdict": "트립 75AT ≤ 프레임 125AF — 적합"
+          "verdict": "트립 50AT ≤ 프레임 125AF — 적합"
         },
         {
           "rule": "AT-LE-AF",
           "severity": "PASS",
-          "subject": "MCCB ABSc [3P 125/100A]",
+          "subject": "MCCB ABSc [3P 125/50A]",
           "componentId": "comp_130",
           "given": {
-            "rating": "125AF/100AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 100AT ≤ 프레임 125AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_131",
-          "given": {
-            "rating": "125AF/100AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 100AT ≤ 프레임 125AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_132",
-          "given": {
-            "rating": "125AF/50AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 50AT ≤ 프레임 125AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_133",
-          "given": {
             "rating": "125AF/50AT"
           },
           "limit": {
@@ -12181,43 +12178,71 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/125A]",
+          "componentId": "comp_136",
+          "given": {
+            "rating": "250AF/125AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 250/125A]",
+          "componentId": "comp_137",
+          "given": {
+            "rating": "250AF/125AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 250/125A]",
+          "componentId": "comp_138",
+          "given": {
+            "rating": "250AF/125AT"
+          },
+          "limit": {
+            "value": "트립 ≤ 프레임",
+            "source": "IEC 60947-2 표준 프레임 정격"
+          },
+          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
+        },
+        {
+          "rule": "AT-LE-AF",
+          "severity": "PASS",
+          "subject": "MCCB ABSc [3P 250/200A]",
           "componentId": "comp_139",
           "given": {
-            "rating": "250AF/125AT"
+            "rating": "250AF/200AT"
           },
           "limit": {
             "value": "트립 ≤ 프레임",
             "source": "IEC 60947-2 표준 프레임 정격"
           },
-          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
+          "verdict": "트립 200AT ≤ 프레임 250AF — 적합"
         },
         {
           "rule": "AT-LE-AF",
           "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/125A]",
+          "subject": "MCCB ABSc [QE 2(2P 125/100A)]",
           "componentId": "comp_140",
           "given": {
-            "rating": "250AF/125AT"
+            "rating": "125AF/100AT"
           },
           "limit": {
             "value": "트립 ≤ 프레임",
             "source": "IEC 60947-2 표준 프레임 정격"
           },
-          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/125A]",
-          "componentId": "comp_141",
-          "given": {
-            "rating": "250AF/125AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 125AT ≤ 프레임 250AF — 적합"
+          "verdict": "트립 100AT ≤ 프레임 125AF — 적합"
         },
         {
           "rule": "AT-LE-AF",
@@ -12236,36 +12261,8 @@
         {
           "rule": "AT-LE-AF",
           "severity": "PASS",
-          "subject": "MCCB ABSc [QE 2(2P 125/100A)]",
+          "subject": "MCCB ABSc [3P 250/200A]",
           "componentId": "comp_143",
-          "given": {
-            "rating": "125AF/100AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 100AT ≤ 프레임 125AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/200A]",
-          "componentId": "comp_145",
-          "given": {
-            "rating": "250AF/200AT"
-          },
-          "limit": {
-            "value": "트립 ≤ 프레임",
-            "source": "IEC 60947-2 표준 프레임 정격"
-          },
-          "verdict": "트립 200AT ≤ 프레임 250AF — 적합"
-        },
-        {
-          "rule": "AT-LE-AF",
-          "severity": "PASS",
-          "subject": "MCCB ABSc [3P 250/200A]",
-          "componentId": "comp_146",
           "given": {
             "rating": "250AF/200AT"
           },
@@ -12279,7 +12276,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 400/350A]",
-          "componentId": "comp_147",
+          "componentId": "comp_144",
           "given": {
             "rating": "400AF/350AT"
           },
@@ -12293,7 +12290,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_148",
+          "componentId": "comp_145",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12307,7 +12304,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_149",
+          "componentId": "comp_146",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12321,7 +12318,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 400/400A]",
-          "componentId": "comp_155",
+          "componentId": "comp_152",
           "given": {
             "rating": "400AF/400AT"
           },
@@ -12335,7 +12332,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_156",
+          "componentId": "comp_153",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12349,7 +12346,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_157",
+          "componentId": "comp_154",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12363,7 +12360,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_158",
+          "componentId": "comp_155",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -12377,7 +12374,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/225A]",
-          "componentId": "comp_161",
+          "componentId": "comp_158",
           "given": {
             "rating": "250AF/225AT"
           },
@@ -12391,7 +12388,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 250/225A]",
-          "componentId": "comp_162",
+          "componentId": "comp_159",
           "given": {
             "rating": "250AF/225AT"
           },
@@ -12405,7 +12402,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 400/400A]",
-          "componentId": "comp_163",
+          "componentId": "comp_160",
           "given": {
             "rating": "400AF/400AT"
           },
@@ -12419,7 +12416,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_164",
+          "componentId": "comp_161",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -12433,7 +12430,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/60A]",
-          "componentId": "comp_166",
+          "componentId": "comp_163",
           "given": {
             "rating": "125AF/60AT"
           },
@@ -12447,7 +12444,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_167",
+          "componentId": "comp_164",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12461,7 +12458,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_168",
+          "componentId": "comp_165",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12475,7 +12472,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_169",
+          "componentId": "comp_166",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12489,7 +12486,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 400/250A]",
-          "componentId": "comp_171",
+          "componentId": "comp_168",
           "given": {
             "rating": "400AF/250AT"
           },
@@ -12503,7 +12500,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_172",
+          "componentId": "comp_169",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -12517,7 +12514,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_173",
+          "componentId": "comp_170",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -12531,7 +12528,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_174",
+          "componentId": "comp_171",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -12545,7 +12542,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_175",
+          "componentId": "comp_172",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12559,7 +12556,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_176",
+          "componentId": "comp_173",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12573,7 +12570,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 250/200A]",
-          "componentId": "comp_177",
+          "componentId": "comp_174",
           "given": {
             "rating": "250AF/200AT"
           },
@@ -12587,7 +12584,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 250/175A]",
-          "componentId": "comp_178",
+          "componentId": "comp_175",
           "given": {
             "rating": "250AF/175AT"
           },
@@ -12601,7 +12598,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_181",
+          "componentId": "comp_178",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -12615,7 +12612,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_182",
+          "componentId": "comp_179",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -12629,7 +12626,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/60A]",
-          "componentId": "comp_183",
+          "componentId": "comp_180",
           "given": {
             "rating": "125AF/60AT"
           },
@@ -12643,7 +12640,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/50A]",
-          "componentId": "comp_184",
+          "componentId": "comp_181",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -12657,7 +12654,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [3P 125/100A]",
-          "componentId": "comp_185",
+          "componentId": "comp_182",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12671,7 +12668,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 125/100A]",
-          "componentId": "comp_186",
+          "componentId": "comp_183",
           "given": {
             "rating": "125AF/100AT"
           },
@@ -12685,7 +12682,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 125/30A]",
-          "componentId": "comp_187",
+          "componentId": "comp_184",
           "given": {
             "rating": "125AF/30AT"
           },
@@ -12699,7 +12696,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 50/20A]",
-          "componentId": "comp_190",
+          "componentId": "comp_187",
           "given": {
             "rating": "50AF/20AT"
           },
@@ -12713,7 +12710,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 125/30A]",
-          "componentId": "comp_191",
+          "componentId": "comp_188",
           "given": {
             "rating": "125AF/30AT"
           },
@@ -12727,7 +12724,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [2P 125/30A]",
-          "componentId": "comp_192",
+          "componentId": "comp_189",
           "given": {
             "rating": "125AF/30AT"
           },
@@ -12741,7 +12738,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 125/60A]",
-          "componentId": "comp_193",
+          "componentId": "comp_190",
           "given": {
             "rating": "125AF/60AT"
           },
@@ -12755,7 +12752,7 @@
           "rule": "AT-LE-AF",
           "severity": "PASS",
           "subject": "MCCB ABSc [4P 125/50A]",
-          "componentId": "comp_194",
+          "componentId": "comp_191",
           "given": {
             "rating": "125AF/50AT"
           },
@@ -12767,27 +12764,20 @@
         },
         {
           "rule": "CABLE-AMPACITY",
+          "severity": "UNKNOWN",
           "subject": "MCCB ABSc [3P 250/100A]",
-          "componentId": "comp_53",
+          "componentId": "comp_50",
           "given": {
             "trip": "100A",
             "cable": "240sq F-CV"
           },
-          "computed": {
-            "허용전류": "461A"
-          },
-          "limit": {
-            "value": "461A",
-            "source": "KEC Cu_XLPE_conduit 240sq"
-          },
-          "severity": "PASS",
-          "verdict": "차단기 100A ≤ 허용전류 461A — 부합 (가정: 관로·30°C)"
+          "verdict": "설치방법·주위온도·집합회로 수·조건 출처 ID 미기재 — 온도·집합·포설 보정의 근거가 완결되지 않아 KEC 허용전류 판정 보류"
         },
         {
           "rule": "TR-MAIN-CURRENT",
           "severity": "UNKNOWN",
           "subject": "MOLD TR-1 [6.6KV/220V]",
-          "componentId": "comp_42",
+          "componentId": "comp_39",
           "given": {
             "rating": "(미파싱)",
             "label": "MOLD TR-1"
@@ -12798,7 +12788,7 @@
           "rule": "TR-MAIN-CURRENT",
           "severity": "UNKNOWN",
           "subject": "MOLD TR-2 [6.6KV/440V]",
-          "componentId": "comp_43",
+          "componentId": "comp_40",
           "given": {
             "rating": "(미파싱)",
             "label": "MOLD TR-2"
@@ -12809,7 +12799,7 @@
           "rule": "TR-MAIN-CURRENT",
           "severity": "UNKNOWN",
           "subject": "TR FL&FAN [AC 220V 35KA]",
-          "componentId": "comp_100",
+          "componentId": "comp_97",
           "given": {
             "rating": "(미파싱)",
             "label": "TR FL&FAN"
@@ -12820,7 +12810,7 @@
           "rule": "TR-MAIN-CURRENT",
           "severity": "UNKNOWN",
           "subject": "DOWN TR [380/110V]",
-          "componentId": "comp_110",
+          "componentId": "comp_107",
           "given": {
             "rating": "(미파싱)",
             "label": "DOWN TR"
@@ -12834,16 +12824,17 @@
           "given": {
             "케이블 미결속 차단기": "103/104",
             "정격(AF/AT) 미파싱 차단기": "18/104",
-            "수치 없는 TR 심볼": "4/8"
+            "프레임·트립 쌍 부재로 AT≤AF 판정 불가": "8/104",
+            "수치 없는 TR 심볼": "1/5"
           },
           "verdict": "이 회로들은 이 도면만으로 케이블 판정 불가 — 분기 케이블은 통상 간선 스케줄(표)에 있다(중급 교차 검토 대상)"
         }
       ],
       "summary": {
-        "pass": 79,
+        "pass": 78,
         "warn": 0,
         "fail": 0,
-        "unknown": 5,
+        "unknown": 6,
         "info": 0
       },
       "coverage": {
@@ -12856,8 +12847,8 @@
     "topology": {
       "nodeCount": 236,
       "edgeCount": 366,
-      "connectedComponents": 43,
-      "isolatedNodes": 37,
+      "connectedComponents": 42,
+      "isolatedNodes": 36,
       "valid": false,
       "issues": [
         {
@@ -12872,13 +12863,18 @@
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_42",
-          "message": "노드 \"comp_42\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_39",
+          "message": "노드 \"comp_39\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_43",
-          "message": "노드 \"comp_43\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_40",
+          "message": "노드 \"comp_40\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_42",
+          "message": "노드 \"comp_42\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
@@ -12887,23 +12883,28 @@
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_48",
-          "message": "노드 \"comp_48\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_62",
+          "message": "노드 \"comp_62\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_65",
-          "message": "노드 \"comp_65\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_64",
+          "message": "노드 \"comp_64\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_66",
-          "message": "노드 \"comp_66\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_70",
+          "message": "노드 \"comp_70\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_67",
-          "message": "노드 \"comp_67\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_71",
+          "message": "노드 \"comp_71\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_72",
+          "message": "노드 \"comp_72\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
@@ -12937,28 +12938,23 @@
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_79",
-          "message": "노드 \"comp_79\"가 어떤 간선에도 연결되지 않았습니다."
-        },
-        {
-          "type": "ISOLATED_NODE",
-          "nodeId": "comp_80",
-          "message": "노드 \"comp_80\"가 어떤 간선에도 연결되지 않았습니다."
-        },
-        {
-          "type": "ISOLATED_NODE",
           "nodeId": "comp_81",
           "message": "노드 \"comp_81\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_84",
-          "message": "노드 \"comp_84\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_90",
+          "message": "노드 \"comp_90\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_93",
-          "message": "노드 \"comp_93\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_109",
+          "message": "노드 \"comp_109\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "ISOLATED_NODE",
+          "nodeId": "comp_110",
+          "message": "노드 \"comp_110\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
@@ -12972,13 +12968,8 @@
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_115",
-          "message": "노드 \"comp_115\"가 어떤 간선에도 연결되지 않았습니다."
-        },
-        {
-          "type": "ISOLATED_NODE",
-          "nodeId": "comp_116",
-          "message": "노드 \"comp_116\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_114",
+          "message": "노드 \"comp_114\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
@@ -12987,71 +12978,221 @@
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_120",
-          "message": "노드 \"comp_120\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_118",
+          "message": "노드 \"comp_118\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_121",
-          "message": "노드 \"comp_121\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_125",
+          "message": "노드 \"comp_125\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_128",
-          "message": "노드 \"comp_128\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_126",
+          "message": "노드 \"comp_126\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_129",
-          "message": "노드 \"comp_129\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_145",
+          "message": "노드 \"comp_145\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_148",
-          "message": "노드 \"comp_148\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_153",
+          "message": "노드 \"comp_153\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_156",
-          "message": "노드 \"comp_156\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_173",
+          "message": "노드 \"comp_173\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_176",
-          "message": "노드 \"comp_176\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_175",
+          "message": "노드 \"comp_175\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_178",
-          "message": "노드 \"comp_178\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_182",
+          "message": "노드 \"comp_182\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_185",
-          "message": "노드 \"comp_185\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_183",
+          "message": "노드 \"comp_183\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
-          "nodeId": "comp_186",
-          "message": "노드 \"comp_186\"가 어떤 간선에도 연결되지 않았습니다."
-        },
-        {
-          "type": "ISOLATED_NODE",
-          "nodeId": "comp_187",
-          "message": "노드 \"comp_187\"가 어떤 간선에도 연결되지 않았습니다."
+          "nodeId": "comp_184",
+          "message": "노드 \"comp_184\"가 어떤 간선에도 연결되지 않았습니다."
         },
         {
           "type": "ISOLATED_NODE",
           "nodeId": "junction_797.88_769.76",
           "message": "노드 \"junction_797.88_769.76\"가 어떤 간선에도 연결되지 않았습니다."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_59",
+          "message": "인라인 기기 \"ACB(DRAW OUT)\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_60",
+          "message": "인라인 기기 \"ACB(DRAW OUT)\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_61",
+          "message": "인라인 기기 \"ACB(DRAW OUT)\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_65",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_70",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_71",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_72",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_90",
+          "message": "인라인 기기 \"차단기\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_92",
+          "message": "인라인 기기 \"차단기\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_109",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_112",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_113",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_117",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_118",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_122",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_125",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_126",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_129",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_138",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_142",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_145",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_153",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_158",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_160",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_168",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_170",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 1개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_173",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_175",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_182",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_183",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
+        },
+        {
+          "type": "DANGLING_INLINE_DEVICE",
+          "nodeId": "comp_184",
+          "message": "인라인 기기 \"MCCB ABSc\"의 연결이 0개뿐입니다. 양쪽 선로 또는 구획 경계 연계를 확인하세요."
         }
       ]
     },
     "parserInfo": {
       "method": "pdf-vector",
       "confidence": 0.85,
-      "description": "PDF vector parsed (page 5): 236 components, 366 connections (snapped 860, junctions 39, dropped 147), 858 text items, 1987 line segments",
-      "durationMs": 257
+      "description": "PDF vector parsed (page 5): 236 components, 366 connections (snapped 844, junctions 42, dropped 147), 858 text items, 1987 line segments",
+      "durationMs": 247
     }
   }
 }
