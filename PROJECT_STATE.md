@@ -4,7 +4,7 @@ project: ESA
 status: active
 baselineBranch: main
 codeBaselineCommit: 7151287f24e08f478f34a2d48e0fcd57f3a93190
-updatedAt: 2026-08-09T18:47:10+09:00
+updatedAt: 2026-08-09T18:51:00+09:00
 trigger: commits
 changedDomains: [app, lib, docs]
 ---
@@ -162,7 +162,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `0d475fc` 코드 배치에서 타입 검사, 경고 0 전체 ESLint, 전체 Jest(333 suites·4,038 tests 통과, 1 suite·1 test skip), production build 66페이지, 캘리브레이션 Node 계약 6건이 exit 0이었다. 비로컬 `xhigh/max` 차단 추가 후 관련 Jest 25건, 타입 검사와 수정 파일 ESLint도 exit 0이었다.
 - 2026-08-08 검증 결함·의존성 수리 배치에서 전체 Jest 341 suites·4,164 tests, Node 스크립트 59 tests, 타입 검사, 경고 0 ESLint, 문서 검사 73파일, production build 66페이지, PDF 실경로 17/17이 exit 0이었다. `npm audit --audit-level=moderate`는 취약점 0건이다.
 - `11d4b02` 전역 선행·선택 구획 배치에서 전체 Jest 4,176건 통과·4건 skip(총 4,180), 관련 council·team·orchestrator 회귀가 exit 0이었다. 이 수치는 구현 계약 증거이며 독립 라벨 정확도 증거가 아니다.
-- 2026-08-09 일반 채팅 판단 책임 계약 배치에서 문서 77파일, 타입 검사, 경고 0 전체 ESLint, 전체 Jest 343 suites·4,201 tests 통과(2 suites·4 tests skip), production build 66페이지가 통과했다. 이후 단독 수량 역질문 2종을 추가한 `7151287`은 계약 전용 20 tests와 타입·수정 파일 ESLint가 exit 0이었다. 첫 `enforce.ps1`의 PDF 단계는 3010 서버 미기동으로 exit 2였고, 같은 production 빌드를 기동한 실제 `/api/pdf-drawing` 보충 게이트는 17/17·exit 0이었다.
+- 2026-08-09 일반 채팅 판단 책임 계약의 최종 코드 `7151287`에서 문서 77파일, 타입 검사, 경고 0 전체 ESLint, 전체 Jest 343 suites·4,203 tests 통과(2 suites·4 tests skip), production build 66페이지가 통과했다. 첫 `enforce.ps1`의 PDF 단계는 3010 서버 미기동으로 exit 2였고, 같은 production 빌드를 기동한 실제 `/api/pdf-drawing` 보충 게이트는 17/17·exit 0이었다.
 
 ## 다음 첫 행동
 
