@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 775d6e418f80df9ad86a9756301d4cc175955a6e
-updatedAt: 2026-08-09T15:44:30+09:00
+codeBaselineCommit: 7151287f24e08f478f34a2d48e0fcd57f3a93190
+updatedAt: 2026-08-09T18:47:10+09:00
 trigger: commits
-changedDomains: [agent, engine, lib, docs, scripts]
+changedDomains: [app, lib, docs]
 ---
 
 # ESA 프로젝트 상태
@@ -27,6 +27,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 로컬 ChatGPT·BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
 - `src/lib/chatgpt-local-*`는 loopback ESA에서 같은 PC의 Codex app-server와 공식 ChatGPT 로그인을 사용한다. ESA는 계정 토큰을 읽지 않고 ephemeral 추론과 모델 목록만 좁게 사용한다.
 - `src/lib/google-model-transport.ts`는 Gemini Developer API와 Google Agent Platform Express Mode의 고정 호스트·키 헤더·최종 응답 텍스트 정본을 분리한다.
+- `src/lib/chat-decision-contract.ts`는 일반 채팅의 판단 책임 전가를 검출하고 1회 교정 입력과 실패 폐쇄 문구를 공급한다. 실제 공급자 재호출과 예산 정산은 `/api/chat`이 소유한다.
 - `scripts/enforce.ps1`은 타입, 무경고 린트, 전체 Jest, production build, PDF fixture를 순차 차단한다.
 - 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이며, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에만 남긴다.
 
@@ -76,6 +77,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 동일 원인의 고아 기기·OCR·연속성 권고를 페이지별로 묶어 212건까지 폭증하던 제안을 6개 근거 묶음으로 줄이되 대상 ID는 보존했다.
 - 도면 보고서에 현재 자동화된 AF/AT·KEC 케이블 허용전류·변압기 2차 전류와 미자동화된 단락·협조·접지·전압강하·단락내량·SPD·전동기 보호를 상시 표시한다.
 - 도면의 모호·미판독 항목은 사용자 질문으로 넘기지 않고 ESA의 우선 후보 또는 판독 불가 판단을 낸다. 해당 항목만 확정 관계·안전 계산에서 보류하고 나머지 분석은 유지하며, 화면과 CSV·인쇄 반출물에 `ESA 판단`·`권장 조치`·`결론 변경 조건`을 함께 보존한다. 일반 채팅의 계산 입력 부족도 역질문 대신 조건부 결론과 결론 변경 입력으로 출력한다.
+- 일반 채팅 모델이 “사용자가 판단”·“값을 알려 주면 판단” 형태로 책임을 되넘기면 같은 공급자·모델을 최대 한 번만 다시 호출한다. 교정 재실패·호출 실패·서버 예산 부족은 원답을 숨긴 `판단 미완결`로 닫고, 정상 답변은 추가 호출하지 않는다. 서버 키 교정 비용은 첫 생성과 별도 예약·정산하며 BYOK·로컬·온프레미스는 서버 예산에서 제외한다.
 - 도면 추론 계약에 `low/medium/high/xhigh/max`를 추가했다. `xhigh/max`는 로컬 ChatGPT 전용으로 제한하고, 비로컬 Vision 공급자가 요청하면 잘못된 thinking level로 전달하지 않고 400으로 차단한다.
 - 로컬 도면 역할은 8개 동시 호출, low/medium 75초, high/xhigh/max 180초로 제한한다. 명시한 추론 레벨의 문서 한도는 570초이며 사용자의 10분 기준은 캘리브레이션에서 통과/실패 경계로만 사용한다.
 - GPT-5.5·GPT-5.6 Luna/Terra/Sol의 지원 조합 17개를 같은 중급 공개 결선도와 같은 snapshot에서 실행하고, 중단 재개·재채점·설정 지문·완결성 우선 후보 게이트를 가진 `validate:drawing-effort-calibration`을 추가했다.
@@ -126,7 +128,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 현재 골든 manifest는 `claimEligible=false`이고 합성 데이터만 가리킨다. 평가 키, 예측 파일, 실도면 독립 라벨이 없으므로 `npm run gate:sld-golden`은 의도대로 exit 1이며 **95% 달성 주장은 HOLD**다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 코드 기준선은 `8dc018b7997218f7090a2db3530b231e82a494c0`이다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
+- 현재 코드 기준선은 `7151287f24e08f478f34a2d48e0fcd57f3a93190`이다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
 
 ## 검증
 
@@ -160,6 +162,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `0d475fc` 코드 배치에서 타입 검사, 경고 0 전체 ESLint, 전체 Jest(333 suites·4,038 tests 통과, 1 suite·1 test skip), production build 66페이지, 캘리브레이션 Node 계약 6건이 exit 0이었다. 비로컬 `xhigh/max` 차단 추가 후 관련 Jest 25건, 타입 검사와 수정 파일 ESLint도 exit 0이었다.
 - 2026-08-08 검증 결함·의존성 수리 배치에서 전체 Jest 341 suites·4,164 tests, Node 스크립트 59 tests, 타입 검사, 경고 0 ESLint, 문서 검사 73파일, production build 66페이지, PDF 실경로 17/17이 exit 0이었다. `npm audit --audit-level=moderate`는 취약점 0건이다.
 - `11d4b02` 전역 선행·선택 구획 배치에서 전체 Jest 4,176건 통과·4건 skip(총 4,180), 관련 council·team·orchestrator 회귀가 exit 0이었다. 이 수치는 구현 계약 증거이며 독립 라벨 정확도 증거가 아니다.
+- 2026-08-09 일반 채팅 판단 책임 계약 배치에서 문서 77파일, 타입 검사, 경고 0 전체 ESLint, 전체 Jest 343 suites·4,201 tests 통과(2 suites·4 tests skip), production build 66페이지가 통과했다. 이후 단독 수량 역질문 2종을 추가한 `7151287`은 계약 전용 20 tests와 타입·수정 파일 ESLint가 exit 0이었다. 첫 `enforce.ps1`의 PDF 단계는 3010 서버 미기동으로 exit 2였고, 같은 production 빌드를 기동한 실제 `/api/pdf-drawing` 보충 게이트는 17/17·exit 0이었다.
 
 ## 다음 첫 행동
 
