@@ -10,6 +10,8 @@ describe('chat decision contract', () => {
     '어느 쪽이 맞는지 직접 선택해 주세요.',
     '계통전압 값을 알려 주시면 판단하겠습니다.',
     '이 기호가 VCB인지 LBS인지 사용자가 결정해야 합니다.',
+    '이 건 몇 개일까요?',
+    '차단기는 몇 개로 보이나요?',
   ])('판단 책임 전가를 검출한다: %s', (answer) => {
     const result = inspectDecisionContract(answer, 'ko');
 

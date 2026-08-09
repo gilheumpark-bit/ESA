@@ -26,6 +26,7 @@ export interface DecisionRepairPrompt {
 const KO_DELEGATED_JUDGMENT = /(?:사용자(?:가|께서)?|직접)[^.!?\n]{0,32}(?:판단|결정|선택|확정|세어|세는)(?:해|하|해야|해\s*주|하셔|할)[^.!?\n]*/gi;
 const KO_REVERSE_INPUT = /(?:값|수량|몇\s*개|정격|계통\s*전압|전압|전류|길이|종류|연결\s*대상)[^.!?\n]{0,32}(?:알려\s*주|입력해\s*주|답해\s*주)(?:시면|세요)[^.!?\n]{0,24}(?:판단|결정|계산|분석|답변)?[^.!?\n]*/gi;
 const KO_REVERSE_QUESTION = /(?:계통\s*전압|전압|전류|길이|정격|수량|종류|연결\s*대상)(?:은|는|이|가|을|를)?\s*(?:얼마|무엇|어느\s*것)[^.!?\n]{0,20}(?:입니까|인가요|일까요)\??/gi;
+const KO_COUNT_QUESTION = /몇\s*(?:개|건|대|기|가닥|회로)(?:로)?\s*(?:(?:보이|판독되|확인되|추정되|판단되)\s*)?(?:나요|인가요|일까요|입니까|습니까)\??/gi;
 
 const EN_DELEGATED_JUDGMENT = /\byou\s+(?:need|have|must|should)\s+to\s+(?:decide|determine|choose|count|confirm)\b[^.!?\n]*/gi;
 const EN_REVERSE_INPUT = /\b(?:tell|give|provide)\s+me\b[^.!?\n]{0,48}\b(?:and|then)\s+I(?:'ll|\s+will)\s+(?:decide|determine|calculate|analy[sz]e|answer)\b[^.!?\n]*/gi;
@@ -75,6 +76,7 @@ export function inspectDecisionContract(
         ...collect(source, KO_DELEGATED_JUDGMENT, 'delegated_judgment'),
         ...collect(source, KO_REVERSE_INPUT, 'reverse_input_question'),
         ...collect(source, KO_REVERSE_QUESTION, 'reverse_input_question'),
+        ...collect(source, KO_COUNT_QUESTION, 'reverse_input_question'),
       ];
 
   const unique = [...new Map(
