@@ -47,7 +47,7 @@
     "@ai-sdk/deepseek": "^3.0.24",
     "@ai-sdk/google": "^4.0.24",
     "@ai-sdk/google-vertex": "^5.0.36",
-    "@ai-sdk/mistral": "^4.0.14",
+    "@ai-sdk/mistral": "^4.0.25",
     "@ai-sdk/openai": "^4.0.16",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans-kr": "5.3.0",
