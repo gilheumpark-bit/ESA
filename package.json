@@ -75,7 +75,7 @@
     "rehype-sanitize": "^6.0.0",
     "remark-math": "^6.0.0",
     "sharp": "0.35.3",
-    "stripe": "^22.3.2",
+    "stripe": "^22.4.0",
     "tailwind-merge": "^3.0.0",
     "weaviate-client": "^3.14.0",
     "zustand": "^5.0.0"
