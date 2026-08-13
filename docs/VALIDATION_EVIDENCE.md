@@ -1934,6 +1934,64 @@ Gemini 키 삭제 + GPT 할당량 소진으로 라이브 모델이 없다. 기�
 
 최종 품질은 통과하지 않았다. 압축 후 실행에서 전체 페이지 `connections` 역할이 구조화 출력 파손으로 한 번 실패했고 coverage auditor는 self-line endpoint 충돌 3건을 남겼다. 변압기 과계수와 차단기 미달, OCR 164건, 근거 추적률 13.1% 때문에 `PARTIAL/FAIL`이 맞다. 압축 전 라벨 90%와 압축 후 83%의 차이는 각각 단발이므로 모델 편차와 코드 효과를 분리할 수 없다. 공급자 정확도나 일반화 80%를 주장하려면 같은 clean snapshot에서 티어별 최소 3회와 독립 라벨 대조가 필요하다.
 
+## 33차 결선축 수리의 라이브 실증 — 32차가 남긴 미검증 항목 (2026-08-13)
+
+32차는 **"이 항목은 단위 시험까지만 실증됐고 라이브 실증은 없다"** 로 끝났다
+(Gemini 키 삭제 + GPT 할당량 소진). GPT 할당량이 복구되어(최소 턴 탐침 `OK`)
+그 항목을 실시했다.
+
+- 교보재: `fixtures/drawings/local/dsan-substation.pdf` p6 (로컬 전용, 27차와 동일)
+- 모델: 로컬 ChatGPT `gpt-5.6-terra` · 명시 추론 `high`
+- 실행: `node scripts/run-drawing-model-matrix.mjs --models=gpt-terra
+  --tiers=reference-textbook --repeat=3`
+- snapshot: `dbe7791` (dirty 표기는 dev 서버 산물 `next-env.d.ts` 1파일뿐)
+- 영수증: `test-results/drawing-model-high-gpt-terra-reference-textbook.json` (로컬 보존물)
+
+### 32차 기대값 대조
+
+| 기대값 | 결과 |
+|---|---|
+| 모선 구간 거짓 `UNBOUND_LINE_ENDPOINT` 소멸 | **0건** (08-07 Gemini 실측은 3건) |
+| 추론 단계 `coverage-and-roles` FAIL 해소 | **HOLD** |
+| 종합 판정 FAIL → HOLD | **HOLD — pass 2 · hold 7 · fail 0** |
+
+**이 원장에서 처음으로 FAIL 단계가 0개인 실행이다.** 라벨은 3회 모두
+**100%(폭 0p)**, 시간 520~551초, 호출 32/15/32. 조립은 미병합비 0.105 ·
+조각비 0.050 · 모호비 0.412.
+
+### 부수 소득 — 모델 교차 일반화
+
+17~32차의 수리는 전부 **Gemini 로 보정**했다. 이번 3회는 **Terra** 인데 같은
+도면에서 100/100/100 · 폭 0 이 나왔다. 보정 모델이 아닌 모델에서도 수리가
+통한다는 첫 데이터다. (호출 15회짜리 회차도 100% 였다 — 단발 관측이라 결론은
+아니다.)
+
+### 정직한 한계
+
+- **모델 교란**: 08-07 비교팔은 Gemini, 이번은 Terra 다. UNBOUND 0 을 수리
+  공으로 돌리는 근거는 라이브가 아니라 **단위 판별 A/B**(옛 규칙 → red 2)다.
+  라이브는 기대한 종단 상태를 확인했을 뿐, 같은 모델 A/B 는 아니다.
+- **페이지 상태는 여전히 `failed/PAGE_ANALYSIS_PARTIAL`** 이다. 감사자가
+  `SELF_LINE_ENDPOINT` 를 두 차례 신고했다(LINE-011·025·063 / LINE-034·072·073).
+  SELF 는 정본 집합이 차단으로 규정한 진짜 구조 신호라 남는 것이 맞고, 단계
+  판정이 FAIL 이 아니라 HOLD 인 것은 "실행은 끝났지만 근거가 부족하면 HOLD"
+  규칙(20차)에 따른 것이다.
+
+### 다음 표적 — SELF 의 정체를 잴 수 없다
+
+08-09(KIMM·LINE-026·035·065)와 이번(교재·6개 선)이 같은 증상인데, **영수증에
+충돌 선의 기하가 보존되지 않는다.** 충돌 문자열만 남고 좌표·길이가 없어서
+그것이 진짜 자기 루프인지, 기기 몸체에 붙은 짧은 스텁 선 오탐 부류인지 사후
+판정이 불가능하다. 다음 수리는 코드가 아니라 **측정 장치** 다 — 충돌에 걸린
+선의 기하를 영수증에 남기는 것.
+
+### 앵커
+
+- 커밋: 이 항목과 같은 커밋.
+- 재실행: 위 실행 명령 그대로 (GPT 할당량 필요). 판별 A/B 는
+  `spatial-graph.ts` 의 `touchesNetwork`/`isBusbarSymbol` 분기를 되돌리면
+  시험 2건 red (`npx jest src/agent/vision/__tests__/spatial-graph.test.ts`).
+
 ## 교보재 지도 (2026-07-22 실측 69파일)
 
 ```
