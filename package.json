@@ -83,7 +83,7 @@
   "devDependencies": {
     "@jest/globals": "^30.0.0",
     "@playwright/test": "^1.62.0",
-    "@sentry/nextjs": "^10.46.0",
+    "@sentry/nextjs": "^10.70.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
