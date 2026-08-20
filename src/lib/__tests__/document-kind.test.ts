@@ -9,7 +9,15 @@
  * 의존하지 않으므로 Windows 에서도 Linux 의 실패 조건을 그대로 재현한다.
  */
 
-import { DWG_GUIDANCE, documentKindOf, isDwgBinary } from '../document-kind';
+import {
+  BINARY_DXF_GUIDANCE,
+  DWG_GUIDANCE,
+  UNREADABLE_DXF_GUIDANCE,
+  documentKindOf,
+  isBinaryDxf,
+  isDwgBinary,
+  looksLikeDxfText,
+} from '../document-kind';
 
 describe('documentKindOf — 확장자가 MIME 을 이긴다', () => {
   it('Linux 가 붙이는 image/vnd.dxf 에 속지 않는다 (실측 회귀)', () => {
@@ -84,5 +92,46 @@ describe('isDwgBinary — 내용 표식', () => {
     expect(isDwgBinary(ascii('%PDF-1'))).toBe(false); // PDF
     expect(isDwgBinary(ascii('AC10'))).toBe(false); // 6바이트 미만
     expect(isDwgBinary(ascii('ACADXX'))).toBe(false); // 비슷하지만 아님
+  });
+});
+
+/**
+ * 판독 가능성 표식 — 「인식 못 함」의 실제 세 원인을 각각 가른다.
+ * 실사용 배경: 회사가 AutoCAD→ZWCAD 전환 + 사내 DRM 환경에서 업로드 실패
+ * 보고(2026-08-10). 원인 미상 오류·조용한 빈 결과는 사용자가 못 고친다.
+ */
+describe('isBinaryDxf — 바이너리 DXF 표식', () => {
+  const ascii = (s: string) => new Uint8Array([...s].map((c) => c.charCodeAt(0)));
+
+  it('표준 22바이트 표식을 잡는다', () => {
+    expect(isBinaryDxf(ascii('AutoCAD Binary DXF\r\n' + String.fromCharCode(0x1a) + String.fromCharCode(0)))).toBe(true);
+  });
+
+  it('ASCII DXF·DWG·짧은 머리는 잡지 않는다', () => {
+    expect(isBinaryDxf(ascii('0\r\nSECTION\r\n2\r\nENTITIES'))).toBe(false);
+    expect(isBinaryDxf(ascii('AC1032' + ' '.repeat(20)))).toBe(false);
+    expect(isBinaryDxf(ascii('AutoCAD'))).toBe(false);
+  });
+
+  it('안내가 해결 절차(ASCII DXF 재저장)를 담는다', () => {
+    expect(BINARY_DXF_GUIDANCE).toContain('ASCII DXF');
+  });
+});
+
+describe('looksLikeDxfText — DRM/암호문 판별', () => {
+  it('정상 DXF 머리는 통과한다 — 최소 구성도, 그룹코드만 보여도', () => {
+    expect(looksLikeDxfText('0\r\nSECTION\r\n2\r\nENTITIES')).toBe(true);
+    expect(looksLikeDxfText('  0\nLINE\n  8\nSYMBOL\n 10\n100.0')).toBe(true);
+  });
+
+  it('암호문·무작위 바이너리는 걸린다 — DRM 파일의 실제 모습', () => {
+    const drm = Array.from({ length: 256 }, (_, i) => String.fromCharCode((i * 37 + 11) % 256)).join('');
+    expect(looksLikeDxfText(drm)).toBe(false);
+    expect(looksLikeDxfText('FSD1' + String.fromCharCode(2, 159, 234) + ' encrypted payload')).toBe(false);
+  });
+
+  it('안내가 원인 후보(DRM)와 해결 절차를 담는다', () => {
+    expect(UNREADABLE_DXF_GUIDANCE).toContain('DRM');
+    expect(UNREADABLE_DXF_GUIDANCE).toContain('보안 해제');
   });
 });

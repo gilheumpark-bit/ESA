@@ -9,7 +9,14 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
-import { DWG_GUIDANCE, isDwgBinary } from '@/lib/document-kind';
+import {
+  BINARY_DXF_GUIDANCE,
+  DWG_GUIDANCE,
+  UNREADABLE_DXF_GUIDANCE,
+  isBinaryDxf,
+  isDwgBinary,
+  looksLikeDxfText,
+} from '@/lib/document-kind';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
 import { reviewAnalysis } from '@/engine/review/circuit-review';
@@ -77,12 +84,23 @@ async function handlePost(req: NextRequest) {
 
     // 이름만 .dxf 로 바꾼 DWG 바이너리를 텍스트 파서에 넣으면 사용자가 고칠 수
     // 없는 파싱 오류가 나간다 — 머리 6바이트 표식(AC1nnn)으로 먼저 가른다.
-    const head = new Uint8Array(await dxfFile.slice(0, 6).arrayBuffer());
+    const head = new Uint8Array(await dxfFile.slice(0, 32).arrayBuffer());
     if (isDwgBinary(head)) {
       return NextResponse.json({ error: DWG_GUIDANCE }, { status: 400 });
     }
+    // 바이너리 DXF — 확장자는 같은 .dxf 라 여기(내용 표식)서만 갈 수 있다.
+    if (isBinaryDxf(head)) {
+      return NextResponse.json({ error: BINARY_DXF_GUIDANCE }, { status: 400 });
+    }
 
     const dxfContent = await dxfFile.text();
+    // DXF 구조가 아예 안 보이면(사내 DRM 암호화가 흔한 원인) 파서가 조용히
+    // 빈 결과를 낸다 — 「기기 0개」는 사용자가 고칠 수 없는 답이다. 원인
+    // 후보와 해결 절차를 말해 주고 멈춘다. 표본은 앞 4KB 면 충분하다 —
+    // 정상 DXF 는 첫 줄부터 그룹코드 구조다.
+    if (!looksLikeDxfText(dxfContent.slice(0, 4096))) {
+      return NextResponse.json({ error: UNREADABLE_DXF_GUIDANCE }, { status: 400 });
+    }
     const unitScalePart = formData.get('unitScale');
     let unitScale: number | undefined;
     if (unitScalePart != null && unitScalePart !== '') {

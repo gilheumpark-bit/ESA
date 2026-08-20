@@ -65,4 +65,49 @@ export function isDwgBinary(head: Uint8Array): boolean {
   return /^AC1\d{3}$/.test(sentinel);
 }
 
-// IDENTITY_SEAL: lib/document-kind | role=업로드 파일의 분석기 선택(확장자 우선) | inputs=name,type | outputs=DocumentKind
+/**
+ * 바이너리 DXF — 표준이 정의한 22바이트 표식으로 시작한다.
+ *
+ * ZWCAD·AutoCAD 의 저장 대화상자에서 「바이너리 DXF」를 고르면 이 형식이
+ * 나온다. 확장자는 같은 .dxf 라 확장자 분기로는 못 가르고, 텍스트 파서에
+ * 넣으면 조용히 빈 결과가 된다 — 사용자는 「인식 못 함」만 본다.
+ */
+const BINARY_DXF_SENTINEL = 'AutoCAD Binary DXF';
+
+export function isBinaryDxf(head: Uint8Array): boolean {
+  if (head.length < BINARY_DXF_SENTINEL.length) return false;
+  let s = '';
+  for (let i = 0; i < BINARY_DXF_SENTINEL.length; i += 1) s += String.fromCharCode(head[i]);
+  return s === BINARY_DXF_SENTINEL;
+}
+
+export const BINARY_DXF_GUIDANCE =
+  '바이너리 DXF입니다. 저장할 때 파일 형식에서 「ASCII DXF」(텍스트 DXF)를 '
+  + '선택해 다시 저장한 뒤 업로드해 주세요 — ZWCAD/AutoCAD 모두 저장 대화상자에 선택지가 있습니다.';
+
+/**
+ * .dxf 인데 DXF 텍스트 구조가 아예 안 보이는 파일 — **사내 문서보안(DRM)** 이
+ * 가장 흔한 원인이다.
+ *
+ * 한국 기업 다수가 Fasoo·MarkAny·SoftCamp 류 DRM 을 쓰고, 이런 파일은
+ * 확장자와 무관하게 내용이 암호문이다. 사내 PC 에서는 CAD 가 투명 복호화로
+ * 열어 주니 사용자는 자기 파일이 암호화돼 있다는 사실 자체를 모른다 —
+ * 그 파일을 웹에 올리면 서버가 읽을 수 없고, 원인을 말해 주지 않으면
+ * 사용자가 고칠 방법이 없다.
+ *
+ * 판정은 보수적으로: 표본 안에 `SECTION` 도, DXF 그룹코드 줄 구조(숫자 줄 +
+ * 값 줄 반복)도 없을 때만. 정상 DXF 는 최소 구성이어도 `0\nSECTION` 으로
+ * 시작하므로 오탐 여지가 좁다.
+ */
+export function looksLikeDxfText(sample: string): boolean {
+  if (sample.includes('SECTION')) return true;
+  // 그룹코드 구조 — 공백 채운 숫자 줄이 연속되는 꼴을 관대하게 본다.
+  return /^\s*\d{1,4}\s*\r?\n/.test(sample) && /\r?\n\s*\d{1,4}\s*\r?\n/.test(sample);
+}
+
+export const UNREADABLE_DXF_GUIDANCE =
+  'DXF 텍스트 구조가 보이지 않습니다. 사내 문서보안(DRM — Fasoo·MarkAny·SoftCamp 등)이 '
+  + '적용된 파일이면 회사 밖 서버는 내용을 읽을 수 없습니다. 보안 해제(반출 승인)된 사본으로 '
+  + '업로드하거나, CAD에서 「ASCII DXF」로 다시 저장한 파일인지 확인해 주세요.';
+
+// IDENTITY_SEAL: lib/document-kind | role=업로드 파일의 분석기 선택(확장자 우선)+판독 가능성 표식 | inputs=name,type,head | outputs=DocumentKind,guidances

@@ -55,7 +55,10 @@ describe('public drawing API error redaction', () => {
 
   test('DXF parser diagnostics stay server-side', async () => {
     jest.mocked(parseDxfToSLD).mockImplementation(() => { throw new Error(SECRET); });
-    const request = multipartRequest('/api/dxf', 'file', new File(['0\nEOF'], 'test.dxf', { type: 'application/dxf' }));
+    // 판독 가능성 preflight(looksLikeDxfText)를 통과해야 파서까지 도달한다 —
+    // 이 테스트의 대상은 «파서 예외의 비밀이 밖으로 안 나간다» 이므로
+    // 픽스처는 진짜 DXF 머리 꼴이어야 한다('0\nEOF' 는 preflight 400 으로 끝났다).
+    const request = multipartRequest('/api/dxf', 'file', new File(['0\nSECTION\n2\nENTITIES\n0\nEOF'], 'test.dxf', { type: 'application/dxf' }));
 
     const response = await postDxf(request);
     const text = await response.text();
