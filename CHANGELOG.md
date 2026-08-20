@@ -5,6 +5,38 @@ All notable changes to ESVA are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **DWG(ZWCAD·AutoCAD·CADian 원본 형식) 인식** — 파싱하지 않고 **인식·안내**한다
+  (DWG 는 비공개 바이너리, 공개 파서는 GPL). 화면 accept·기본 업로드·V3 전체
+  판독·`/api/dxf` 4층에서 같은 정본 문구로 「DXF 로 저장 후 업로드」를 안내하고,
+  이름만 `.dxf` 로 바꾼 DWG 도 머리 6바이트 표식(AC1nnn)으로 잡는다.
+- **DXF 판독 가능성 preflight** — 「인식 못 함」의 남은 두 원인을 가른다:
+  바이너리 DXF(표준 22바이트 표식 → 「ASCII DXF 로 재저장」 안내)와 사내
+  DRM 암호문(DXF 구조 부재 → 「보안 해제 사본」 안내). 둘 다 예전에는 파서가
+  던지지 않아 조용히 「기기 0개」로 끝났다.
+
+### Changed
+- **오픈 베타 요금제 봉인 전면화** — `OPEN_BETA` 가 pro 까지만 열고
+  `/api/account/tier` 는 무시하던 것을, 서버·클라이언트(`NEXT_PUBLIC_OPEN_BETA`)
+  양층 전 등급 개방으로 정렬. 화면의 고정 요금 문구(영수증 「Pro 플랜 이상 필요」·
+  관리자 「엔터프라이즈 온보딩」)도 봉인을 따르고, 요금 문구 회귀는
+  `no-pricing-surface` 게이트가 잡는다. 권한(role=admin)은 봉인과 무관하게 유지.
+
+### Fixed
+- **SLD 작업 폴링 영구 잠금** — 세션 만료(401)·서버 장애에서 `return` 만 하고
+  interval 이 계속 돌아, 스피너가 안 사라지고 업로드 버튼이 영구 비활성이었다.
+  4xx 는 즉시 종료+사유 표시, 5xx·네트워크 단절은 연속 3회까지 참고 종료.
+- **`getUserTier` 무관측 강등** — 프로필 없음(정상)과 조회 실패(장애)를 무로그
+  `'free'` 로 뭉개, Supabase 장애가 결제 고객 강등으로 이어져도 지표에 안 잡혔다.
+  fail-closed 방향은 유지하고 장애만 `log.error` 기록.
+- **Weaviate 로그 7곳** — `console.*` 직접 호출을 구조화 로거로. (security-hardening
+  의 콘솔 경고 2건은 사용자 브라우저 대상 기능이라 유지.)
+- **모바일 터치 타깃** — 375px 에서 헤더 검색 입력 23px·푸터 링크 20px 로
+  WCAG 2.2 SC 2.5.8(24×24) 미달이던 것을 히트 영역만 확장.
+- **T-접점 잠금의 공회전 단언** — 존재하지 않는 선 id(`LINE-001`)의 부재를
+  단언해 어떤 코드에서도 통과하던 테스트를, 의심 지점을 고립한 픽스처 +
+  실측 id 빈 목록 단언으로 교체(전후 A/B: 수리 전 코드에서 2건 실패 확인).
+
+### Added
 - **`claude-local` 도면 공급자** — 사용자의 로그인된 `claude` CLI 를 루프백에서만
   사용한다. 원격 API 키가 필요 없다. 프롬프트는 stdin 으로만 넣고 argv 값은
   정규식·열거로 검증하며, 이미지는 격리 임시 폴더에 두고 `--allowedTools=Read`

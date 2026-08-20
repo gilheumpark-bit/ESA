@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 7151287f24e08f478f34a2d48e0fcd57f3a93190
-updatedAt: 2026-08-09T18:51:00+09:00
+codeBaselineCommit: 1da82fc02a48f63a8c2a342fe3b9b67f727a1c59
+updatedAt: 2026-08-21T00:32:54+09:00
 trigger: commits
 changedDomains: [app, lib, docs]
 ---
@@ -32,6 +32,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이며, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에만 남긴다.
 
 ## 완료
+
+- 2026-08-21 기준선 갱신 — 8/10 이후 반영분: DWG/바이너리 DXF/사내 DRM 판독 가능성 3층(업로드 실패의 세 원인을 화면이 직접 안내), 오픈 베타 요금제 봉인 전면화(+ 요금 문구 게이트), SLD 폴링 영구 잠금·getUserTier 무관측·모바일 터치 타깃 수리, 동시 세션 착지분(spatial-graph 거짓 UNBOUND/SELF 제거 + 충돌 선 기하 기록) 검증 수용과 T-접점 공회전 단언 교정, dependabot 21종. 상세는 CHANGELOG [Unreleased].
 
 - 로컬 ChatGPT 실패 응답은 허용된 상태·오류 코드만 노출하며 키 모양의 공급자 문자열을 제거한다. stderr 분류는 해당 단일 활성 턴에만 귀속되어 다음 턴이나 동시 턴으로 전파되지 않는다.
 - 서로 다른 미등록 기기 타입은 정본 `other`로 닫히더라도 원래 타입 식별자를 보존하고 서로 합치지 않는다.
