@@ -399,16 +399,20 @@ describe('선망에 이어진 끝점은 부유 끝점이 아니다', () => {
       start: { x: 20, y: 50 }, end: { x: 80, y: 50 },
       junctions: [], crossovers: [], confidence: 0.95,
     }, {
-      // 분기선: 위쪽 허공에서 내려와 모선 위(50,50)에 닿는다. 분기점 미보고.
+      // 분기선: VCB(0,40~20,60)에서 나와 모선 위(50,50)에 T-접점으로 닿는다.
+      // 분기점 미보고 — 34차 실측의 그 패턴이다. 반대쪽 끝은 기기에 결속시켜
+      // 의심 지점을 T-접점 하나로 고립한다.
       id: 'branch', sourceId: 'variant:line-enhanced', lineKind: 'power',
-      path: [{ x: 50, y: 50 }, { x: 50, y: 10 }],
-      start: { x: 50, y: 50 }, end: { x: 50, y: 10 },
+      path: [{ x: 10, y: 45 }, { x: 50, y: 45 }, { x: 50, y: 50 }],
+      start: { x: 10, y: 45 }, end: { x: 50, y: 50 },
       junctions: [], crossovers: [], confidence: 0.95,
     }]);
-    // branch 의 (50,50) 은 bus 위라 선망에 이어졌다. (50,10) 은 기기(0,40~20,60
-    // VCB)에서 멀지만 — 24px 밖 — 이 시험의 관심은 T-접점 끝이다.
+    // 원판 단언은 `not.toContain('…:LINE-001')` 이었다 — 존재하지 않는 id 라
+    // **어떤 코드에서도 참**이었다(전후 A/B 실측 2026-08-21: 수리 전 코드에서도
+    // 통과). 공회전 단언은 잠금이 아니다. 실제 충돌 id(:branch)로 비어 있음을
+    // 단언한다.
     const unbound = graph.conflicts.filter((item) => item.startsWith('UNBOUND'));
-    expect(unbound).not.toContain('UNBOUND_LINE_ENDPOINT:LINE-001');
+    expect(unbound).toEqual([]);
   });
 
   it('직렬 기기를 관통하는 도선은 SELF 가 아니다', () => {
