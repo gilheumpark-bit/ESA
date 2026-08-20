@@ -9,6 +9,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
+import { DWG_GUIDANCE, isDwgBinary } from '@/lib/document-kind';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
 import { reviewAnalysis } from '@/engine/review/circuit-review';
@@ -61,12 +62,24 @@ async function handlePost(req: NextRequest) {
       return NextResponse.json({ error: 'DXF 파일이 없습니다. file 필드에 .dxf 파일을 첨부하세요.' }, { status: 400 });
     }
 
+    if (dxfFile.name.toLowerCase().endsWith('.dwg')) {
+      // 「.dxf만 가능」은 DWG 사용자가 고칠 방법을 못 찾는 메시지다 —
+      // 무엇을 하면 되는지(DXF 저장)까지 말해 준다.
+      return NextResponse.json({ error: DWG_GUIDANCE }, { status: 400 });
+    }
     if (!dxfFile.name.toLowerCase().endsWith('.dxf')) {
       return NextResponse.json({ error: '.dxf 파일만 업로드할 수 있습니다.' }, { status: 400 });
     }
 
     if (dxfFile.size > DXF_FILE_MAX_BYTES) {
       return NextResponse.json({ error: '파일이 너무 큽니다 (최대 16MB).' }, { status: 413 });
+    }
+
+    // 이름만 .dxf 로 바꾼 DWG 바이너리를 텍스트 파서에 넣으면 사용자가 고칠 수
+    // 없는 파싱 오류가 나간다 — 머리 6바이트 표식(AC1nnn)으로 먼저 가른다.
+    const head = new Uint8Array(await dxfFile.slice(0, 6).arrayBuffer());
+    if (isDwgBinary(head)) {
+      return NextResponse.json({ error: DWG_GUIDANCE }, { status: 400 });
     }
 
     const dxfContent = await dxfFile.text();

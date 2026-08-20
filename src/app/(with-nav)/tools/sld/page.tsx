@@ -42,7 +42,7 @@ import { orderSLDConnectionEndpoints } from '@/lib/sld-flow-display';
 import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import { documentKindOf } from '@/lib/document-kind';
+import { documentKindOf, DWG_GUIDANCE } from '@/lib/document-kind';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
@@ -600,6 +600,12 @@ export default function SLDAnalysisPage() {
   }, [preview]);
 
   const handleFullDocumentAnalyze = useCallback(async (file: File) => {
+    // V3 입력이 .dwg 를 받도록 넓혔으므로(전체 판독 input) 여기서도 같은
+    // 안내로 멈춘다 — 기본 업로드 경로의 가드만으로는 이 입력이 뚫린다.
+    if (documentKindOf(file) === 'dwg') {
+      setV3Error(DWG_GUIDANCE);
+      return;
+    }
     setV3Loading(true);
     setV3Error(null);
     setV3Doc(null);
@@ -1105,6 +1111,12 @@ export default function SLDAnalysisPage() {
     // 확장자 우선 — MIME 우선이면 Linux 에서 .dxf 가 image/vnd.dxf 로 잡혀
     // 이미지 경로로 새어 나간다(document-kind.ts 주석에 실측 근거).
     const kind = documentKindOf(file);
+    if (kind === 'dwg') {
+      // 파싱 못 하는 형식을 V3 전체 판독에 태우면 사용자는 원인 모를 실패를
+      // 본다 — 여기서 멈추고 10초짜리 우회로(DXF 저장)를 알려준다.
+      setError(DWG_GUIDANCE);
+      return;
+    }
     if (kind === 'dxf') {
       await handleDxfUpload(file);
     } else if (kind === 'pdf') {
@@ -1198,10 +1210,10 @@ export default function SLDAnalysisPage() {
             <Upload size={28} />
             <div className="text-center">
               <p className="font-semibold">DXF 파일 업로드</p>
-              <p className="mt-1 text-xs opacity-70">AutoCAD DXF 파일 (최대 50MB) — API 키 불필요</p>
+              <p className="mt-1 text-xs opacity-70">AutoCAD·ZWCAD·CADian 호환 DXF (최대 50MB) — API 키 불필요 · DWG는 DXF로 저장 후 업로드</p>
             </div>
           </button>
-          <input ref={dxfInputRef} type="file" accept=".dxf" className="hidden"
+          <input ref={dxfInputRef} type="file" accept=".dxf,.dwg" className="hidden"
             onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
@@ -1318,7 +1330,7 @@ export default function SLDAnalysisPage() {
           <input
             ref={fullDocInputRef}
             type="file"
-            accept=".pdf,.dxf,image/*"
+            accept=".pdf,.dxf,.dwg,image/*"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
