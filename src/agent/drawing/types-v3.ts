@@ -48,7 +48,12 @@ export type ReadFailureCode =
   | 'EMPTY_REGION_RESULT'
   | 'ROLE_CALL_FAILED'
   | 'PARTIAL_BUDGET_EXCEEDED'
-  | 'CORRECTION_REANALYSIS_REQUIRED';
+  | 'CORRECTION_REANALYSIS_REQUIRED'
+  // 감사자가 차단 신호(UNBOUND/SELF 선 끝점)로 신고한 선의 기하 기록.
+  // 33차 실측: 충돌 문자열만 남고 선의 좌표·길이가 보존되지 않아, 남은
+  // SELF 가 진짜 자기 루프인지 기기 몸체에 붙은 짧은 스텁 선 오탐인지
+  // 사후 판정이 불가능했다(08-09 KIMM 3건 · 08-13 교재 6건 모두).
+  | 'GRAPH_CONFLICT_LINE';
 
 export type Certainty = 'confirmed' | 'ambiguous' | 'unread';
 export type CountStatus = 'COMPLETE' | 'CONDITIONAL' | 'HOLD';

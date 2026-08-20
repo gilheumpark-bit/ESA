@@ -97,6 +97,7 @@ const READ_FAILURE_LABELS: Record<ReadFailureCode, string> = {
   ROLE_CALL_FAILED: '분석 역할 실행 실패',
   PARTIAL_BUDGET_EXCEEDED: '분석 한도 도달',
   CORRECTION_REANALYSIS_REQUIRED: '수정 후 재분석 필요',
+  GRAPH_CONFLICT_LINE: '결선 구조 충돌 선',
 };
 
 export function labelJobStatus(value: JobStatus | string): string {

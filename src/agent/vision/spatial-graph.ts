@@ -597,12 +597,44 @@ function touchesNetwork(
   point: Point,
   junctions: readonly SpatialJunction[],
   crossovers: readonly SpatialJunction[],
+  lines: readonly SpatialLine[],
   tolerance: number,
 ): boolean {
   for (const node of [...junctions, ...crossovers]) {
     if (line.pages.includes(node.page) && distance(node.point, point) <= tolerance) return true;
   }
+  // 모델이 분기점을 안 찍은 T-접점·모서리. 34차 실측(교재 p6, 기하 기록 12건):
+  // UNBOUND 6건 전부 끝점이 **다른 선까지 0~2px** 였다 — 피더 모선의 T-접점과
+  // L-모서리다. 분기점 목록만 보면 이 정상 접점이 전부 부유로 신고된다.
+  // 제품 경로 조립기는 같은 판단을 `endpointMeetsPath` 로 이미 한다.
+  return touchesOtherLine(line, point, lines, tolerance);
+}
+
+/** 끝점이 다른 선의 경로 위에 있는가 — 선-선 접점(T-접점·모서리) 판정. */
+function touchesOtherLine(
+  line: SpatialLine,
+  point: Point,
+  lines: readonly SpatialLine[],
+  tolerance: number,
+): boolean {
+  for (const other of lines) {
+    if (other.id === line.id) continue;
+    if (!other.pages.some((page) => line.pages.includes(page))) continue;
+    for (let index = 1; index < other.path.length; index += 1) {
+      if (distanceToSegment(point, other.path[index - 1], other.path[index]) <= tolerance) return true;
+    }
+  }
   return false;
+}
+
+function distanceToSegment(point: Point, from: Point, to: Point): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  const t = lengthSquared > 0
+    ? Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared))
+    : 0;
+  return Math.hypot(point.x - (from.x + t * dx), point.y - (from.y + t * dy));
 }
 
 /** 모선인가. 모선 위를 지나는 구간은 양끝이 같은 모선에 닿는 것이 정상이다. */
@@ -740,8 +772,8 @@ export function assembleSpatialGraph(
     // 여기서는 조립기를 옮겨오지 않는다(자료형이 다르다). 대신 **거짓
     // UNBOUND 를 없앤다** — 선망에 닿았는지만 본다. 어디에도 닿지 않은 진짜
     // 부유 끝점은 그대로 신고하므로 차단 신호는 살아 있다.
-    const fromOnNetwork = from.length > 0 || touchesNetwork(line, line.start, junctions, crossovers, snapTolerance);
-    const toOnNetwork = to.length > 0 || touchesNetwork(line, line.end, junctions, crossovers, snapTolerance);
+    const fromOnNetwork = from.length > 0 || touchesNetwork(line, line.start, junctions, crossovers, lines, snapTolerance);
+    const toOnNetwork = to.length > 0 || touchesNetwork(line, line.end, junctions, crossovers, lines, snapTolerance);
     if (!fromOnNetwork || !toOnNetwork) {
       conflicts.push(`UNBOUND_LINE_ENDPOINT:${line.id}`);
     } else if (from.length === 0 || to.length === 0) {
@@ -754,6 +786,15 @@ export function assembleSpatialGraph(
       // 모선 위를 지나는 구간은 양끝이 같은 모선에 닿는다. 그것은 자기 참조가
       // 아니라 모선 구간이다.
       if (isBusbarSymbol(from[0])) continue;
+      // 직렬 기기를 **관통하는** 도선. 34차 실측(교재 p6): SELF 6건 전부
+      // 도선이 MOF·CB 몸체를 지나는 구간이었고 — 양끝이 같은 기기에 결속 —
+      // **양끝 모두 다른 선에도 0~1px** 로 닿아 있었다. 도선망에 양끝이 이어져
+      // 있으면 자기 루프가 아니라 관통 구간이다. 진짜 자기 루프(양끝이 그
+      // 기기에만 닿고 어디에도 안 이어짐)는 그대로 신고된다.
+      if (touchesOtherLine(line, line.start, lines, snapTolerance)
+        && touchesOtherLine(line, line.end, lines, snapTolerance)) {
+        continue;
+      }
       conflicts.push(`SELF_LINE_ENDPOINT:${line.id}`);
     } else {
       edges.push({

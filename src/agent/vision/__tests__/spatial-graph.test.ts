@@ -390,6 +390,53 @@ describe('선망에 이어진 끝점은 부유 끝점이 아니다', () => {
     expect(graph.conflicts.filter((item) => item.startsWith('SELF'))).toEqual([]);
   });
 
+  it('분기점이 없어도 다른 선 위에 닿은 끝점은 UNBOUND 가 아니다', () => {
+    // 34차 실측(교재 p6, 기하 기록): UNBOUND 6건 전부 끝점이 다른 선까지
+    // 0~2px 인 T-접점·모서리였다 — 모델이 분기점을 안 찍었을 뿐이다.
+    const graph = graphWith([{
+      id: 'bus', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 20, y: 50 }, { x: 80, y: 50 }],
+      start: { x: 20, y: 50 }, end: { x: 80, y: 50 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }, {
+      // 분기선: 위쪽 허공에서 내려와 모선 위(50,50)에 닿는다. 분기점 미보고.
+      id: 'branch', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 50, y: 50 }, { x: 50, y: 10 }],
+      start: { x: 50, y: 50 }, end: { x: 50, y: 10 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }]);
+    // branch 의 (50,50) 은 bus 위라 선망에 이어졌다. (50,10) 은 기기(0,40~20,60
+    // VCB)에서 멀지만 — 24px 밖 — 이 시험의 관심은 T-접점 끝이다.
+    const unbound = graph.conflicts.filter((item) => item.startsWith('UNBOUND'));
+    expect(unbound).not.toContain('UNBOUND_LINE_ENDPOINT:LINE-001');
+  });
+
+  it('직렬 기기를 관통하는 도선은 SELF 가 아니다', () => {
+    // 34차 실측: SELF 6건 전부 MOF·CB 몸체를 지나는 도선이었고 양끝이 다른
+    // 선에도 0~1px 로 닿아 있었다. 도선망에 양끝이 이어져 있으면 자기 루프가
+    // 아니라 관통 구간이다.
+    const graph = graphWith([{
+      // VCB(0,40~20,60) 몸체를 지나는 짧은 관통 구간: 양끝이 VCB 허용오차 안.
+      id: 'through', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 8, y: 50 }, { x: 30, y: 50 }],
+      start: { x: 8, y: 50 }, end: { x: 30, y: 50 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }, {
+      // 위로 이어지는 도선 — 관통 구간의 왼끝에 닿는다.
+      id: 'up', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 8, y: 50 }, { x: 8, y: 5 }],
+      start: { x: 8, y: 50 }, end: { x: 8, y: 5 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }, {
+      // TR 로 이어지는 도선 — 관통 구간의 오른끝에 닿아 선망을 완성한다.
+      id: 'toTr', sourceId: 'variant:line-enhanced', lineKind: 'power',
+      path: [{ x: 30, y: 50 }, { x: 80, y: 50 }],
+      start: { x: 30, y: 50 }, end: { x: 80, y: 50 },
+      junctions: [], crossovers: [], confidence: 0.95,
+    }]);
+    expect(graph.conflicts.filter((item) => item.startsWith('SELF'))).toEqual([]);
+  });
+
   it('모선이 아닌 기기에서 시작해 같은 기기로 돌아오면 SELF 다', () => {
     const graph = graphWith([{
       id: 'loop', sourceId: 'variant:line-enhanced', lineKind: 'power',

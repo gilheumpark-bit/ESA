@@ -457,6 +457,52 @@ function failedRoleRescanTargets(page: PreparedDrawingPage, result: TeamResult):
   });
 }
 
+/**
+ * 차단 충돌에 걸린 선의 기하를 영수증에 남긴다 — 수리가 아니라 **측정 장치**다.
+ *
+ * 33차 실측: 감사자가 `SELF_LINE_ENDPOINT` 를 신고해도 영수증에는 충돌 문자열만
+ * 남았다. 선의 좌표·길이가 없으니 그것이 진짜 자기 루프인지, 기기 몸체에 붙은
+ * 짧은 스텁 선(양끝이 같은 기기 허용오차 안) 오탐 부류인지 **사후 판정이
+ * 불가능**했다 — 08-09 KIMM 3건, 08-13 교재 6건 모두. 충돌 문자열 형식은
+ * 소비자들이 `split(':')` 로 파싱하므로 건드리지 않고, 구조화된 확인 항목으로
+ * 따로 싣는다.
+ */
+function graphConflictLineItems(page: PreparedDrawingPage, result: TeamResult): UnresolvedItem[] {
+  const graph = result.drawingReview?.graph;
+  if (!graph) return [];
+  const MAX_ITEMS = 12;
+  return graph.conflicts.filter(isBlockingGraphConflict).slice(0, MAX_ITEMS).flatMap((conflict, index) => {
+    const separator = conflict.indexOf(':');
+    const prefix = separator < 0 ? conflict : conflict.slice(0, separator);
+    const lineId = conflict.split(':').at(-1);
+    const line = graph.lines.find((candidate) => candidate.id === lineId);
+    if (!line || line.path.length < 2) return [];
+    const xs = line.path.map((point) => point.x);
+    const ys = line.path.map((point) => point.y);
+    const x = Math.max(0, Math.min(...xs));
+    const y = Math.max(0, Math.min(...ys));
+    const right = Math.min(page.width, Math.max(...xs));
+    const bottom = Math.min(page.height, Math.max(...ys));
+    let length = 0;
+    for (let point = 1; point < line.path.length; point += 1) {
+      length += Math.hypot(
+        line.path[point].x - line.path[point - 1].x,
+        line.path[point].y - line.path[point - 1].y,
+      );
+    }
+    const start = line.path[0];
+    const end = line.path[line.path.length - 1];
+    return [{
+      id: `graph-conflict-line-${page.pageIndex}-${index + 1}`,
+      code: 'GRAPH_CONFLICT_LINE' as const,
+      pageIndex: page.pageIndex,
+      // 폭·높이 0 인 수직/수평선도 항목은 남아야 하므로 최소 1px 로 둔다.
+      bounds: { x, y, w: Math.max(1, right - x), h: Math.max(1, bottom - y) },
+      note: `${prefix} · ${lineId} · (${Math.round(start.x)},${Math.round(start.y)})→(${Math.round(end.x)},${Math.round(end.y)}) · 경로점 ${line.path.length} · 길이 ${Math.round(length)}px`,
+    }];
+  });
+}
+
 /** 조립기가 위치까지 아는 차단 충돌은 해당 축만 재검사할 수 있는 대상으로 바꾼다. */
 function graphConflictRescanTargets(page: PreparedDrawingPage, result: TeamResult): RescanTargetEvidence[] {
   const graph = result.drawingReview?.graph;
@@ -622,6 +668,8 @@ interface EvidenceAccumulator {
   continuityByPage: Map<number, NonNullable<AdaptedTeamResult['continuity']>>;
   calculations: DrawingDocumentV3['calculations'];
   logicConflictsByPage: Map<number, LogicConflict[]>;
+  /** 차단 충돌 선의 기하. 재시도마다 덮어써서 **마지막 시도에 남은 것**만 담는다. */
+  graphConflictsByPage: Map<number, UnresolvedItem[]>;
   unresolved: UnresolvedItem[];
   rolesPresent: Set<RoleId>;
   regionRecords: CoverageRegionRecord[];
@@ -949,6 +997,8 @@ async function runRasterPass(
         id: `P${String(page.pageIndex + 1).padStart(2, '0')}-${calculation.id}`,
       })));
       evidence.logicConflictsByPage.set(page.pageIndex, [...(result.drawingSynthesis?.conflicts ?? [])]);
+      // 재시도마다 덮어쓴다 — 재검사가 충돌을 풀었으면 빈 배열이 남는 것이 맞다.
+      evidence.graphConflictsByPage.set(page.pageIndex, graphConflictLineItems(page, result));
       usable = true;
       const coverage = markCouncilCoverage(regions, page, result);
       regions = coverage.regions;
@@ -1294,6 +1344,7 @@ export async function runDocumentAnalysis(
       return pageMatch ? !activeRetryPages.has(Number(pageMatch[1]) - 1) : activeRetryPages.size === 0;
     });
   const finalLogicConflictsByPage = new Map<number, LogicConflict[]>();
+  const finalGraphConflictsByPage = new Map<number, UnresolvedItem[]>();
   const unresolved: UnresolvedItem[] = (previousJob?.document?.unresolvedItems ?? [])
     .filter((item) => !activeRetryPages.has(item.pageIndex));
   const rolesPresent = new Set<RoleId>(previousJob?.document?.coverageLedger.rolesPresent ?? []);
@@ -1326,6 +1377,7 @@ export async function runDocumentAnalysis(
       continuityByPage,
       calculations: calculationHits,
       logicConflictsByPage: finalLogicConflictsByPage,
+      graphConflictsByPage: finalGraphConflictsByPage,
       unresolved,
       rolesPresent,
       regionRecords,
@@ -1406,6 +1458,11 @@ export async function runDocumentAnalysis(
   unresolved.push(...findUnboundLineItems(lines, relations));
   appendLogicConflictItems(source, finalLogicConflictsByPage, unresolved);
   appendCrossPageItems(crossPageRelations, unresolved);
+  // 차단 충돌 선의 기하 기록(측정 장치). 기존 항목 번호가 밀리지 않게 맨 뒤에
+  // 붙이고, 페이지·ID 순으로 고정해 같은 도면이면 같은 번호가 나오게 한다.
+  unresolved.push(...[...finalGraphConflictsByPage.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .flatMap(([, items]) => items));
   const equipmentLinks = assignPhysicalEquipmentIds(
     symbols,
     crossPageRelations.filter((relation) => relation.status === 'confirmed'),

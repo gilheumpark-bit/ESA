@@ -627,6 +627,56 @@ describe('document-orchestrator + evaluator', () => {
       ?.roleCalls['coverage-auditor'] ?? [];
     expect(ambiguousAudit.some((call) => call.success === false)).toBe(false);
     expect(ambiguousRun.document.coverageLedger.rolesPresent).toContain('coverage-auditor');
+    // 비차단 충돌은 기하 기록을 만들지 않는다.
+    expect(ambiguousRun.document.unresolvedItems.some((item) => item.code === 'GRAPH_CONFLICT_LINE')).toBe(false);
+
+    // 차단 충돌은 선의 기하를 확인 항목으로 남긴다 — 33차의 측정 장치.
+    // SELF 가 진짜 자기 루프인지 기기 몸체에 붙은 짧은 스텁 선 오탐인지는
+    // 좌표·길이가 있어야 사후 판정이 된다. 08-09 KIMM 3건·08-13 교재 6건은
+    // 충돌 문자열만 남아 판정 불가였다.
+    const selfGeometryReview = review(true);
+    selfGeometryReview.graph.conflicts = [
+      'SELF_LINE_ENDPOINT:LINE-7',
+      'AMBIGUOUS_LINE_ENDPOINT:LINE-8',
+    ];
+    selfGeometryReview.graph.lines = [{
+      id: 'LINE-7', originalEvidenceId: 'original:LINE-7', originalEvidenceIds: ['original:LINE-7'],
+      sourceIds: ['variant:line-enhanced'], lineKind: 'power',
+      path: [{ x: 40, y: 20 }, { x: 40, y: 60 }],
+      start: { x: 40, y: 20 }, end: { x: 40, y: 60 },
+      junctions: [], crossovers: [], confidence: 0.9, pages: [1],
+    }, {
+      id: 'LINE-8', originalEvidenceId: 'original:LINE-8', originalEvidenceIds: ['original:LINE-8'],
+      sourceIds: ['variant:line-enhanced'], lineKind: 'power',
+      path: [{ x: 0, y: 0 }, { x: 9, y: 9 }],
+      start: { x: 0, y: 0 }, end: { x: 9, y: 9 },
+      junctions: [], crossovers: [], confidence: 0.9, pages: [1],
+    }] as never;
+    const executeSelfGeometry = jest.fn(async () => ({
+      success: true,
+      components: [],
+      connections: [],
+      confidence: 0.95,
+      drawingReview: selfGeometryReview,
+      drawingSynthesis: { calculations: [] },
+    }));
+    const selfRun = await runDocumentAnalysis({
+      bytes: await makePng(), mimeType: 'image/png', ownerId: 'owner-self-geometry',
+      vision: { provider: 'openai', apiKey: 'test-request-key' },
+      budget: { maxPages: 1, maxVlmCalls: 57, maxPixels: 100_000, deadlineMs: 60_000 },
+    }, { prepareSource: async () => source, executeTeam: executeSelfGeometry as never });
+
+    const geometryItems = selfRun.document.unresolvedItems.filter((item) => item.code === 'GRAPH_CONFLICT_LINE');
+    // 차단(SELF)만 기록되고 모호(AMBIGUOUS)는 기록되지 않는다.
+    expect(geometryItems).toHaveLength(1);
+    expect(geometryItems[0]).toMatchObject({
+      pageIndex: 0,
+      bounds: { x: 40, y: 20, w: 1, h: 40 },
+    });
+    expect(geometryItems[0].note).toContain('SELF_LINE_ENDPOINT');
+    expect(geometryItems[0].note).toContain('LINE-7');
+    expect(geometryItems[0].note).toContain('(40,20)→(40,60)');
+    expect(geometryItems[0].note).toContain('길이 40px');
 
     let failedRegionAttempt = 0;
     const executeFailedRegion = jest.fn(async () => {
