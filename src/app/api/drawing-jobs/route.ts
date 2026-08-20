@@ -196,9 +196,18 @@ async function POST__impl(req: NextRequest) {
     if (form.get('leaseSource') === '1' && !owner.authenticated) {
       return userError('취소·재개용 도면 보관은 로그인이 필요합니다.', 401);
     }
+    // 벡터 전용(무 AI) 실행 — DXF·벡터 PDF 는 파서·토폴로지·KEC 검토가 전부
+    // 기하 연산이라 VLM 없이 성립한다. 오케스트레이터도 vision 부재를 설계로
+    // 지원한다(runVectorPass 가 커버리지를 소유). 익명 무키 사용자를 여기서
+    // 401 로 막을 이유가 없다 — VLM 비용이 0 인 실행이다. 이미지에는 열지
+    // 않는다: 픽셀은 AI 없이 읽을 수 없고, 그런 척은 §2.10 위반이다.
+    const vectorOnly = form.get('vectorOnly') === '1';
+    if (vectorOnly && allowedDrawing(file) === 'image') {
+      return userError('vectorOnly 는 DXF·PDF 전용입니다 — 이미지 분석에는 AI 연결이 필요합니다.', 400);
+    }
     let vision;
     try {
-      vision = await resolveDrawingVisionRequest(form, req, owner.authenticated);
+      vision = vectorOnly ? undefined : await resolveDrawingVisionRequest(form, req, owner.authenticated);
     } catch (error) {
       if (error instanceof DrawingVisionRequestError) {
         return userError(error.message, error.status);

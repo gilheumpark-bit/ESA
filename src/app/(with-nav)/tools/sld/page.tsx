@@ -42,7 +42,7 @@ import { orderSLDConnectionEndpoints } from '@/lib/sld-flow-display';
 import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import { documentKindOf, DWG_GUIDANCE, IMAGE_NEEDS_AI_GUIDANCE, VECTOR_KEYLESS_NOTE } from '@/lib/document-kind';
+import { documentKindOf, DWG_GUIDANCE, IMAGE_NEEDS_AI_GUIDANCE } from '@/lib/document-kind';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
@@ -613,15 +613,12 @@ export default function SLDAnalysisPage() {
       setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
       return;
     }
-    // 벡터(DXF·PDF) + AI 미연결: V3 는 무키·비로그인에서 절대 안 열린다
-    // (deferred 보관 = 로그인 게이트 · 아니어도 BYOK 게이트). 여기서 시작하면
-    // 성공한 파서 결과 옆에 «로그인이 필요합니다» 오류가 붙어 전체가 «안 됨»
-    // 으로 읽힌다(실사용 2026-08-21 회사 보고의 원인). 시작하지 않고 상태를
-    // 설명한다 — 파서 결과는 이미 위에 떠 있다.
-    if (!(await getFirstAvailableVisionKey())) {
-      setV3Error(VECTOR_KEYLESS_NOTE);
-      return;
-    }
+    // 벡터(DXF·PDF) + AI 미연결: vectorOnly 모드로 V3 를 실제로 시작한다 —
+    // 파서·토폴로지·KEC 검토는 기하 연산이라 VLM 없이 성립하고, 서버가 이
+    // 깃발로 익명 무키 실행을 연다. deferred 보관(취소·재개)은 로그인 저장이
+    // 필요하므로 무키에선 요청하지 않는다 — 그 요청이 로그인 401 을 만들어
+    // 성공한 결과 옆에 오류를 띄우던 것이 «AI 없이 안 됨» 오인의 원인이었다.
+    const keylessVector = !(await getFirstAvailableVisionKey());
     setV3Loading(true);
     setV3Error(null);
     setV3Doc(null);
@@ -637,8 +634,12 @@ export default function SLDAnalysisPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('pages', 'all');
-      formData.append('leaseSource', '1');
-      formData.append('deferred', '1');
+      if (keylessVector) {
+        formData.append('vectorOnly', '1');
+      } else {
+        formData.append('leaseSource', '1');
+        formData.append('deferred', '1');
+      }
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
       const createResponse = await fetch('/api/drawing-jobs', {
@@ -653,6 +654,12 @@ export default function SLDAnalysisPage() {
       const jobId = String(created.data.jobId);
       setV3JobId(jobId);
       setV3JobStatus(String(created.data.status));
+      // 동기 실행(vectorOnly 등)은 생성 응답에 문서가 동봉된다 — run 루프도
+      // 세션 재개 키도 필요 없다(무키·비로그인은 서버 보관이 없어 재개 불가).
+      if (created.data.document) {
+        setV3Doc(created.data.document as DrawingDocumentV3);
+        return;
+      }
       sessionStorage.setItem(V3_JOB_SESSION_KEY, jobId);
 
       const visionKey = await getFirstAvailableVisionKey();

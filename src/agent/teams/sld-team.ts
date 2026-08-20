@@ -910,14 +910,27 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
       }
     }
 
-    const vectorRoles: NonNullable<TeamResult['vectorAudit']>['roles'] = [];
-    if (components.length > 0) vectorRoles.push('symbols');
-    if (connections.length > 0) vectorRoles.push('connections');
-    if ((vectorTexts?.length ?? 0) > 0) vectorRoles.push('text');
-    if (connections.length > 0 && topologyIssues.length === 0) vectorRoles.push('logic');
-    if (components.length > 0 && topologyIssues.length === 0) vectorRoles.push('coverage-auditor');
-    const vectorAuditComplete = ['symbols', 'connections', 'text', 'logic', 'coverage-auditor']
-      .every((role) => vectorRoles.includes(role as (typeof vectorRoles)[number]));
+    // 영수증 = **실행 증명**이다. 내용 유무·발견 유무로 지우지 않는다.
+    //
+    // 종전(2026-07-21 독립 심사)은 「증거를 낸 역할만」 적었다 — text 는
+    // 텍스트 개수>0, logic·coverage 는 토폴로지 이상 0 이 조건이었다. 그
+    // 조건이 오케스트레이터의 커버리지 판정과 결합하자 두 가지 거짓을 만들었다
+    // (실측 2026-08-21, vectorOnly 개통 중):
+    //
+    //   · TEXT 엔티티가 0 인 **정상 합성 도면**(L1-01, 라벨은 블록명)이
+    //     「감사 영수증 불완전」→ 페이지 failed → PARTIAL. 글자 없는 도면은
+    //     감사 누락이 아니라 «돌았고 없더라» 다.
+    //   · 토폴로지 이상을 **찾으면** logic·coverage 영수증이 사라진다 —
+    //     문제를 발견한 감사가 실행 안 된 감사로 기록된다. 발견은 발견
+    //     (violations)으로 보고되는 것이 이 리포의 분리 원칙이다(관문↔점수
+    //     분리와 동형).
+    //
+    // 이 지점에 도달했으면 다섯 감사는 전부 실행됐다 — 기기 0 조기반환이 위에
+    // 있고, 텍스트 추출·토폴로지 검증·계산 체인이 방금 돌았다. 실행이 실패하면
+    // catch 가 success:false 로 갈라낸다.
+    const vectorRoles: NonNullable<TeamResult['vectorAudit']>['roles'] =
+      ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'];
+    const vectorAuditComplete = true;
 
     return {
       teamId: 'TEAM-SLD',

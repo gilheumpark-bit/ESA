@@ -808,7 +808,18 @@ describe('SLD raster independent council integration', () => {
     expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer', position: { x: 25, y: 75 } })]);
   });
 
-  it('reports only vector roles that actually produced evidence and passed topology validation', async () => {
+  /**
+   * 2026-08-21 의미 개정 — 영수증은 **실행 증명**이다.
+   *
+   * 이 케이스의 원판(2026-07-21 독립 심사)은 「증거를 낸 역할만」을 잠갔다:
+   * 텍스트 0 이면 text 영수증 없음, 토폴로지 이상이 있으면 logic·coverage
+   * 영수증 없음. 그 의미가 오케스트레이터 커버리지 판정과 결합하자, 글자 없는
+   * 정상 도면(L1-01 — 라벨이 블록명이라 TEXT 엔티티 0)과 **결함을 발견한**
+   * 도면이 똑같이 「감사 영수증 불완전 → 페이지 failed → PARTIAL」 로 무너졌다
+   * (실측: vectorOnly 개통 중 발각). 문제를 찾은 감사는 실행 안 된 감사가
+   * 아니다 — 발견은 violations 로 보고된다. 그 보증을 여기서 함께 잠근다.
+   */
+  it('vector receipts attest execution; findings surface as violations, not missing receipts', async () => {
     jest.mocked(parsePdfToSLD).mockResolvedValue({
       components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR', position: { x: 25, y: 75 } }],
       connections: [{ from: 'PDF-TR-01', to: 'MISSING-LOAD' }],
@@ -821,8 +832,11 @@ describe('SLD raster independent council integration', () => {
     });
 
     expect(result.vectorAudit).toEqual({
-      parser: 'pdf', pageNumber: 1, complete: false, roles: ['symbols', 'connections'],
+      parser: 'pdf', pageNumber: 1, complete: true,
+      roles: ['symbols', 'connections', 'text', 'logic', 'coverage-auditor'],
     });
+    // 끊어진 결선(MISSING-LOAD)은 영수증 삭제가 아니라 발견으로 나간다.
+    expect((result.violations ?? []).some((v) => v.title === '토폴로지 이상')).toBe(true);
   });
 
   it('keeps the caller-owned PDF buffer intact across multi-page parser calls', async () => {
