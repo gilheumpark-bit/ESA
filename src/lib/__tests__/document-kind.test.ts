@@ -13,6 +13,7 @@ import {
   BINARY_DXF_GUIDANCE,
   DWG_GUIDANCE,
   IMAGE_NEEDS_AI_GUIDANCE,
+  VECTOR_KEYLESS_NOTE,
   UNREADABLE_DXF_GUIDANCE,
   documentKindOf,
   isBinaryDxf,
@@ -143,5 +144,15 @@ describe('IMAGE_NEEDS_AI_GUIDANCE — 막다른 골목 금지', () => {
     expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('DXF');
     expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('벡터 PDF');
     expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('키 없이');
+  });
+});
+
+describe('VECTOR_KEYLESS_NOTE — 오류가 아니라 상태 설명', () => {
+  it('무키 수행 사실과 AI 연결 시 추가분을 함께 말한다', () => {
+    expect(VECTOR_KEYLESS_NOTE).toContain('키 없이 수행');
+    expect(VECTOR_KEYLESS_NOTE).toContain('AI 연결');
+    expect(VECTOR_KEYLESS_NOTE).toContain('KEC 검토');
+    // 오류 어휘 금지 — 성공 화면 옆에 뜨는 문장이다
+    expect(VECTOR_KEYLESS_NOTE).not.toMatch(/실패|오류|필요합니다\./);
   });
 });

@@ -42,7 +42,7 @@ import { orderSLDConnectionEndpoints } from '@/lib/sld-flow-display';
 import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import { documentKindOf, DWG_GUIDANCE, IMAGE_NEEDS_AI_GUIDANCE } from '@/lib/document-kind';
+import { documentKindOf, DWG_GUIDANCE, IMAGE_NEEDS_AI_GUIDANCE, VECTOR_KEYLESS_NOTE } from '@/lib/document-kind';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
@@ -611,6 +611,15 @@ export default function SLDAnalysisPage() {
     // PDF)까지 담은 안내로 여기서 멈춘다(실사용 2026-08-21 회사 환경 보고).
     if (documentKindOf(file) === 'image' && !(await getFirstAvailableVisionKey())) {
       setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
+      return;
+    }
+    // 벡터(DXF·PDF) + AI 미연결: V3 는 무키·비로그인에서 절대 안 열린다
+    // (deferred 보관 = 로그인 게이트 · 아니어도 BYOK 게이트). 여기서 시작하면
+    // 성공한 파서 결과 옆에 «로그인이 필요합니다» 오류가 붙어 전체가 «안 됨»
+    // 으로 읽힌다(실사용 2026-08-21 회사 보고의 원인). 시작하지 않고 상태를
+    // 설명한다 — 파서 결과는 이미 위에 떠 있다.
+    if (!(await getFirstAvailableVisionKey())) {
+      setV3Error(VECTOR_KEYLESS_NOTE);
       return;
     }
     setV3Loading(true);
