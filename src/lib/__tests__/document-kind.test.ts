@@ -12,6 +12,7 @@
 import {
   BINARY_DXF_GUIDANCE,
   DWG_GUIDANCE,
+  IMAGE_NEEDS_AI_GUIDANCE,
   UNREADABLE_DXF_GUIDANCE,
   documentKindOf,
   isBinaryDxf,
@@ -133,5 +134,14 @@ describe('looksLikeDxfText — DRM/암호문 판별', () => {
   it('안내가 원인 후보(DRM)와 해결 절차를 담는다', () => {
     expect(UNREADABLE_DXF_GUIDANCE).toContain('DRM');
     expect(UNREADABLE_DXF_GUIDANCE).toContain('보안 해제');
+  });
+});
+
+describe('IMAGE_NEEDS_AI_GUIDANCE — 막다른 골목 금지', () => {
+  it('키 요구와 함께 키 없이 되는 길(DXF·벡터 PDF)을 같은 문장에서 알려준다', () => {
+    expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('AI 연결이 필요');
+    expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('DXF');
+    expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('벡터 PDF');
+    expect(IMAGE_NEEDS_AI_GUIDANCE).toContain('키 없이');
   });
 });

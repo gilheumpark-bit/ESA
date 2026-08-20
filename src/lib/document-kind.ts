@@ -105,6 +105,20 @@ export function looksLikeDxfText(sample: string): boolean {
   return /^\s*\d{1,4}\s*\r?\n/.test(sample) && /\r?\n\s*\d{1,4}\s*\r?\n/.test(sample);
 }
 
+/**
+ * 이미지 + AI 미연결 안내 — **막다른 골목 금지.**
+ *
+ * 이미지(사진·스캔)는 픽셀뿐이라 AI(VLM) 없이 읽을 수 없다 — 이건 정직한
+ * 한계다. 문제는 기존 안내가 「키를 가져와라」만 말하고 끝난 것이다(실사용
+ * 2026-08-21: 회사 무키 환경에서 이미지 업로드 → 401 두 번, 사용자는 「안
+ * 들어간다」로 경험). 키가 없는 사용자에게는 **키 없이 되는 길**(같은 도면을
+ * DXF·벡터 PDF 로)을 같은 문장 안에서 알려줘야 안내가 안내다.
+ */
+export const IMAGE_NEEDS_AI_GUIDANCE =
+  '이미지(사진·스캔) 분석에는 AI 연결이 필요합니다 — 로컬 ChatGPT 연결 또는 Vision API 키(/settings/byok). '
+  + 'AI 없이 바로 분석하려면 같은 도면을 CAD에서 DXF 또는 벡터 PDF로 저장해 업로드하세요 — '
+  + '벡터 형식은 키 없이 즉시 분석되며 같은 KEC 검토를 탑니다.';
+
 export const UNREADABLE_DXF_GUIDANCE =
   'DXF 텍스트 구조가 보이지 않습니다. 사내 문서보안(DRM — Fasoo·MarkAny·SoftCamp 등)이 '
   + '적용된 파일이면 회사 밖 서버는 내용을 읽을 수 없습니다. 보안 해제(반출 승인)된 사본으로 '

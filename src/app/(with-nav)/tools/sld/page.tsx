@@ -42,7 +42,7 @@ import { orderSLDConnectionEndpoints } from '@/lib/sld-flow-display';
 import { compareSLDAnalysisRuns, type SLDRunComparison } from '@/lib/sld-run-comparison';
 import Image from 'next/image';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import { documentKindOf, DWG_GUIDANCE } from '@/lib/document-kind';
+import { documentKindOf, DWG_GUIDANCE, IMAGE_NEEDS_AI_GUIDANCE } from '@/lib/document-kind';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
@@ -606,6 +606,13 @@ export default function SLDAnalysisPage() {
       setV3Error(DWG_GUIDANCE);
       return;
     }
+    // 이미지 + AI 미연결: 서버는 어차피 401 을 준다. 왕복시켜 「키 필요」만
+    // 보여주면 무키 사용자에겐 막다른 골목이다 — 키 없이 되는 길(DXF·벡터
+    // PDF)까지 담은 안내로 여기서 멈춘다(실사용 2026-08-21 회사 환경 보고).
+    if (documentKindOf(file) === 'image' && !(await getFirstAvailableVisionKey())) {
+      setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
+      return;
+    }
     setV3Loading(true);
     setV3Error(null);
     setV3Doc(null);
@@ -1014,7 +1021,7 @@ export default function SLDAnalysisPage() {
     try {
       const visionKey = await getFirstAvailableVisionKey();
       if (!visionKey) {
-        setError('AI 연결이 없습니다. 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 등록하세요. → /settings/byok');
+        setError(IMAGE_NEEDS_AI_GUIDANCE);
         setLoading(false);
         return;
       }
