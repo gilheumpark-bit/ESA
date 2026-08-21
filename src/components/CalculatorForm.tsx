@@ -612,8 +612,15 @@ export default function CalculatorForm({
     );
   };
 
+  // noValidate: 브라우저 native 검증을 끈다. 안 끄면 min 위반(rangeUnderflow)
+  // 에서 submit 이벤트 자체가 발화하지 않아(실측 2026-08-21: 음수 입력 후
+  // 계산하기 → submitEventFired=false), 아래 handleSubmit 의 React 검증
+  // —「최소값: X」인라인 문구 + 오류 칸 포커스 이동 — 이 **한 번도 돌지
+  // 않는다.** 사용자는 제어 불가능한 브라우저 팝오버만 보거나, 버튼이 화면
+  // 밖이면 아무것도 못 본다(구 BUG-014 의 실체). native 를 끄고 우리
+  // 검증·문구·포커스가 전 경로를 소유하게 한다.
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className={`space-y-4 ${className}`}>
+    <form ref={formRef} onSubmit={handleSubmit} noValidate className={`space-y-4 ${className}`}>
       {/* 필수 필드 */}
       {requiredParams.map(renderField)}
 

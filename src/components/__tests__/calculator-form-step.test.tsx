@@ -33,6 +33,19 @@ describe('숫자 입력은 step 격자로 값을 막지 않는다', () => {
     }
   });
 
+  it('폼은 noValidate 로 native 검증을 끈다 — 안 그러면 min 위반이 침묵으로 막힌다', () => {
+    // step 만 문제가 아니다. `min` 도 native 검증에 쓰이고, 위반하면(rangeUnderflow)
+    // submit 이벤트 자체가 발화하지 않아 React 의 「최소값: X」 문구·포커스 이동이
+    // 한 번도 돌지 않는다(실측 2026-08-21: 음수 입력 → submitEventFired=false ·
+    // aria-invalid 0). noValidate 로 native 를 끄고 우리 검증이 전 경로를 소유한다.
+    const src = require('node:fs').readFileSync('src/components/CalculatorForm.tsx', 'utf8') as string;
+    // form 태그에 noValidate 가 있어야 하고, React 검증 문구가 실재해야 한다.
+    expect(/<form[^>]*\bnoValidate\b/.test(src)).toBe(true);
+    expect(src).toContain('최소값:');
+    // 검증이 오류를 실제로 push 하는지 — 조용히 통과시키지 않는다.
+    expect(src).toContain("num < param.min");
+  });
+
   it('정의에 남은 step 은 기본값조차 통과시키지 못한다 — 왜 검증에 쓰면 안 되는지', () => {
     const offGrid: string[] = [];
     for (const id of Object.keys(CALCULATOR_PARAMS)) {

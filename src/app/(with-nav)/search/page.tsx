@@ -613,14 +613,19 @@ function SearchPageInner() {
           <Link href="/" className="shrink-0 text-xl font-bold text-[var(--color-primary)]">
             ESVA
           </Link>
-          <SearchBar defaultValue={query} size="sm" className="flex-1" />
+          <SearchBar defaultValue={query} size="sm" className="min-w-0 flex-1" />
           {query.trim() && (
             <button
               onClick={() => setShowChat((v) => !v)}
+              aria-label="AI에게 물어보기"
+              // 375px 실측: 로고+검색바+이 버튼이 한 줄인데 셋 다 shrink-0/고정
+              // 이라 scrollWidth 527 > 375 로 수평 넘침(풀버그 FB-02). 모바일에선
+              // 아이콘만 남기고 라벨을 숨겨 폭을 회수한다 — aria-label 로 접근성
+              // 이름은 유지. min-w-0 은 검색바가 실제로 줄 수 있게 한다.
               className="shrink-0 flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)]"
             >
               <Bot size={16} />
-              AI에게 물어보기
+              <span className="hidden sm:inline">AI에게 물어보기</span>
             </button>
           )}
         </div>
