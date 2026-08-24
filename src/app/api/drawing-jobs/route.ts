@@ -10,6 +10,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile } from '@/lib/api';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
+import { readSymbolLibraryPart } from '@/lib/symbol-library-form';
 import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { createSourceLease, isSourceLeaseAvailable, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyDrawingOwnerCookie, resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
@@ -138,6 +139,13 @@ async function POST__impl(req: NextRequest) {
     if (!isDrawingJobStoreAvailable()) {
       return userError('지속형 작업 저장소가 설정되지 않아 도면 분석 작업을 시작할 수 없습니다.', 503);
     }
+    // 고객사 심볼 라이브러리(선택) — deferred 분기가 아래에서 조기 반환하므로
+    // 그 이전에 읽는다. 뒤에서 읽으면 로그인(deferred) 사용자의 라이브러리가
+    // 조용히 증발한다. 무효면 400.
+    const libraryRead = await readSymbolLibraryPart(form.get('symbolLibrary'));
+    if (!libraryRead.ok) {
+      return userError(libraryRead.message, 400);
+    }
     if (form.get('deferred') === '1') {
       if (!owner.authenticated) {
         return userError('취소·재개용 도면 보관은 로그인이 필요합니다.', 401);
@@ -184,7 +192,12 @@ async function POST__impl(req: NextRequest) {
       if ('error' in created) return userError('암호화 원본 임시 보관소가 준비되지 않았습니다.', 503);
       updateOwnedJob(job.jobId, owner.ownerId, {
         sourceLease: { leaseId: created.leaseId, expiresAt: created.expiresAt },
-        sourceMetadata: { mimeType: file.type || 'application/octet-stream', fileName: file.name, requestedPages },
+        sourceMetadata: {
+          mimeType: file.type || 'application/octet-stream',
+          fileName: file.name,
+          requestedPages,
+          ...(libraryRead.library ? { symbolLibrary: libraryRead.library } : {}),
+        },
       });
       const response = privateJson({
         success: true,
@@ -224,6 +237,7 @@ async function POST__impl(req: NextRequest) {
       vision,
       ownerId: owner.ownerId,
       signal: req.signal,
+      ...(libraryRead.library ? { symbolLibrary: libraryRead.library } : {}),
     });
     updateOwnedJob(job.jobId, owner.ownerId, {
       sourceMetadata: {

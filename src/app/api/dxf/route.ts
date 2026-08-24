@@ -9,6 +9,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { parseDxfToSLD } from '@/engine/topology/dxf-parser';
+import { readSymbolLibraryPart } from '@/lib/symbol-library-form';
 import {
   BINARY_DXF_GUIDANCE,
   DWG_GUIDANCE,
@@ -113,8 +114,18 @@ async function handlePost(req: NextRequest) {
       }
     }
 
+    // 고객사 심볼 라이브러리(선택) — JSON 문자열 또는 파일 파트 둘 다 받는다.
+    const libraryRead = await readSymbolLibraryPart(formData.get('symbolLibrary'));
+    if (!libraryRead.ok) {
+      return NextResponse.json({ error: libraryRead.message }, { status: 400 });
+    }
+    const symbolLibrary = libraryRead.library;
+
     // 벡터 파싱 (VLM 없이)
-    const analysis = parseDxfToSLD(dxfContent, unitScale ? { unitScale } : {});
+    const analysis = parseDxfToSLD(dxfContent, {
+      ...(unitScale ? { unitScale } : {}),
+      ...(symbolLibrary ? { symbolLibrary } : {}),
+    });
 
     // 파싱 실패를 success:true로 넘기면 사용자는 "빈 도면"과 "잘못된 파일"을
     // 구분할 수 없다. 파서는 confidence 0으로 신호하고, 라우트가 이를 400으로

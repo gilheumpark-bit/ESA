@@ -102,6 +102,14 @@ interface SLDAnalysisResult {
   systemType?: string;
   confidence: number;
   rawDescription: string;
+  /** 고객사 심볼 라이브러리 적용 결과 (DXF 벡터 경로 전용) */
+  symbolLibraryApplied?: { organization: string; matched: number; entryCount: number };
+  unknownSymbols?: Array<{
+    blockName: string;
+    fingerprint: string | null;
+    count: number;
+    samplePosition: { x: number; y: number };
+  }>;
 }
 
 
@@ -480,6 +488,8 @@ export default function SLDAnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   // 사내 규정(선택) — JSON 룰셋. 서버가 린트하고 무효면 400으로 거절한다.
   const [rulesFile, setRulesFile] = useState<File | null>(null);
+  // 고객사 심볼 라이브러리(선택) — 파싱 시점에 적용되므로 업로드 전에 첨부한다
+  const [symbolLibraryFile, setSymbolLibraryFile] = useState<File | null>(null);
   // 정밀 검증(3개 전문팀 + 합의 단계)용 — 마지막 업로드 원본 파일과 진행 상태.
   // 배선 전엔 /api/team-review·/report/[id]가 UI에서 영구 미도달이었다(Batch C1).
   const [drawingFile, setDrawingFile] = useState<File | null>(null);
@@ -634,6 +644,10 @@ export default function SLDAnalysisPage() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('pages', 'all');
+      // 고객사 심볼 라이브러리는 DXF 벡터 추출에 적용된다 — 파싱 시점 첨부
+      if (symbolLibraryFile && documentKindOf(file) === 'dxf') {
+        formData.append('symbolLibrary', symbolLibraryFile);
+      }
       if (keylessVector) {
         formData.append('vectorOnly', '1');
       } else {
@@ -696,7 +710,7 @@ export default function SLDAnalysisPage() {
     } finally {
       setV3Loading(false);
     }
-  }, []);
+  }, [symbolLibraryFile]);
 
   const handlePublicFixtureCalibration = useCallback(async () => {
     setV3Loading(true);
@@ -1085,6 +1099,7 @@ export default function SLDAnalysisPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (symbolLibraryFile) formData.append('symbolLibrary', symbolLibraryFile);
       const res = await fetch('/api/dxf', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'DXF 파싱 실패');
@@ -1096,7 +1111,7 @@ export default function SLDAnalysisPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [symbolLibraryFile]);
 
   // PDF 벡터 파싱 (DRAWING_PARSER 플래그 필수)
   const handlePdfUpload = useCallback(async (file: File) => {
@@ -1238,6 +1253,23 @@ export default function SLDAnalysisPage() {
           </button>
           <input ref={dxfInputRef} type="file" accept=".dxf,.dwg" className="hidden"
             onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+          {/* 고객사 심볼 라이브러리 — 파싱 시점에 적용되므로 도면 업로드 전에 첨부 */}
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
+            <span className="text-xs font-medium text-[var(--text-secondary)]">
+              고객사 심볼 라이브러리 (선택, JSON)
+            </span>
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={(e) => setSymbolLibraryFile(e.target.files?.[0] ?? null)}
+              className="text-xs text-[var(--text-secondary)] file:mr-2 file:rounded-md file:border-0 file:bg-[var(--bg-primary)] file:px-2 file:py-1 file:text-xs file:text-[var(--text-primary)]"
+            />
+            <span className="text-xs text-[var(--text-tertiary)]">
+              {symbolLibraryFile
+                ? `${symbolLibraryFile.name} — 이 회사 심볼 매핑을 우선 적용`
+                : '회사마다 다른 블록명·심볼을 등록해 두면 다음 도면부터 자동 인식됩니다'}
+            </span>
+          </div>
         </>
       )}
 
@@ -1478,6 +1510,53 @@ export default function SLDAnalysisPage() {
               <p className="mt-1 text-xs text-[var(--text-tertiary)]">
                 같은 원본의 반복 판독이 달라 현재 결과를 확정값으로 쓰지 않습니다. 정밀 검증에서 구획·선로·전체 관계를 교차 확인하세요.
               </p>
+            </div>
+          )}
+
+          {/* 고객사 심볼 라이브러리 적용 결과 — 조용히 적용된 척하지 않는다 */}
+          {analysis.symbolLibraryApplied && (
+            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
+              <p className="text-xs text-[var(--text-secondary)]">
+                심볼 라이브러리 적용: <span className="font-medium text-[var(--text-primary)]">{analysis.symbolLibraryApplied.organization}</span>
+                {' · '}등록 {analysis.symbolLibraryApplied.entryCount}종 중 이 도면에서 <span className="font-medium text-[var(--text-primary)]">{analysis.symbolLibraryApplied.matched}개</span> 매칭
+              </p>
+            </div>
+          )}
+
+          {/* 미인식 심볼 — 회사별 라이브러리를 만들 재료. 뭉개면 축적 루프가 시작되지 않는다 */}
+          {analysis.unknownSymbols && analysis.unknownSymbols.length > 0 && (
+            <div className="rounded-xl border border-[var(--color-warning)] bg-[var(--bg-secondary)] px-4 py-3" role="status">
+              <p className="text-sm font-semibold text-[var(--color-warning)]">
+                미인식 심볼 {analysis.unknownSymbols.length}종 — 임시로 부하(LD)로 분류됨
+              </p>
+              <ul className="mt-1.5 space-y-0.5 text-xs text-[var(--text-secondary)]">
+                {analysis.unknownSymbols.map((symbol) => (
+                  <li key={symbol.blockName}>
+                    <span className="font-mono text-[var(--text-primary)]">{symbol.blockName}</span>
+                    {' '}× {symbol.count}
+                    {symbol.fingerprint && <span className="ml-1 font-mono text-[var(--text-tertiary)]">{symbol.fingerprint}</span>}
+                  </li>
+                ))}
+              </ul>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs font-medium text-[var(--text-secondary)]">
+                  라이브러리 등록용 JSON 보기 — 기기 종류만 채워 저장하면 다음 도면부터 자동 인식
+                </summary>
+                <pre className="mt-1.5 overflow-x-auto rounded-lg bg-[var(--bg-primary)] p-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">
+{JSON.stringify({
+  schemaVersion: 1,
+  organization: '고객사명',
+  entries: analysis.unknownSymbols.map((symbol) => ({
+    ...(symbol.fingerprint ? { fingerprint: symbol.fingerprint } : {}),
+    blockNames: [symbol.blockName],
+    deviceType: 'breaker | transformer | meter | panel | switch | relay …중 택1',
+  })),
+}, null, 2)}
+                </pre>
+                <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
+                  이 내용을 <span className="font-mono">회사명-심볼.json</span> 으로 저장 → deviceType 을 실제 기기 종류로 수정 → 위 「고객사 심볼 라이브러리」에 첨부해 재분석하세요.
+                </p>
+              </details>
             </div>
           )}
 

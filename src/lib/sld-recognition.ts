@@ -168,6 +168,18 @@ export interface SLDAnalysis {
   partial?: boolean;
   /** Machine-readable analysis warnings that must remain visible to downstream review. */
   warnings?: string[];
+  /**
+   * 고객사 심볼 라이브러리 적용 결과 (DXF 벡터 경로 전용).
+   * 미인식 블록(unknownSymbols)은 사용자가 라이브러리에 추가할 재료다 —
+   * 조용히 'load' 로 뭉개면 회사별 축적 루프가 시작될 수 없다.
+   */
+  symbolLibraryApplied?: { organization: string; matched: number; entryCount: number };
+  unknownSymbols?: Array<{
+    blockName: string;
+    fingerprint: string | null;
+    count: number;
+    samplePosition: { x: number; y: number };
+  }>;
   /** 케이블 스케줄 표(중급) — 표 문서에서 행 단위 피더 데이터. 검토 입력원. */
   scheduleTables?: Array<{
     title: string;

@@ -13,6 +13,14 @@
 
 import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
+import {
+  fingerprintBlock,
+  indexSymbolLibrary,
+  matchSymbol,
+  type SymbolLibrary,
+  type SymbolLibraryIndex,
+  type UnknownSymbolReport,
+} from './symbol-library';
 import { generateSuggestions } from '@/lib/sld-recognition';
 import { snapConnectionEndpoints, formatEndpointId as endpointId } from './endpoint-snap';
 import { parseSpecText, type ParsedSpec } from './spec-text';
@@ -107,8 +115,11 @@ const SYMBOL_KEYS_BY_LENGTH = Object.keys(BLOCK_SYMBOL_MAP).sort((a, b) => b.len
  * 그래서 이름을 토큰으로 끊고 단계적으로 좁힌다. 1글자 키는 **완전한 토큰일 때만**
  * 유효하다("M-1"은 모터, "MCC-1"은 모터가 아니다).
  */
-/** DXF 블록명 → 기기 종류. 사전 공백이 곧 미검출이라 단독 검사 대상이다. */
-export function resolveBlockType(blockName: string): SLDComponentType {
+/**
+ * 이름 휴리스틱의 «매칭 없음» 을 구분해 주는 원형. 기본값 'load' 로 뭉개기 전에
+ * 미식별을 알아야 고객사 심볼 라이브러리의 unknownSymbols 보고가 가능하다.
+ */
+export function resolveBlockTypeOrNull(blockName: string): SLDComponentType | null {
   const lower = blockName.toLowerCase();
   const tokens = lower.split(/[^a-z]+/).filter(Boolean);
 
@@ -130,7 +141,12 @@ export function resolveBlockType(blockName: string): SLDComponentType {
     if (key.length >= 3 && lower.includes(key)) return BLOCK_SYMBOL_MAP[key];
   }
 
-  return 'load'; // 미식별 블록은 부하로 기본 분류
+  return null;
+}
+
+/** DXF 블록명 → 기기 종류. 사전 공백이 곧 미검출이라 단독 검사 대상이다. */
+export function resolveBlockType(blockName: string): SLDComponentType {
+  return resolveBlockTypeOrNull(blockName) ?? 'load'; // 미식별 블록은 부하로 기본 분류
 }
 
 /**
@@ -250,6 +266,8 @@ export interface DxfParseOptions {
   maxConnections?: number;
   /** 의미 매핑에 투입할 최대 텍스트 수 */
   maxTexts?: number;
+  /** 고객사 심볼 라이브러리 — 지문·블록명 매칭이 이름 휴리스틱을 이긴다. */
+  symbolLibrary?: SymbolLibrary;
 }
 
 const DXF_WORK_LIMITS = {
@@ -343,6 +361,21 @@ export function parseDxfToSLD(
 
   const components: SLDComponent[] = [];
   const connections: SLDConnection[] = [];
+
+  // 고객사 심볼 라이브러리 — 색인 1회 + 블록 정의 지문 메모(같은 블록은 재계산 없음)
+  const libraryIndex: SymbolLibraryIndex | null =
+    options.symbolLibrary ? indexSymbolLibrary(options.symbolLibrary) : null;
+  let libraryMatched = 0;
+  const unknownSymbols = new Map<string, UnknownSymbolReport>();
+  const fingerprintMemo = new Map<string, string | null>();
+  const blockFingerprint = (name: string): string | null => {
+    const memo = fingerprintMemo.get(name);
+    if (memo !== undefined) return memo;
+    const definition = dxf?.blocks?.[name]?.entities;
+    const fp = definition ? fingerprintBlock(definition) : null;
+    fingerprintMemo.set(name, fp);
+    return fp;
+  };
   const texts: Array<{ text: string; x: number; y: number; spec: ParsedSpec }> = [];
 
   let compIdx = 0;
@@ -359,7 +392,26 @@ export function parseDxfToSLD(
         // 관례)이 컴포넌트로 승격되고 미식별 블록명은 resolveBlockType 기본 'load'가
         // 되어 phantom load→부하계산 오염이었다. 동일 필터를 적용한다.
         if (isIgnoredLayer(entity.layer)) break;
-        const type = resolveBlockType(entity.name);
+        // 우선순위: 고객사 라이브러리(지문→별칭) → 전역 이름 휴리스틱 → 'load' 기본.
+        // 라이브러리에도 휴리스틱에도 없는 블록은 unknownSymbols 로 보고한다 —
+        // 조용한 'load' 뭉개기가 사용자가 라이브러리를 만들 기회를 없애기 때문.
+        const fingerprint = blockFingerprint(entity.name);
+        const libraryType = libraryIndex ? matchSymbol(libraryIndex, entity.name, fingerprint) : null;
+        const heuristicType = libraryType ? null : resolveBlockTypeOrNull(entity.name);
+        if (libraryType) libraryMatched += 1;
+        if (!libraryType && !heuristicType) {
+          const known = unknownSymbols.get(entity.name);
+          if (known) known.count += 1;
+          else if (unknownSymbols.size < 100) {
+            unknownSymbols.set(entity.name, {
+              blockName: entity.name,
+              fingerprint,
+              count: 1,
+              samplePosition: { x: entity.position.x, y: entity.position.y },
+            });
+          }
+        }
+        const type = libraryType ?? heuristicType ?? 'load';
         components.push({
           id: `comp_${++compIdx}`,
           type,
@@ -577,6 +629,10 @@ export function parseDxfToSLD(
     suggestedCalculations: generateSuggestions({ components, connections: snap.connections }),
     confidence: 0.95, // 벡터 파싱은 VLM보다 높은 신뢰도
     rawDescription: `DXF parsed: ${components.length} components, ${snap.connections.length} connections (snapped ${snap.stats.snapped}, junctions ${snap.stats.junctioned}, dropped ${snap.stats.droppedSelfLoops}), ${texts.length} text labels`,
+    symbolLibraryApplied: libraryIndex
+      ? { organization: libraryIndex.organization, matched: libraryMatched, entryCount: libraryIndex.size }
+      : undefined,
+    unknownSymbols: unknownSymbols.size > 0 ? [...unknownSymbols.values()] : undefined,
   };
 }
 

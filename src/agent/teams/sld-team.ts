@@ -64,7 +64,10 @@ async function extractFromDrawing(
     const requestedScale = typeof params?.unitScale === 'number' && Number.isFinite(params.unitScale) && params.unitScale > 0
       ? params.unitScale
       : undefined;
-    const analysis = parseDxfToSLD(text, requestedScale ? { unitScale: requestedScale } : {});
+    const analysis = parseDxfToSLD(text, {
+      ...(requestedScale ? { unitScale: requestedScale } : {}),
+      ...(input.symbolLibrary ? { symbolLibrary: input.symbolLibrary } : {}),
+    });
     return {
       components: (analysis.components ?? []).map((c, index) => ({
         id: c.id ?? `dxf-comp-${index + 1}`,

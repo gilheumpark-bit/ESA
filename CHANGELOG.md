@@ -5,6 +5,15 @@ All notable changes to ESVA are documented in this file.
 ## [Unreleased]
 
 ### Added
+- **고객사 심볼 라이브러리** — 회사마다 다른 CAD 블록명·심볼을 회사별 JSON 으로
+  등록·재사용한다. DXF 블록 **정의 기하의 정규화 지문**(위치·회전·배율 불변,
+  AI 불요)과 블록명 별칭 두 키로 매칭하며, 라이브러리가 전역 이름 휴리스틱을
+  이긴다. 미인식 블록은 조용히 부하로 뭉개지 않고 `unknownSymbols`(이름·지문·
+  개수)로 보고 + 화면에서 등록용 JSON 을 바로 제공 — 종류만 채워 재업로드하면
+  그 회사의 다음 도면부터 자동 인식된다(축적 루프). `/api/dxf`·`/api/drawing-jobs`
+  (V3, vectorOnly 포함) 공용 `symbolLibrary` 폼 파트, 무효 라이브러리는 이유와
+  함께 400. 라이브 실측: 동일 도면 A/B 에서 미등록 load×2 → 등록 후 breaker×2,
+  블록명 바꾼 사본도 지문만으로 매칭.
 - **DWG(ZWCAD·AutoCAD·CADian 원본 형식) 인식** — 파싱하지 않고 **인식·안내**한다
   (DWG 는 비공개 바이너리, 공개 파서는 GPL). 화면 accept·기본 업로드·V3 전체
   판독·`/api/dxf` 4층에서 같은 정본 문구로 「DXF 로 저장 후 업로드」를 안내하고,

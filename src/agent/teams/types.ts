@@ -89,6 +89,8 @@ export interface TeamInput {
       };
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 들어온다 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
+  /** 고객사 심볼 라이브러리 — 라우트에서 린트 통과분만. DXF 벡터 추출에만 적용된다. */
+  symbolLibrary?: import('@/engine/topology/symbol-library').SymbolLibrary;
 }
 
 export interface ExtractedComponent {

@@ -90,6 +90,8 @@ export interface OrchestrateInput {
         effortProfile?: import('@/lib/drawing-reasoning-effort').DrawingEffortProfile;
       };
   signal?: AbortSignal;
+  /** 고객사 심볼 라이브러리 — DXF 벡터 추출에만 적용 (라우트에서 린트 통과분). */
+  symbolLibrary?: import('@/engine/topology/symbol-library').SymbolLibrary;
   seedDetections?: {
     symbols?: RawSymbolHit[];
     lines?: RawLineHit[];
@@ -566,6 +568,7 @@ function teamInputForVector(
     fileName: input.fileName,
     mimeType: input.mimeType,
     params: dxf ? {} : { pageNumber: page.pageIndex + 1 },
+    ...(dxf && input.symbolLibrary ? { symbolLibrary: input.symbolLibrary } : {}),
     signal,
     settleOnAbort: true,
   };

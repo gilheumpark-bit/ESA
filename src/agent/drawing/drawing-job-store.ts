@@ -43,6 +43,8 @@ export interface DrawingJobRecord {
     mimeType: string;
     fileName?: string;
     requestedPages: number[] | 'all';
+    /** 고객사 심볼 라이브러리 — deferred/resume 실행에서 원 요청과 동일 적용 */
+    symbolLibrary?: import('@/engine/topology/symbol-library').SymbolLibrary;
   };
   error?: string;
   vlmCallsUsed: number;

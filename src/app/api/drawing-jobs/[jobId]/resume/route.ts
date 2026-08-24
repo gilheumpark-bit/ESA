@@ -78,6 +78,7 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
       jobId,
       maxPagesPerRun: 1,
       signal: req.signal,
+      ...(job.sourceMetadata.symbolLibrary ? { symbolLibrary: job.sourceMetadata.symbolLibrary } : {}),
     });
     if (result.document.jobStatus === 'COMPLETE') {
       releaseSourceLease(job.sourceLease.leaseId, owner.ownerId);
