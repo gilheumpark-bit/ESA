@@ -388,10 +388,52 @@ test.describe('도면 분석', () => {
     // 것이지 검사를 무르게 하는 것이 아니다: 결과가 안 나오면 그대로 실패한다.
     // 뒤따르는 단언들은 같은 렌더 안이라 기본값으로 둔다.
     await expect(page.getByRole('heading', { name: '분석 결과' })).toBeVisible({ timeout: 20_000 });
+    const resultTabs = page.getByRole('tablist', { name: '도면 분석 결과 항목' });
+    const summaryTab = page.getByRole('tab', { name: '요약', exact: true });
+    const devicesTab = page.getByRole('tab', { name: '기기 5', exact: true });
+    const connectionsTab = page.getByRole('tab', { name: '결선 4', exact: true });
+    const reviewTab = page.getByRole('tab', { name: /^검토/ });
+
+    await expect(resultTabs).toBeVisible();
+    await expect(summaryTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tabpanel', { name: '요약' })).toBeVisible();
+
+    await devicesTab.click();
+    await expect(devicesTab).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByText('인식된 기기 (5개)')).toBeVisible();
-    await expect(page.getByText('연결 맵 (4개)')).toBeVisible();
     await expect(page.getByText('MCCB-MAIN', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('LOAD-C', { exact: true }).first()).toBeVisible();
+
+    await devicesTab.press('ArrowRight');
+    await expect(connectionsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText('연결 맵 (4개)')).toBeVisible();
+
+    await connectionsTab.press('End');
+    await expect(reviewTab).toHaveAttribute('aria-selected', 'true');
+    await reviewTab.press('Home');
+    await expect(summaryTab).toHaveAttribute('aria-selected', 'true');
+
+    const rerunResponse = page.waitForResponse((response) => (
+      new URL(response.url()).pathname === '/api/dxf'
+      && response.request().method() === 'POST'
+    ), { timeout: 3_000 });
+    await page.getByRole('button', { name: '같은 도면 다시 분석' }).click();
+    expect((await rerunResponse).status()).toBe(200);
+    await expect(summaryTab).toHaveAttribute('aria-selected', 'true');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileWidths = await page.evaluate(() => {
+      const tablist = document.querySelector<HTMLElement>('[role="tablist"][aria-label="도면 분석 결과 항목"]');
+      const scroller = tablist?.parentElement;
+      return {
+        viewport: window.innerWidth,
+        document: document.documentElement.scrollWidth,
+        tabViewport: scroller?.clientWidth ?? 0,
+        tabContent: scroller?.scrollWidth ?? 0,
+      };
+    });
+    expect(mobileWidths.document).toBeLessThanOrEqual(mobileWidths.viewport);
+    expect(mobileWidths.tabContent).toBeGreaterThan(mobileWidths.tabViewport);
   });
 
   test('회사 심볼을 화면에서 저장하고 재시작 뒤 다음 DXF에 자동 적용', async ({ page }) => {
@@ -404,6 +446,7 @@ test.describe('도면 분석', () => {
     };
 
     await dxfInput.setInputFiles(companyDxf);
+    await page.getByRole('tab', { name: /^기기/ }).click();
     await expect(page.getByRole('heading', { name: '미인식 심볼 1종' })).toBeVisible({ timeout: 20_000 });
 
     // 분석 결과를 열어 둔 상태에서 활성 회사를 바꿔도 등록 폼이 이전 회사에 남지 않는다.

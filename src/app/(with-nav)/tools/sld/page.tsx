@@ -48,6 +48,12 @@ import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
 import { SymbolLibraryPanel, UnknownSymbolRegistrar } from '@/components/SymbolLibraryPanel';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
 import {
+  QuickDrawingResultTabs,
+  quickDrawingResultPanelId,
+  quickDrawingResultTabId,
+  type QuickDrawingResultTab,
+} from '@/components/QuickDrawingResultTabs';
+import {
   labelDocumentReadStatus,
   labelJobStatus,
   labelPageStatus,
@@ -518,6 +524,7 @@ export default function SLDAnalysisPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   // DXF를 기본탭으로 — API 키 없이 즉시 분석 가능 (BYOK 장벽 제거)
   const [activeTab, setActiveTab] = useState<'image' | 'dxf' | 'pdf'>('dxf');
+  const [resultTab, setResultTab] = useState<QuickDrawingResultTab>('summary');
   // V3 전체 문서 판독 작업 (다중 페이지 · COMPLETE/PARTIAL)
   const [v3Doc, setV3Doc] = useState<DrawingDocumentV3 | null>(null);
   const [v3JobId, setV3JobId] = useState<string | null>(null);
@@ -539,6 +546,13 @@ export default function SLDAnalysisPage() {
     && !v3CorrectionTarget,
   );
   const activeSymbolLibrary = getActiveSymbolLibrary(symbolLibraryCatalog);
+  const reviewFindingCount = review && !('skipped' in review) ? review.findings.length : 0;
+  const quickResultCounts = {
+    devices: analysis?.components.length ?? 0,
+    connections: analysis?.connections.length ?? 0,
+    calculations: (analysis?.suggestedCalculations.length ?? 0) + calcChain.length,
+    review: reviewFindingCount,
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -643,6 +657,7 @@ export default function SLDAnalysisPage() {
     setRunComparison(null);
     setCalcChain([]);
     setReview(null);
+    setResultTab('summary');
     setError(null);
   }, []);
 
@@ -715,6 +730,7 @@ export default function SLDAnalysisPage() {
     setRunComparison(null);
     setCalcChain([]);
     setReview(null);
+    setResultTab('summary');
     setError(null);
     setV3Doc(null);
     setV3JobId(null);
@@ -911,6 +927,7 @@ export default function SLDAnalysisPage() {
       setAnalysis(result.data);
       setCalcChain(result.calcChain ?? []);
       setReview(result.review ?? null);
+      setResultTab('summary');
     } catch (analysisError) {
       setError(analysisError instanceof Error ? analysisError.message : '공개 교보재 빠른 분석에 실패했습니다.');
     } finally {
@@ -1202,6 +1219,7 @@ export default function SLDAnalysisPage() {
       setAnalysis(nextAnalysis);
       setCalcChain(nextCalcChain);
       setReview(data.review ?? null);
+      setResultTab('summary');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'SLD 분석 중 오류가 발생했습니다');
     } finally {
@@ -1225,6 +1243,7 @@ export default function SLDAnalysisPage() {
     setAnalysis(null);
     setCalcChain([]);
     setReview(null);
+    setResultTab('summary');
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -1235,6 +1254,7 @@ export default function SLDAnalysisPage() {
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
+      setResultTab('summary');
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'DXF 파싱 오류');
@@ -1256,6 +1276,7 @@ export default function SLDAnalysisPage() {
     setAnalysis(null);
     setCalcChain([]);
     setReview(null);
+    setResultTab('summary');
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -1265,6 +1286,7 @@ export default function SLDAnalysisPage() {
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
+      setResultTab('summary');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'PDF 파싱 오류');
     } finally {
@@ -1301,6 +1323,15 @@ export default function SLDAnalysisPage() {
     return primarySucceeded;
   }, [handleDxfUpload, handleFullDocumentAnalyze, handleImageSelect, handlePdfUpload]);
 
+  const handleReanalyze = useCallback(async () => {
+    if (!drawingFile) return;
+    if (documentKindOf(drawingFile) === 'image') {
+      await handleAnalyze();
+      return;
+    }
+    await handlePrimaryDocumentUpload(drawingFile);
+  }, [drawingFile, handleAnalyze, handlePrimaryDocumentUpload]);
+
   const handleUnknownSymbolSave = useCallback(async (
     organization: string,
     mappings: SymbolMappingInput[],
@@ -1325,7 +1356,7 @@ export default function SLDAnalysisPage() {
   }, [drawingFile, handlePrimaryDocumentUpload]);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-8">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">
@@ -1616,17 +1647,17 @@ export default function SLDAnalysisPage() {
 
       {/* Analysis results */}
       {analysis && (
-        <div className="mt-6 space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="mt-6 min-w-0 space-y-4">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">
               분석 결과
             </h2>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <button
                 type="button"
                 onClick={handleTeamReview}
                 disabled={reviewLoading || !drawingFile}
-                className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {reviewLoading ? (
                   <>
@@ -1642,9 +1673,9 @@ export default function SLDAnalysisPage() {
               </button>
               <button
                 type="button"
-                onClick={() => void handleAnalyze()}
-                disabled={loading}
-                className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)]"
+                onClick={() => void handleReanalyze()}
+                disabled={loading || !drawingFile}
+                className="flex min-h-11 items-center gap-1 rounded-lg px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-secondary)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
               >
                 {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
                 {loading ? '재분석 중…' : '같은 도면 다시 분석'}
@@ -1666,84 +1697,160 @@ export default function SLDAnalysisPage() {
             </div>
           )}
 
-          {/* 고객사 심볼 라이브러리 적용 결과 — 조용히 적용된 척하지 않는다 */}
-          {analysis.symbolLibraryApplied && (
-            <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
-              <p className="text-xs text-[var(--text-secondary)]">
-                심볼 라이브러리 적용: <span className="font-medium text-[var(--text-primary)]">{analysis.symbolLibraryApplied.organization}</span>
-                {' · '}등록 {analysis.symbolLibraryApplied.entryCount}종 중 이 도면에서 <span className="font-medium text-[var(--text-primary)]">{analysis.symbolLibraryApplied.matched}개</span> 매칭
-              </p>
-            </div>
-          )}
-
-          {/* 미인식 심볼 — 회사별 라이브러리를 만들 재료. 뭉개면 축적 루프가 시작되지 않는다 */}
-          {analysis.unknownSymbols && analysis.unknownSymbols.length > 0 && (
-            <UnknownSymbolRegistrar
-              key={activeSymbolLibrary?.organization ?? '__no-active-company__'}
-              symbols={analysis.unknownSymbols}
-              activeOrganization={activeSymbolLibrary?.organization ?? null}
-              storageBlocked={symbolLibraryRecoveryRequired}
-              onSaveAndAnalyze={handleUnknownSymbolSave}
-            />
-          )}
-
-          {/* 사내 규정 첨부(선택) — 정밀 검증 시 KEC와 나란히 대조된다 */}
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
-              사내 규정 (선택, JSON)
-            </span>
-            <input
-              type="file"
-              accept=".json,application/json"
-              onChange={(e) => setRulesFile(e.target.files?.[0] ?? null)}
-              className="text-xs text-[var(--text-secondary)] file:mr-2 file:rounded-md file:border-0 file:bg-[var(--bg-primary)] file:px-2 file:py-1 file:text-xs file:text-[var(--text-primary)]"
-            />
-            {rulesFile && (
-              <span className="text-xs text-[var(--text-tertiary)]">
-                {rulesFile.name} — 정밀 검증 시 함께 대조
-              </span>
-            )}
-          </div>
-
           {reviewError && (
-            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3" role="alert">
               <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
               <p className="text-sm text-[var(--color-error)]">{reviewError}</p>
             </div>
           )}
 
-          {/* System info */}
-          {(analysis.systemVoltage || analysis.systemType) && (
-            <div className="flex flex-wrap gap-3 rounded-xl bg-[var(--bg-secondary)] px-4 py-3 text-sm">
-              {analysis.systemVoltage && (
-                <span>
-                  <span className="text-[var(--text-tertiary)]">계통전압: </span>
-                  <span className="font-medium text-[var(--text-primary)]">{analysis.systemVoltage}</span>
-                </span>
-              )}
-              {analysis.systemType && (
-                <span>
-                  <span className="text-[var(--text-tertiary)]">방식: </span>
-                  <span className="font-medium text-[var(--text-primary)]">{analysis.systemType}</span>
-                </span>
-              )}
-                  <span>
-                    <span className="text-[var(--text-tertiary)]">모델 추정 확신도: </span>
-                    <span className="font-medium text-[var(--text-primary)]">
-                      {Math.round(analysis.confidence * 100)}%
-                    </span>
-                    <span className="ml-1 text-[10px] text-[var(--text-tertiary)]" title="정답률이 아닌 AI 자체 추정치">
-                      (정답률이 아닌 AI 자체 추정치)
-                    </span>
-                  </span>
-            </div>
-          )}
+          <QuickDrawingResultTabs
+            activeTab={resultTab}
+            counts={quickResultCounts}
+            onTabChange={setResultTab}
+          />
 
-          <ComponentList components={analysis.components} />
-          <ConnectionMap connections={analysis.connections} components={analysis.components} />
-          <SuggestedCalcs suggestions={analysis.suggestedCalculations} />
-          <CalcChain steps={calcChain} />
-          <ReviewReportPanel review={review} />
+          <div
+            id={quickDrawingResultPanelId(resultTab)}
+            role="tabpanel"
+            aria-labelledby={quickDrawingResultTabId(resultTab)}
+            tabIndex={0}
+            className="focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--color-primary)]"
+          >
+            {resultTab === 'summary' && (
+              <div className="space-y-3">
+                {/* 고객사 심볼 라이브러리 적용 결과 — 조용히 적용된 척하지 않는다 */}
+                {analysis.symbolLibraryApplied && (
+                  <div className="rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      심볼 라이브러리 적용: <span className="font-medium text-[var(--text-primary)]">{analysis.symbolLibraryApplied.organization}</span>
+                      {' · '}등록 {analysis.symbolLibraryApplied.entryCount}종 중 이 도면에서 <span className="font-medium text-[var(--text-primary)]">{analysis.symbolLibraryApplied.matched}개</span> 매칭
+                    </p>
+                  </div>
+                )}
+
+                <section
+                  aria-labelledby="quick-result-summary-title"
+                  className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4"
+                >
+                  <h3 id="quick-result-summary-title" className="text-sm font-semibold text-[var(--text-primary)]">
+                    판독 요약
+                  </h3>
+                  <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+                    <div>
+                      <dt className="text-xs text-[var(--text-tertiary)]">계통전압</dt>
+                      <dd className="mt-1 text-sm font-medium text-[var(--text-primary)]">
+                        {analysis.systemVoltage ?? '미판독'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-[var(--text-tertiary)]">계통방식</dt>
+                      <dd className="mt-1 text-sm font-medium text-[var(--text-primary)]">
+                        {analysis.systemType ?? '미판독'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-[var(--text-tertiary)]">모델 추정 확신도:</dt>
+                      <dd className="mt-1 text-sm font-medium tabular-nums text-[var(--text-primary)]">
+                        {Math.round(analysis.confidence * 100)}%
+                        <span className="ml-1 text-[10px] font-normal text-[var(--text-tertiary)]" title="정답률이 아닌 AI 자체 추정치">
+                          (정답률 아님)
+                        </span>
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="mt-4 border-t border-[var(--border-default)] pt-3 text-xs text-[var(--text-secondary)]">
+                    분석 범위 · 기기 {quickResultCounts.devices}개 · 결선 {quickResultCounts.connections}개
+                    {' · '}계산 항목 {quickResultCounts.calculations}건 · 회로 검토 {quickResultCounts.review}건
+                  </p>
+                </section>
+              </div>
+            )}
+
+            {resultTab === 'devices' && (
+              <div className="space-y-4">
+                {/* 미인식 심볼 — 회사별 라이브러리를 만들 재료. 뭉개면 축적 루프가 시작되지 않는다 */}
+                {analysis.unknownSymbols && analysis.unknownSymbols.length > 0 && (
+                  <UnknownSymbolRegistrar
+                    key={activeSymbolLibrary?.organization ?? '__no-active-company__'}
+                    symbols={analysis.unknownSymbols}
+                    activeOrganization={activeSymbolLibrary?.organization ?? null}
+                    storageBlocked={symbolLibraryRecoveryRequired}
+                    onSaveAndAnalyze={handleUnknownSymbolSave}
+                  />
+                )}
+                {analysis.components.length > 0 ? (
+                  <ComponentList components={analysis.components} />
+                ) : (
+                  <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
+                    <Box size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
+                    <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">확정해 표시할 기기가 없습니다.</p>
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">미인식 심볼과 원본 도면을 함께 확인하세요.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {resultTab === 'connections' && (
+              analysis.connections.length > 0 ? (
+                <ConnectionMap connections={analysis.connections} components={analysis.components} />
+              ) : (
+                <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
+                  <Link2 size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
+                  <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">확정해 표시할 결선이 없습니다.</p>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">기기 목록만으로 계통 관계를 판단하지 마세요.</p>
+                </div>
+              )
+            )}
+
+            {resultTab === 'calculations' && (
+              quickResultCounts.calculations > 0 ? (
+                <div className="space-y-4">
+                  <SuggestedCalcs suggestions={analysis.suggestedCalculations} />
+                  <CalcChain steps={calcChain} />
+                </div>
+              ) : (
+                <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
+                  <Calculator size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
+                  <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">도면에서 제안할 계산 항목이 없습니다.</p>
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">필요한 정격·길이·도체 정보가 판독됐는지 원본에서 확인하세요.</p>
+                </div>
+              )
+            )}
+
+            {resultTab === 'review' && (
+              <div className="space-y-4">
+                {/* 사내 규정 첨부(선택) — 정밀 검증 시 KEC와 나란히 대조된다 */}
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-3">
+                  <label htmlFor="quick-result-rules-file" className="text-xs font-medium text-[var(--text-secondary)]">
+                    사내 규정 (선택, JSON)
+                  </label>
+                  <input
+                    id="quick-result-rules-file"
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={(e) => setRulesFile(e.target.files?.[0] ?? null)}
+                    className="max-w-full text-xs text-[var(--text-secondary)] file:mr-2 file:min-h-9 file:rounded-md file:border file:border-[var(--border-default)] file:bg-[var(--bg-primary)] file:px-3 file:text-xs file:text-[var(--text-primary)]"
+                  />
+                  {rulesFile && (
+                    <span className="text-xs text-[var(--text-tertiary)]">
+                      {rulesFile.name} — 정밀 검증 시 함께 대조
+                    </span>
+                  )}
+                </div>
+
+                {review ? (
+                  <ReviewReportPanel review={review} />
+                ) : (
+                  <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
+                    <GitBranch size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
+                    <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">빠른 회로 검토 결과가 없습니다.</p>
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">적합이라는 뜻이 아닙니다. 필요하면 상단의 정밀 검증을 실행하세요.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

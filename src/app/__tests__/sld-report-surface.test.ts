@@ -111,7 +111,9 @@ describe('source-linked SLD report surface', () => {
   it('reruns the retained drawing and labels model confidence without implying measured accuracy', () => {
     const page = source('src/app/(with-nav)/tools/sld/page.tsx');
 
-    expect(page).toContain('onClick={() => void handleAnalyze()}');
+    expect(page).toContain('onClick={() => void handleReanalyze()}');
+    expect(page).toContain("documentKindOf(drawingFile) === 'image'");
+    expect(page).toContain('await handlePrimaryDocumentUpload(drawingFile)');
     expect(page).toContain('모델 추정 확신도:');
     expect(page).toContain('정답률이 아닌 AI 자체 추정치');
     expect(page).not.toContain('정확도:');
