@@ -19,7 +19,9 @@ All notable changes to ESVA are documented in this file.
   매칭은 재등록이 필요하다. `/api/dxf`·`/api/drawing-jobs`(V3, vectorOnly 포함)·
   `/api/team-review` 정밀 검증은 같은 활성 사전과 검증 계약을 쓰며 무효 값은
   이유와 함께 거부한다. 저장값도 읽을 때 회사당 1MB·전체 4MB UTF-8 한도를
-  재검증해 직접 변조된 과대 사전을 자동 적용하지 않는다.
+  재검증해 직접 변조된 과대 사전을 자동 적용하지 않는다. 일부 회사 항목만
+  손상돼도 정상 항목을 빈 값으로 오인해 새 저장으로 덮지 않으며, 화면에서
+  손상 원본을 파일로 백업하고 초기화를 확인한 뒤에만 다시 등록할 수 있다.
 - **DWG(ZWCAD·AutoCAD·CADian 원본 형식) 인식** — 파싱하지 않고 **인식·안내**한다
   (DWG 는 비공개 바이너리, 공개 파서는 GPL). 화면 accept·기본 업로드·V3 전체
   판독·`/api/dxf` 4층에서 같은 정본 문구로 「DXF 로 저장 후 업로드」를 안내하고,

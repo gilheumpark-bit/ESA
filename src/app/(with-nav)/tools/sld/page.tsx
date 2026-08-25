@@ -55,9 +55,11 @@ import {
 import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
 import type { SymbolLibrary } from '@/lib/symbol-library-contract';
 import {
+  backupAndResetSymbolLibraryCatalog,
   deleteSymbolLibrary,
   getActiveSymbolLibrary,
   importSymbolLibraryText,
+  isSymbolLibraryRecoveryError,
   readSymbolLibraryCatalog,
   selectSymbolLibrary,
   upsertSymbolMappings,
@@ -508,6 +510,7 @@ export default function SLDAnalysisPage() {
   // 고객사 심볼 라이브러리 — 브라우저에 회사별로 보존하고 선택 회사를 DXF 두 경로에 적용한다.
   const [symbolLibraryCatalog, setSymbolLibraryCatalog] = useState<SymbolLibraryCatalog>(EMPTY_SYMBOL_LIBRARY_CATALOG);
   const [symbolLibraryStatus, setSymbolLibraryStatus] = useState<string | null>(null);
+  const [symbolLibraryRecoveryRequired, setSymbolLibraryRecoveryRequired] = useState(false);
   // 정밀 검증(3개 전문팀 + 합의 단계)용 — 마지막 업로드 원본 파일과 진행 상태.
   // 배선 전엔 /api/team-review·/report/[id]가 UI에서 영구 미도달이었다(Batch C1).
   const [drawingFile, setDrawingFile] = useState<File | null>(null);
@@ -541,6 +544,7 @@ export default function SLDAnalysisPage() {
     const timer = window.setTimeout(() => {
       const stored = readSymbolLibraryCatalog();
       setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryRecoveryRequired(Boolean(stored.warning));
       if (stored.warning) setSymbolLibraryStatus(stored.warning);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -550,11 +554,13 @@ export default function SLDAnalysisPage() {
     try {
       const stored = importSymbolLibraryText(await file.text());
       setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryRecoveryRequired(false);
       const active = getActiveSymbolLibrary(stored.catalog);
       setSymbolLibraryStatus(active
         ? `${active.organization} 심볼 ${active.entries.length}종을 저장하고 활성화했습니다.`
         : '회사 심볼 라이브러리를 저장했습니다.');
     } catch (importError) {
+      if (isSymbolLibraryRecoveryError(importError)) setSymbolLibraryRecoveryRequired(true);
       setSymbolLibraryStatus(importError instanceof Error ? importError.message : '회사 심볼 JSON 가져오기에 실패했습니다.');
     }
   }, []);
@@ -563,10 +569,12 @@ export default function SLDAnalysisPage() {
     try {
       const stored = selectSymbolLibrary(organization);
       setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryRecoveryRequired(false);
       setSymbolLibraryStatus(organization
         ? `${organization} 심볼 사전을 DXF 분석·정밀 검증에 적용합니다.`
         : '회사 심볼 자동 적용을 해제했습니다.');
     } catch (selectionError) {
+      if (isSymbolLibraryRecoveryError(selectionError)) setSymbolLibraryRecoveryRequired(true);
       setSymbolLibraryStatus(selectionError instanceof Error ? selectionError.message : '회사 심볼 사전 선택에 실패했습니다.');
     }
   }, []);
@@ -591,11 +599,42 @@ export default function SLDAnalysisPage() {
       const deletedOrganization = activeSymbolLibrary.organization;
       const stored = deleteSymbolLibrary(deletedOrganization);
       setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryRecoveryRequired(false);
       setSymbolLibraryStatus(`${deletedOrganization} 심볼 사전을 삭제했습니다.`);
     } catch (deleteError) {
+      if (isSymbolLibraryRecoveryError(deleteError)) setSymbolLibraryRecoveryRequired(true);
       setSymbolLibraryStatus(deleteError instanceof Error ? deleteError.message : '회사 심볼 사전 삭제에 실패했습니다.');
     }
   }, [activeSymbolLibrary]);
+
+  const handleSymbolLibraryBackupAndReset = useCallback(() => {
+    const accepted = window.confirm(
+      '손상된 저장 원본을 파일로 내려받은 뒤 브라우저의 회사 심볼 저장소를 비웁니다. 백업 파일은 수동 복구용이며 자동 적용되지 않습니다. 계속할까요?',
+    );
+    if (!accepted) return;
+    try {
+      const reset = backupAndResetSymbolLibraryCatalog((backupText) => {
+        const blob = new Blob([backupText], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        try {
+          anchor.href = url;
+          anchor.download = 'esva-symbol-library-recovery-raw.json';
+          anchor.hidden = true;
+          document.body.appendChild(anchor);
+          anchor.click();
+        } finally {
+          anchor.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        }
+      });
+      setSymbolLibraryCatalog(reset.catalog);
+      setSymbolLibraryRecoveryRequired(false);
+      setSymbolLibraryStatus('손상 원본을 백업하고 회사 심볼 저장소를 초기화했습니다.');
+    } catch (resetError) {
+      setSymbolLibraryStatus(resetError instanceof Error ? resetError.message : '회사 심볼 저장소 복구에 실패했습니다.');
+    }
+  }, []);
 
   const handleImageSelect = useCallback((file: File) => {
     setImageFile(file);
@@ -1266,17 +1305,23 @@ export default function SLDAnalysisPage() {
     organization: string,
     mappings: SymbolMappingInput[],
   ): Promise<boolean> => {
-    const stored = upsertSymbolMappings(organization, mappings);
-    const savedLibrary = getActiveSymbolLibrary(stored.catalog);
-    if (!savedLibrary) throw new Error('저장한 회사 심볼 사전을 다시 불러오지 못했습니다.');
-    setSymbolLibraryCatalog(stored.catalog);
-    setSymbolLibraryStatus(`${savedLibrary.organization} 심볼 ${savedLibrary.entries.length}종을 저장했습니다.`);
-    if (!drawingFile || documentKindOf(drawingFile) !== 'dxf') return false;
-    const analyzed = await handlePrimaryDocumentUpload(drawingFile, savedLibrary);
-    setSymbolLibraryStatus(analyzed
-      ? `${savedLibrary.organization} 심볼 사전을 저장하고 현재 DXF에 다시 적용했습니다.`
-      : `${savedLibrary.organization} 심볼 사전은 저장했지만 현재 DXF 재분석은 실패했습니다.`);
-    return analyzed;
+    try {
+      const stored = upsertSymbolMappings(organization, mappings);
+      const savedLibrary = getActiveSymbolLibrary(stored.catalog);
+      if (!savedLibrary) throw new Error('저장한 회사 심볼 사전을 다시 불러오지 못했습니다.');
+      setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryRecoveryRequired(false);
+      setSymbolLibraryStatus(`${savedLibrary.organization} 심볼 ${savedLibrary.entries.length}종을 저장했습니다.`);
+      if (!drawingFile || documentKindOf(drawingFile) !== 'dxf') return false;
+      const analyzed = await handlePrimaryDocumentUpload(drawingFile, savedLibrary);
+      setSymbolLibraryStatus(analyzed
+        ? `${savedLibrary.organization} 심볼 사전을 저장하고 현재 DXF에 다시 적용했습니다.`
+        : `${savedLibrary.organization} 심볼 사전은 저장했지만 현재 DXF 재분석은 실패했습니다.`);
+      return analyzed;
+    } catch (saveError) {
+      if (isSymbolLibraryRecoveryError(saveError)) setSymbolLibraryRecoveryRequired(true);
+      throw saveError;
+    }
   }, [drawingFile, handlePrimaryDocumentUpload]);
 
   return (
@@ -1371,10 +1416,12 @@ export default function SLDAnalysisPage() {
             catalog={symbolLibraryCatalog}
             activeLibrary={activeSymbolLibrary}
             status={symbolLibraryStatus}
+            recoveryRequired={symbolLibraryRecoveryRequired}
             onImport={handleSymbolLibraryImport}
             onSelect={handleSymbolLibrarySelect}
             onExport={handleSymbolLibraryExport}
             onDelete={handleSymbolLibraryDelete}
+            onBackupAndReset={handleSymbolLibraryBackupAndReset}
           />
         </>
       )}
@@ -1635,6 +1682,7 @@ export default function SLDAnalysisPage() {
               key={activeSymbolLibrary?.organization ?? '__no-active-company__'}
               symbols={analysis.unknownSymbols}
               activeOrganization={activeSymbolLibrary?.organization ?? null}
+              storageBlocked={symbolLibraryRecoveryRequired}
               onSaveAndAnalyze={handleUnknownSymbolSave}
             />
           )}

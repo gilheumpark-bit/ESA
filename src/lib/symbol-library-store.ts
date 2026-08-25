@@ -16,6 +16,10 @@ import {
 import { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-types';
 
 export const SYMBOL_LIBRARY_CATALOG_KEY = 'esva-symbol-libraries-v1';
+export const SYMBOL_LIBRARY_CORRUPTION_WARNING =
+  '저장된 회사 심볼 라이브러리가 손상되거나 변조되어 자동 적용하지 않았습니다.';
+export const SYMBOL_LIBRARY_RECOVERY_REQUIRED_MESSAGE =
+  `${SYMBOL_LIBRARY_CORRUPTION_WARNING} 기존 원본을 덮어쓰지 않도록 먼저 백업하고 저장소를 초기화하세요.`;
 
 const CATALOG_SCHEMA_VERSION = 1 as const;
 const MAX_LIBRARIES = 20;
@@ -40,12 +44,19 @@ export interface SymbolLibraryCatalogRead {
   warning?: string;
 }
 
+export interface SymbolLibraryCatalogReset {
+  catalog: SymbolLibraryCatalog;
+  backupText?: string;
+}
+
 export interface SymbolMappingInput {
   blockName: string;
   fingerprint: string | null;
   deviceType: SLDComponentType;
   note?: string;
 }
+
+export type SymbolLibraryBackupWriter = (backupText: string) => void;
 
 function emptyCatalog(): SymbolLibraryCatalog {
   return { schemaVersion: CATALOG_SCHEMA_VERSION, activeOrganization: null, libraries: [] };
@@ -127,9 +138,44 @@ export function readSymbolLibraryCatalog(
   } catch {
     return {
       catalog: emptyCatalog(),
-      warning: '저장된 회사 심볼 라이브러리가 손상되거나 변조되어 자동 적용하지 않았습니다. 정상 JSON을 다시 가져오세요.',
+      warning: `${SYMBOL_LIBRARY_CORRUPTION_WARNING} 손상 원본을 백업한 뒤 초기화하세요.`,
     };
   }
+}
+
+function readWritableCatalog(storage: SymbolLibraryStorage | null): SymbolLibraryCatalog {
+  const current = readSymbolLibraryCatalog(storage);
+  if (current.warning) throw new Error(SYMBOL_LIBRARY_RECOVERY_REQUIRED_MESSAGE);
+  return current.catalog;
+}
+
+export function isSymbolLibraryRecoveryError(error: unknown): boolean {
+  return error instanceof Error && error.message === SYMBOL_LIBRARY_RECOVERY_REQUIRED_MESSAGE;
+}
+
+/** 손상 상태를 사용자가 승인한 경우에만 원문을 반환하고 저장 키를 초기화한다. */
+export function backupAndResetSymbolLibraryCatalog(
+  writeBackup: SymbolLibraryBackupWriter,
+  storage: SymbolLibraryStorage | null = defaultStorage(),
+): SymbolLibraryCatalogReset {
+  if (!storage) throw new Error('이 브라우저에서는 회사 심볼 저장소를 사용할 수 없습니다.');
+  let backupText: string | null;
+  try {
+    backupText = storage.getItem(SYMBOL_LIBRARY_CATALOG_KEY);
+  } catch {
+    throw new Error('손상된 회사 심볼 원본을 읽지 못해 초기화하지 않았습니다. 브라우저 저장소 설정을 확인하세요.');
+  }
+  // 백업 생성기가 실패하면 removeItem에 도달하지 않는다. 원본 보존이 초기화보다 우선이다.
+  if (backupText !== null) writeBackup(backupText);
+  try {
+    storage.removeItem(SYMBOL_LIBRARY_CATALOG_KEY);
+  } catch {
+    throw new Error('손상된 회사 심볼 저장소를 초기화하지 못했습니다. 브라우저 저장소 설정을 확인하세요.');
+  }
+  return {
+    catalog: emptyCatalog(),
+    ...(backupText === null ? {} : { backupText }),
+  };
 }
 
 export function getActiveSymbolLibrary(catalog: SymbolLibraryCatalog): SymbolLibrary | null {
@@ -152,7 +198,7 @@ export function saveSymbolLibrary(
     throw new Error('회사 심볼 라이브러리가 너무 큽니다 (회사당 최대 1MB).');
   }
 
-  const current = readSymbolLibraryCatalog(storage).catalog;
+  const current = readWritableCatalog(storage);
   const key = organizationKey(lint.library.organization);
   const existingIndex = current.libraries.findIndex((candidate) => organizationKey(candidate.organization) === key);
   const libraries = [...current.libraries];
@@ -193,32 +239,30 @@ export function selectSymbolLibrary(
   organization: string | null,
   storage: SymbolLibraryStorage | null = defaultStorage(),
 ): SymbolLibraryCatalogRead {
-  const current = readSymbolLibraryCatalog(storage);
-  if (current.warning) throw new Error(current.warning);
+  const current = readWritableCatalog(storage);
   if (organization === null) {
-    return writeCatalog({ ...current.catalog, activeOrganization: null }, storage);
+    return writeCatalog({ ...current, activeOrganization: null }, storage);
   }
-  const selected = current.catalog.libraries.find(
+  const selected = current.libraries.find(
     (library) => organizationKey(library.organization) === organizationKey(organization),
   );
   if (!selected) throw new Error('선택한 회사 심볼 라이브러리를 찾을 수 없습니다.');
-  return writeCatalog({ ...current.catalog, activeOrganization: selected.organization }, storage);
+  return writeCatalog({ ...current, activeOrganization: selected.organization }, storage);
 }
 
 export function deleteSymbolLibrary(
   organization: string,
   storage: SymbolLibraryStorage | null = defaultStorage(),
 ): SymbolLibraryCatalogRead {
-  const current = readSymbolLibraryCatalog(storage);
-  if (current.warning) throw new Error(current.warning);
+  const current = readWritableCatalog(storage);
   const key = organizationKey(organization);
-  const libraries = current.catalog.libraries.filter((library) => organizationKey(library.organization) !== key);
-  if (libraries.length === current.catalog.libraries.length) {
+  const libraries = current.libraries.filter((library) => organizationKey(library.organization) !== key);
+  if (libraries.length === current.libraries.length) {
     throw new Error('삭제할 회사 심볼 라이브러리를 찾을 수 없습니다.');
   }
-  const activeOrganization = current.catalog.activeOrganization
-    && organizationKey(current.catalog.activeOrganization) !== key
-    ? current.catalog.activeOrganization
+  const activeOrganization = current.activeOrganization
+    && organizationKey(current.activeOrganization) !== key
+    ? current.activeOrganization
     : null;
   return writeCatalog({ schemaVersion: CATALOG_SCHEMA_VERSION, activeOrganization, libraries }, storage);
 }
@@ -244,7 +288,7 @@ export function upsertSymbolMappings(
   if (!company) throw new Error('회사명을 입력하세요.');
   if (mappings.length === 0) throw new Error('저장할 심볼을 하나 이상 선택하세요.');
 
-  const current = readSymbolLibraryCatalog(storage).catalog;
+  const current = readWritableCatalog(storage);
   const existing = current.libraries.find(
     (library) => organizationKey(library.organization) === organizationKey(company),
   );

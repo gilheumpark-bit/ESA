@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Library, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, Download, Library, Trash2, Upload } from 'lucide-react';
 
 import { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-types';
 import type { SymbolLibrary } from '@/lib/symbol-library-contract';
@@ -39,10 +39,12 @@ interface SymbolLibraryPanelProps {
   catalog: SymbolLibraryCatalog;
   activeLibrary: SymbolLibrary | null;
   status: string | null;
+  recoveryRequired: boolean;
   onImport: (file: File) => Promise<void>;
   onSelect: (organization: string | null) => void;
   onExport: () => void;
   onDelete: () => void;
+  onBackupAndReset: () => void;
 }
 
 /** 도면 업로드 전에 적용 회사를 고르고, JSON을 반입·반출하는 표면. */
@@ -50,10 +52,12 @@ export function SymbolLibraryPanel({
   catalog,
   activeLibrary,
   status,
+  recoveryRequired,
   onImport,
   onSelect,
   onExport,
   onDelete,
+  onBackupAndReset,
 }: SymbolLibraryPanelProps) {
   const [importing, setImporting] = useState(false);
 
@@ -74,13 +78,36 @@ export function SymbolLibraryPanel({
         </div>
       </div>
 
+      {recoveryRequired && (
+        <div role="alert" className="mt-3 rounded-lg border border-[var(--color-error)] bg-[var(--bg-primary)] p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-[var(--color-error)]">저장된 회사 심볼 사전을 안전하게 열 수 없습니다.</p>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+                기존 원본을 덮어쓰지 않도록 선택·가져오기·신규 저장을 차단했습니다. 원본 파일을 내려받은 뒤에만 빈 저장소로 초기화합니다.
+              </p>
+              <button
+                type="button"
+                onClick={onBackupAndReset}
+                className="mt-2 flex min-h-11 items-center gap-2 rounded-lg border border-[var(--color-error)] px-3 text-xs font-semibold text-[var(--color-error)] hover:bg-[var(--bg-secondary)]"
+              >
+                <Download size={14} aria-hidden="true" />
+                손상 원본 백업 후 초기화
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
         <label className="text-xs font-medium text-[var(--text-secondary)]">
           분석에 적용할 회사
           <select
             value={activeLibrary?.organization ?? ''}
+            disabled={recoveryRequired}
             onChange={(event) => onSelect(event.target.value || null)}
-            className="mt-1 min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="mt-1 min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="">적용 안 함</option>
             {catalog.libraries.map((library) => (
@@ -91,13 +118,16 @@ export function SymbolLibraryPanel({
           </select>
         </label>
 
-        <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 self-end rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-primary)] hover:border-[var(--color-primary)]">
+        <label
+          aria-disabled={importing || recoveryRequired}
+          className={`flex min-h-11 items-center justify-center gap-2 self-end rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-primary)] ${importing || recoveryRequired ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-[var(--color-primary)]'}`}
+        >
           <Upload size={15} aria-hidden="true" />
           {importing ? '가져오는 중…' : 'JSON 가져오기'}
           <input
             type="file"
             accept=".json,application/json"
-            disabled={importing}
+            disabled={importing || recoveryRequired}
             className="sr-only"
             onChange={async (event) => {
               const file = event.target.files?.[0];
@@ -160,6 +190,7 @@ interface UnknownSymbol {
 interface UnknownSymbolRegistrarProps {
   symbols: UnknownSymbol[];
   activeOrganization: string | null;
+  storageBlocked?: boolean;
   onSaveAndAnalyze: (organization: string, mappings: SymbolMappingInput[]) => Promise<boolean>;
 }
 
@@ -167,6 +198,7 @@ interface UnknownSymbolRegistrarProps {
 export function UnknownSymbolRegistrar({
   symbols,
   activeOrganization,
+  storageBlocked = false,
   onSaveAndAnalyze,
 }: UnknownSymbolRegistrarProps) {
   const [organization, setOrganization] = useState(activeOrganization ?? '');
@@ -242,7 +274,7 @@ export function UnknownSymbolRegistrar({
 
       <button
         type="button"
-        disabled={saving || selectedMappings.length === 0 || organization.trim().length === 0}
+        disabled={storageBlocked || saving || selectedMappings.length === 0 || organization.trim().length === 0}
         onClick={async () => {
           setSaving(true);
           setMessage(null);
@@ -259,7 +291,11 @@ export function UnknownSymbolRegistrar({
         }}
         className="mt-3 flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--color-primary)] px-4 text-sm font-semibold text-white hover:bg-[var(--color-primary-hover)] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {saving ? '저장·재분석 중…' : `선택한 ${selectedMappings.length}종 저장 후 다시 분석`}
+        {storageBlocked
+          ? '회사 심볼 저장소 복구 후 등록 가능'
+          : saving
+            ? '저장·재분석 중…'
+            : `선택한 ${selectedMappings.length}종 저장 후 다시 분석`}
       </button>
       <p className="mt-2 min-h-4 text-xs text-[var(--text-secondary)]" aria-live="polite">
         {message}

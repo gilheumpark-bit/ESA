@@ -1,5 +1,6 @@
 import {
   SYMBOL_LIBRARY_CATALOG_KEY,
+  backupAndResetSymbolLibraryCatalog,
   deleteSymbolLibrary,
   getActiveSymbolLibrary,
   importSymbolLibraryText,
@@ -36,6 +37,21 @@ const A_LIBRARY = {
     },
   ],
 };
+
+function catalogWithRecoverableAndCorruptLibraries(): string {
+  return JSON.stringify({
+    schemaVersion: 1,
+    activeOrganization: 'A전기',
+    libraries: [
+      A_LIBRARY,
+      {
+        schemaVersion: 1,
+        organization: 'B설계',
+        entries: [{ blockNames: ['B-BAD'], deviceType: 'not-a-device' }],
+      },
+    ],
+  });
+}
 
 describe('고객사 심볼 라이브러리 브라우저 저장', () => {
   it('가져온 라이브러리를 활성 상태로 저장하고 새 페이지에서도 복원한다', () => {
@@ -162,6 +178,71 @@ describe('고객사 심볼 라이브러리 브라우저 저장', () => {
 
     expect(() => importSymbolLibraryText('{broken', storage)).toThrow('JSON');
     expect(getActiveSymbolLibrary(readSymbolLibraryCatalog(storage).catalog)).toEqual(A_LIBRARY);
+  });
+
+  it('일부 손상 catalog에서는 새 라이브러리 저장·가져오기를 차단하고 원문을 보존한다', () => {
+    const storage = new MemoryStorage();
+    const raw = catalogWithRecoverableAndCorruptLibraries();
+    storage.setItem(SYMBOL_LIBRARY_CATALOG_KEY, raw);
+
+    expect(() => saveSymbolLibrary({
+      schemaVersion: 1,
+      organization: 'C전기',
+      entries: [{ blockNames: ['C-TR'], deviceType: 'transformer' }],
+    }, storage)).toThrow('백업');
+    expect(() => importSymbolLibraryText(JSON.stringify({
+      schemaVersion: 1,
+      organization: 'D전기',
+      entries: [{ blockNames: ['D-SW'], deviceType: 'switch' }],
+    }), storage)).toThrow('백업');
+
+    expect(storage.getItem(SYMBOL_LIBRARY_CATALOG_KEY)).toBe(raw);
+  });
+
+  it('일부 손상 catalog에서는 미인식 심볼 등록을 차단하고 원문을 보존한다', () => {
+    const storage = new MemoryStorage();
+    const raw = catalogWithRecoverableAndCorruptLibraries();
+    storage.setItem(SYMBOL_LIBRARY_CATALOG_KEY, raw);
+
+    expect(() => upsertSymbolMappings('C전기', [{
+      blockName: 'C-CB',
+      fingerprint: 'fp2:cccccccccccccccc',
+      deviceType: 'breaker',
+    }], storage)).toThrow('백업');
+
+    expect(storage.getItem(SYMBOL_LIBRARY_CATALOG_KEY)).toBe(raw);
+  });
+
+  it('명시적 복구는 손상 원문을 그대로 반환한 뒤 저장소를 빈 상태로 초기화한다', () => {
+    const storage = new MemoryStorage();
+    const raw = catalogWithRecoverableAndCorruptLibraries();
+    storage.setItem(SYMBOL_LIBRARY_CATALOG_KEY, raw);
+    let downloaded = '';
+
+    const recovered = backupAndResetSymbolLibraryCatalog((backupText) => {
+      downloaded = backupText;
+    }, storage);
+
+    expect(downloaded).toBe(raw);
+    expect(recovered.backupText).toBe(raw);
+    expect(recovered.catalog).toEqual({
+      schemaVersion: 1,
+      activeOrganization: null,
+      libraries: [],
+    });
+    expect(storage.getItem(SYMBOL_LIBRARY_CATALOG_KEY)).toBeNull();
+  });
+
+  it('복구 백업 생성이 실패하면 손상 원문을 삭제하지 않는다', () => {
+    const storage = new MemoryStorage();
+    const raw = catalogWithRecoverableAndCorruptLibraries();
+    storage.setItem(SYMBOL_LIBRARY_CATALOG_KEY, raw);
+
+    expect(() => backupAndResetSymbolLibraryCatalog(() => {
+      throw new Error('download blocked');
+    }, storage)).toThrow('download blocked');
+
+    expect(storage.getItem(SYMBOL_LIBRARY_CATALOG_KEY)).toBe(raw);
   });
 
   it('활성 회사를 삭제하면 남은 라이브러리를 임의 적용하지 않고 선택 없음으로 둔다', () => {

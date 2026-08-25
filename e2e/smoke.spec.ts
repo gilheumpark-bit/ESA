@@ -455,6 +455,70 @@ test.describe('도면 분석', () => {
     await expect.poll(() => teamReviewBody).toContain('name="symbolLibrary"');
     expect(teamReviewBody).toContain('"organization":"A전기"');
   });
+
+  test('손상된 회사 심볼 저장소는 새 저장을 막고 원본 백업 뒤에만 초기화', async ({ page }) => {
+    const catalogKey = 'esva-symbol-libraries-v1';
+    const corruptRaw = JSON.stringify({
+      schemaVersion: 1,
+      activeOrganization: 'A전기',
+      libraries: [
+        {
+          schemaVersion: 1,
+          organization: 'A전기',
+          entries: [{ blockNames: ['A-CB'], deviceType: 'breaker' }],
+        },
+        {
+          schemaVersion: 1,
+          organization: 'B설계',
+          entries: [{ blockNames: ['B-BAD'], deviceType: 'not-a-device' }],
+        },
+      ],
+    });
+    await page.addInitScript(({ key, raw }) => {
+      window.localStorage.setItem(key, raw);
+    }, { key: catalogKey, raw: corruptRaw });
+
+    await page.goto('/tools/sld');
+    const recoveryButton = page.getByRole('button', { name: '손상 원본 백업 후 초기화' });
+    await expect(recoveryButton).toBeVisible();
+    await expect(page.getByLabel('분석에 적용할 회사')).toBeDisabled();
+
+    const downloadPromise = page.waitForEvent('download');
+    page.once('dialog', (dialog) => dialog.accept());
+    await recoveryButton.click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('esva-symbol-library-recovery-raw.json');
+    expect(await page.evaluate((key) => window.localStorage.getItem(key), catalogKey)).toBeNull();
+    await expect(page.getByLabel('분석에 적용할 회사')).toBeEnabled();
+    await expect(page.getByText('손상 원본을 백업하고 회사 심볼 저장소를 초기화했습니다.')).toBeVisible();
+  });
+
+  test('손상 원본 다운로드를 시작하지 못하면 저장소를 삭제하지 않음', async ({ page }) => {
+    const catalogKey = 'esva-symbol-libraries-v1';
+    const corruptRaw = JSON.stringify({
+      schemaVersion: 1,
+      activeOrganization: 'A전기',
+      libraries: [{
+        schemaVersion: 1,
+        organization: 'A전기',
+        entries: [{ blockNames: ['A-BAD'], deviceType: 'not-a-device' }],
+      }],
+    });
+    await page.addInitScript(({ key, raw }) => {
+      window.localStorage.setItem(key, raw);
+      URL.createObjectURL = () => {
+        throw new Error('download blocked');
+      };
+    }, { key: catalogKey, raw: corruptRaw });
+
+    await page.goto('/tools/sld');
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: '손상 원본 백업 후 초기화' }).click();
+
+    await expect(page.getByText('download blocked')).toBeVisible();
+    expect(await page.evaluate((key) => window.localStorage.getItem(key), catalogKey)).toBe(corruptRaw);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
