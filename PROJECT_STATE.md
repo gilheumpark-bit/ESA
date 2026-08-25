@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 9ede686661d962155418200143eeb4e9e144717a
-updatedAt: 2026-08-26T00:35:26+09:00
+codeBaselineCommit: 0a7d7dbda45a3d67ed3df095b8d122ef11665da1
+updatedAt: 2026-08-26T01:40:40+09:00
 trigger: files
-changedDomains: [agent, app, lib, docs]
+changedDomains: [agent, app, engine, lib, docs]
 ---
 
 # ESA 프로젝트 상태
@@ -38,7 +38,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - 2026-08-21 기준선 갱신 — 8/10 이후 반영분: DWG/바이너리 DXF/사내 DRM 판독 가능성 3층(업로드 실패의 세 원인을 화면이 직접 안내), 오픈 베타 요금제 봉인 전면화(+ 요금 문구 게이트), SLD 폴링 영구 잠금·getUserTier 무관측·모바일 터치 타깃 수리, 동시 세션 착지분(spatial-graph 거짓 UNBOUND/SELF 제거 + 충돌 선 기하 기록) 검증 수용과 T-접점 공회전 단언 교정, dependabot 21종. 상세는 CHANGELOG [Unreleased].
 - 2026-08-25 기준선 갱신 — 벡터 DXF·PDF는 AI 키가 없어도 V3 `vectorOnly`로 파서·토폴로지·계산·제안 경로를 실행하며, 래스터 이미지는 Vision 연결 필요를 명시한다.
 - 2026-08-26 기준선 갱신 — 기존 AutoCAD 호환 ASCII DXF 경로에 ZWCAD 한국어 `ANSI_949` 복원과 동일한 바이너리 DXF·DWG·DRM 실패 계약을 연결했다. 실제 production `/api/dxf` 왕복에서 변압기·VCB·모터 3기기, 결선 2건, 한글 문자와 유효 토폴로지를 확인했다.
-- 고객사 DXF 심볼 라이브러리는 미식별 블록의 이름·지문·개수를 화면에 노출하고, 사용자가 아는 항목만 기기 종류로 확정해 회사별 브라우저 사전에 저장·즉시 재분석할 수 있다. 활성 회사는 새로고침, 빠른 분석·V3 전체 문서·정밀 검증과 다음 DXF에 동일하게 적용되며 JSON 반입·반출·삭제를 지원한다. 현행 `fp2`는 내부 선·곡선·중첩 형상을 정규화하며 지문·블록명 중 어느 키든 기기 종류가 충돌하면 그 키의 자동 판정을 중단한다. 기존 `fp1`은 정확한 블록명이 있는 항목만 호환하고 별칭 없는 항목은 재등록을 요구한다. 검증된 라이브러리는 V3 PARTIAL 작업의 저장·재개에도 같은 값으로 보존한다.
+- 고객사 DXF 심볼 라이브러리는 미식별 블록의 이름·지문·개수를 화면에 노출하고, 사용자가 아는 항목만 기기 종류로 확정해 회사별 브라우저 사전에 저장·즉시 재분석할 수 있다. 활성 회사는 새로고침, 빠른 분석·V3 전체 문서·정밀 검증과 다음 DXF에 동일하게 적용되며 JSON 반입·반출·삭제를 지원한다. 현행 `fp2`는 내부 선·곡선·중첩 형상을 정규화하며 지문·블록명 중 어느 키든 기기 종류가 충돌하면 그 키의 자동 판정을 중단한다. 기존 `fp1`은 정확한 블록명이 있는 항목만 호환하고 별칭 없는 항목은 재등록을 요구한다. 검증된 라이브러리는 V3 PARTIAL 작업의 저장·재개에도 같은 값으로 보존한다. 저장 catalog 일부가 손상돼도 정상 항목을 새 저장으로 덮지 않으며, 모든 쓰기를 차단한 뒤 사용자가 raw 원본 백업과 초기화를 확인한 경우에만 복구한다.
 - 계산기 단계 입력의 `min` 위반을 조용히 무시하던 경로와 검색 화면의 모바일 수평 넘침을 수리했다.
 
 - 로컬 ChatGPT 실패 응답은 허용된 상태·오류 코드만 노출하며 키 모양의 공급자 문자열을 제거한다. stderr 분류는 해당 단일 활성 턴에만 귀속되어 다음 턴이나 동시 턴으로 전파되지 않는다.
@@ -194,7 +194,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계 — 8월 26일 ZWCAD DXF 호환 경로](docs/project/handoffs/2026-08-26-zwcad-dxf-parity.md)
+- [최신 인수인계 — 8월 26일 회사별 심볼 사전 앱 저장 완료](docs/project/handoffs/2026-08-26-zz-company-symbol-library-completion.md)
 - [과거 인수인계 색인](docs/project/HANDOFFS.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)

@@ -70,6 +70,7 @@ node scripts/fixtures/rasterize-golden-scan.mjs fixtures/drawings/realworld/inco
 | [IMPLEMENTATION_MAP](project/IMPLEMENTATION_MAP.md) | 현재 정본 | production entry부터 실패·재조회까지 배선 |
 | [DECISIONS](project/DECISIONS.md) | 현재 정본 | 유지해야 할 구조적 결정과 불변식 |
 | [SLD_V3_TRACEABILITY](project/SLD_V3_TRACEABILITY.md) | 현재 정본 | 설계 §1–15와 생산 코드·검증 연결 |
+| [2026-08-26 회사별 심볼 사전 앱 저장 완료](project/handoffs/2026-08-26-zz-company-symbol-library-completion.md) | 최신 작업 기록 | 화면 등록·브라우저 저장·세 분석 경로 배선·손상 복구와 최종 검증 |
 | [2026-08-25 고객사 심볼 라이브러리·메인 동기화](project/handoffs/2026-08-25-symbol-library-main-sync.md) | 최신 작업 기록 | vectorOnly·고객사 DXF 심볼·재개 배선과 메인 검증 |
 | [2026-07-24 종합 감사·수리 설계도](project/design/2026-07-24-full-audit-and-remediation-blueprint.md) | 역사 기록 | 당시 리비전의 감사 결과와 수리 설계 |
 | [도면 심사 단계 설계](project/design/2026-07-21-drawing-review-ladder.md) | 설계 참고 | 심사 강도와 역할 분리 |

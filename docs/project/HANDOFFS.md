@@ -4,6 +4,7 @@
 
 ## 2026-08-26
 
+- [회사별 심볼 사전 앱 저장 완료](handoffs/2026-08-26-zz-company-symbol-library-completion.md)
 - [ZWCAD DXF 호환 경로](handoffs/2026-08-26-zwcad-dxf-parity.md)
 
 ## 2026-08-25
