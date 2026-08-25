@@ -7,6 +7,35 @@
 
 import { test, expect } from '@playwright/test';
 
+const dxfPair = (code: number | string, value: number | string) => `${code}\n${value}\n`;
+
+function customCompanySymbolDxf(): string {
+  const line = (x1: number, y1: number, x2: number, y2: number, layer = 'WIRE') => (
+    dxfPair(0, 'LINE') + dxfPair(8, layer)
+    + dxfPair(10, x1) + dxfPair(20, y1) + dxfPair(30, 0)
+    + dxfPair(11, x2) + dxfPair(21, y2) + dxfPair(31, 0)
+  );
+  const insert = (name: string, x: number, y: number) => (
+    dxfPair(0, 'INSERT') + dxfPair(8, 'SYMBOL') + dxfPair(2, name)
+    + dxfPair(10, x) + dxfPair(20, y) + dxfPair(30, 0)
+  );
+  const block = (
+    dxfPair(0, 'BLOCK') + dxfPair(8, '0') + dxfPair(2, 'XX-7Q') + dxfPair(70, 0)
+    + dxfPair(10, 0) + dxfPair(20, 0) + dxfPair(30, 0) + dxfPair(3, 'XX-7Q')
+    + line(0, 0, 10, 0, '0') + line(10, 0, 10, 4, '0')
+    + line(10, 4, 0, 4, '0') + line(0, 4, 0, 0, '0') + line(2, 2, 8, 2, '0')
+    + dxfPair(0, 'ENDBLK')
+  );
+  return (
+    dxfPair(0, 'SECTION') + dxfPair(2, 'HEADER')
+    + dxfPair(9, '$ACADVER') + dxfPair(1, 'AC1015') + dxfPair(0, 'ENDSEC')
+    + dxfPair(0, 'SECTION') + dxfPair(2, 'BLOCKS') + block + dxfPair(0, 'ENDSEC')
+    + dxfPair(0, 'SECTION') + dxfPair(2, 'ENTITIES')
+    + insert('XX-7Q', 50, 50) + insert('XX-7Q', 50, 150) + line(50, 50, 50, 150)
+    + dxfPair(0, 'ENDSEC') + dxfPair(0, 'EOF')
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 1. 메인 페이지
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -337,7 +366,7 @@ test.describe('도면 분석', () => {
 
   test('공개 합성 DXF 업로드부터 기기·관계 결과까지 실주행', async ({ page }) => {
     await page.goto('/tools/sld');
-    const dxfInput = page.locator('input[accept=".dxf"]');
+    const dxfInput = page.locator('input[accept=".dxf,.dwg"]');
     await dxfInput.setInputFiles('fixtures/drawings/synthetic/L1-01-basic-radial.dxf');
 
     // 브라우저가 이 파일에 붙인 MIME 을 기록해 둔다. OS 마다 다르고(Linux
@@ -357,6 +386,74 @@ test.describe('도면 분석', () => {
     await expect(page.getByText('연결 맵 (4개)')).toBeVisible();
     await expect(page.getByText('MCCB-MAIN', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('LOAD-C', { exact: true }).first()).toBeVisible();
+  });
+
+  test('회사 심볼을 화면에서 저장하고 재시작 뒤 다음 DXF에 자동 적용', async ({ page }) => {
+    await page.goto('/tools/sld');
+    const dxfInput = page.locator('input[accept=".dxf,.dwg"]');
+    const companyDxf = {
+      name: 'a-company-custom-symbol.dxf',
+      mimeType: 'application/dxf',
+      buffer: Buffer.from(customCompanySymbolDxf(), 'utf8'),
+    };
+
+    await dxfInput.setInputFiles(companyDxf);
+    await expect(page.getByRole('heading', { name: '미인식 심볼 1종' })).toBeVisible({ timeout: 20_000 });
+
+    // 분석 결과를 열어 둔 상태에서 활성 회사를 바꿔도 등록 폼이 이전 회사에 남지 않는다.
+    const libraryPanel = page.getByRole('region', { name: '회사별 심볼 사전' });
+    await libraryPanel.locator('input[type="file"]').setInputFiles({
+      name: 'b-company-symbols.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({
+        schemaVersion: 1,
+        organization: 'B설계',
+        entries: [{ blockNames: ['B-UNRELATED'], deviceType: 'switch' }],
+      }), 'utf8'),
+    });
+    await expect(page.getByLabel('이 심볼을 사용하는 회사명')).toHaveValue('B설계');
+
+    await page.getByLabel('이 심볼을 사용하는 회사명').fill('A전기');
+    await page.getByLabel('XX-7Q 기기 종류').selectOption('breaker');
+    await page.getByRole('button', { name: '선택한 1종 저장 후 다시 분석' }).click();
+
+    await expect(page.getByText(/A전기 심볼 사전을 저장하고 현재 DXF에 다시 적용했습니다/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: /미인식 심볼/ })).toHaveCount(0);
+    await expect(page.getByText(/심볼 라이브러리 적용:/)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel('분석에 적용할 회사')).toHaveValue('A전기');
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: '내보내기' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('A전기-심볼.json');
+    const exportedPath = await download.path();
+    if (!exportedPath) throw new Error('내보낸 회사 심볼 JSON의 로컬 경로가 없습니다.');
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: '삭제' }).click();
+    await expect(page.getByLabel('분석에 적용할 회사')).toHaveValue('');
+    await page.locator('input[accept=".json,application/json"]').setInputFiles(exportedPath);
+    await expect(page.getByLabel('분석에 적용할 회사')).toHaveValue('A전기');
+
+    await page.locator('input[accept=".dxf,.dwg"]').setInputFiles(companyDxf);
+    await expect(page.getByText(/심볼 라이브러리 적용:/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/등록 1종 중 이 도면에서 2개 매칭/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /미인식 심볼/ })).toHaveCount(0);
+
+    let teamReviewBody = '';
+    await page.route('**/api/team-review', async (route) => {
+      teamReviewBody = route.request().postDataBuffer()?.toString('utf8') ?? '';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, data: { reportFull: { reportId: 'RPT-SYMBOL-E2E' } } }),
+      });
+    });
+    await page.getByRole('button', { name: '정밀 검증 (3개 전문팀 + 합의)' }).click();
+    await expect.poll(() => teamReviewBody).toContain('name="symbolLibrary"');
+    expect(teamReviewBody).toContain('"organization":"A전기"');
   });
 });
 

@@ -50,12 +50,33 @@ describe('린트 — 무효 라이브러리는 이유와 함께 거부된다', (
       schemaVersion: 1,
       organization: 'A사',
       entries: [
-        { fingerprint: 'fp1:0123456789abcdef', deviceType: 'breaker' },
+        { fingerprint: 'fp1:0123456789abcdef', blockNames: ['LEGACY-CB'], deviceType: 'breaker' },
         { blockNames: ['BRK_TYPE2'], deviceType: 'breaker', note: 'B동 표준' },
       ],
     });
     expect(lint.ok).toBe(true);
     expect(lint.library?.entries).toHaveLength(2);
+  });
+
+  it('강한 fp2 지문을 정상 계약으로 받는다', () => {
+    const lint = parseSymbolLibrary({
+      schemaVersion: 1,
+      organization: 'A사',
+      entries: [{ fingerprint: 'fp2:0123456789abcdef', deviceType: 'breaker' }],
+    });
+    expect(lint.ok).toBe(true);
+  });
+
+  it('별칭 없는 fp1 전용 항목은 0-match로 활성화하지 않고 재등록을 안내한다', () => {
+    const lint = parseSymbolLibrary({
+      schemaVersion: 1,
+      organization: '구형사',
+      entries: [{ fingerprint: 'fp1:0123456789abcdef', deviceType: 'breaker' }],
+    });
+
+    expect(lint.ok).toBe(false);
+    expect(lint.errors.join(' ')).toContain('fp1');
+    expect(lint.errors.join(' ')).toContain('blockNames');
   });
 
   it('표준에 없는 deviceType 은 항목 위치와 함께 거부된다', () => {
@@ -80,6 +101,24 @@ describe('린트 — 무효 라이브러리는 이유와 함께 거부된다', (
     expect(parseSymbolLibrary([1]).ok).toBe(false);
     expect(parseSymbolLibrary(null).ok).toBe(false);
   });
+
+  it('비문자·빈값·한도 초과 blockNames와 잘려 나갈 note를 조용히 정규화하지 않는다', () => {
+    const invalidName = parseSymbolLibrary({
+      schemaVersion: 1,
+      organization: 'A사',
+      entries: [{ fingerprint: 'fp2:0123456789abcdef', blockNames: [42, ''], deviceType: 'breaker' }],
+    });
+    const invalidNote = parseSymbolLibrary({
+      schemaVersion: 1,
+      organization: 'A사',
+      entries: [{ blockNames: ['CB'], deviceType: 'breaker', note: '가'.repeat(301) }],
+    });
+
+    expect(invalidName.ok).toBe(false);
+    expect(invalidName.errors.join(' ')).toContain('blockNames');
+    expect(invalidNote.ok).toBe(false);
+    expect(invalidNote.errors.join(' ')).toContain('note');
+  });
 });
 
 describe('지문 — 기하 정체성', () => {
@@ -91,7 +130,7 @@ describe('지문 — 기하 정체성', () => {
 
   it('같은 정의는 항상 같은 지문이다 (결정론)', () => {
     expect(fingerprintBlock(box(1))).toBe(fingerprintBlock(box(1)));
-    expect(fingerprintBlock(box(1))).toMatch(/^fp1:[0-9a-f]{16}$/);
+    expect(fingerprintBlock(box(1))).toMatch(/^fp2:[0-9a-f]{16}$/);
   });
 
   it('크기만 다른 복제 정의는 같은 지문이다 — 비율·상대반지름 기반이므로', () => {
@@ -101,6 +140,70 @@ describe('지문 — 기하 정체성', () => {
   it('기하가 다르면 지문이 다르다 — 다른 심볼을 같다고 하면 오분류다', () => {
     const other = [...box(1), { type: 'ARC', center: { x: 0, y: 0 }, radius: 2 }];
     expect(fingerprintBlock(other)).not.toBe(fingerprintBlock(box(1)));
+  });
+
+  it('엔티티 수와 외곽비가 같아도 내부 선 형상이 다르면 지문이 달라야 한다', () => {
+    const rectangleWithHorizontal = [
+      { type: 'LINE', startPoint: { x: 0, y: 0 }, endPoint: { x: 10, y: 0 } },
+      { type: 'LINE', startPoint: { x: 10, y: 0 }, endPoint: { x: 10, y: 4 } },
+      { type: 'LINE', startPoint: { x: 10, y: 4 }, endPoint: { x: 0, y: 4 } },
+      { type: 'LINE', startPoint: { x: 0, y: 4 }, endPoint: { x: 0, y: 0 } },
+      { type: 'LINE', startPoint: { x: 2, y: 2 }, endPoint: { x: 8, y: 2 } },
+    ];
+    const rectangleWithDiagonal = [
+      ...rectangleWithHorizontal.slice(0, 4),
+      { type: 'LINE', startPoint: { x: 2, y: 1 }, endPoint: { x: 8, y: 3 } },
+    ];
+
+    expect(fingerprintBlock(rectangleWithHorizontal)).not.toBe(fingerprintBlock(rectangleWithDiagonal));
+  });
+
+  it('중심·반지름이 같아도 ARC 시작·끝 각도가 다르면 지문이 달라야 한다', () => {
+    const upperArc = [{
+      type: 'ARC', center: { x: 5, y: 5 }, radius: 5, startAngle: 0, endAngle: Math.PI,
+    }];
+    const lowerArc = [{
+      type: 'ARC', center: { x: 5, y: 5 }, radius: 5, startAngle: Math.PI, endAngle: Math.PI * 2,
+    }];
+
+    expect(fingerprintBlock(upperArc)).not.toBe(fingerprintBlock(lowerArc));
+  });
+
+  it('타원 비율·폴리라인 bulge·스플라인 제어점·중첩 블록 차이도 지문에 포함한다', () => {
+    const ellipse = { type: 'ELLIPSE', center: { x: 0, y: 0 }, majorAxisEndPoint: { x: 10, y: 0 } };
+    expect(fingerprintBlock([{ ...ellipse, axisRatio: 0.5 }]))
+      .not.toBe(fingerprintBlock([{ ...ellipse, axisRatio: 0.8 }]));
+
+    const polyline = (bulge: number) => [{
+      type: 'LWPOLYLINE',
+      vertices: [{ x: 0, y: 0, bulge }, { x: 10, y: 0 }],
+      shape: false,
+    }];
+    expect(fingerprintBlock(polyline(0.25))).not.toBe(fingerprintBlock(polyline(0.75)));
+
+    const spline = (middleY: number) => [{
+      type: 'SPLINE',
+      controlPoints: [{ x: 0, y: 0 }, { x: 5, y: middleY }, { x: 10, y: 0 }],
+      degreeOfSplineCurve: 2,
+    }];
+    expect(fingerprintBlock(spline(2))).not.toBe(fingerprintBlock(spline(4)));
+
+    const nested = (name: string) => [{
+      type: 'INSERT', position: { x: 0, y: 0 }, name, xScale: 1, yScale: 1,
+    }, { type: 'LINE', vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }] }];
+    expect(fingerprintBlock(nested('INNER-A'))).not.toBe(fingerprintBlock(nested('INNER-B')));
+  });
+
+  it('엔티티 순서와 블록 기준점 이동은 같은 형상 지문을 유지한다', () => {
+    const original = box(1);
+    const translatedAndReordered = [...original].reverse().map((entity) => ({
+      ...entity,
+      startPoint: entity.startPoint ? { x: entity.startPoint.x + 37, y: entity.startPoint.y - 11 } : undefined,
+      endPoint: entity.endPoint ? { x: entity.endPoint.x + 37, y: entity.endPoint.y - 11 } : undefined,
+      center: entity.center ? { x: entity.center.x + 37, y: entity.center.y - 11 } : undefined,
+    }));
+
+    expect(fingerprintBlock(translatedAndReordered)).toBe(fingerprintBlock(original));
   });
 
   it('기하 좌표가 전혀 없으면 null — 지어내지 않는다', () => {
@@ -132,6 +235,34 @@ describe('매칭 우선순위', () => {
   it('둘 다 미스면 null', () => {
     expect(matchSymbol(index, 'UNKNOWN-9', null)).toBeNull();
   });
+
+  it('같은 지문이 서로 다른 기기 종류에 등록되면 블록명만 신뢰하고 새 이름은 미인식으로 둔다', () => {
+    const collisionIndex = indexSymbolLibrary({
+      schemaVersion: 1,
+      organization: '충돌사',
+      entries: [
+        { fingerprint: 'fp1:cccccccccccccccc', blockNames: ['RECT-CB'], deviceType: 'breaker' },
+        { fingerprint: 'fp1:cccccccccccccccc', blockNames: ['RECT-SW'], deviceType: 'switch' },
+      ],
+    });
+
+    expect(matchSymbol(collisionIndex, 'RECT-CB', 'fp1:cccccccccccccccc')).toBe('breaker');
+    expect(matchSymbol(collisionIndex, 'RECT-SW', 'fp1:cccccccccccccccc')).toBe('switch');
+    expect(matchSymbol(collisionIndex, 'RENAMED-UNKNOWN', 'fp1:cccccccccccccccc')).toBeNull();
+  });
+
+  it('같은 블록명 별칭이 서로 다른 종류에 등록되면 지문 없는 입력을 첫 항목으로 오분류하지 않는다', () => {
+    const collisionIndex = indexSymbolLibrary({
+      schemaVersion: 1,
+      organization: '별칭충돌사',
+      entries: [
+        { blockNames: ['DUPLICATE'], deviceType: 'breaker' },
+        { blockNames: ['DUPLICATE'], deviceType: 'switch' },
+      ],
+    });
+
+    expect(matchSymbol(collisionIndex, 'DUPLICATE', null)).toBeNull();
+  });
 });
 
 describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
@@ -148,7 +279,7 @@ describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
     const unknown = result.unknownSymbols![0];
     expect(unknown.blockName).toBe('XX-7Q');
     expect(unknown.count).toBe(2);
-    expect(unknown.fingerprint).toMatch(/^fp1:[0-9a-f]{16}$/);
+    expect(unknown.fingerprint).toMatch(/^fp2:[0-9a-f]{16}$/);
   });
 
   it('②→③ 그 지문을 라이브러리에 등록하면 다음 분석에서 자동 인식된다', () => {
@@ -167,6 +298,33 @@ describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
     expect(custom.every((c) => c.type === 'breaker')).toBe(true);
     expect(second.unknownSymbols).toBeUndefined();
     expect(second.symbolLibraryApplied).toEqual({ organization: 'A사', matched: 2, entryCount: 1 });
+  });
+
+  it('엔티티 수·외곽이 같은 다른 블록은 등록 심볼로 오인하지 않는다', () => {
+    const horizontal = B('RECT-H', [
+      [0, 0, 10, 0], [10, 0, 10, 4], [10, 4, 0, 4], [0, 4, 0, 0], [2, 2, 8, 2],
+    ]);
+    const diagonal = B('RECT-D', [
+      [0, 0, 10, 0], [10, 0, 10, 4], [10, 4, 0, 4], [0, 4, 0, 0], [2, 1, 8, 3],
+    ]);
+    const collisionDoc = doc([horizontal, diagonal], [I('RECT-H', 0, 0), I('RECT-D', 0, 100)]);
+    const first = parseDxfToSLD(collisionDoc);
+    const reports = new Map(first.unknownSymbols?.map((symbol) => [symbol.blockName, symbol]));
+    const horizontalFingerprint = reports.get('RECT-H')?.fingerprint;
+
+    expect(horizontalFingerprint).toMatch(/^fp2:[0-9a-f]{16}$/);
+    expect(reports.get('RECT-D')?.fingerprint).not.toBe(horizontalFingerprint);
+
+    const second = parseDxfToSLD(collisionDoc, {
+      symbolLibrary: {
+        schemaVersion: 1,
+        organization: '충돌방지사',
+        entries: [{ fingerprint: horizontalFingerprint!, blockNames: ['RECT-H'], deviceType: 'breaker' }],
+      },
+    });
+
+    expect(second.components.find((component) => component.properties?.blockName === 'RECT-H')?.type).toBe('breaker');
+    expect(second.unknownSymbols?.map((symbol) => symbol.blockName)).toEqual(['RECT-D']);
   });
 
   it('이름 별칭만으로도 인식된다 — 지문 없이 수기로 만든 라이브러리도 유효', () => {

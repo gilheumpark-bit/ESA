@@ -18,9 +18,12 @@ import {
   DrawingVisionRequestError,
   resolveDrawingVisionRequest,
 } from '@/lib/drawing-vision-request';
+import { readSymbolLibraryPart } from '@/lib/symbol-library-form';
+import type { SymbolLibrary } from '@/lib/symbol-library-contract';
 
 /** 사내 규정 JSON 크기 상한 — 리포트·메모리 폭주 방지 */
 const RULES_MAX_BYTES = 1024 * 1024;
+const SYMBOL_LIBRARY_MAX_BYTES = 1024 * 1024;
 const DRAWING_MAX_BYTES = 20 * 1024 * 1024;
 const VISION_KEY_MAX_CHARS = 4096;
 const VISION_MODEL_PATTERN = /^[a-zA-Z0-9._:/-]{1,128}$/;
@@ -66,7 +69,7 @@ export const POST = withApiHandler(
     rateLimit: 'sld',
     checkOrigin: true,
     maxBodySize: (req) => (req.headers.get('content-type') ?? '').includes('multipart/form-data')
-      ? DRAWING_MAX_BYTES + RULES_MAX_BYTES + (512 * 1024)
+      ? DRAWING_MAX_BYTES + RULES_MAX_BYTES + SYMBOL_LIBRARY_MAX_BYTES + (512 * 1024)
       : 256 * 1024,
   },
   async (req: NextRequest, ctx) => {
@@ -89,6 +92,7 @@ export const POST = withApiHandler(
     let mimeType: string | undefined;
     let params: Record<string, unknown> = {};
     let customRuleSet: CustomRuleSet | undefined;
+    let symbolLibrary: SymbolLibrary | undefined;
     let ruleWarnings: string[] = [];
     let vision: NonNullable<import('@/agent/teams/types').TeamInput['vision']> | undefined;
 
@@ -177,6 +181,17 @@ export const POST = withApiHandler(
         }
       }
 
+      const libraryRead = await readSymbolLibraryPart(formData.get('symbolLibrary'));
+      if (!libraryRead.ok) {
+        return ctx.error('ESVA-4400', libraryRead.message, 400);
+      }
+      if (libraryRead.library) {
+        if (!file || drawingKind(file) !== 'dxf') {
+          return ctx.error('ESVA-4400', '회사 심볼 라이브러리는 DXF 도면 검토에만 적용할 수 있습니다', 400);
+        }
+        symbolLibrary = libraryRead.library;
+      }
+
       // 사내 규정(선택) — 무효 룰셋을 조용히 버리고 검토를 진행하면 사용자는
       // "규정 대조가 됐다"고 오인한다. fail-closed: 오류 목록과 함께 400.
       // 문자열 파트면 .size가 undefined라 크기 캡 비교(undefined > N)가 항상
@@ -223,6 +238,9 @@ export const POST = withApiHandler(
       if (body.rules !== undefined) {
         return ctx.error('ESVA-4400', '사내 규정은 multipart form-data의 rules 파일 파트로만 첨부할 수 있습니다', 400);
       }
+      if (body.symbolLibrary !== undefined) {
+        return ctx.error('ESVA-4400', '회사 심볼 라이브러리는 DXF multipart form-data 요청에서만 첨부할 수 있습니다', 400);
+      }
     }
 
     perf.checkpoint('parse');
@@ -257,6 +275,7 @@ export const POST = withApiHandler(
       language: (params.language as string) ?? 'ko',
       vision,
       customRuleSet,
+      symbolLibrary,
       signal: requestScope.signal,
     });
 

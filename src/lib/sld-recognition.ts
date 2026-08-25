@@ -18,6 +18,9 @@ import {
   sanitizeGoogleErrorText,
   type GoogleModelProvider,
 } from '@/lib/google-model-transport';
+import { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-types';
+
+export { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-types';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -42,54 +45,6 @@ import {
  * 접지)·451.3/451.4(설치장소·선정)다. 이 어휘의 `arrester` 는 LA 와 SPD 를
  * 한 칸에 담고 있으니 조항을 붙일 때 둘을 섞지 말 것.
  */
-export const SLD_COMPONENT_TYPES = [
-  'transformer',
-  'breaker',
-  'cable',
-  'bus',
-  'generator',
-  'motor',
-  'capacitor',
-  /** 분로·직렬 리액터. 콘덴서와 목적·검토 항목이 달라 별도 기기로 보존한다. */
-  'reactor',
-  'load',
-  'switch',
-  'relay',
-  'meter',
-  'panel',
-  'ups',
-  'mcc',
-  /** 피뢰기·서지흡수기·SPD (LA / SA / SPD) */
-  'arrester',
-  /**
-   * 아래 셋은 IEC 60617 분류에는 있는데 이 어휘에만 없던 자리다(2026-07-27).
-   * 실도면 근거가 있고, 없으면 갈 곳이 없어 엉뚱한 타입에 얹힌다.
-   */
-  /** 접지 (E / GND / 접지) — 삼성 22.9kV 도면 `E1`, 세종 배전반 SPD 접지. 모든 도면에 있다 */
-  'ground',
-  /** 표시등·신호 (PL / RL / GL / 파일럿램프) — 세종 p6 분전반 각 회로마다 */
-  'lamp',
-  /** 퓨즈 (PF / LF / FUSE) — 차단기와 다른 기기다. 그동안 breaker 에 얹혀 있었다 */
-  'fuse',
-  /** 도면 밖 전력망과 이어지는 계통 경계. import/export 어느 쪽도 될 수 있다. */
-  'grid_connection',
-  /**
-   * 수전점·인입 (INCOMING / 수전 / 한전 인입 / UTILITY) — 도면의 전원이다.
-   * 자리가 없어 `load` 에 얹히고 있었다(2026-07-28 실측: 22.9kV LBS 패널의
-   * `154S/S INCOMING LINE`). 부하와 전원이 뒤바뀌면 상류/하류가 통째로
-   * 반대가 되고, 인입선이 최대수요 목록에 들어간다.
-   */
-  'source',
-  /**
-   * 타 도면·타 반 참조 주석 (`FROM SV-VCS#1 PT LINE`, `TO SV-TIE LBS PANEL`).
-   * 도면에 적힌 정보라 버리지 않되 기기 대수에는 넣지 않는다.
-   * 2026-07-28 실측: 인출선 주석 둘이 `meter` 로 승격돼 계기가 2 → 4 가 됐다.
-   */
-  'annotation',
-] as const;
-
-export type SLDComponentType = (typeof SLD_COMPONENT_TYPES)[number];
-
 export interface SLDComponent {
   id: string;
   type: SLDComponentType;

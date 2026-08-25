@@ -28,111 +28,16 @@
 
 import { createHash } from 'node:crypto';
 
-import { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-recognition';
+import type { SLDComponentType } from '@/lib/sld-component-types';
+import type { SymbolLibrary } from '@/lib/symbol-library-contract';
 
-// ─── 스키마 ────────────────────────────────────────────────────────────────
-
-export interface SymbolLibraryEntry {
-  /** fingerprintBlock 산출값. 'fp1:' 접두 + 16 hex. */
-  fingerprint?: string;
-  /** 블록명 별칭 — 지문이 없거나(수기 작성) 이름만 아는 경우의 보조 키. */
-  blockNames?: string[];
-  deviceType: SLDComponentType;
-  note?: string;
-  confirmedAt?: string;
-}
-
-export interface SymbolLibrary {
-  schemaVersion: 1;
-  /** 고객사 식별 — 표시·정리용이며 매칭에는 쓰지 않는다. */
-  organization: string;
-  entries: SymbolLibraryEntry[];
-}
-
-export interface SymbolLibraryLint {
-  ok: boolean;
-  library?: SymbolLibrary;
-  errors: string[];
-}
-
-/** 파서 결과에 싣는 미인식 심볼 1종 — 사용자가 라이브러리에 추가할 재료. */
-export interface UnknownSymbolReport {
-  blockName: string;
-  fingerprint: string | null;
-  count: number;
-  samplePosition: { x: number; y: number };
-}
-
-const CAPS = { entries: 500, blockNames: 20, nameLen: 120, noteLen: 300, orgLen: 120 } as const;
-const FINGERPRINT_RE = /^fp1:[0-9a-f]{16}$/;
-const TYPE_SET = new Set<string>(SLD_COMPONENT_TYPES);
-
-// ─── 린트 ──────────────────────────────────────────────────────────────────
-
-/**
- * 업로드된 JSON 을 검증한다. 룰팩(parseCustomRuleSet)과 같은 태도 —
- * 무엇이 왜 무효인지 문장으로 돌려주고, 무효면 아무것도 적용하지 않는다.
- */
-export function parseSymbolLibrary(raw: unknown): SymbolLibraryLint {
-  const errors: string[] = [];
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return { ok: false, errors: ['라이브러리 루트는 JSON 객체여야 합니다'] };
-  }
-  const record = raw as Record<string, unknown>;
-  if (record.schemaVersion !== 1) errors.push('schemaVersion 은 1 이어야 합니다');
-  const organization = typeof record.organization === 'string' ? record.organization.trim() : '';
-  if (!organization || organization.length > CAPS.orgLen) {
-    errors.push(`organization 누락 또는 무효 (1~${CAPS.orgLen}자)`);
-  }
-  if (!Array.isArray(record.entries) || record.entries.length === 0) {
-    errors.push('entries 는 비어 있지 않은 배열이어야 합니다');
-    return { ok: false, errors };
-  }
-  if (record.entries.length > CAPS.entries) {
-    errors.push(`항목 수 ${record.entries.length} > 한도 ${CAPS.entries}`);
-    return { ok: false, errors };
-  }
-
-  const entries: SymbolLibraryEntry[] = [];
-  record.entries.forEach((item, index) => {
-    const at = `entries[${index}]`;
-    if (typeof item !== 'object' || item === null) {
-      errors.push(`${at} 는 객체여야 합니다`);
-      return;
-    }
-    const entry = item as Record<string, unknown>;
-    const deviceType = typeof entry.deviceType === 'string' ? entry.deviceType : '';
-    if (!TYPE_SET.has(deviceType)) {
-      errors.push(`${at}.deviceType «${deviceType}» 는 표준 기기 종류가 아닙니다`);
-      return;
-    }
-    const fingerprint = typeof entry.fingerprint === 'string' ? entry.fingerprint : undefined;
-    if (fingerprint !== undefined && !FINGERPRINT_RE.test(fingerprint)) {
-      errors.push(`${at}.fingerprint 형식 무효 (fp1: + 16자리 hex)`);
-      return;
-    }
-    const namesRaw = Array.isArray(entry.blockNames) ? entry.blockNames : [];
-    const blockNames = namesRaw
-      .filter((name): name is string => typeof name === 'string')
-      .map((name) => name.trim())
-      .filter((name) => name.length > 0 && name.length <= CAPS.nameLen)
-      .slice(0, CAPS.blockNames);
-    if (!fingerprint && blockNames.length === 0) {
-      errors.push(`${at} 는 fingerprint 또는 blockNames 중 하나는 가져야 합니다`);
-      return;
-    }
-    entries.push({
-      fingerprint,
-      blockNames: blockNames.length > 0 ? blockNames : undefined,
-      deviceType: deviceType as SLDComponentType,
-      note: typeof entry.note === 'string' ? entry.note.slice(0, CAPS.noteLen) : undefined,
-      confirmedAt: typeof entry.confirmedAt === 'string' ? entry.confirmedAt : undefined,
-    });
-  });
-
-  if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, errors, library: { schemaVersion: 1, organization, entries } };
-}
+export { parseSymbolLibrary } from '@/lib/symbol-library-contract';
+export type {
+  SymbolLibrary,
+  SymbolLibraryEntry,
+  SymbolLibraryLint,
+  UnknownSymbolReport,
+} from '@/lib/symbol-library-contract';
 
 // ─── 지문 ──────────────────────────────────────────────────────────────────
 
@@ -140,64 +45,306 @@ interface FingerprintEntity {
   type: string;
   startPoint?: { x: number; y: number };
   endPoint?: { x: number; y: number };
-  vertices?: Array<{ x: number; y: number }>;
+  position?: { x: number; y: number };
+  vertices?: Array<{ x: number; y: number; bulge?: number; startWidth?: number; endWidth?: number }>;
+  points?: Array<{ x: number; y: number }>;
+  controlPoints?: Array<{ x: number; y: number }>;
+  fitPoints?: Array<{ x: number; y: number }>;
   center?: { x: number; y: number };
+  majorAxisEndPoint?: { x: number; y: number };
   radius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  axisRatio?: number;
+  degreeOfSplineCurve?: number;
+  shape?: boolean;
+  name?: string;
+  xScale?: number;
+  yScale?: number;
+}
+
+interface GeometryPoint {
+  x: number;
+  y: number;
+  z?: number;
+  [key: string]: unknown;
+}
+
+const POSITION_FIELDS = [
+  'startPoint',
+  'endPoint',
+  'center',
+  'position',
+  'anchorPoint',
+  'middleOfText',
+  'insertionPoint',
+  'linearOrAngularPoint1',
+  'linearOrAngularPoint2',
+  'diameterOrRadiusPoint',
+  'arcPoint',
+] as const;
+const POSITION_ARRAY_FIELDS = ['vertices', 'points', 'controlPoints', 'fitPoints'] as const;
+const RELATIVE_VECTOR_FIELDS = ['majorAxisEndPoint', 'startTangent', 'endTangent'] as const;
+const DIRECTION_VECTOR_FIELDS = ['normalVector', 'directionVector', 'extrusionDirection'] as const;
+const LENGTH_FIELDS = [
+  'radius',
+  'thickness',
+  'textHeight',
+  'height',
+  'width',
+  'depth',
+  'columnSpacing',
+  'rowSpacing',
+] as const;
+const RAW_NUMBER_FIELDS = [
+  'startAngle',
+  'endAngle',
+  'angleLength',
+  'axisRatio',
+  'rotation',
+  'obliqueAngle',
+  'scale',
+  'xScale',
+  'yScale',
+  'zScale',
+  'columnCount',
+  'rowCount',
+  'degreeOfSplineCurve',
+  'dimensionType',
+  'attachmentPoint',
+  'drawingDirection',
+  'halign',
+  'valign',
+  'horizontalJustification',
+  'verticalJustification',
+  'extrusionDirectionX',
+  'extrusionDirectionY',
+  'extrusionDirectionZ',
+] as const;
+const BOOLEAN_FIELDS = [
+  'shape',
+  'closed',
+  'periodic',
+  'rational',
+  'planar',
+  'linear',
+  'hasContinuousLinetypePattern',
+  'includesCurveFitVertices',
+  'includesSplineFitVertices',
+  'is3dPolyline',
+  'is3dPolygonMesh',
+  'is3dPolygonMeshClosed',
+  'isPolyfaceMesh',
+] as const;
+
+function geometryPoint(value: unknown): GeometryPoint | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  return typeof record.x === 'number'
+    && Number.isFinite(record.x)
+    && typeof record.y === 'number'
+    && Number.isFinite(record.y)
+    ? record as GeometryPoint
+    : null;
+}
+
+function geometryPoints(value: unknown): GeometryPoint[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(geometryPoint).filter((point): point is GeometryPoint => point !== null);
 }
 
 /**
- * 블록 정의 기하의 정규화 지문.
+ * 블록 정의 기하의 정규화 지문(v2).
  *
- * 잡는 것: 엔티티 종류별 개수 + 정의 자체 좌표계의 가로세로 비율(2자리) +
- * 원·호 반지름의 상대 크기 분포. 전부 블록 **정의** 좌표라 INSERT 의
- * 위치·회전·배율에 불변이고, 같은 정의는 항상 같은 지문이다.
+ * 잡는 것: 엔티티 종류와 내부 좌표·연결 형상·상대 반지름. 블록 전체를
+ * 원점 이동·등비 정규화한 뒤 엔티티와 선 끝점 순서를 정규화하므로, 정의의
+ * 기준점·크기·엔티티 저장 순서가 달라도 같은 형상은 같은 지문이다. INSERT의
+ * 위치·회전·배율은 애초에 참조 정보라 이 정의 지문에 들어오지 않는다.
  *
  * 안 잡는 것: 절대 크기·레이어·색. 회사가 같은 심볼을 크기만 다르게 복제한
- * 정의는 비율·상대반지름이 같아 여전히 잡힌다. 기하가 실제로 다른 두 심볼
+ * 정의는 정규화 형상이 같아 여전히 잡힌다. 기하가 실제로 다른 두 심볼
  * (예: NFB 와 MCCB 를 다르게 그리는 회사)은 다른 지문이 된다 — 그것이 맞다.
- * 텍스트 내용은 지문에 넣지 않는다 — 정격 문구가 바뀌어도 심볼 정체성은
- * 유지되어야 하므로 TEXT 는 개수만 센다.
+ * 텍스트 내용·레이어·색은 넣지 않는다. 정격 문구나 CAD 표시 속성이 바뀌어도
+ * 심볼 정체성은 유지되어야 하기 때문이다.
  */
 export function fingerprintBlock(entities: readonly FingerprintEntity[]): string | null {
   if (!entities || entities.length === 0) return null;
 
-  const counts = new Map<string, number>();
-  const xs: number[] = [];
-  const ys: number[] = [];
-  const radii: number[] = [];
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  let pointCount = 0;
+  let maxLinearSize = 0;
+  const includePoint = (x: number, y: number): void => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+    pointCount += 1;
+  };
 
   for (const entity of entities) {
-    counts.set(entity.type, (counts.get(entity.type) ?? 0) + 1);
-    for (const point of [entity.startPoint, entity.endPoint, entity.center, ...(entity.vertices ?? [])]) {
-      if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
-        xs.push(point.x);
-        ys.push(point.y);
+    const record = entity as unknown as Record<string, unknown>;
+    for (const field of POSITION_FIELDS) {
+      const point = geometryPoint(record[field]);
+      if (point) includePoint(point.x, point.y);
+    }
+    for (const field of POSITION_ARRAY_FIELDS) {
+      for (const point of geometryPoints(record[field])) includePoint(point.x, point.y);
+    }
+    if (
+      entity.center
+      && Number.isFinite(entity.center.x)
+      && Number.isFinite(entity.center.y)
+      && typeof entity.radius === 'number'
+      && Number.isFinite(entity.radius)
+      && entity.radius > 0
+    ) {
+      includePoint(entity.center.x - entity.radius, entity.center.y - entity.radius);
+      includePoint(entity.center.x + entity.radius, entity.center.y + entity.radius);
+    }
+    const center = geometryPoint(record.center);
+    const majorAxis = geometryPoint(record.majorAxisEndPoint);
+    if (center && majorAxis) {
+      includePoint(center.x - Math.abs(majorAxis.x), center.y - Math.abs(majorAxis.y));
+      includePoint(center.x + Math.abs(majorAxis.x), center.y + Math.abs(majorAxis.y));
+    }
+    for (const field of LENGTH_FIELDS) {
+      const value = record[field];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        maxLinearSize = Math.max(maxLinearSize, Math.abs(value));
       }
     }
-    if (typeof entity.radius === 'number' && Number.isFinite(entity.radius) && entity.radius > 0) {
-      radii.push(entity.radius);
+    for (const vertex of geometryPoints(record.vertices)) {
+      for (const field of ['startWidth', 'endWidth'] as const) {
+        const value = vertex[field];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          maxLinearSize = Math.max(maxLinearSize, Math.abs(value));
+        }
+      }
     }
   }
-  if (xs.length === 0) return null;
+  if (pointCount === 0) return null;
 
-  const width = Math.max(...xs) - Math.min(...xs);
-  const height = Math.max(...ys) - Math.min(...ys);
-  const larger = Math.max(width, height);
-  const aspect = larger > 0 ? (Math.min(width, height) / larger).toFixed(2) : '0.00';
-  const relRadii = larger > 0
-    ? radii.map((r) => (r / larger).toFixed(2)).sort().join(',')
-    : radii.length > 0 ? 'r-only' : '';
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const scale = Math.max(width, height, maxLinearSize);
+  if (!Number.isFinite(scale) || scale <= 0) return null;
 
-  const countPart = [...counts.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([type, n]) => `${type}=${n}`)
-    .join('|');
+  const number = (value: number): string => {
+    const rounded = (Math.round(value * 10_000) / 10_000).toFixed(4);
+    return rounded === '-0.0000' ? '0.0000' : rounded;
+  };
+  const point = (value: unknown): string | null => {
+    const parsed = geometryPoint(value);
+    if (!parsed) return null;
+    return `${number((parsed.x - minX) / scale)},${number((parsed.y - minY) / scale)}`;
+  };
+  const relativeVector = (value: unknown): string | null => {
+    const parsed = geometryPoint(value);
+    if (!parsed) return null;
+    return `${number(parsed.x / scale)},${number(parsed.y / scale)}`;
+  };
+  const directionVector = (value: unknown): string | null => {
+    const parsed = geometryPoint(value);
+    if (!parsed) return null;
+    const magnitude = Math.hypot(parsed.x, parsed.y, typeof parsed.z === 'number' ? parsed.z : 0);
+    if (!Number.isFinite(magnitude) || magnitude === 0) return '0.0000,0.0000';
+    return `${number(parsed.x / magnitude)},${number(parsed.y / magnitude)}`;
+  };
+  const vertex = (value: GeometryPoint): string => {
+    const parts = [point(value)!];
+    const bulge = value.bulge;
+    if (typeof bulge === 'number' && Number.isFinite(bulge)) parts.push(`b=${number(bulge)}`);
+    for (const field of ['startWidth', 'endWidth'] as const) {
+      const widthValue = value[field];
+      if (typeof widthValue === 'number' && Number.isFinite(widthValue)) {
+        parts.push(`${field}=${number(widthValue / scale)}`);
+      }
+    }
+    for (const field of ['faceA', 'faceB', 'faceC', 'faceD'] as const) {
+      const face = value[field];
+      if (typeof face === 'number' && Number.isFinite(face)) parts.push(`${field}=${number(face)}`);
+    }
+    return parts.join(',');
+  };
+  const path = (value: unknown, includeVertexGeometry = false): string | null => {
+    const parsed = geometryPoints(value);
+    if (parsed.length === 0) return null;
+    const normalized = parsed.map((item) => includeVertexGeometry ? vertex(item) : point(item)!);
+    if (normalized.length === 0) return null;
+    const forward = normalized.join(';');
+    const reverse = [...normalized].reverse().join(';');
+    return forward <= reverse ? forward : reverse;
+  };
+  const normalizedKnots = (value: unknown): string | null => {
+    if (!Array.isArray(value)) return null;
+    const knots = value.filter((item): item is number => typeof item === 'number' && Number.isFinite(item));
+    if (knots.length === 0) return null;
+    let min = Number.POSITIVE_INFINITY;
+    let max = Number.NEGATIVE_INFINITY;
+    for (const knot of knots) {
+      min = Math.min(min, knot);
+      max = Math.max(max, knot);
+    }
+    const span = max - min;
+    const normalized = knots.map((item) => number(span > 0 ? (item - min) / span : 0));
+    const forward = normalized.join(',');
+    const reverse = [...normalized].reverse().join(',');
+    return forward <= reverse ? forward : reverse;
+  };
+
+  const signatures = entities.map((entity) => {
+    const record = entity as unknown as Record<string, unknown>;
+    const type = typeof entity.type === 'string' ? entity.type.trim().toUpperCase() || 'UNKNOWN' : 'UNKNOWN';
+    const parts = [`t=${type}`];
+    const endpoints = [point(record.startPoint), point(record.endPoint)]
+      .filter((value): value is string => value !== null)
+      .sort();
+    if (endpoints.length > 0) parts.push(`e=${endpoints.join(';')}`);
+    for (const field of POSITION_FIELDS) {
+      if (field === 'startPoint' || field === 'endPoint') continue;
+      const normalized = point(record[field]);
+      if (normalized) parts.push(`${field}=${normalized}`);
+    }
+    for (const field of POSITION_ARRAY_FIELDS) {
+      const normalized = path(record[field], field === 'vertices');
+      if (normalized) parts.push(`${field}=${normalized}`);
+    }
+    for (const field of RELATIVE_VECTOR_FIELDS) {
+      const normalized = relativeVector(record[field]);
+      if (normalized) parts.push(`${field}=${normalized}`);
+    }
+    for (const field of DIRECTION_VECTOR_FIELDS) {
+      const normalized = directionVector(record[field]);
+      if (normalized) parts.push(`${field}=${normalized}`);
+    }
+    for (const field of LENGTH_FIELDS) {
+      const value = record[field];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        parts.push(`${field}=${number(value / scale)}`);
+      }
+    }
+    for (const field of RAW_NUMBER_FIELDS) {
+      const value = record[field];
+      if (typeof value === 'number' && Number.isFinite(value)) parts.push(`${field}=${number(value)}`);
+    }
+    for (const field of BOOLEAN_FIELDS) {
+      if (typeof record[field] === 'boolean') parts.push(`${field}=${record[field] ? 1 : 0}`);
+    }
+    const knots = normalizedKnots(record.knotValues);
+    if (knots) parts.push(`knotValues=${knots}`);
+    if (type === 'INSERT' && typeof record.name === 'string') parts.push(`name=${record.name.trim().toLowerCase()}`);
+    return parts.join('#');
+  }).sort();
 
   const digest = createHash('sha256')
-    .update(`${countPart}#a=${aspect}#r=${relRadii}`)
+    .update(signatures.join('|'))
     .digest('hex')
     .slice(0, 16);
-  return `fp1:${digest}`;
+  return `fp2:${digest}`;
 }
 
 // ─── 매칭 ──────────────────────────────────────────────────────────────────
@@ -205,24 +352,50 @@ export function fingerprintBlock(entities: readonly FingerprintEntity[]): string
 export interface SymbolLibraryIndex {
   organization: string;
   byFingerprint: Map<string, SLDComponentType>;
+  /** 같은 지문에 서로 다른 기기 종류가 등록된 경우 — 지문만으로 자동 판정 금지. */
+  ambiguousFingerprints: Set<string>;
   byBlockName: Map<string, SLDComponentType>;
+  /** 같은 별칭에 서로 다른 기기 종류가 등록된 경우 — 이름만으로 자동 판정 금지. */
+  ambiguousBlockNames: Set<string>;
   size: number;
 }
 
 /** 매 INSERT 마다 배열을 훑지 않도록 한 번 색인한다. 뒤 항목이 앞 항목을 덮지 않는다(선등록 우선). */
 export function indexSymbolLibrary(library: SymbolLibrary): SymbolLibraryIndex {
   const byFingerprint = new Map<string, SLDComponentType>();
+  const ambiguousFingerprints = new Set<string>();
   const byBlockName = new Map<string, SLDComponentType>();
+  const ambiguousBlockNames = new Set<string>();
   for (const entry of library.entries) {
-    if (entry.fingerprint && !byFingerprint.has(entry.fingerprint)) {
-      byFingerprint.set(entry.fingerprint, entry.deviceType);
+    if (entry.fingerprint && !ambiguousFingerprints.has(entry.fingerprint)) {
+      const existingType = byFingerprint.get(entry.fingerprint);
+      if (existingType && existingType !== entry.deviceType) {
+        byFingerprint.delete(entry.fingerprint);
+        ambiguousFingerprints.add(entry.fingerprint);
+      } else if (!existingType) {
+        byFingerprint.set(entry.fingerprint, entry.deviceType);
+      }
     }
     for (const name of entry.blockNames ?? []) {
       const key = name.toLowerCase();
-      if (!byBlockName.has(key)) byBlockName.set(key, entry.deviceType);
+      if (ambiguousBlockNames.has(key)) continue;
+      const existingType = byBlockName.get(key);
+      if (existingType && existingType !== entry.deviceType) {
+        byBlockName.delete(key);
+        ambiguousBlockNames.add(key);
+      } else if (!existingType) {
+        byBlockName.set(key, entry.deviceType);
+      }
     }
   }
-  return { organization: library.organization, byFingerprint, byBlockName, size: library.entries.length };
+  return {
+    organization: library.organization,
+    byFingerprint,
+    ambiguousFingerprints,
+    byBlockName,
+    ambiguousBlockNames,
+    size: library.entries.length,
+  };
 }
 
 /**
@@ -234,11 +407,13 @@ export function matchSymbol(
   blockName: string,
   fingerprint: string | null,
 ): SLDComponentType | null {
-  if (fingerprint) {
+  if (fingerprint && !index.ambiguousFingerprints.has(fingerprint)) {
     const byFp = index.byFingerprint.get(fingerprint);
     if (byFp) return byFp;
   }
-  return index.byBlockName.get(blockName.toLowerCase()) ?? null;
+  const nameKey = blockName.toLowerCase();
+  if (index.ambiguousBlockNames.has(nameKey)) return null;
+  return index.byBlockName.get(nameKey) ?? null;
 }
 
 // IDENTITY_SEAL: topology/symbol-library | role=고객사 심볼 등록·지문·매칭 정본 | inputs=library JSON·블록 정의 기하 | outputs=deviceType 매칭·unknownSymbols 재료

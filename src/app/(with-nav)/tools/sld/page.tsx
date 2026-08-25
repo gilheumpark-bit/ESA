@@ -45,6 +45,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags';
 import { documentKindOf, DWG_GUIDANCE, IMAGE_NEEDS_AI_GUIDANCE } from '@/lib/document-kind';
 import { DrawingDocumentV3Report } from '@/components/DrawingDocumentV3Report';
 import { DrawingSourcePreview } from '@/components/DrawingSourcePreview';
+import { SymbolLibraryPanel, UnknownSymbolRegistrar } from '@/components/SymbolLibraryPanel';
 import ReviewReportPanel, { type ReviewLike } from '@/components/ReviewReportPanel';
 import {
   labelDocumentReadStatus,
@@ -52,8 +53,24 @@ import {
   labelPageStatus,
 } from '@/components/drawing-v3-labels';
 import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
+import type { SymbolLibrary } from '@/lib/symbol-library-contract';
+import {
+  deleteSymbolLibrary,
+  getActiveSymbolLibrary,
+  importSymbolLibraryText,
+  readSymbolLibraryCatalog,
+  selectSymbolLibrary,
+  upsertSymbolMappings,
+  type SymbolLibraryCatalog,
+  type SymbolMappingInput,
+} from '@/lib/symbol-library-store';
 
 const V3_JOB_SESSION_KEY = 'esva-sld-v3-active-job';
+const EMPTY_SYMBOL_LIBRARY_CATALOG: SymbolLibraryCatalog = {
+  schemaVersion: 1,
+  activeOrganization: null,
+  libraries: [],
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -488,8 +505,9 @@ export default function SLDAnalysisPage() {
   const [error, setError] = useState<string | null>(null);
   // 사내 규정(선택) — JSON 룰셋. 서버가 린트하고 무효면 400으로 거절한다.
   const [rulesFile, setRulesFile] = useState<File | null>(null);
-  // 고객사 심볼 라이브러리(선택) — 파싱 시점에 적용되므로 업로드 전에 첨부한다
-  const [symbolLibraryFile, setSymbolLibraryFile] = useState<File | null>(null);
+  // 고객사 심볼 라이브러리 — 브라우저에 회사별로 보존하고 선택 회사를 DXF 두 경로에 적용한다.
+  const [symbolLibraryCatalog, setSymbolLibraryCatalog] = useState<SymbolLibraryCatalog>(EMPTY_SYMBOL_LIBRARY_CATALOG);
+  const [symbolLibraryStatus, setSymbolLibraryStatus] = useState<string | null>(null);
   // 정밀 검증(3개 전문팀 + 합의 단계)용 — 마지막 업로드 원본 파일과 진행 상태.
   // 배선 전엔 /api/team-review·/report/[id]가 UI에서 영구 미도달이었다(Batch C1).
   const [drawingFile, setDrawingFile] = useState<File | null>(null);
@@ -517,6 +535,67 @@ export default function SLDAnalysisPage() {
     && !v3Loading
     && !v3CorrectionTarget,
   );
+  const activeSymbolLibrary = getActiveSymbolLibrary(symbolLibraryCatalog);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const stored = readSymbolLibraryCatalog();
+      setSymbolLibraryCatalog(stored.catalog);
+      if (stored.warning) setSymbolLibraryStatus(stored.warning);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const handleSymbolLibraryImport = useCallback(async (file: File) => {
+    try {
+      const stored = importSymbolLibraryText(await file.text());
+      setSymbolLibraryCatalog(stored.catalog);
+      const active = getActiveSymbolLibrary(stored.catalog);
+      setSymbolLibraryStatus(active
+        ? `${active.organization} 심볼 ${active.entries.length}종을 저장하고 활성화했습니다.`
+        : '회사 심볼 라이브러리를 저장했습니다.');
+    } catch (importError) {
+      setSymbolLibraryStatus(importError instanceof Error ? importError.message : '회사 심볼 JSON 가져오기에 실패했습니다.');
+    }
+  }, []);
+
+  const handleSymbolLibrarySelect = useCallback((organization: string | null) => {
+    try {
+      const stored = selectSymbolLibrary(organization);
+      setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryStatus(organization
+        ? `${organization} 심볼 사전을 DXF 분석·정밀 검증에 적용합니다.`
+        : '회사 심볼 자동 적용을 해제했습니다.');
+    } catch (selectionError) {
+      setSymbolLibraryStatus(selectionError instanceof Error ? selectionError.message : '회사 심볼 사전 선택에 실패했습니다.');
+    }
+  }, []);
+
+  const handleSymbolLibraryExport = useCallback(() => {
+    if (!activeSymbolLibrary) return;
+    const blob = new Blob([JSON.stringify(activeSymbolLibrary, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    const safeOrganization = activeSymbolLibrary.organization.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_');
+    anchor.href = url;
+    anchor.download = `${safeOrganization}-심볼.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setSymbolLibraryStatus(`${activeSymbolLibrary.organization} 심볼 사전을 JSON으로 내보냈습니다.`);
+  }, [activeSymbolLibrary]);
+
+  const handleSymbolLibraryDelete = useCallback(() => {
+    if (!activeSymbolLibrary) return;
+    if (!window.confirm(`${activeSymbolLibrary.organization} 심볼 사전을 이 브라우저에서 삭제할까요?`)) return;
+    try {
+      const deletedOrganization = activeSymbolLibrary.organization;
+      const stored = deleteSymbolLibrary(deletedOrganization);
+      setSymbolLibraryCatalog(stored.catalog);
+      setSymbolLibraryStatus(`${deletedOrganization} 심볼 사전을 삭제했습니다.`);
+    } catch (deleteError) {
+      setSymbolLibraryStatus(deleteError instanceof Error ? deleteError.message : '회사 심볼 사전 삭제에 실패했습니다.');
+    }
+  }, [activeSymbolLibrary]);
 
   const handleImageSelect = useCallback((file: File) => {
     setImageFile(file);
@@ -542,6 +621,9 @@ export default function SLDAnalysisPage() {
       formData.append('projectName', 'SLD 정밀 검증');
       formData.append('projectType', '전기 설비');
       if (rulesFile) formData.append('rules', rulesFile);
+      if (activeSymbolLibrary && documentKindOf(drawingFile) === 'dxf') {
+        formData.append('symbolLibrary', JSON.stringify(activeSymbolLibrary));
+      }
       if (drawingFile.type.startsWith('image/')) {
         const visionKey = await getFirstAvailableVisionKey();
         if (!visionKey) {
@@ -582,7 +664,7 @@ export default function SLDAnalysisPage() {
     } finally {
       setReviewLoading(false);
     }
-  }, [drawingFile, rulesFile, router]);
+  }, [activeSymbolLibrary, drawingFile, rulesFile, router]);
 
   const handleReset = useCallback(() => {
     if (preview) URL.revokeObjectURL(preview);
@@ -609,7 +691,11 @@ export default function SLDAnalysisPage() {
     sessionStorage.removeItem(V3_JOB_SESSION_KEY);
   }, [preview]);
 
-  const handleFullDocumentAnalyze = useCallback(async (file: File) => {
+  const handleFullDocumentAnalyze = useCallback(async (
+    file: File,
+    libraryOverride?: SymbolLibrary | null,
+  ) => {
+    const libraryToApply = libraryOverride === undefined ? activeSymbolLibrary : libraryOverride;
     // V3 입력이 .dwg 를 받도록 넓혔으므로(전체 판독 input) 여기서도 같은
     // 안내로 멈춘다 — 기본 업로드 경로의 가드만으로는 이 입력이 뚫린다.
     if (documentKindOf(file) === 'dwg') {
@@ -645,8 +731,8 @@ export default function SLDAnalysisPage() {
       formData.append('file', file);
       formData.append('pages', 'all');
       // 고객사 심볼 라이브러리는 DXF 벡터 추출에 적용된다 — 파싱 시점 첨부
-      if (symbolLibraryFile && documentKindOf(file) === 'dxf') {
-        formData.append('symbolLibrary', symbolLibraryFile);
+      if (libraryToApply && documentKindOf(file) === 'dxf') {
+        formData.append('symbolLibrary', JSON.stringify(libraryToApply));
       }
       if (keylessVector) {
         formData.append('vectorOnly', '1');
@@ -710,7 +796,7 @@ export default function SLDAnalysisPage() {
     } finally {
       setV3Loading(false);
     }
-  }, [symbolLibraryFile]);
+  }, [activeSymbolLibrary]);
 
   const handlePublicFixtureCalibration = useCallback(async () => {
     setV3Loading(true);
@@ -1085,10 +1171,14 @@ export default function SLDAnalysisPage() {
   }, [analysis, calcChain.length, imageFile]);
 
   // DXF 벡터 파싱 (DRAWING_PARSER 플래그 필수)
-  const handleDxfUpload = useCallback(async (file: File) => {
+  const handleDxfUpload = useCallback(async (
+    file: File,
+    libraryOverride?: SymbolLibrary | null,
+  ): Promise<boolean> => {
+    const libraryToApply = libraryOverride === undefined ? activeSymbolLibrary : libraryOverride;
     if (!isFeatureEnabled('DRAWING_PARSER')) {
       setError('DXF 파싱이 비활성입니다 (DRAWING_PARSER=false). 이미지 AI 분석을 사용하거나 플래그를 켜세요.');
-      return;
+      return false;
     }
     setDrawingFile(file);
     setLoading(true);
@@ -1099,19 +1189,21 @@ export default function SLDAnalysisPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      if (symbolLibraryFile) formData.append('symbolLibrary', symbolLibraryFile);
+      if (libraryToApply) formData.append('symbolLibrary', JSON.stringify(libraryToApply));
       const res = await fetch('/api/dxf', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'DXF 파싱 실패');
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'DXF 파싱 오류');
+      return false;
     } finally {
       setLoading(false);
     }
-  }, [symbolLibraryFile]);
+  }, [activeSymbolLibrary]);
 
   // PDF 벡터 파싱 (DRAWING_PARSER 플래그 필수)
   const handlePdfUpload = useCallback(async (file: File) => {
@@ -1144,7 +1236,10 @@ export default function SLDAnalysisPage() {
   // 기본 업로드는 빠른 형식별 파싱/미리보기를 살리면서 V3 전체 문서 판독도
   // 함께 시작한다. 한쪽만 호출하면 legacy 결과·정밀검증 또는 전체 페이지 판독
   // 중 하나가 영구 미도달이 된다.
-  const handlePrimaryDocumentUpload = useCallback(async (file: File) => {
+  const handlePrimaryDocumentUpload = useCallback(async (
+    file: File,
+    libraryOverride?: SymbolLibrary | null,
+  ): Promise<boolean> => {
     setDrawingFile(file);
     // 확장자 우선 — MIME 우선이면 Linux 에서 .dxf 가 image/vnd.dxf 로 잡혀
     // 이미지 경로로 새어 나간다(document-kind.ts 주석에 실측 근거).
@@ -1153,17 +1248,36 @@ export default function SLDAnalysisPage() {
       // 파싱 못 하는 형식을 V3 전체 판독에 태우면 사용자는 원인 모를 실패를
       // 본다 — 여기서 멈추고 10초짜리 우회로(DXF 저장)를 알려준다.
       setError(DWG_GUIDANCE);
-      return;
+      return false;
     }
+    let primarySucceeded = true;
     if (kind === 'dxf') {
-      await handleDxfUpload(file);
+      primarySucceeded = await handleDxfUpload(file, libraryOverride);
     } else if (kind === 'pdf') {
       await handlePdfUpload(file);
     } else if (kind === 'image') {
       handleImageSelect(file);
     }
-    await handleFullDocumentAnalyze(file);
+    await handleFullDocumentAnalyze(file, libraryOverride);
+    return primarySucceeded;
   }, [handleDxfUpload, handleFullDocumentAnalyze, handleImageSelect, handlePdfUpload]);
+
+  const handleUnknownSymbolSave = useCallback(async (
+    organization: string,
+    mappings: SymbolMappingInput[],
+  ): Promise<boolean> => {
+    const stored = upsertSymbolMappings(organization, mappings);
+    const savedLibrary = getActiveSymbolLibrary(stored.catalog);
+    if (!savedLibrary) throw new Error('저장한 회사 심볼 사전을 다시 불러오지 못했습니다.');
+    setSymbolLibraryCatalog(stored.catalog);
+    setSymbolLibraryStatus(`${savedLibrary.organization} 심볼 ${savedLibrary.entries.length}종을 저장했습니다.`);
+    if (!drawingFile || documentKindOf(drawingFile) !== 'dxf') return false;
+    const analyzed = await handlePrimaryDocumentUpload(drawingFile, savedLibrary);
+    setSymbolLibraryStatus(analyzed
+      ? `${savedLibrary.organization} 심볼 사전을 저장하고 현재 DXF에 다시 적용했습니다.`
+      : `${savedLibrary.organization} 심볼 사전은 저장했지만 현재 DXF 재분석은 실패했습니다.`);
+    return analyzed;
+  }, [drawingFile, handlePrimaryDocumentUpload]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -1253,23 +1367,15 @@ export default function SLDAnalysisPage() {
           </button>
           <input ref={dxfInputRef} type="file" accept=".dxf,.dwg" className="hidden"
             onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
-          {/* 고객사 심볼 라이브러리 — 파싱 시점에 적용되므로 도면 업로드 전에 첨부 */}
-          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border-primary)] bg-[var(--bg-secondary)] px-4 py-2.5">
-            <span className="text-xs font-medium text-[var(--text-secondary)]">
-              고객사 심볼 라이브러리 (선택, JSON)
-            </span>
-            <input
-              type="file"
-              accept=".json,application/json"
-              onChange={(e) => setSymbolLibraryFile(e.target.files?.[0] ?? null)}
-              className="text-xs text-[var(--text-secondary)] file:mr-2 file:rounded-md file:border-0 file:bg-[var(--bg-primary)] file:px-2 file:py-1 file:text-xs file:text-[var(--text-primary)]"
-            />
-            <span className="text-xs text-[var(--text-tertiary)]">
-              {symbolLibraryFile
-                ? `${symbolLibraryFile.name} — 이 회사 심볼 매핑을 우선 적용`
-                : '회사마다 다른 블록명·심볼을 등록해 두면 다음 도면부터 자동 인식됩니다'}
-            </span>
-          </div>
+          <SymbolLibraryPanel
+            catalog={symbolLibraryCatalog}
+            activeLibrary={activeSymbolLibrary}
+            status={symbolLibraryStatus}
+            onImport={handleSymbolLibraryImport}
+            onSelect={handleSymbolLibrarySelect}
+            onExport={handleSymbolLibraryExport}
+            onDelete={handleSymbolLibraryDelete}
+          />
         </>
       )}
 
@@ -1525,39 +1631,12 @@ export default function SLDAnalysisPage() {
 
           {/* 미인식 심볼 — 회사별 라이브러리를 만들 재료. 뭉개면 축적 루프가 시작되지 않는다 */}
           {analysis.unknownSymbols && analysis.unknownSymbols.length > 0 && (
-            <div className="rounded-xl border border-[var(--color-warning)] bg-[var(--bg-secondary)] px-4 py-3" role="status">
-              <p className="text-sm font-semibold text-[var(--color-warning)]">
-                미인식 심볼 {analysis.unknownSymbols.length}종 — 임시로 부하(LD)로 분류됨
-              </p>
-              <ul className="mt-1.5 space-y-0.5 text-xs text-[var(--text-secondary)]">
-                {analysis.unknownSymbols.map((symbol) => (
-                  <li key={symbol.blockName}>
-                    <span className="font-mono text-[var(--text-primary)]">{symbol.blockName}</span>
-                    {' '}× {symbol.count}
-                    {symbol.fingerprint && <span className="ml-1 font-mono text-[var(--text-tertiary)]">{symbol.fingerprint}</span>}
-                  </li>
-                ))}
-              </ul>
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs font-medium text-[var(--text-secondary)]">
-                  라이브러리 등록용 JSON 보기 — 기기 종류만 채워 저장하면 다음 도면부터 자동 인식
-                </summary>
-                <pre className="mt-1.5 overflow-x-auto rounded-lg bg-[var(--bg-primary)] p-2 text-[11px] leading-relaxed text-[var(--text-secondary)]">
-{JSON.stringify({
-  schemaVersion: 1,
-  organization: '고객사명',
-  entries: analysis.unknownSymbols.map((symbol) => ({
-    ...(symbol.fingerprint ? { fingerprint: symbol.fingerprint } : {}),
-    blockNames: [symbol.blockName],
-    deviceType: 'breaker | transformer | meter | panel | switch | relay …중 택1',
-  })),
-}, null, 2)}
-                </pre>
-                <p className="mt-1 text-[11px] text-[var(--text-tertiary)]">
-                  이 내용을 <span className="font-mono">회사명-심볼.json</span> 으로 저장 → deviceType 을 실제 기기 종류로 수정 → 위 「고객사 심볼 라이브러리」에 첨부해 재분석하세요.
-                </p>
-              </details>
-            </div>
+            <UnknownSymbolRegistrar
+              key={activeSymbolLibrary?.organization ?? '__no-active-company__'}
+              symbols={analysis.unknownSymbols}
+              activeOrganization={activeSymbolLibrary?.organization ?? null}
+              onSaveAndAnalyze={handleUnknownSymbolSave}
+            />
           )}
 
           {/* 사내 규정 첨부(선택) — 정밀 검증 시 KEC와 나란히 대조된다 */}

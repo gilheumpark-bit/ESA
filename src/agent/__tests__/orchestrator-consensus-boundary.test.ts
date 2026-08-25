@@ -138,6 +138,26 @@ describe('orchestrator consensus boundary', () => {
     }));
   });
 
+  test('passes the validated company symbol library to TEAM-SLD', async () => {
+    const symbolLibrary = {
+      schemaVersion: 1 as const,
+      organization: 'A전기',
+      entries: [{ fingerprint: 'fp2:0123456789abcdef', blockNames: ['A-CB'], deviceType: 'breaker' as const }],
+    };
+
+    await runOrchestrator({
+      sessionId: 'company-symbol-review',
+      file: {
+        buffer: new ArrayBuffer(1),
+        name: 'company.dxf',
+        mimeType: 'application/dxf',
+      },
+      symbolLibrary,
+    });
+
+    expect(mockSLD).toHaveBeenCalledWith(expect.objectContaining({ symbolLibrary }));
+  });
+
   test('does not dispatch or reach consensus when the request signal is already aborted', async () => {
     const controller = new AbortController();
     controller.abort();

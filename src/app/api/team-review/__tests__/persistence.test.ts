@@ -180,6 +180,53 @@ describe('POST /api/team-review report persistence', () => {
     expect(JSON.stringify(body)).not.toContain(secret);
   });
 
+  test('forwards a validated company symbol library with a DXF review', async () => {
+    const symbolLibrary = {
+      schemaVersion: 1,
+      organization: 'A전기',
+      entries: [{ fingerprint: 'fp2:0123456789abcdef', blockNames: ['A-CB'], deviceType: 'breaker' }],
+    };
+    const formData = new FormData();
+    formData.append('file', new File(['0\nEOF\n'], 'company.dxf', { type: 'application/dxf' }));
+    formData.append('symbolLibrary', JSON.stringify(symbolLibrary));
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:3000',
+        Authorization: 'Bearer verified-token',
+        'X-Forwarded-For': '198.51.100.82',
+      },
+      body: formData,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mockRunOrchestrator).toHaveBeenCalledWith(expect.objectContaining({ symbolLibrary }));
+  });
+
+  test('rejects an invalid company symbol library instead of reviewing without it', async () => {
+    const formData = new FormData();
+    formData.append('file', new File(['0\nEOF\n'], 'company.dxf', { type: 'application/dxf' }));
+    formData.append('symbolLibrary', JSON.stringify({
+      schemaVersion: 1,
+      organization: 'A전기',
+      entries: [{ blockNames: ['A-CB'], deviceType: 'not-a-device' }],
+    }));
+
+    const response = await POST(new NextRequest('http://localhost:3000/api/team-review', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:3000',
+        Authorization: 'Bearer verified-token',
+        'X-Forwarded-For': '198.51.100.83',
+      },
+      body: formData,
+    }));
+
+    expect(response.status).toBe(400);
+    expect(mockRunOrchestrator).not.toHaveBeenCalled();
+  });
+
   test('requires BYOK for anonymous image review even when a server key exists', async () => {
     mockExtractUser.mockResolvedValue(null);
     process.env.OPENAI_API_KEY = 'deployment-owned-key';

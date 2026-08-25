@@ -38,6 +38,8 @@ export interface OrchestratorRequest {
   vision?: TeamInput['vision'];
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
   customRuleSet?: import('@/engine/standards/custom-rules').CustomRuleSet;
+  /** 고객사 DXF 심볼 사전 — 라우트에서 공용 계약 검증을 통과한 값만 전달한다. */
+  symbolLibrary?: import('@/engine/topology/symbol-library').SymbolLibrary;
   /** 요청 메모리 안에서만 전달하며 결과·보고서·JSON에 직렬화하지 않는다. */
   signal?: AbortSignal;
 }
@@ -82,6 +84,7 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     language: req.language,
     vision: req.vision,
     customRuleSet: req.customRuleSet,
+    symbolLibrary: req.symbolLibrary,
     signal: req.signal,
   };
 }

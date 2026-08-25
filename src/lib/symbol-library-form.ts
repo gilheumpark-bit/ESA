@@ -22,7 +22,7 @@ export async function readSymbolLibraryPart(
 
   let rawText: string;
   if (typeof part === 'string') {
-    if (part.length > LIBRARY_MAX_BYTES) {
+    if (new TextEncoder().encode(part).byteLength > LIBRARY_MAX_BYTES) {
       return { ok: false, message: '심볼 라이브러리가 너무 큽니다 (최대 1MB).' };
     }
     rawText = part;
