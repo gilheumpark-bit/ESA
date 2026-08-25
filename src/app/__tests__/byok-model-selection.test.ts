@@ -9,7 +9,7 @@ describe('BYOK provider model selection surface', () => {
     expect(page).toContain('aria-label="AI 연결 방식"');
     expect(page).toContain('id="chatgpt-account"');
     expect(page).toContain('id="provider-api-keys"');
-    expect(page).toContain('ChatGPT 구독과 API 키는 서로 다른 연결 방식입니다.');
+    expect(page).toContain('ChatGPT 로그인 계정과 API 키는 서로 다른 연결 방식입니다.');
     expect(page).toContain('공급자 API 키 (BYOK)');
     expect(accountCard).toContain('같은 PC에 Codex 설치');
     expect(accountCard).toContain('API 키 아님');

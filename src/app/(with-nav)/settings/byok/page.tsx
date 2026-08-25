@@ -631,7 +631,7 @@ export default function AIConnectionsPage() {
         AI 연결 관리
       </h1>
       <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-        ChatGPT 구독과 API 키는 서로 다른 연결 방식입니다. 원하는 방식만 선택해 설정하세요.
+        ChatGPT 로그인 계정과 API 키는 서로 다른 연결 방식입니다. 원하는 방식만 선택해 설정하세요.
       </p>
 
       <nav aria-label="AI 연결 방식" className="my-7 grid gap-3 sm:grid-cols-3">
@@ -640,7 +640,7 @@ export default function AIConnectionsPage() {
           className="group min-h-24 rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-500"
         >
           <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">ChatGPT 계정</span>
-          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">구독 계정 · API 키 없이</span>
+          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">공식 로그인 계정 · API 키 없이</span>
           <span className="mt-2 block text-xs font-medium text-blue-600 group-hover:underline dark:text-blue-400">계정 연결로 이동</span>
         </a>
         <a
@@ -648,7 +648,7 @@ export default function AIConnectionsPage() {
           className="group min-h-24 rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-500"
         >
           <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">API 키 직접 연결</span>
-          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">공급자 개발자 계정 · 별도 과금</span>
+          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">공급자 개발자 콘솔 · 별도 발급</span>
           <span className="mt-2 block text-xs font-medium text-blue-600 group-hover:underline dark:text-blue-400">API 설정으로 이동</span>
         </a>
         <a
@@ -689,8 +689,8 @@ export default function AIConnectionsPage() {
             공급자 API 키 (BYOK)
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-            OpenAI·Anthropic·Google 등의 개발자 콘솔에서 발급한 키입니다. ChatGPT 구독과 별도이며,
-            사용량은 각 공급자 계정에 청구될 수 있습니다.
+            OpenAI·Anthropic·Google 등의 개발자 콘솔에서 발급한 키입니다. ChatGPT 계정 연결과
+            별개이며 각 공급자의 사용량 한도와 정책이 적용됩니다.
           </p>
         </div>
         <div className="flex flex-col gap-4">

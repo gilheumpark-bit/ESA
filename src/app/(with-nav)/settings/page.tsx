@@ -147,7 +147,7 @@ function AIConnectionSection() {
   return (
     <SectionCard title="AI 연결 관리">
       <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-        ChatGPT 구독 계정, 공급자 API 키, 로컬 AI 서버를 서로 다른 방식으로 연결합니다.
+        ChatGPT 로그인 계정, 공급자 API 키, 로컬 AI 서버를 서로 다른 방식으로 연결합니다.
       </p>
       <Link
         href="/settings/byok"
