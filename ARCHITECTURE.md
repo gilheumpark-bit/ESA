@@ -1,6 +1,6 @@
 # ESVA 아키텍처
 
-> 기준: 제품 코드 커밋 `599c741` · 2026-07-31
+> 기준: 제품 코드 커밋 `3c9172f` · 2026-08-26
 
 이 문서는 현재 production 진입점과 신뢰 경계를 설명합니다. 파일 수, 페이지 수, 테스트 수처럼 자주 바뀌는 수치는 고정하지 않습니다. 기능별 실제 배선은 [구현 배선 지도](docs/project/IMPLEMENTATION_MAP.md)가 정본입니다.
 
@@ -62,6 +62,11 @@ Data/External: 정적 자료·파일 저장소·Supabase·AI·Stripe·Weaviate
 클라이언트는 시스템 지침을 지정할 수 없습니다. 서버가 답변 언어와 전기 직무 규칙을 구성하고, 사용자 질문은 대화 메시지로만 전달합니다. 계산기는 지원 의도가 식별되고 필수 입력이 완전하며 확신도 기준을 넘을 때만 실행됩니다.
 
 공식 OpenAI 공급자는 Responses API 계약을 사용합니다. Groq, Ollama, LM Studio와 관리자 허용 온프레미스 OpenAI 호환 서버는 Chat Completions 계약을 사용합니다. `chatgpt-local`은 loopback에서 같은 PC의 `codex app-server`에 stdio로 연결하고 사용자의 공식 ChatGPT 로그인을 사용합니다. 공급자·모델 목록은 `src/lib/ai-providers.ts`와 로컬 계정의 `model/list` 응답이 각각 정본입니다.
+
+사용자 설정은 `/settings/byok` 한 화면에서 **ChatGPT 계정**, **공급자 API 키(BYOK)**,
+**로컬 AI 서버**의 세 구역으로 분리합니다. 구독 계정을 API 키로 변환하지 않으며,
+로컬 ChatGPT는 같은 PC의 공식 Codex 로그인, BYOK는 공급자 개발자 키, 로컬 서버는
+별도 온프레미스 origin 계약을 각각 사용합니다.
 
 ## 4. 단일 계산과 영수증
 
@@ -169,4 +174,5 @@ Data/External: 정적 자료·파일 저장소·Supabase·AI·Stripe·Weaviate
 - 구조 결정: [DECISIONS.md](docs/project/DECISIONS.md)
 - 도면 실증: [VALIDATION_EVIDENCE.md](docs/VALIDATION_EVIDENCE.md)
 - 현재 작업 상태: [PROJECT_STATE.md](PROJECT_STATE.md)
+- 열린 개발 부채: [TECHNICAL_DEBT.md](docs/TECHNICAL_DEBT.md)
 - 문서 분류와 역사 자료: [docs/README.md](docs/README.md)

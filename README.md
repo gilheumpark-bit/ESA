@@ -178,6 +178,7 @@ docs/                     사용자, 검증, 구조, 인수인계 문서
 - 사용자 절차: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 - API 계약: [docs/API_REFERENCE.md](docs/API_REFERENCE.md), `GET /api/openapi`
 - 현재 구현 상태: [PROJECT_STATE.md](PROJECT_STATE.md)
+- 열린 개발 부채: [docs/TECHNICAL_DEBT.md](docs/TECHNICAL_DEBT.md)
 - 기여 절차: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 보안 정책: [SECURITY.md](SECURITY.md)
 

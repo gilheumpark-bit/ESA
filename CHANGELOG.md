@@ -32,6 +32,10 @@ All notable changes to ESVA are documented in this file.
   던지지 않아 조용히 「기기 0개」로 끝났다.
 
 ### Changed
+- **AI 연결 관리 구조화** — 한 화면에 섞여 있던 연결 수단을 `ChatGPT 계정 연결`,
+  `공급자 API 키(BYOK)`, `로컬 AI 서버` 세 구역과 바로가기 카드로 분리했다. 구독
+  계정과 개발자 API 키를 같은 것으로 오해하지 않도록 설명을 분리하고, 가격·크레딧
+  보유 여부를 단정하지 않는 중립 문구를 사용한다.
 - **오픈 베타 요금제 봉인 전면화** — `OPEN_BETA` 가 pro 까지만 열고
   `/api/account/tier` 는 무시하던 것을, 서버·클라이언트(`NEXT_PUBLIC_OPEN_BETA`)
   양층 전 등급 개방으로 정렬. 화면의 고정 요금 문구(영수증 「Pro 플랜 이상 필요」·
@@ -39,6 +43,13 @@ All notable changes to ESVA are documented in this file.
   `no-pricing-surface` 게이트가 잡는다. 권한(role=admin)은 봉인과 무관하게 유지.
 
 ### Fixed
+- **감사 기준선·Windows 셸 부채** — 운영 의존성 취약점이 0건으로 줄었는데도
+  `high 9`를 허용하던 래칫을 `critical 0 · high 0`으로 갱신했다. npm CLI를
+  `shell: true`로 실행하던 Windows 경로도 현재 Node가 npm CLI 파일을 직접
+  실행하도록 바꿔 DEP0190 경고와 셸 재해석 표면을 제거했다.
+- **오픈 베타 환경 예제 불일치** — `.env.example`에 서버 `OPEN_BETA`만 있어
+  브라우저 제어와 엇갈릴 수 있던 구성을 `NEXT_PUBLIC_OPEN_BETA`와 한 쌍으로
+  만들었다. 문서 게이트가 두 키의 누락·값 불일치를 차단한다.
 - **ZWCAD DXF 동등 지원** — 기존 AutoCAD 공용 DXF 분석기를 그대로 사용하되,
   `File.text()`/기본 UTF-8 디코딩 때문에 `ANSI_949` 한국어 기기명·규격이 깨지던
   빠른 분석·SLD 팀·평면도 팀 세 경로를 `$DWGCODEPAGE` 기반 공용 디코더로

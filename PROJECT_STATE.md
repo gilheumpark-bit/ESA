@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 6792a516f4d534749e93d9341a00d351cc6b1c4c
-updatedAt: 2026-08-26T01:42:16+09:00
+codeBaselineCommit: 3c9172fd41839ff6bd187717b638ed2a43a57769
+updatedAt: 2026-08-26T02:53:01+09:00
 trigger: files
-changedDomains: [agent, app, engine, lib, docs]
+changedDomains: [app, components, engine, scripts, config, docs]
 ---
 
 # ESA 프로젝트 상태
@@ -28,16 +28,19 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `src/lib/drawing-asset-store.ts`는 원본을 브라우저 IndexedDB에만 보관하고 SHA-256 재검증 뒤 같은 브라우저에서 다시 연다.
 - `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 로컬 ChatGPT·BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
 - `src/lib/chatgpt-local-*`는 loopback ESA에서 같은 PC의 Codex app-server와 공식 ChatGPT 로그인을 사용한다. ESA는 계정 토큰을 읽지 않고 ephemeral 추론과 모델 목록만 좁게 사용한다.
+- `/settings/byok`의 AI 연결 관리는 ChatGPT 계정, 공급자 API 키(BYOK), 로컬 AI 서버를 서로 다른 구역과 저장 계약으로 표시한다. 구독 계정을 API 키로 변환하지 않는다.
 - `src/lib/google-model-transport.ts`는 Gemini Developer API와 Google Agent Platform Express Mode의 고정 호스트·키 헤더·최종 응답 텍스트 정본을 분리한다.
 - `src/lib/chat-decision-contract.ts`는 일반 채팅의 판단 책임 전가를 검출하고 1회 교정 입력과 실패 폐쇄 문구를 공급한다. 실제 공급자 재호출과 예산 정산은 `/api/chat`이 소유한다.
 - `scripts/enforce.ps1`은 타입, 무경고 린트, 전체 Jest, production build, PDF fixture를 순차 차단한다.
-- 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이며, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에만 남긴다.
+- 상세 배선과 구조 결정은 아래 프로젝트 문서가 정본이다. 활성 코드의 열린 부채는 `docs/TECHNICAL_DEBT.md`, 휴면 기능은 `docs/DORMANT_MANIFEST.md`에서 분리해 추적한다.
 
 ## 완료
 
 - 2026-08-21 기준선 갱신 — 8/10 이후 반영분: DWG/바이너리 DXF/사내 DRM 판독 가능성 3층(업로드 실패의 세 원인을 화면이 직접 안내), 오픈 베타 요금제 봉인 전면화(+ 요금 문구 게이트), SLD 폴링 영구 잠금·getUserTier 무관측·모바일 터치 타깃 수리, 동시 세션 착지분(spatial-graph 거짓 UNBOUND/SELF 제거 + 충돌 선 기하 기록) 검증 수용과 T-접점 공회전 단언 교정, dependabot 21종. 상세는 CHANGELOG [Unreleased].
 - 2026-08-25 기준선 갱신 — 벡터 DXF·PDF는 AI 키가 없어도 V3 `vectorOnly`로 파서·토폴로지·계산·제안 경로를 실행하며, 래스터 이미지는 Vision 연결 필요를 명시한다.
 - 2026-08-26 기준선 갱신 — 기존 AutoCAD 호환 ASCII DXF 경로에 ZWCAD 한국어 `ANSI_949` 복원과 동일한 바이너리 DXF·DWG·DRM 실패 계약을 연결했다. 실제 production `/api/dxf` 왕복에서 변압기·VCB·모터 3기기, 결선 2건, 한글 문자와 유효 토폴로지를 확인했다.
+- 2026-08-26 AI 연결 관리 갱신 — ChatGPT 공식 로그인 계정, 공급자 개발자 API 키, 로컬 AI 서버를 한 화면의 세 독립 구역으로 분리하고 가격·크레딧을 추정하지 않는 안내로 정렬했다.
+- 2026-08-26 개발 부채 정리 — 운영 의존성 감사 기준선을 실제 `critical 0 · high 0`으로 낮추고 Windows 셸 호출을 제거했다. `.env.example`의 서버·브라우저 오픈베타 값을 한 쌍으로 만들고 문서 게이트가 누락·불일치를 차단한다. 활성 코드의 미해결 안전 부채 1건은 익명 TODO 대신 `DEBT-SAFETY-001`로 정본화했다.
 - 고객사 DXF 심볼 라이브러리는 미식별 블록의 이름·지문·개수를 화면에 노출하고, 사용자가 아는 항목만 기기 종류로 확정해 회사별 브라우저 사전에 저장·즉시 재분석할 수 있다. 활성 회사는 새로고침, 빠른 분석·V3 전체 문서·정밀 검증과 다음 DXF에 동일하게 적용되며 JSON 반입·반출·삭제를 지원한다. 현행 `fp2`는 내부 선·곡선·중첩 형상을 정규화하며 지문·블록명 중 어느 키든 기기 종류가 충돌하면 그 키의 자동 판정을 중단한다. 기존 `fp1`은 정확한 블록명이 있는 항목만 호환하고 별칭 없는 항목은 재등록을 요구한다. 검증된 라이브러리는 V3 PARTIAL 작업의 저장·재개에도 같은 값으로 보존한다. 저장 catalog 일부가 손상돼도 정상 항목을 새 저장으로 덮지 않으며, 모든 쓰기를 차단한 뒤 사용자가 raw 원본 백업과 초기화를 확인한 경우에만 복구한다.
 - 계산기 단계 입력의 `min` 위반을 조용히 무시하던 경로와 검색 화면의 모바일 수평 넘침을 수리했다.
 
@@ -140,13 +143,14 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - GitHub의 Dependabot PR #61~#70은 Verify를 통과했지만 Live gates가 실패한 `UNSTABLE` 상태라 병합하지 않았다. 각 브랜치는 실패 원인을 분리 수리하고 전체 게이트가 녹색이 된 뒤에만 다시 판단한다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 프로젝트 코드 기준선은 `9ede686661d962155418200143eeb4e9e144717a`다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
+- 현재 프로젝트 코드 기준선은 `3c9172fd41839ff6bd187717b638ed2a43a57769`다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
 
 ## 검증
 
 > 스위트·테스트·페이지 **개수를 이 문서에 복제하지 않는다.** 기능이 바뀌면 같이 바뀌는 수라 반드시 드리프트하고, 드리프트한 수는 읽는 사람을 잘못 인도한다. 아래는 **어떤 게이트가 exit 0 이었는지**만 기록하고, 현재 수치는 명령을 직접 돌려 확인한다.
 
-- `pwsh -NoProfile -File scripts/enforce.ps1`: exit 0.
+- 2026-08-26 코드 기준선 `3c9172f`: `scripts/enforce.ps1`의 문서·타입·무경고 린트·전체 Jest·production build는 통과했다. 마지막 PDF 단계는 검증 서버 미기동으로 exit 2였고, 같은 build를 3010 포트에 기동한 뒤 `npm run gate:pdf` 17/17·exit 0으로 보충했다.
+- `npm run gate:audit`: critical 0 · high 0, exit 0, Windows DEP0190 경고 없음.
 - `npx tsc --noEmit`: exit 0.
 - `npm run lint -- --max-warnings=0`: exit 0.
 - `npm test -- --runInBand`: exit 0.
@@ -194,7 +198,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계 — 8월 26일 회사별 심볼 사전 앱 저장 완료](docs/project/handoffs/2026-08-26-zz-company-symbol-library-completion.md)
+- [기술부채 대장](docs/TECHNICAL_DEBT.md)
+- [최신 인수인계 — 8월 26일 개발 부채·문서 정본화](docs/project/handoffs/2026-08-26-zzz-development-debt-docs-sync.md)
 - [과거 인수인계 색인](docs/project/HANDOFFS.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)
