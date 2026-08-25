@@ -19,6 +19,7 @@ import type {
   ViolationEntry,
   RecommendationEntry,
 } from './types';
+import { decodeDxfText } from '@/lib/dxf-text';
 import { mergeVisionSplitResults, splitAndAnalyze } from '../vision/vision-splitter';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -117,7 +118,7 @@ async function extractLayoutElements(
 
 /** DXF 평면도 파싱 — 레이어별 요소 분류 */
 async function parseDxfLayout(buffer: ArrayBuffer, params?: Record<string, unknown>): Promise<LayoutExtraction> {
-  const text = new TextDecoder().decode(buffer);
+  const text = decodeDxfText(buffer).text;
   const elements: LayoutElement[] = [];
   const segments: WiringSegment[] = [];
   const callerScale = positiveScale(params?.unitScale);

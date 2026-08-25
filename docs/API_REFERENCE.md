@@ -112,7 +112,7 @@
 
 - JSON: `query`, `projectName`, `projectType`, `params`, 선택적 `rules`
 - multipart: 위 필드와 `file`
-- 허용 파일: PNG, JPEG, WebP, PDF, DXF
+- 허용 파일: PNG, JPEG, WebP, PDF, AutoCAD·ZWCAD 호환 ASCII DXF
 - 이미지 분석: 지원 공급자의 BYOK·서버 키 또는 이미지 입력을 지원하는 로컬 ChatGPT 모델 필요
 
 서로 다른 전문팀 두 곳 이상이 성공하지 않으면 합의 완료가 아니라 사람 검토 필요 상태를 반환합니다.
@@ -122,7 +122,7 @@
 | API | 역할 | 핵심 경계 |
 |---|---|---|
 | `POST /api/sld` | 이미지 SLD 인식 | BYOK/서버 Vision 키 또는 로컬 ChatGPT 이미지 모델, 이미지 형식·크기 검증 |
-| `POST /api/dxf` | DXF 벡터 파싱 | `$INSUNITS` 또는 명시적 `unitScale`만 물리 길이에 사용 |
+| `POST /api/dxf` | AutoCAD·ZWCAD 호환 DXF 벡터 파싱 | `$DWGCODEPAGE` 기반 문자 복원, `$INSUNITS` 또는 명시적 `unitScale`만 물리 길이에 사용. 응답 `parserInfo`에 `inputEncoding`·`declaredCodePage` 포함 |
 | `POST /api/pdf-drawing` | PDF 선택 페이지 벡터 파싱 | 페이지 범위·파일 크기 검증, 래스터 전용 PDF는 실패 |
 | `POST /api/ocr` | 전기 명판 OCR | 필드 타입·길이·confidence 엄격 검증 |
 

@@ -31,6 +31,11 @@ All notable changes to ESVA are documented in this file.
   `no-pricing-surface` 게이트가 잡는다. 권한(role=admin)은 봉인과 무관하게 유지.
 
 ### Fixed
+- **ZWCAD DXF 동등 지원** — 기존 AutoCAD 공용 DXF 분석기를 그대로 사용하되,
+  `File.text()`/기본 UTF-8 디코딩 때문에 `ANSI_949` 한국어 기기명·규격이 깨지던
+  빠른 분석·SLD 팀·평면도 팀 세 경로를 `$DWGCODEPAGE` 기반 공용 디코더로
+  정렬했다. 빠른 API는 실제 인코딩을 영수증에 포함하고, V3가 바이너리 DXF를
+  받았다가 뒤에서 실패하던 불일치도 업로드 경계의 동일한 400 안내로 닫았다.
 - **고객사 심볼 라이브러리 재개 누락** — 동기 V3 분석이 PARTIAL 뒤 원본 임대를
   만들 때 최초 분석에 쓴 라이브러리를 작업 메타데이터에서 빠뜨려, 재개 시 회사별
   매핑이 사라질 수 있던 경로를 닫았다. 라이브러리는 최초 실행·작업 저장·재개에

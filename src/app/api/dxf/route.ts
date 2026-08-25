@@ -18,6 +18,7 @@ import {
   isDwgBinary,
   looksLikeDxfText,
 } from '@/lib/document-kind';
+import { decodeDxfText, DXF_TEXT_ENCODING_GUIDANCE } from '@/lib/dxf-text';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { generateCalcChainFromSLD } from '@/lib/sld-recognition';
 import { reviewAnalysis } from '@/engine/review/circuit-review';
@@ -85,7 +86,8 @@ async function handlePost(req: NextRequest) {
 
     // 이름만 .dxf 로 바꾼 DWG 바이너리를 텍스트 파서에 넣으면 사용자가 고칠 수
     // 없는 파싱 오류가 나간다 — 머리 6바이트 표식(AC1nnn)으로 먼저 가른다.
-    const head = new Uint8Array(await dxfFile.slice(0, 32).arrayBuffer());
+    const dxfBytes = new Uint8Array(await dxfFile.arrayBuffer());
+    const head = dxfBytes.subarray(0, 32);
     if (isDwgBinary(head)) {
       return NextResponse.json({ error: DWG_GUIDANCE }, { status: 400 });
     }
@@ -94,7 +96,13 @@ async function handlePost(req: NextRequest) {
       return NextResponse.json({ error: BINARY_DXF_GUIDANCE }, { status: 400 });
     }
 
-    const dxfContent = await dxfFile.text();
+    let decodedDxf: ReturnType<typeof decodeDxfText>;
+    try {
+      decodedDxf = decodeDxfText(dxfBytes);
+    } catch {
+      return NextResponse.json({ error: DXF_TEXT_ENCODING_GUIDANCE }, { status: 400 });
+    }
+    const dxfContent = decodedDxf.text;
     // DXF 구조가 아예 안 보이면(사내 DRM 암호화가 흔한 원인) 파서가 조용히
     // 빈 결과를 낸다 — 「기기 0개」는 사용자가 고칠 수 없는 답이다. 원인
     // 후보와 해결 절차를 말해 주고 멈춘다. 표본은 앞 4KB 면 충분하다 —
@@ -180,6 +188,8 @@ async function handlePost(req: NextRequest) {
         confidence: analysis.confidence,
         description: analysis.rawDescription,
         durationMs: timer.elapsed(),
+        inputEncoding: decodedDxf.encoding,
+        declaredCodePage: decodedDxf.declaredCodePage,
       },
     });
   } catch (err) {

@@ -326,6 +326,31 @@ describe('drawing jobs API ownership and input boundary', () => {
     expect(runDocumentAnalysis).not.toHaveBeenCalled();
   });
 
+  it('rejects binary DXF at the same boundary as the quick DXF route', async () => {
+    const binaryDxf = new File([
+      'AutoCAD Binary DXF\r\n',
+      Uint8Array.from([0x1a, 0x00, 0x01, 0x02]),
+    ], 'zwcad-binary.dxf', { type: 'application/dxf' });
+
+    const response = await POST(formRequest({ vectorOnly: '1' }, binaryDxf));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain('ASCII DXF');
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unsupported declared DXF code page before analysis', async () => {
+    const unsupported = new File([
+      '0\nSECTION\n2\nHEADER\n9\n$DWGCODEPAGE\n3\nANSI_9999\n0\nENDSEC\n0\nEOF\n',
+    ], 'zwcad-unknown-codepage.dxf', { type: 'application/octet-stream' });
+
+    const response = await POST(formRequest({ vectorOnly: '1' }, unsupported));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain('문자 인코딩');
+    expect(runDocumentAnalysis).not.toHaveBeenCalled();
+  });
+
   it('does not retain a source lease for a completed synchronous analysis', async () => {
     jest.mocked(isSourceLeaseAvailable).mockReturnValue(true);
     jest.mocked(runDocumentAnalysis).mockResolvedValue({

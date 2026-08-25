@@ -21,6 +21,15 @@ import {
   resolveDrawingVisionRequest,
 } from '@/lib/drawing-vision-request';
 import { drawingDocumentDeadlineMs } from '@/lib/drawing-reasoning-effort';
+import {
+  BINARY_DXF_GUIDANCE,
+  DWG_GUIDANCE,
+  UNREADABLE_DXF_GUIDANCE,
+  isBinaryDxf,
+  isDwgBinary,
+  looksLikeDxfText,
+} from '@/lib/document-kind';
+import { decodeDxfText, DXF_TEXT_ENCODING_GUIDANCE } from '@/lib/dxf-text';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -71,7 +80,7 @@ function hasValidDrawingSignature(kind: 'image' | 'pdf' | 'dxf', bytes: ArrayBuf
     return false;
   }
   const header = Buffer.from(view.subarray(0, Math.min(view.length, 4096))).toString('latin1');
-  return header.startsWith('AutoCAD Binary DXF') || /(?:^|\r?\n)\s*0\s*\r?\n\s*SECTION(?:\r?\n|$)/i.test(header);
+  return /(?:^|\r?\n)\s*0\s*\r?\n\s*SECTION(?:\r?\n|$)/i.test(header);
 }
 
 async function POST__impl(req: NextRequest) {
@@ -115,6 +124,21 @@ async function POST__impl(req: NextRequest) {
     if (file.size > byteLimit) return userError(`도면 파일이 너무 큽니다. 최대 ${byteLimit / 1024 / 1024}MB입니다.`);
 
     const bytes = await file.arrayBuffer();
+    if (drawingKind === 'dxf') {
+      const view = new Uint8Array(bytes);
+      const head = view.subarray(0, 32);
+      if (isDwgBinary(head)) return userError(DWG_GUIDANCE);
+      if (isBinaryDxf(head)) return userError(BINARY_DXF_GUIDANCE);
+      let dxfText: string;
+      try {
+        dxfText = decodeDxfText(view).text;
+      } catch {
+        return userError(DXF_TEXT_ENCODING_GUIDANCE);
+      }
+      if (!looksLikeDxfText(dxfText.slice(0, 4096))) {
+        return userError(UNREADABLE_DXF_GUIDANCE);
+      }
+    }
     if (!hasValidDrawingSignature(drawingKind, bytes, file.name)) {
       return userError('파일 확장자와 실제 도면 형식이 일치하지 않습니다. 원본 파일을 확인해주세요.');
     }

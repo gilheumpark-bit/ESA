@@ -19,6 +19,7 @@ import type {
   ViolationEntry,
   DrawingReviewArtifact,
 } from './types';
+import { decodeDxfText } from '@/lib/dxf-text';
 import { resolveSymbol } from '../vision/symbol-db';
 import { runDrawingCouncil, selectCouncilVariant } from '../vision/drawing-council';
 import { assembleSpatialGraph, type SpatialEvidenceGraph } from '../vision/spatial-graph';
@@ -59,7 +60,7 @@ async function extractFromDrawing(
 
   // DXF: 결정론적 벡터 파싱. 좌표를 직접 읽지만 블록 의미 인식은 불완전할 수 있다.
   if (classification === 'sld_dxf' && fileBuffer) {
-    const text = new TextDecoder().decode(fileBuffer);
+    const text = decodeDxfText(fileBuffer).text;
     const { parseDxfToSLD } = await import('@/engine/topology/dxf-parser');
     const requestedScale = typeof params?.unitScale === 'number' && Number.isFinite(params.unitScale) && params.unitScale > 0
       ? params.unitScale

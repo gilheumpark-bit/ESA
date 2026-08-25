@@ -146,7 +146,8 @@ const OPENAPI_SPEC = {
     },
     '/dxf': {
       post: {
-        summary: 'DXF 벡터 파싱',
+        summary: 'AutoCAD·ZWCAD 호환 ASCII DXF 벡터 파싱',
+        description: 'CAD 제품과 무관하게 같은 ESA 벡터 분석 경로를 사용하며, $DWGCODEPAGE 기반 문자 인코딩을 복원합니다. DWG와 바이너리 DXF는 지원하지 않습니다.',
         tags: ['Drawing'],
         // JSON 이 아니라 multipart 다. 그게 안 적혀 있어 문서만 보고는
         // 400 을 받게 돼 있었다(2026-07-28).
@@ -157,14 +158,14 @@ const OPENAPI_SPEC = {
               schema: {
                 type: 'object',
                 required: ['file'],
-                properties: { file: { type: 'string', format: 'binary', description: '.dxf 파일 (최대 16MB)' } },
+                properties: { file: { type: 'string', format: 'binary', description: 'AutoCAD·ZWCAD 호환 ASCII .dxf 파일 (최대 16MB)' } },
               },
             },
           },
         },
         responses: {
           200: { description: 'SLD 컴포넌트 + 연결' },
-          400: { description: 'multipart 가 아니거나 .dxf 가 아니거나 16MB 초과' },
+          400: { description: 'multipart·확장자·크기 오류, DWG·바이너리 DXF, 또는 미지원 문자 인코딩' },
         },
       },
     },
