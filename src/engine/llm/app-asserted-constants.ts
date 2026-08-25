@@ -59,9 +59,10 @@ export const APP_ASSERTED_CONSTANTS: readonly AppAssertedConstant[] = [
   // 등급 없이 "절연장갑 500V" 라고만 쓰면 통과하지 않는다 — 어느 등급인지
   // 모르는 전압은 현장에서 위험하다.
   //
-  // TODO(등재 기준 위반·개발자 판단 대기): Class 1~4 는 이 앱의 다른 화면이
+  // DEBT-SAFETY-001: Class 1~4 는 이 앱의 다른 화면이
   // 보여 주지 않는 값이라 아래 등재 기준을 어긴다. 빼면 22.9kV 활선의 실제
-  // 등급(Class 3·4)을 챗이 말할 수 없고, 두면 앱이 출처가 된다.
+  // 등급(Class 3·4)을 챗이 말할 수 없고, 두면 앱이 출처가 된다. 폐쇄 조건과
+  // 현재 억제책은 docs/TECHNICAL_DEBT.md에서 추적한다.
   { value: '500', unit: 'V', discriminator: 'Class 00', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
   { value: '1000', unit: 'V', discriminator: 'Class 0', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
   { value: '7500', unit: 'V', discriminator: 'Class 1', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },

@@ -91,13 +91,24 @@ requireIndexed('files/README.md', 'files');
 
 const envLines = readFileSync(path.join(root, '.env.example'), 'utf8').split(/\r?\n/u);
 const envCounts = new Map();
+const envValues = new Map();
 for (const line of envLines) {
-  const match = line.match(/^([A-Z][A-Z0-9_]*)=/u);
+  const match = line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/u);
   if (!match) continue;
   envCounts.set(match[1], (envCounts.get(match[1]) ?? 0) + 1);
+  envValues.set(match[1], match[2]);
 }
 for (const [key, count] of envCounts) {
   if (count > 1) errors.push(`.env.example duplicates ${key} (${count})`);
+}
+
+const openBetaKeys = ['OPEN_BETA', 'NEXT_PUBLIC_OPEN_BETA'];
+for (const key of openBetaKeys) {
+  if (!envValues.has(key)) errors.push(`.env.example missing ${key}`);
+}
+if (openBetaKeys.every((key) => envValues.has(key))
+  && envValues.get(openBetaKeys[0]) !== envValues.get(openBetaKeys[1])) {
+  errors.push('.env.example OPEN_BETA and NEXT_PUBLIC_OPEN_BETA must match');
 }
 
 for (const required of [
