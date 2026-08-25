@@ -244,6 +244,7 @@ async function POST__impl(req: NextRequest) {
         mimeType: file.type || 'application/octet-stream',
         fileName: file.name,
         requestedPages,
+        ...(libraryRead.library ? { symbolLibrary: libraryRead.library } : {}),
       },
     });
 

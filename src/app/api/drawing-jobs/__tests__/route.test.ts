@@ -1,7 +1,13 @@
 import { NextRequest } from 'next/server';
 
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
-import { cancelOwnedJob, createJob, getOwnedJob, isDrawingJobStoreAvailable } from '@/agent/drawing/drawing-job-store';
+import {
+  cancelOwnedJob,
+  createJob,
+  getOwnedJob,
+  isDrawingJobStoreAvailable,
+  updateOwnedJob,
+} from '@/agent/drawing/drawing-job-store';
 import { createSourceLease, isSourceLeaseAvailable } from '@/agent/drawing/source-lease-store';
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { enumerateDrawingPageCount } from '@/agent/drawing/drawing-source';
@@ -330,5 +336,39 @@ describe('drawing jobs API ownership and input boundary', () => {
     expect(response.status).toBe(200);
     expect(createSourceLease).not.toHaveBeenCalled();
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('retains the DXF symbol library in resumable synchronous job metadata', async () => {
+    const symbolLibrary = {
+      schemaVersion: 1,
+      organization: 'A사',
+      entries: [{ blockNames: ['CUSTOM_BREAKER'], deviceType: 'breaker' }],
+    };
+    jest.mocked(isSourceLeaseAvailable).mockReturnValue(true);
+    jest.mocked(createSourceLease).mockReturnValue({
+      leaseId: 'lease-symbol',
+      documentHash: 'a'.repeat(64),
+      expiresAt: Date.now() + 60_000,
+    });
+    jest.mocked(runDocumentAnalysis).mockResolvedValue({
+      job: { jobId: 'job-symbol', status: 'PARTIAL', estimated: {} },
+      document: { documentHash: 'a'.repeat(64), jobStatus: 'PARTIAL' },
+    } as never);
+
+    const response = await POST(formRequest(
+      {
+        vectorOnly: '1',
+        leaseSource: '1',
+        symbolLibrary: JSON.stringify(symbolLibrary),
+      },
+      new File([
+        '0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n',
+      ], 'customer.dxf', { type: 'application/dxf' }),
+    ));
+
+    expect(response.status).toBe(200);
+    expect(updateOwnedJob).toHaveBeenCalledWith('job-symbol', owner.ownerId, expect.objectContaining({
+      sourceMetadata: expect.objectContaining({ symbolLibrary }),
+    }));
   });
 });
