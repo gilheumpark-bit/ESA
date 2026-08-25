@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'API 키 설정 · ESVA',
-  description: '내 API 키로 AI를 쓰는 BYOK 설정 — 키는 브라우저에만 저장된다.',
+  title: 'AI 연결 관리 · ESVA',
+  description: '로컬 ChatGPT 계정, 공급자 API 키, 로컬 AI 서버를 구분해 연결합니다.',
 };
 
 export default function SettingsByokLayout({ children }: { children: React.ReactNode }) {

@@ -21,9 +21,9 @@ const EXAMPLES: Array<{ icon: LucideIcon; text: string; tail?: string }> = [
   { icon: Camera, text: '변압기 명판 촬영 → 스펙 추출 → 용량 검증' },
 ];
 
-/** 도구 행 — 헤더 밖 라우트 전부 홈에서 도달 가능하게. BYOK는 비로그인도 사용. */
+/** 도구 행 — 헤더 밖 라우트 전부 홈에서 도달 가능하게. AI 연결은 비로그인도 사용. */
 const TOOLS: Array<{ icon: LucideIcon; label: string; href: string }> = [
-  { icon: Shield, label: 'BYOK 키 설정', href: '/settings/byok' },
+  { icon: Shield, label: 'AI 연결 관리', href: '/settings/byok' },
   { icon: Camera, label: 'OCR 명판', href: '/tools/ocr' },
   { icon: Columns2, label: 'Studio', href: '/tools/studio' },
   { icon: HardHat, label: '현장 모드', href: '/mobile' },
@@ -82,14 +82,14 @@ export default function HomePage() {
               <Search size={13} aria-hidden="true" />
               자동 분류
             </span>
-            {/* BYOK 상태 겸 입구 — 키 등록 페이지로 (비로그인도 사용 가능) */}
+            {/* 계정·API 키 연결 입구 — 비로그인도 사용 가능 */}
             <Link
               href="/settings/byok"
               className="ml-auto inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-1 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--bg-secondary)] hover:text-[var(--text-secondary)]"
-              title="BYOK 키 설정"
+              title="AI 연결 관리"
             >
               <ShieldCheck size={12} />
-              내 API 키 · BYOK
+              ChatGPT · API 키
             </Link>
             <button
               onClick={handleSearch}
@@ -153,7 +153,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ═══ 도구 행 — 헤더 밖 라우트 도달성 (BYOK 포함) ═══ */}
+      {/* ═══ 도구 행 — 헤더 밖 라우트 도달성 (AI 연결 포함) ═══ */}
       <section className="mx-auto w-full max-w-[808px] px-4 pb-10 pt-7 sm:px-6">
         <div className="mb-2 text-[11px] font-semibold tracking-[0.12em] text-[var(--text-tertiary)]">도구</div>
         <div className="flex flex-wrap gap-2">
@@ -180,7 +180,7 @@ export default function HomePage() {
             전수 대조했다. 임계값까지 검증한 것은 아니라 "2026" 이라고만
             쓰면 과장이라 대조 범위를 함께 적는다. */}
         <span className="shrink-0">내장 판본 KEC 조항 2026.1.5 대조 · NEC 2023 · IEC 60364</span>
-        <span className="hidden shrink-0 sm:inline">BYOK · AES-GCM 세션 암호화</span>
+        <span className="hidden shrink-0 sm:inline">ChatGPT 계정 또는 BYOK · 키는 AES-GCM 암호화</span>
         <span className="ml-auto hidden shrink-0 sm:inline">엔진 {CALCULATOR_COUNT}종</span>
       </div>
     </div>

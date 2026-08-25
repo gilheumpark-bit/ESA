@@ -2,6 +2,19 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 describe('BYOK provider model selection surface', () => {
+  it('separates the local ChatGPT account from provider API-key connections', () => {
+    const page = readFileSync(join(process.cwd(), 'src/app/(with-nav)/settings/byok/page.tsx'), 'utf8');
+    const accountCard = readFileSync(join(process.cwd(), 'src/components/ChatGPTLocalCard.tsx'), 'utf8');
+
+    expect(page).toContain('aria-label="AI 연결 방식"');
+    expect(page).toContain('id="chatgpt-account"');
+    expect(page).toContain('id="provider-api-keys"');
+    expect(page).toContain('ChatGPT 구독과 API 키는 서로 다른 연결 방식입니다.');
+    expect(page).toContain('공급자 API 키 (BYOK)');
+    expect(accountCard).toContain('같은 PC에 Codex 설치');
+    expect(accountCard).toContain('API 키 아님');
+  });
+
   it('loads provider-reported models and exposes them in the saved-key selector', () => {
     const page = readFileSync(join(process.cwd(), 'src/app/(with-nav)/settings/byok/page.tsx'), 'utf8');
 

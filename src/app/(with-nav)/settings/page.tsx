@@ -3,7 +3,7 @@
 /**
  * ESVA Settings Page
  * -----------------
- * User preferences: Profile, Language, Country, BYOK keys link, Plan & Billing.
+ * User preferences: Profile, Language, Country, AI connections, Plan & Billing.
  *
  * PART 1: Constants & helpers
  * PART 2: Section components
@@ -143,17 +143,17 @@ function CountrySection({
   );
 }
 
-function BYOKSection() {
+function AIConnectionSection() {
   return (
-    <SectionCard title="API Keys (BYOK)">
+    <SectionCard title="AI 연결 관리">
       <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-        Bring Your Own Key — encrypted in this browser; sent transiently through ESVA for provider calls and not persisted server-side.
+        ChatGPT 구독 계정, 공급자 API 키, 로컬 AI 서버를 서로 다른 방식으로 연결합니다.
       </p>
       <Link
         href="/settings/byok"
         className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
       >
-        Manage API Keys
+        연결 방식 선택
         <span aria-hidden="true">&rarr;</span>
       </Link>
     </SectionCard>
@@ -359,7 +359,7 @@ export default function SettingsPage() {
           )}
         <LanguageSection current={language} onChange={setLanguage} />
         <CountrySection current={country} onChange={setCountry} />
-        <BYOKSection />
+        <AIConnectionSection />
         <SectionCard title="On-Premise AI 서버">
           <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
             관리자가 허용한 자체 AI 서버에 연결합니다. 실제 데이터 경로와 운영 비용은 배포 환경 정책을 확인하세요.

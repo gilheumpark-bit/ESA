@@ -143,20 +143,34 @@ export function ChatGPTLocalCard() {
   }, [postAction, refresh]);
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            ChatGPT 계정
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              현재 PC 연결 상태
+            </h3>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              API 키 아님
+            </span>
+          </div>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
-            이 PC의 공식 Codex 로그인을 사용합니다. API 키는 필요하지 않습니다.
+            이 PC의 공식 Codex 로그인을 사용하며 ESA는 계정 토큰이나 쿠키를 읽지 않습니다.
           </p>
         </div>
         <span className="text-xs text-zinc-600 dark:text-zinc-300" aria-live="polite">
           {loading ? '확인 중…' : statusMessage(status)}
         </span>
       </div>
+
+      <ol aria-label="회사 PC 사용 조건" className="mt-4 grid gap-2 text-xs text-zinc-700 sm:grid-cols-3 dark:text-zinc-200">
+        <li className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70"><strong>1.</strong> 같은 PC에 Codex 설치</li>
+        <li className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70"><strong>2.</strong> Codex에서 ChatGPT 로그인</li>
+        <li className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70"><strong>3.</strong> 같은 PC에서 ESA 실행</li>
+      </ol>
+      <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+        회사 보안 정책이 Codex 실행·브라우저 로그인·로컬 연결을 차단하면 관리자 허용이 필요합니다.
+      </p>
 
       {status.connected && (
         <div className="mt-4 space-y-3">
@@ -240,6 +254,6 @@ export function ChatGPTLocalCard() {
           </button>
         )}
       </div>
-    </section>
+    </div>
   );
 }

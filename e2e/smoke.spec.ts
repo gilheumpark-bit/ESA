@@ -62,7 +62,7 @@ test.describe('메인 페이지', () => {
 
   test('헤더 밖 핵심 도구도 홈에서 도달 가능', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('link', { name: 'BYOK 키 설정' })).toHaveAttribute('href', '/settings/byok');
+    await expect(page.getByRole('link', { name: 'AI 연결 관리' })).toHaveAttribute('href', '/settings/byok');
     await expect(page.getByRole('link', { name: 'OCR 명판' })).toHaveAttribute('href', '/tools/ocr');
     await expect(page.getByRole('link', { name: '프로젝트' })).toHaveAttribute('href', '/projects');
     await expect(page.getByRole('link', { name: '계산 이력', exact: true })).toHaveAttribute('href', '/history');
@@ -301,7 +301,7 @@ test.describe('반응형 레이아웃', () => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
     await expect(page.getByRole('searchbox', { name: '질의 입력' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'BYOK 키 설정' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'AI 연결 관리' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 
@@ -323,9 +323,15 @@ test.describe('반응형 레이아웃', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('설정 페이지', () => {
-  test('BYOK 페이지 접근', async ({ page }) => {
+  test('ChatGPT 계정과 공급자 API 키를 별도 연결로 안내', async ({ page }) => {
     await page.goto('/settings/byok');
-    await expect(page.getByRole('heading', { level: 1, name: 'API 키 관리' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'AI 연결 관리' })).toBeVisible();
+    const methods = page.getByRole('navigation', { name: 'AI 연결 방식' });
+    await expect(methods.getByRole('link', { name: /ChatGPT 계정/ })).toHaveAttribute('href', '#chatgpt-account');
+    await expect(methods.getByRole('link', { name: /API 키 직접 연결/ })).toHaveAttribute('href', '#provider-api-keys');
+    await expect(page.getByRole('heading', { level: 2, name: 'ChatGPT 계정 연결' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: '공급자 API 키 \(BYOK\)' })).toBeVisible();
+    await expect(page.getByText('같은 PC에 Codex 설치', { exact: false })).toBeVisible();
   });
 
   test('도면 분석에 실제 배선된 공급자만 모델 선택을 노출', async ({ page }) => {

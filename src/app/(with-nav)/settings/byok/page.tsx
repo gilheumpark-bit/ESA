@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * ESVA BYOK Key Management Page
- * -----------------------------
- * Cloud API keys are encrypted with a browser-bound key before ciphertext is
- * stored locally. Local providers are configured on the on-premise page.
+ * ESVA AI Connection Management Page
+ * ----------------------------------
+ * ChatGPT account, cloud BYOK, and local model-server connections are shown as
+ * distinct methods. Cloud keys are encrypted with a browser-bound key before
+ * ciphertext is stored locally.
  *
  * PART 1: Types & constants
  * PART 2: Provider key card component
@@ -65,16 +66,21 @@ interface ProviderModelOption {
   name: string;
 }
 
-const PROVIDER_ORDER: string[] = [
+const API_PROVIDER_ORDER: string[] = [
   'openai',
   'claude',
   'gemini',
   'google-agent-platform',
   'groq',
   'mistral',
+];
+
+const LOCAL_PROVIDER_ORDER: string[] = [
   'ollama',
   'lmstudio',
 ];
+
+const PROVIDER_ORDER = [...API_PROVIDER_ORDER, ...LOCAL_PROVIDER_ORDER];
 
 const STATUS_LABEL: Record<KeyStatus, string> = {
   empty: '',
@@ -129,10 +135,9 @@ function ProviderKeyCard({
     <div className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          {/* 페이지 h1 아래 첫 절이다 — h3 로 두면 단계를 건너뛴다. */}
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {provider.name}
-          </h2>
+          </h3>
           {isLocal && (
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
               로컬 서버 — API 키가 없을 수 있습니다
@@ -258,7 +263,7 @@ function ProviderKeyCard({
       {(provider.id === 'gemini' || provider.id === 'google-agent-platform') && (state.probeRunning || state.probeResults.length > 0) && (
         <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700" aria-live="polite">
           <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h3>
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">모델 호환성</h4>
             <span className="text-xs tabular-nums text-zinc-700 dark:text-zinc-200">
               {state.probeResults.length}/{models.length} 완료
             </span>
@@ -321,9 +326,9 @@ function probeStatusClass(status: ProbeStatus): string {
 function QuickStartGuide() {
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-900/20">
-      <h2 className="mb-3 text-lg font-semibold text-amber-900 dark:text-amber-200">
+      <h3 className="mb-3 text-lg font-semibold text-amber-900 dark:text-amber-200">
         API 키 발급 빠른 안내
-      </h2>
+      </h3>
       <ol className="list-inside list-decimal space-y-2 text-sm text-amber-800 dark:text-amber-300">
         <li>
           <strong>OpenAI</strong> — platform.openai.com &rarr; API Keys &rarr;
@@ -355,9 +360,9 @@ function QuickStartGuide() {
 function FAQ() {
   return (
     <section className="rounded-xl border border-zinc-200 bg-zinc-50 p-6 dark:border-zinc-700 dark:bg-zinc-800/50">
-      <h2 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+      <h3 className="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
         BYOK 자주 묻는 질문
-      </h2>
+      </h3>
       <div className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
         <div>
           <p className="font-medium text-zinc-800 dark:text-zinc-200">
@@ -397,7 +402,7 @@ function FAQ() {
 // PART 4 — Main Page Component
 // =============================================================================
 
-export default function BYOKPage() {
+export default function AIConnectionsPage() {
   const [states, setStates] = useState<Record<string, ProviderKeyState>>({});
   const [loaded, setLoaded] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
@@ -574,6 +579,34 @@ export default function BYOKPage() {
     [updateState],
   );
 
+  const renderProviderCards = (ids: readonly string[]) => ids.map((id) => {
+    const provider = PROVIDERS[id];
+    if (!provider) return null;
+    const state = states[id] ?? {
+      maskedKey: '',
+      status: 'empty' as KeyStatus,
+      rawInput: '',
+      selectedModel: '',
+      availableModels: [],
+      probeRunning: false,
+      probeResults: [],
+    };
+    return (
+      <ProviderKeyCard
+        key={id}
+        provider={provider}
+        state={state}
+        onSave={() => handleSave(id)}
+        onTest={() => handleTest(id)}
+        onDelete={() => handleDelete(id)}
+        onInputChange={(value) => updateState(id, { rawInput: value })}
+        onModelChange={(model) => handleModelChange(id, model)}
+        onProbeModels={() => handleProbeModels(id)}
+        models={state.availableModels}
+      />
+    );
+  });
+
   // 로딩 상태
   if (!loaded) {
     return (
@@ -584,7 +617,7 @@ export default function BYOKPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-6 flex items-center gap-3">
         <Link
           href="/settings"
@@ -597,9 +630,36 @@ export default function BYOKPage() {
       <h1 className="mb-2 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
         AI 연결 관리
       </h1>
-      <p className="mb-4 text-sm text-zinc-500 dark:text-zinc-400">
-        로컬 ChatGPT 계정을 사용하거나 공급자 API 키를 등록할 수 있습니다.
+      <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+        ChatGPT 구독과 API 키는 서로 다른 연결 방식입니다. 원하는 방식만 선택해 설정하세요.
       </p>
+
+      <nav aria-label="AI 연결 방식" className="my-7 grid gap-3 sm:grid-cols-3">
+        <a
+          href="#chatgpt-account"
+          className="group min-h-24 rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-500"
+        >
+          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">ChatGPT 계정</span>
+          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">구독 계정 · API 키 없이</span>
+          <span className="mt-2 block text-xs font-medium text-blue-600 group-hover:underline dark:text-blue-400">계정 연결로 이동</span>
+        </a>
+        <a
+          href="#provider-api-keys"
+          className="group min-h-24 rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-500"
+        >
+          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">API 키 직접 연결</span>
+          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">공급자 개발자 계정 · 별도 과금</span>
+          <span className="mt-2 block text-xs font-medium text-blue-600 group-hover:underline dark:text-blue-400">API 설정으로 이동</span>
+        </a>
+        <a
+          href="#local-ai-server"
+          className="group min-h-24 rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-blue-500"
+        >
+          <span className="block text-sm font-semibold text-zinc-900 dark:text-zinc-100">로컬 AI 서버</span>
+          <span className="mt-1 block text-xs leading-5 text-zinc-600 dark:text-zinc-300">Ollama · LM Studio</span>
+          <span className="mt-2 block text-xs font-medium text-blue-600 group-hover:underline dark:text-blue-400">로컬 설정으로 이동</span>
+        </a>
+      </nav>
 
       {storageError && (
         <div role="alert" className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
@@ -607,58 +667,70 @@ export default function BYOKPage() {
         </div>
       )}
 
-      {/* Provider cards */}
-      <div className="mb-8 flex flex-col gap-4">
+      <section id="chatgpt-account" aria-labelledby="chatgpt-account-title" className="scroll-mt-24 border-t border-zinc-200 pt-8 dark:border-zinc-700">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400">연결 방식 1</p>
+            <h2 id="chatgpt-account-title" className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
+              ChatGPT 계정 연결
+            </h2>
+          </div>
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+            API 키 불필요
+          </span>
+        </div>
         <ChatGPTLocalCard />
-        {PROVIDER_ORDER.map((id) => {
-          const provider = PROVIDERS[id];
-          if (!provider) return null;
-          const state = states[id] ?? {
-            maskedKey: '',
-            status: 'empty' as KeyStatus,
-            rawInput: '',
-            selectedModel: '',
-            availableModels: [],
-            probeRunning: false,
-            probeResults: [],
-          };
-          return (
-            <ProviderKeyCard
-              key={id}
-              provider={provider}
-              state={state}
-              onSave={() => handleSave(id)}
-              onTest={() => handleTest(id)}
-              onDelete={() => handleDelete(id)}
-              onInputChange={(v) => updateState(id, { rawInput: v })}
-              onModelChange={(m) => handleModelChange(id, m)}
-              onProbeModels={() => handleProbeModels(id)}
-              models={state.availableModels}
-            />
-          );
-        })}
-      </div>
+      </section>
 
-      {/* Team Sharing Guide */}
-      <div className="mb-8 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
-        <h3 className="mb-3 text-base font-semibold text-[var(--text-primary)]">팀 공유 방법</h3>
-        <div className="space-y-2 text-sm text-[var(--text-secondary)]">
-          <p><strong>1. 사용자를 구분한 키 발급:</strong> 가능하면 팀 공용 키 대신 구성원별 제한 키를 생성합니다.</p>
-          <p><strong>2. 안전한 전달:</strong> 조직의 비밀 관리 도구나 만료되는 일회성 비밀 링크를 사용합니다.</p>
-          <p><strong>3. 각 브라우저에서 등록:</strong> 팀원 각자 이 페이지에서 키를 등록합니다.</p>
-          <p className="mt-2 text-xs text-[var(--text-tertiary)]">
-            암호문은 각 브라우저에 저장됩니다. OCR·SLD·채팅처럼 ESA 서버가 공급자 호출을
-            대행하는 기능에서는 해당 요청 동안 복호화된 키가 HTTPS로 전달되며 저장하지 않습니다.
-            공급자 콘솔에서 사용 한도, 허용 모델, 만료일을 함께 설정하세요.
+      <section id="provider-api-keys" aria-labelledby="provider-api-keys-title" className="mt-10 scroll-mt-24 border-t border-zinc-200 pt-8 dark:border-zinc-700">
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400">연결 방식 2</p>
+          <h2 id="provider-api-keys-title" className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            공급자 API 키 (BYOK)
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            OpenAI·Anthropic·Google 등의 개발자 콘솔에서 발급한 키입니다. ChatGPT 구독과 별도이며,
+            사용량은 각 공급자 계정에 청구될 수 있습니다.
           </p>
         </div>
-      </div>
+        <div className="flex flex-col gap-4">
+          {renderProviderCards(API_PROVIDER_ORDER)}
+        </div>
 
-      {/* Guide & FAQ */}
-      <div className="flex flex-col gap-6">
-        <QuickStartGuide />
-        <FAQ />
-      </div>
+        <div className="my-8 rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
+          <h3 className="mb-3 text-base font-semibold text-[var(--text-primary)]">팀 공유 방법</h3>
+          <div className="space-y-2 text-sm text-[var(--text-secondary)]">
+            <p><strong>1. 사용자를 구분한 키 발급:</strong> 가능하면 팀 공용 키 대신 구성원별 제한 키를 생성합니다.</p>
+            <p><strong>2. 안전한 전달:</strong> 조직의 비밀 관리 도구나 만료되는 일회성 비밀 링크를 사용합니다.</p>
+            <p><strong>3. 각 브라우저에서 등록:</strong> 팀원 각자 이 페이지에서 키를 등록합니다.</p>
+            <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+              암호문은 각 브라우저에 저장됩니다. OCR·SLD·채팅처럼 ESA 서버가 공급자 호출을
+              대행하는 기능에서는 해당 요청 동안 복호화된 키가 HTTPS로 전달되며 저장하지 않습니다.
+              공급자 콘솔에서 사용 한도, 허용 모델, 만료일을 함께 설정하세요.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          <QuickStartGuide />
+          <FAQ />
+        </div>
+      </section>
+
+      <section id="local-ai-server" aria-labelledby="local-ai-server-title" className="mt-10 scroll-mt-24 border-t border-zinc-200 pt-8 dark:border-zinc-700">
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-600 dark:text-blue-400">연결 방식 3</p>
+          <h2 id="local-ai-server-title" className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
+            로컬 AI 서버
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            사내 PC나 내부 서버의 Ollama·LM Studio를 연결합니다. 공급자 API 키 영역과 별도로 관리됩니다.
+          </p>
+        </div>
+        <div className="flex flex-col gap-4">
+          {renderProviderCards(LOCAL_PROVIDER_ORDER)}
+        </div>
+      </section>
     </div>
   );
 }

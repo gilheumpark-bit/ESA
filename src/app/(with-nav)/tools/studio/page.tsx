@@ -389,7 +389,7 @@ function ChatPanel({ file }: ChatPanelProps) {
           </button>
         </div>
         <p className="text-[10px] text-[var(--color-text-muted)] mt-1.5 px-1">
-          Enter로 전송 · BYOK 키 설정 시 AI 답변 활성화
+          Enter로 전송 · AI 연결 설정 시 답변 활성화
         </p>
       </div>
     </div>
