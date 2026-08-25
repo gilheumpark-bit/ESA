@@ -3,10 +3,10 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 2da4bd46d459ffc79cad193709637c1eadfa71ca
-updatedAt: 2026-08-25T23:59:41+09:00
+codeBaselineCommit: 9ede686661d962155418200143eeb4e9e144717a
+updatedAt: 2026-08-26T00:35:26+09:00
 trigger: files
-changedDomains: [agent, app, engine, lib, docs]
+changedDomains: [agent, app, lib, docs]
 ---
 
 # ESA 프로젝트 상태
@@ -23,6 +23,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `src/agent/report`는 현재 도면에 유일하게 결박된 근거만 보고서와 95% 게이트에 전달한다.
 - `src/agent/drawing`은 V3 전체 문서 작업, PDF/DXF 전체 좌표 문자, 페이지·구획 ledger, 교차 페이지 관계, 수량·제안·정정·평가기 계약을 소유한다.
 - `src/engine/topology/symbol-library.ts`는 고객사 DXF 블록 정의의 기하 지문과 별칭을 검증·색인하고, 미식별 블록을 다음 등록에 쓸 `unknownSymbols`로 반환한다.
+- `src/lib/dxf-text.ts`는 AutoCAD·ZWCAD·CADian ASCII DXF의 `$DWGCODEPAGE`를 엄격하게 복원하며, 빠른 API·V3 전체 문서·계통도팀·평면도팀이 같은 디코더를 사용한다.
 - `DRAWING_JOB_STORE_DIR`은 다중 인스턴스가 공유하는 작업·암호화 원본 임대 볼륨이다. 운영 미설정 시 취소·재개는 503으로 닫힌다.
 - `src/lib/drawing-asset-store.ts`는 원본을 브라우저 IndexedDB에만 보관하고 SHA-256 재검증 뒤 같은 브라우저에서 다시 연다.
 - `src/lib/electrical-chat-client.ts`는 홈 검색 AI와 Studio 텍스트 질문의 로컬 ChatGPT·BYOK·온프렘 선택, SSE 조립, 계산기 실행 영수증을 단일 경로로 처리한다.
@@ -36,6 +37,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 2026-08-21 기준선 갱신 — 8/10 이후 반영분: DWG/바이너리 DXF/사내 DRM 판독 가능성 3층(업로드 실패의 세 원인을 화면이 직접 안내), 오픈 베타 요금제 봉인 전면화(+ 요금 문구 게이트), SLD 폴링 영구 잠금·getUserTier 무관측·모바일 터치 타깃 수리, 동시 세션 착지분(spatial-graph 거짓 UNBOUND/SELF 제거 + 충돌 선 기하 기록) 검증 수용과 T-접점 공회전 단언 교정, dependabot 21종. 상세는 CHANGELOG [Unreleased].
 - 2026-08-25 기준선 갱신 — 벡터 DXF·PDF는 AI 키가 없어도 V3 `vectorOnly`로 파서·토폴로지·계산·제안 경로를 실행하며, 래스터 이미지는 Vision 연결 필요를 명시한다.
+- 2026-08-26 기준선 갱신 — 기존 AutoCAD 호환 ASCII DXF 경로에 ZWCAD 한국어 `ANSI_949` 복원과 동일한 바이너리 DXF·DWG·DRM 실패 계약을 연결했다. 실제 production `/api/dxf` 왕복에서 변압기·VCB·모터 3기기, 결선 2건, 한글 문자와 유효 토폴로지를 확인했다.
 - 고객사 DXF 심볼 라이브러리는 기하 지문→블록명 별칭→내장 휴리스틱 순으로 적용하고, 미식별 블록의 이름·지문·개수를 등록 재료로 노출한다. 검증된 라이브러리는 최초 실행뿐 아니라 PARTIAL 작업의 저장·재개에도 같은 값으로 보존한다.
 - 계산기 단계 입력의 `min` 위반을 조용히 무시하던 경로와 검색 화면의 모바일 수평 넘침을 수리했다.
 
@@ -122,6 +124,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 
 - 독립 정답을 붙인 공개 교보재 데이터셋에서 symbol macro-F1, text field accuracy, edge-F1, junction accuracy, critical logic recall을 재현하는 외부 평가.
 - 서로 다른 공개 DXF 작도 관례에서 고객사 지문·별칭 라이브러리의 미인식 회수율, 서로 다른 기기 간 지문 충돌률과 오분류율을 독립 라벨로 검증하는 평가.
+- ZWCAD 실제 저장본의 여러 DXF 버전·코드페이지·회사별 커스텀 블록을 독립 정답과 대조한 호환성 평가. 현재 ZWCAD 증거는 공개 규격에 맞춘 비민감 합성 `AC1027`·`ANSI_949` 입력이다.
 - 실제 OpenAI, Gemini, Claude 키로 같은 도면을 반복 호출한 공급자별 누락·오탐·비용·timeout.
 - 대상 Supabase 마이그레이션 적용 뒤 새 세션에서 원본 메타데이터·보고서·티어를 읽는 왕복.
 - Stripe 테스트 모드 Checkout→서명 웹훅→티어 반영→새 로그인→Portal 전체 흐름.
@@ -137,7 +140,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - GitHub의 Dependabot PR #61~#70은 Verify를 통과했지만 Live gates가 실패한 `UNSTABLE` 상태라 병합하지 않았다. 각 브랜치는 실패 원인을 분리 수리하고 전체 게이트가 녹색이 된 뒤에만 다시 판단한다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 프로젝트 기준선은 `2da4bd46d459ffc79cad193709637c1eadfa71ca`이고 최신 제품 코드 수리는 `72cb322`다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
+- 현재 프로젝트 코드 기준선은 `9ede686661d962155418200143eeb4e9e144717a`다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
 
 ## 검증
 
@@ -173,6 +176,8 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - `11d4b02` 전역 선행·선택 구획 배치에서 전체 Jest 4,176건 통과·4건 skip(총 4,180), 관련 council·team·orchestrator 회귀가 exit 0이었다. 이 수치는 구현 계약 증거이며 독립 라벨 정확도 증거가 아니다.
 - 2026-08-09 일반 채팅 판단 책임 계약의 최종 코드 `7151287`에서 문서 77파일, 타입 검사, 경고 0 전체 ESLint, 전체 Jest 343 suites·4,203 tests 통과(2 suites·4 tests skip), production build 66페이지가 통과했다. 첫 `enforce.ps1`의 PDF 단계는 3010 서버 미기동으로 exit 2였고, 같은 production 빌드를 기동한 실제 `/api/pdf-drawing` 보충 게이트는 17/17·exit 0이었다.
 - 2026-08-25 코드 기준선 `72cb322`에서 전체 Jest, 타입 검사, 수정 파일 무경고 ESLint와 Next.js production build가 exit 0이었다. 심볼 라이브러리 재개 회귀는 수리 전 실패·수리 후 통과를 확인했다. 부모 기능 커밋 `64619d0`의 standalone `/api/dxf` 실동작은 등록 심볼 1건, 기기 5개, 관계 4개와 라이브러리 적용 메타데이터를 반환했다.
+- 2026-08-26 코드 기준선 `9ede686`에서 문서 검사, 타입 검사, 경고 0 전체 ESLint, 전체 Jest 347 suites·4,242 tests, Next.js production build 66페이지가 통과했다. 첫 통합 게이트는 3010 검증 서버 미기동으로 PDF 단계만 exit 2였고, 같은 production 빌드를 기동한 보충 `gate:pdf`는 17/17·exit 0이었다.
+- 같은 production `/api/dxf`에 ZWCAD형 `AC1027`·`ANSI_949` multipart를 실제 업로드해 HTTP 200, `euc-kr` 복원, 변압기·차단기·모터 3기기, 결선 2건, 한글 `변압기`, topology valid·issues 0을 확인했다.
 
 ## 다음 첫 행동
 
@@ -189,7 +194,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - [기능 배선 지도](docs/project/IMPLEMENTATION_MAP.md)
 - [구조 결정 기록](docs/project/DECISIONS.md)
 - [SLD V3 §1–15 추적표](docs/project/SLD_V3_TRACEABILITY.md)
-- [최신 인수인계 — 8월 25일 심볼 라이브러리·메인 동기화](docs/project/handoffs/2026-08-25-symbol-library-main-sync.md)
+- [최신 인수인계 — 8월 26일 ZWCAD DXF 호환 경로](docs/project/handoffs/2026-08-26-zwcad-dxf-parity.md)
 - [과거 인수인계 색인](docs/project/HANDOFFS.md)
 - [휴면 기능 대장](docs/DORMANT_MANIFEST.md)
 - [현실화 게이트](docs/REALIZATION_PLAN.md)

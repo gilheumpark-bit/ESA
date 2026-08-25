@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-08-26
+
+- [ZWCAD DXF 호환 경로](handoffs/2026-08-26-zwcad-dxf-parity.md)
+
 ## 2026-08-25
 
 - [고객사 심볼 라이브러리·메인 동기화](handoffs/2026-08-25-symbol-library-main-sync.md)
