@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 0a7d7dbda45a3d67ed3df095b8d122ef11665da1
-updatedAt: 2026-08-26T01:40:40+09:00
+codeBaselineCommit: 6792a516f4d534749e93d9341a00d351cc6b1c4c
+updatedAt: 2026-08-26T01:42:16+09:00
 trigger: files
 changedDomains: [agent, app, engine, lib, docs]
 ---
