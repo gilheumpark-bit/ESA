@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 72cb32231207a7bad84707239e33ab163d8dd9f6
-updatedAt: 2026-08-25T23:56:00+09:00
+codeBaselineCommit: 2da4bd46d459ffc79cad193709637c1eadfa71ca
+updatedAt: 2026-08-25T23:59:41+09:00
 trigger: files
 changedDomains: [agent, app, engine, lib, docs]
 ---
@@ -137,7 +137,7 @@ ESA는 전기 엔지니어가 계산 입력·공식·판본·경고를 재검토
 - GitHub의 Dependabot PR #61~#70은 Verify를 통과했지만 Live gates가 실패한 `UNSTABLE` 상태라 병합하지 않았다. 각 브랜치는 실패 원인을 분리 수리하고 전체 게이트가 녹색이 된 뒤에만 다시 판단한다.
 - **스냅 허용반경 재유도(S1)는 교보재 부재로 착수 불가다.** 설계의 채택 기준은 다섯 항목인데, 그중 (b) "실도면 블라인드 라벨 relations 대조 — 정밀도·재현율 분리, 어느 쪽도 하락 금지"를 평가할 데이터가 저장소에 없다. 실측: `fixtures/` 전체에 라벨은 합성 15개와 `kimm-panelboard-sld.p14.adjudicated.json`(텍스트축) 1개뿐이고, `fixtures/drawings/realworld/`에는 라벨 파일이 0개다. (b)는 반경을 넓혔을 때 생기는 **오병합**(없는 결선을 만들어 "보호기 없음" critical을 거짓 소거하는 방향)을 잡는 유일한 기준이라, 그것 없이 반경을 바꾸는 것은 판정 입력을 실측 없이 바꾸는 것이다. 근거 G1(실도면 자기루프 폐기율 9~26%)은 체크인된 결과에서 재현되므로 문제 자체는 실재한다 — 막힌 것은 **채택 판정**이다. 따라서 S1은 위 「다음 첫 행동 1」(정답표 작성)에 의존하며 그보다 먼저 진행할 수 없다.
 - 운영 DB, 실결제, 회사 도면은 사용하지 않았다. 외부 Agent Platform 테스트 키와 로컬 ChatGPT 계정은 출처가 기록된 공개 `wiki-oneline.png` 실호출에만 사용했고 키·계정 토큰은 출력·커밋하지 않았다.
-- 현재 코드 기준선은 `72cb32231207a7bad84707239e33ab163d8dd9f6`이다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
+- 현재 프로젝트 기준선은 `2da4bd46d459ffc79cad193709637c1eadfa71ca`이고 최신 제품 코드 수리는 `72cb322`다. 기존 17개 라이브 영수증은 호출 당시 동일 dirty snapshot `f70da7f6…`에 결박돼 있고, 2026-08-08 전역 선행·선택 구획 구조의 초급 단발 원본 영수증은 저장소에 남지 않았다. 2026-08-09 고급 전후 영수증은 clean `b285776`·`8dc018b`에 각각 결박돼 로컬 `test-results/`에 보존했다. 생성된 `.next/`, `test-results/`, 검증용 작업 JSON과 브라우저 임시 업로드는 Git에 포함하지 않는다.
 
 ## 검증
 

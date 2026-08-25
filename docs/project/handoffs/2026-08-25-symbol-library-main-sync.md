@@ -3,8 +3,8 @@ schemaVersion: 1
 project: ESA
 status: active
 baselineBranch: main
-codeBaselineCommit: 72cb32231207a7bad84707239e33ab163d8dd9f6
-updatedAt: 2026-08-25T23:56:00+09:00
+codeBaselineCommit: 2da4bd46d459ffc79cad193709637c1eadfa71ca
+updatedAt: 2026-08-25T23:59:41+09:00
 trigger: files
 changedDomains: [agent, app, engine, lib, docs]
 ---
@@ -33,7 +33,7 @@ changedDomains: [agent, app, engine, lib, docs]
 - 매칭 우선순위는 기하 지문→블록명 별칭→내장 휴리스틱→미식별 보고다.
 - 라이브러리는 `/api/dxf`와 `/api/drawing-jobs`에서 같은 검증 계약을 사용하며 1MB 초과·무효 JSON은 400으로 닫힌다.
 - V3 최초 실행, deferred run, 동기 PARTIAL 저장과 resume가 같은 검증본을 사용한다.
-- 로컬 `main` 코드 기준선은 `72cb32231207a7bad84707239e33ab163d8dd9f6`으로 고정했다.
+- 최신 제품 코드 수리는 `72cb32231207a7bad84707239e33ab163d8dd9f6`, 이를 설명하는 프로젝트 기준선은 `2da4bd46d459ffc79cad193709637c1eadfa71ca`로 고정했다.
 
 ## 부분 완료
 
