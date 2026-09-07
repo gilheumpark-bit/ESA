@@ -83,19 +83,22 @@ test.describe('메인 페이지', () => {
 test.describe('계산기 페이지', () => {
   test('12개 카테고리 카드 표시', async ({ page }) => {
     await page.goto('/calc');
-    await expect(page.locator('main h3')).toHaveCount(12);
-    await expect(page.getByRole('heading', { level: 3, name: '전력기초' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 3, name: 'AI특화' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveCount(12);
+    await expect(page.getByRole('heading', { level: 2, name: '전력기초' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'AI특화' })).toBeVisible();
   });
 
   test('계산기 검색 동작', async ({ page }) => {
     await page.goto('/calc');
     await page.getByRole('textbox', { name: '계산기 검색' }).fill('전압강하');
-    await expect(page.locator('main h3')).toHaveCount(1);
-    await expect(page.getByRole('heading', { level: 3, name: '전압강하' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveCount(1);
+    await expect(page.getByRole('heading', { level: 2, name: '전압강하' })).toBeVisible();
     await expect(page.getByRole('link', { name: '전압 강하 계산' }))
       .toHaveAttribute('href', '/calc/voltage-drop/voltage-drop');
-    await expect(page.getByRole('heading', { level: 3, name: '전력기초' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 2, name: '전력기초' })).toHaveCount(0);
+
+    await page.getByRole('textbox', { name: '계산기 검색' }).clear();
+    await expect(page.getByRole('main').getByRole('heading', { level: 2 })).toHaveCount(12);
   });
 
   test('Breadcrumb 계층 구조 표시', async ({ page }) => {
@@ -280,6 +283,7 @@ test.describe('API 엔드포인트', () => {
       error: {
         code: 'ESVA-4010',
         message: 'voltage must be a positive finite number, got -100',
+        field: 'voltage',
       },
     });
   });
