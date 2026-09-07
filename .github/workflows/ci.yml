@@ -119,22 +119,42 @@ jobs:
       - name: Live PDF pipeline and UI smoke gates
         shell: bash
         run: |
-          npm start -- --hostname 127.0.0.1 --port 3010 > /tmp/esa-next.log 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:3010/ > /dev/null; then
-              break
+          # PDF와 브라우저 검사는 독립된 production 프로세스를 사용한다.
+          # PDF 17건이 같은 dxf rate bucket을 소모해 뒤의 저장·재분석이
+          # 429가 됐던 run 34139438545의 검사 간 상태 누수를 막는다.
+          # 운영 제한·신뢰 헤더·재시도 횟수는 변경하지 않는다.
+          app_pid=''
+          cleanup() {
+            if [ -n "$app_pid" ]; then
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              app_pid=''
             fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              cat /tmp/esa-next.log
-              exit 1
-            fi
-            sleep 1
-          done
-          curl --fail --silent http://127.0.0.1:3010/ > /dev/null
+          }
+          trap cleanup EXIT
+          start_gate_server() {
+            local port="$1"
+            local logfile="$2"
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$port" > "$logfile" 2>&1 &
+            app_pid=$!
+            for attempt in $(seq 1 60); do
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat "$logfile"
+                return 1
+              fi
+              if curl --fail --silent "http://127.0.0.1:$port/" > /dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            cat "$logfile"
+            return 1
+          }
+          start_gate_server 3010 /tmp/esa-pdf-next.log
           npm run gate:pdf -- http://127.0.0.1:3010
-          BASE_URL=http://127.0.0.1:3010 npx playwright test
+          cleanup
+          start_gate_server 3011 /tmp/esa-next.log
+          BASE_URL=http://127.0.0.1:3011 npx playwright test
 
       # E2E 실패는 스크린샷과 페이지 스냅샷 없이는 진단할 수 없다. DXF 실주행이
       # CI 에서만 실패하는데(run 30132954958) 로컬은 standalone·next start 양쪽
@@ -148,5 +168,6 @@ jobs:
           path: |
             test-results/
             /tmp/esa-next.log
+            /tmp/esa-pdf-next.log
           retention-days: 7
           if-no-files-found: warn
