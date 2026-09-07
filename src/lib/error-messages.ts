@@ -46,6 +46,7 @@ const ERROR_MESSAGES: Record<string, { ko: string; action?: string }> = {
   // System (9xxx)
   'ESVA-9001': { ko: '접근이 차단되었습니다.' },
   'ESVA-9002': { ko: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+  'ESVA-9429': { ko: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
   'ESVA-9500': { ko: '내부 오류가 발생했습니다.', action: '잠시 후 다시 시도해주세요.' },
   'ESVA-9999': { ko: '알 수 없는 오류가 발생했습니다.', action: '문제가 지속되면 문의해주세요.' },
 };
@@ -72,4 +73,34 @@ export function formatApiError(error: { code?: string; message?: string }): stri
     }
   }
   return error.message ?? '오류가 발생했습니다.';
+}
+
+/**
+ * Read a same-origin API error envelope without coercing objects into text.
+ * Legacy drawing routes return error:string; shared handlers return an object.
+ * Preserve the server's specific safe message, never stringify details/stacks.
+ */
+export function readApiErrorMessage(body: unknown, fallback: string): string {
+  const text = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return fallback;
+  const envelope = body as Record<string, unknown>;
+  const legacyMessage = text(envelope.error);
+  if (legacyMessage) return legacyMessage;
+
+  if (envelope.error && typeof envelope.error === 'object' && !Array.isArray(envelope.error)) {
+    const error = envelope.error as Record<string, unknown>;
+    if (error.code === 'ESVA-9429') {
+      const retryAfter = error.retryAfter;
+      // This is guidance from the response, not an automatic retry or a new limit.
+      if (typeof retryAfter === 'number' && Number.isFinite(retryAfter)
+        && retryAfter > 0 && retryAfter <= 86_400) {
+        return `요청이 너무 많습니다. ${Math.ceil(retryAfter)}초 후 다시 시도해주세요.`;
+      }
+      return getUserMessage('ESVA-9429');
+    }
+    const message = text(error.message);
+    if (message) return message;
+  }
+  return text(envelope.message) ?? fallback;
 }

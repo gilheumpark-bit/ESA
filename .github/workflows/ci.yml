@@ -171,3 +171,15 @@ jobs:
             /tmp/esa-pdf-next.log
           retention-days: 7
           if-no-files-found: warn
+
+      # 합성 오류 응답의 모바일·데스크톱 표시와 같은 파일 복구 화면도 확인한다.
+      - name: Upload drawing error recovery screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: drawing-error-recovery-evidence
+          path: |
+            test-results/**/readable-error.png
+            test-results/**/recovered-result.png
+          retention-days: 7
+          if-no-files-found: warn

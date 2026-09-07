@@ -16,6 +16,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { calculatorHref } from '@/lib/calculator-catalog';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { readApiErrorMessage } from '@/lib/error-messages';
 import { readStoredCountry } from '@/hooks/useSettings';
 import { useRouter } from 'next/navigation';
 import {
@@ -920,9 +921,9 @@ export default function SLDAnalysisPage() {
       formData.append('model', visionKey.model);
       if (visionKey.key) formData.append('apiKey', visionKey.key);
       const resultResponse = await fetch('/api/sld', { method: 'POST', body: formData });
-      const result = await resultResponse.json();
-      if (!resultResponse.ok || !result.success) {
-        throw new Error(result.error ?? `빠른 SLD 분석 실패 (${resultResponse.status})`);
+      const result = await resultResponse.json().catch(() => null);
+      if (!resultResponse.ok || !result?.success) {
+        throw new Error(readApiErrorMessage(result, `빠른 SLD 분석 실패 (${resultResponse.status})`));
       }
       setAnalysis(result.data);
       setCalcChain(result.calcChain ?? []);
@@ -1205,10 +1206,10 @@ export default function SLDAnalysisPage() {
       if (visionKey.key) formData.append('apiKey', visionKey.key);
 
       const res = await fetch('/api/sld', { method: 'POST', body: formData });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? 'SLD 분석에 실패했습니다');
+      if (!res.ok || !data?.success) {
+        throw new Error(readApiErrorMessage(data, 'SLD 분석에 실패했습니다'));
       }
 
       const nextAnalysis = data.data as SLDAnalysisResult;
@@ -1249,8 +1250,8 @@ export default function SLDAnalysisPage() {
       formData.append('file', file);
       if (libraryToApply) formData.append('symbolLibrary', JSON.stringify(libraryToApply));
       const res = await fetch('/api/dxf', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'DXF 파싱 실패');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(readApiErrorMessage(data, 'DXF 파싱 실패'));
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
@@ -1281,8 +1282,8 @@ export default function SLDAnalysisPage() {
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch('/api/pdf-drawing', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'PDF 파싱 실패');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(readApiErrorMessage(data, 'PDF 파싱 실패'));
       setAnalysis(data.data);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
@@ -1427,7 +1428,7 @@ export default function SLDAnalysisPage() {
             </button>
           )}
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -1438,11 +1439,11 @@ export default function SLDAnalysisPage() {
             <Upload size={28} />
             <div className="text-center">
               <p className="font-semibold">DXF 파일 업로드</p>
-              <p className="mt-1 text-xs opacity-70">AutoCAD·ZWCAD·CADian 호환 DXF (최대 50MB) — API 키 불필요 · DWG는 DXF로 저장 후 업로드</p>
+              <p className="mt-1 text-xs opacity-70">AutoCAD·ZWCAD·CADian 호환 DXF (최대 16MB) — API 키 불필요 · DWG는 DXF로 저장 후 업로드</p>
             </div>
           </button>
           <input ref={dxfInputRef} type="file" accept=".dxf,.dwg" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handlePrimaryDocumentUpload(file); }} />
           <SymbolLibraryPanel
             catalog={symbolLibraryCatalog}
             activeLibrary={activeSymbolLibrary}
@@ -1468,7 +1469,7 @@ export default function SLDAnalysisPage() {
             </div>
           </button>
           <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -1496,7 +1497,7 @@ export default function SLDAnalysisPage() {
 
       {/* Error */}
       {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+        <div role="alert" aria-label="빠른 도면 분석 오류" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
           <div>
             <p className="text-sm text-[var(--color-error)]">{error}</p>
