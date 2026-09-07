@@ -156,6 +156,10 @@ export function deduplicateSymbols(
 ): SymbolNode[] {
   const uniqueNameplates = uniqueVectorNameplates(hits, textSeeds);
   const nameplateOfNode = new Map<string, string>();
+  // Confidence-only legacy reads can be confirmed in isolation, but cannot
+  // overrule a conflicting fragment as though a reviewer confirmed the body.
+  // Keep the area tied to that explicit observation, not an unrelated crop.
+  const explicitBodies = new Map<string, { type: string; area: number }>();
   const kept: SymbolNode[] = [];
   const pageSequences = new Map<number, number>();
   const ordered = [...hits].sort((left, right) =>
@@ -217,6 +221,7 @@ export function deduplicateSymbols(
       // Compare against the existing evidence BEFORE appending the new body.
       // Including the incoming area makes `largestArea * 4 <= hitArea` impossible.
       const previousMaxArea = Math.max(...dup.evidence.map((item) => item.bounds.w * item.bounds.h));
+      const explicitBody = explicitBodies.get(dup.id);
       const incoming = evidenceRefs(hit, `${dup.id}-e${dup.evidence.length}`)
         .filter((item) => !dup.evidence.some((existing) => existing.evidenceId === item.evidenceId));
       dup.evidence.push(...incoming);
@@ -255,10 +260,15 @@ export function deduplicateSymbols(
         const declaredType = designatorType(dup.rawLabel) ?? designatorType(hit.label);
         const designatorResolves = declaredType !== undefined
           && dup.typeCandidates.includes(declaredType)
+          && dup.typeCandidates.every(inSwitchgearFamily)
           && !hitIsFragment && !hitIsBody;
-        if (dup.confirmedType && hitIsFragment) {
+        if (dup.confirmedType && hitIsFragment && explicitBody
+          && typesCompatible(explicitBody.type, dup.confirmedType)
+          && hitArea * 4 <= explicitBody.area) {
           // 후보와 근거는 이미 보존됐다. 확정과 라벨은 본체 판독의 것을 유지한다.
-        } else if (!dup.confirmedType && hitIsBody && hitConfirmed) {
+        } else if (hitIsBody && hit.certainty === 'confirmed' && hitConfirmed) {
+          // A high-confidence fragment may already have a confirmedType. That
+          // must not block a later, explicitly confirmed complete body.
           dup.confirmedType = hitType;
           dup.certainty = 'confirmed';
           dup.rawLabel = hit.label ?? dup.rawLabel;
@@ -278,6 +288,19 @@ export function deduplicateSymbols(
           dup.certainty = 'confirmed';
         }
       }
+      if (!dup.confirmedType) {
+        explicitBodies.delete(dup.id);
+      } else if (hit.certainty === 'confirmed' && hitConfirmed
+        && typesCompatible(dup.confirmedType, hitType)) {
+        const previous = explicitBodies.get(dup.id);
+        explicitBodies.set(dup.id, {
+          type: dup.confirmedType,
+          area: Math.max(
+            previous && typesCompatible(previous.type, dup.confirmedType) ? previous.area : 0,
+            hit.bounds.w * hit.bounds.h,
+          ),
+        });
+      }
       continue;
     }
 
@@ -296,6 +319,9 @@ export function deduplicateSymbols(
       ...(hit.ports?.length ? { ports: mergePoints([], hit.ports.filter(finitePoint), 0) } : {}),
       evidence: evidenceRefs(hit, `${id}-e0`),
     });
+    if (hit.certainty === 'confirmed' && hitConfirmed) {
+      explicitBodies.set(id, { type: hitType, area: hit.bounds.w * hit.bounds.h });
+    }
     if (hitNameplate !== undefined) nameplateOfNode.set(id, hitNameplate);
   }
   return kept;
@@ -1178,11 +1204,10 @@ function canonicalSymbolType(value: string, label?: string): string {
   // (docs/VALIDATION_EVIDENCE.md 7차, 기호축 69%). vt_pt 명판 우선과 같은
   // 원칙이며, 숫자가 붙은 지정문자만 인정해 FUSE 같은 일반 단어를 잡지 않는다.
   const declared = designatorType(label);
-  if (declared) return declared;
-  // 철자 정규화는 정본에 맡긴다. 종전에는 여기서 `['switch','disconnector',…]`
-  // 같은 사설 목록을 돌렸고, 목록에 없는 철자(`ct` vs `current_transformer`)는
-  // 서로 다른 값이 되어 같은 기기가 두 노드로 남았다.
+  // Normalize the observed type before applying a label. A switchgear
+  // designator cannot manufacture a breaker from transformer/load evidence.
   const canonical = canonicalDeviceType(value);
+  if (declared && SWITCHGEAR_CONFUSABLE_FAMILIES.has(deviceFamilyOf(canonical))) return declared;
   // PTx3 / PPT / VT 명판은 계기용변성기를 가리킨다. 넓은 크롭 분류보다
   // 도면이 직접 적은 이름이 우선이다.
   if (canonical === 'transformer' && /^(?:PT|PPT|VT)X?\d+/.test(compactLabel)) return 'voltage_transformer';
