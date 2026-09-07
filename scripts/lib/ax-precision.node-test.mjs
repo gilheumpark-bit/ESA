@@ -16,7 +16,7 @@ after(() => rmSync(build, { recursive: true, force: true }));
 // a replacement for the project's full tsc, Jest, build, or live-model gates.
 for (const name of [
   'device-vocabulary', 'device-class', 'content-zone-classifier',
-  'evidence-deduplicator', 'team-result-adapter',
+  'terminal-path-resolver', 'evidence-deduplicator', 'team-result-adapter',
 ]) {
   const fileName = path.join(root, 'src/agent/drawing', `${name}.ts`);
   const compiled = ts.transpileModule(readFileSync(fileName, 'utf8'), {

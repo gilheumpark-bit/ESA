@@ -102,6 +102,8 @@ export interface SymbolNode {
 }
 
 export interface LineNode {
+  /** Synthetic display chords cannot prove an observed conductor path. */
+  geometrySource?: 'observed' | 'synthetic';
   id: string;
   displayId: string;
   lineKind: 'power' | 'control' | 'ground' | 'bus' | 'unknown';
@@ -130,6 +132,9 @@ export interface RelationEdge {
   from: string;
   to: string;
   lineId?: string;
+  /** All original fragments traversed by a proven route, in route order. */
+  lineIds?: string[];
+  terminalPath?: { version: 1; from: { x: number; y: number }; to: { x: number; y: number } };
   certainty: Certainty;
   evidence: EvidenceRef[];
 }
@@ -375,4 +380,4 @@ export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
 export const PROMPT_VERSION = 'sld-role-v8';
 export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v7';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v8';

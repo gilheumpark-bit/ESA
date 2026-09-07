@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-09-08
+
+- [도면 분석 업무 제품화: 단자 경로·재개·보고서](handoffs/2026-09-08-commercial-drawing-workflow.md)
+
 ## 2026-09-07
 
 - [AX 도면 정밀도 개선과 회사 제출용 제안](handoffs/2026-09-07-ax-precision.md)

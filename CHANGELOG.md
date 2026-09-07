@@ -43,6 +43,8 @@ All notable changes to ESVA are documented in this file.
   `no-pricing-surface` 게이트가 잡는다. 권한(role=admin)은 봉인과 무관하게 유지.
 
 ### Fixed
+- **2026-09-08 도면 업무 제품화** — 관측 분할선의 유일 단자 경로와 전체 선로 근거를 복원하고 완료 페이지 재개 시 판정·후보·단자를 보존한다. 관계 선택은 전체 경로를 강조한다. CSV/인쇄 보고서에 정격·계산 영수증·페이지 출처를 추가하고 5,000행 조용한 절단, CSV 수식 실행 표식, 빈 인쇄창과 동일 파일 재선택을 수리했다. 독립 실도면 성능 주장은 포함하지 않는다.
+
 - **감사 기준선·Windows 셸 부채** — 운영 의존성 취약점이 0건으로 줄었는데도
   `high 9`를 허용하던 래칫을 `critical 0 · high 0`으로 갱신했다. npm CLI를
   `shell: true`로 실행하던 Windows 경로도 현재 Node가 npm CLI 파일을 직접

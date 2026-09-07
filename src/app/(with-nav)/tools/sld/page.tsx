@@ -17,6 +17,7 @@ import { calculatorHref } from '@/lib/calculator-catalog';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
 import { readApiErrorMessage } from '@/lib/error-messages';
+import { openDrawingPrintWindow } from '@/lib/drawing-print-window';
 import { readStoredCountry } from '@/hooks/useSettings';
 import { useRouter } from 'next/navigation';
 import {
@@ -1102,26 +1103,35 @@ export default function SLDAnalysisPage() {
    */
   const handleV3Export = useCallback(async (kind: 'print' | 'csv') => {
     if (!v3Doc) return;
-    const mod = await import('@/lib/export-drawing-document');
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (kind === 'print') {
-      const win = window.open('', '_blank', 'noopener,noreferrer');
-      if (!win) {
-        setError('팝업이 차단되어 인쇄용 보고서를 열 수 없습니다. 팝업을 허용해 주세요.');
+    setError(null);
+    try {
+      if (kind === 'print') {
+        // Open synchronously during the user gesture; render lazily afterwards.
+        await openDrawingPrintWindow(async () => {
+          const mod = await import('@/lib/export-drawing-document');
+          return mod.drawingDocumentPrintableHtml(v3Doc);
+        });
         return;
       }
-      win.opener = null;
-      win.document.write(mod.drawingDocumentPrintableHtml(v3Doc));
-      win.document.close();
-      return;
+      const mod = await import('@/lib/export-drawing-document');
+      const stamp = new Date().toISOString().slice(0, 10);
+      const csv = mod.drawingDocumentCsv(v3Doc);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      try {
+        anchor.href = url;
+        anchor.download = `esa-drawing-${v3Doc.documentHash.slice(0, 12)}-${stamp}.csv`;
+        anchor.hidden = true;
+        window.document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      }
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : '판독 결과를 반출하지 못했습니다. 다시 시도해주세요.');
     }
-    const blob = new Blob([mod.drawingDocumentCsv(v3Doc)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `esa-drawing-${v3Doc.documentHash.slice(0, 12)}-${stamp}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   }, [v3Doc]);
 
   const handleV3Correct = useCallback(async (
@@ -1574,6 +1584,7 @@ export default function SLDAnalysisPage() {
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
+              e.target.value = '';
               if (file) void handleFullDocumentAnalyze(file);
             }}
           />

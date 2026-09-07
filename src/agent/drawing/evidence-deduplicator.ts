@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 
 import type { EvidenceBounds } from '../vision/evidence-types';
 import { hasDeviceClass } from './device-class';
+import { buildConductorAdjacency, resolveTerminalPaths } from './terminal-path-resolver';
 import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, UnresolvedItem } from './types-v3';
 
 export interface RawSymbolHit {
@@ -25,6 +26,7 @@ export interface RawSymbolHit {
 }
 
 export interface RawLineHit {
+  geometrySource?: LineNode['geometrySource'];
   localId: string;
   lineKind: LineNode['lineKind'];
   path: Array<{ x: number; y: number }>;
@@ -415,6 +417,7 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
     const end = hit.path[hit.path.length - 1];
     const dup = kept.find((k) => {
       if (k.evidence[0]?.pageIndex !== hit.pageIndex) return false;
+      if ((k.geometrySource === 'synthetic') !== (hit.geometrySource === 'synthetic')) return false;
       // The same heavy conductor is often called `bus` in the full-page read
       // and `power` in a crop. Geometry, not that role-name disagreement,
       // identifies the physical line. Ground/control remain electrically
@@ -452,6 +455,7 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
       id,
       displayId,
       lineKind: hit.lineKind,
+      ...(hit.geometrySource ? { geometrySource: hit.geometrySource } : {}),
       path: hit.path,
       junctions: [...(hit.junctions ?? [])],
       crossovers: [...(hit.crossovers ?? [])],
@@ -696,6 +700,20 @@ export function buildPageRelations(
       union(candidate.left.id, candidate.right.id);
     }
   }
+  for (const proof of resolveTerminalPaths(pageSymbols, pageLines, pageIndex)) {
+    const pair = [proof.from.id, proof.to.id].sort().join('|');
+    if (!relatedPairs.has(pair)) appendRelation(proof.from, proof.to, proof.lines[0], 'confirmed');
+    const relation = relations.find((item) => [item.from, item.to].sort().join('|') === pair)!;
+    const forward = relation.from === proof.from.id;
+    const route = forward ? proof.lines : [...proof.lines].reverse();
+    relation.lineId = route[0].id;
+    relation.lineIds = route.map((line) => line.id);
+    relation.certainty = 'confirmed';
+    relation.terminalPath = { version: 1, from: forward ? proof.fromPort : proof.toPort,
+      to: forward ? proof.toPort : proof.fromPort };
+    relation.evidence = [...new Map([...proof.from.evidence, ...proof.to.evidence,
+      ...route.flatMap((line) => line.evidence)].map((ref) => [`${ref.pageIndex}:${ref.evidenceId}`, ref])).values()];
+  }
   return relations;
 }
 
@@ -889,18 +907,7 @@ function segmentsIntersect(
 }
 
 function buildLineAdjacency(lines: LineNode[], tolerance = 55): Map<string, Set<string>> {
-  const adjacency = new Map(lines.map((line) => [line.id, new Set<string>()]));
-  for (let leftIndex = 0; leftIndex < lines.length; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < lines.length; rightIndex += 1) {
-      const left = lines[leftIndex];
-      const right = lines[rightIndex];
-      if (!lineKindsConnect(left.lineKind, right.lineKind) || !expandedBoundsIntersect(pathBounds(left.path), pathBounds(right.path), tolerance)) continue;
-      if (!linesMeet(left.path, right.path, tolerance)) continue;
-      adjacency.get(left.id)?.add(right.id);
-      adjacency.get(right.id)?.add(left.id);
-    }
-  }
-  return adjacency;
+  return buildConductorAdjacency(lines, tolerance);
 }
 
 function connectedLineIds(startId: string, adjacency: Map<string, Set<string>>): string[] {
@@ -915,56 +922,6 @@ function connectedLineIds(startId: string, adjacency: Map<string, Set<string>>):
   return [...visited];
 }
 
-function linesMeet(left: LineNode['path'], right: LineNode['path'], tolerance: number): boolean {
-  return endpointMeetsPath(left[0], directionAt(left, 0), right, tolerance)
-    || endpointMeetsPath(left[left.length - 1], directionAt(left, left.length - 1), right, tolerance)
-    || endpointMeetsPath(right[0], directionAt(right, 0), left, tolerance)
-    || endpointMeetsPath(right[right.length - 1], directionAt(right, right.length - 1), left, tolerance);
-}
-
-function directionAt(path: LineNode['path'], index: number): { x: number; y: number } {
-  const adjacentIndex = index === 0 ? 1 : path.length - 2;
-  return { x: path[index].x - path[adjacentIndex].x, y: path[index].y - path[adjacentIndex].y };
-}
-
-function endpointMeetsPath(
-  point: { x: number; y: number },
-  direction: { x: number; y: number },
-  path: LineNode['path'],
-  tolerance: number,
-): boolean {
-  const directionLength = Math.hypot(direction.x, direction.y);
-  if (directionLength === 0) return false;
-  for (let index = 1; index < path.length; index += 1) {
-    const start = path[index - 1];
-    const end = path[index];
-    const vx = end.x - start.x;
-    const vy = end.y - start.y;
-    const lengthSquared = vx * vx + vy * vy;
-    if (lengthSquared === 0) continue;
-    const projection = Math.max(0, Math.min(1, ((point.x - start.x) * vx + (point.y - start.y) * vy) / lengthSquared));
-    const closest = { x: start.x + projection * vx, y: start.y + projection * vy };
-    if (dist(point, closest) > tolerance) continue;
-    if (projection <= 0.05 || projection >= 0.95) return true;
-    const segmentLength = Math.sqrt(lengthSquared);
-    const parallelRatio = Math.abs(direction.x * vx + direction.y * vy) / (directionLength * segmentLength);
-    if (parallelRatio <= 0.35) return true;
-  }
-  return false;
-}
-
-function lineKindsConnect(left: LineNode['lineKind'], right: LineNode['lineKind']): boolean {
-  if (left === right) return true;
-  const powerKinds = new Set<LineNode['lineKind']>(['power', 'bus', 'unknown']);
-  return powerKinds.has(left) && powerKinds.has(right);
-}
-
-function expandedBoundsIntersect(left: EvidenceBounds, right: EvidenceBounds, tolerance: number): boolean {
-  return left.x - tolerance <= right.x + right.w
-    && left.x + left.w + tolerance >= right.x
-    && left.y - tolerance <= right.y + right.h
-    && left.y + left.h + tolerance >= right.y;
-}
 
 function isBusbar(symbol: SymbolNode): boolean {
   return [symbol.confirmedType, ...symbol.typeCandidates]
@@ -984,7 +941,8 @@ export function findUnboundLineItems(
   lines: LineNode[],
   relations: RelationEdge[],
 ): UnresolvedItem[] {
-  const bound = new Set(relations.map((relation) => relation.lineId).filter(Boolean));
+  const bound = new Set(relations.flatMap((relation) => relation.lineIds?.length
+    ? relation.lineIds : relation.lineId ? [relation.lineId] : []));
   return lines.filter((line) => line.certainty === 'confirmed' && !bound.has(line.id)).map((line) => {
     const evidence = line.evidence[0];
     return {

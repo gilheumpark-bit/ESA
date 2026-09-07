@@ -219,6 +219,7 @@ function adaptContinuityReview(result: TeamResult, pageIndex: number): AdaptedTe
       const adapted: RawLineHit = {
         localId: line.id,
         lineKind: line.lineKind,
+        geometrySource: 'observed',
         path: line.path.map((point) => ({ ...point })),
         junctions: line.junctions.map((point) => ({ ...point })),
         crossovers: line.crossovers.map((point) => ({ ...point })),
@@ -301,6 +302,7 @@ export function adaptTeamResult(
     .map((line) => ({
         localId: line.id,
         lineKind: line.lineKind,
+        geometrySource: 'observed',
         path: line.path.map((point) => ({ ...point })),
         junctions: line.junctions.map((point) => ({ ...point })),
         crossovers: line.crossovers.map((point) => ({ ...point })),
@@ -360,6 +362,7 @@ export function adaptTeamResult(
     if (!from || !to || (from.x === to.x && from.y === to.y)) continue;
     lines.push({
       localId: `vector-line-${index + 1}`,
+      geometrySource: 'synthetic',
       lineKind: 'power',
       path: [{ ...from }, { ...to }],
       junctions: [],
