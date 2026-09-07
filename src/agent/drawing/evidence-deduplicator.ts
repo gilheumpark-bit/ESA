@@ -12,6 +12,9 @@ import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, Unresolve
 export interface RawSymbolHit {
   localId: string;
   type: string;
+  /** Preserve alternatives and original-coordinate terminals from the reviewer. */
+  typeCandidates?: string[];
+  ports?: Array<{ x: number; y: number }>;
   label?: string;
   bounds: EvidenceBounds;
   confidence: number;
@@ -101,7 +104,18 @@ function resolveUniqueNameplate(label: string | undefined, unique: ReadonlySet<s
   if (!text) return undefined;
   let best: string | undefined;
   for (const candidate of unique) {
-    if (text !== candidate && !text.includes(candidate)) continue;
+    // A nameplate is a bounded token, not a substring: TR-1 must not claim TR-10.
+    let index = text.indexOf(candidate);
+    let bounded = false;
+    while (index >= 0) {
+      if (!/[A-Z0-9]/.test(text.charAt(index - 1))
+        && !/[A-Z0-9]/.test(text.charAt(index + candidate.length))) {
+        bounded = true;
+        break;
+      }
+      index = text.indexOf(candidate, index + 1);
+    }
+    if (!bounded) continue;
     if (!best || candidate.length > best.length) best = candidate;
   }
   return best;
@@ -109,11 +123,32 @@ function resolveUniqueNameplate(label: string | undefined, unique: ReadonlySet<s
 
 const VECTOR_SOURCE_REGION = 'vector-full';
 
+function symbolHitCandidates(hit: RawSymbolHit): string[] {
+  return unique([hit.type, ...(hit.typeCandidates ?? [])]
+    .map((candidate) => canonicalSymbolType(candidate, hit.label)));
+}
+
+function canConfirmSymbolHit(hit: RawSymbolHit): boolean {
+  if (hit.certainty === 'ambiguous' || hit.certainty === 'unread') return false;
+  const primary = canonicalSymbolType(hit.type, hit.label);
+  return (hit.certainty === 'confirmed' || hit.confidence >= 0.85)
+    && symbolHitCandidates(hit).every((candidate) => typesCompatible(primary, candidate));
+}
+
+function finitePoint(point: { x: number; y: number }): boolean {
+  return Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
+function hasUsablePath(path: LineNode['path']): boolean {
+  return path.length >= 2 && path.every(finitePoint)
+    && path.some((point, index) => index > 0 && dist(point, path[index - 1]) > 0);
+}
+
 export function deduplicateSymbols(
   hits: RawSymbolHit[],
   tolerance = 24,
   /**
-   * 판독된 문자 층. 라스터 원본에는 벡터 앵커가 없으므로 "이 명판이 도면에 몇 번
+   * 판독된 문자 층. 라스터 원본에는 벡터 앵커가 없어 "이 명판이 도면에 몇 번
    * 적혔나" 를 여기서 센다. 중복 제거를 거친 문자여야 값이 맞는다
    * (`mergeRepeatedTextReads`).
    */
@@ -131,8 +166,11 @@ export function deduplicateSymbols(
 
   for (const hit of ordered) {
     const hitType = canonicalSymbolType(hit.type, hit.label);
+    const hitCandidates = symbolHitCandidates(hit);
+    const hitConfirmed = canConfirmSymbolHit(hit);
     const hitNameplate = resolveUniqueNameplate(hit.label, uniqueNameplates);
     const dup = kept.find((k) => {
+      if (!k.evidence.some((evidence) => evidence.pageIndex === hit.pageIndex)) return false;
       // 도면이 딱 한 번 선언한 명판이면, 그 이름을 단 판독은 몇 개든 같은
       // 기기다. 크기·겹침 같은 간접 신호보다 강하다 — 도면이 직접 말해 준다.
       if (hitNameplate !== undefined && nameplateOfNode.get(k.id) === hitNameplate
@@ -176,11 +214,20 @@ export function deduplicateSymbols(
 
     if (dup) {
       const previousMaxConfidence = Math.max(...dup.evidence.map((item) => item.confidence));
+      // Compare against the existing evidence BEFORE appending the new body.
+      // Including the incoming area makes `largestArea * 4 <= hitArea` impossible.
+      const previousMaxArea = Math.max(...dup.evidence.map((item) => item.bounds.w * item.bounds.h));
       const incoming = evidenceRefs(hit, `${dup.id}-e${dup.evidence.length}`)
         .filter((item) => !dup.evidence.some((existing) => existing.evidenceId === item.evidenceId));
       dup.evidence.push(...incoming);
-      const typeConflict = !dup.typeCandidates.some((candidate) => typesCompatible(candidate, hitType));
-      dup.typeCandidates = unique([...dup.typeCandidates, hitType]);
+      const establishedTypes = dup.confirmedType ? [dup.confirmedType] : dup.typeCandidates;
+      const typeConflict = establishedTypes.some((candidate) =>
+        hitCandidates.some((incomingType) => !typesCompatible(candidate, incomingType)));
+      dup.typeCandidates = unique([...dup.typeCandidates, ...hitCandidates]);
+      if (hit.ports?.length) {
+        // Do not apply the 24px symbol snap to distinct, closely spaced terminals.
+        dup.ports = mergePoints(dup.ports ?? [], hit.ports.filter(finitePoint), 0);
+      }
       if (typeConflict) {
         // 조각과 본체의 충돌은 대칭이 아니다. 79px 퓨즈 몸통을 확정으로 읽은
         // 판독과 그 상단 17px 조각을 breaker 로 읽은 판독이 충돌하면, 조각이
@@ -189,7 +236,7 @@ export function deduplicateSymbols(
         // 반대로 조각으로 태어난 노드에 본체 확정 판독이 오면 본체가 이긴다.
         // 비슷한 크기끼리의 진짜 충돌만 ambiguous 로 내린다.
         const hitArea = hit.bounds.w * hit.bounds.h;
-        const largestArea = Math.max(...dup.evidence.map((item) => item.bounds.w * item.bounds.h));
+        const largestArea = previousMaxArea;
         const hitIsFragment = hitArea * 4 <= largestArea;
         const hitIsBody = largestArea * 4 <= hitArea;
         // 지정문자는 충돌도 이긴다. canonicalSymbolType 은 들어오는 판독 하나를
@@ -211,8 +258,7 @@ export function deduplicateSymbols(
           && !hitIsFragment && !hitIsBody;
         if (dup.confirmedType && hitIsFragment) {
           // 후보와 근거는 이미 보존됐다. 확정과 라벨은 본체 판독의 것을 유지한다.
-        } else if (!dup.confirmedType && hitIsBody
-          && (hit.certainty === 'confirmed' || hit.confidence >= 0.85)) {
+        } else if (!dup.confirmedType && hitIsBody && hitConfirmed) {
           dup.confirmedType = hitType;
           dup.certainty = 'confirmed';
           dup.rawLabel = hit.label ?? dup.rawLabel;
@@ -227,7 +273,7 @@ export function deduplicateSymbols(
         }
       } else if (hit.confidence > previousMaxConfidence) {
         dup.rawLabel = hit.label ?? dup.rawLabel;
-        if (hit.certainty === 'confirmed' || hit.confidence >= 0.85) {
+        if (hitConfirmed) {
           dup.confirmedType = hitType;
           dup.certainty = 'confirmed';
         }
@@ -243,10 +289,11 @@ export function deduplicateSymbols(
     kept.push({
       id,
       displayId,
-      typeCandidates: [hitType],
-      confirmedType: hit.certainty === 'confirmed' ? hitType : undefined,
+      typeCandidates: hitCandidates,
+      confirmedType: hitConfirmed ? hitType : undefined,
       rawLabel: hit.label,
-      certainty: hit.certainty ?? (hit.confidence >= 0.85 ? 'confirmed' : 'ambiguous'),
+      certainty: hit.certainty === 'unread' ? 'unread' : hitConfirmed ? 'confirmed' : 'ambiguous',
+      ...(hit.ports?.length ? { ports: mergePoints([], hit.ports.filter(finitePoint), 0) } : {}),
       evidence: evidenceRefs(hit, `${id}-e0`),
     });
     if (hitNameplate !== undefined) nameplateOfNode.set(id, hitNameplate);
@@ -337,7 +384,7 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
     || (left.path[0]?.x ?? 0) - (right.path[0]?.x ?? 0)
     || left.localId.localeCompare(right.localId));
   for (const hit of ordered) {
-    if (hit.path.length < 2) continue;
+    if (!hasUsablePath(hit.path)) continue;
     const start = hit.path[0];
     const end = hit.path[hit.path.length - 1];
     const dup = kept.find((k) => {
@@ -349,9 +396,12 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
       if (!lineKindsEquivalentForDedup(k.lineKind, hit.lineKind)) return false;
       const ks = k.path[0];
       const ke = k.path[k.path.length - 1];
-      return (dist(ks, start) <= tolerance && dist(ke, end) <= tolerance)
-        || (dist(ks, end) <= tolerance && dist(ke, start) <= tolerance)
-        || substantiallyOverlappingSegments(ks, ke, start, end, tolerance);
+      const sameEnds = (dist(ks, start) <= tolerance && dist(ke, end) <= tolerance)
+        || (dist(ks, end) <= tolerance && dist(ke, start) <= tolerance);
+      if (sameEnds && sameConductorRoute(k.path, hit.path, tolerance)) return true;
+      // Endpoint chords are only evidence of overlap when both paths are straight.
+      return isStraightPath(k.path, tolerance) && isStraightPath(hit.path, tolerance)
+        && substantiallyOverlappingSegments(ks, ke, start, end, tolerance);
     });
     if (dup) {
       const incoming = evidenceRefs({ ...hit, bounds: pathBounds(hit.path) }, `${dup.id}-e${dup.evidence.length}`)
@@ -472,7 +522,8 @@ export function buildPageRelations(
   // 모호한 기기 후보도 선로 종단 후보로 연결해 사용자가 번호 관계를 검토할 수
   // 있게 한다. 단, 어느 한쪽이라도 미확정이면 관계 전체를 ambiguous로 유지한다.
   const pageSymbols = symbols.filter((s) => s.evidence[0]?.pageIndex === pageIndex && s.certainty !== 'unread');
-  const pageLines = lines.filter((l) => l.evidence[0]?.pageIndex === pageIndex && l.certainty !== 'unread');
+  const pageLines = lines.filter((l) => l.evidence[0]?.pageIndex === pageIndex
+    && l.certainty !== 'unread' && hasUsablePath(l.path));
   const relations: RelationEdge[] = [];
   const relatedPairs = new Set<string>();
   let seq = 0;
@@ -495,8 +546,8 @@ export function buildPageRelations(
   };
 
   const endpointSymbols = new Map(pageLines.map((line) => {
-    const start = nearestSymbol(pageSymbols, line.path[0]);
-    const end = nearestSymbol(pageSymbols, line.path[line.path.length - 1]);
+    const start = nearestSymbol(pageSymbols, line.path[0], 80, line.certainty === 'confirmed' ? 2 : 10);
+    const end = nearestSymbol(pageSymbols, line.path[line.path.length - 1], 80, line.certainty === 'confirmed' ? 2 : 10);
     return [line.id, { start, end }] as const;
   }));
 
@@ -511,6 +562,8 @@ export function buildPageRelations(
         to,
         line,
         line.certainty === 'confirmed' && from.certainty === 'confirmed' && to.certainty === 'confirmed'
+          && hasExclusiveTerminalContact(from, line, pageSymbols)
+          && hasExclusiveTerminalContact(to, line, pageSymbols)
           ? 'confirmed'
           : 'ambiguous',
       );
@@ -685,15 +738,22 @@ function orderedSymbolsOnConductor(symbols: SymbolNode[], line: LineNode): Symbo
     const bounds = symbol.evidence[0]?.bounds;
     if (!bounds) return;
     const center = { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 };
-    const projection = projectPointOnPath(center, line.path);
+    const contactTolerance = line.certainty === 'confirmed' ? 2 : 10;
+    const projection = symbol.ports?.length
+      ? symbol.ports.filter(finitePoint)
+        .filter((point) => !line.crossovers.some((crossing) => dist(point, crossing) <= contactTolerance))
+        .map((point) => projectPointOnPath(point, line.path))
+        .sort((a, b) => a.distance - b.distance || a.offset - b.offset)[0]
+      : projectPointOnPath(center, line.path);
+    if (!projection || (symbol.ports?.length && projection.distance > contactTolerance)) return;
     const previous = candidates.get(symbol.id);
     if (!previous || projection.distance < previous.distance) {
       candidates.set(symbol.id, { symbol, ...projection });
     }
   };
 
-  append(nearestSymbol(symbols, line.path[0]));
-  append(nearestSymbol(symbols, line.path[line.path.length - 1]));
+  append(nearestSymbol(symbols, line.path[0], 80, line.certainty === 'confirmed' ? 2 : 10));
+  append(nearestSymbol(symbols, line.path[line.path.length - 1], 80, line.certainty === 'confirmed' ? 2 : 10));
   for (const symbol of symbols) {
     const bounds = symbol.evidence[0]?.bounds;
     // Deterministic raster fallback lines are intentionally ambiguous and can
@@ -701,12 +761,27 @@ function orderedSymbolsOnConductor(symbols: SymbolNode[], line: LineNode): Symbo
     // bounded gap only on ambiguous lines; confirmed reviewer geometry keeps
     // the strict two-pixel contact rule.
     const contactTolerance = line.certainty === 'confirmed' ? 2 : 10;
-    if (bounds && pathIntersectsBounds(line.path, bounds, contactTolerance)) append(symbol);
+    if (symbol.ports?.length) {
+      append(symbol); // A body crossing a wire is not contact when its terminals are elsewhere.
+    } else if (bounds && pathIntersectsBounds(line.path, bounds, contactTolerance)) {
+      append(symbol);
+    }
   }
 
   return [...candidates.values()]
     .sort((left, right) => left.offset - right.offset || left.distance - right.distance || left.symbol.id.localeCompare(right.symbol.id))
     .map(({ symbol }) => symbol);
+}
+
+/** Shared terminal observations are candidates, not an arbitrary ID tie-break proof. */
+function hasExclusiveTerminalContact(symbol: SymbolNode, line: LineNode, symbols: SymbolNode[]): boolean {
+  if (!symbol.ports?.length) return true; // Preserve the legacy no-terminal contract.
+  const tolerance = line.certainty === 'confirmed' ? 2 : 10;
+  return symbol.ports.filter(finitePoint).some((port) =>
+    projectPointOnPath(port, line.path).distance <= tolerance
+    && !line.crossovers.some((crossing) => dist(port, crossing) <= tolerance)
+    && !symbols.some((other) => other.id !== symbol.id
+      && (other.ports ?? []).filter(finitePoint).some((otherPort) => dist(port, otherPort) <= tolerance)));
 }
 
 function projectPointOnPath(
@@ -899,10 +974,27 @@ export function findUnboundLineItems(
   });
 }
 
-function nearestSymbol(symbols: SymbolNode[], point: { x: number; y: number }, max = 80): SymbolNode | null {
+function nearestSymbol(
+  symbols: SymbolNode[],
+  point: { x: number; y: number },
+  max = 80,
+  terminalTolerance = 2,
+): SymbolNode | null {
+  const terminals = symbols.filter((symbol) => symbol.ports?.length)
+    .map((symbol) => ({
+      symbol,
+      distance: Math.min(...(symbol.ports ?? []).filter(finitePoint).map((port) => dist(point, port))),
+    }))
+    .filter((candidate) => candidate.distance <= terminalTolerance)
+    .sort((a, b) => a.distance - b.distance || a.symbol.id.localeCompare(b.symbol.id));
+  if (terminals.length > 0) {
+    if (terminals[1] && Math.abs(terminals[1].distance - terminals[0].distance) < 1e-6) return null;
+    return terminals[0].symbol;
+  }
   let best: SymbolNode | null = null;
   let bestD = max;
   for (const s of symbols) {
+    if (s.ports?.length) continue;
     const b = s.evidence[0]?.bounds;
     if (!b) continue;
     const dx = Math.max(b.x - point.x, 0, point.x - (b.x + b.w));
@@ -1137,6 +1229,26 @@ function stableId(prefix: string, parts: Array<string | number>): string {
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function isStraightPath(path: LineNode['path'], tolerance: number): boolean {
+  const chord = [path[0], path[path.length - 1]];
+  if (dist(chord[0], chord[1]) === 0) return false;
+  return path.every((point) => projectPointOnPath(point, chord).distance <= tolerance);
+}
+
+function sameConductorRoute(left: LineNode['path'], right: LineNode['path'], tolerance: number): boolean {
+  const length = (route: LineNode['path']) => route.reduce((sum, point, index) =>
+    sum + (index > 0 ? dist(route[index - 1], point) : 0), 0);
+  if (Math.abs(length(left) - length(right)) > tolerance * 2) return false;
+  const follows = (from: LineNode['path'], to: LineNode['path']) => from.every((point, index) => {
+    if (projectPointOnPath(point, to).distance > tolerance) return false;
+    if (index === 0) return true;
+    const previous = from[index - 1];
+    const midpoint = { x: (previous.x + point.x) / 2, y: (previous.y + point.y) / 2 };
+    return projectPointOnPath(midpoint, to).distance <= tolerance;
+  });
+  return follows(left, right) && follows(right, left);
 }
 
 function substantiallyOverlappingSegments(

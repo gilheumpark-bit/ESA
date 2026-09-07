@@ -285,6 +285,8 @@ export function adaptTeamResult(
     .map((symbol) => ({
         localId: symbol.id,
         type: normalizedEquipmentType(symbol.typeCandidates[0] ?? 'other', symbol.rawLabel),
+        typeCandidates: symbol.typeCandidates.map((candidate) => normalizedEquipmentType(candidate, symbol.rawLabel)),
+        ports: (symbol.ports ?? []).map((point) => ({ ...point })),
         label: symbol.rawLabel ?? undefined,
         bounds: { x: symbol.bounds.x, y: symbol.bounds.y, w: symbol.bounds.w, h: symbol.bounds.h },
         confidence: symbol.confidence,
