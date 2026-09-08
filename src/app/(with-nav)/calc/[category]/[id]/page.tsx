@@ -1,5 +1,7 @@
 'use client';
 
+import { copyTextWithFallback } from '@/lib/clipboard';
+
 /**
  * Individual Calculator Page — Dynamic route /calc/[category]/[id]
  *
@@ -206,12 +208,9 @@ export default function CalculatorPage({
   );
 
   /** Share button copies URL with current params */
-  const handleShareWithParams = useCallback(() => {
+  const handleShareWithParams = useCallback(async () => {
     const url = window.location.href;
-    navigator.clipboard.writeText(url).then(
-      () => alert('계산기 링크가 복사되었습니다 (입력값 포함)'),
-      () => prompt('공유 링크:', url),
-    );
+    if (await copyTextWithFallback(url, '공유 링크:')) alert('계산기 링크가 복사되었습니다 (입력값 포함)');
   }, []);
 
   const handleSubmit = useCallback(

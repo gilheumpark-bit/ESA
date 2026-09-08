@@ -1,5 +1,7 @@
 'use client';
 
+import { copyTextWithFallback } from '@/lib/clipboard';
+
 /**
  * Project Detail Page — 프로젝트 상세
  *
@@ -266,7 +268,7 @@ function ShareDialog({
 
   const handleCopy = async () => {
     if (!shareUrl) return;
-    await navigator.clipboard.writeText(shareUrl);
+    if (!(await copyTextWithFallback(shareUrl, '공유 링크:'))) return;
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

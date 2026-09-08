@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react';
+import { copyTextWithFallback } from '@/lib/clipboard';
 import {
   ChevronDown,
   ChevronUp,
@@ -215,7 +216,7 @@ function FullCard({ receipt, className }: { receipt: Receipt; className: string 
   const [hashCopied, setHashCopied] = useState(false);
 
   const copyHash = async () => {
-    await navigator.clipboard.writeText(receipt.receiptHash);
+    if (!(await copyTextWithFallback(receipt.receiptHash, '영수증 해시:'))) return;
     setHashCopied(true);
     setTimeout(() => setHashCopied(false), 2000);
   };

@@ -9,7 +9,9 @@
  * PART 4: Multi-standard comparison (KEC vs NEC vs IEC)
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { copyTextWithFallback } from '@/lib/clipboard';
+import { readApiErrorMessage } from '@/lib/error-messages';
 import {
   GitCompareArrows,
   Plus,
@@ -47,6 +49,7 @@ const CALCULATOR_OPTIONS: { value: string; label: string; params: ExtendedParamD
 const SCENARIO_LABELS = ['A안', 'B안', 'C안', 'D안'];
 
 interface ScenarioState {
+  id: string;
   label: string;
   inputs: Record<string, string>;
   result: CalcResult | null;
@@ -160,12 +163,22 @@ function createEmptyScenario(label: string, params: ExtendedParamDef[]): Scenari
   for (const p of params) {
     inputs[p.name] = p.defaultValue != null ? String(p.defaultValue) : '';
   }
-  return { label, inputs, result: null, receipt: null, isLoading: false, error: null };
+  return { id: crypto.randomUUID(), label, inputs, result: null, receipt: null, isLoading: false, error: null };
 }
 
 export default function ComparePage() {
   const [selectedCalc, setSelectedCalc] = useState(CALCULATOR_OPTIONS[0].value);
   const [scenarios, setScenarios] = useState<ScenarioState[]>([]);
+  const requests = useRef(new Map<string, AbortController>());
+  const cancelScenario = useCallback((id: string) => {
+    requests.current.get(id)?.abort();
+    requests.current.delete(id);
+  }, []);
+  const cancelAll = useCallback(() => {
+    requests.current.forEach((request) => request.abort());
+    requests.current.clear();
+  }, []);
+  useEffect(() => cancelAll, [cancelAll]);
 
   const calcOption = useMemo(
     () => CALCULATOR_OPTIONS.find((c) => c.value === selectedCalc) ?? CALCULATOR_OPTIONS[0],
@@ -190,6 +203,7 @@ export default function ComparePage() {
           if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
           const label = SCENARIO_LABELS[newScenarios.length] ?? `${key.toUpperCase()}안`;
           newScenarios.push({
+            id: crypto.randomUUID(),
             label,
             inputs: parsed as Record<string, string>,
             result: null,
@@ -210,105 +224,77 @@ export default function ComparePage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Reset scenarios when calculator changes
-  const handleCalcChange = useCallback(
-    (value: string) => {
-      setSelectedCalc(value);
-      const opt = CALCULATOR_OPTIONS.find((c) => c.value === value) ?? CALCULATOR_OPTIONS[0];
-      setScenarios([
-        createEmptyScenario('A안', opt.params),
-        createEmptyScenario('B안', opt.params),
-      ]);
-    },
-    [],
-  );
+  // Stable scenario IDs prevent late responses from migrating after deletion.
+  const handleCalcChange = useCallback((value: string) => {
+    cancelAll();
+    setSelectedCalc(value);
+    const opt = CALCULATOR_OPTIONS.find((c) => c.value === value) ?? CALCULATOR_OPTIONS[0];
+    setScenarios([createEmptyScenario('A안', opt.params), createEmptyScenario('B안', opt.params)]);
+  }, [cancelAll]);
 
-  const handleInputChange = useCallback(
-    (idx: number, key: string, val: string) => {
-      setScenarios((prev) =>
-        prev.map((s, i) =>
-          i === idx ? { ...s, inputs: { ...s.inputs, [key]: val } } : s,
-        ),
-      );
-    },
-    [],
-  );
+  const handleInputChange = useCallback((idx: number, key: string, val: string) => {
+    const target = scenarios[idx];
+    if (!target) return;
+    cancelScenario(target.id);
+    setScenarios((prev) => prev.map((s) => s.id === target.id
+      ? { ...s, inputs: { ...s.inputs, [key]: val }, result: null, receipt: null, isLoading: false, error: null }
+      : s));
+  }, [scenarios, cancelScenario]);
 
-  const handleCalculate = useCallback(
-    async (idx: number) => {
-      setScenarios((prev) =>
-        prev.map((s, i) =>
-          i === idx ? { ...s, isLoading: true, error: null } : s,
-        ),
-      );
-
-      try {
-        // Parse inputs
-        const scenario = scenarios[idx];
-        const parsedInputs: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(scenario.inputs)) {
-          const num = parseFloat(v);
-          parsedInputs[k] = isNaN(num) ? v : num;
-        }
-
-        const res = await fetch('/api/calculate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            calculatorId: selectedCalc,
-            inputs: parsedInputs,
-            countryCode: readStoredCountry(),
-          }),
-        });
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          // Server error shape is { success:false, error:{ code, message } };
-          // pull the message string so we never render "[object Object]".
-          const errMsg = typeof body.error === 'string'
-            ? body.error
-            : body.error?.message ?? `Calculation failed (${res.status})`;
-          throw new Error(errMsg);
-        }
-
-        const body = await res.json();
-        // Success shape is { success, data:{ result, receipt, relatedCalculators } };
-        // unwrap data (mirrors useCalculator) so result/receipt are never undefined.
-        const data = body.data ?? body;
-
-        setScenarios((prev) =>
-          prev.map((s, i) =>
-            i === idx
-              ? { ...s, result: data.result, receipt: data.receipt, isLoading: false }
-              : s,
-          ),
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        setScenarios((prev) =>
-          prev.map((s, i) =>
-            i === idx ? { ...s, isLoading: false, error: msg } : s,
-          ),
-        );
+  const handleCalculate = useCallback(async (idx: number) => {
+    const scenario = scenarios[idx];
+    if (!scenario) return;
+    cancelScenario(scenario.id);
+    const controller = new AbortController();
+    requests.current.set(scenario.id, controller);
+    const isCurrent = () => !controller.signal.aborted && requests.current.get(scenario.id) === controller;
+    setScenarios((prev) => prev.map((s) => s.id === scenario.id
+      ? { ...s, isLoading: true, error: null, result: null, receipt: null } : s));
+    try {
+      const parsedInputs: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(scenario.inputs)) {
+        const num = parseFloat(v);
+        parsedInputs[k] = isNaN(num) ? v : num;
       }
-    },
-    [scenarios, selectedCalc],
-  );
+      const res = await fetch('/api/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calculatorId: selectedCalc, inputs: parsedInputs, countryCode: readStoredCountry() }),
+        signal: controller.signal,
+      });
+      const body = await res.json().catch(() => null);
+      if (!isCurrent()) return;
+      const data = body?.data ?? body;
+      if (!res.ok || body?.success === false || !data?.result) {
+        throw new Error(readApiErrorMessage(body, `계산에 실패했습니다 (${res.status})`));
+      }
+      setScenarios((prev) => prev.map((s) => s.id === scenario.id
+        ? { ...s, result: data.result, receipt: data.receipt ?? null, isLoading: false } : s));
+    } catch (err) {
+      if (!isCurrent()) return;
+      const message = err instanceof Error ? err.message : '계산 중 오류가 발생했습니다.';
+      setScenarios((prev) => prev.map((s) => s.id === scenario.id
+        ? { ...s, isLoading: false, error: message } : s));
+    } finally {
+      if (requests.current.get(scenario.id) === controller) requests.current.delete(scenario.id);
+    }
+  }, [scenarios, selectedCalc, cancelScenario]);
 
   const handleAddScenario = useCallback(() => {
     if (scenarios.length >= 4) return;
-    const label = SCENARIO_LABELS[scenarios.length] ?? `${scenarios.length + 1}안`;
-    setScenarios((prev) => [...prev, createEmptyScenario(label, calcOption.params)]);
+    const next = createEmptyScenario(SCENARIO_LABELS[scenarios.length], calcOption.params);
+    setScenarios((prev) => prev.length < 4 ? [...prev, next] : prev);
   }, [scenarios.length, calcOption.params]);
 
   const handleRemoveScenario = useCallback((idx: number) => {
-    setScenarios((prev) => {
-      const next = prev.filter((_, i) => i !== idx);
-      return next.map((s, i) => ({ ...s, label: SCENARIO_LABELS[i] ?? s.label }));
-    });
-  }, []);
+    const target = scenarios[idx];
+    if (!target || scenarios.length <= 2) return;
+    cancelScenario(target.id);
+    setScenarios((prev) => prev.filter((s) => s.id !== target.id)
+      .map((s, i) => ({ ...s, label: SCENARIO_LABELS[i] ?? s.label })));
+  }, [scenarios, cancelScenario]);
 
-  const handleShare = useCallback(() => {
+  const handleShare = useCallback(async () => {
     const params = new URLSearchParams();
     params.set('calc', selectedCalc);
     const keys = ['a', 'b', 'c', 'd'];
@@ -317,10 +303,7 @@ export default function ComparePage() {
     }
     const url = `${window.location.origin}/compare?${params.toString()}`;
     history.replaceState(null, '', `/compare?${params.toString()}`);
-    navigator.clipboard.writeText(url).then(
-      () => alert('공유 링크가 복사되었습니다'),
-      () => prompt('공유 링크:', url),
-    );
+    if (await copyTextWithFallback(url, '공유 링크:')) alert('공유 링크가 복사되었습니다');
   }, [selectedCalc, scenarios]);
 
   // Build comparison data
@@ -411,7 +394,7 @@ export default function ComparePage() {
         }`}>
           {scenarios.map((s, i) => (
             <ScenarioForm
-              key={i}
+              key={s.id}
               scenario={s}
               params={calcOption.params}
               index={i}

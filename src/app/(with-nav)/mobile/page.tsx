@@ -1,5 +1,7 @@
 'use client';
 
+import { copyTextWithFallback } from '@/lib/clipboard';
+
 /**
  * Mobile Field Mode — 현장 모드
  *
@@ -245,7 +247,7 @@ function RecentCalculations({ results }: { results: CachedResult[] }) {
                   if (navigator.share) {
                     navigator.share({ title: 'ESVA 계산 결과', text }).catch(() => {});
                   } else {
-                    navigator.clipboard.writeText(text).then(() => alert('복사됨'));
+                    void copyTextWithFallback(text, '계산 결과:').then((copied) => { if (copied) alert('복사됨'); });
                   }
                 }}
                 className="rounded-lg p-1.5 hover:bg-[var(--bg-secondary)] active:bg-[var(--bg-tertiary)]"

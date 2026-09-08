@@ -11,7 +11,8 @@
  * PART 4: Main page component
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { readApiErrorMessage } from '@/lib/error-messages';
 import { calculatorHref } from '@/lib/calculator-catalog';
 import {
   Camera,
@@ -59,7 +60,7 @@ interface OCRResponse {
   success: boolean;
   data: NameplateResult;
   suggestedCalculators: string[];
-  error?: string;
+  error?: unknown;
 }
 
 
@@ -124,6 +125,8 @@ function ImageUploader({
             style={{ maxHeight: 400 }}
           />
           <button
+            type="button"
+            aria-label="명판 이미지 삭제"
             onClick={onReset}
             className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80"
           >
@@ -204,12 +207,15 @@ function ParameterRow({
         </span>
         <input
           type="text"
+          aria-label={`${label} 수정값`}
           value={editValue}
           onChange={e => setEditValue(e.target.value)}
-          className="flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1 text-sm"
+          className="min-w-0 flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1 text-sm"
           autoFocus
         />
         <button
+          type="button"
+          aria-label={`${label} 수정 저장`}
           onClick={() => {
             onEdit(editValue);
             setEditing(false);
@@ -219,6 +225,8 @@ function ParameterRow({
           <Check size={14} />
         </button>
         <button
+          type="button"
+          aria-label={`${label} 수정 취소`}
           onClick={() => {
             setEditValue(value);
             setEditing(false);
@@ -240,7 +248,9 @@ function ParameterRow({
         {value}
       </span>
       <button
-        onClick={() => setEditing(true)}
+        type="button"
+        aria-label={`${label} 수정`}
+        onClick={() => { setEditValue(value); setEditing(true); }}
         className="rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
       >
         <Edit3 size={12} />
@@ -283,7 +293,7 @@ function OCRResults({
             />
           </div>
           <span className="text-xs font-medium text-[var(--text-secondary)]">
-            인식 정확도 {Math.round(result.confidence * 100)}%
+            모델 추정 확신도 {Math.round(result.confidence * 100)}% (정답률 아님)
           </span>
         </div>
       ) : (
@@ -381,58 +391,66 @@ export default function OCRNameplatePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const activeRequest = useRef<AbortController | null>(null);
+  const cancelAnalysis = useCallback(() => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+  }, []);
+  useEffect(() => cancelAnalysis, [cancelAnalysis]);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
   const handleImageSelect = useCallback((file: File) => {
+    cancelAnalysis();
+    setLoading(false);
     setImageFile(file);
     setPreview(URL.createObjectURL(file));
     setResult(null);
     setSuggestedCalcs([]);
     setError(null);
-  }, []);
+  }, [cancelAnalysis]);
 
   const handleReset = useCallback(() => {
-    if (preview) URL.revokeObjectURL(preview);
+    cancelAnalysis();
+    setLoading(false);
     setImageFile(null);
     setPreview(null);
     setResult(null);
     setSuggestedCalcs([]);
     setError(null);
-  }, [preview]);
+  }, [cancelAnalysis]);
 
   const handleAnalyze = useCallback(async () => {
     if (!imageFile) return;
-
+    cancelAnalysis();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const isCurrent = () => activeRequest.current === controller && !controller.signal.aborted;
     setLoading(true);
     setError(null);
-
     try {
       const visionKey = await getFirstAvailableVisionKey();
-      if (!visionKey) {
-        setError('AI 연결이 없습니다. 설정에서 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 입력하세요.');
-        setLoading(false);
-        return;
-      }
-
+      if (!isCurrent()) return;
+      if (!visionKey) throw new Error('AI 연결이 없습니다. 설정에서 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 입력하세요.');
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('provider', visionKey.provider);
       formData.append('model', visionKey.model);
       if (visionKey.key) formData.append('apiKey', visionKey.key);
-
-      const res = await fetch('/api/ocr', { method: 'POST', body: formData });
-      const data: OCRResponse = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? 'OCR 처리에 실패했습니다');
-      }
-
+      const res = await fetch('/api/ocr', { method: 'POST', body: formData, signal: controller.signal });
+      const data: OCRResponse | null = await res.json().catch(() => null);
+      if (!isCurrent()) return;
+      if (!res.ok || !data?.success || !data.data) throw new Error(readApiErrorMessage(data, 'OCR 처리에 실패했습니다'));
       setResult(data.data);
-      setSuggestedCalcs(data.suggestedCalculators);
+      setSuggestedCalcs(Array.isArray(data.suggestedCalculators) ? data.suggestedCalculators.filter((id) => typeof id === 'string') : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OCR 처리 중 오류가 발생했습니다');
+      if (isCurrent()) setError(err instanceof Error ? err.message : 'OCR 처리 중 오류가 발생했습니다');
     } finally {
-      setLoading(false);
+      if (activeRequest.current === controller) {
+        activeRequest.current = null;
+        setLoading(false);
+      }
     }
-  }, [imageFile]);
+  }, [imageFile, cancelAnalysis]);
 
   const handleParamEdit = useCallback((key: string, value: string) => {
     setResult(prev => (prev ? { ...prev, [key]: value } : null));
@@ -482,7 +500,7 @@ export default function OCRNameplatePage() {
 
       {/* Error */}
       {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+        <div role="alert" aria-label="명판 분석 오류" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
           <p className="text-sm text-[var(--color-error)]">{error}</p>
         </div>

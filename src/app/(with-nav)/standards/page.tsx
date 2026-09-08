@@ -496,7 +496,7 @@ function StandardConvertWidget() {
             onChange={(e) => setFromClause(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleConvert(); }}
             placeholder="조항 번호 (예: 232.1)"
-            className="h-9 flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm outline-none focus:border-[var(--color-primary)]"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm outline-none focus:border-[var(--color-primary)]"
           />
         </div>
 

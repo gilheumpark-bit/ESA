@@ -752,38 +752,38 @@ export default function SLDAnalysisPage() {
     file: File,
     libraryOverride?: SymbolLibrary | null,
   ) => {
-    const libraryToApply = libraryOverride === undefined ? activeSymbolLibrary : libraryOverride;
-    // V3 입력이 .dwg 를 받도록 넓혔으므로(전체 판독 input) 여기서도 같은
-    // 안내로 멈춘다 — 기본 업로드 경로의 가드만으로는 이 입력이 뚫린다.
-    if (documentKindOf(file) === 'dwg') {
-      setV3Error(DWG_GUIDANCE);
-      return;
-    }
-    // 이미지 + AI 미연결: 서버는 어차피 401 을 준다. 왕복시켜 「키 필요」만
-    // 보여주면 무키 사용자에겐 막다른 골목이다 — 키 없이 되는 길(DXF·벡터
-    // PDF)까지 담은 안내로 여기서 멈춘다(실사용 2026-08-21 회사 환경 보고).
-    if (documentKindOf(file) === 'image' && !(await getFirstAvailableVisionKey())) {
-      setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
-      return;
-    }
-    // 벡터(DXF·PDF) + AI 미연결: vectorOnly 모드로 V3 를 실제로 시작한다 —
-    // 파서·토폴로지·KEC 검토는 기하 연산이라 VLM 없이 성립하고, 서버가 이
-    // 깃발로 익명 무키 실행을 연다. deferred 보관(취소·재개)은 로그인 저장이
-    // 필요하므로 무키에선 요청하지 않는다 — 그 요청이 로그인 401 을 만들어
-    // 성공한 결과 옆에 오류를 띄우던 것이 «AI 없이 안 됨» 오인의 원인이었다.
-    const keylessVector = !(await getFirstAvailableVisionKey());
-    setV3Loading(true);
-    setV3Error(null);
-    setV3Doc(null);
-    setV3JobId(null);
-    setV3JobStatus(null);
-    setV3ResumeAvailable(false);
-    setV3CorrectionTarget(null);
-    v3CorrectionInFlightRef.current.clear();
-    setV3SourceFile(file);
-    setV3PageIndex(0);
-    setSelectedDisplayId(undefined);
     try {
+      const libraryToApply = libraryOverride === undefined ? activeSymbolLibrary : libraryOverride;
+      // V3 입력이 .dwg 를 받도록 넓혔으므로(전체 판독 input) 여기서도 같은
+      // 안내로 멈춘다 — 기본 업로드 경로의 가드만으로는 이 입력이 뚫린다.
+      if (documentKindOf(file) === 'dwg') {
+        setV3Error(DWG_GUIDANCE);
+        return;
+      }
+      // 이미지 + AI 미연결: 서버는 어차피 401 을 준다. 왕복시켜 「키 필요」만
+      // 보여주면 무키 사용자에겐 막다른 골목이다 — 키 없이 되는 길(DXF·벡터
+      // PDF)까지 담은 안내로 여기서 멈춘다(실사용 2026-08-21 회사 환경 보고).
+      if (documentKindOf(file) === 'image' && !(await getFirstAvailableVisionKey())) {
+        setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
+        return;
+      }
+      // 벡터(DXF·PDF) + AI 미연결: vectorOnly 모드로 V3 를 실제로 시작한다 —
+      // 파서·토폴로지·KEC 검토는 기하 연산이라 VLM 없이 성립하고, 서버가 이
+      // 깃발로 익명 무키 실행을 연다. deferred 보관(취소·재개)은 로그인 저장이
+      // 필요하므로 무키에선 요청하지 않는다 — 그 요청이 로그인 401 을 만들어
+      // 성공한 결과 옆에 오류를 띄우던 것이 «AI 없이 안 됨» 오인의 원인이었다.
+      const keylessVector = !(await getFirstAvailableVisionKey());
+      setV3Loading(true);
+      setV3Error(null);
+      setV3Doc(null);
+      setV3JobId(null);
+      setV3JobStatus(null);
+      setV3ResumeAvailable(false);
+      setV3CorrectionTarget(null);
+      v3CorrectionInFlightRef.current.clear();
+      setV3SourceFile(file);
+      setV3PageIndex(0);
+      setSelectedDisplayId(undefined);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('pages', 'all');

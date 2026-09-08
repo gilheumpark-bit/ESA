@@ -1,3 +1,7 @@
+'use client';
+
+import { useId } from 'react';
+
 /**
  * ESVA Custom Logo — 번개볼트가 통합된 전기 버티컬 로고
  */
@@ -16,6 +20,7 @@ const SIZES = {
 } as const;
 
 function BoltIcon({ size }: { size: number }) {
+  const id = useId();
   return (
     <svg
       width={size}
@@ -27,21 +32,21 @@ function BoltIcon({ size }: { size: number }) {
     >
       {/* 원형 배경 — 그래디언트 */}
       <defs>
-        <linearGradient id="esva-bolt-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id={`${id}-bolt`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#d97706" />
           <stop offset="100%" stopColor="#b45309" />
         </linearGradient>
-        <linearGradient id="esva-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id={`${id}-ring`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#1e3a5f" />
           <stop offset="100%" stopColor="#2d5280" />
         </linearGradient>
       </defs>
       {/* 외곽 링 */}
-      <circle cx="20" cy="20" r="18" stroke="url(#esva-ring-grad)" strokeWidth="2.5" fill="none" />
+      <circle cx="20" cy="20" r="18" stroke={`url(#${id}-ring)`} strokeWidth="2.5" fill="none" />
       {/* 번개 볼트 */}
       <path
         d="M22 6L12 22h7l-3 12 12-16h-7l3-12z"
-        fill="url(#esva-bolt-grad)"
+        fill={`url(#${id}-bolt)`}
       />
     </svg>
   );
