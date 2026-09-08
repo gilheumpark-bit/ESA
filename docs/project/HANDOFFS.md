@@ -4,6 +4,8 @@
 
 ## 2026-09-08
 
+- [프런트엔드 전체 목록·버튼 전이·오류 복구 검사](handoffs/2026-09-08-frontend-controls.md)
+
 - [도면 분석 업무 제품화: 단자 경로·재개·보고서](handoffs/2026-09-08-commercial-drawing-workflow.md)
 
 ## 2026-09-07

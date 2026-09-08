@@ -97,6 +97,7 @@ function TreeGroupNode({
       {/* Group header */}
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-[var(--bg-tertiary)]"
       >

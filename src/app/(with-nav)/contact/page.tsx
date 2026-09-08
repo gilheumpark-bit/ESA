@@ -8,6 +8,7 @@
  */
 
 import { useState, FormEvent } from 'react';
+import { readApiErrorMessage } from '@/lib/error-messages';
 import { Mail, Send, Loader2, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -70,7 +71,7 @@ export default function ContactPage() {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? '전송에 실패했습니다');
+        throw new Error(readApiErrorMessage(data, '전송에 실패했습니다'));
       }
       setStatus('success');
       setForm(INITIAL_FORM);
@@ -207,7 +208,7 @@ export default function ContactPage() {
 
           {/* Error */}
           {status === 'error' && (
-            <p className="text-sm text-[var(--color-error)]">{errorMsg}</p>
+            <p role="alert" aria-label="문의 전송 오류" className="text-sm text-[var(--color-error)]">{errorMsg}</p>
           )}
 
           {/* Submit */}
