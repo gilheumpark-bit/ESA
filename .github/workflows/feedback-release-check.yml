@@ -1,0 +1,147 @@
+name: Reviewed feedback release verification
+on:
+  push:
+    branches: ['chore/feedback-link-20260909']
+    paths: ['.github/workflows/feedback-release-check.yml', '.review-patches/*.py', 'src/**', 'e2e/**', 'scripts/bench/**', 'docs/project/handoffs/2026-09-09-reviewed-feedback-accuracy.md']
+concurrency:
+  group: reviewed-feedback-release
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply exact reviewed source changes
+        run: |
+          git diff --exit-code d73a19b5318d2a39ea80f02b62eba0429b44955b -- package.json package-lock.json
+          python3 .review-patches/prepare-core.py
+          python3 .review-patches/repair-applier.py
+          python3 .review-patches/apply-feedback.py
+          python3 .review-patches/apply-feedback-ui.py
+          python3 .review-patches/finalize-inputs.py
+          python3 .review-patches/harden-feedback.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('docs/project/HANDOFFS.md')
+          s=p.read_text(); anchor='## 2026-09-09\n'
+          assert s.count(anchor)==1
+          p.write_text(s.replace(anchor, anchor+'\n- [사람 정정 승인·재사용과 정격·페이지 연결 정확도 개선](handoffs/2026-09-09-reviewed-feedback-accuracy.md)\n'))
+          PY
+          git diff --name-only d73a19b5318d2a39ea80f02b62eba0429b44955b -- src scripts e2e docs > /tmp/feedback-product-paths.txt
+          python3 - <<'PY'
+          import hashlib,json,tarfile
+          from pathlib import Path
+          paths=Path('/tmp/feedback-product-paths.txt').read_text().splitlines()
+          assert paths and all(Path(p).is_file() and Path(p).parts[0] in ['src','scripts','e2e','docs'] for p in paths)
+          Path('/tmp/feedback-product-hashes.json').write_text(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths},indent=2))
+          with tarfile.open('/tmp/feedback-product-source.tar.gz','w:gz') as archive:
+              for p in paths: archive.add(p,arcname=p)
+          print('PRODUCT_FILE_COUNT',len(paths))
+          PY
+          git read-tree d73a19b5318d2a39ea80f02b62eba0429b44955b
+          while IFS= read -r file; do git add -- "$file"; done < /tmp/feedback-product-paths.txt
+          git diff --cached --check
+          git diff --cached --stat
+          npm run gate:hygiene
+          npm run check:docs
+          npm ci > /tmp/feedback-install-final.log 2>&1 || { tail -100 /tmp/feedback-install-final.log; exit 1; }
+      - name: Type, lint and both security scopes
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npm run gate:audit > /tmp/feedback-audit-production.log 2>&1 || { cat /tmp/feedback-audit-production.log; exit 1; }
+          npm run gate:audit:all > /tmp/feedback-audit-all.log 2>&1 || { cat /tmp/feedback-audit-all.log; exit 1; }
+          cat /tmp/feedback-audit-production.log /tmp/feedback-audit-all.log
+      - name: Full regression and drawing contracts
+        run: |
+          npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/feedback-jest.json > /tmp/feedback-jest.log 2>&1 || { tail -160 /tmp/feedback-jest.log; exit 1; }
+          node - <<'JS'
+          const r=require('/tmp/feedback-jest.json');
+          console.log('JEST_SUMMARY',JSON.stringify({success:r.success,passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suitesPassed:r.numPassedTestSuites,suitesFailed:r.numFailedTestSuites,suitesSkipped:r.numPendingTestSuites}));
+          JS
+          npm run test:scripts > /tmp/feedback-scripts-final.log 2>&1 || { tail -120 /tmp/feedback-scripts-final.log; exit 1; }
+          tail -15 /tmp/feedback-scripts-final.log
+          npm run gate:sld-v3-contract
+          npm run gate:snapshot
+      - name: Compare actual old and new production functions and exact-pattern reuse
+        run: |
+          FEEDBACK_QUALITY_OUTPUT=/tmp/feedback-quality.json npx jest --runInBand --testMatch '**/scripts/bench/feedback-quality.bench.ts' > /tmp/feedback-quality.log 2>&1 || { cat /tmp/feedback-quality.log; exit 1; }
+          node - <<'JS'
+          const r=require('/tmp/feedback-quality.json');
+          console.log('QUALITY_DIAGNOSTICS',JSON.stringify({baseline:r.baseline,scope:r.scope,before:r.before,after:r.after,reuse:r.reuse}));
+          JS
+      - name: Production build and calculator receipt integration
+        run: |
+          npm run build > /tmp/feedback-build.log 2>&1 || { tail -120 /tmp/feedback-build.log; exit 1; }
+          npm run gate:chat-live
+          npx playwright install --with-deps chromium > /tmp/feedback-browser-install.log 2>&1 || { tail -60 /tmp/feedback-browser-install.log; exit 1; }
+      - name: Real PDF and browser control regression on independent servers
+        run: |
+          pid=''
+          cleanup() { if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; pid=''; fi; }
+          trap cleanup EXIT
+          start_server() {
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$1" > "$2" 2>&1 &
+            pid=$!
+            for n in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || { cat "$2"; return 1; }
+              if curl -fsS "http://127.0.0.1:$1/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            cat "$2"; return 1
+          }
+          start_server 3010 /tmp/feedback-pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010 > /tmp/feedback-pdf.log 2>&1 || { cat /tmp/feedback-pdf.log; exit 1; }
+          cat /tmp/feedback-pdf.log
+          cleanup
+          start_server 3011 /tmp/feedback-ui-server.log
+          BASE_URL=http://127.0.0.1:3011 PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/feedback-browser.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json
+      - name: Create product-only candidate after every gate succeeds
+        run: |
+          git diff --cached --check
+          npm run gate:hygiene
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'feat: reuse reviewed drawing corrections and repair rating ownership' '' 'Publish exact company/name/geometry feedback only after local review, retain provenance, block conflicts and support withdrawal. Separate numeric reading from ownership, retain multiple ratings, normalize complete units and require unique page references. Add actual baseline comparisons, scoped recurrence tests and approval/revocation browser checks. No model retraining, threshold reduction, main merge or deployment.' | git commit-tree "$tree" -p d73a19b5318d2a39ea80f02b62eba0429b44955b)
+          git push origin "$commit":refs/heads/chore/feedback-prepared-20260909
+          echo "$commit" > /tmp/feedback-prepared-sha.txt
+          echo "FEEDBACK_PREPARED_COMMIT=$commit"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: reviewed-feedback-release-verification
+          path: |
+            /tmp/feedback-product-paths.txt
+            /tmp/feedback-product-hashes.json
+            /tmp/feedback-product-source.tar.gz
+            /tmp/feedback-audit-production.log
+            /tmp/feedback-audit-all.log
+            /tmp/feedback-jest.json
+            /tmp/feedback-jest.log
+            /tmp/feedback-scripts-final.log
+            /tmp/feedback-quality.json
+            /tmp/feedback-quality.log
+            /tmp/feedback-build.log
+            /tmp/feedback-pdf.log
+            /tmp/feedback-pdf-server.log
+            /tmp/feedback-ui-server.log
+            /tmp/feedback-browser.json
+            /tmp/feedback-prepared-sha.txt
+            test-results/
+          retention-days: 3
+          if-no-files-found: warn
