@@ -292,10 +292,9 @@ export function calculateTokenCost(input: TokenCostInput): DetailedCalcResult {
     comparisons.push({ model: p.name, costPerReq: round(cpr, 6), monthlyCost: round(mc, 2) });
   }
 
-  // Show cheapest and most expensive
+  // Show the cheapest comparison
   const sorted = [...comparisons].sort((a, b) => a.monthlyCost - b.monthlyCost);
   const cheapest = sorted[0];
-  const _mostExpensive = sorted[sorted.length - 1];
 
   steps.push({
     step: stepNum,

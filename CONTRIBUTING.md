@@ -123,3 +123,11 @@ PR에는 다음 내용을 남깁니다.
 - 잡은 결함과 남은 HOLD·미검증
 - UI 변경이면 주요 해상도의 실제 화면 확인
 - 데이터·인증·결제 변경이면 마이그레이션과 rollback 경로
+
+## 개발 잔재와 부채 관리
+
+`npm run gate:hygiene`는 Git 인덱스의 임시 작업공간·환경 파일·빌드 잔재를 검사하며 로컬 파일은 삭제하지 않는다. `fixtures/`, 날짜별 검증 기록, `output/manual/`, 유지하는 개발 설정은 임시 파일로 일괄 삭제하지 않는다.
+
+미사용 선언·인자는 기본 TypeScript 검사에서 차단한다. 공개 콜백의 호환 인자만 `_name`으로 표시하고 불필요한 계산·import는 제거한다. TODO와 검사 실패를 지워 부채를 숨기지 않는다. [기술부채](docs/TECHNICAL_DEBT.md)와 [휴면 대장](docs/DORMANT_MANIFEST.md)을 구분한다.
+
+`gate:audit`는 운영, `gate:audit:all`은 개발 의존성 포함 범위다. 둘 다 critical/high 허용 0이며 실행 실패는 판정 불가(exit 2)다. 부모 버전 제약 내 패치와 전체 회귀를 함께 검증하고 `--force`로 주 버전을 바꾸거나 감사 기준을 낮추지 않는다.

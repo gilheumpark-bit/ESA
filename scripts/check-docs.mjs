@@ -122,6 +122,18 @@ for (const required of [
   }
 }
 
+// Current debt counts must not silently exclude known open findings.
+const debt = readFileSync(path.join(root, 'docs/TECHNICAL_DEBT.md'), 'utf8');
+const declaredOpen = debt.match(/열린 활성 코드 부채: (\d+)건/u);
+const openRows = debt.split('\n').filter((line) => /^\| `DEBT-/u.test(line) && /`OPEN`/u.test(line));
+if (!declaredOpen || Number(declaredOpen[1]) !== openRows.length) {
+  errors.push('docs/TECHNICAL_DEBT.md open-count does not match OPEN rows');
+}
+const projectState = readFileSync(path.join(root, 'PROJECT_STATE.md'), 'utf8');
+if (!/^codeBaselineCommit: [a-f0-9]{40}$/mu.test(projectState)) {
+  errors.push('PROJECT_STATE.md must identify an exact starting code commit');
+}
+
 if (errors.length > 0) {
   process.stderr.write(`${errors.join('\n')}\n`);
   process.exit(1);

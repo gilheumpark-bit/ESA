@@ -65,7 +65,6 @@ function buildGroundingCondition(type: GroundingType): Condition {
 }
 
 function buildGroundingArticle(type: GroundingType): CodeArticle {
-  const _limit = GROUNDING_LIMITS[type];
   return {
     id: `KEC-142.5-${type}`,
     country: 'KR',

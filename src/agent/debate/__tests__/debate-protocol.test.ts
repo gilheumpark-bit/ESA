@@ -1,4 +1,4 @@
-import { detectDisagreements, executeDebateRound, runDebate, validatePhysicsLaw, buildEscalation } from '../debate-protocol';
+import { detectDisagreements, runDebate, validatePhysicsLaw, buildEscalation } from '../debate-protocol';
 import type { TeamResult } from '../../teams/types';
 
 const makeTeamResult = (teamId: string, calcs: { id: string; value: number }[]): TeamResult => ({

@@ -814,8 +814,7 @@ function compactRescanTargets(
       if (boundsIntersect(bounds, target.bounds)) matchesByRegion[index].push(target);
     });
   }
-  regions.forEach((bounds, index) => {
-    const matches = matchesByRegion[index];
+  matchesByRegion.forEach((matches, index) => {
     if (matches.length === 0) return;
     const suggestedRoles = roles.filter((role) =>
       matches.some((target) => target.suggestedRoles.includes(role)));

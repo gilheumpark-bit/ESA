@@ -68,7 +68,6 @@ export async function runRoleCall(req: RoleCallRequest): Promise<RoleCallResult>
   const callId = `call-${req.role}-p${req.pageIndex}-${req.regionId}-${inputDigest.slice(0, 10)}`;
 
   try {
-    const { analyzeDrawingWithVLM } = await import('../vision/vlm-client');
     // Role-specific path: call underlying HTTP with custom prompt via analyzeRoleImage
     const result = await analyzeRoleImage(req, prompt);
     const rawText = typeof result === 'string' ? result : JSON.stringify(result);

@@ -4,6 +4,9 @@
 
 ## 2026-09-09
 
+- [개발 잔재·개발 의존성·기술부채 정리](handoffs/2026-09-09-development-debt-cleanup.md)
+- [정리 전 PROJECT_STATE 보존본](handoffs/2026-09-09-project-state-before-cleanup.md)
+
 - [남은 항목: 보안 취약점 수정·논리 검토 대기 제거](handoffs/2026-09-09-remaining-security-scheduling.md)
 
 - [도면 처리 성능: 선택 구획·재검사 재사용·공간 색인](handoffs/2026-09-09-drawing-performance.md)

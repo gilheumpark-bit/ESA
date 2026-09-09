@@ -116,3 +116,17 @@ fixtures/drawings/realworld/raster/
 # 것은 **이 리포가 인용하는 번호의 표제만** 담은 clause-titles.tsv 다.
 # 만드는 법 = scripts/build-kec-title-fixture.mjs
 fixtures/kec/.source/
+
+# Temporary transfer/audit workspaces; maintained scripts and fixtures stay tracked.
+/.audit/
+/.review-patches/
+/.performance-lab/
+/.remaining/
+/.remaining-support/
+/.cleanup/
+/.cleanup-lab/
+/.tmp-*/
+/playwright-report/
+/blob-report/
+*.orig
+*.rej

@@ -81,7 +81,7 @@ describe('dependency-ready drawing scheduling', () => {
     const calls: string[] = [];
     const input = schedulingInput();
     const pending = runDrawingCouncil({ ...input, options: { ...input.options, signal: controller.signal }, settleOnAbort: true },
-      async (buffer, _mime, role, options) => {
+      async (_buffer, _mime, role, options) => {
         calls.push(role);
         if (role === 'logic') await new Promise<void>((resolve) => options.signal!.addEventListener('abort', () => resolve(), { once: true }));
         return schedulingResponse(role);

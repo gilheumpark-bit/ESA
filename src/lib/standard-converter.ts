@@ -498,7 +498,6 @@ const MAPPINGS: MappingEntry[] = [
 // ---------------------------------------------------------------------------
 
 function findMapping(standard: StandardCode, clause: string): MappingEntry | undefined {
-  const stdKey = standard.toLowerCase() as 'kec' | 'nec' | 'iec' | 'jis';
 
   // 조항 번호는 점으로 끊어 읽는 계층 식별자다. 문자열로만 보면 두 가지가 깨진다.
   //

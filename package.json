@@ -40,7 +40,9 @@
     "gate:sld-v3-contract": "jest --runInBand src/agent/drawing/__tests__/sld-evaluator-v2.test.ts",
     "test:sld-golden": "npm run gate:sld-golden",
     "gate:audit": "node scripts/audit-baseline-gate.mjs",
-    "gate:snapshot": "node scripts/realworld-snapshot-freshness.mjs"
+    "gate:snapshot": "node scripts/realworld-snapshot-freshness.mjs",
+    "gate:hygiene": "node scripts/check-repository-hygiene.mjs",
+    "gate:audit:all": "node scripts/audit-baseline-gate.mjs --include-dev"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
@@ -52,11 +54,9 @@
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans-kr": "5.3.0",
     "@fontsource/noto-serif-kr": "5.3.0",
-    "@google/genai": "^2.17.1",
     "@napi-rs/canvas": "1.0.2",
     "@stripe/stripe-js": "^9.12.1",
     "@supabase/supabase-js": "^2.112.3",
-    "@tanstack/react-query": "^5.101.4",
     "ai": "^7.0.56",
     "clsx": "^2.1.0",
     "dxf-parser": "^1.1.2",

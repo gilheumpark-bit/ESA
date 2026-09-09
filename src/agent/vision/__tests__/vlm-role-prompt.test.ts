@@ -398,14 +398,14 @@ describe('role-specific VLM prompts', () => {
 
   it('bounds provider errors without exposing the API key', async () => {
     const apiKey = apiKeys.openai;
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(`${apiKey} ${'x'.repeat(1000)}`, { status: 500 }));
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(`${apiKey} ${'x'.repeat(1000)}`, { status: 500 }));
 
     await expect(analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', options('openai'))).rejects.not.toThrow(apiKey);
     await expect(analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', options('openai'))).rejects.toThrow(/OpenAI Vision API error 500/);
   });
 
   it('rejects oversized response bodies before parsing JSON', async () => {
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response('x'.repeat(1024 * 1024 + 1), { status: 200 }));
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response('x'.repeat(1024 * 1024 + 1), { status: 200 }));
 
     await expect(analyzeDrawingRole(new ArrayBuffer(8), 'image/png', 'text', options('openai'))).rejects.toThrow(/byte limit/);
   });
@@ -449,7 +449,7 @@ describe('role-specific VLM prompts', () => {
 
   it('fails closed without calling text() when a response has no bounded stream', async () => {
     const text = jest.fn(async () => JSON.stringify({ choices: [{ message: { content: JSON.stringify(textPayload) } }] }));
-    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+    jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
       status: 200,
       headers: new Headers(),
@@ -464,7 +464,7 @@ describe('role-specific VLM prompts', () => {
   it('aborts a stalled request at the configured timeout boundary', async () => {
     jest.useFakeTimers();
     let fetchCalls = 0;
-    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation((_url, request) => {
+    jest.spyOn(global, 'fetch').mockImplementation((_url, request) => {
       fetchCalls += 1;
       expect(request?.signal).toBeInstanceOf(AbortSignal);
       const reader = {

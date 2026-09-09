@@ -1137,7 +1137,7 @@ export default function SLDAnalysisPage() {
   const handleV3Correct = useCallback(async (
     targetDisplayId: string,
     selectedValue: string,
-    candidates: string[],
+    _candidates: string[],
   ) => {
     if (!v3JobId || v3CorrectionInFlightRef.current.has(targetDisplayId) || v3CorrectionInFlightRef.current.size > 0) return;
     v3CorrectionInFlightRef.current.add(targetDisplayId);
