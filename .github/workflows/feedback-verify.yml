@@ -1,0 +1,69 @@
+name: Feedback accuracy verification
+on:
+  push:
+    branches: ['chore/feedback-link-20260909']
+    paths:
+      - '.github/workflows/feedback-verify.yml'
+      - '.review-patches/*.py'
+      - 'src/**'
+      - 'e2e/**'
+      - 'scripts/bench/**'
+concurrency:
+  group: feedback-accuracy-verification
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply guarded source wiring
+        run: |
+          python3 .review-patches/prepare-core.py
+          python3 .review-patches/apply-feedback.py
+          python3 .review-patches/apply-feedback-ui.py
+          python3 .review-patches/finalize-inputs.py
+          git diff --check
+          npm ci > /tmp/feedback-install.log 2>&1 || { tail -80 /tmp/feedback-install.log; exit 1; }
+          sed -n '1,90p' node_modules/next/dist/docs/01-app/02-guides/testing/jest.md
+          sed -n '1,70p' node_modules/next/dist/docs/01-app/02-guides/testing/playwright.md
+      - name: Typecheck and lint
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+      - name: Focused accuracy and feedback contracts
+        run: |
+          npm test -- --runInBand --testPathPatterns='reviewed-symbol-feedback|rating-assignment-regression|cross-page-graph|rated-value-extractor|uncertainty-contract|symbol-library|team-result-adapter' > /tmp/feedback-focused.log 2>&1 || { cat /tmp/feedback-focused.log; exit 1; }
+          tail -25 /tmp/feedback-focused.log
+          npm run test:scripts > /tmp/feedback-scripts.log 2>&1 || { tail -100 /tmp/feedback-scripts.log; exit 1; }
+          tail -15 /tmp/feedback-scripts.log
+      - name: Save applied source diagnostics
+        if: always()
+        run: |
+          mkdir -p /tmp/feedback-applied
+          cp .review-patches/apply-feedback.py /tmp/feedback-applied/
+          git diff -- src scripts > /tmp/feedback-applied/product.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: feedback-focused-verification
+          path: |
+            /tmp/feedback-focused.log
+            /tmp/feedback-scripts.log
+            /tmp/feedback-applied/
+          retention-days: 3
+          if-no-files-found: warn
