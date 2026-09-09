@@ -44,6 +44,24 @@ it('a missing endpoint is unread; an unknown endpoint cannot yield a confirmed c
   const doc = analysis(); doc.connections.push({ id: 'missing', from: 'known', to: 'absent' });
   expect(buildQuickDrawingReadout(doc).connections.map((item) => item.relation.certainty)).toEqual(['ambiguous', 'unread']);
 });
+it('competing type candidates are review, not promotion of the first candidate', () => {
+  const doc = analysis();
+  doc.components[0] = { ...doc.components[0], typeCandidates: ['breaker', 'fuse'] };
+  const read = buildQuickDrawingReadout(doc);
+  expect(read.components[0].type).toEqual({ certainty: 'ambiguous', reason: 'MULTIPLE_TYPE_CANDIDATES' });
+  expect(read.connections[0].relation.certainty).toBe('ambiguous');
+});
+it('duplicate spelling of one candidate is not treated as a candidate conflict', () => {
+  const doc = analysis();
+  doc.components[0] = { ...doc.components[0], typeCandidates: ['breaker', ' breaker '] };
+  expect(buildQuickDrawingReadout(doc).components[0].type.reason).toBe('QUICK_NOT_VERIFIED');
+});
+it('high global confidence cannot override a competing candidate set', () => {
+  const doc = analysis();
+  doc.confidence = 1;
+  doc.components[0] = { ...doc.components[0], typeCandidates: ['breaker', 'switch'] };
+  expect(buildQuickDrawingReadout(doc).components[0].type.certainty).toBe('ambiguous');
+});
 it('truncated extraction cannot be relabelled as complete', () => {
   expect(buildQuickDrawingReadout({ ...analysis(), partial: true }).completeness).toBe('partial');
 });
