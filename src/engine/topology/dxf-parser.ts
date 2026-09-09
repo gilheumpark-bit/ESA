@@ -15,6 +15,7 @@ import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 import {
   fingerprintBlock,
+  matchSymbolFeedback,
   indexSymbolLibrary,
   matchSymbol,
   type SymbolLibrary,
@@ -397,7 +398,8 @@ export function parseDxfToSLD(
         // 조용한 'load' 뭉개기가 사용자가 라이브러리를 만들 기회를 없애기 때문.
         const fingerprint = blockFingerprint(entity.name);
         const libraryType = libraryIndex ? matchSymbol(libraryIndex, entity.name, fingerprint) : null;
-        const heuristicType = libraryType ? null : resolveBlockTypeOrNull(entity.name);
+        const feedback = libraryIndex ? matchSymbolFeedback(libraryIndex, entity.name, fingerprint) : undefined;
+        const heuristicType = libraryType || feedback?.status === 'conflict' ? null : resolveBlockTypeOrNull(entity.name);
         if (libraryType) libraryMatched += 1;
         if (!libraryType && !heuristicType) {
           const known = unknownSymbols.get(entity.name);
@@ -417,7 +419,9 @@ export function parseDxfToSLD(
           type,
           label: entity.name,
           position: { x: entity.position.x, y: entity.position.y },
-          properties: { blockName: entity.name, layer: entity.layer ?? '' },
+          properties: { blockName: entity.name, layer: entity.layer ?? '', ...(fingerprint ? { blockFingerprint: fingerprint } : {}),
+            ...(feedback?.status === 'matched' ? { feedbackIds: feedback.feedbackIds.join(','), feedbackRevision: String(libraryIndex?.revision ?? 0) } : {}),
+            ...(feedback?.status === 'conflict' ? { feedbackConflict: 'true' } : {}) },
         });
         if (components.length > maxComponents) return dxfResourceLimit(`components > ${maxComponents}`);
         break;

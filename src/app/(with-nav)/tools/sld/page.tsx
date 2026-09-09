@@ -18,6 +18,7 @@ import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { prepareDrawingCalculationInputs } from '@/lib/drawing-calculation-inputs';
 import { buildQuickDrawingReadout, QUICK_READ_REASON_LABELS, type QuickComponentRead, type QuickConnectionRead } from '@/lib/quick-drawing-readout';
 import { DRAWING_CERTAINTY_LABELS } from '@/lib/drawing-certainty';
+import { SymbolFeedbackPanel } from '@/components/SymbolFeedbackPanel';
 import { DrawingReadingSummary } from '@/components/DrawingReadingSummary';
 import type { SLDComponent, SLDConnection, CalcChainStep, SLDAnalysis as SLDAnalysisResult } from '@/lib/sld-recognition';
 import { readApiErrorMessage } from '@/lib/error-messages';
@@ -1618,6 +1619,12 @@ export default function SLDAnalysisPage() {
           </div>
         )}
       </section>
+
+      <SymbolFeedbackPanel key={symbolLibraryCatalog.activeOrganization ?? '__no-company__'} document={v3Doc} catalog={symbolLibraryCatalog}
+        blocked={symbolLibraryRecoveryRequired} onSaved={(catalog) => {
+          setSymbolLibraryCatalog(catalog);
+          setSymbolLibraryStatus('피드백 사전을 갱신했습니다. 새 분석에만 적용됩니다.');
+        }} />
 
       {/* Analysis results */}
       {analysis && (

@@ -5,6 +5,7 @@
  * Node 전용 모듈을 참조하지 않아 도면 화면에서도 같은 검증 규칙을 쓴다.
  */
 
+import { parseSymbolFeedback, type SymbolFeedback } from './symbol-feedback';
 import { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-types';
 
 export interface SymbolLibraryEntry {
@@ -22,6 +23,9 @@ export interface SymbolLibrary {
   /** 고객사 식별 — 표시·정리용이며 매칭에는 쓰지 않는다. */
   organization: string;
   entries: SymbolLibraryEntry[];
+  /** Explicit local review history; approved rules require BOTH fingerprint and name. */
+  feedback?: SymbolFeedback[];
+  revision?: number;
 }
 
 export interface SymbolLibraryLint {
@@ -58,7 +62,14 @@ export function parseSymbolLibrary(raw: unknown): SymbolLibraryLint {
   if (!organization || organization.length > CAPS.orgLen) {
     errors.push(`organization 누락 또는 무효 (1~${CAPS.orgLen}자)`);
   }
-  if (!Array.isArray(record.entries) || record.entries.length === 0) {
+  let feedback: SymbolFeedback[] | undefined;
+  if (hasOwn(record, 'feedback')) {
+    try { feedback = parseSymbolFeedback(record.feedback); }
+    catch (error) { errors.push(error instanceof Error ? error.message : '피드백 검증 실패'); }
+  }
+  const revision = record.revision;
+  if (revision !== undefined && (!Number.isSafeInteger(revision) || (revision as number) < 0)) errors.push('revision 형식 무효');
+  if (!Array.isArray(record.entries) || (record.entries.length === 0 && !feedback?.length)) {
     errors.push('entries 는 비어 있지 않은 배열이어야 합니다');
     return { ok: false, errors };
   }
@@ -161,5 +172,6 @@ export function parseSymbolLibrary(raw: unknown): SymbolLibraryLint {
   });
 
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, errors, library: { schemaVersion: 1, organization, entries } };
+  return { ok: true, errors, library: { schemaVersion: 1, organization, entries,
+    ...(feedback ? { feedback } : {}), ...(revision !== undefined ? { revision: revision as number } : {}) } };
 }

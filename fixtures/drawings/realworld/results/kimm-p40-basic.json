@@ -4053,6 +4053,6730 @@
       "confidence": 0.85,
       "rawDescription": "PDF vector parsed (page 40): 78 components, 190 connections (snapped 409, junctions 32, dropped 98), 237 text items, 556 line segments"
     },
+    "readout": {
+      "schemaVersion": 1,
+      "source": "quick-extraction",
+      "scope": "observed-records-only",
+      "completeness": "not-verified",
+      "components": [
+        {
+          "id": "comp_1",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_2",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_3",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "comp_4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "comp_5",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_6",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_7",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_8",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_9",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_10",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_11",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_12",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_13",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_14",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_15",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_16",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_17",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_18",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_19",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_20",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_21",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_22",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_23",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_24",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_25",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_26",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "comp_27",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "comp_28",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_29",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_30",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "comp_31",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_32",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_33",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_34",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_35",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_36",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_37",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_38",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_39",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_40",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_41",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_42",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_43",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_44",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_45",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "comp_46",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            }
+          }
+        },
+        {
+          "id": "junction_330.24_330.68",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_587.04_330.68",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_330.24_94.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_587.04_94.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_447.36_301.88",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_883.8_330.68",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_883.8_101.84",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_855.24_162.8",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_747.96_303.68",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_48.12_805.16",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_48.12_37.16",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_1138.08_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_1053_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_967.92_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_797.88_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_627.84_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_365.64_787.52",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_435.12_778.64",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_532.32_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_219.12_769.76",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_1138.08_37.16",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_219.12_688.4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_100.08_688.4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_101.64_763.4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_711.72_723.56",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_330.24_598.4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_587.04_598.4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_587.04_415.04",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_447.36_569.6",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_883.8_598.4",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_883.8_415.04",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "junction_744.12_569.6",
+          "type": {
+            "certainty": "ambiguous",
+            "reason": "SYNTHETIC_JUNCTION"
+          },
+          "fields": {
+            "label": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "rating": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "voltage": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "current": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "conn_1",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_2",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_3",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_4",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_5",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_6",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_7",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_8",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_9",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_10",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_11",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_12",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_13",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_14",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_16",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_18",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_19",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_20",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_21",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_22",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_23",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_24",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_25",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_27",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_28",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_29",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_30",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_31",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_32",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_33",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_34",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_35",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_37",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_39",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_42",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_44",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_45",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_52",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_53",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_60",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_61",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_62",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_63",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_64",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_65",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_66",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_67",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_68",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_69",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_70",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_71",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_72",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_73",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "ambiguous",
+              "reason": "QUICK_NOT_VERIFIED"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_74",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_75",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_76",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_77",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_78",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_79",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_81",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_82",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_83",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_84",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_85",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_86",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_88",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_89",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_91",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_92",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_93",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_94",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_95",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_96",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_98",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_99",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_100",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_101",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_102",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_103",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_105",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_108",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_110",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_111",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_118",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_119",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_126",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_127",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_132",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_133",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_134",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_135",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_138",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_139",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_140",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_143",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_144",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_145",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_146",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_147",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_148",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_149",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_150",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_151",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_152",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_153",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_154",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_155",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_156",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_157",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_158",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_159",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_160",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_161",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_162",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_163",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_164",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_165",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_166",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_167",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_168",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_169",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_170",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_171",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_172",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_173",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_174",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_175",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_176",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_177",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_178",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_179",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_180",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_181",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_182",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_183",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_184",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_185",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_189",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_191",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_192",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_193",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_195",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_196",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_200",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_201",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_202",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_203",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_205",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_208",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_210",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_211",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_212",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_213",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_215",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_216",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_217",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_218",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_219",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_220",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_227",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_228",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_229",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_230",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_231",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_232",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_233",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_234",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_235",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_236",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_237",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_238",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_239",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_240",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_244",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_246",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_247",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_248",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_250",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_251",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_253",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_254",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_255",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_256",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_257",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_258",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_265",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_266",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_268",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_273",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        },
+        {
+          "id": "conn_274",
+          "relation": {
+            "certainty": "ambiguous",
+            "reason": "QUICK_NOT_VERIFIED"
+          },
+          "fields": {
+            "cableType": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "length": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "conductorSize": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            },
+            "flowDirection": {
+              "certainty": "unread",
+              "reason": "VALUE_NOT_READ"
+            }
+          }
+        }
+      ],
+      "counts": {
+        "components": {
+          "confirmed": 0,
+          "ambiguous": 78,
+          "unread": 0,
+          "total": 78
+        },
+        "connections": {
+          "confirmed": 0,
+          "ambiguous": 190,
+          "unread": 0,
+          "total": 190
+        }
+      }
+    },
     "calcChain": [],
     "review": {
       "findings": [
@@ -4758,7 +11482,7 @@
       "method": "pdf-vector",
       "confidence": 0.85,
       "description": "PDF vector parsed (page 40): 78 components, 190 connections (snapped 409, junctions 32, dropped 98), 237 text items, 556 line segments",
-      "durationMs": 383
+      "durationMs": 165
     }
   }
 }

@@ -28,6 +28,7 @@
 
 import { createHash } from 'node:crypto';
 
+import { feedbackNameKey, type SymbolFeedback } from '@/lib/symbol-feedback';
 import type { SLDComponentType } from '@/lib/sld-component-types';
 import type { SymbolLibrary } from '@/lib/symbol-library-contract';
 
@@ -358,6 +359,8 @@ export interface SymbolLibraryIndex {
   /** 같은 별칭에 서로 다른 기기 종류가 등록된 경우 — 이름만으로 자동 판정 금지. */
   ambiguousBlockNames: Set<string>;
   size: number;
+  feedback?: SymbolFeedback[];
+  revision?: number;
 }
 
 /** 매 INSERT 마다 배열을 훑지 않도록 한 번 색인한다. 뒤 항목이 앞 항목을 덮지 않는다(선등록 우선). */
@@ -394,8 +397,26 @@ export function indexSymbolLibrary(library: SymbolLibrary): SymbolLibraryIndex {
     ambiguousFingerprints,
     byBlockName,
     ambiguousBlockNames,
-    size: library.entries.length,
+    size: library.entries.length + (library.feedback?.filter((item) => item.status === 'approved').length ?? 0),
+    feedback: library.feedback?.filter((item) => item.status === 'approved'),
+    revision: library.revision,
   };
+}
+
+/** Reviewed cases are exact, conjunctive matches. Conflicts never use first-wins. */
+export function matchSymbolFeedback(index: SymbolLibraryIndex, blockName: string, fingerprint: string | null):
+  { status: 'none' } | { status: 'conflict' } | { status: 'matched'; type: SLDComponentType; feedbackIds: string[] } {
+  const matches = (index.feedback ?? []).filter((item) => item.status === 'approved' && item.source.fingerprint === fingerprint
+    && feedbackNameKey(item.source.blockName) === feedbackNameKey(blockName));
+  if (!matches.length) return { status: 'none' };
+  const knownTypes = new Set(matches.map((item) => item.deviceType));
+  const legacy = fingerprint ? index.byFingerprint.get(fingerprint) : undefined;
+  const named = index.byBlockName.get(feedbackNameKey(blockName));
+  if (legacy) knownTypes.add(legacy);
+  if (named) knownTypes.add(named);
+  if (knownTypes.size !== 1 || (fingerprint && index.ambiguousFingerprints.has(fingerprint))
+    || index.ambiguousBlockNames.has(feedbackNameKey(blockName))) return { status: 'conflict' };
+  return { status: 'matched', type: matches[0].deviceType, feedbackIds: matches.map((item) => item.id).sort() };
 }
 
 /**
@@ -407,6 +428,9 @@ export function matchSymbol(
   blockName: string,
   fingerprint: string | null,
 ): SLDComponentType | null {
+  const feedback = matchSymbolFeedback(index, blockName, fingerprint);
+  if (feedback.status === 'conflict') return null;
+  if (feedback.status === 'matched') return feedback.type;
   if (fingerprint && !index.ambiguousFingerprints.has(fingerprint)) {
     const byFp = index.byFingerprint.get(fingerprint);
     if (byFp) return byFp;

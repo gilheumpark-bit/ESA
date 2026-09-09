@@ -1,6 +1,6 @@
 /** Production-module regressions; no AI calls, credentials, or drawing uploads. */
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -28,6 +28,14 @@ for (const name of [
   assert.equal(errors.length, 0, errors.map((item) => ts.flattenDiagnosticMessageText(item.messageText, '\n')).join('\n'));
   writeFileSync(path.join(build, `${name}.js`), compiled.outputText);
 }
+for (const name of ['symbol-feedback', 'sld-component-types']) {
+  const source = readFileSync(path.join(root, 'src/lib', `${name}.ts`), 'utf8');
+  const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
+  mkdirSync(path.join(build, 'lib'), { recursive: true });
+  writeFileSync(path.join(build, 'lib', `${name}.js`), compiled.outputText);
+}
+const adapter = path.join(build, 'team-result-adapter.js');
+writeFileSync(adapter, readFileSync(adapter, 'utf8').replace('require("@/lib/symbol-feedback")', 'require("./lib/symbol-feedback")'));
 const require = createRequire(import.meta.url);
 const { deduplicateSymbols, deduplicateLines, buildPageRelations } = require(path.join(build, 'evidence-deduplicator.js'));
 const { adaptTeamResult } = require(path.join(build, 'team-result-adapter.js'));

@@ -90,6 +90,8 @@ export interface EvidenceRef {
 }
 
 export interface SymbolNode {
+  /** Only vector-origin metadata; not inferred from model prose. */
+  sourceSymbol?: import('@/lib/symbol-feedback').DxfSymbolIdentity;
   id: string;
   displayId: string;
   equipmentId?: string;
@@ -164,6 +166,9 @@ export interface EquipmentCountRow {
 }
 
 export interface RatedValue {
+  /** Reading a number and assigning it to equipment are separate claims. */
+  textSpan?: { start: number; end: number };
+  ownership?: { status: Certainty; candidates: string[]; reason: string };
   id: string;
   displayId: string;
   field: string;
@@ -384,4 +389,4 @@ export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
 export const PROMPT_VERSION = 'sld-role-v8';
 export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v9';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v10';

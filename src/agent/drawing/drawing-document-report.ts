@@ -115,7 +115,7 @@ export function buildDrawingDocumentV3(input: {
   if (input.evidenceGraph.texts.some((item) => item.certainty === 'unread')) {
     addHoldReason(holdReasons, 'UNREADABLE_TEXT');
   }
-  if (input.ratedValues.some((item) => item.certainty !== 'confirmed')) {
+  if (input.ratedValues.some((item) => item.certainty !== 'confirmed' || (item.ownership && item.ownership.status !== 'confirmed'))) {
     addHoldReason(holdReasons, 'UNREADABLE_TEXT');
   }
   if (input.crossPageRelations.some((item) => item.status !== 'confirmed')) {

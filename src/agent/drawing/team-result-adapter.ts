@@ -1,3 +1,4 @@
+import { readDxfSymbolIdentity } from '@/lib/symbol-feedback';
 import type { TeamResult } from '@/agent/teams/types';
 import type { BoundaryContinuationPlan } from '@/agent/vision/continuity-types';
 import type { EvidenceBounds } from '@/agent/vision/evidence-types';
@@ -339,6 +340,7 @@ export function adaptTeamResult(
       confidence: component.confidence,
       pageIndex: context.pageIndex,
       regionId: 'vector-full',
+      sourceSymbol: readDxfSymbolIdentity({ blockName: component.properties?.blockName, fingerprint: component.properties?.blockFingerprint }),
       certainty: component.type === 'unknown' ? 'unread' : component.confidence >= 0.85 ? 'confirmed' : 'ambiguous',
     });
     if (component.label) {

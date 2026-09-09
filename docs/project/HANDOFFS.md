@@ -4,6 +4,8 @@
 
 ## 2026-09-09
 
+- [사람 피드백의 다음 DXF 연계·정격/페이지 연결 정밀도](handoffs/2026-09-09-feedback-precision.md)
+
 - [미판독 계약 추가 설계 검토·계수·수정·계산·보고서 일관성](handoffs/2026-09-09-uncertainty-contract-review.md)
 
 - [개발 잔재·개발 의존성·기술부채 정리](handoffs/2026-09-09-development-debt-cleanup.md)

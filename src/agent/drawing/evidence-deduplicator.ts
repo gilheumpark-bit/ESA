@@ -11,6 +11,7 @@ import { buildConductorAdjacency, resolveTerminalPaths } from './terminal-path-r
 import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, UnresolvedItem } from './types-v3';
 
 export interface RawSymbolHit {
+  sourceSymbol?: SymbolNode['sourceSymbol'];
   localId: string;
   type: string;
   /** Preserve alternatives and original-coordinate terminals from the reviewer. */
@@ -163,6 +164,7 @@ export function deduplicateSymbols(
   // Keep the area tied to that explicit observation, not an unrelated crop.
   const explicitBodies = new Map<string, { type: string; area: number }>();
   const kept: SymbolNode[] = [];
+  const conflictingOrigins = new Set<string>();
   const pageSequences = new Map<number, number>();
   const ordered = [...hits].sort((left, right) =>
     left.pageIndex - right.pageIndex
@@ -219,6 +221,12 @@ export function deduplicateSymbols(
     });
 
     if (dup) {
+      if (hit.sourceSymbol && !conflictingOrigins.has(dup.id)) {
+        if (dup.sourceSymbol && JSON.stringify(dup.sourceSymbol) !== JSON.stringify(hit.sourceSymbol)) {
+          delete dup.sourceSymbol;
+          conflictingOrigins.add(dup.id);
+        } else dup.sourceSymbol = { ...hit.sourceSymbol };
+      }
       const previousMaxConfidence = Math.max(...dup.evidence.map((item) => item.confidence));
       // Compare against the existing evidence BEFORE appending the new body.
       // Including the incoming area makes `largestArea * 4 <= hitArea` impossible.
@@ -315,6 +323,7 @@ export function deduplicateSymbols(
       id,
       displayId,
       typeCandidates: hitCandidates,
+      ...(hit.sourceSymbol ? { sourceSymbol: { ...hit.sourceSymbol } } : {}),
       confirmedType: hitConfirmed ? hitType : undefined,
       rawLabel: hit.label,
       certainty: hit.certainty === 'unread' || hit.type.trim().toLowerCase() === 'unknown' ? 'unread' : hitConfirmed ? 'confirmed' : 'ambiguous',

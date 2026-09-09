@@ -80,7 +80,7 @@ export function drawingDocumentRows(document: DrawingDocumentV3): DrawingExportR
   }
   for (const value of document.ratedValues ?? []) {
     add({ section: '정격', displayId: cell(value.displayId), kind: cell(value.field),
-      detail: `${equipment(value.equipmentId)} · ${value.normalized ? `${value.normalized.value} ${value.normalized.unit}` : cell(value.raw)}`,
+      detail: `${equipment(value.equipmentId)} · ${value.normalized ? `${value.normalized.value} ${value.normalized.unit}` : cell(value.raw)}${value.ownership ? ` · 귀속 ${certaintyLabel(value.ownership.status)} · 후보: ${value.ownership.candidates.map(equipment).join(' / ') || '없음'}` : ' · 귀속 상태 미기록'}`,
       certainty: certaintyLabel(value.certainty), ...sourceColumns(value.evidence) });
   }
   for (const calculation of document.calculations ?? []) {
