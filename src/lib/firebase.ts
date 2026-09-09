@@ -142,6 +142,8 @@ export async function onAuthChanged(
  */
 export async function getIdToken(forceRefresh = false): Promise<string | null> {
   const auth = await getFirebaseAuth();
+  // Initial restoration is asynchronous: null before it settles is not sign-out.
+  await auth.authStateReady();
   const user = auth.currentUser;
   if (!user) return null;
   return user.getIdToken(forceRefresh);
@@ -152,6 +154,8 @@ export async function getIdToken(forceRefresh = false): Promise<string | null> {
  */
 export async function getCurrentUser(): Promise<ESAUser | null> {
   const auth = await getFirebaseAuth();
+  // Initial restoration is asynchronous: null before it settles is not sign-out.
+  await auth.authStateReady();
   const user = auth.currentUser;
   return user ? mapFirebaseUser(user) : null;
 }

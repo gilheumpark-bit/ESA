@@ -12,6 +12,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   History,
   Search,
@@ -22,7 +23,7 @@ import {
 import type { Receipt } from '@/engine/receipt/types';
 import { EmptyHistory } from '@/components/EmptyState';
 import { CALCULATOR_NAMES } from '@/lib/calculator-params';
-import { CALCULATOR_CATALOG, CALC_CATEGORY_LABELS } from '@/lib/calculator-catalog';
+import { CALCULATOR_CATALOG, CALC_CATEGORY_LABELS, calculatorHref } from '@/lib/calculator-catalog';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types & Constants
@@ -167,6 +168,7 @@ function exportCsv(entries: HistoryEntry[]): void {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function HistoryPage() {
+  const router = useRouter();
   // Load receipts from sessionStorage on mount
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [search, setSearch] = useState('');
@@ -349,7 +351,7 @@ export default function HistoryPage() {
 
         {/* Table or empty state */}
         {filtered.length === 0 ? (
-          <EmptyHistory onExample={(calcId) => window.location.href = `/calc/power/${calcId}`} />
+          <EmptyHistory onExample={(calcId) => router.push(calculatorHref(calcId))} />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
             <table className="w-full border-collapse">

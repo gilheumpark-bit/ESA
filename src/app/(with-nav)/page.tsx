@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Search, FileText, Camera, BarChart3, Globe, FolderOpen,
   Users, BookOpen, Shield, HardHat, Columns2, ClipboardCheck,
@@ -36,8 +37,9 @@ const TOOLS: Array<{ icon: LucideIcon; label: string; href: string }> = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, startNavigation] = useTransition();
   const [calcIntent, setCalcIntent] = useState<CalcIntentResult | null>(null);
 
   // 질의 실행 — 계산 의도면 인라인 계산, 아니면 검색 페이지. (기존 로직 보존)
@@ -50,9 +52,8 @@ export default function HomePage() {
       setCalcIntent(intent);
       return;
     }
-    setIsLoading(true);
-    window.location.href = `/search?q=${encodeURIComponent(q)}&answer=1`;
-  }, []);
+    startNavigation(() => router.push(`/search?q=${encodeURIComponent(q)}&answer=1`));
+  }, [router, startNavigation]);
 
   const handleSearch = useCallback(() => runQuery(query), [runQuery, query]);
   const handleKeyDown = useCallback(

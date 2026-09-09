@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createBoundedTaskPool } from './bounded-task-pool';
 
 import {
   drawingRoleTimeoutMs,
@@ -88,6 +89,9 @@ export interface SourceCallTiming {
 
 export interface DrawingCouncilPerformance {
   version: 'drawing-perf-v1';
+  /** Full extraction readiness, before independent logic necessarily finishes. */
+  graphReadyMs?: number;
+  scheduling?: 'overlap-logic-v1';
   totalMs: number;
   stages: Partial<Record<'full' | 'regionPreparation' | 'precision' | 'audit', number>>;
   selectedRegions: number;
@@ -860,12 +864,16 @@ async function invokeSource(task: SourceTask, input: DrawingCouncilInput, invoke
   return { role: task.role, source: task.source, data, model: result.model };
 }
 
+interface SettledSources { successes: SourceSuccess[]; failures: SourceFailure[] }
+
 async function runFairSourceTasks(
-  plans: readonly PlannedRole[], input: DrawingCouncilInput, invoke: Invoke, limit: number,
+  plans: readonly PlannedRole[], input: DrawingCouncilInput, invoke: Invoke,
+  pool: ReturnType<typeof createBoundedTaskPool>,
   recordTiming?: (timing: SourceCallTiming) => void,
-): Promise<{ successes: SourceSuccess[]; failures: SourceFailure[] }> {
+  onGraphSettled?: (settled: SettledSources) => void,
+): Promise<SettledSources> {
   const tasks: SourceTask[] = [];
-  const longestPlan = Math.max(...plans.map((plan) => plan.sources.length));
+  const longestPlan = Math.max(0, ...plans.map((plan) => plan.sources.length));
   for (let sourceIndex = 0; sourceIndex < longestPlan; sourceIndex += 1) {
     for (const plan of plans) {
       const source = plan.sources[sourceIndex];
@@ -874,45 +882,37 @@ async function runFairSourceTasks(
   }
   const successes: SourceSuccess[] = [];
   const failures: SourceFailure[] = [];
-  const started = new Set<number>();
   const queuedAt = performance.now();
-  let nextTask = 0;
-  const worker = async (): Promise<void> => {
-    while (true) {
-      if (input.options.signal?.aborted) {
-        if (input.settleOnAbort) return;
-        throw abortError();
-      }
-      const index = nextTask++;
-      if (index >= tasks.length) return;
-      const task = tasks[index];
-      started.add(index);
-      const startedAt = performance.now();
-      let outcome: SourceCallTiming['outcome'] = 'success';
-      try {
-        successes.push(await invokeSource(task, input, invoke));
-      } catch (error) {
-        outcome = input.options.signal?.aborted ? 'aborted' : 'failed';
-        if (input.options.signal?.aborted) {
-          if (!input.settleOnAbort) throw abortError();
-          failures.push({ role: task.role, source: task.source, order: task.order, error, started: true });
-          return;
-        }
-        failures.push({ role: task.role, source: task.source, order: task.order, error, started: true });
-      } finally {
-        recordTiming?.({ role: task.role, sourceId: task.source.id,
-          queueMs: Math.max(0, startedAt - queuedAt), serviceMs: Math.max(0, performance.now() - startedAt), outcome });
-      }
+  let graphPending = tasks.filter((task) => task.role !== 'logic').length;
+  const graphSnapshot = (): SettledSources => ({
+    successes: successes.filter((item) => item.role !== 'logic'),
+    failures: failures.filter((item) => item.role !== 'logic'),
+  });
+  if (graphPending === 0) onGraphSettled?.(graphSnapshot());
+  // All full-stage tasks enter the FIFO before precision tasks. The SAME pool
+  // bounds both stages; overlapping logic must not increase provider concurrency.
+  await Promise.all(tasks.map(async (task) => {
+    let started = false;
+    let startedAt = 0;
+    let outcome: SourceCallTiming['outcome'] = 'success';
+    try {
+      const success = await pool.run(async () => {
+        throwIfAborted(input.options.signal);
+        started = true;
+        startedAt = performance.now();
+        return invokeSource(task, input, invoke);
+      });
+      successes.push(success);
+    } catch (error) {
+      outcome = input.options.signal?.aborted ? 'aborted' : 'failed';
+      failures.push({ role: task.role, source: task.source, order: task.order, error, started });
+      if (input.options.signal?.aborted && !input.settleOnAbort) throw abortError();
+    } finally {
+      if (started) recordTiming?.({ role: task.role, sourceId: task.source.id,
+        queueMs: Math.max(0, startedAt - queuedAt), serviceMs: Math.max(0, performance.now() - startedAt), outcome });
+      if (task.role !== 'logic' && --graphPending === 0) onGraphSettled?.(graphSnapshot());
     }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
-  if (input.options.signal?.aborted && input.settleOnAbort) {
-    for (let index = 0; index < tasks.length; index += 1) {
-      if (started.has(index)) continue;
-      const task = tasks[index];
-      failures.push({ role: task.role, source: task.source, order: task.order, error: abortError(), started: false });
-    }
-  }
+  }));
   return { successes, failures };
 }
 
@@ -990,17 +990,18 @@ export async function runDrawingCouncil(
   throwIfAborted(input.options.signal);
   const councilStarted = performance.now();
   const metrics: DrawingCouncilPerformance = {
-    version: 'drawing-perf-v1', totalMs: 0, stages: {}, selectedRegions: 0,
+    version: 'drawing-perf-v1', scheduling: 'overlap-logic-v1', totalMs: 0, stages: {}, selectedRegions: 0,
     preparedRegions: 0, preparationFailures: 0, calls: [],
   };
   const finish = (result: DrawingCouncilResult): DrawingCouncilResult => ({
     ...result, performance: { ...metrics, stages: { ...metrics.stages }, calls: [...metrics.calls],
       totalMs: Math.max(0, performance.now() - councilStarted) },
   });
-  const timedTasks = async (stage: 'full' | 'precision' | 'audit', plans: readonly PlannedRole[], limit: number) => {
+  const pool = createBoundedTaskPool(limits.maxConcurrentCalls);
+  const timedTasks = async (stage: 'full' | 'precision' | 'audit', plans: readonly PlannedRole[], onGraphSettled?: (settled: SettledSources) => void) => {
     const started = performance.now();
     try {
-      return await runFairSourceTasks(plans, input, invoke, limit, (timing) => metrics.calls.push({ stage, ...timing }));
+      return await runFairSourceTasks(plans, input, invoke, pool, (timing) => metrics.calls.push({ stage, ...timing }), onGraphSettled);
     } finally {
       metrics.stages[stage] = Math.max(0, performance.now() - started);
     }
@@ -1017,115 +1018,127 @@ export async function runDrawingCouncil(
     started: Date.now(),
   }));
   const fullPlannedCalls = fullPlans.reduce((total, plan) => total + plan.sources.length, 0);
-  const fullSettled = await timedTasks('full', fullPlans, limits.maxConcurrentCalls);
-  const fullOutcomes = fullPlans
-    .filter((plan) => plan.sources.length > 0)
-    .map((plan) => buildRoleOutcome(plan, fullSettled.successes, fullSettled.failures, input));
-  const fullEnvelopes = fullOutcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
-  const fullFailures = fullOutcomes.flatMap((outcome) => outcome.failures);
-  const precisionPlan = selectPrecisionPlan(input, fullEnvelopes, fullFailures, limits.maxRegionCalls, activeRoles);
-  const selectedRegionIds = new Set(Object.values(precisionPlan).flat());
-  const selectedRegions = input.regions.filter((region) => selectedRegionIds.has(region.id));
-  const plannedCalls = fullPlannedCalls
-    + Object.values(precisionPlan).reduce((total, regionIds) => total + regionIds.length, 0)
-    + 1;
-  const continuityPlan = buildContinuationPlan(input, selectedRegions, fullPlans, fullSettled);
-  if (input.options.signal?.aborted) {
-    if (!input.settleOnAbort) throw abortError();
-    return finish(settleAbortedCouncil(input, fullPlans, fullSettled, continuityPlan, plannedCalls, precisionPlan));
-  }
-  const preparationStarted = performance.now();
-  metrics.selectedRegions = selectedRegions.length;
-  const prepared: Array<PrecisionRegion | undefined> = new Array(selectedRegions.length);
-  const preparationFailures: SourceFailure[] = [];
-  let nextRegion = 0;
-  // Two image workers bound native memory independently of provider concurrency.
-  const prepareWorker = async () => {
-    while (nextRegion < selectedRegions.length) {
-      const index = nextRegion++;
-      const descriptor = selectedRegions[index];
-      try {
-        throwIfAborted(input.options.signal);
-        const region = 'buffer' in descriptor ? descriptor : await input.materializeRegion!(descriptor, input.options.signal);
-        assertPreparedRegion(region);
-        if (regionDescriptorKey(region) !== regionDescriptorKey(descriptor)) invalid('materialized region identity or coordinates changed.');
-        throwIfAborted(input.options.signal);
-        const annotated = region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds
-          ? await annotateRegion(region, continuityPlan.continuations) : region;
-        assertPreparedRegion(annotated);
-        if (regionDescriptorKey(annotated) !== regionDescriptorKey(descriptor)) invalid('annotated region identity or coordinates changed.');
-        prepared[index] = annotated;
-        metrics.preparedRegions += 1;
-      } catch (error) {
-        metrics.preparationFailures += 1;
-        for (const role of activeRoles) {
-          if (role !== 'logic' && precisionPlan[role]?.includes(descriptor.id)) {
-            preparationFailures.push({ role, source: { id: descriptor.id }, order: index, error, started: false });
+  let resolveGraph!: (settled: SettledSources) => void;
+  let rejectGraph!: (error: unknown) => void;
+  const graphReady = new Promise<SettledSources>((resolve, reject) => { resolveGraph = resolve; rejectGraph = reject; });
+  const fullPending = timedTasks('full', fullPlans, resolveGraph);
+  // Observe rejection immediately, including strict abort before graph readiness.
+  void fullPending.then(resolveGraph, rejectGraph);
+  try {
+    const graphSettled = await graphReady;
+    metrics.graphReadyMs = Math.max(0, performance.now() - councilStarted);
+    const fullOutcomes = fullPlans
+      .filter((plan) => plan.role !== 'logic' && plan.sources.length > 0)
+      .map((plan) => buildRoleOutcome(plan, graphSettled.successes, graphSettled.failures, input));
+    const fullEnvelopes = fullOutcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
+    const fullFailures = fullOutcomes.flatMap((outcome) => outcome.failures);
+    const precisionPlan = selectPrecisionPlan(input, fullEnvelopes, fullFailures, limits.maxRegionCalls, activeRoles);
+    const selectedRegionIds = new Set(Object.values(precisionPlan).flat());
+    const selectedRegions = input.regions.filter((region) => selectedRegionIds.has(region.id));
+    const plannedCalls = fullPlannedCalls
+      + Object.values(precisionPlan).reduce((total, regionIds) => total + regionIds.length, 0)
+      + 1;
+    const continuityPlan = buildContinuationPlan(input, selectedRegions, fullPlans, graphSettled);
+    if (input.options.signal?.aborted) {
+      if (!input.settleOnAbort) throw abortError();
+      return finish(settleAbortedCouncil(input, fullPlans, await fullPending, continuityPlan, plannedCalls, precisionPlan));
+    }
+    const preparationStarted = performance.now();
+    metrics.selectedRegions = selectedRegions.length;
+    const prepared: Array<PrecisionRegion | undefined> = new Array(selectedRegions.length);
+    const preparationFailures: SourceFailure[] = [];
+    let nextRegion = 0;
+    // Two image workers bound native memory independently of provider concurrency.
+    const prepareWorker = async () => {
+      while (nextRegion < selectedRegions.length) {
+        const index = nextRegion++;
+        const descriptor = selectedRegions[index];
+        try {
+          throwIfAborted(input.options.signal);
+          const region = 'buffer' in descriptor ? descriptor : await input.materializeRegion!(descriptor, input.options.signal);
+          assertPreparedRegion(region);
+          if (regionDescriptorKey(region) !== regionDescriptorKey(descriptor)) invalid('materialized region identity or coordinates changed.');
+          throwIfAborted(input.options.signal);
+          const annotated = region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds
+            ? await annotateRegion(region, continuityPlan.continuations) : region;
+          assertPreparedRegion(annotated);
+          if (regionDescriptorKey(annotated) !== regionDescriptorKey(descriptor)) invalid('annotated region identity or coordinates changed.');
+          prepared[index] = annotated;
+          metrics.preparedRegions += 1;
+        } catch (error) {
+          metrics.preparationFailures += 1;
+          for (const role of activeRoles) {
+            if (role !== 'logic' && precisionPlan[role]?.includes(descriptor.id)) {
+              preparationFailures.push({ role, source: { id: descriptor.id }, order: index, error, started: false });
+            }
           }
         }
       }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(2, selectedRegions.length) }, () => prepareWorker()));
-  metrics.stages.regionPreparation = Math.max(0, performance.now() - preparationStarted);
-  const precisionRegions = prepared.filter((region): region is PrecisionRegion => region !== undefined);
-  const precisionPlans = activeRoles.map((role) => ({
-    role,
-    sources: precisionSourcesForRole(
+    };
+    await Promise.all(Array.from({ length: Math.min(2, selectedRegions.length) }, () => prepareWorker()));
+    metrics.stages.regionPreparation = Math.max(0, performance.now() - preparationStarted);
+    const precisionRegions = prepared.filter((region): region is PrecisionRegion => region !== undefined);
+    const precisionPlans = activeRoles.map((role) => ({
       role,
-      input,
-      precisionRegions.filter((region) => role === 'logic' || precisionPlan[role as PrecisionRole]?.includes(region.id)),
-      continuityPlan,
-      limits.maxRegionCalls,
-    ),
-    started: Date.now(),
-  }));
-  const precisionSettled = await timedTasks('precision', precisionPlans, limits.maxConcurrentCalls);
-  precisionSettled.failures.push(...preparationFailures);
-  const plans = activeRoles.map((role, index) => ({
-    role,
-    sources: [...fullPlans[index].sources, ...precisionPlans[index].sources],
-    started: fullPlans[index].started,
-  }));
-  const settled = {
-    successes: [...fullSettled.successes, ...precisionSettled.successes],
-    failures: [...fullSettled.failures, ...precisionSettled.failures],
-  };
-  if (input.options.signal?.aborted) {
-    if (!input.settleOnAbort) throw abortError();
-    return finish(settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls, precisionPlan));
+      sources: precisionSourcesForRole(
+        role,
+        input,
+        precisionRegions.filter((region) => role === 'logic' || precisionPlan[role as PrecisionRole]?.includes(region.id)),
+        continuityPlan,
+        limits.maxRegionCalls,
+      ),
+      started: Date.now(),
+    }));
+    const precisionSettled = await timedTasks('precision', precisionPlans);
+    const fullSettled = await fullPending;
+    precisionSettled.failures.push(...preparationFailures);
+    const plans = activeRoles.map((role, index) => ({
+      role,
+      sources: [...fullPlans[index].sources, ...precisionPlans[index].sources],
+      started: fullPlans[index].started,
+    }));
+    const settled = {
+      successes: [...fullSettled.successes, ...precisionSettled.successes],
+      failures: [...fullSettled.failures, ...precisionSettled.failures],
+    };
+    if (input.options.signal?.aborted) {
+      if (!input.settleOnAbort) throw abortError();
+      return finish(settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls, precisionPlan));
+    }
+    const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
+    const currentEnvelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
+    const primaryEnvelopes = mergePrimaryEnvelopes(input, currentEnvelopes, activeRoles);
+    const primaryFailures = outcomes.flatMap((outcome) => outcome.failures);
+    const original = selectCouncilVariant(COVERAGE_ROLE, input.variants, input.snapshot.quality.recommendedScale);
+    const auditPlan: PlannedRole = {
+      role: COVERAGE_ROLE,
+      sources: [{
+        id: original.id,
+        namespace: 'audit',
+        buffer: original.buffer,
+        originalBounds: { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height },
+      }],
+      started: Date.now(),
+      context: buildCoverageContext(
+        input,
+        [...(input.priorEnvelopes ?? []), ...primaryEnvelopes],
+        primaryFailures,
+        precisionPlan,
+        graphSummary(primaryEnvelopes, input.snapshot.width),
+      ),
+    };
+    const auditSettled = await timedTasks('audit', [auditPlan]);
+    const auditOutcome = buildRoleOutcome(auditPlan, auditSettled.successes, auditSettled.failures, input);
+    return finish({
+      envelopes: deepFreeze([...primaryEnvelopes, ...(auditOutcome.envelope ? [auditOutcome.envelope] : [])]) as RoleReviewEnvelope[],
+      failures: deepFreeze([...primaryFailures, ...auditOutcome.failures]) as RoleFailure[],
+      callCounts: callCounts(plannedCalls, settled, auditSettled),
+      precisionPlan: deepFreeze(precisionPlan) as PrecisionPlan,
+      continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
+    });
+  } finally {
+    await fullPending.catch(() => undefined);
   }
-  const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
-  const currentEnvelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
-  const primaryEnvelopes = mergePrimaryEnvelopes(input, currentEnvelopes, activeRoles);
-  const primaryFailures = outcomes.flatMap((outcome) => outcome.failures);
-  const original = selectCouncilVariant(COVERAGE_ROLE, input.variants, input.snapshot.quality.recommendedScale);
-  const auditPlan: PlannedRole = {
-    role: COVERAGE_ROLE,
-    sources: [{
-      id: original.id,
-      namespace: 'audit',
-      buffer: original.buffer,
-      originalBounds: { x: 0, y: 0, w: input.snapshot.width, h: input.snapshot.height },
-    }],
-    started: Date.now(),
-    context: buildCoverageContext(
-      input,
-      [...(input.priorEnvelopes ?? []), ...primaryEnvelopes],
-      primaryFailures,
-      precisionPlan,
-      graphSummary(primaryEnvelopes, input.snapshot.width),
-    ),
-  };
-  const auditSettled = await timedTasks('audit', [auditPlan], 1);
-  const auditOutcome = buildRoleOutcome(auditPlan, auditSettled.successes, auditSettled.failures, input);
-  return finish({
-    envelopes: deepFreeze([...primaryEnvelopes, ...(auditOutcome.envelope ? [auditOutcome.envelope] : [])]) as RoleReviewEnvelope[],
-    failures: deepFreeze([...primaryFailures, ...auditOutcome.failures]) as RoleFailure[],
-    callCounts: callCounts(plannedCalls, settled, auditSettled),
-    precisionPlan: deepFreeze(precisionPlan) as PrecisionPlan,
-    continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
-  });
 }
 
 function buildCoverageContext(

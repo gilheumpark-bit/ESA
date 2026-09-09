@@ -4,6 +4,8 @@
 
 ## 2026-09-09
 
+- [남은 항목: 보안 취약점 수정·논리 검토 대기 제거](handoffs/2026-09-09-remaining-security-scheduling.md)
+
 - [도면 처리 성능: 선택 구획·재검사 재사용·공간 색인](handoffs/2026-09-09-drawing-performance.md)
 
 ## 2026-09-08

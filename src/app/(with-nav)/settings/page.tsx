@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth, type UserTier } from '@/contexts/AuthContext';
 import {
   useSettings,
@@ -161,6 +162,7 @@ function AIConnectionSection() {
 }
 
 function PlanSection({ tier }: { tier: UserTier }) {
+  const router = useRouter();
   const badge = TIER_BADGES[tier];
   const [upgrading, setUpgrading] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -191,7 +193,7 @@ function PlanSection({ tier }: { tier: UserTier }) {
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken();
       if (!token) {
-        window.location.assign('/login');
+        router.push('/login');
         return;
       }
       const res = await fetch('/api/checkout', {
@@ -226,7 +228,7 @@ function PlanSection({ tier }: { tier: UserTier }) {
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken();
       if (!token) {
-        window.location.assign('/login');
+        router.push('/login');
         return;
       }
       const response = await fetch('/api/billing/portal', {
