@@ -41,19 +41,25 @@ export function quickFieldRead(value: unknown): QuickFieldRead {
     : { certainty: 'unread', reason: 'VALUE_NOT_READ' };
 }
 
+const NON_TYPES = new Set(['unknown', 'unread', 'unresolved', '모름', '미판독', '미확정']);
+function distinctTypeEvidence(component: SLDComponent): Set<string> {
+  return new Set([component.type, ...(component.typeCandidates ?? [])]
+    .map((candidate) => String(candidate ?? '').trim().toLowerCase())
+    .filter((candidate) => candidate.length > 0 && !NON_TYPES.has(candidate)));
+}
+
 /** Source fields are preserved; global confidence and model-supplied certainty
  * cannot turn a quick extraction into an independently verified claim. Competing
- * type candidates are kept as REVIEW rather than silently promoting typeCandidates[0].
- * Older DXF results that used load as the fallback are also read as unknown here. */
+ * primary/candidate type evidence is kept as REVIEW rather than silently promoting
+ * the primary type or typeCandidates[0]. Older DXF load fallbacks accompanied by
+ * unresolved block evidence are also read as unknown here. */
 export function buildQuickDrawingReadout(analysis: Pick<SLDAnalysis,
   'components' | 'connections' | 'unknownSymbols' | 'partial'>): QuickDrawingReadout {
   const unregistered = new Set((analysis.unknownSymbols ?? []).map((item) => item.blockName));
   const isUnknown = (component: SLDComponent) => component.type === 'unknown'
     || !hasReadValue(component.type)
     || unregistered.has(component.properties?.blockName ?? component.label ?? '');
-  const hasCompetingCandidates = (component: SLDComponent) => new Set(
-    (component.typeCandidates ?? []).map((candidate) => candidate.trim()).filter(Boolean),
-  ).size > 1;
+  const hasCompetingCandidates = (component: SLDComponent) => distinctTypeEvidence(component).size > 1;
   const byId = new Map(analysis.components.map((item) => [item.id, item]));
   const components: QuickComponentRead[] = analysis.components.map((item) => ({
     id: item.id,
