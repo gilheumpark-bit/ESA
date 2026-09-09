@@ -51,9 +51,21 @@ it('competing type candidates are review, not promotion of the first candidate',
   expect(read.components[0].type).toEqual({ certainty: 'ambiguous', reason: 'MULTIPLE_TYPE_CANDIDATES' });
   expect(read.connections[0].relation.certainty).toBe('ambiguous');
 });
+it('primary type disagreement with a single alternate candidate is still review', () => {
+  const doc = analysis();
+  doc.components[0] = { ...doc.components[0], type: 'breaker', typeCandidates: ['fuse'] };
+  const read = buildQuickDrawingReadout(doc);
+  expect(read.components[0].type).toEqual({ certainty: 'ambiguous', reason: 'MULTIPLE_TYPE_CANDIDATES' });
+  expect(read.connections[0].relation.certainty).toBe('ambiguous');
+});
 it('duplicate spelling of one candidate is not treated as a candidate conflict', () => {
   const doc = analysis();
-  doc.components[0] = { ...doc.components[0], typeCandidates: ['breaker', ' breaker '] };
+  doc.components[0] = { ...doc.components[0], typeCandidates: ['breaker', ' breaker ', 'BREAKER'] };
+  expect(buildQuickDrawingReadout(doc).components[0].type.reason).toBe('QUICK_NOT_VERIFIED');
+});
+it('unknown-state words do not manufacture a conflict with a readable primary type', () => {
+  const doc = analysis();
+  doc.components[0] = { ...doc.components[0], typeCandidates: ['unknown', ' 미판독 ', ''] };
   expect(buildQuickDrawingReadout(doc).components[0].type.reason).toBe('QUICK_NOT_VERIFIED');
 });
 it('high global confidence cannot override a competing candidate set', () => {
