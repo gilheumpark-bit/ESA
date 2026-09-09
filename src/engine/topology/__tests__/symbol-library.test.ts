@@ -266,9 +266,9 @@ describe('매칭 우선순위', () => {
 });
 
 describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
-  it('resolveBlockType 의 기존 계약은 유지된다 (미식별 = load, OrNull = null)', () => {
+  it('resolveBlockType도 미식별을 부하로 지어내지 않고 unknown으로 보존한다', () => {
     expect(resolveBlockTypeOrNull('XX-7Q')).toBeNull();
-    expect(resolveBlockType('XX-7Q')).toBe('load');
+    expect(resolveBlockType('XX-7Q')).toBe('unknown');
     expect(resolveBlockType('MCCB-1')).toBe('breaker');
   });
 

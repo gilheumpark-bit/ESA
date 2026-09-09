@@ -144,9 +144,9 @@ export function resolveBlockTypeOrNull(blockName: string): SLDComponentType | nu
   return null;
 }
 
-/** DXF 블록명 → 기기 종류. 사전 공백이 곧 미검출이라 단독 검사 대상이다. */
+/** DXF 블록명 → 기기 종류. 미식별은 실제 부하로 지어내지 않고 unknown으로 남긴다. */
 export function resolveBlockType(blockName: string): SLDComponentType {
-  return resolveBlockTypeOrNull(blockName) ?? 'load'; // 미식별 블록은 부하로 기본 분류
+  return resolveBlockTypeOrNull(blockName) ?? 'unknown';
 }
 
 /**

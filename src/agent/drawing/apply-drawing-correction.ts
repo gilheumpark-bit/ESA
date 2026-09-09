@@ -27,7 +27,8 @@ export function applyDrawingCorrection(
   if (input.correctionKind === 'text' && !textTarget) throw new Error('DRAWING_CORRECTION_KIND_MISMATCH');
   if (input.correctionKind !== 'text' && !symbolTarget) throw new Error('DRAWING_CORRECTION_KIND_MISMATCH');
 
-  const unknownType = input.correctionKind === 'type' && /^(unknown|unread|unresolved|모름|미판독|미확정)$/i.test(input.selectedValue.trim());
+  const selectedType = input.correctionKind === 'type' ? input.selectedValue.trim() : input.selectedValue;
+  const unknownType = input.correctionKind === 'type' && /^(unknown|unread|unresolved|모름|미판독|미확정)$/i.test(selectedType);
   const targetEvidenceIds = new Set([
     ...(textTarget?.evidence.map((item) => item.evidenceId) ?? []),
     ...(symbolTarget?.evidence.map((item) => item.evidenceId) ?? []),
@@ -47,8 +48,9 @@ export function applyDrawingCorrection(
     if (input.correctionKind === 'type') {
       return {
         ...item,
-        confirmedType: unknownType ? undefined : input.selectedValue,
-        typeCandidates: [...new Set([...item.typeCandidates, input.selectedValue])],
+        confirmedType: unknownType ? undefined : selectedType,
+        // 'unknown' is a state chosen by the reviewer, not a new type hypothesis.
+        typeCandidates: unknownType ? [...item.typeCandidates] : [...new Set([...item.typeCandidates, selectedType])],
         certainty: unknownType ? 'unread' as const : 'confirmed' as const,
       };
     }
@@ -147,7 +149,7 @@ export function applyDrawingCorrection(
     originalCandidates: textTarget?.candidates
       ?? (input.correctionKind === 'label' ? [symbolTarget?.rawLabel ?? ''].filter(Boolean) : symbolTarget?.typeCandidates)
       ?? [],
-    selectedValue: input.selectedValue,
+    selectedValue: selectedType,
     correctedAt: new Date().toISOString(),
     correctedBy: input.correctedBy,
     affectedEntityIds,
