@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-09-09
+
+- [도면 처리 성능: 선택 구획·재검사 재사용·공간 색인](handoffs/2026-09-09-drawing-performance.md)
+
 ## 2026-09-08
 
 - [프런트엔드 전체 목록·버튼 전이·오류 복구 검사](handoffs/2026-09-08-frontend-controls.md)

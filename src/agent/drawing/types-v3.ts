@@ -264,6 +264,8 @@ export interface CoverageLedger {
 }
 
 export interface PageAnalysisState {
+  /** At most three latest raster attempts. Timings do not alter completeness or confidence. */
+  recentPerformance?: Array<NonNullable<import('../teams/types').DrawingReviewArtifact['performance']>>;
   pageIndex: number;
   status: 'pending' | 'surveying' | 'analyzing' | 'complete' | 'failed' | 'skipped-empty';
   drawingKind: DocumentInventoryPage['drawingKind'];

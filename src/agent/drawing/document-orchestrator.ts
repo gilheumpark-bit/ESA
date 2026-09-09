@@ -8,7 +8,7 @@
 
 import { isBlockingGraphConflict } from '@/agent/electrical/electrical-invariants';
 import type { LogicConflict } from '@/agent/electrical/logic-conflicts';
-import { executeSLDTeam, type SLDTeamDeps } from '@/agent/teams/sld-team';
+import { executeSLDTeam, createRasterPreparationCache, type SLDTeamDeps } from '@/agent/teams/sld-team';
 import type { TeamInput, TeamResult } from '@/agent/teams/types';
 import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
 import type { RescanTargetEvidence, RoleReviewEnvelope } from '@/agent/vision/review-types';
@@ -934,6 +934,9 @@ async function runRasterPass(
       run.deps.teamDeps,
     );
     recordEnvelopeOrigins(run, result);
+    if (result.drawingReview?.performance) {
+      state.recentPerformance = [...(state.recentPerformance ?? []), result.drawingReview.performance].slice(-3);
+    }
     const actualCalls = result.drawingReview?.coverage.actualCalls
       ?? result.drawingReview?.coverage.plannedCalls
       ?? plannedCalls;
@@ -1320,7 +1323,11 @@ export async function runDocumentAnalysis(
   const analysisSignal = input.signal
     ? AbortSignal.any([input.signal, deadlineSignal])
     : deadlineSignal;
-  const executeTeam = deps.executeTeam ?? executeSLDTeam;
+  const preparedRaster = createRasterPreparationCache();
+  const executeTeam: typeof executeSLDTeam = deps.executeTeam ?? ((teamInput, teamDeps) => executeSLDTeam(teamInput, {
+    ...teamDeps,
+    prepareRaster: teamDeps?.prepareRaster ?? preparedRaster,
+  }));
   const providersUsed = new Set<string>();
   const modelsUsed = new Set<string>();
   const run: DocumentRun = {

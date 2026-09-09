@@ -12,7 +12,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const build = mkdtempSync(path.join(tmpdir(), 'esa-commercial-contract-'));
 after(() => rmSync(build, { recursive: true, force: true }));
 for (const name of [
-  'agent/drawing/device-vocabulary', 'agent/drawing/device-class',
+  'agent/drawing/device-vocabulary', 'agent/drawing/device-class', 'agent/drawing/bounds-index',
   'agent/drawing/evidence-deduplicator', 'agent/drawing/terminal-path-resolver',
   'agent/drawing/completed-page-evidence',
   'lib/security-hardening', 'lib/export-drawing-document',

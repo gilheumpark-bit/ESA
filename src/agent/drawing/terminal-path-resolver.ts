@@ -5,6 +5,7 @@
  * nets remain in the existing candidate path. No physical units are inferred.
  */
 import { hasDeviceClass } from './device-class';
+import { createBoundsIndex, type IndexedBounds } from './bounds-index';
 import type { LineNode, SymbolNode } from './types-v3';
 
 type Point = { x: number; y: number };
@@ -100,6 +101,19 @@ export function buildConductorAdjacency(lines: LineNode[], tolerance: number): M
   return result;
 }
 
+function lineBounds(line: LineNode): IndexedBounds {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const point of line.path) {
+    minX = Math.min(minX, point.x); minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x); maxY = Math.max(maxY, point.y);
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+function nearPoint(point: Point): IndexedBounds {
+  return { x: point.x - TERMINAL_TOLERANCE, y: point.y - TERMINAL_TOLERANCE,
+    w: 2 * TERMINAL_TOLERANCE, h: 2 * TERMINAL_TOLERANCE };
+}
+
 function crossesEquipmentBody(line: LineNode, symbol: SymbolNode): boolean {
   if (hasDeviceClass(symbol, 'bus')) return false;
   // A whole body, not a small crop fragment, is the obstacle to bypassing a device.
@@ -167,11 +181,16 @@ export function resolveTerminalPaths(symbols: SymbolNode[], lines: LineNode[], p
     && symbol.evidence.every((ref) => ref.pageIndex === pageIndex));
   const pageLines = lines.filter((line) => usable(line) && line.evidence.length > 0
     && line.evidence.every((ref) => ref.pageIndex === pageIndex));
+  if (!pageLines.length || !pageSymbols.some((symbol) => symbol.ports?.length)) return [];
+  const boundsByLine = new Map(pageLines.map((line) => [line, lineBounds(line)]));
+  const lineIndex = createBoundsIndex(pageLines, (line) => boundsByLine.get(line));
+  const bodyIndex = createBoundsIndex(pageSymbols, (symbol) => [...symbol.evidence]
+    .sort((a, b) => b.bounds.w * b.bounds.h - a.bounds.w * a.bounds.h)[0]?.bounds);
   const observed = pageLines.filter((line) => line.certainty === 'confirmed'
     && line.geometrySource !== 'synthetic' && line.lineKind !== 'unknown'
     && line.evidence.length > 0 && line.evidence.every((ref) => ref.pageIndex === pageIndex)
-    && !pageSymbols.some((symbol) => crossesEquipmentBody(line, symbol)));
-  if (!observed.length || !pageSymbols.some((symbol) => symbol.ports?.length)) return [];
+    && !bodyIndex.query(boundsByLine.get(line)!).some((symbol) => crossesEquipmentBody(line, symbol)));
+  if (!observed.length) return [];
   // Keep excluded observations in the component map. Dropping an uncertain
   // branch first would turn a three-terminal net into a false two-terminal proof.
   const graph = buildConductorAdjacency(pageLines, EPSILON);
@@ -190,18 +209,19 @@ export function resolveTerminalPaths(symbols: SymbolNode[], lines: LineNode[], p
   }
   const contacts = new Map<number, Contact[]>();
   const allPorts = pageSymbols.flatMap((symbol) => (symbol.ports ?? []).filter(finite).map((point) => ({ symbol, point })));
+  const portIndex = createBoundsIndex(allPorts, (port) => ({ ...port.point, w: 0, h: 0 }));
   const eligible = new Set(observed.map((line) => line.id));
   const blockedComponents = new Set(pageLines.filter((line) => !eligible.has(line.id))
     .map((line) => componentOf.get(line.id)!));
   for (const port of allPorts) {
-    const candidates = pageLines.map((line) => ({ line, distance: pathDistance(port.point, line) }))
+    const candidates = lineIndex.query(nearPoint(port.point)).map((line) => ({ line, distance: pathDistance(port.point, line) }))
       .filter((hit) => hit.distance <= TERMINAL_TOLERANCE
         && !hit.line.crossovers.some((crossing) => distance(crossing, port.point) <= TERMINAL_TOLERANCE));
     if (!candidates.length) continue;
     const minimum = Math.min(...candidates.map((hit) => hit.distance));
     const closest = candidates.filter((hit) => hit.distance <= minimum + EPSILON);
     const components = new Set(closest.map((hit) => componentOf.get(hit.line.id)!));
-    const collision = allPorts.some((other) => other.symbol.id !== port.symbol.id
+    const collision = portIndex.query(nearPoint(port.point)).some((other) => other.symbol.id !== port.symbol.id
       && distance(other.point, port.point) <= TERMINAL_TOLERANCE);
     if (components.size !== 1 || collision) {
       for (const component of components) blockedComponents.add(component);

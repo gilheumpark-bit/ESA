@@ -112,6 +112,8 @@ export interface ExtractedConnection {
 }
 
 export interface DrawingReviewArtifact {
+  /** Measured execution costs, not a quality score; no source text or credentials. */
+  performance?: { preparationMs: number; council?: import('../vision/drawing-council').DrawingCouncilPerformance };
   snapshot: {
     drawingHash: string;
     mimeType: string;

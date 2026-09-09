@@ -7,6 +7,7 @@ import {
 } from '@/lib/drawing-reasoning-effort';
 
 import { annotatePrecisionRegion } from './annotated-region-renderer';
+import { regionDescriptorKey, type PrecisionRegionDescriptor, type MaterializeRegion } from './lazy-precision-regions';
 import { planBoundaryContinuations } from './boundary-continuation-planner';
 import type { BoundaryContinuationPlan, GlobalLineCandidate } from './continuity-types';
 import { ROLE_PROMPT_VERSION } from './role-prompts';
@@ -55,7 +56,9 @@ export interface RoleFailure {
 export interface DrawingCouncilInput {
   snapshot: DrawingSnapshot;
   variants: readonly ImageVariant[];
-  regions: readonly PrecisionRegion[];
+  regions: readonly PrecisionRegionDescriptor[];
+  /** Request-local loader for metadata-only regions; no empty image placeholders. */
+  materializeRegion?: MaterializeRegion;
   options: VLMOptions;
   /**
    * 역할별 추론 단계. 지정한 역할만 `options.effort` 를 덮고, 그 역할의
@@ -75,7 +78,27 @@ export interface DrawingCouncilInput {
   fullSourceReviewRoles?: readonly CouncilReviewRole[];
 }
 
+export interface SourceCallTiming {
+  role: VLMReviewRole;
+  sourceId: string;
+  queueMs: number;
+  serviceMs: number;
+  outcome: 'success' | 'failed' | 'aborted';
+}
+
+export interface DrawingCouncilPerformance {
+  version: 'drawing-perf-v1';
+  totalMs: number;
+  stages: Partial<Record<'full' | 'regionPreparation' | 'precision' | 'audit', number>>;
+  selectedRegions: number;
+  preparedRegions: number;
+  preparationFailures: number;
+  /** Provider execution includes its retries and response validation, not pure inference. */
+  calls: Array<SourceCallTiming & { stage: 'full' | 'precision' | 'audit' }>;
+}
+
 export interface DrawingCouncilResult {
+  performance?: DrawingCouncilPerformance;
   envelopes: RoleReviewEnvelope[];
   failures: RoleFailure[];
   callCounts?: { planned: number; attempted: number; successful: number; failed: number };
@@ -120,7 +143,7 @@ interface SourceSuccess extends SuccessfulSource {
 
 interface SourceFailure {
   role: VLMReviewRole;
-  source: ReviewSource;
+  source: Pick<ReviewSource, 'id'>;
   order: number;
   error: unknown;
   started: boolean;
@@ -237,7 +260,17 @@ function assertOptions(options: VLMOptions): void {
   }
 }
 
+function assertPreparedRegion(region: PrecisionRegionDescriptor): asserts region is PrecisionRegion {
+  const buffer = 'buffer' in region ? region.buffer : undefined;
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength === 0 || buffer.byteLength > MAX_PREPARED_SOURCE_BYTES) {
+    invalid(`region ${region.id} must have a bounded non-empty ArrayBuffer.`);
+  }
+}
+
 function validateInput(input: DrawingCouncilInput): CouncilLimits {
+  if (input.materializeRegion !== undefined && typeof input.materializeRegion !== 'function') {
+    invalid('materializeRegion must be a request-local function.');
+  }
   assertSnapshot(input.snapshot);
   if (!Array.isArray(input.variants) || input.variants.length === 0 || input.variants.length > MAX_VARIANTS) {
     invalid(`variants must contain from 1 to ${MAX_VARIANTS} entries.`);
@@ -305,9 +338,7 @@ function validateInput(input: DrawingCouncilInput): CouncilLimits {
     sourceIds.add(region.id);
     const variant = variantsById.get(region.variantId);
     if (!variant) invalid(`region ${region.id} references an unknown variant.`);
-    if (!(region.buffer instanceof ArrayBuffer) || region.buffer.byteLength === 0 || region.buffer.byteLength > MAX_PREPARED_SOURCE_BYTES) {
-      invalid(`region ${region.id} must have a bounded non-empty ArrayBuffer.`);
-    }
+    if (!input.materializeRegion || 'buffer' in region) assertPreparedRegion(region);
     assertFiniteBounds(region.variantBounds, variant.width, variant.height, `region ${region.id}.variantBounds`);
     assertFiniteBounds(region.originalBounds, input.snapshot.width, input.snapshot.height, `region ${region.id}.originalBounds`);
     assertSameBounds(originalBoundsForVariantBounds(region.variantBounds, variant), region.originalBounds, `region ${region.id}.originalBounds`);
@@ -385,7 +416,7 @@ function precisionSourcesForRole(
 }
 
 function analysisPlansFromRegions(
-  regions: readonly PrecisionRegion[],
+  regions: readonly PrecisionRegionDescriptor[],
   pageIndex: number,
 ): AnalysisRegionPlan[] {
   const byDisplayId = new Map<string, AnalysisRegionPlan>();
@@ -420,7 +451,7 @@ function fullEnvelopeFor(
 
 function buildContinuationPlan(
   input: DrawingCouncilInput,
-  precisionRegions: readonly PrecisionRegion[],
+  precisionRegions: readonly PrecisionRegionDescriptor[],
   plans: readonly PlannedRole[],
   settled: { successes: SourceSuccess[]; failures: SourceFailure[] },
 ): BoundaryContinuationPlan {
@@ -829,7 +860,10 @@ async function invokeSource(task: SourceTask, input: DrawingCouncilInput, invoke
   return { role: task.role, source: task.source, data, model: result.model };
 }
 
-async function runFairSourceTasks(plans: readonly PlannedRole[], input: DrawingCouncilInput, invoke: Invoke, limit: number): Promise<{ successes: SourceSuccess[]; failures: SourceFailure[] }> {
+async function runFairSourceTasks(
+  plans: readonly PlannedRole[], input: DrawingCouncilInput, invoke: Invoke, limit: number,
+  recordTiming?: (timing: SourceCallTiming) => void,
+): Promise<{ successes: SourceSuccess[]; failures: SourceFailure[] }> {
   const tasks: SourceTask[] = [];
   const longestPlan = Math.max(...plans.map((plan) => plan.sources.length));
   for (let sourceIndex = 0; sourceIndex < longestPlan; sourceIndex += 1) {
@@ -841,6 +875,7 @@ async function runFairSourceTasks(plans: readonly PlannedRole[], input: DrawingC
   const successes: SourceSuccess[] = [];
   const failures: SourceFailure[] = [];
   const started = new Set<number>();
+  const queuedAt = performance.now();
   let nextTask = 0;
   const worker = async (): Promise<void> => {
     while (true) {
@@ -848,20 +883,25 @@ async function runFairSourceTasks(plans: readonly PlannedRole[], input: DrawingC
         if (input.settleOnAbort) return;
         throw abortError();
       }
-      const index = nextTask;
-      nextTask += 1;
+      const index = nextTask++;
       if (index >= tasks.length) return;
       const task = tasks[index];
       started.add(index);
+      const startedAt = performance.now();
+      let outcome: SourceCallTiming['outcome'] = 'success';
       try {
         successes.push(await invokeSource(task, input, invoke));
       } catch (error) {
+        outcome = input.options.signal?.aborted ? 'aborted' : 'failed';
         if (input.options.signal?.aborted) {
           if (!input.settleOnAbort) throw abortError();
           failures.push({ role: task.role, source: task.source, order: task.order, error, started: true });
           return;
         }
         failures.push({ role: task.role, source: task.source, order: task.order, error, started: true });
+      } finally {
+        recordTiming?.({ role: task.role, sourceId: task.source.id,
+          queueMs: Math.max(0, startedAt - queuedAt), serviceMs: Math.max(0, performance.now() - startedAt), outcome });
       }
     }
   };
@@ -948,6 +988,23 @@ export async function runDrawingCouncil(
 ): Promise<DrawingCouncilResult> {
   const limits = validateInput(input);
   throwIfAborted(input.options.signal);
+  const councilStarted = performance.now();
+  const metrics: DrawingCouncilPerformance = {
+    version: 'drawing-perf-v1', totalMs: 0, stages: {}, selectedRegions: 0,
+    preparedRegions: 0, preparationFailures: 0, calls: [],
+  };
+  const finish = (result: DrawingCouncilResult): DrawingCouncilResult => ({
+    ...result, performance: { ...metrics, stages: { ...metrics.stages }, calls: [...metrics.calls],
+      totalMs: Math.max(0, performance.now() - councilStarted) },
+  });
+  const timedTasks = async (stage: 'full' | 'precision' | 'audit', plans: readonly PlannedRole[], limit: number) => {
+    const started = performance.now();
+    try {
+      return await runFairSourceTasks(plans, input, invoke, limit, (timing) => metrics.calls.push({ stage, ...timing }));
+    } finally {
+      metrics.stages[stage] = Math.max(0, performance.now() - started);
+    }
+  };
   const activeRoles = input.reviewRoles ?? PRIMARY_ROLES;
   const targetedRetry = input.reviewRoles !== undefined;
   const fullPlans = activeRoles.map((role) => ({
@@ -960,7 +1017,7 @@ export async function runDrawingCouncil(
     started: Date.now(),
   }));
   const fullPlannedCalls = fullPlans.reduce((total, plan) => total + plan.sources.length, 0);
-  const fullSettled = await runFairSourceTasks(fullPlans, input, invoke, limits.maxConcurrentCalls);
+  const fullSettled = await timedTasks('full', fullPlans, limits.maxConcurrentCalls);
   const fullOutcomes = fullPlans
     .filter((plan) => plan.sources.length > 0)
     .map((plan) => buildRoleOutcome(plan, fullSettled.successes, fullSettled.failures, input));
@@ -975,16 +1032,43 @@ export async function runDrawingCouncil(
   const continuityPlan = buildContinuationPlan(input, selectedRegions, fullPlans, fullSettled);
   if (input.options.signal?.aborted) {
     if (!input.settleOnAbort) throw abortError();
-    return settleAbortedCouncil(input, fullPlans, fullSettled, continuityPlan, plannedCalls, precisionPlan);
+    return finish(settleAbortedCouncil(input, fullPlans, fullSettled, continuityPlan, plannedCalls, precisionPlan));
   }
-  const shouldAnnotate = selectedRegions.some((region) =>
-    Boolean(region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds));
-  const precisionRegions = shouldAnnotate
-    ? await Promise.all(selectedRegions.map((region) =>
-      region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds
-        ? annotateRegion(region, continuityPlan.continuations)
-        : Promise.resolve(region)))
-    : [...selectedRegions];
+  const preparationStarted = performance.now();
+  metrics.selectedRegions = selectedRegions.length;
+  const prepared: Array<PrecisionRegion | undefined> = new Array(selectedRegions.length);
+  const preparationFailures: SourceFailure[] = [];
+  let nextRegion = 0;
+  // Two image workers bound native memory independently of provider concurrency.
+  const prepareWorker = async () => {
+    while (nextRegion < selectedRegions.length) {
+      const index = nextRegion++;
+      const descriptor = selectedRegions[index];
+      try {
+        throwIfAborted(input.options.signal);
+        const region = 'buffer' in descriptor ? descriptor : await input.materializeRegion!(descriptor, input.options.signal);
+        assertPreparedRegion(region);
+        if (regionDescriptorKey(region) !== regionDescriptorKey(descriptor)) invalid('materialized region identity or coordinates changed.');
+        throwIfAborted(input.options.signal);
+        const annotated = region.displayId && region.logicalOriginalBounds && region.logicalVariantBounds
+          ? await annotateRegion(region, continuityPlan.continuations) : region;
+        assertPreparedRegion(annotated);
+        if (regionDescriptorKey(annotated) !== regionDescriptorKey(descriptor)) invalid('annotated region identity or coordinates changed.');
+        prepared[index] = annotated;
+        metrics.preparedRegions += 1;
+      } catch (error) {
+        metrics.preparationFailures += 1;
+        for (const role of activeRoles) {
+          if (role !== 'logic' && precisionPlan[role]?.includes(descriptor.id)) {
+            preparationFailures.push({ role, source: { id: descriptor.id }, order: index, error, started: false });
+          }
+        }
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(2, selectedRegions.length) }, () => prepareWorker()));
+  metrics.stages.regionPreparation = Math.max(0, performance.now() - preparationStarted);
+  const precisionRegions = prepared.filter((region): region is PrecisionRegion => region !== undefined);
   const precisionPlans = activeRoles.map((role) => ({
     role,
     sources: precisionSourcesForRole(
@@ -996,12 +1080,8 @@ export async function runDrawingCouncil(
     ),
     started: Date.now(),
   }));
-  const precisionSettled = await runFairSourceTasks(
-    precisionPlans,
-    input,
-    invoke,
-    limits.maxConcurrentCalls,
-  );
+  const precisionSettled = await timedTasks('precision', precisionPlans, limits.maxConcurrentCalls);
+  precisionSettled.failures.push(...preparationFailures);
   const plans = activeRoles.map((role, index) => ({
     role,
     sources: [...fullPlans[index].sources, ...precisionPlans[index].sources],
@@ -1013,7 +1093,7 @@ export async function runDrawingCouncil(
   };
   if (input.options.signal?.aborted) {
     if (!input.settleOnAbort) throw abortError();
-    return settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls, precisionPlan);
+    return finish(settleAbortedCouncil(input, plans, settled, continuityPlan, plannedCalls, precisionPlan));
   }
   const outcomes = plans.map((plan) => buildRoleOutcome(plan, settled.successes, settled.failures, input));
   const currentEnvelopes = outcomes.flatMap((outcome) => outcome.envelope ? [outcome.envelope] : []);
@@ -1037,15 +1117,15 @@ export async function runDrawingCouncil(
       graphSummary(primaryEnvelopes, input.snapshot.width),
     ),
   };
-  const auditSettled = await runFairSourceTasks([auditPlan], input, invoke, 1);
+  const auditSettled = await timedTasks('audit', [auditPlan], 1);
   const auditOutcome = buildRoleOutcome(auditPlan, auditSettled.successes, auditSettled.failures, input);
-  return {
+  return finish({
     envelopes: deepFreeze([...primaryEnvelopes, ...(auditOutcome.envelope ? [auditOutcome.envelope] : [])]) as RoleReviewEnvelope[],
     failures: deepFreeze([...primaryFailures, ...auditOutcome.failures]) as RoleFailure[],
     callCounts: callCounts(plannedCalls, settled, auditSettled),
     precisionPlan: deepFreeze(precisionPlan) as PrecisionPlan,
     continuityPlan: deepFreeze(continuityPlan) as BoundaryContinuationPlan,
-  };
+  });
 }
 
 function buildCoverageContext(
