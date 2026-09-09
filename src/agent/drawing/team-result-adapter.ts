@@ -339,7 +339,7 @@ export function adaptTeamResult(
       confidence: component.confidence,
       pageIndex: context.pageIndex,
       regionId: 'vector-full',
-      certainty: component.confidence >= 0.85 ? 'confirmed' : 'ambiguous',
+      certainty: component.type === 'unknown' ? 'unread' : component.confidence >= 0.85 ? 'confirmed' : 'ambiguous',
     });
     if (component.label) {
       texts.push({

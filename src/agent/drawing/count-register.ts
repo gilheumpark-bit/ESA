@@ -29,6 +29,7 @@ export function buildEquipmentCounts(
   for (const [equipmentKind, list] of kinds) {
     const confirmedList = list.filter((s) => s.certainty === 'confirmed');
     const ambiguousList = list.filter((s) => s.certainty === 'ambiguous');
+    const unreadList = list.filter((s) => s.certainty === 'unread');
     const unreadRelated = unresolved.filter(
       (u) =>
         (u.code === 'UNREADABLE_SYMBOL' || u.code === 'AMBIGUOUS_OCR')
@@ -41,11 +42,11 @@ export function buildEquipmentCounts(
       physicalIds.add(equipmentLinks.get(s.id) ?? s.id);
     }
     const hasCrossPageCandidates = crossPage.some(
-      (c) => c.status === 'candidate' && list.some((s) => c.fromRef === s.id || c.toRef === s.id),
+      (c) => c.status !== 'confirmed' && list.some((s) => c.fromRef === s.id || c.toRef === s.id),
     );
 
     let physicalEquipmentCount: number | null = physicalIds.size;
-    if (confirmedList.length === 0 && ambiguousList.length > 0) {
+    if (confirmedList.length === 0 && (ambiguousList.length > 0 || unreadList.length > 0)) {
       physicalEquipmentCount = null;
     }
 
@@ -57,7 +58,7 @@ export function buildEquipmentCounts(
       ambiguous: ambiguousList.length,
       missingSuspected,
       hasCrossPageCandidates,
-      failedUnresolved: unresolved.some((u) =>
+      failedUnresolved: unreadList.length > 0 || unresolved.some((u) =>
         u.code === 'ROLE_CALL_FAILED' || u.code === 'HOLD_RESCAN_UNRESOLVED'),
     });
 
@@ -65,6 +66,7 @@ export function buildEquipmentCounts(
       equipmentKind,
       confirmed: confirmedList.length,
       ambiguous: ambiguousList.length,
+      ...(unreadList.length > 0 ? { unread: unreadList.length } : {}),
       missingSuspected,
       physicalEquipmentCount,
       symbolOccurrences,

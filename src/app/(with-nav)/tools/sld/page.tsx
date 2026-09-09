@@ -12,10 +12,14 @@
  * PART 5: Main page component
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { calculatorHref } from '@/lib/calculator-catalog';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
-import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { prepareDrawingCalculationInputs } from '@/lib/drawing-calculation-inputs';
+import { buildQuickDrawingReadout, QUICK_READ_REASON_LABELS, type QuickComponentRead, type QuickConnectionRead } from '@/lib/quick-drawing-readout';
+import { DRAWING_CERTAINTY_LABELS } from '@/lib/drawing-certainty';
+import { DrawingReadingSummary } from '@/components/DrawingReadingSummary';
+import type { SLDComponent, SLDConnection, CalcChainStep, SLDAnalysis as SLDAnalysisResult } from '@/lib/sld-recognition';
 import { readApiErrorMessage } from '@/lib/error-messages';
 import { openDrawingPrintWindow } from '@/lib/drawing-print-window';
 import { readStoredCountry } from '@/hooks/useSettings';
@@ -86,61 +90,8 @@ const EMPTY_SYMBOL_LIBRARY_CATALOG: SymbolLibraryCatalog = {
 // PART 1 — Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface SLDComponent {
-  id: string;
-  type: string;
-  label?: string;
-  rating?: string;
-  voltage?: string;
-  current?: string;
-  position: { x: number; y: number };
-}
-
-interface SLDConnection {
-  id: string;
-  from: string;
-  to: string;
-  cableType?: string;
-  length?: string;
-  conductorSize?: string;
-  activePower?: string;
-  reactivePower?: string;
-  flowDirection?: 'from_to' | 'to_from' | 'bidirectional' | 'unknown';
-}
-
-interface CalcChainStep {
-  step: number;
-  calculatorId: string;
-  inputs: Record<string, unknown>;
-  dependsOn?: number[];
-  description: string;
-}
-
-interface SLDAnalysisResult {
-  components: SLDComponent[];
-  connections: SLDConnection[];
-  suggestedCalculations: Array<{
-    calculatorId: string;
-    inputs: Record<string, unknown>;
-    reason: string;
-    priority: number;
-  }>;
-  systemVoltage?: string;
-  systemType?: string;
-  confidence: number;
-  rawDescription: string;
-  /** 고객사 심볼 라이브러리 적용 결과 (DXF 벡터 경로 전용) */
-  symbolLibraryApplied?: { organization: string; matched: number; entryCount: number };
-  unknownSymbols?: Array<{
-    blockName: string;
-    fingerprint: string | null;
-    count: number;
-    samplePosition: { x: number; y: number };
-  }>;
-}
-
-
 const COMPONENT_ICONS: Record<string, string> = {
+  unknown: '?',
   transformer: 'TX',
   breaker: 'CB',
   cable: 'CA',
@@ -176,7 +127,8 @@ const COMPONENT_COLORS: Record<string, string> = {
 // PART 2 — Component List
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ComponentList({ components }: { components: SLDComponent[] }) {
+function ComponentList({ components, reads }: { components: SLDComponent[]; reads: QuickComponentRead[] }) {
+  const byId = new Map(reads.map((item) => [item.id, item]));
   if (!components.length) return null;
 
   return (
@@ -200,8 +152,18 @@ function ComponentList({ components }: { components: SLDComponent[] }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
-                {comp.label ?? comp.type}
+                {comp.label ?? (comp.type === 'unknown' ? '종류 미판독' : comp.type)}
               </p>
+              <p className="text-xs" title={QUICK_READ_REASON_LABELS[byId.get(comp.id)?.type.reason ?? 'QUICK_NOT_VERIFIED']}>
+                종류: {byId.get(comp.id)?.type.certainty === 'unread' ? '미판독' : `${comp.type} · 검토 필요`}
+                {comp.typeCandidates?.length ? ` (미지원 후보: ${comp.typeCandidates.join(' / ')})` : ''}
+              </p>
+              <details className="mt-1 text-xs"><summary className="cursor-pointer">정격·입력 판독 상태</summary>
+                <dl>{(['rating', 'voltage', 'current'] as const).map((field) => <div key={field} className="mt-1">
+                  <dt className="inline">{{ rating: '정격', voltage: '전압', current: '전류' }[field]}: </dt>
+                  <dd className="inline">{comp[field] ?? '미기재/미판독'} · {DRAWING_CERTAINTY_LABELS[byId.get(comp.id)?.fields[field].certainty ?? 'unread']}</dd>
+                </div>)}</dl>
+              </details>
               <div className="flex flex-wrap gap-1.5 text-[10px] opacity-80">
                 {comp.rating && <span>{comp.rating}</span>}
                 {comp.voltage && <span>{comp.voltage}</span>}
@@ -222,12 +184,15 @@ function ComponentList({ components }: { components: SLDComponent[] }) {
 function ConnectionMap({
   connections,
   components,
+  reads,
 }: {
   connections: SLDConnection[];
   components: SLDComponent[];
+  reads: QuickConnectionRead[];
 }) {
   if (!connections.length) return null;
 
+  const byId = new Map(reads.map((item) => [item.id, item]));
   const getLabel = (id: string) => {
     const comp = components.find(c => c.id === id);
     return comp?.label ?? comp?.type ?? id;
@@ -252,11 +217,16 @@ function ConnectionMap({
               <span className="font-medium text-[var(--text-primary)]">
                 {getLabel(ordered.from)}
               </span>
-              {conn.flowDirection === 'bidirectional'
+              {!conn.flowDirection || conn.flowDirection === 'unknown'
+                ? <Link2 size={14} className="shrink-0 text-[var(--text-tertiary)]" aria-label="방향 미판독" />
+                : conn.flowDirection === 'bidirectional'
                 ? <ArrowLeftRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />
                 : <ArrowRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />}
               <span className="font-medium text-[var(--text-primary)]">
                 {getLabel(ordered.to)}
+              </span>
+              <span className="text-xs text-[var(--text-secondary)]" title={QUICK_READ_REASON_LABELS[byId.get(conn.id)?.relation.reason ?? 'QUICK_NOT_VERIFIED']}>
+                {DRAWING_CERTAINTY_LABELS[byId.get(conn.id)?.relation.certainty ?? 'ambiguous']}
               </span>
               {(conn.cableType || conn.length || conn.conductorSize || conn.activePower || conn.reactivePower) && (
                 <span className="ml-auto text-xs text-[var(--text-tertiary)]">
@@ -337,82 +307,63 @@ interface ChainRun {
   note?: string;
 }
 
-/**
- * 순서만 보여주던 체인을 실제로 돌린다.
- *
- * 지금까지 이 패널은 "추천 계산 순서"를 나열하고 단계마다 계산기를 여는 링크만
- * 줬다. 여섯 단계면 여섯 번 열어 여섯 번 입력해야 한다. 도면에서 읽은 값은
- * 이미 있으므로 그대로 돌려서 보여준다.
- *
- * 값을 채우는 방식은 폼과 같다 — 기본값을 **클라이언트에서 채워 보낸다**.
- * /api/calculate 가 대신 채우게 하면 영수증에는 사용자가 준 적 없는 값이
- * 조용히 들어간다. 필수 입력이 비면 돌리지 않고 그 사실을 적는다.
- */
+/** Drawing bulk execution accepts explicit inputs only. Unknown/default assumptions
+ * remain HOLD; the standalone form is the manual completion path. */
 function useChainRunner(steps: CalcChainStep[]) {
   const [runs, setRuns] = useState<Record<number, ChainRun>>({});
   const [running, setRunning] = useState(false);
-
+  const active = useRef<AbortController | null>(null);
+  useEffect(() => () => { active.current?.abort(); }, []);
   const runAll = useCallback(async () => {
+    if (active.current) return;
+    const controller = new AbortController();
+    active.current = controller;
+    const current = () => active.current === controller && !controller.signal.aborted;
+    const settled: Record<number, ChainRun> = {};
+    const publish = (step: number, run: ChainRun) => {
+      settled[step] = run;
+      if (current()) setRuns({ ...settled });
+    };
     setRunning(true);
     setRuns({});
-    const country = readStoredCountry();
-
-    for (const step of steps) {
-      const defs = CALCULATOR_PARAMS[step.calculatorId] ?? [];
-      const { input, invalid } = coerceCalculatorInput(defs, step.inputs as Record<string, unknown>);
-      const missing = defs
-        .filter((d) => d.defaultValue === undefined && input[d.name] === undefined)
-        .map((d) => d.description ?? d.name);
-
-      if (invalid.length > 0 || missing.length > 0) {
-        setRuns((prev) => ({
-          ...prev,
-          [step.step]: {
-            status: 'blocked',
-            note: missing.length > 0
-              ? `도면에서 못 읽은 입력: ${missing.join(', ')}`
-              : `값을 숫자로 읽지 못했습니다: ${invalid.join(', ')}`,
-          },
-        }));
-        continue;
-      }
-
-      try {
-        const res = await fetch('/api/calculate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ calculatorId: step.calculatorId, inputs: input, countryCode: country }),
-        });
-        const body = await res.json();
-        const data = body.data ?? body;
-        if (!res.ok || !data.result) {
-          setRuns((prev) => ({
-            ...prev,
-            [step.step]: { status: 'error', note: body.error?.message ?? `실행 실패 (${res.status})` },
-          }));
-          continue;
+    try {
+      const country = readStoredCountry();
+      for (const step of steps) {
+        if (!current()) break;
+        const prepared = prepareDrawingCalculationInputs(CALCULATOR_PARAMS[step.calculatorId] ?? [], step.inputs);
+        const dependencies = (step.dependsOn ?? []).filter((id) => settled[id]?.status !== 'ok');
+        const reasons = [...(step.holdReasons ?? []),
+          ...(dependencies.length ? [`선행 계산 미완료: ${dependencies.join(', ')}`] : []),
+          ...(prepared.missing.length ? [`미확인 입력: ${prepared.missing.join(', ')}`] : []),
+          ...(prepared.invalid.length ? [`입력 확인 필요: ${prepared.invalid.join(', ')}`] : [])];
+        if (reasons.length) { publish(step.step, { status: 'blocked', note: `HOLD — ${reasons.join(' · ')}` }); continue; }
+        try {
+          const res = await fetch('/api/calculate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+            body: JSON.stringify({ calculatorId: step.calculatorId, inputs: prepared.input, countryCode: country }),
+          });
+          const body = await res.json().catch(() => null);
+          if (!current()) break;
+          const data = body?.data ?? body;
+          if (!res.ok || !data?.result) {
+            publish(step.step, { status: 'error', note: readApiErrorMessage(body, `실행 실패 (${res.status})`) }); continue;
+          }
+          publish(step.step, { status: 'ok', value: `${data.result.value}${data.result.unit ?? ''}`, note: data.result.judgment?.message });
+        } catch {
+          if (current()) publish(step.step, { status: 'error', note: '서버에 연결하지 못했습니다.' });
         }
-        setRuns((prev) => ({
-          ...prev,
-          [step.step]: {
-            status: 'ok',
-            value: `${data.result.value}${data.result.unit ?? ''}`,
-            note: data.result.judgment?.message,
-          },
-        }));
-      } catch {
-        setRuns((prev) => ({ ...prev, [step.step]: { status: 'error', note: '서버에 연결하지 못했습니다.' } }));
       }
+    } finally {
+      if (current()) setRunning(false);
+      if (active.current === controller) active.current = null;
     }
-
-    setRunning(false);
   }, [steps]);
-
   return { runs, running, runAll };
 }
 
 function CalcChain({ steps }: { steps: CalcChainStep[] }) {
   const { runs, running, runAll } = useChainRunner(steps);
+  const [inputsReviewed, setInputsReviewed] = useState(false);
 
   if (!steps.length) return null;
 
@@ -427,8 +378,8 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
         </div>
         <button
           type="button"
-          onClick={runAll}
-          disabled={running}
+          onClick={() => { if (inputsReviewed) void runAll(); }}
+          disabled={running || !inputsReviewed}
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-60"
         >
           <PlayCircle size={13} />
@@ -436,11 +387,15 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
         </button>
       </div>
       <p className="mb-3 text-xs text-[var(--text-tertiary)]">
-        도면에서 읽은 값으로 돌립니다. 판독값이므로 결과는 계산기에서 다시 확인하세요.
+        확인하지 않은 전압·역률 등은 기본값으로 채우지 않고 해당 단계만 보류합니다. 누락 입력은 계산기에서 직접 확인하세요.
       </p>
+      <label className="mb-3 flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+        <input type="checkbox" checked={inputsReviewed} disabled={running} onChange={(event) => setInputsReviewed(event.target.checked)} />
+        표시된 판독 입력을 원본에서 확인했습니다. 이 확인은 AI 확정 상태를 변경하지 않습니다.
+      </label>
       <div className="space-y-3">
         {steps.map((step, idx) => (
-          <div key={step.step} className="flex items-start gap-3">
+          <div key={step.step} className="relative flex items-start gap-3">
             {/* Step number */}
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-xs font-bold text-white">
               {step.step}
@@ -451,6 +406,7 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
               <p className="text-sm font-medium text-[var(--text-primary)]">
                 {step.description}
               </p>
+              <p className="mt-1 break-words text-xs text-[var(--text-tertiary)]">입력: {Object.entries(step.inputs).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(' · ') || '미입력'}</p>
               {step.dependsOn && step.dependsOn.length > 0 && (
                 <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
                   Step {step.dependsOn.join(', ')} 완료 후 실행
@@ -508,6 +464,8 @@ export default function SLDAnalysisPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
+  const [analysisRevision, setAnalysisRevision] = useState(0);
+  const quickReadout = useMemo(() => analysis ? buildQuickDrawingReadout(analysis) : null, [analysis]);
   const [runComparison, setRunComparison] = useState<SLDRunComparison | null>(null);
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [review, setReview] = useState<ReviewLike | null>(null);
@@ -927,6 +885,7 @@ export default function SLDAnalysisPage() {
         throw new Error(readApiErrorMessage(result, `빠른 SLD 분석 실패 (${resultResponse.status})`));
       }
       setAnalysis(result.data);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(result.calcChain ?? []);
       setReview(result.review ?? null);
       setResultTab('summary');
@@ -1228,6 +1187,7 @@ export default function SLDAnalysisPage() {
         ? compareSLDAnalysisRuns(analysis, nextAnalysis, [calcChain.length, nextCalcChain.length])
         : null);
       setAnalysis(nextAnalysis);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(nextCalcChain);
       setReview(data.review ?? null);
       setResultTab('summary');
@@ -1263,6 +1223,7 @@ export default function SLDAnalysisPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(readApiErrorMessage(data, 'DXF 파싱 실패'));
       setAnalysis(data.data);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
       setResultTab('summary');
@@ -1295,6 +1256,7 @@ export default function SLDAnalysisPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(readApiErrorMessage(data, 'PDF 파싱 실패'));
       setAnalysis(data.data);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
       setResultTab('summary');
@@ -1716,6 +1678,13 @@ export default function SLDAnalysisPage() {
             </div>
           )}
 
+          {quickReadout && <>
+            <DrawingReadingSummary title="빠른 추출의 판독 상태" groups={[
+              { kind: 'components', label: '기기 종류', counts: quickReadout.counts.components },
+              { kind: 'connections', label: '결선', counts: quickReadout.counts.connections },
+            ]} />
+            <p className="text-xs text-[var(--text-secondary)]">빠른 결과는 후보이며 전체 confidence로 확정하지 않습니다. 위 V3의 정밀 근거 결과와 구분해 사용하세요.{quickReadout.completeness === 'partial' ? ' 현재 빠른 응답은 부분 복구된 결과입니다.' : ''}</p>
+          </>}
           <QuickDrawingResultTabs
             activeTab={resultTab}
             counts={quickResultCounts}
@@ -1792,7 +1761,7 @@ export default function SLDAnalysisPage() {
                   />
                 )}
                 {analysis.components.length > 0 ? (
-                  <ComponentList components={analysis.components} />
+                  <ComponentList components={analysis.components} reads={quickReadout?.components ?? []} />
                 ) : (
                   <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
                     <Box size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
@@ -1805,7 +1774,7 @@ export default function SLDAnalysisPage() {
 
             {resultTab === 'connections' && (
               analysis.connections.length > 0 ? (
-                <ConnectionMap connections={analysis.connections} components={analysis.components} />
+                <ConnectionMap connections={analysis.connections} components={analysis.components} reads={quickReadout?.connections ?? []} />
               ) : (
                 <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
                   <Link2 size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
@@ -1819,7 +1788,7 @@ export default function SLDAnalysisPage() {
               quickResultCounts.calculations > 0 ? (
                 <div className="space-y-4">
                   <SuggestedCalcs suggestions={analysis.suggestedCalculations} />
-                  <CalcChain steps={calcChain} />
+                  <CalcChain key={analysisRevision} steps={calcChain} />
                 </div>
               ) : (
                 <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">

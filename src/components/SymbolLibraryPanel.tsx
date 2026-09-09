@@ -33,6 +33,7 @@ const DEVICE_TYPE_LABELS: Record<SLDComponentType, string> = {
   grid_connection: '전력망 연결점',
   source: '수전·인입 전원',
   annotation: '타 도면 참조·주석',
+  unknown: '미판독',
 };
 
 interface SymbolLibraryPanelProps {
@@ -263,7 +264,7 @@ export function UnknownSymbolRegistrar({
                 className="mt-1 min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)]"
               >
                 <option value="">모름 · 저장 안 함</option>
-                {SLD_COMPONENT_TYPES.map((type) => (
+                {SLD_COMPONENT_TYPES.filter((type) => type !== 'unknown').map((type) => (
                   <option key={type} value={type}>{DEVICE_TYPE_LABELS[type]}</option>
                 ))}
               </select>

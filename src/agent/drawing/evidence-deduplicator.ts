@@ -131,7 +131,7 @@ function symbolHitCandidates(hit: RawSymbolHit): string[] {
 }
 
 function canConfirmSymbolHit(hit: RawSymbolHit): boolean {
-  if (hit.certainty === 'ambiguous' || hit.certainty === 'unread') return false;
+  if (hit.certainty === 'ambiguous' || hit.certainty === 'unread' || hit.type === 'unknown') return false;
   const primary = canonicalSymbolType(hit.type, hit.label);
   return (hit.certainty === 'confirmed' || hit.confidence >= 0.85)
     && symbolHitCandidates(hit).every((candidate) => typesCompatible(primary, candidate));
@@ -317,7 +317,7 @@ export function deduplicateSymbols(
       typeCandidates: hitCandidates,
       confirmedType: hitConfirmed ? hitType : undefined,
       rawLabel: hit.label,
-      certainty: hit.certainty === 'unread' ? 'unread' : hitConfirmed ? 'confirmed' : 'ambiguous',
+      certainty: hit.certainty === 'unread' || hit.type.trim().toLowerCase() === 'unknown' ? 'unread' : hitConfirmed ? 'confirmed' : 'ambiguous',
       ...(hit.ports?.length ? { ports: mergePoints([], hit.ports.filter(finitePoint), 0) } : {}),
       evidence: evidenceRefs(hit, `${id}-e0`),
     });

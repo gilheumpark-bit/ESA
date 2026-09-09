@@ -15,7 +15,7 @@ for (const name of [
   'agent/drawing/device-vocabulary', 'agent/drawing/device-class', 'agent/drawing/bounds-index',
   'agent/drawing/evidence-deduplicator', 'agent/drawing/terminal-path-resolver',
   'agent/drawing/completed-page-evidence',
-  'lib/security-hardening', 'lib/export-drawing-document',
+  'lib/security-hardening', 'lib/drawing-certainty', 'lib/drawing-read-summary', 'lib/export-drawing-document',
 ]) {
   const fileName = path.join(root, 'src', `${name}.ts`);
   if (!existsSync(fileName)) continue; // Allows the exact same contracts on the pre-change baseline.

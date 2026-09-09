@@ -27,6 +27,7 @@ export const SLD_COMPONENT_TYPES = [
   'grid_connection',
   'source',
   'annotation',
+  'unknown',
 ] as const;
 
 export type SLDComponentType = (typeof SLD_COMPONENT_TYPES)[number];

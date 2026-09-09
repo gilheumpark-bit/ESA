@@ -133,9 +133,9 @@ describe('적대 — 분류기', () => {
     expect(typeOf('TRANSFORMER-1')).toBe('transformer');
   });
 
-  it('어휘에 없는 이름은 조용히 부하로 떨어진다 (예외 없음)', () => {
-    expect(typeOf('ZZZ-9')).toBe('load');
-    expect(typeOf('한글심볼')).toBe('load');
+  it('어휘에 없는 이름은 unknown으로 보존하고 부하를 지어내지 않는다', () => {
+    expect(typeOf('ZZZ-9')).toBe('unknown');
+    expect(typeOf('한글심볼')).toBe('unknown');
   });
 
   it('이름 없는 INSERT는 심볼이 되지 않는다 (분류 근거가 없으므로)', () => {

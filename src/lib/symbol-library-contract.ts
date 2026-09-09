@@ -40,7 +40,8 @@ export interface UnknownSymbolReport {
 
 const CAPS = { entries: 500, blockNames: 20, nameLen: 120, noteLen: 300, orgLen: 120 } as const;
 const FINGERPRINT_RE = /^fp[12]:[0-9a-f]{16}$/;
-const TYPE_SET = new Set<string>(SLD_COMPONENT_TYPES);
+// A dictionary entry must resolve a type, not teach an unknown as an answer.
+const TYPE_SET = new Set<string>(SLD_COMPONENT_TYPES.filter((type) => type !== 'unknown'));
 const hasOwn = (record: Record<string, unknown>, key: string): boolean => (
   Object.prototype.hasOwnProperty.call(record, key)
 );

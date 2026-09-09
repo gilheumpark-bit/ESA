@@ -4,6 +4,8 @@
 
 ## 2026-09-09
 
+- [미판독 계약 추가 설계 검토·계수·수정·계산·보고서 일관성](handoffs/2026-09-09-uncertainty-contract-review.md)
+
 - [개발 잔재·개발 의존성·기술부채 정리](handoffs/2026-09-09-development-debt-cleanup.md)
 - [정리 전 PROJECT_STATE 보존본](handoffs/2026-09-09-project-state-before-cleanup.md)
 

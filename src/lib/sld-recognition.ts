@@ -48,6 +48,8 @@ export { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-
 export interface SLDComponent {
   id: string;
   type: SLDComponentType;
+  /** Unrecognized model vocabulary is preserved, never promoted to a known type. */
+  typeCandidates?: string[];
   label?: string;
   rating?: string;
   voltage?: string;
@@ -150,6 +152,8 @@ export interface CalcChainStep {
   inputs: Partial<Record<string, unknown>>;
   dependsOn?: number[];
   description: string;
+  /** Reasons this step cannot be used as an automatic drawing calculation. */
+  holdReasons?: string[];
 }
 
 export interface SLDAnalysisOptions {
@@ -385,6 +389,7 @@ Return ONLY valid JSON with this structure:
 - KEC 212.7.2 is not a generic upstream/downstream selectivity check. Populate the two device IDs and I-squared-t fields only for a documented pair of separate overload and short-circuit protection devices. Never derive I-squared-t from a curve image or invent it from device ratings
 - For every populated condition or protection field, include the exact visible evidence identifier in sourceIds. If no such field is present, return an empty sourceIds array
 - Never infer a physical length, rating, voltage, or conductor size from pixel spacing
+- If a symbol is present but its type cannot be read, use type="unknown" and retain its location. Do not omit it or use load as a fallback.
 - If printed text is too blurred, faint, or low-resolution to read with certainty, set that field to null. Do NOT pick the most likely digit. A scanned drawing where "5" and "6" are indistinguishable must yield null, not a guess — a wrong rating on a compliance report is worse than a missing one
 - Lower "confidence" when key printed values were unreadable. A high confidence with guessed ratings is the worst outcome
 Return ONLY valid JSON. No markdown, no explanation.`;
@@ -634,13 +639,15 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       if (!row || typeof row !== 'object') continue;
       const component = row as Record<string, unknown>;
       const id = boundedText(component.id, 128);
-      const type = boundedText(component.type, 64);
+      const suppliedType = boundedText(component.type, 64);
+      const type: SLDComponentType = suppliedType && SLD_COMPONENT_TYPE_SET.has(suppliedType as SLDComponentType)
+        ? suppliedType as SLDComponentType : 'unknown';
       const position = component.position && typeof component.position === 'object'
         ? component.position as Record<string, unknown>
         : undefined;
       const x = finiteNumber(position?.x);
       const y = finiteNumber(position?.y);
-      if (!id || ids.has(id) || !type || !SLD_COMPONENT_TYPE_SET.has(type as SLDComponentType) ||
+      if (!id || ids.has(id) ||
           x == null || y == null || x < 0 || x > 100 || y < 0 || y > 100) continue;
       ids.add(id);
       const properties = stringProperties(component.properties);
@@ -669,6 +676,7 @@ export function parseSLDResponse(text: string): SLDAnalysis {
       components.push({
         id,
         type: normalizedType,
+        ...(type === 'unknown' && suppliedType && suppliedType !== 'unknown' ? { typeCandidates: [suppliedType] } : {}),
         position: { x, y },
         ...optionalTextField('label', component.label),
         ...optionalTextField('rating', component.rating),
@@ -1010,18 +1018,10 @@ export function generateSuggestions(analysis: Pick<SLDAnalysis, 'components' | '
   if (loads.length > 0) {
     suggestions.push({
       calculatorId: 'demand-diversity',
-      // 이 계산기는 개별 최대수요 목록(kW)을 받는다. 도면의 정격 표기는 단위가
-      // 제각각이라 그대로 목록으로 넘기지 않고, 읽어낸 kW 만 싣는다.
-      inputs: {
-        individualMaxDemands: loads
-          .map((l) => parseMeasuredValue(
-            { name: 'value', type: 'number', unit: 'kW', description: '최대수요' },
-            l.rating,
-          ))
-          .filter((v): v is number => v !== undefined)
-          .map((value) => ({ value })),
-      },
-      reason: `${loads.length}개 부하 수용률 계산`,
+      // Nameplate powers are not measured maximum demands. Preserve the
+      // suggestion, but require actual demands instead of copying ratings.
+      inputs: {},
+      reason: `${loads.length}개 부하 수용률 계산 — 개별 최대수요·누락 부하 확인 필요`,
       priority: 2,
     });
   }
@@ -1073,7 +1073,7 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
       step: stepNum++,
       calculatorId: 'max-demand',
       // 항목 스키마는 name·ratedPower(kW)·demandFactor 다. 도면의 정격 표기를
-      // kW 로 옮기지 못하면 그 부하는 넣지 않는다.
+      // kW 로 옮기지 못해도 해당 행을 유지한다. 누락을 0이나 일부 합계로 바꾸지 않는다.
       inputs: {
         loads: loads
           .map((l) => ({
@@ -1082,10 +1082,11 @@ export function generateCalcChainFromSLD(analysis: SLDAnalysis): CalcChainStep[]
               { name: 'ratedPower', type: 'number', unit: 'kW', description: '정격 용량' },
               l.rating,
             ),
-          }))
-          .filter((l): l is { name: string; ratedPower: number } => l.ratedPower !== undefined),
+          })),
       },
-      description: '부하 계산 - 총 수전 용량 산정',
+      description: '검출 부하의 수요 계산 — 도면 전체 부하 포함 여부 확인 필요',
+      ...(components.some((item) => item.type === 'unknown')
+        ? { holdReasons: ['미판독 기기가 있어 부하 목록의 범위를 확정하지 못했습니다.'] } : {}),
     });
   }
 

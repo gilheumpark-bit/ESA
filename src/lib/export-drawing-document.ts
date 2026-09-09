@@ -3,6 +3,7 @@
  * findings and actions. Exports retain uncertainty and original evidence IDs.
  * No model calls or network requests; the document stays in this browser.
  */
+import { summarizeDrawingReadState } from '@/lib/drawing-read-summary';
 import { escapeHtml } from '@/lib/security-hardening';
 import type { DrawingDocumentV3, EvidenceRef } from '@/agent/drawing/types-v3';
 
@@ -108,6 +109,7 @@ export function drawingDocumentSummary(document: DrawingDocumentV3): Array<[stri
   const symbols = document.evidenceGraph?.symbols ?? [];
   const relations = document.evidenceGraph?.relations ?? [];
   const ledger = document.coverageLedger;
+  const summary = summarizeDrawingReadState(document);
   return [
     ['도면명', cell(document.title)], ['문서 해시', cell(document.documentHash)],
     ['분석 갱신 시각', cell(document.updatedAt)], ['문서 형식 버전', cell(document.schemaVersion)],
@@ -118,6 +120,11 @@ export function drawingDocumentSummary(document: DrawingDocumentV3): Array<[stri
     ['잠정 보류 항목', String(document.unresolvedItems?.length ?? 0)],
     ['구획 완료/계획', `${cell(ledger?.regionsComplete, '0')} / ${cell(ledger?.plannedRegionCount, '0')}`],
     ['미해결 재검사', cell(ledger?.unresolvedRescans, '0')],
+    ['집계 범위', '검출 항목만 집계. 전체 정답률·자동화율 아님. 범주 간 중복은 합산하지 않음.'],
+    ['사람 정정 확정(종류·문자)', summary.humanConfirmed === undefined ? '정정 이력 미기록' : String(summary.humanConfirmed)],
+    ...(summary.missingGroups.length ? [['판독 범주 미기록', summary.missingGroups.join(' / ')] as [string, string]] : []),
+    ...summary.groups.map((group): [string, string] => [`${group.label}(확정/검토/미판독)`, `${group.counts.confirmed} / ${group.counts.ambiguous} / ${group.counts.unread}`]),
+    ...summary.unresolvedCauses.map((item): [string, string] => [`미확정 원인 ${item.code}`, String(item.count)]),
   ];
 }
 

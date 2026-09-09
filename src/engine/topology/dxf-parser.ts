@@ -392,7 +392,7 @@ export function parseDxfToSLD(
         // 관례)이 컴포넌트로 승격되고 미식별 블록명은 resolveBlockType 기본 'load'가
         // 되어 phantom load→부하계산 오염이었다. 동일 필터를 적용한다.
         if (isIgnoredLayer(entity.layer)) break;
-        // 우선순위: 고객사 라이브러리(지문→별칭) → 전역 이름 휴리스틱 → 'load' 기본.
+        // 우선순위: 고객사 라이브러리(지문→별칭) → 전역 이름 휴리스틱 → 'unknown'.
         // 라이브러리에도 휴리스틱에도 없는 블록은 unknownSymbols 로 보고한다 —
         // 조용한 'load' 뭉개기가 사용자가 라이브러리를 만들 기회를 없애기 때문.
         const fingerprint = blockFingerprint(entity.name);
@@ -411,7 +411,7 @@ export function parseDxfToSLD(
             });
           }
         }
-        const type = libraryType ?? heuristicType ?? 'load';
+        const type = libraryType ?? heuristicType ?? 'unknown';
         components.push({
           id: `comp_${++compIdx}`,
           type,

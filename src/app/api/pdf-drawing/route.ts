@@ -6,6 +6,7 @@
  * CAD에서 출력(Plot)한 PDF의 내부 좌표를 직접 추출.
  */
 
+import { buildQuickDrawingReadout } from '@/lib/quick-drawing-readout';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
@@ -123,6 +124,7 @@ async function handlePost(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: analysis,
+      readout: buildQuickDrawingReadout(analysis),
       calcChain,
       review,
       topology: {

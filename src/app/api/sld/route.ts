@@ -8,6 +8,7 @@
  * BYOK required (Vision LLM).
  */
 
+import { buildQuickDrawingReadout } from '@/lib/quick-drawing-readout';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
@@ -249,6 +250,7 @@ async function POST__impl(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: analysis,
+      readout: buildQuickDrawingReadout(analysis),
       // 스펙 수치를 믿어도 되는지 — 화면이 이걸 보고 경고를 붙인다.
       textQuality,
       /**

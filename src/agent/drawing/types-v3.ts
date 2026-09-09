@@ -55,7 +55,7 @@ export type ReadFailureCode =
   // 사후 판정이 불가능했다(08-09 KIMM 3건 · 08-13 교재 6건 모두).
   | 'GRAPH_CONFLICT_LINE';
 
-export type Certainty = 'confirmed' | 'ambiguous' | 'unread';
+export type Certainty = import('@/lib/drawing-certainty').DrawingCertainty;
 export type CountStatus = 'COMPLETE' | 'CONDITIONAL' | 'HOLD';
 export type RecommendationStatus = 'SUPPORTED' | 'CONDITIONAL' | 'HOLD' | 'REJECTED';
 export type OcrAdjudicationStatus =
@@ -156,6 +156,8 @@ export interface EquipmentCountRow {
   confirmed: number;
   ambiguous: number;
   missingSuspected: number;
+  /** Present on new counts; absent in older saved documents. */
+  unread?: number;
   physicalEquipmentCount: number | null;
   symbolOccurrences: number;
   countStatus: CountStatus;
@@ -382,4 +384,4 @@ export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
 export const PROMPT_VERSION = 'sld-role-v8';
 export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v8';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v9';

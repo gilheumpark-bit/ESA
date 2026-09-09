@@ -352,3 +352,15 @@ describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
     expect(result.components.find((c) => c.properties?.blockName === 'TR-2')?.type).toBe('transformer');
   });
 });
+
+it('preserves unfamiliar DXF blocks as unknown components rather than invented loads', () => {
+  const parsed = parseDxfToSLD(CUSTOM_DOC);
+  const components = parsed.components.filter((item) => item.properties?.blockName === 'XX-7Q');
+  expect(components).toHaveLength(2);
+  expect(components.every((item) => item.type === 'unknown')).toBe(true);
+  expect(components.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.y))).toBe(true);
+  expect(parsed.unknownSymbols?.[0].count).toBe(2);
+});
+it('cannot publish an unknown answer as a company dictionary classification', () => {
+  expect(parseSymbolLibrary({ schemaVersion: 1, organization: 'Fixture', entries: [{ blockNames: ['X'], deviceType: 'unknown' }] }).ok).toBe(false);
+});
