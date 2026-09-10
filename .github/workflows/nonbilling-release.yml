@@ -1,0 +1,172 @@
+name: Non-billing release verification
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-release.yml', '.review-patches/release-fixes.py']
+concurrency:
+  group: nonbilling-release-verification
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply exact integrations without changing payment code
+        run: |
+          python3 .review-patches/connect-resources.py
+          python3 .review-patches/connect-search.py
+          python3 .review-patches/connect-admin.py
+          python3 .review-patches/connect-project-actions.py
+          python3 .review-patches/connect-field.py
+          python3 .review-patches/connect-ocr.py
+          python3 .review-patches/refine-nonbilling.py
+          python3 .review-patches/connect-search-evidence.py
+          python3 .review-patches/connect-history.py
+          python3 .review-patches/connect-compare-standards.py
+          python3 .review-patches/final-corrections.py
+          python3 .review-patches/align-regressions.py
+          if [ -f .review-patches/release-fixes.py ]; then python3 .review-patches/release-fixes.py; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,json,hashlib,tarfile,re
+          base='dd4be8d5b39030390e23131adf3c442cd225da1c'
+          p=Path('docs/project/HANDOFFS.md');s=p.read_text();anchor='## 2026-09-10\n'
+          assert s.count(anchor)==1
+          p.write_text(s.replace(anchor,anchor+'\n- [결제 제외 기능 품질·데이터 경계·검색/협업/현장 개선](handoffs/2026-09-10-nonbilling-feature-quality.md)\n'))
+          paths=subprocess.check_output(['git','diff','--name-only',base,'--','src','e2e','docs','scripts'],text=True).splitlines()
+          assert paths and len(paths)<100
+          assert all(Path(p).is_file() for p in paths)
+          prohibited=re.compile(r'(?:^|/)(?:checkout|billing|stripe|pricing)(?:[/.]|$)|(?:^|/)(?:stripe|billing|pricing)[-.]',re.I)
+          assert not [p for p in paths if prohibited.search(p)],'payment changes are outside scope'
+          subprocess.run(['git','diff','--exit-code',base,'--','package.json','package-lock.json','src/app/api/account/tier','src/app/(with-nav)/settings/page.tsx'],check=True)
+          protected=[p for p in subprocess.check_output(['git','ls-tree','-r','--name-only',base],text=True).splitlines() if prohibited.search(p)]
+          for p in protected:
+              assert Path(p).read_bytes()==subprocess.check_output(['git','show',f'{base}:{p}']),f'payment drift: {p}'
+          Path('/tmp/nonbilling-paths.txt').write_text('\n'.join(paths)+'\n')
+          manifest={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}
+          Path('/tmp/nonbilling-hashes.json').write_text(json.dumps(manifest,indent=2))
+          Path('/tmp/nonbilling-scope.json').write_text(json.dumps({'base':base,'changedFiles':len(paths),'protectedPaymentFiles':len(protected),'paymentUnchanged':True,'dependenciesUnchanged':True},indent=2))
+          with tarfile.open('/tmp/nonbilling-product-source.tar.gz','w:gz') as archive:
+              for p in paths:archive.add(p,arcname=p)
+          print('NONBILLING_SCOPE',Path('/tmp/nonbilling-scope.json').read_text())
+          PY
+          git read-tree dd4be8d5b39030390e23131adf3c442cd225da1c
+          while IFS= read -r file; do git add -- "$file"; done < /tmp/nonbilling-paths.txt
+          git diff --cached --check
+          git diff --cached --stat
+          npm run gate:hygiene
+          npm run check:docs
+          npm ci > /tmp/nonbilling-install.log 2>&1 || { tail -70 /tmp/nonbilling-install.log; exit 1; }
+      - name: Types, strict lint and both security audit scopes
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npm run gate:audit > /tmp/nonbilling-production-audit.log 2>&1 || { cat /tmp/nonbilling-production-audit.log; exit 1; }
+          npm run gate:audit:all > /tmp/nonbilling-all-audit.log 2>&1 || { cat /tmp/nonbilling-all-audit.log; exit 1; }
+          cat /tmp/nonbilling-production-audit.log /tmp/nonbilling-all-audit.log
+      - name: Full unit and script regression with existing drawing gates
+        run: |
+          set +e
+          npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/nonbilling-jest.json > /tmp/nonbilling-jest.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const fs=require('fs');
+          if(!fs.existsSync('/tmp/nonbilling-jest.json')) { console.log(fs.readFileSync('/tmp/nonbilling-jest.log','utf8').slice(-12000)); process.exit(1); }
+          const r=require('/tmp/nonbilling-jest.json');
+          console.log('JEST_SUMMARY',JSON.stringify({success:r.success,passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suites:r.numPassedTestSuites,failedSuites:r.numFailedTestSuites,skippedSuites:r.numPendingTestSuites}));
+          for(const suite of r.testResults.filter(s=>s.status!=='passed'&&s.status!=='pending'))console.log('JEST_FAILURE',suite.name,(suite.message||'').slice(0,20000));
+          JS
+          test "$status" = 0
+          npm run test:scripts > /tmp/nonbilling-scripts.log 2>&1 || { tail -120 /tmp/nonbilling-scripts.log; exit 1; }
+          tail -15 /tmp/nonbilling-scripts.log
+          npm run gate:sld-v3-contract
+          npm run gate:snapshot
+      - name: Production build, calculator receipt integration and Chromium
+        run: |
+          npm run build > /tmp/nonbilling-build.log 2>&1 || { tail -120 /tmp/nonbilling-build.log; exit 1; }
+          npm run gate:chat-live
+          npx playwright install --with-deps chromium > /tmp/nonbilling-chromium.log 2>&1 || { tail -50 /tmp/nonbilling-chromium.log; exit 1; }
+      - name: Isolated real PDF and browser tests
+        run: |
+          pid=''
+          cleanup() { if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; pid=''; fi; }
+          trap cleanup EXIT
+          start_server() {
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$1" > "$2" 2>&1 &
+            pid=$!
+            for n in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || { cat "$2"; return 1; }
+              if curl -fsS "http://127.0.0.1:$1/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          start_server 3010 /tmp/nonbilling-pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010 > /tmp/nonbilling-pdf.log 2>&1 || { cat /tmp/nonbilling-pdf.log; exit 1; }
+          cat /tmp/nonbilling-pdf.log
+          cleanup
+          start_server 3011 /tmp/nonbilling-browser-server.log
+          set +e
+          BASE_URL=http://127.0.0.1:3011 NONBILLING_SCREEN_DIR=/tmp/nonbilling-screens PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/nonbilling-browser.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json > /tmp/nonbilling-browser.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const fs=require('fs');
+          if(!fs.existsSync('/tmp/nonbilling-browser.json')) {console.log(fs.readFileSync('/tmp/nonbilling-browser.log','utf8').slice(-18000));process.exit(1);}
+          const r=require('/tmp/nonbilling-browser.json'); console.log('BROWSER_SUMMARY',JSON.stringify(r.stats));
+          function walk(s){for(const spec of s.specs||[])for(const t of spec.tests||[])if(t.status!=='expected')console.log('BROWSER_FAILURE',spec.title,JSON.stringify(t.results).slice(0,18000));for(const child of s.suites||[])walk(child);}
+          for(const s of r.suites||[])walk(s);
+          for(const e of r.errors||[])console.log('BROWSER_ERROR',e.message);
+          JS
+          test "$status" = 0
+      - name: Prepare clean product commit only after all checks succeed
+        run: |
+          git diff --cached --check
+          npm run gate:hygiene
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'feat: strengthen non-billing workflows and evidence boundaries' '' 'Improve account-scoped projects, sharing, dashboard, community, history, notifications and admin audits. Preserve field record/delivery semantics, OCR originals, explicit numeric comparison inputs and source editions. Harden complete AI streaming, local provider selection, licensed RAG and vector resource lifetime. Add negative-path and desktop/mobile regressions. Leave payment files, dependencies, drawing models and electrical constants unchanged. No main merge or deployment.' | git commit-tree "$tree" -p dd4be8d5b39030390e23131adf3c442cd225da1c)
+          git push origin "$commit":refs/heads/chore/nonbilling-prepared-20260910
+          echo "$commit" > /tmp/nonbilling-prepared-sha.txt
+          echo "NONBILLING_PREPARED_COMMIT=$commit"
+      - name: Preserve full evidence on every outcome
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nonbilling-release-verification
+          path: |
+            /tmp/nonbilling-paths.txt
+            /tmp/nonbilling-hashes.json
+            /tmp/nonbilling-scope.json
+            /tmp/nonbilling-product-source.tar.gz
+            /tmp/nonbilling-production-audit.log
+            /tmp/nonbilling-all-audit.log
+            /tmp/nonbilling-jest.json
+            /tmp/nonbilling-jest.log
+            /tmp/nonbilling-scripts.log
+            /tmp/nonbilling-build.log
+            /tmp/nonbilling-pdf.log
+            /tmp/nonbilling-browser.json
+            /tmp/nonbilling-browser.log
+            /tmp/nonbilling-browser-server.log
+            /tmp/nonbilling-screens/
+            /tmp/nonbilling-prepared-sha.txt
+            test-results/
+          retention-days: 3
+          if-no-files-found: warn
