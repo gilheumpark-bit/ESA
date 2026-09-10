@@ -1,0 +1,93 @@
+{
+  "runId": 34495428044,
+  "scope": "Existing run output only; no new test execution",
+  "scopeCheck": {
+    "base": "dd4be8d5b39030390e23131adf3c442cd225da1c",
+    "changedFiles": 49,
+    "protectedPaymentFiles": 13,
+    "paymentUnchanged": true,
+    "dependenciesUnchanged": true
+  },
+  "jest": {
+    "success": true,
+    "numPassedTests": 4632,
+    "numFailedTests": 0,
+    "numPendingTests": 7,
+    "numPassedTestSuites": 370,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 2
+  },
+  "browser": {
+    "stats": {
+      "startTime": "2026-09-10T15:28:30.877Z",
+      "duration": 206756.833,
+      "expected": 130,
+      "skipped": 0,
+      "unexpected": 3,
+      "flaky": 0
+    },
+    "failures": [
+      {
+        "file": "frontend-controls.spec.ts",
+        "title": "a disconnected local AI reports a V3 error without an unhandled rejection",
+        "status": "unexpected",
+        "results": [
+          {
+            "status": "failed",
+            "errors": [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/frontend-controls.spec.ts",
+                  "column": 59,
+                  "line": 169
+                },
+                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator: getByRole('main').getByRole('alert')\nExpected substring: \u001b[32m\"\u001b[7m로컬 Codex를 사용할 수 없\u001b[27m습니다\"\u001b[39m\nReceived string:    \u001b[31m\"\u001b[7m계정 상태 확인 실패: 요청을 완료하지 못했\u001b[27m습니다\u001b[7m.\u001b[27m\"\u001b[39m\nTimeout: 5000ms\n\nCall log:\n\u001b[2m  - Expect \"toContainText\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByRole('main').getByRole('alert')\u001b[22m\n\u001b[2m    14 × locator resolved to <p role=\"alert\" class=\"text-sm text-[var(--drawing-error-text)]\">계정 상태 확인 실패: 요청을 완료하지 못했습니다.</p>\u001b[22m\n\u001b[2m       - unexpected value \"계정 상태 확인 실패: 요청을 완료하지 못했습니다.\"\u001b[22m\n\n\n  167 |   await page.getByRole('button', { name: 'PDF/DXF/이미지 전체 분석', exact: true }).click();\n  168 |   await (await chooser).setFiles({ name: 'synthetic-page.png', mimeType: 'image/png', buffer: SAMPLE_PNG });\n> 169 |   await expect(page.getByRole('main').getByRole('alert')).toContainText('로컬 Codex를 사용할 수 없습니다');\n      |                                                           ^\n  170 |   await expect(page.getByRole('button', { name: 'PDF/DXF/이미지 전체 분석', exact: true })).toBeEnabled();\n  171 |   expect(errors).toEqual([]);\n  172 | });\n    at /home/runner/work/ESA/ESA/e2e/frontend-controls.spec.ts:169:59"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "file": "nonbilling-review-forms.spec.ts",
+        "title": "missing OCR fields can be completed without losing original evidence (1440px)",
+        "status": "unexpected",
+        "results": [
+          {
+            "status": "failed",
+            "errors": [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts",
+                  "column": 5,
+                  "line": 13
+                },
+                "message": "Error: locator.setInputFiles: Error: strict mode violation: locator('input[type=\"file\"]') resolved to 2 elements:\n    1) <input type=\"file\" class=\"hidden\" accept=\"image/*\" capture=\"environment\"/> aka locator('input[type=\"file\"]').first()\n    2) <input type=\"file\" class=\"hidden\" accept=\"image/jpeg,image/png,image/webp\"/> aka locator('input[type=\"file\"]').nth(1)\n\nCall log:\n\u001b[2m  - waiting for locator('input[type=\"file\"]')\u001b[22m\n\n\n  11 |     await page.goto('/tools/ocr');\n  12 |     // Small synthetic image; no actual OCR provider or customer data.\n> 13 |     await page.locator('input[type=\"file\"]').setInputFiles({ name: 'synthetic-plate.png', mimeType: 'image/png',\n     |     ^\n  14 |       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMqoAAAAASUVORK5CYII=', 'base64') });\n  15 |     await page.getByRole('button', { name: '명판 분석하기', exact: true }).click();\n  16 |     await expect(page.getByText(/복수 값·범위·미확정 표기/).first()).toBeVisible();\n    at /home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts:13:5"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "file": "nonbilling-review-forms.spec.ts",
+        "title": "missing OCR fields can be completed without losing original evidence (390px)",
+        "status": "unexpected",
+        "results": [
+          {
+            "status": "failed",
+            "errors": [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts",
+                  "column": 5,
+                  "line": 13
+                },
+                "message": "Error: locator.setInputFiles: Error: strict mode violation: locator('input[type=\"file\"]') resolved to 2 elements:\n    1) <input type=\"file\" class=\"hidden\" accept=\"image/*\" capture=\"environment\"/> aka locator('input[type=\"file\"]').first()\n    2) <input type=\"file\" class=\"hidden\" accept=\"image/jpeg,image/png,image/webp\"/> aka locator('input[type=\"file\"]').nth(1)\n\nCall log:\n\u001b[2m  - waiting for locator('input[type=\"file\"]')\u001b[22m\n\n\n  11 |     await page.goto('/tools/ocr');\n  12 |     // Small synthetic image; no actual OCR provider or customer data.\n> 13 |     await page.locator('input[type=\"file\"]').setInputFiles({ name: 'synthetic-plate.png', mimeType: 'image/png',\n     |     ^\n  14 |       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMqoAAAAASUVORK5CYII=', 'base64') });\n  15 |     await page.getByRole('button', { name: '명판 분석하기', exact: true }).click();\n  16 |     await expect(page.getByText(/복수 값·범위·미확정 표기/).first()).toBeVisible();\n    at /home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts:13:5"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "errors": []
+  }
+}
