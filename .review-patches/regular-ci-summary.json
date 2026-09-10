@@ -1,0 +1,227 @@
+{
+  "runId": 34501093032,
+  "productHead": "9327c3afcd8a090be90d699c071b7d59b202700f",
+  "status": "completed",
+  "conclusion": "success",
+  "scope": "Original regular PR CI only; this collection does not execute tests",
+  "jobs": [
+    {
+      "id": 102952247580,
+      "name": "Verify (docs, types, lint, tests, build) (24)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-10T16:18:18Z",
+      "completed_at": "2026-09-10T16:21:22Z"
+    },
+    {
+      "id": 102953341691,
+      "name": "Live gates (server, PDF, UI smoke) (24)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-10T16:21:24Z",
+      "completed_at": "2026-09-10T16:27:08Z"
+    }
+  ],
+  "jobSteps": {
+    "Verify (docs, types, lint, tests, build) (24)": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install dependencies",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Tracked development residue",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Documentation contracts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "TypeScript check",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run tests",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "SLD V3 contract gate",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Dependency audit ratchet (production)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Dependency audit ratchet (including development)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Realworld snapshot freshness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "Live gates (server, PDF, UI smoke) (24)": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install dependencies",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Live AI calculator receipt gate",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install Chromium for UI smoke",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Live PDF pipeline and UI smoke gates",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Upload E2E failure evidence",
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Upload drawing error recovery screenshots",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Upload browser result and retained traces",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "id": 10162285450,
+      "name": "browser-execution-evidence",
+      "digest": "sha256:bcdb15af66b85625c47abdf044236285759376eeed6797e2bd202180441de376",
+      "size_in_bytes": 2761925,
+      "expired": false
+    },
+    {
+      "id": 10162284763,
+      "name": "drawing-error-recovery-evidence",
+      "digest": "sha256:28842f632074e7da065d9db96cb452d8257164bb7dc8ae55283f90d078c6575a",
+      "size_in_bytes": 1197809,
+      "expired": false
+    }
+  ],
+  "browser": {
+    "available": true,
+    "stats": {
+      "startTime": "2026-09-10T16:23:46.680Z",
+      "duration": 197766.12999999998,
+      "expected": 133,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "executions": 133,
+    "everyFirstAttemptPassed": true,
+    "failures": [],
+    "errors": []
+  },
+  "logSummaries": {
+    "Verify (docs, types, lint, tests, build) (24)": {
+      "available": false,
+      "collectionExit": 1
+    },
+    "Live gates (server, PDF, UI smoke) (24)": {
+      "available": false,
+      "collectionExit": 1
+    }
+  }
+}
