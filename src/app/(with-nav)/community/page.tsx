@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, MessageSquare, ChevronUp, Tag, Plus } from 'lucide-react';
 import Link from 'next/link';
+import { useFeatureResource } from '@/hooks/useFeatureResource';
+import { requestFeatureJson, relativeActivityTime } from '@/lib/feature-request';
+import { decodeCommunity } from '@/lib/feature-read-models';
 
 /**
  * ESVA Community Q&A Hub
@@ -49,53 +52,14 @@ function useQuestions(opts: {
   search: string;
   page: number;
 }) {
-  const [questions, setQuestions] = useState<QuestionSummary[]>([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [retry, setRetry] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set('sort', opts.sort);
-      params.set('page', String(opts.page));
-      if (opts.tags.length > 0) params.set('tags', opts.tags.join(','));
-      if (opts.search) params.set('search', opts.search);
-
-      setError(null);
-      fetch(`/api/community?${params.toString()}`)
-        .then((res) => res.json())
-        .then((json) => {
-          if (cancelled) return;
-          if (json.success) {
-            setQuestions(json.data.data ?? []);
-            setTotalPages(json.data.totalPages ?? 1);
-            return;
-          }
-          // 실패를 삼키면 화면은 "아직 질문이 없습니다" 가 된다 — 서버가
-          // 죽었는데 질문이 없다고 말하고, 실패할 게 뻔한 "첫 질문을
-          // 남겨보세요" 를 권하게 된다(실측 2026-07-26: /api/community 가
-          // 500 ESVA-7050 인데 화면은 빈 목록).
-          setQuestions([]);
-          setError(json.error?.message ?? '질문 목록을 불러오지 못했습니다.');
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setQuestions([]);
-          setError('질문 목록을 불러오지 못했습니다. 연결을 확인해 주세요.');
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 0);
-
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [opts.sort, opts.tags, opts.search, opts.page, retry]);
-
-  return { questions, totalPages, loading, error, reload: () => setRetry((n) => n + 1) };
+  const params = new URLSearchParams({ sort: opts.sort, page: String(opts.page) });
+  if (opts.tags.length) params.set('tags', [...opts.tags].sort().join(','));
+  if (opts.search) params.set('search', opts.search);
+  const query = params.toString();
+  const load = useCallback((signal: AbortSignal) => requestFeatureJson(`/api/community?${query}`, { signal }, decodeCommunity), [query]);
+  const resource = useFeatureResource(query, load);
+  return { questions: resource.data?.data ?? [], totalPages: resource.data?.totalPages ?? 1,
+    loading: resource.loading, error: resource.error, reload: resource.reload };
 }
 
 // ─── PART 3: Filter Bar ───────────────────────────────────────
@@ -128,7 +92,8 @@ function FilterBar({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
         <input
           type="text"
-          defaultValue={search}
+          value={search}
+          maxLength={200}
           onChange={(e) => {
             const val = e.target.value;
             onSearchChange(val);
@@ -165,6 +130,7 @@ function FilterBar({
           <button
             key={tag}
             onClick={() => onTagToggle(tag)}
+            aria-pressed={selectedTags.includes(tag)}
             className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs transition-colors
               ${selectedTags.includes(tag)
                 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
@@ -187,7 +153,7 @@ function QuestionCard({ q }: { q: QuestionSummary }) {
 
   return (
     <Link
-      href={`/community/${q.id}`}
+      href={`/community/${encodeURIComponent(q.id)}`}
       className="block rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] p-4 transition-shadow
                  hover:shadow-md"
     >
@@ -252,6 +218,7 @@ export default function CommunityPage() {
   const [sort, setSort] = useState<SortOption>('newest');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [search, setSearch] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
 
   const { questions, totalPages, loading, error, reload } = useQuestions({
@@ -270,7 +237,9 @@ export default function CommunityPage() {
 
   // 300ms 디바운스 — 타이핑 중 불필요한 리렌더 방지
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); }, []);
   const handleSearchChange = useCallback((value: string) => {
+    setSearchDraft(value);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
       setSearch(value);
@@ -306,10 +275,14 @@ export default function CommunityPage() {
         onSortChange={(s) => { setSort(s); setPage(1); }}
         selectedTags={selectedTags}
         onTagToggle={handleTagToggle}
-        search={search}
+        search={searchDraft}
         onSearchChange={handleSearchChange}
       />
 
+      {(searchDraft || selectedTags.length > 0 || sort !== 'newest') && <button type="button" className="mt-3 min-h-11 rounded-lg border px-3 text-sm" onClick={() => {
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+        setSearchDraft(''); setSearch(''); setSelectedTags([]); setSort('newest'); setPage(1);
+      }}>검색·필터 초기화</button>}
       {/* Question List */}
       <div className="mt-6 space-y-3">
         {loading ? (
@@ -320,7 +293,7 @@ export default function CommunityPage() {
           </div>
         ) : error ? (
           <div className="rounded-lg border border-[var(--color-error)] bg-red-50 p-6 text-center dark:bg-red-900/20">
-            <p className="text-sm text-[var(--color-error)]">{error}</p>
+            <p role="alert" className="text-sm text-[var(--color-error)]">{error}</p>
             <button
               type="button"
               onClick={reload}
@@ -371,23 +344,4 @@ export default function CommunityPage() {
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-function formatTimeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffMs = now - then;
-
-  const minutes = Math.floor(diffMs / 60_000);
-  if (minutes < 1) return '방금 전';
-  if (minutes < 60) return `${minutes}분 전`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}시간 전`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}일 전`;
-
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}개월 전`;
-
-  return `${Math.floor(months / 12)}년 전`;
-}
+function formatTimeAgo(value: string): string { return relativeActivityTime(value); }

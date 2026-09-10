@@ -38,6 +38,7 @@ import { getCachedResponse, cacheResponse } from '@/lib/ai-cache';
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import { requestElectricalChat } from '@/lib/electrical-chat-client';
 import { scheduleInitialChatSend } from '@/lib/chat-initial-send';
+import { safeFeatureLink } from '@/lib/feature-output';
 import { readStoredCountry, readStoredLanguage } from '@/hooks/useSettings';
 import type {
   SearchResult,
@@ -108,6 +109,7 @@ function FeaturedCalculatorPanel({ calc }: { calc: FeaturedCalculator }) {
 
 function DocumentResultItem({ ranked }: { ranked: RankedResult }) {
   const doc = ranked.document;
+  const sourceLink = safeFeatureLink(doc.url);
 
   return (
     <article className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] p-4 transition-shadow hover:shadow-sm">
@@ -121,9 +123,9 @@ function DocumentResultItem({ ranked }: { ranked: RankedResult }) {
 
       {/* Title */}
       <h3 className="mb-1">
-        {doc.url ? (
+        {sourceLink ? (
           <a
-            href={doc.url}
+            href={sourceLink}
             target="_blank"
             rel="noopener noreferrer"
             className="text-base font-semibold text-[var(--color-primary)] hover:underline"
@@ -160,10 +162,13 @@ function DocumentResultItem({ ranked }: { ranked: RankedResult }) {
             전문가 검증
           </span>
         )}
+        {doc.verification === 'unverified' && <span>출처·적용 판본 확인 필요</span>}
+        {doc.accessTier === 'summary_only' && <span>요약만 제공</span>}
+        {doc.accessTier === 'link_only' && <span>원문 링크만 제공</span>}
         {/* Date */}
         <span className="flex items-center gap-1">
           <Clock size={12} />
-          {new Date(doc.updatedAt).toLocaleDateString('ko-KR')}
+          {Number.isFinite(Date.parse(doc.updatedAt)) ? new Date(doc.updatedAt).toLocaleDateString('ko-KR') : '원문 날짜 미확인'}
         </span>
         {/* Related calculators */}
         {doc.relatedCalculators.length > 0 && (
@@ -539,10 +544,11 @@ function SearchPageInner() {
       try {
         const responseLanguage = readStoredLanguage();
         const countryCode = readStoredCountry();
-        const browserEmbeddingByok = await getFirstAvailableVisionKey(['openai', 'gemini']);
+        const browserEmbeddingByok = await getFirstAvailableVisionKey(['openai', 'gemini'], controller.signal);
+        if (cancelled) return;
         const searchCacheVariant = browserEmbeddingByok
-          ? `search-vector-${browserEmbeddingByok.provider}-${responseLanguage}-${countryCode}`
-          : `search-keyword-${responseLanguage}-${countryCode}`;
+          ? `search-evidence-v2-vector-${browserEmbeddingByok.provider}-${responseLanguage}-${countryCode}`
+          : `search-evidence-v2-keyword-${responseLanguage}-${countryCode}`;
         // AI 캐시 확인 — 동일 쿼리 재요청 시 API 비용 0
         const cached = await getCachedResponse('esva', searchCacheVariant, [{ role: 'user', content: query.trim() }], 0);
         if (cached && !cancelled) {
@@ -663,6 +669,13 @@ function SearchPageInner() {
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
             {/* Main column */}
             <div>
+              {result.retrieval && <div role="status" className="mb-4 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] p-3 text-sm text-[var(--text-secondary)]">
+                조회 경로: {{ agent: '에이전트 근거', rag: '문서 검색', local: '앱 내 자료' }[result.retrieval.source]}.
+                {result.retrieval.vectorStatus === 'unavailable' && ' 외부 문서 검색을 확인하지 못해 앱 내 자료를 표시합니다.'}
+                {result.retrieval.vectorStatus === 'partial' && ' 일부 검색 저장소 응답이 누락됐습니다.'}
+                {result.retrieval.mode === 'keyword-only' && ' 의미 벡터 없이 키워드 검색을 사용했습니다.'}
+                {' '}표시 건수는 회수한 결과 기준이며 전체 원문 수나 최신 개정 여부를 보증하지 않습니다.
+              </div>}
               {/* Search meta */}
               <p className="mb-4 text-xs text-[var(--text-tertiary)]">
                 약 {result.totalCount}개 결과 ({result.latencyMs}ms)

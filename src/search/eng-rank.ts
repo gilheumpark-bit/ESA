@@ -112,7 +112,7 @@ function computeStandardScore(doc: SearchDocument, query: ParsedQuery): number {
 function computeFreshnessScore(doc: SearchDocument): number {
   const now = Date.now();
   const updatedAt = new Date(doc.updatedAt).getTime();
-  if (Number.isNaN(updatedAt)) {
+  if (!Number.isFinite(updatedAt) || updatedAt > now) {
     return 0.1; // Invalid date fallback
   }
   const ageDays = Math.max(0, (now - updatedAt) / (1000 * 60 * 60 * 24));

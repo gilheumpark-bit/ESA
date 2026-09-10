@@ -159,7 +159,7 @@ describe('vision-byok — 모델 배선', () => {
     expect(mockStorage.loadStoredProviderKey).not.toHaveBeenCalled();
   });
 
-  it('선택 모델이 text 전용이면 image 지원 모델로 대체하고 없으면 BYOK로 내려간다', async () => {
+  it('명시적으로 선택한 로컬 연결에 이미지 모델이 없으면 다른 공급자로 조용히 전환하지 않는다', async () => {
     const localStorage = new MemoryStorage();
     localStorage.setItem('esa-chatgpt-local', JSON.stringify({
       enabled: true,
@@ -182,10 +182,7 @@ describe('vision-byok — 모델 배선', () => {
     ));
     mockStorage.loadSelectedModel.mockReturnValue('gemini-3.6-flash');
 
-    await expect(getFirstAvailableVisionKey()).resolves.toEqual({
-      provider: 'gemini',
-      key: fallbackGeminiKey,
-      model: 'gemini-3.6-flash',
-    });
+    await expect(getFirstAvailableVisionKey()).rejects.toThrow('다른 공급자로 자동 전환하지 않았습니다');
+    expect(mockStorage.loadStoredProviderKey).not.toHaveBeenCalled();
   });
 });

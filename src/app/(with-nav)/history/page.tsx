@@ -10,7 +10,13 @@
  * PART 5: Main page component
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useFeatureResource } from '@/hooks/useFeatureResource';
+import { requestFeatureJson } from '@/lib/feature-request';
+import { featureAuthenticatedFetch } from '@/lib/feature-auth';
+import { featureCsv } from '@/lib/feature-output';
+import { cachedHistory, decodeHistoryRows, type HistoryRecord as Receipt } from '@/lib/history-read-model';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -20,7 +26,6 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import type { Receipt } from '@/engine/receipt/types';
 import { EmptyHistory } from '@/components/EmptyState';
 import { CALCULATOR_NAMES } from '@/lib/calculator-params';
 import { CALCULATOR_CATALOG, CALC_CATEGORY_LABELS, calculatorHref } from '@/lib/calculator-catalog';
@@ -47,8 +52,6 @@ const CATEGORIES = [
   ...Object.entries(CALC_CATEGORY_LABELS).map(([value, label]) => ({ value, label })),
 ];
 
-const STORAGE_PREFIX = 'esa-receipt-';
-const INDEX_KEY = 'esa-receipt-index';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — Helpers
@@ -76,91 +79,22 @@ function receiptToEntry(receipt: Receipt): HistoryEntry {
   };
 }
 
-function loadCachedReceipts(): Receipt[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = sessionStorage.getItem(INDEX_KEY);
-    const ids: string[] = raw ? JSON.parse(raw) : [];
-    const receipts: Receipt[] = [];
-    for (const id of ids) {
-      const data = sessionStorage.getItem(STORAGE_PREFIX + id);
-      if (data) {
-        receipts.push(JSON.parse(data) as Receipt);
-      }
-    }
-    return receipts;
-  } catch {
-    return [];
-  }
-}
-
-/** Supabase에서 영구 저장된 이력 로드 (로그인 유저) */
-async function loadSupabaseReceipts(): Promise<Receipt[]> {
-  try {
-    const { getIdToken } = await import('@/lib/firebase');
-    const token = await getIdToken();
-    if (!token) return [];
-    const response = await fetch('/api/calculate?page=1&pageSize=100', {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    });
-    if (!response.ok) return [];
-    const body = await response.json() as {
-      data?: { data?: Array<Record<string, unknown>> };
-    };
-    const rows = body.data?.data ?? [];
-    return rows.map(r => ({
-      id: r.id ?? '',
-      calcId: r.calculator_id,
-      userId: r.user_id,
-      countryCode: r.country_code ?? 'KR',
-      appliedStandard: r.applied_standard ?? 'KEC',
-      unitSystem: r.unit_system ?? 'SI',
-      difficultyLevel: r.difficulty_level ?? 'basic',
-      inputs: r.inputs as Record<string, unknown>,
-      result: r.outputs as Receipt['result'],
-      steps: r.steps ?? [],
-      formulaUsed: r.formula_used ?? '',
-      standardsUsed: r.standards_used ?? [],
-      warnings: r.warnings ?? [],
-      recommendations: r.recommendations ?? [],
-      disclaimerText: r.disclaimer_text ?? '',
-      disclaimerVersion: r.disclaimer_version ?? '',
-      calculatedAt: r.calculated_at ?? r.created_at ?? new Date().toISOString(),
-      standardVersion: r.standard_version ?? r.standard_ref ?? '',
-      engineVersion: r.engine_version ?? '',
-      isStandardCurrent: r.is_standard_current ?? false,
-      receiptHash: r.receipt_hash ?? '',
-      isPublic: r.is_public ?? false,
-    })) as Receipt[];
-  } catch {
-    return [];
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 3 — CSV Export
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function exportCsv(entries: HistoryEntry[]): void {
-  const header = '날짜,계산기,주요입력,결과,판정';
-  const rows = entries.map((e) =>
-    [
-      new Date(e.date).toLocaleDateString('ko-KR'),
-      e.calcName,
-      `"${e.keyInput}"`,
-      `"${e.keyResult}"`,
-      e.judgment === 'pass' ? 'PASS' : e.judgment === 'fail' ? 'FAIL' : '-',
-    ].join(','),
-  );
-  const csv = '\uFEFF' + [header, ...rows].join('\n');
+  const csv = featureCsv(['날짜', '계산기', '주요입력', '결과', '판정'], entries.map((entry) => [
+    Number.isFinite(Date.parse(entry.date)) ? new Date(entry.date).toLocaleDateString('ko-KR') : '기록 시각 미확인',
+    entry.calcName, entry.keyInput, entry.keyResult, entry.judgment === 'pass' ? 'PASS' : entry.judgment === 'fail' ? 'FAIL' : '-',
+  ]));
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `ESVA_history_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -170,7 +104,8 @@ function exportCsv(entries: HistoryEntry[]): void {
 export default function HistoryPage() {
   const router = useRouter();
   // Load receipts from sessionStorage on mount
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const [exportError, setExportError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [judgmentFilter, setJudgmentFilter] = useState<'' | 'pass' | 'fail'>('');
@@ -181,42 +116,25 @@ export default function HistoryPage() {
    * 화면은 "계산 기록" 이라 부르고 CSV 내보내기까지 주면서 그 사실을 말하지
    * 않았다(실측 2026-07-26). 사라질 기록을 영구 기록처럼 보여주면 안 된다.
    */
-  const [signedIn, setSignedIn] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      // 1) sessionStorage 캐시 (즉시)
-      const cached = loadCachedReceipts();
-      const mapped = cached.map(receiptToEntry).sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-      );
-      setEntries(mapped);
-
-      // 2) Supabase 영구 이력 (로그인 유저)
-      try {
-        // AuthContext는 hook이라 여기서 직접 사용 불가 — Firebase getCurrentUser 경유.
-        const { getCurrentUser } = await import('@/lib/firebase');
-        const user = await getCurrentUser();
-        setSignedIn(Boolean(user));
-        if (user) {
-          const supaReceipts = await loadSupabaseReceipts();
-          if (supaReceipts.length > 0) {
-            const supaEntries = supaReceipts.map(receiptToEntry);
-            // 병합 + 중복 제거 (id 기준)
-            const existing = new Set(mapped.map(e => e.id));
-            const merged = [...mapped, ...supaEntries.filter(e => !existing.has(e.id))];
-            merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setEntries(merged);
-          }
-        }
-      } catch (err) {
-        // Firebase/Supabase 미설정 시 sessionStorage만 사용
-        setSignedIn(false);
-        console.warn('[ESVA] History Supabase load failed:', err instanceof Error ? err.message : err);
-      }
+  const signedIn = authLoading ? null : Boolean(user);
+  const uid = user?.uid;
+  const load = useCallback(async (signal: AbortSignal) => {
+    const warnings: string[] = [];
+    let local: Receipt[] = [], account: Receipt[] = [];
+    try {
+      const cached = cachedHistory(sessionStorage, uid); local = cached.records;
+      if (cached.skipped) warnings.push(`손상 또는 누락된 탭 기록 ${cached.skipped}건을 표시하지 않았습니다. 원본 저장값은 보존했습니다.`);
+    } catch (error) { warnings.push(error instanceof Error ? error.message : '탭 기록을 읽지 못했습니다.'); }
+    if (uid) {
+      try { account = await requestFeatureJson('/api/calculate?page=1&pageSize=100', { signal }, decodeHistoryRows, featureAuthenticatedFetch); }
+      catch (error) { if (signal.aborted) throw error; warnings.push(error instanceof Error ? error.message : '계정 이력 동기화 실패'); }
     }
-    load();
-  }, []);
+    const records = [...new Map([...local, ...account].map((record) => [record.id, record])).values()];
+    const entries = records.map(receiptToEntry).sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0));
+    return { entries, warnings };
+  }, [uid]);
+  const resource = useFeatureResource(authLoading ? null : `history:${uid ?? 'anonymous'}`, load);
+  const entries = useMemo(() => resource.data?.entries ?? [], [resource.data]);
 
   const filtered = useMemo(() => {
     let result = entries;
@@ -253,7 +171,7 @@ export default function HistoryPage() {
   }, [entries, search, categoryFilter, judgmentFilter, dateFrom, dateTo]);
 
   const handleExportCsv = useCallback(() => {
-    exportCsv(filtered);
+    try { exportCsv(filtered); setExportError(null); } catch { setExportError('이력을 내보내지 못했습니다. 다시 시도해 주세요.'); }
   }, [filtered]);
 
   return (
@@ -274,17 +192,23 @@ export default function HistoryPage() {
               <Link href="/login" className="text-[var(--color-primary)] hover:underline">
                 로그인
               </Link>
-              하면 계정에 영구 보관됩니다. 남겨야 할 기록은 CSV 로 먼저 내려받으세요.
+              후 계정 저장소가 정상 연결되면 저장된 이력을 조회합니다. 남겨야 할 기록은 CSV 로 먼저 내려받으세요.
             </p>
           )}
         </div>
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-[var(--text-secondary)]">현재 탭 기록{user ? ' + 계정의 최근 최대 100건' : ''} · 필터 결과만 CSV로 내보냅니다.</p>
+          <button type="button" onClick={resource.reload} disabled={resource.loading} className="min-h-11 rounded-lg border px-3 text-sm disabled:opacity-50">이력 새로 불러오기</button>
+        </div>
+        {resource.data?.warnings.map((warning) => <p key={warning} role="status" className="mb-3 rounded-lg border p-3 text-sm">{warning}</p>)}
+        {(resource.error || exportError) && <p role="alert" className="mb-3 text-sm text-[var(--drawing-error-text)]">{resource.error ?? exportError}</p>}
         {/* Filters */}
         <div className="mb-6 flex flex-wrap items-end gap-3">
           {/* Search */}
-          <div className="relative min-w-[240px] flex-1">
+          <div className="relative min-w-0 basis-56 flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               aria-label="계산 기록 검색"
@@ -292,7 +216,7 @@ export default function HistoryPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="검색..."
-              className="h-10 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
+              className="min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
             />
           </div>
 
@@ -301,7 +225,7 @@ export default function HistoryPage() {
             aria-label="계산기 카테고리"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
           >
             {CATEGORIES.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -313,7 +237,7 @@ export default function HistoryPage() {
             aria-label="판정 결과"
             value={judgmentFilter}
             onChange={(e) => setJudgmentFilter(e.target.value as '' | 'pass' | 'fail')}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
           >
             <option value="">전체 판정</option>
             <option value="pass">PASS</option>
@@ -326,7 +250,7 @@ export default function HistoryPage() {
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
           />
           <span className="text-sm text-[var(--text-tertiary)]">~</span>
           <input
@@ -334,7 +258,7 @@ export default function HistoryPage() {
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
           />
 
           {/* Export button */}
@@ -342,7 +266,7 @@ export default function HistoryPage() {
             type="button"
             onClick={handleExportCsv}
             disabled={filtered.length === 0}
-            className="flex h-10 items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] disabled:opacity-50"
+            className="flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-4 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] disabled:opacity-50"
           >
             <Download size={16} />
             CSV 내보내기
@@ -350,7 +274,10 @@ export default function HistoryPage() {
         </div>
 
         {/* Table or empty state */}
-        {filtered.length === 0 ? (
+        {authLoading || resource.loading ? <p role="status" className="p-6 text-sm">계산 이력을 확인하고 있습니다.</p>
+          : !entries.length && Boolean(resource.error || resource.data?.warnings.length) ? <p className="p-6 text-sm">현재 조회를 완료하지 못한 기록이 있습니다. 이력이 없는 것으로 판단하지 않습니다.</p>
+          : filtered.length === 0 && entries.length > 0 ? <div className="p-6 text-center"><p>선택한 필터에 맞는 이력이 없습니다.</p><button type="button" className="mt-3 min-h-11 rounded-lg border px-3" onClick={() => { setSearch(''); setCategoryFilter(''); setJudgmentFilter(''); setDateFrom(''); setDateTo(''); }}>이력 필터 초기화</button></div>
+          : filtered.length === 0 ? (
           <EmptyHistory onExample={(calcId) => router.push(calculatorHref(calcId))} />
         ) : (
           <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
@@ -385,7 +312,7 @@ export default function HistoryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/receipt/${entry.id}`}
+                        href={`/receipt/${encodeURIComponent(entry.id)}`}
                         className="text-sm font-medium text-[var(--color-primary)] hover:underline"
                       >
                         {entry.calcName}

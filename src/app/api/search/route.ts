@@ -219,6 +219,7 @@ async function POST__impl(request: NextRequest) {
 
     // Step 4: Build documents from agent sources; fall back to RAG, then local search
     let documents: SearchDocument[] = [];
+    const retrieval: NonNullable<SearchResult['retrieval']> = { source: 'agent', scope: 'retrieved-results-only' };
 
     if (agentResponse && agentResponse.sources.length > 0) {
       documents = agentResponse.sources.map((source, idx) => ({
@@ -226,10 +227,10 @@ async function POST__impl(request: NextRequest) {
         title: `${source.standard} ${source.clause ?? ''}`.trim(),
         body: agentResponse!.answer,
         excerpt: agentResponse!.answer.slice(0, 200),
-        updatedAt: new Date().toISOString(),
+        updatedAt: '',
         standardsCited: [source],
         accessTier: 'open' as const,
-        verification: 'auto_verified' as const,
+        verification: 'unverified' as const,
         relatedCalculators: agentResponse!.calculatorSuggestion
           ? [agentResponse!.calculatorSuggestion.calculatorId]
           : [],
@@ -241,10 +242,12 @@ async function POST__impl(request: NextRequest) {
     // Step 4b: If agent returned no results (0 sources, error, or threw), try RAG
     if (documents.length === 0) {
       try {
+        retrieval.source = 'rag';
         const ragResults = await searchRAG({
           query: body.query,
           country: countryCode,
-          limit: pageSize,
+          limit: Math.min(page * pageSize, 100),
+          onDiagnostics: (state) => { retrieval.vectorStatus = state.status; retrieval.mode = state.mode; retrieval.failedCollections = state.failedCollections; },
           ...(embeddingByok ? {
             embeddingByok: {
               provider: embeddingByok.provider,
@@ -258,23 +261,25 @@ async function POST__impl(request: NextRequest) {
           body: r.snippet,
           excerpt: r.snippet.slice(0, 200),
           url: r.url,
-          updatedAt: r.publishedAt ?? new Date().toISOString(),
+          updatedAt: r.publishedAt ?? '',
           standardsCited: r.standard
             ? [{ standard: r.standard, clause: r.clause ?? '', source: r.source }]
             : [],
           accessTier: r.licenseType === 'open' ? 'open' as const : r.licenseType === 'summary_only' ? 'summary_only' as const : 'link_only' as const,
-          verification: 'auto_verified' as const,
+          verification: 'unverified' as const,
           relatedCalculators: [],
           tags: [],
           language,
         }));
       } catch (ragErr) {
-        console.warn('[ESVA /api/search] RAG fallback failed:', ragErr);
+        void ragErr; retrieval.vectorStatus = 'unavailable';
+        console.warn('[ESVA /api/search] RAG retrieval unavailable');
       }
     }
 
     // Step 4c: If RAG also returned nothing, fall back to local data search
     if (documents.length === 0) {
+      retrieval.source = 'local';
       const localResults = searchLocalData(body.query, language);
       documents = localResults.map((lr, idx) => ({
         id: `local-${idx}`,
@@ -282,12 +287,12 @@ async function POST__impl(request: NextRequest) {
         body: lr.description,
         excerpt: lr.description.slice(0, 200),
         url: lr.url,
-        updatedAt: new Date().toISOString(),
+        updatedAt: '',
         standardsCited: lr.standardRef
           ? [{ standard: lr.standardRef, clause: '', source: 'local' }]
           : [],
         accessTier: 'open' as const,
-        verification: 'auto_verified' as const,
+        verification: 'unverified' as const,
         relatedCalculators: lr.calcId ? [lr.calcId] : [],
         tags: [lr.type],
         language,
@@ -452,6 +457,7 @@ async function POST__impl(request: NextRequest) {
 
     const result: SearchResult = {
       documents: paginated,
+      retrieval,
       featuredCalculator,
       knowledgePanel,
       relatedCalcs,
@@ -495,7 +501,7 @@ async function POST__impl(request: NextRequest) {
         status: 200,
         headers: {
           'X-RateLimit-Remaining': String(rl.remaining),
-          'Cache-Control': 'private, max-age=30',
+          'Cache-Control': 'private, no-store',
         },
       },
     );

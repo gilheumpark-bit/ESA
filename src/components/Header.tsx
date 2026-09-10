@@ -30,6 +30,7 @@ import {
 import SearchBar from '@/components/SearchBar';
 import ESVALogo from '@/components/ESVALogo';
 import ThemeToggle from '@/components/ThemeToggle';
+import NotificationBell from '@/components/NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { type Lang, RESPONSE_LANGS } from '@/lib/i18n';
@@ -376,7 +377,7 @@ export default function Header() {
   return (
     <>
       <header className="sticky top-0 z-[var(--z-dropdown)] border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4">
+        <div className="mx-auto flex h-14 min-w-0 max-w-7xl items-center gap-1 px-3 sm:gap-3 sm:px-4">
           <Link
             href="/"
             className="flex shrink-0 items-center gap-1.5 font-bold text-[var(--color-primary)]"
@@ -392,6 +393,7 @@ export default function Header() {
 
           <div className="flex-1 lg:hidden xl:block 2xl:hidden" />
 
+          <NotificationBell />
           <ThemeToggle />
 
           <LangSwitcher />

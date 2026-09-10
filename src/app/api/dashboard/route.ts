@@ -23,6 +23,7 @@ import { withRequestLog } from '@/lib/api/with-request-log';
 interface DashboardResponse {
   calcUsage: { name: string; count: number; calculatorId: string }[];
   totalCalcs: number;
+  usageComplete: boolean;
   recentCalcs: {
     id: string;
     calculatorName: string;
@@ -66,9 +67,10 @@ async function GET__impl(request: NextRequest) {
         .order('created_at', { ascending: false })
         .limit(10),
       supabase.from('calculation_receipts')
-        .select('calculator_id, calculator_name')
+        .select('calculator_id, calculator_name', { count: 'exact' })
         .eq('user_id', userId)
-        .gte('created_at', thirtyDaysAgoISO),
+        .gte('created_at', thirtyDaysAgoISO)
+        .limit(1000),
       supabase.from('notifications')
         .select('id, title, body, created_at, metadata')
         .eq('user_id', userId)
@@ -142,7 +144,8 @@ async function GET__impl(request: NextRequest) {
 
     const response: DashboardResponse = {
       calcUsage,
-      totalCalcs: monthRows?.length ?? 0,
+      totalCalcs: typeof monthResult.count === 'number' ? monthResult.count : monthRows?.length ?? 0,
+      usageComplete: typeof monthResult.count === 'number' ? monthResult.count === (monthRows?.length ?? 0) : (monthRows?.length ?? 0) < 1000,
       recentCalcs,
       standardUpdates,
     };
@@ -153,7 +156,7 @@ async function GET__impl(request: NextRequest) {
         data: response,
         warnings: notifErr ? ['standard_updates_unavailable'] : [],
       },
-      { status: 200, headers: { 'Cache-Control': 'private, max-age=30' } },
+      { status: 200, headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';

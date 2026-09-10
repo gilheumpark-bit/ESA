@@ -193,6 +193,13 @@ export interface GlobalComparison {
 
 /** Complete search response payload */
 export interface SearchResult {
+  retrieval?: {
+    source: 'agent' | 'rag' | 'local';
+    vectorStatus?: 'complete' | 'partial' | 'unavailable';
+    mode?: 'hybrid' | 'keyword-only';
+    failedCollections?: number;
+    scope: 'retrieved-results-only';
+  };
   /** Ranked document results */
   documents: RankedResult[];
   /** Featured calculator (if query matches a calculator) */

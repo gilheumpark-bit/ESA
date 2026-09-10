@@ -37,7 +37,7 @@ for (const action of ['inviteMember', 'removeMember', 'delete'] as const) {
       await page.getByPlaceholder('이메일 주소', { exact: true }).fill('invited@example.invalid');
       await page.getByRole('button', { name: '초대하기', exact: true }).click();
     } else {
-      await page.getByRole('button', { name: action === 'delete' ? '삭제' : '멤버 제거', exact: true }).click();
+      await page.getByRole('button', { name: action === 'delete' ? /^삭제$/ : /멤버 제거$/ }).click();
     }
     await expect(page.getByRole('main').getByRole('alert')).toContainText('합성 저장 서비스 실패');
     await expect(page.getByRole('heading', { name: 'UI 검증 프로젝트', exact: true })).toBeVisible();
@@ -57,7 +57,7 @@ test('project invite, remove, share, copy fallback and close controls complete t
   await page.getByRole('button', { name: '초대하기', exact: true }).click();
   await expect(page.getByText('invited@example.invalid', { exact: true })).toBeVisible();
   const member = page.getByRole('listitem').filter({ hasText: 'invited@example.invalid' });
-  await member.getByRole('button', { name: '멤버 제거', exact: true }).click();
+  await member.getByRole('button', { name: /멤버 제거$/ }).click();
   await expect(page.getByText('invited@example.invalid', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '공유', exact: true }).click();
   await page.getByLabel('공유 만료 시간').selectOption('24');

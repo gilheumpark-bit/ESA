@@ -3,7 +3,7 @@
 /**
  * ESVA User Dashboard with Visualizations
  * -----------------------------------------
- * a. 내 계산 통계: 이번 달 계산 횟수 + top5 bar chart
+ * a. 내 계산 통계: 최근 30일 계산 횟수 + top5 bar chart
  * b. 최근 계산: 최근 10개 영수증
  * c. 규격 업데이트: 최근 개정된 규격 알림
  * d. 글로벌 규격 비교: 국가별 비교 radar chart (프리셋 기준값)
@@ -13,7 +13,11 @@
  * PART 3: Main page
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useCallback } from 'react';
+import { useFeatureResource } from '@/hooks/useFeatureResource';
+import { requestFeatureJson, relativeActivityTime } from '@/lib/feature-request';
+import { featureAuthenticatedFetch } from '@/lib/feature-auth';
+import { decodeDashboard } from '@/lib/feature-read-models';
 import Link from 'next/link';
 import {
   Calculator,
@@ -52,65 +56,14 @@ interface StandardUpdate {
   link?: string;
 }
 
-function useDashboardData(authenticated: boolean, authLoading: boolean) {
-  const [calcUsage, setCalcUsage] = useState<CalcUsageData[]>([]);
-  const [totalCalcs, setTotalCalcs] = useState(0);
-  const [recentCalcs, setRecentCalcs] = useState<RecentCalc[]>([]);
-  const [standardUpdates, setStandardUpdates] = useState<StandardUpdate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (authLoading) return;
-
-    let cancelled = false;
-
-    async function fetchDashboard() {
-      if (!authenticated) {
-        setError('로그인이 필요합니다.');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Get auth token for API call
-        const { getIdToken } = await import('@/lib/firebase');
-        const token = await getIdToken();
-        const headers: Record<string, string> = {};
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        const res = await fetch('/api/dashboard', { headers });
-        if (!res.ok) {
-          throw new Error(res.status === 401 ? '로그인이 필요합니다.' : '대시보드 데이터를 불러올 수 없습니다.');
-        }
-
-        const json = await res.json();
-        if (cancelled) return;
-
-        if (json.success && json.data) {
-          const d = json.data;
-          setCalcUsage(d.calcUsage ?? []);
-          setTotalCalcs(d.totalCalcs ?? 0);
-          setRecentCalcs(d.recentCalcs ?? []);
-          setStandardUpdates(d.standardUpdates ?? []);
-        }
-      } catch (err) {
-        console.warn('[ESVA Dashboard] Fetch failed:', err);
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : '대시보드 데이터를 불러올 수 없습니다.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchDashboard();
-    return () => { cancelled = true; };
-  }, [authenticated, authLoading]);
-
-  return { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error };
+function useDashboardData(uid: string | undefined, authLoading: boolean) {
+  const loader = useCallback((signal: AbortSignal) => requestFeatureJson('/api/dashboard', { signal }, decodeDashboard, featureAuthenticatedFetch), []);
+  const resource = useFeatureResource(authLoading || !uid ? null : `dashboard:${uid}`, loader);
+  return { calcUsage: resource.data?.calcUsage ?? [], totalCalcs: resource.data?.totalCalcs ?? 0,
+    recentCalcs: resource.data?.recentCalcs ?? [], standardUpdates: resource.data?.standardUpdates ?? [],
+    warnings: resource.data?.warnings ?? [], usageComplete: resource.data?.usageComplete ?? true,
+    loading: authLoading || resource.loading, error: !authLoading && !uid ? '로그인이 필요합니다.' : resource.error,
+    reload: resource.reload };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -128,11 +81,19 @@ function CalcStatsSection({ data, total }: { data: CalcUsageData[]; total: numbe
         <div className="flex items-center gap-1.5 rounded-lg bg-[var(--bg-secondary)] px-3 py-1.5">
           <TrendingUp size={14} className="text-green-500" />
           <span className="text-sm font-bold text-[var(--text-primary)]">{total}</span>
-          <span className="text-xs text-[var(--text-tertiary)]">이번 달</span>
+          <span className="text-xs text-[var(--text-tertiary)]">최근 30일</span>
         </div>
       </div>
       {data.length > 0 ? (
-        <CalcUsageChart data={data} height={250} />
+        <>
+          <CalcUsageChart data={data} height={250} />
+          <details className="mt-2 text-sm"><summary className="min-h-11 cursor-pointer">계산 통계 표로 보기</summary>
+            <table className="w-full text-left"><caption className="sr-only">최근 30일 계산기별 사용 횟수</caption>
+              <thead><tr><th scope="col">계산기</th><th scope="col">횟수</th></tr></thead>
+              <tbody>{data.map((row) => <tr key={row.calculatorId}><th scope="row" className="font-normal">{row.name}</th><td>{row.count}</td></tr>)}</tbody>
+            </table>
+          </details>
+        </>
       ) : (
         <p className="flex h-[250px] items-center justify-center text-sm text-[var(--text-tertiary)]">
           최근 30일 계산 기록이 없습니다.
@@ -162,7 +123,7 @@ function RecentCalcsSection({ calcs }: { calcs: RecentCalc[] }) {
         {calcs.map(calc => (
           <Link
             key={calc.id}
-            href={`/receipt/${calc.id}`}
+            href={`/receipt/${encodeURIComponent(calc.id)}`}
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-[var(--bg-secondary)]"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary)]/10 text-xs font-bold text-[var(--color-primary)]">
@@ -233,6 +194,7 @@ function GlobalCompareSection() {
           </span>
         </div>
         <select
+          aria-label="비교할 규격 예시"
           value={selectedPreset}
           onChange={e => setSelectedPreset(e.target.value as PresetKey)}
           className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1.5 text-xs"
@@ -255,17 +217,7 @@ function GlobalCompareSection() {
 // PART 3 — Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-
-  if (diffHours < 1) return `${Math.floor(diffMs / 60000)}분 전`;
-  if (diffHours < 24) return `${Math.floor(diffHours)}시간 전`;
-  if (diffHours < 48) return '어제';
-  return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
-}
+function formatDate(value: string): string { return relativeActivityTime(value); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 4 — Main Page
@@ -273,7 +225,7 @@ function formatDate(dateStr: string): string {
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
-  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error } = useDashboardData(Boolean(user), authLoading);
+  const { calcUsage, totalCalcs, recentCalcs, standardUpdates, loading, error, reload, warnings, usageComplete } = useDashboardData(user?.uid, authLoading);
 
   if (loading) {
     return (
@@ -293,7 +245,7 @@ export default function DashboardPage() {
         {user ? (
           <button
             type="button"
-            onClick={() => window.location.reload()}
+            onClick={reload}
             className="mt-5 inline-flex text-sm text-[var(--color-primary)] hover:underline"
           >
             다시 시도
@@ -315,10 +267,16 @@ export default function DashboardPage() {
           {user?.displayName ? `${user.displayName}님의 대시보드` : '대시보드'}
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          이번 달 계산 현황과 규격 업데이트를 한눈에 확인하세요.
+          최근 30일 계산 현황과 규격 업데이트를 한눈에 확인하세요.
         </p>
       </div>
 
+      <nav aria-label="업무 바로가기" className="mb-6 flex flex-wrap gap-3">
+        <Link href="/tools/sld" className="min-h-11 rounded-lg border px-4 py-3 text-sm">새 도면 분석</Link>
+        <Link href="/projects" className="min-h-11 rounded-lg border px-4 py-3 text-sm">프로젝트 관리</Link>
+        <Link href="/history" className="min-h-11 rounded-lg border px-4 py-3 text-sm">계산 이력</Link>
+      </nav>
+      {!usageComplete && <p role="status" className="mb-4 text-sm">사용량 분포는 일부 기록 기준입니다. 총계와 상위 계산기 비율을 같은 모집단으로 해석하지 마세요.</p>}
       {/* Grid layout */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* a. 계산 통계 */}
@@ -331,7 +289,9 @@ export default function DashboardPage() {
         <GlobalCompareSection />
 
         {/* c. 규격 업데이트 */}
-        <StandardUpdatesSection updates={standardUpdates} />
+        {warnings.includes('standard_updates_unavailable')
+          ? <section className="rounded-xl border p-5"><h2 className="font-semibold">규격 업데이트</h2><p role="status" className="mt-2 text-sm">업데이트 알림 조회에 실패했습니다. 업데이트가 없다는 뜻이 아닙니다.</p><button type="button" onClick={reload} className="mt-3 min-h-11 rounded-lg border px-3">다시 시도</button></section>
+          : <StandardUpdatesSection updates={standardUpdates} />}
       </div>
     </div>
   );

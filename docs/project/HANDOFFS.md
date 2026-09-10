@@ -4,6 +4,8 @@
 
 ## 2026-09-10
 
+- [결제 제외 기능 품질·데이터 경계·검색/협업/현장 개선](handoffs/2026-09-10-nonbilling-feature-quality.md)
+
 - [프런트·백엔드 연결과 미확정 검토 화면 개선](handoffs/2026-09-10-fullstack-review-workspace.md)
 
 ## 2026-09-09

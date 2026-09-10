@@ -9,9 +9,13 @@
  * PART 4: Main page layout
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useFeatureResource } from '@/hooks/useFeatureResource';
+import { requestFeatureJson, relativeActivityTime } from '@/lib/feature-request';
+import { decodeProjects } from '@/lib/feature-read-models';
 import Link from 'next/link';
-import { authenticatedFetch } from '@/lib/client-auth';
+import { featureAuthenticatedFetch } from '@/lib/feature-auth';
 import {
   FolderOpen,
   Plus,
@@ -68,7 +72,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
 
   return (
     <Link
-      href={`/projects/${project.id}`}
+      href={`/projects/${encodeURIComponent(project.id)}`}
       className="block rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5 shadow-sm transition-all hover:shadow-md hover:border-[var(--color-primary)]"
     >
       <div className="flex items-start justify-between">
@@ -130,13 +134,14 @@ function FilterBar({
   ];
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <Filter className="h-4 w-4 text-[var(--text-tertiary)]" />
       {filters.map(({ mode, label }) => (
         <button
           key={mode}
           onClick={() => onFilterChange(mode)}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+          aria-pressed={filter === mode}
+          className={`min-h-11 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             filter === mode
               ? 'bg-[var(--color-primary)] text-white'
               : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
@@ -154,31 +159,14 @@ function FilterBar({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const { user, loading: authLoading } = useAuth();
   const [filter, setFilter] = useState<FilterMode>('all');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchProjects = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await authenticatedFetch(`/api/projects?filter=${filter}`);
-      if (!res.ok) throw new Error('프로젝트 목록을 불러올 수 없습니다.');
-      const data = await res.json();
-      setProjects(data.projects ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '알 수 없는 오류');
-    } finally {
-      setLoading(false);
-    }
-  }, [filter]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => { void fetchProjects(); }, 0);
-    return () => window.clearTimeout(timer);
-  }, [fetchProjects]);
+  const loader = useCallback((signal: AbortSignal) => requestFeatureJson(`/api/projects?filter=${filter}`,
+    { signal }, decodeProjects, featureAuthenticatedFetch), [filter]);
+  const resource = useFeatureResource(authLoading || !user ? null : `${user.uid}:${filter}`, loader);
+  const projects = resource.data ?? [];
+  const loading = authLoading || resource.loading;
+  const error = !authLoading && !user ? '로그인이 필요합니다.' : resource.error;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -217,7 +205,9 @@ export default function ProjectsPage() {
         </div>
       ) : error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-red-700">
-          {error}
+          <p role="alert">{error}</p>
+          {user ? <button type="button" onClick={resource.reload} className="mt-3 min-h-11 rounded-lg border px-4 text-sm">다시 시도</button>
+            : <Link href="/login" className="mt-3 inline-flex min-h-11 items-center underline">로그인하기</Link>}
         </div>
       ) : projects.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] p-12 text-center">
@@ -249,21 +239,4 @@ export default function ProjectsPage() {
 // Util
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function formatTimeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diff = now - then;
-
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return '방금 전';
-  if (minutes < 60) return `${minutes}분 전`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}시간 전`;
-
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}일 전`;
-
-  const months = Math.floor(days / 30);
-  return `${months}개월 전`;
-}
+function formatTimeAgo(value: string): string { return relativeActivityTime(value); }

@@ -225,7 +225,7 @@ async function GET__impl(request: NextRequest) {
     source: liveData ? 'database' : 'unavailable',
     data,
   };
-  return NextResponse.json(response);
+  return NextResponse.json(response, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
 export const GET = withRequestLog(GET__impl);

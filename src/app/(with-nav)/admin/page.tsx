@@ -14,7 +14,11 @@
  * PART 6: Main page (fetches from /api/admin)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useFeatureResource } from '@/hooks/useFeatureResource';
+import { featureAuthenticatedFetch } from '@/lib/feature-auth';
+import { FeatureRequestError, requestFeatureJson, requireRecord, requireArray, isRecord, unwrapFeatureResponse } from '@/lib/feature-request';
+import { featureCsv } from '@/lib/feature-output';
 import {
   Shield,
   Users,
@@ -186,7 +190,7 @@ function TenantNotConfigured() {
 function TenantSection({ tenant }: { tenant: TenantInfo | null }) {
   if (!tenant) return <TenantNotConfigured />;
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <InfoCard label="조직명" value={tenant.name} />
         <InfoCard label="도메인" value={tenant.domain} />
@@ -214,7 +218,7 @@ function TenantSection({ tenant }: { tenant: TenantInfo | null }) {
 function SSOSection({ tenant }: { tenant: TenantInfo | null }) {
   if (!tenant) return <TenantNotConfigured />;
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="rounded-xl border border-[var(--border-default)] p-4">
         <h2 className="mb-4 text-sm font-semibold text-[var(--text-primary)]">SSO 설정</h2>
 
@@ -301,61 +305,69 @@ function UsageSection({ stats }: { stats: UsageStat[] }) {
 // PART 4 — Audit Log Table
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const AUDIT_PAGE_SIZE = 10;
+function decodeAudit(value: unknown) {
+  const body = requireRecord(unwrapFeatureResponse(value));
+  const entries = requireArray(body.entries, (row): row is AuditRow => isRecord(row)
+    && ['id','userId','action','resource','createdAt'].every((key) => typeof row[key] === 'string')
+    && (row.ip === undefined || typeof row.ip === 'string'), 20);
+  if (!Number.isSafeInteger(body.totalPages) || Number(body.totalPages) < 1 || !Number.isSafeInteger(body.totalCount)) throw new FeatureRequestError('감사로그 페이지 정보가 올바르지 않습니다.');
+  return { entries, totalPages: Number(body.totalPages), totalCount: Number(body.totalCount) };
+}
 
 function AuditLogSection({
-  entries: initialEntries,
+  entries: _initialEntries,
 }: {
   entries: AuditRow[];
   totalPages: number;
 }) {
-  const [entries] = useState<AuditRow[]>(initialEntries);
+  const { user } = useAuth();
   const [actionFilter, setActionFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
 
-  const filtered = entries.filter(e => {
-    if (actionFilter && e.action !== actionFilter) return false;
-    if (searchQuery && !e.resource.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
-
-  // \uD544\uD130/\uAC80\uC0C9 \uACB0\uACFC\uB97C \uD074\uB77C\uC774\uC5B8\uD2B8\uC5D0\uC11C \uD398\uC774\uC9C0 \uBD84\uD560\uD55C\uB2E4. \uC11C\uBC84\uB294 \uCD5C\uC2E0 20\uAC74\uC744 \uB2E8\uC77C
-  // \uD398\uC774\uC9C0\uB85C\uB9CC \uC8FC\uBBC0\uB85C(auditTotalPages=1) \uAE30\uC874 \uD398\uC774\uC9C0\uB124\uC774\uC158\uC740 \uC8FD\uC5B4 \uC788\uC5C8\uB2E4 (bug M4).
-  const totalPages = Math.max(1, Math.ceil(filtered.length / AUDIT_PAGE_SIZE));
-  const pageEntries = filtered.slice((page - 1) * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE);
-
-  // \uD544\uD130\u00B7\uAC80\uC0C9\uC774 \uBC14\uB00C\uBA74 1\uD398\uC774\uC9C0\uB85C \uB418\uB3CC\uB9B0\uB2E4 (\uBC94\uC704 \uBC16 \uD398\uC774\uC9C0 \uBC29\uC9C0).
+  const params = new URLSearchParams({ page: String(page), action: actionFilter, search: searchQuery });
+  const query = params.toString();
+  const loader = useCallback((signal: AbortSignal) => requestFeatureJson(`/api/admin/audit?${query}`, { signal }, decodeAudit, featureAuthenticatedFetch), [query]);
+  const resource = useFeatureResource(user ? `audit:${user.uid}:${query}` : null, loader);
+  const entries = resource.data?.entries ?? [];
+  const filtered = entries;
+  const totalPages = resource.data?.totalPages ?? 1;
+  const pageEntries = entries;
+  const [exportError, setExportError] = useState<string | null>(null);
   const handleExportCSV = useCallback(async () => {
+    if (resource.loading || resource.error || !resource.data) return;
     setExporting(true);
     try {
       // \uD604\uC7AC \uD544\uD130\u00B7\uAC80\uC0C9\uC774 \uC801\uC6A9\uB41C \uACB0\uACFC \uC804\uCCB4\uB97C \uB0B4\uBCF4\uB0B8\uB2E4 (bug L8: \uD544\uD130 \uBB34\uC2DC \uC218\uC815).
-      const csv = filtered.map(e =>
-        `"${e.createdAt}","${e.userId}","${e.action}","${e.resource}","${e.ip ?? ''}"`,
-      ).join('\n');
-      const header = '"Timestamp","User","Action","Resource","IP"\n';
-      const blob = new Blob(['\uFEFF' + header + csv], { type: 'text/csv;charset=utf-8' });
+      setExportError(null);
+      const csv = featureCsv(['Timestamp', 'User', 'Action', 'Resource', 'IP'], filtered.map((entry) =>
+        [entry.createdAt, entry.userId, entry.action, entry.resource, entry.ip ?? '']));
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `audit_log_${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
-      URL.revokeObjectURL(url);
-    } finally {
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setExportError('CSV를 내보내지 못했습니다. 다시 시도해 주세요.'); } finally {
       setExporting(false);
     }
-  }, [filtered]);
+  }, [filtered, resource.loading, resource.error, resource.data]);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
+      <p className="text-sm text-[var(--text-secondary)]">서버의 감사로그 전체를 페이지별로 조회합니다. CSV는 현재 조회 페이지의 {entries.length}건만 포함합니다.</p>
+      {exportError && <p role="alert" className="text-sm text-[var(--drawing-error-text)]">{exportError}</p>}
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1">
+        <div className="relative min-w-0 flex-1 basis-48">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
           <input
             type="text"
             placeholder="리소스 검색..."
+            aria-label="감사로그 리소스 검색"
+            maxLength={200}
             value={searchQuery}
             onChange={e => {
               setSearchQuery(e.target.value);
@@ -364,9 +376,10 @@ function AuditLogSection({
             className="w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] py-2 pl-9 pr-3 text-sm"
           />
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <Filter size={14} className="text-[var(--text-tertiary)]" />
           <select
+            aria-label="감사로그 액션"
             value={actionFilter}
             onChange={e => {
               setActionFilter(e.target.value);
@@ -382,16 +395,18 @@ function AuditLogSection({
         </div>
         <button
           onClick={handleExportCSV}
-          disabled={exporting}
+          disabled={exporting || resource.loading || Boolean(resource.error) || !entries.length}
           className="flex items-center gap-1.5 rounded-lg border border-[var(--border-default)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] disabled:opacity-50"
         >
           <Download size={14} />
-          CSV 내보내기
+          현재 페이지 CSV 내보내기
         </button>
       </div>
 
+      {resource.loading && <p role="status" className="p-3 text-sm">감사로그를 조회하고 있습니다.</p>}
+      {resource.error && <div className="p-3"><p role="alert" className="text-sm text-[var(--drawing-error-text)]">{resource.error}</p><button type="button" onClick={resource.reload} className="mt-2 min-h-11 rounded-lg border px-3">다시 시도</button></div>}
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-[var(--border-default)]">
+      <div className="w-full min-w-0 max-w-full overflow-x-auto rounded-xl border border-[var(--border-default)]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--border-default)] bg-[var(--bg-secondary)]">
@@ -403,6 +418,7 @@ function AuditLogSection({
             </tr>
           </thead>
           <tbody>
+            {!resource.loading && !resource.error && !entries.length && <tr><td colSpan={5} className="p-6 text-center">조회 조건에 맞는 감사로그가 없습니다.</td></tr>}
             {pageEntries.map(entry => (
               <tr key={entry.id} className="border-b border-[var(--border-default)] last:border-b-0">
                 <td className="whitespace-nowrap px-4 py-3 text-xs text-[var(--text-tertiary)]">
@@ -423,14 +439,15 @@ function AuditLogSection({
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-xs text-[var(--text-tertiary)]">
-          {filtered.length}건 표시
+          {resource.data ? `현재 ${filtered.length}건 / 전체 ${resource.data.totalCount}건` : '조회 결과 미확인'}
         </span>
         <div className="flex items-center gap-2">
           <button
+            aria-label="이전 감사로그 페이지"
             onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page <= 1}
+            disabled={page <= 1 || resource.loading || Boolean(resource.error)}
             className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--bg-secondary)] disabled:opacity-30"
           >
             <ChevronLeft size={16} />
@@ -439,8 +456,9 @@ function AuditLogSection({
             {page} / {totalPages}
           </span>
           <button
+            aria-label="다음 감사로그 페이지"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
+            disabled={page >= totalPages || resource.loading || Boolean(resource.error)}
             className="rounded-lg p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--bg-secondary)] disabled:opacity-30"
           >
             <ChevronRight size={16} />
@@ -478,64 +496,23 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function AdminDashboard() {
-  const { tier } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<AdminTab>('tenant');
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<AdminData | null>(null);
-  const [dataSource, setDataSource] = useState<'database' | 'unavailable'>('unavailable');
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const loader = useCallback((signal: AbortSignal) => requestFeatureJson('/api/admin', { signal }, (value) => {
+    const envelope = requireRecord(value);
+    if (envelope.ok !== true || envelope.source !== 'database') throw new FeatureRequestError('관리 데이터 저장소를 확인하지 못했습니다. 임의의 값은 표시하지 않습니다.');
+    const data = requireRecord(envelope.data);
+    if (!Array.isArray(data.users) || !Array.isArray(data.auditLog) || !Array.isArray(data.usage) || !isRecord(data.counts)
+      || (data.tenant !== null && !isRecord(data.tenant))) throw new FeatureRequestError('관리자 응답 형식 오류');
+    return data as unknown as AdminData;
+  }, featureAuthenticatedFetch), []);
+  const resource = useFeatureResource(authLoading || !user ? null : `admin:${user.uid}`, loader);
+  const data = resource.data ?? null, loading = authLoading || resource.loading;
+  const dataSource: 'database' | 'unavailable' = data ? 'database' : 'unavailable';
+  const loadError = resource.error;
 
-  // Fetch admin data from API on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchAdmin() {
-      if (tier !== 'enterprise') {
-        if (!cancelled) setLoading(false);
-        return;
-      }
-      setLoading(true);
-      setLoadError(null);
-      try {
-        // API는 Firebase JWT를 요구한다 — 대시보드 페이지와 동일한 토큰 패턴
-        const { getIdToken } = await import('@/lib/firebase');
-        const token = await getIdToken();
-        const headers: Record<string, string> = {};
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const res = await fetch('/api/admin', { headers });
-        if (!res.ok) {
-          const failure = await res.json().catch(() => null) as { error?: string } | null;
-          throw new Error(failure?.error ?? `관리자 데이터 요청 실패 (${res.status})`);
-        }
-        const json = await res.json();
-
-        if (!cancelled && json.ok) {
-          const adminData = json.data as AdminData;
-          setData(adminData);
-          const source = json.source === 'database' ? 'database' : 'unavailable';
-          setDataSource(source);
-          if (source === 'unavailable') {
-            setLoadError('관리 데이터 저장소가 연결되지 않았습니다. 임의의 데모 값은 표시하지 않습니다.');
-          }
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setData(null);
-          setDataSource('unavailable');
-          setLoadError(error instanceof Error ? error.message : '관리자 데이터를 불러오지 못했습니다.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchAdmin();
-    return () => { cancelled = true; };
-  }, [tier]);
-
-  // Gate: enterprise only
-  if (tier !== 'enterprise') {
+  // Server role determines access; a subscription is not an admin credential.
+  if (!authLoading && (!user || resource.status === 401 || resource.status === 403)) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <AlertCircle size={48} className="mx-auto text-[var(--text-tertiary)]" />
@@ -556,7 +533,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto w-full min-w-0 max-w-5xl px-4 py-8">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2">
@@ -569,7 +546,7 @@ export default function AdminDashboard() {
           )}
         </div>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          {data?.tenant?.name ?? 'ESVA'} - Enterprise 관리
+          {data?.tenant?.name ?? 'ESVA'} - 시스템 관리자
           {dataSource === 'unavailable' && !loading && (
             <span className="ml-2 rounded bg-yellow-100 px-1.5 py-0.5 text-xs text-yellow-700">
               저장소 미연결
@@ -583,7 +560,7 @@ export default function AdminDashboard() {
 
       {!loading && loadError && (
         <div role="alert" className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-          {loadError}
+          <p>{loadError}</p><button type="button" onClick={resource.reload} className="mt-3 min-h-11 rounded-lg border px-4">다시 시도</button>
         </div>
       )}
 
@@ -591,11 +568,12 @@ export default function AdminDashboard() {
       {!loading && data && (
         <>
           {/* Tabs */}
-          <div className="mb-6 flex gap-1 overflow-x-auto rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-1">
+          <div className="mb-6 flex min-w-0 max-w-full gap-1 overflow-x-auto rounded-xl border border-[var(--border-default)] bg-[var(--bg-secondary)] p-1">
             {TAB_CONFIG.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
+                aria-pressed={activeTab === key}
                 className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-4 py-2 text-xs font-medium transition-colors ${
                   activeTab === key
                     ? 'bg-[var(--bg-primary)] text-[var(--color-primary)] shadow-sm'

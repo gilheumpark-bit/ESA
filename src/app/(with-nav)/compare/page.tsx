@@ -11,7 +11,8 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { copyTextWithFallback } from '@/lib/clipboard';
-import { readApiErrorMessage } from '@/lib/error-messages';
+import { prepareDrawingCalculationInputs } from '@/lib/drawing-calculation-inputs';
+import { requestFeatureJson, requireRecord, FeatureRequestError } from '@/lib/feature-request';
 import {
   GitCompareArrows,
   Plus,
@@ -109,7 +110,7 @@ function ScenarioForm({
                 id={fieldId}
                 value={scenario.inputs[p.name] ?? ''}
                 onChange={(e) => onInputChange(index, p.name, e.target.value)}
-                className="h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
+                className="min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
               >
                 {p.options.map((option) => (
                   <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
@@ -125,7 +126,7 @@ function ScenarioForm({
                 max={p.max}
                 step={p.step ?? 'any'}
                 placeholder={p.defaultValue != null ? String(p.defaultValue) : ''}
-                className="h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
+                className="min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
               />
             )}
           </div>
@@ -137,7 +138,7 @@ function ScenarioForm({
         type="button"
         onClick={() => onCalculate(index)}
         disabled={scenario.isLoading}
-        className="mt-3 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+        className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary)] text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
       >
         {scenario.isLoading ? (
           <Loader2 size={14} className="animate-spin" />
@@ -148,7 +149,7 @@ function ScenarioForm({
       </button>
 
       {scenario.error && (
-        <p className="mt-2 text-xs text-[var(--color-error)]" role="alert">{scenario.error}</p>
+        <p className="mt-2 text-xs text-[var(--drawing-error-text)]" role="alert">{scenario.error}</p>
       )}
     </div>
   );
@@ -167,6 +168,7 @@ function createEmptyScenario(label: string, params: ExtendedParamDef[]): Scenari
 }
 
 export default function ComparePage() {
+  const [shareWarning, setShareWarning] = useState<string | null>(null);
   const [selectedCalc, setSelectedCalc] = useState(CALCULATOR_OPTIONS[0].value);
   const [scenarios, setScenarios] = useState<ScenarioState[]>([]);
   const requests = useRef(new Map<string, AbortController>());
@@ -199,20 +201,26 @@ export default function ComparePage() {
         const raw = params.get(key);
         if (!raw) continue;
         try {
+          if (raw.length > 16_384) throw new Error('Shared scenario too long');
           const parsed = JSON.parse(decodeURIComponent(raw));
           if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
           const label = SCENARIO_LABELS[newScenarios.length] ?? `${key.toUpperCase()}안`;
           newScenarios.push({
             id: crypto.randomUUID(),
             label,
-            inputs: parsed as Record<string, string>,
+            inputs: Object.fromEntries(initialOption.params.filter((param) => Object.hasOwn(parsed, param.name))
+              .map((param) => {
+                const value: unknown = parsed[param.name];
+                if ((typeof value !== 'string' && typeof value !== 'number') || String(value).length > 500) throw new Error('Invalid shared input');
+                return [param.name, String(value)];
+              })),
             result: null,
             receipt: null,
             isLoading: false,
             error: null,
           });
         } catch {
-          // Ignore malformed shared scenarios and show safe defaults.
+          setShareWarning('일부 공유 입력의 형식을 확인하지 못했습니다. 기본 입력과 원본을 확인하세요.');
         }
       }
 
@@ -251,23 +259,16 @@ export default function ComparePage() {
     setScenarios((prev) => prev.map((s) => s.id === scenario.id
       ? { ...s, isLoading: true, error: null, result: null, receipt: null } : s));
     try {
-      const parsedInputs: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(scenario.inputs)) {
-        const num = parseFloat(v);
-        parsedInputs[k] = isNaN(num) ? v : num;
-      }
-      const res = await fetch('/api/calculate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ calculatorId: selectedCalc, inputs: parsedInputs, countryCode: readStoredCountry() }),
-        signal: controller.signal,
+      const prepared = prepareDrawingCalculationInputs(calcOption.params, scenario.inputs);
+      if (!prepared.ready) throw new Error(`입력 확인 필요: ${[...prepared.missing, ...prepared.invalid].join(', ')}`);
+      const data = await requestFeatureJson('/api/calculate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calculatorId: selectedCalc, inputs: prepared.input, countryCode: readStoredCountry() }), signal: controller.signal,
+      }, (value) => {
+        const envelope = requireRecord(value), body = requireRecord(envelope.data ?? envelope);
+        if (!body.result || typeof body.result !== 'object') throw new FeatureRequestError('계산 결과 응답이 올바르지 않습니다.');
+        return body as unknown as { result: CalcResult; receipt?: Receipt };
       });
-      const body = await res.json().catch(() => null);
       if (!isCurrent()) return;
-      const data = body?.data ?? body;
-      if (!res.ok || body?.success === false || !data?.result) {
-        throw new Error(readApiErrorMessage(body, `계산에 실패했습니다 (${res.status})`));
-      }
       setScenarios((prev) => prev.map((s) => s.id === scenario.id
         ? { ...s, result: data.result, receipt: data.receipt ?? null, isLoading: false } : s));
     } catch (err) {
@@ -278,7 +279,7 @@ export default function ComparePage() {
     } finally {
       if (requests.current.get(scenario.id) === controller) requests.current.delete(scenario.id);
     }
-  }, [scenarios, selectedCalc, cancelScenario]);
+  }, [scenarios, selectedCalc, cancelScenario, calcOption.params]);
 
   const handleAddScenario = useCallback(() => {
     if (scenarios.length >= 4) return;
@@ -313,14 +314,15 @@ export default function ComparePage() {
         label: s.label,
         inputs: Object.fromEntries(
           Object.entries(s.inputs).map(([k, v]) => {
-            const n = parseFloat(v);
-            return [k, isNaN(n) ? v : n];
+            const definition = calcOption.params.find((param) => param.name === k);
+            const n = definition?.type === 'number' && v.trim() ? Number(v) : NaN;
+            return [k, Number.isFinite(n) ? n : v];
           }),
         ),
         result: s.result?.result ?? s.result ?? null,
         receipt: s.receipt,
       })),
-    [scenarios],
+    [scenarios, calcOption.params],
   );
 
   const hasAnyResult = scenarios.some((s) => s.result !== null);
@@ -351,6 +353,8 @@ export default function ComparePage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-6">
+        {shareWarning && <p role="alert" className="mb-4 rounded-lg border p-3 text-sm">{shareWarning}</p>}
+        <p className="mb-4 text-xs text-[var(--text-secondary)]">입력값과 적용 국가를 확인한 뒤 계산하세요. 공유 링크에는 입력값만 포함되며 이전 결과의 검증을 승계하지 않습니다.</p>
         {/* Calculator selector + actions */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <label htmlFor="compare-calculator" className="sr-only">계산기 선택</label>
@@ -358,7 +362,7 @@ export default function ComparePage() {
             id="compare-calculator"
             value={selectedCalc}
             onChange={(e) => handleCalcChange(e.target.value)}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm font-medium text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm font-medium text-[var(--text-primary)]"
           >
             {CALCULATOR_OPTIONS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -369,7 +373,7 @@ export default function ComparePage() {
             <button
               type="button"
               onClick={handleAddScenario}
-              className="flex h-10 items-center gap-1.5 rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+              className="flex min-h-11 items-center gap-1.5 rounded-lg border border-dashed border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
             >
               <Plus size={16} />
               시나리오 추가
@@ -379,7 +383,7 @@ export default function ComparePage() {
           <button
             type="button"
             onClick={handleShare}
-            className="ml-auto flex h-10 items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+            className="ml-auto flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
           >
             <Share2 size={16} />
             공유

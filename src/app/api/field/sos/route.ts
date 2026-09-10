@@ -26,7 +26,12 @@ export const POST = withApiHandler(
     const user = await extractVerifiedUser(req);
     if (!user) return ctx.error('ESVA-1001', '로그인이 필요합니다.', 401);
 
-    const body = await req.json() as SosRequest;
+    const raw = await req.json().catch(() => null);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.sessionId !== 'string'
+      || (raw.workSite !== undefined && (typeof raw.workSite !== 'string' || raw.workSite.length > 2000))) {
+      return ctx.error('ESA-4001', 'SOS 요청 형식이 올바르지 않습니다.', 400);
+    }
+    const body = raw as SosRequest;
     const { sessionId, workSite, sosTimestamp, workers } = body;
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(sessionId ?? '')) {
       return ctx.error('ESA-4001', '유효한 sessionId가 필요합니다.', 400);
@@ -81,7 +86,8 @@ export const POST = withApiHandler(
       channels: { inApp: delivered, sms: 0, email: 0, push: 0 },
       message: delivered > 0
         ? `SOS를 기록하고 설정된 관리자 ${delivered}명에게 인앱 알림을 보냈습니다. 외부 자동 신고는 없습니다.`
-        : 'SOS는 기록됐지만 설정된 관리자 수신자가 없습니다. 비상 연락망으로 직접 연락하세요.',
+        : recipients.length > 0 ? 'SOS는 기록됐지만 관리자 인앱 알림 전달에 실패했습니다. 비상 연락망으로 직접 연락하세요.'
+          : 'SOS는 기록됐지만 설정된 관리자 수신자가 없습니다. 비상 연락망으로 직접 연락하세요.',
     });
   },
 );

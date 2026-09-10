@@ -1,3 +1,4 @@
+import { requestFeatureJson, requireRecord, FeatureRequestError } from './feature-request';
 import { loadSelectedModel, loadStoredProviderKey } from '@/lib/byok-storage';
 import { getDefaultModel } from '@/lib/ai-providers';
 import {
@@ -46,30 +47,30 @@ export function resolveSelectedModel(provider: string): string {
  */
 export async function getFirstAvailableVisionKey(
   allowedProviders: readonly VisionProvider[] = VISION_PROVIDERS,
+  signal?: AbortSignal,
 ): Promise<VisionByokSelection | null> {
+  signal?.throwIfAborted();
   if (typeof window === 'undefined') return null;
 
   if (allowedProviders.includes('chatgpt-local')) {
     const selection = loadChatGPTLocalSelection();
     if (selection.enabled) {
-      const response = await fetch('/api/settings/chatgpt-local', {
-        method: 'GET',
-        cache: 'no-store',
-      });
-      const payload = await response.json().catch(() => null) as {
-        data?: ChatGPTLocalStatus;
-      } | null;
-      const status = payload?.data;
-      if (!response.ok || !status?.available) {
-        throw new Error('로컬 Codex를 사용할 수 없습니다. 설치 상태를 확인해 주세요.');
-      }
+      const status = await requestFeatureJson('/api/settings/chatgpt-local', { signal }, (value) => {
+        const data = requireRecord(requireRecord(value).data);
+        if (typeof data.available !== 'boolean' || typeof data.connected !== 'boolean' || !Array.isArray(data.models)) throw new FeatureRequestError('로컬 AI 상태 응답을 확인하지 못했습니다.');
+        return data as unknown as ChatGPTLocalStatus;
+      }).catch((error: unknown) => {
+      signal?.throwIfAborted();
+      const unavailable = error instanceof Error && 'status' in error && error.status === 503;
+      throw new Error(`계정 상태 확인 실패: ${unavailable ? '로컬 Codex를 사용할 수 없습니다. ' : ''}${error instanceof Error ? error.message : '로컬 연결을 확인해 주세요.'}`);
+    });
+      if (!status.available) throw new Error('로컬 Codex를 사용할 수 없습니다. 설치 상태를 확인해 주세요.');
       if (!status.connected) {
         throw new Error('ChatGPT 계정 연결이 끊겼습니다. AI 연결 관리에서 다시 연결해 주세요.');
       }
       const model = resolveChatGPTLocalModel(selection, status.models, 'image');
-      if (model) {
-        return { provider: 'chatgpt-local', key: '', model };
-      }
+      if (model) return { provider: 'chatgpt-local', key: '', model };
+      throw new Error('선택한 로컬 모델에서 이미지 입력을 확인하지 못했습니다. 설정에서 사용할 연결을 직접 선택하세요. 다른 공급자로 자동 전환하지 않았습니다.');
     }
   }
 
@@ -77,11 +78,14 @@ export async function getFirstAvailableVisionKey(
     allowedProviders.includes(candidate)
   ))) {
     try {
+      signal?.throwIfAborted();
       const key = await loadStoredProviderKey(provider);
+      signal?.throwIfAborted();
       if (key) {
         return { provider, key, model: resolveSelectedModel(provider) };
       }
     } catch {
+      signal?.throwIfAborted();
       // 손상되거나 없는 키 하나가 다른 제공자 확인을 막아서는 안 된다.
     }
   }
