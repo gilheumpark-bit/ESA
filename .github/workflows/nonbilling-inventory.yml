@@ -1,0 +1,26 @@
+name: Non-billing baseline inventory
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-inventory.yml']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: dd4be8d5b39030390e23131adf3c442cd225da1c
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: |
+          npm ci > /tmp/nonbilling-install.log 2>&1 || { tail -70 /tmp/nonbilling-install.log; exit 1; }
+          sed -n '1,110p' node_modules/next/dist/docs/01-app/02-guides/testing/jest.md
+          sed -n '1,110p' node_modules/next/dist/docs/01-app/02-guides/testing/playwright.md
+          git ls-files | grep -E '(admin|notification|dashboard|projects|community|field|weaviate|rag-|ocr|chatgpt-local|BYOK|ChatPanel|electrical-chat)' | head -180
+          node -e 'console.log("BASELINE",process.version,require("./package.json").version)'
