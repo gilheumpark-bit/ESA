@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { uncertaintyDocument, readSymbol } from '../src/agent/drawing/test-support/uncertainty-document';
 import { applyDrawingCorrection } from '../src/agent/drawing/apply-drawing-correction';
 import type { DrawingDocumentV3 } from '../src/agent/drawing/types-v3';
@@ -31,7 +31,47 @@ async function load(page: Page) {
 }
 async function capture(page: Page, label: string) {
   const dir = process.env.FULLSTACK_SCREEN_DIR;
-  if (dir) { mkdirSync(dir, { recursive: true }); await page.screenshot({ path: `${dir}/${label}.png`, fullPage: false, animations: 'disabled' }); }
+  if (dir) {
+    mkdirSync(dir, { recursive: true });
+    await expect(page).toHaveURL(/\/tools\/sld$/);
+    await expect(page).toHaveTitle('단선도 검토 · ESVA');
+    await expect(page.locator('nextjs-portal')).toHaveCount(0);
+    const evidence = await page.evaluate(() => ({ url: location.href, title: document.title,
+      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
+      width: innerWidth, height: innerHeight, horizontalOverflow: document.documentElement.scrollWidth - innerWidth,
+      meaningfulText: (document.querySelector('main')?.textContent?.trim().length ?? 0) > 50 }));
+    expect(evidence.meaningfulText).toBe(true); expect(evidence.horizontalOverflow).toBeLessThanOrEqual(0);
+    // Verify rendered foreground/background, not merely CSS token strings.
+    // Alert backgrounds in this workspace are solid; skip off-screen route announcers.
+    const errorContrast = await page.getByRole('main').locator('[role="alert"]').evaluateAll((nodes) => {
+      const luminance = (color: string) => {
+        const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [];
+        if (channels.length !== 3) throw new Error(`Unsupported computed color ${color}`);
+        return channels.map((c) => c / 255).map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+          .reduce((total, c, i) => total + c * [0.2126, 0.7152, 0.0722][i], 0);
+      };
+      return nodes.filter((node) => {
+        const box = node.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && Boolean(node.textContent?.trim());
+      }).map((node) => {
+        const foreground = getComputedStyle(node).color;
+        let current: Element | null = node, background = '';
+        while (current) {
+          const color = getComputedStyle(current).backgroundColor;
+          const channels = color.match(/[\d.]+/g)?.map(Number) ?? [];
+          if (channels.length === 3 || channels[3] === 1) { background = color; break; }
+          current = current.parentElement;
+        }
+        if (!background) throw new Error('No opaque error background found');
+        const f = luminance(foreground), b = luminance(background);
+        return { foreground, background, ratio: (Math.max(f, b) + 0.05) / (Math.min(f, b) + 0.05) };
+      });
+    });
+    for (const measurement of errorContrast) expect(measurement.ratio).toBeGreaterThanOrEqual(4.5);
+    if (label.startsWith('review-error-') || label.startsWith('review-dark-')) expect(errorContrast.length).toBeGreaterThan(0);
+    writeFileSync(`${dir}/${label}.json`, JSON.stringify({ ...evidence, errorContrast }, null, 2));
+    await page.screenshot({ path: `${dir}/${label}.png`, fullPage: false, animations: 'disabled' });
+  }
 }
 for (const width of [1440, 390]) {
   test(`review queue filters, retains drafts and recovers from a failed edit (${width}px)`, async ({ page }) => {
@@ -49,7 +89,7 @@ for (const width of [1440, 390]) {
     await capture(page, `upload-after-${width}`);
     await load(page);
     const queue = page.getByRole('region', { name: '미확정 검토 작업', exact: true });
-    await queue.scrollIntoViewIfNeeded(); await capture(page, `review-after-${width}`);
+    await queue.evaluate((element) => { element.scrollIntoView({ block: 'start', behavior: 'instant' }); window.scrollBy(0, -130); }); await capture(page, `review-after-${width}`);
     await expect(queue.getByRole('status')).toContainText('표시 40 / 검색 결과 46건');
     await queue.getByRole('button', { name: '다음 6건 더 보기', exact: true }).click();
     await expect(queue.getByRole('list', { name: '검토 항목 목록' }).getByRole('listitem')).toHaveCount(46);
@@ -68,10 +108,19 @@ for (const width of [1440, 390]) {
     await page.getByRole('button', { name: '미확정 46', exact: true }).click();
     await expect(input).toHaveValue('breaker');
     await queue.getByRole('button', { name: 'P01-S001 원본 위치 확인', exact: true }).first().click();
-    await queue.scrollIntoViewIfNeeded(); await capture(page, `review-before-save-${width}`);
+    await queue.evaluate((element) => { element.scrollIntoView({ block: 'start', behavior: 'instant' }); window.scrollBy(0, -130); }); await capture(page, `review-before-save-${width}`);
     await queue.getByRole('button', { name: '수정 반영', exact: true }).click();
     await expect(queue.getByRole('alert')).toHaveText('합성 일시 장애: 입력을 유지합니다.');
-    await expect(input).toHaveValue('breaker'); await capture(page, `review-error-${width}`);
+    await expect(input).toHaveValue('breaker');
+    await queue.evaluate((element) => { element.scrollIntoView({ block: 'start', behavior: 'instant' }); window.scrollBy(0, -130); });
+    await capture(page, `review-error-${width}`);
+    const theme = page.getByRole('button', { name: /^테마:/ });
+    for (let i = 0; i < 3 && await theme.getAttribute('aria-label') !== '테마: 어둡게'; i++) await theme.click();
+    await expect(page.locator('html')).toHaveClass(/dark/);
+    await queue.evaluate((element) => { element.scrollIntoView({ block: 'start', behavior: 'instant' }); window.scrollBy(0, -130); });
+    await capture(page, `review-dark-${width}`);
+    for (let i = 0; i < 3 && await theme.getAttribute('aria-label') !== '테마: 밝게'; i++) await theme.click();
+    await expect(page.locator('html')).not.toHaveClass(/dark/);
     await queue.getByRole('button', { name: '수정 반영', exact: true }).click();
     await expect(page.getByRole('button', { name: '미확정 45', exact: true })).toBeVisible();
     expect(keys[0]).toBe(keys[1]); expect(attempts).toBe(2);
@@ -81,7 +130,7 @@ for (const width of [1440, 390]) {
     await expect(queue.getByRole('status')).toContainText('검색 결과 22건');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
-    await queue.scrollIntoViewIfNeeded(); await capture(page, `review-filtered-${width}`);
+    await queue.evaluate((element) => { element.scrollIntoView({ block: 'start', behavior: 'instant' }); window.scrollBy(0, -130); }); await capture(page, `review-filtered-${width}`);
   });
 }
 
@@ -121,8 +170,62 @@ test('stale edit can refresh the owned result without losing the draft', async (
   const input = page.getByRole('textbox', { name: 'P01-S001 직접 수정값', exact: true }); await input.fill('breaker');
   await page.getByRole('button', { name: '수정 반영', exact: true }).click();
   await page.getByRole('button', { name: '최신 결과 다시 불러오기', exact: true }).click();
+  await expect(page.getByRole('button', { name: '최신 결과 확인 중…', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '최신 결과 다시 불러오기', exact: true })).toHaveCount(0);
   await expect(input).toHaveValue('breaker');
   await page.getByRole('button', { name: '수정 반영', exact: true }).click();
   await expect(page.getByRole('button', { name: '미확정 1', exact: true })).toBeVisible();
   expect(versions).toHaveLength(2); expect(versions[1]).not.toBe(versions[0]);
+});
+
+test('starting a new document does not restore the saved previous job', async ({ page }) => {
+  let creates = 0, restoredOld = 0;
+  let release!: () => void; let entered!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  await page.route('**/api/drawing-jobs', async (r) => {
+    creates++;
+    if (creates === 2) { entered(); await held; }
+    await r.fulfill({ json: { success: true, data: { jobId: creates === 1 ? 'review-a' : 'review-b', status: 'COMPLETE', document: documentFixture(creates === 1 ? 'a' : 'b', 1) } } });
+  });
+  await page.route('**/api/drawing-jobs?jobId=review-a', (r) => {
+    restoredOld++;
+    return r.fulfill({ json: { success: true, data: { jobId: 'review-a', status: 'COMPLETE', document: documentFixture('a', 1) } } });
+  });
+  await load(page);
+  await page.evaluate(() => sessionStorage.setItem('esva-sld-v3-active-job', 'review-a'));
+  try {
+    await page.locator('input[accept=".pdf,.dxf,.dwg,image/*"]').setInputFiles(upload('new-source.dxf'));
+    await started;
+    expect(await page.evaluate(() => sessionStorage.getItem('esva-sld-v3-active-job'))).toBeNull();
+    release();
+    await expect(page.getByRole('heading', { name: '검토 도면 B', exact: true })).toBeVisible();
+    expect(restoredOld).toBe(0);
+  } finally { release(); }
+});
+
+test('successful server cancellation prevents a delayed poll from restoring the result', async ({ page }) => {
+  await page.addInitScript(() => sessionStorage.setItem('esva-sld-v3-active-job', 'running-a'));
+  let reads = 0; let release!: () => void; let entered!: () => void;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  const polling = new Promise<void>((resolve) => { entered = resolve; });
+  await page.route('**/api/drawing-jobs?jobId=running-a', async (r) => {
+    if (r.request().method() === 'DELETE') return r.fulfill({ json: { success: true, data: { status: 'CANCELLED' } } });
+    reads++;
+    if (reads === 1) return r.fulfill({ json: { success: true, data: { status: 'RUNNING' } } });
+    entered(); await held;
+    return r.fulfill({ json: { success: true, data: { status: 'COMPLETE', document: documentFixture('a', 1) } } }).catch(() => undefined);
+  });
+  try {
+    await page.goto('/tools/sld');
+    await polling;
+    await page.getByRole('button', { name: '분석 중단', exact: true }).click();
+    // Next.js also has an off-screen route announcer with role=alert. Only the
+    // drawing workspace's user-visible cancellation message is the assertion target.
+    await expect(page.getByRole('main').getByRole('alert')).toContainText('분석을 취소했습니다.');
+    release();
+    await expect(page.getByRole('button', { name: 'PDF/DXF/이미지 전체 분석', exact: true })).toBeEnabled();
+    await expect(page.getByRole('heading', { name: '검토 도면 A', exact: true })).toHaveCount(0);
+    expect(await page.evaluate(() => sessionStorage.getItem('esva-sld-v3-active-job'))).toBeNull();
+  } finally { release(); }
 });

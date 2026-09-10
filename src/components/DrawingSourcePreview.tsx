@@ -124,9 +124,10 @@ export function DrawingSourcePreview({
   return (
     <figure className="min-w-0 overflow-hidden rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-primary)] shadow-[var(--shadow-card)]" aria-busy={loading}>
       <figcaption className="flex min-h-11 items-center justify-between gap-3 border-b border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 text-xs text-[var(--text-secondary)]">
-        <span className="font-medium text-[var(--text-primary)]">원본 위 분석 근거</span>
+        <span className="font-medium text-[var(--text-primary)]">{isPdf || isImage ? '원본 위 분석 근거' : 'DXF 추출 위치·관계'}</span>
         <span className="tabular-nums">{pageIndex + 1} / {document.pageCount}페이지</span>
       </figcaption>
+      {!isPdf && !isImage && <p className="border-b border-[var(--border-default)] px-3 py-2 text-xs leading-relaxed text-[var(--text-secondary)]">DXF는 원본 미리보기 대신 추출 좌표와 관계도를 표시합니다.</p>}
       <div className="relative max-h-[70vh] overflow-auto bg-white p-2">
         {isPdf && loading && <div className="flex min-h-72 items-center justify-center text-sm text-[var(--text-secondary)]" role="status">PDF 페이지를 불러오는 중입니다.</div>}
         {isPdf && error && <div className="flex min-h-72 items-center justify-center px-6 text-center text-sm text-[var(--color-error)]" role="alert">{error}</div>}
@@ -151,7 +152,6 @@ export function DrawingSourcePreview({
         )}
         {!isPdf && !isImage && (
           <div className="relative mx-auto min-h-72 w-full" style={{ aspectRatio: `${renderSize.width} / ${renderSize.height}` }}>
-            <p className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-sm text-[var(--text-secondary)]">DXF는 원본 미리보기 대신 추출 좌표와 관계도를 표시합니다.</p>
             {overlay}
           </div>
         )}

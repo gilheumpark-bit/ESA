@@ -69,7 +69,7 @@ export function DrawingReviewQueue({ document, selectedDisplayId, onSelectDispla
             <option value="all">모든 페이지</option>{pageNumbers.map((p) => <option key={p} value={p}>{p + 1}페이지</option>)}
           </select>
         </label>
-        <button type="button" onClick={clear} className={actionStyle}>필터 초기화</button>
+        <button type="button" onClick={clear} className={`${actionStyle} basis-full sm:basis-auto`}>필터 초기화</button>
       </div>
       <p role="status" aria-live="polite" className="mt-3 text-xs tabular-nums text-[var(--text-secondary)]">표시 {Math.min(limit, filtered.length)} / 검색 결과 {filtered.length}건 · 전체 미확정 {document.unresolvedItems.length}건</p>
     </div>
@@ -102,7 +102,7 @@ export function DrawingReviewQueue({ document, selectedDisplayId, onSelectDispla
               <Check size={15} aria-hidden="true" />{saving === item.id ? '반영 중…' : '수정 반영'}
             </button>
           </form>
-          {errors[item.id] && <p id={`review-error-${item.id}`} role="alert" className="mt-2 text-sm text-[var(--color-error)]">{errors[item.id]}</p>}
+          {errors[item.id] && <p id={`review-error-${item.id}`} role="alert" className="mt-2 text-sm text-[var(--drawing-error-text)]">{errors[item.id]}</p>}
         </div> : <p className="mt-3 rounded-lg bg-[var(--bg-secondary)] p-3 text-xs leading-relaxed text-[var(--text-secondary)]">{editable ? '이 결과는 현재 읽기 전용입니다.' : '이 항목은 직접 값 수정 대상이 아닙니다. 원본을 확인하고 필요한 근거를 보완하거나 재분석하세요.'}</p>}
       </li>;
     })}</ul>}

@@ -419,7 +419,7 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
                   className={`mt-1 text-xs ${
                     runs[step.step].status === 'ok'
                       ? 'font-semibold text-[var(--text-primary)]'
-                      : 'text-[var(--color-error)]'
+                      : 'text-[var(--drawing-error-text)]'
                   }`}
                 >
                   {runs[step.step].status === 'ok'
@@ -700,6 +700,7 @@ export default function SLDAnalysisPage() {
     setReview(null);
     setResultTab('summary');
     setError(null);
+    setV3Loading(false);
     setV3Doc(null);
     setV3JobId(null);
     setV3Error(null);
@@ -721,6 +722,7 @@ export default function SLDAnalysisPage() {
   ) => {
     workspaceGuard.invalidate();
     correctionRetryRef.current = null;
+    sessionStorage.removeItem(V3_JOB_SESSION_KEY);
     v3CorrectionInFlightRef.current.clear();
     const operation = workspaceGuard.lease();
     try {
@@ -834,6 +836,14 @@ export default function SLDAnalysisPage() {
   }, [activeSymbolLibrary, workspaceGuard]);
 
   const handlePublicFixtureCalibration = useCallback(async () => {
+    workspaceGuard.invalidate();
+    sessionStorage.removeItem(V3_JOB_SESSION_KEY);
+    correctionRetryRef.current = null;
+    v3CorrectionInFlightRef.current.clear();
+    setV3CorrectionTarget(null);
+    setV3Refreshing(false);
+    setV3Cancelling(false);
+    const operation = workspaceGuard.lease();
     setV3Loading(true);
     setV3Error(null);
     setV3Doc(null);
@@ -842,10 +852,11 @@ export default function SLDAnalysisPage() {
     setV3ResumeAvailable(false);
     try {
       const response = await fetch('/api/dev/drawing-fixture?id=wiki-oneline', {
-        cache: 'no-store',
+        cache: 'no-store', signal: operation.signal,
       });
       if (!response.ok) throw new Error('공개 교보재를 불러오지 못했습니다.');
       const blob = await response.blob();
+      if (!operation.isCurrent()) return;
       const file = new File([blob], 'wiki-oneline.png', { type: 'image/png' });
       setDrawingFile(file);
       setV3SourceFile(file);
@@ -859,11 +870,13 @@ export default function SLDAnalysisPage() {
         formData.append('model', visionKey.model);
         if (visionKey.key) formData.append('apiKey', visionKey.key);
       }
+      if (!operation.isCurrent()) return;
       const resultResponse = await fetch('/api/drawing-jobs', {
-        method: 'POST',
+        method: 'POST', signal: operation.signal,
         body: formData,
       });
       const result = await resultResponse.json();
+      if (!operation.isCurrent()) return;
       if (!resultResponse.ok || !result?.success || !result.data?.document) {
         throw new Error(result?.error?.message ?? `공개 교보재 분석 실패 (${resultResponse.status})`);
       }
@@ -872,11 +885,12 @@ export default function SLDAnalysisPage() {
       setV3JobId(String(result.data.jobId));
       setV3JobStatus(document.jobStatus);
     } catch (error) {
-      setV3Error(error instanceof Error ? error.message : '공개 교보재 분석을 시작하지 못했습니다.');
+      if (operation.isCurrent()) setV3Error(error instanceof Error ? error.message : '공개 교보재 분석을 시작하지 못했습니다.');
     } finally {
-      setV3Loading(false);
+      if (operation.isCurrent()) setV3Loading(false);
+      operation.release();
     }
-  }, []);
+  }, [workspaceGuard]);
 
   const handlePublicFixtureQuickAnalysis = useCallback(async () => {
     setLoading(true);
@@ -1036,6 +1050,10 @@ export default function SLDAnalysisPage() {
       const json = await response.json();
       if (!operation.isCurrent()) return;
       if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '취소 요청을 처리하지 못했습니다.');
+      // Successful server cancellation invalidates the older run and poll responses.
+      workspaceGuard.invalidate();
+      setV3Cancelling(false);
+      setV3Loading(false);
       setV3ResumeAvailable(false);
       setV3JobStatus('CANCELLED');
       sessionStorage.removeItem(V3_JOB_SESSION_KEY);
@@ -1043,7 +1061,7 @@ export default function SLDAnalysisPage() {
     } catch (err) {
       if (operation.isCurrent()) setV3Error(err instanceof Error ? err.message : '분석 취소 오류');
     } finally {
-      if (operation.isCurrent()) { setV3Cancelling(false); setV3Loading(false); }
+      if (operation.isCurrent()) setV3Cancelling(false);
       operation.release();
     }
   }, [v3Cancelling, v3JobId, workspaceGuard]);
@@ -1539,9 +1557,9 @@ export default function SLDAnalysisPage() {
       {/* Error */}
       {error && (
         <div role="alert" aria-label="빠른 도면 분석 오류" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--drawing-error-text)]" />
           <div>
-            <p className="text-sm text-[var(--color-error)]">{error}</p>
+            <p className="text-sm text-[var(--drawing-error-text)]">{error}</p>
             {error.includes('API 키') && (
               <a href="/settings/byok" className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline">
                 BYOK 설정 페이지로 이동 →
@@ -1553,7 +1571,7 @@ export default function SLDAnalysisPage() {
 
       {/* V3 전체 문서 완전 판독 */}
       <section className="mt-8 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">전체 문서 판독 (V3)</h2>
+        <h2 className="text-base font-bold text-[var(--text-primary)]">전체 문서 검토</h2>
         <p className="mt-1 text-[12px] text-[var(--text-tertiary)]">
           모든 페이지의 기기·정격·결선을 근거와 함께 검토합니다. 빠른 추출과 별도 결과이며, 미확정 항목은 직접 확인할 수 있습니다.
         </p>
@@ -1602,7 +1620,7 @@ export default function SLDAnalysisPage() {
               type="button"
               onClick={() => void handleV3Cancel()}
               disabled={v3Cancelling}
-              className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--color-error)] px-4 text-xs font-semibold text-[var(--color-error)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--color-error)] px-4 text-xs font-semibold text-[var(--drawing-error-text)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Square size={13} aria-hidden="true" />
               {v3Cancelling ? '취소 처리 중' : '분석 중단'}
@@ -1622,7 +1640,7 @@ export default function SLDAnalysisPage() {
         </div>
         {v3Error && (
           <div className="mt-3 rounded-xl border border-[var(--color-error)] p-3">
-            <p className="text-sm text-[var(--color-error)]" role="alert">{v3Error}</p>
+            <p className="text-sm text-[var(--drawing-error-text)]" role="alert">{v3Error}</p>
             {v3Doc && v3JobId && !v3Loading && <button type="button" onClick={() => void handleV3Refresh()}
               disabled={v3Refreshing || Boolean(v3CorrectionTarget)} className="mt-2 min-h-11 rounded-lg border border-[var(--border-hover)] px-3 text-sm disabled:opacity-50">
               {v3Refreshing ? '최신 결과 확인 중…' : '최신 결과 다시 불러오기'}
@@ -1757,8 +1775,8 @@ export default function SLDAnalysisPage() {
 
           {reviewError && (
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3" role="alert">
-              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
-              <p className="text-sm text-[var(--color-error)]">{reviewError}</p>
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--drawing-error-text)]" />
+              <p className="text-sm text-[var(--drawing-error-text)]">{reviewError}</p>
             </div>
           )}
 
