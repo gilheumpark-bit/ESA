@@ -1,0 +1,32 @@
+name: Non-billing integration smoke
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-smoke.yml']
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: |
+          python3 .review-patches/connect-resources.py
+          npm ci > /tmp/nonbilling-smoke-install.log 2>&1 || { tail -50 /tmp/nonbilling-smoke-install.log; exit 1; }
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npx jest --runInBand --testPathPatterns='dashboard|community-ui|auth-gate' > /tmp/nonbilling-smoke-tests.log 2>&1 || { tail -130 /tmp/nonbilling-smoke-tests.log; exit 1; }
+          tail -30 /tmp/nonbilling-smoke-tests.log
