@@ -1,0 +1,56 @@
+name: Non-billing failure diagnostics
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-diagnostics.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Read stored verification evidence without running or retrying tests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 34495428044 --repo gilheumpark-bit/ESA --name nonbilling-release-verification --dir /tmp/nonbilling-diagnostic
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('/tmp/nonbilling-diagnostic')
+          report={'runId':34495428044,'scope':'Existing run output only; no new test execution'}
+          for filename,key in [('nonbilling-scope.json','scopeCheck'),('nonbilling-jest.json','jest'),('nonbilling-browser.json','browser')]:
+            candidates=list(root.rglob(filename))
+            if len(candidates)!=1:
+              report[key]={'missing':True};continue
+            value=json.loads(candidates[0].read_text())
+            if key=='jest':
+              value={k:value.get(k) for k in ['success','numPassedTests','numFailedTests','numPendingTests','numPassedTestSuites','numFailedTestSuites','numPendingTestSuites']}
+            if key=='browser':
+              failures=[]
+              def visit(suite):
+                for spec in suite.get('specs',[]):
+                  for test in spec.get('tests',[]):
+                    if test.get('status')!='expected':
+                      failures.append({'file':spec.get('file'),'title':spec['title'],'status':test.get('status'),'results':[{'status':r.get('status'),'errors':r.get('errors',[])} for r in test.get('results',[])]})
+                for child in suite.get('suites',[]):visit(child)
+              for suite in value.get('suites',[]):visit(suite)
+              value={'stats':value.get('stats'),'failures':failures,'errors':value.get('errors',[])}
+            report[key]=value
+          target=Path('.review-patches/failure-summary.json')
+          target.parent.mkdir(exist_ok=True)
+          target.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+          print(target.read_text())
+          PY
+      - name: Publish only the diagnostic summary in the isolated work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f .review-patches/failure-summary.json
+          git commit -m 'test: record actual failed non-billing assertions without rerunning them'
+          git push origin HEAD:refs/heads/chore/nonbilling-quality-20260910
