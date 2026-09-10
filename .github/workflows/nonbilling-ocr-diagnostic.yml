@@ -1,0 +1,56 @@
+name: Non-billing OCR failure context
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-ocr-diagnostic.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 34496785112 --repo gilheumpark-bit/ESA --name nonbilling-release-verification --dir /tmp/ocr-failure
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,zipfile,tarfile
+          root=Path('/tmp/ocr-failure')
+          report={'runId':34496785112,'scope':'Preserved synthetic OCR error DOM and response outcomes only; no fresh execution','contexts':[],'network':[]}
+          for path in root.rglob('error-context.md'):
+              if 'nonbilling-review-forms' in str(path):report['contexts'].append({'file':str(path.relative_to(root)),'text':path.read_text()[:18000]})
+          for path in root.rglob('trace.zip'):
+              if 'nonbilling-review-forms' not in str(path):continue
+              with zipfile.ZipFile(path) as z:
+                  for name in z.namelist():
+                      if not name.endswith('.network'):continue
+                      for line in z.read(name).decode().splitlines():
+                          try: event=json.loads(line)
+                          except ValueError:continue
+                          snapshot=event.get('snapshot',{})
+                          request=snapshot.get('request',{}); url=request.get('url','')
+                          if '/api/ocr' not in url and '/api/settings/chatgpt-local' not in url:continue
+                          response=snapshot.get('response',{})
+                          body=response.get('content',{}); content=None
+                          sha=body.get('_sha1')
+                          if sha and 'resources/'+sha in z.namelist():content=z.read('resources/'+sha).decode('utf-8',errors='replace')[:4000]
+                          report['network'].append({'trace':path.parent.name,'url':url,'method':request.get('method'),'status':response.get('status'),'body':content})
+          archives=list(root.rglob('nonbilling-product-source.tar.gz'));assert len(archives)==1
+          with tarfile.open(archives[0]) as archive:
+              source=archive.extractfile('src/app/(with-nav)/tools/ocr/page.tsx').read().decode()
+              report['ocrResultComponent']=source[source.index('function ResultPanel'):source.index('// ═══',source.index('function ResultPanel'))] if 'function ResultPanel' in source else source[:17000]
+          out=Path('.review-patches/ocr-failure-context.json');out.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'contexts':len(report['contexts']),'network':report['network']},ensure_ascii=False))
+          PY
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f .review-patches/ocr-failure-context.json
+          git commit -m 'test: preserve actual OCR failure screen context without rerunning tests'
+          git push origin HEAD:refs/heads/chore/nonbilling-quality-20260910
