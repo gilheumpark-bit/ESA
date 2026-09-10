@@ -9,8 +9,7 @@ rep(p,"page.getByRole('alert')).toContainText('합성 커뮤니티 장애')", "p
 p='e2e/nonbilling-review-forms.spec.ts'
 rep(p,"page.getByText(/복수 값·범위·미확정 표기/)).toBeVisible()", "page.getByText(/복수 값·범위·미확정 표기/).first()).toBeVisible()")
 rep(p,"page.locator('input[type=\"file\"]').setInputFiles", "page.locator('input[accept=\"image/jpeg,image/png,image/webp\"]').setInputFiles")
-rep(p,"    await page.route('**/api/ocr', (route) => route.fulfill", """    // Exercise the production connection gate using a declared synthetic local
-    // transport, as the existing OCR tests do. No real key or account is created.
+rep(p,"    await page.route('**/api/ocr', (route) => route.fulfill", """    // Declared synthetic vision connection; no real key or account is created.
     await page.addInitScript(() => localStorage.setItem('esa-chatgpt-local', JSON.stringify({ enabled: true, model: 'ui-nonbilling-vision' })));
     await page.route('**/api/settings/chatgpt-local', (route) => route.fulfill({ json: { data: {
       available: true, connected: true, models: [{ id: 'ui-nonbilling-vision', inputModalities: ['text', 'image'] }],
@@ -66,6 +65,30 @@ rep(p,"    await capture(page, `audit-${width}`);", """    const search = page.g
     await expect(page.getByRole('button', { name: /현재 페이지 CSV 내보내기/ })).toBeEnabled();
     await capture(page, `audit-${width}`);""")
 
+# Keyboard edits have the same explicit commit/cancel behavior as buttons.
+# Enter used to do nothing; IME composition must never commit a partial value.
+p='src/app/(with-nav)/tools/ocr/page.tsx'
+rep(p,'          onChange={e => setEditValue(e.target.value)}', '''          onChange={e => setEditValue(e.target.value)}
+          onKeyDown={event => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (event.key === 'Enter') {
+              event.preventDefault(); onEdit(editValue); setEditing(false);
+            } else if (event.key === 'Escape') {
+              event.preventDefault(); setEditValue(value); setEditing(false);
+            }
+          }}''')
+p='e2e/nonbilling-review-forms.spec.ts'
+rep(p,"    const input = missing.getByRole('textbox'); await input.fill('원본 확인 제조사'); await input.press('Enter');", """    const input = missing.getByRole('textbox'); await input.fill('원본 확인 제조사');
+    await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
+    await expect(input).toBeVisible(); await expect(input).toHaveValue('원본 확인 제조사');
+    await input.press('Enter');""")
+rep(p,"    await expect(page.getByText('원본 확인 제조사', { exact: true })).toBeVisible();", """    await expect(page.getByText('원본 확인 제조사', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '제조사 수정', exact: true }).click();
+    const editing = page.getByRole('textbox', { name: '제조사 수정값', exact: true });
+    await editing.fill('취소할 수정'); await editing.press('Escape');
+    await expect(page.getByText('원본 확인 제조사', { exact: true })).toBeVisible();
+    await expect(page.getByText('취소할 수정', { exact: true })).toHaveCount(0);""")
+
 p=Path('docs/project/handoffs/2026-09-10-nonbilling-feature-quality.md')
 p.write_text(p.read_text()+'''
 ## 브라우저 통합에서 확인한 후속 수리
@@ -74,8 +97,10 @@ p.write_text(p.read_text()+'''
 
 후속 실행 34495428044는 브라우저130통과/3실패였다. 503 로컬 서비스 사용 불가 안내를 응답 형식 실패와 구분했고, 카메라·파일 입력이 함께 있는 OCR 시험의 선택자를 실제 파일 선택 입력으로 한정했다. 반복 안내 선택자도 첫 실제 안내로 한정하되 원본/수정값·미판독 보완·반출 단언은 유지했다.
 
-실행 34496785112의131통과/2실패에서 남은 OCR 조건은 공급자 응답을 가로챘지만 앱의 연결 선택을 구성하지 않은 시험이었다. 보존된 화면에 AI 연결 없음이 표시됐고 OCR 요청은 나가지 않았다. 기존 OCR 검사가 사용하는 로컬 상태 fixture와 같은 계약으로 명시적 합성 Vision 연결을 추가했다. production의 연결 필수 조건을 끄거나 실제 키·계정을 만든 것이 아니다. 실패 실행은 보존한다.
+실행 34496785112의131통과/2실패에서 남은 OCR 조건은 앱의 연결 선택을 구성하지 않은 시험이었다. 보존된 화면에 AI 연결 없음이 표시됐고 OCR 요청은 나가지 않았다. 기존 OCR 검사와 같은 계약으로 명시적 합성 Vision 연결을 추가했다. production의 연결 필수 조건을 끄거나 실제 키·계정을 만든 것이 아니다.
+
+실행 34498274868은 OCR 연결 이후 키보드 Enter 저장이 구현되지 않은 지점에서 두 검사가 실패했다. 버튼 기능을 대체해 시험을 약화시키지 않고 Enter 저장·Escape 취소를 연결했다. IME 조합 Enter는 저장하지 않도록 하고 브라우저에서 조합 입력·저장·취소·원본 보존을 확인한다. 실패 실행은 보존한다.
 
 감사로그 필터는 조회 중에도 유지해 한 글자를 입력한 뒤 초점이 사라지는 문제를 막고, 미완료/실패 조회를0건으로 표시하거나 CSV로 반출하지 않는다. 브라우저에서 연속 키 입력과 초점 유지를 검사한다. 모바일 표는 내부 스크롤을 사용하고 문서 바깥 넘침을 숨겨 통과시키지 않는다.
 ''')
-print('Explicit synthetic vision setup added; production provider gating and all OCR output assertions retained.')
+print('Completed explicit OCR keyboard commit/cancel with IME safety; all original review/export assertions preserved.')
