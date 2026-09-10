@@ -1,0 +1,95 @@
+name: Non-billing verification evidence
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-closeout.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERIFY_RUN_ID: '34501093032'
+      VERIFY_HEAD_SHA: '9327c3afcd8a090be90d699c071b7d59b202700f'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verify original release evidence against the exact product commit
+        run: |
+          gh run download 34500130347 --repo gilheumpark-bit/ESA --name nonbilling-release-verification --dir /tmp/nonbilling-release-evidence
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,subprocess,hashlib,tarfile
+          root=Path('/tmp/nonbilling-release-evidence');repo='gilheumpark-bit/ESA'
+          product='9327c3afcd8a090be90d699c071b7d59b202700f';base='dd4be8d5b39030390e23131adf3c442cd225da1c'
+          def get(path):return json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/{path}'],text=True))
+          def one(name):
+              paths=list(root.rglob(name));assert len(paths)==1,(name,len(paths));return paths[0]
+          run=get('actions/runs/34500130347')
+          assert run['head_sha']=='a34ac736e6b9c8296489d8e2cf39ce978635efa1' and run['conclusion']=='success'
+          assert one('nonbilling-prepared-sha.txt').read_text().strip()==product
+          manifest=json.loads(one('nonbilling-hashes.json').read_text())
+          assert len(manifest)==49
+          changed=subprocess.check_output(['git','diff','--name-only',base,product],text=True).splitlines()
+          assert set(changed)==set(manifest)
+          for path,expected in manifest.items():
+              actual=subprocess.check_output(['git','show',f'{product}:{path}'])
+              assert hashlib.sha256(actual).hexdigest()==expected,path
+          with tarfile.open(one('nonbilling-product-source.tar.gz')) as archive:
+              for item in archive.getmembers():
+                  if item.isfile():assert hashlib.sha256(archive.extractfile(item).read()).hexdigest()==manifest[item.name],item.name
+          scope=json.loads(one('nonbilling-scope.json').read_text())
+          assert scope['paymentUnchanged'] and scope['dependenciesUnchanged']
+          unit=json.loads(one('nonbilling-jest.json').read_text())
+          browser=json.loads(one('nonbilling-browser.json').read_text());attempts=[];failures=[]
+          def walk(suite):
+              for spec in suite.get('specs',[]):
+                  for test in spec.get('tests',[]):
+                      entry={'title':spec['title'],'status':test.get('status'),'attempts':[r['status'] for r in test.get('results',[])]}
+                      attempts.append(entry)
+                      if entry['status']!='expected':failures.append(entry)
+              for child in suite.get('suites',[]):walk(child)
+          for suite in browser.get('suites',[]):walk(suite)
+          first=bool(attempts) and all(t['status']=='expected' and t['attempts']==['passed'] for t in attempts)
+          assert unit['success'] and not unit['numFailedTests'] and first
+          report={'runId':run['id'],'conclusion':run['conclusion'],'sourceHead':run['head_sha'],'productHead':product,
+            'scopeCheck':scope,'productIntegrity':{'changedFiles':len(changed),'allArchiveAndProductHashesMatch':True},
+            'unit':{k:unit[k] for k in ['numPassedTests','numFailedTests','numPendingTests','numPassedTestSuites','numFailedTestSuites','numPendingTestSuites']},
+            'browser':{'stats':browser['stats'],'executions':len(attempts),'everyFirstAttemptPassed':first,'failures':failures},
+            'artifacts':[{k:a.get(k) for k in ['id','name','digest','expired','size_in_bytes']} for a in get('actions/runs/34500130347/artifacts')['artifacts']]}
+          for file in ['nonbilling-production-audit.log','nonbilling-all-audit.log','nonbilling-scripts.log','nonbilling-pdf.log']:
+              report[file]=one(file).read_text()[-4500:]
+          Path('.review-patches/release-verified-summary.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(report,ensure_ascii=False))
+          PY
+      - name: Collect the original regular PR CI independently
+        run: python3 .review-patches/collect-regular-ci.py
+      - name: Publish evidence only in the review workspace, preserving newer unrelated work
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin chore/nonbilling-quality-20260910
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          count=0
+          for file in .review-patches/release-verified-summary.json .review-patches/regular-ci-summary.json; do
+            if [ -f "$file" ]; then git add -f -- "$file"; count=$((count+1)); fi
+          done
+          test "$count" -gt 0
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: bind non-billing product files and regular CI to their original evidence' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/nonbilling-quality-20260910
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nonbilling-final-evidence-summaries
+          path: |
+            .review-patches/release-verified-summary.json
+            .review-patches/regular-ci-summary.json
+          retention-days: 7
+          if-no-files-found: warn
