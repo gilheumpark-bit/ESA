@@ -1,0 +1,70 @@
+name: Integrated non-billing quality
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-integrated.yml', '.review-patches/final-corrections.py']
+concurrency:
+  group: nonbilling-integrated
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply bounded reviewed integrations
+        run: |
+          python3 .review-patches/connect-resources.py
+          python3 .review-patches/connect-search.py
+          python3 .review-patches/connect-admin.py
+          python3 .review-patches/connect-project-actions.py
+          python3 .review-patches/connect-field.py
+          python3 .review-patches/connect-ocr.py
+          python3 .review-patches/refine-nonbilling.py
+          python3 .review-patches/connect-search-evidence.py
+          python3 .review-patches/connect-history.py
+          python3 .review-patches/connect-compare-standards.py
+          if [ -f .review-patches/final-corrections.py ]; then python3 .review-patches/final-corrections.py; fi
+          git diff --check
+          npm ci > /tmp/nonbilling-install.log 2>&1 || { tail -80 /tmp/nonbilling-install.log; exit 1; }
+      - name: Types and zero-warning lint
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+      - name: Full Jest and script regression
+        run: |
+          npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/nonbilling-jest.json > /tmp/nonbilling-jest.log 2>&1 || { tail -180 /tmp/nonbilling-jest.log; exit 1; }
+          node - <<'JS'
+          const r=require('/tmp/nonbilling-jest.json');console.log('JEST',JSON.stringify({passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suites:r.numPassedTestSuites,failedSuites:r.numFailedTestSuites}));
+          JS
+          npm run test:scripts > /tmp/nonbilling-scripts.log 2>&1 || { tail -100 /tmp/nonbilling-scripts.log; exit 1; }
+          tail -15 /tmp/nonbilling-scripts.log
+      - name: Preserve integrated diagnostics
+        if: always()
+        run: |
+          git diff -- src scripts e2e docs > /tmp/nonbilling-applied.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nonbilling-integrated-tests
+          path: |
+            /tmp/nonbilling-jest.json
+            /tmp/nonbilling-jest.log
+            /tmp/nonbilling-scripts.log
+            /tmp/nonbilling-applied.diff
+          retention-days: 3
+          if-no-files-found: warn
