@@ -8,6 +8,7 @@ import { applyDrawingCorrection } from '@/agent/drawing/apply-drawing-correction
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
+import { CorrectionRequestError, readDrawingCorrectionRequest, matchesCorrectionReplay, type DrawingCorrectionRequest } from '@/lib/drawing-correction-request';
 import { withRequestLog } from '@/lib/api/with-request-log';
 
 export const runtime = 'nodejs';
@@ -35,29 +36,22 @@ async function POST__impl(
     return privateJson({ success: false, error: { message: 'job not found' } }, { status: 404 });
   }
 
-  const body = await req.json().catch(() => null) as {
-    targetDisplayId?: string;
-    originalCandidates?: string[];
-    selectedValue?: string;
-    correctionKind?: 'text' | 'type' | 'label';
-    expectedUpdatedAt?: string;
-    idempotencyKey?: string;
-  } | null;
-
-  if (!body?.targetDisplayId || !/^P\d{2,}-[STL]\d{3,}$/.test(body.targetDisplayId)
-    || !body.selectedValue || body.selectedValue.length > 200 || /[\u0000-\u001f]/.test(body.selectedValue)
-    || !body.correctionKind || !['text', 'type', 'label'].includes(body.correctionKind)
-    || !body.expectedUpdatedAt || Number.isNaN(Date.parse(body.expectedUpdatedAt))
-    || !body.idempotencyKey || !/^[a-zA-Z0-9_-]{8,128}$/.test(body.idempotencyKey)) {
-    return privateJson({ success: false, error: { message: '수정 대상, 종류, 문서 버전 및 요청 고유키가 필요합니다.' } }, { status: 400 });
+  let body: DrawingCorrectionRequest;
+  try { body = await readDrawingCorrectionRequest(req); }
+  catch (error) {
+    if (!(error instanceof CorrectionRequestError)) throw error;
+    return privateJson({ success: false, error: { code: error.code, message: error.message } }, { status: error.status });
   }
   const existing = job.document.userCorrections.find((item) => item.idempotencyKey === body.idempotencyKey);
+  if (existing && !matchesCorrectionReplay(existing, body)) {
+    return privateJson({ success: false, error: { code: 'IDEMPOTENCY_CONFLICT', message: '이미 다른 수정에 사용한 요청 고유키입니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
+  }
   if (existing) return privateJson({ success: true, data: { correction: existing, document: job.document, resumeAvailable: job.document.jobStatus === 'PARTIAL' && Boolean(job.sourceLease) } });
   if (!['COMPLETE', 'PARTIAL'].includes(job.status)) {
     return privateJson({ success: false, error: { message: '분석 진행 중에는 결과를 수정할 수 없습니다. 분석이 끝난 뒤 다시 시도해 주세요.' } }, { status: 409 });
   }
   if (job.document.updatedAt !== body.expectedUpdatedAt) {
-    return privateJson({ success: false, error: { message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
+    return privateJson({ success: false, error: { code: 'STALE_DOCUMENT', message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
   }
   const textTarget = job.document.evidenceGraph.texts.find((item) => item.displayId === body.targetDisplayId);
   const symbolTarget = job.document.evidenceGraph.symbols.find((item) => item.displayId === body.targetDisplayId);
@@ -79,7 +73,7 @@ async function POST__impl(
   const correction = document.userCorrections.at(-1)!;
 
   const updated = updateOwnedJobIfDocumentVersion(jobId, owner.ownerId, body.expectedUpdatedAt, { document, status: document.jobStatus });
-  if (!updated) return privateJson({ success: false, error: { message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
+  if (!updated) return privateJson({ success: false, error: { code: 'STALE_DOCUMENT', message: '다른 수정이 먼저 반영되었습니다. 최신 결과를 확인한 뒤 다시 시도해 주세요.' } }, { status: 409 });
   return privateJson({
     success: true,
     data: {

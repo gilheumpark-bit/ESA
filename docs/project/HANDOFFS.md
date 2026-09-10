@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-09-10
+
+- [프런트·백엔드 연결과 미확정 검토 화면 개선](handoffs/2026-09-10-fullstack-review-workspace.md)
+
 ## 2026-09-09
 
 - [사람 피드백의 다음 DXF 연계·정격/페이지 연결 정밀도](handoffs/2026-09-09-feedback-precision.md)
