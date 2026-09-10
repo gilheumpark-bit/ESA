@@ -9,23 +9,32 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Read preserved run output without rerunning tests
+      - name: Collect completed verification, not a new test sample
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh run download 34496785112 --repo gilheumpark-bit/ESA --name nonbilling-release-verification --dir /tmp/nonbilling-diagnostic
-          gh api repos/gilheumpark-bit/ESA/actions/runs/34496785112 > /tmp/nonbilling-run.json
+          python3 - <<'PY'
+          import json,subprocess,time
+          from pathlib import Path
+          for attempt in range(12):
+              run=json.loads(subprocess.check_output(['gh','api','repos/gilheumpark-bit/ESA/actions/runs/34498274868'],text=True))
+              assert run['head_sha']=='635a5a94f2eacc9a7823a42f2f918a40c5bcd3e7'
+              if run['status']=='completed':break
+              time.sleep(15)
+          assert run['status']=='completed','source verification not yet complete'
+          Path('/tmp/nonbilling-run.json').write_text(json.dumps(run))
+          PY
+          gh run download 34498274868 --repo gilheumpark-bit/ESA --name nonbilling-release-verification --dir /tmp/nonbilling-diagnostic
           python3 - <<'PY'
           from pathlib import Path
           import json,hashlib,tarfile
           root=Path('/tmp/nonbilling-diagnostic')
           run=json.loads(Path('/tmp/nonbilling-run.json').read_text())
-          assert run['head_sha']=='b401db215b178ce39eb86770a4fb288f2647a161'
           report={'runId':run['id'],'headSha':run['head_sha'],'status':run['status'],'conclusion':run['conclusion'],'scope':'Preserved run output only; no new test execution'}
           def one(name):
             matches=list(root.rglob(name))
@@ -50,10 +59,8 @@ jobs:
               value={'stats':value.get('stats'),'executions':len(attempts),'everyFirstAttemptPassed':bool(attempts) and all(t['status']=='expected' and t['attempts']==['passed'] for t in attempts),'failures':failures,'errors':value.get('errors',[])}
             report[key]=value
           for filename in ['nonbilling-production-audit.log','nonbilling-all-audit.log','nonbilling-scripts.log','nonbilling-pdf.log']:
-            p=one(filename)
-            report[filename]=p.read_text()[-4500:] if p else 'not recorded'
-          p=one('nonbilling-prepared-sha.txt')
-          report['preparedSha']=p.read_text().strip() if p else None
+            p=one(filename);report[filename]=p.read_text()[-4500:] if p else 'not recorded'
+          p=one('nonbilling-prepared-sha.txt');report['preparedSha']=p.read_text().strip() if p else None
           hashes=one('nonbilling-hashes.json'); source=one('nonbilling-product-source.tar.gz')
           if hashes and source:
             expected=json.loads(hashes.read_text()); checked=[]
@@ -61,8 +68,7 @@ jobs:
               for member in archive.getmembers():
                 if not member.isfile():continue
                 assert member.name in expected
-                contents=archive.extractfile(member).read()
-                assert hashlib.sha256(contents).hexdigest()==expected[member.name],member.name
+                assert hashlib.sha256(archive.extractfile(member).read()).hexdigest()==expected[member.name],member.name
                 checked.append(member.name)
             assert set(checked)==set(expected)
             report['sourceArchive']={'verifiedFiles':len(checked),'allManifestHashesMatch':True,'paths':sorted(checked)}
@@ -70,10 +76,10 @@ jobs:
           target.write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
           print(target.read_text())
           PY
-      - name: Publish diagnostic evidence in isolated work branch
+      - name: Publish diagnostic summary only in the isolated work branch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -f .review-patches/validation-summary.json
-          git commit -m 'test: preserve current non-billing results and product archive verification'
+          git commit -m 'test: retain final non-billing gate evidence and source archive verification'
           git push origin HEAD:refs/heads/chore/nonbilling-quality-20260910
