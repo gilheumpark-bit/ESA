@@ -1,0 +1,138 @@
+{
+  "runId": 34496785112,
+  "headSha": "b401db215b178ce39eb86770a4fb288f2647a161",
+  "status": "completed",
+  "conclusion": "failure",
+  "scope": "Preserved run output only; no new test execution",
+  "scopeCheck": {
+    "base": "dd4be8d5b39030390e23131adf3c442cd225da1c",
+    "changedFiles": 49,
+    "protectedPaymentFiles": 13,
+    "paymentUnchanged": true,
+    "dependenciesUnchanged": true
+  },
+  "jest": {
+    "success": true,
+    "numPassedTests": 4632,
+    "numFailedTests": 0,
+    "numPendingTests": 7,
+    "numPassedTestSuites": 370,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 2
+  },
+  "browser": {
+    "stats": {
+      "startTime": "2026-09-10T15:40:47.125Z",
+      "duration": 191220.092,
+      "expected": 131,
+      "skipped": 0,
+      "unexpected": 2,
+      "flaky": 0
+    },
+    "executions": 133,
+    "everyFirstAttemptPassed": false,
+    "failures": [
+      {
+        "file": "nonbilling-review-forms.spec.ts",
+        "title": "missing OCR fields can be completed without losing original evidence (1440px)",
+        "status": "unexpected",
+        "results": [
+          {
+            "status": "failed",
+            "errors": [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts",
+                  "column": 60,
+                  "line": 16
+                },
+                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText(/복수 값·범위·미확정 표기/).first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText(/복수 값·범위·미확정 표기/).first()\u001b[22m\n\n\n  14 |       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMqoAAAAASUVORK5CYII=', 'base64') });\n  15 |     await page.getByRole('button', { name: '명판 분석하기', exact: true }).click();\n> 16 |     await expect(page.getByText(/복수 값·범위·미확정 표기/).first()).toBeVisible();\n     |                                                            ^\n  17 |     await expect(page.getByText(/kA 값은 차단용량일 수 있습니다/)).toBeVisible();\n  18 |     await page.getByText('미기재·미판독 항목 보완', { exact: true }).click();\n  19 |     const missing = page.locator('details').filter({ hasText: '미기재·미판독 항목 보완' });\n    at /home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts:16:60"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "file": "nonbilling-review-forms.spec.ts",
+        "title": "missing OCR fields can be completed without losing original evidence (390px)",
+        "status": "unexpected",
+        "results": [
+          {
+            "status": "failed",
+            "errors": [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts",
+                  "column": 60,
+                  "line": 16
+                },
+                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText(/복수 값·범위·미확정 표기/).first()\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText(/복수 값·범위·미확정 표기/).first()\u001b[22m\n\n\n  14 |       buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMqoAAAAASUVORK5CYII=', 'base64') });\n  15 |     await page.getByRole('button', { name: '명판 분석하기', exact: true }).click();\n> 16 |     await expect(page.getByText(/복수 값·범위·미확정 표기/).first()).toBeVisible();\n     |                                                            ^\n  17 |     await expect(page.getByText(/kA 값은 차단용량일 수 있습니다/)).toBeVisible();\n  18 |     await page.getByText('미기재·미판독 항목 보완', { exact: true }).click();\n  19 |     const missing = page.locator('details').filter({ hasText: '미기재·미판독 항목 보완' });\n    at /home/runner/work/ESA/ESA/e2e/nonbilling-review-forms.spec.ts:16:60"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "errors": []
+  },
+  "nonbilling-production-audit.log": "\n> esva@0.2.0 gate:audit\n> node scripts/audit-baseline-gate.mjs\n\naudit-gate PASS [production] — critical 0 · high 0 · total 0 (critical/high 허용 0)\n",
+  "nonbilling-all-audit.log": "\n> esva@0.2.0 gate:audit:all\n> node scripts/audit-baseline-gate.mjs --include-dev\n\naudit-gate PASS [all] — critical 0 · high 0 · total 0 (critical/high 허용 0)\n",
+  "nonbilling-scripts.log": "efix \"-\" (0.310758ms)\n✔ CSV neutralizes spreadsheet formula prefix \"@\" (0.375717ms)\n✔ CSV neutralizes spreadsheet formula prefix \"\\t=\" (0.388622ms)\n✔ CSV neutralizes spreadsheet formula prefix \"\\r=\" (0.383192ms)\n✔ CSV neutralizes spreadsheet formula prefix \"  =\" (0.401416ms)\n✔ CSV neutralizes spreadsheet formula prefix \"＝\" (0.296831ms)\n✔ CSV neutralizes spreadsheet formula prefix \"＋\" (0.289007ms)\n✔ CSV neutralizes spreadsheet formula prefix \"－\" (0.216312ms)\n✔ CSV neutralizes spreadsheet formula prefix \"＠\" (0.148435ms)\n✔ exports beyond 5000 rows include the final finding and never silently lose safety items (20.34296ms)\n✔ includes rated values and calculation receipts in the work product (1.640457ms)\n✔ export preserves readable provenance, title and source revision (0.222653ms)\n✔ HTML export never executes an untrusted label (0.957538ms)\n✔ resume preserves resolved alternatives, terminals, geometry provenance and evidence IDs (0.888991ms)\n✔ resume excludes unfinished pages, cross-page evidence and empty checkpoints (0.266956ms)\n✔ report refuses an oversized export explicitly rather than returning a partial list (16.522135ms)\n✔ 서로 다른 워크스페이스 스냅샷의 모델 결과는 직접 비교 불가로 봉인한다 (2.315558ms)\n✔ 동일 스냅샷 결과만 있으면 모델 비교가 유효하다 (0.192197ms)\n✔ 하한을 크게 넘긴 관계는 종합 점수를 만들어 내지 않는다 (1.873548ms)\n✔ 최소 수량 관문은 기호 정확도를 올리지 않는다 (0.404501ms)\n✔ 하한 미달은 감점이 아니라 관문 실패로 드러난다 (0.402156ms)\n✔ 정답이 0인 환각 축은 하나라도 검출되면 0점이다 (0.281613ms)\n✔ 정확 수량 축이 하나도 없으면 점수를 지어내지 않는다 (0.348066ms)\n✔ 대표값은 평균이 아니라 최저점이다 (6.170013ms)\n✔ 대표 회차는 최저 종합 회차이며 동점이면 먼저 실행한 쪽이다 (4.99404ms)\n✔ 한 회차라도 못 돌면 셀 전체가 그 상태다 (0.357413ms)\n✔ 한 회차라도 PASS 가 아니면 셀은 PASS 가 아니다 (0.418306ms)\n✔ 기호 타입별로 어느 축이 흔들리는지 남긴다 (0.457499ms)\n✔ 1회 실행은 종전과 같은 단일 수치로 적는다 (0.302572ms)\n✔ 2회 이상은 최저~최고로 적어 단발로 오독되지 않게 한다 (2.77475ms)\n✔ 빈 회차 묶음은 조용히 통과시키지 않는다 (0.649455ms)\n✔ benchmark receipt preserves review, KEC proposals, calculations, and topology (1.670651ms)\n✔ skipped or absent review is recorded as HOLD rather than success (0.166359ms)\n✔ empty, warning, unverified scan, or topology-defective reviews never become PASS (0.405162ms)\n✔ V3 도면을 추론 단계별 PASS/HOLD/FAIL 영수증으로 분리한다 (2.032111ms)\n✔ 모호성은 HOLD로 남기고 구조 계약 위반은 FAIL로 구분한다 (0.975561ms)\n✔ 기호 근거 없이 래스터 선만 검출된 결과는 공간 분석 PASS가 아니다 (0.415821ms)\n✔ 근거가 없는 SUPPORTED 제안과 허위 verified95는 최종 단계에서 실패한다 (0.39859ms)\n✔ 사전 고정 라벨과 수량·관계가 다르면 해당 추론 단계를 FAIL로 기록한다 (0.656659ms)\n✔ 동일 차단기 별칭은 같은 기호 유형으로 집계한다 (0.825903ms)\n✔ disconnector·isolator 별칭은 스위치 축으로 집계한다 (0.460845ms)\n✔ VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한다 (0.394643ms)\n✔ cutout_switch는 제품 정본과 같이 fuse 골든 축으로 집계한다 (0.274109ms)\n✔ 모든 닫힌 DeviceType의 골든 축이 계열 접기 규칙과 일치한다 (119.102381ms)\n✔ repeat=3 resume은 같은 설정의 1회 영수증을 재사용하지 않는다 (0.656499ms)\n✔ disconnecting_switch·DS 도 switch 골든 축으로 집계한다 (0.692987ms)\n✔ lightning_arrester·LA 도 arrester 골든 축으로 집계한다 (0.503816ms)\n✔ surge_arrester는 arrester 골든 축으로 집계한다 (0.243052ms)\n✔ 미확정 물리 수량 null은 판독된 기호 수량을 0으로 덮어쓰지 않는다 (0.532629ms)\n✔ 권선 기호 수가 아니라 물리 변압기 대수로 장치 라벨을 판정한다 (0.525176ms)\n✔ 경계 연속선 영수증은 내부 ID와 표시 ID 중 어느 쪽으로도 결박된다 (0.321818ms)\n✔ 실행은 끝났지만 근거가 부족한 부분 페이지와 감사 결과는 FAIL이 아니라 HOLD다 (0.387208ms)\n✔ 래스터 페이지 종류가 미분류여도 판독 실행이 완결되면 페이지 조사는 PASS다 (0.252169ms)\n✔ 실패 뒤 성공한 역할 재시도는 최종 커버리지 실패로 채점하지 않는다 (0.223415ms)\n✔ rejects tracked residue .audit/apply.py (1.995714ms)\n✔ rejects tracked residue .performance-lab/patch.b64 (0.240506ms)\n✔ rejects tracked residue .remaining-support/fix.py (0.185093ms)\n✔ rejects tracked residue .review-patches/0.b64 (0.13478ms)\n✔ rejects tracked residue .cleanup/script.py (0.204079ms)\n✔ rejects tracked residue .tmp-sld-live/file.json (0.22079ms)\n✔ rejects tracked residue test-results/private.json (0.191545ms)\n✔ rejects tracked residue playwright-report/index.html (0.208297ms)\n✔ rejects tracked residue .next/cache/data (0.21586ms)\n✔ rejects tracked residue .env (0.256847ms)\n✔ rejects tracked residue .env.local (0.225528ms)\n✔ rejects tracked residue nested/.env.production (0.171769ms)\n✔ rejects tracked residue src/file.ts.orig (0.170667ms)\n✔ rejects tracked residue types.tsbuildinfo (0.114853ms)\n✔ rejects tracked residue src/file.ts~ (0.136002ms)\n✔ preserves maintained tooling, example config, original fixtures and historical manuals (0.732049ms)\n✔ handles Windows separators, unusual filenames and duplicates deterministically (0.349268ms)\n✔ actual Git inventory excludes untracked output but fails if it is staged (164.143193ms)\n✔ cannot claim a clean repository when Git inventory fails (53.414042ms)\nℹ tests 164\nℹ suites 0\nℹ pass 164\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1397.464188\n",
+  "nonbilling-pdf.log": "\n> esva@0.2.0 gate:pdf\n> node scripts/pdf-fixture-gate.mjs http://127.0.0.1:3010\n\nPDF fixture gate → http://127.0.0.1:3010/api/pdf-drawing\n  PASS R1/R2/R5 회로형: 200 + TR/MCCB + 결선≥1 + conf 0.85\n  PASS R3/R3b 표제란만: conf 0.3 + 설비 환각 0\n  PASS R7 표 격자: 결선>0인데 conf 0.55 강등 + 사유 명시\n  PASS 페인트 필터: fill 전용 경로는 선분 0 → conf 0.3\n  PASS R3c 키워드 없는 스펙/표제란 → phantom 0 + 가짜 계산 0\n  PASS R8 단독 G≠발전기 · GEN=발전기 1건\n  PASS R8b 단독 M≠모터(스펙 무) · \"M 5.5KW\"=모터 1건\n  PASS R6 12MB 대용량: 프록시 절단 없이 200 파싱\n  PASS 비PDF: 500이 아니라 400 정직 거부\n  PASS R9 표 문서(표제≥2): conf 0.55 강등 + 사유 명시\n  PASS R10 주석 문장≠장치 · 실라벨 VCB 630A=차단기 1건\n  PASS R11 가공 길이 0 + 길이 의존 계산 0\n  PASS R12 회전 도면: TR/MCCB 검출 + 결선≥1 유지\n  PASS R13 검토 사슬: 200AT vs 4sq → CABLE-AMPACITY FAIL + KEC 출처 결박\n  PASS R13b AT>AF 표기 오류 FAIL 검출\n  PASS R14 표 문서→판정: conf 0.55 강등에도 표 행으로 CABLE-AMPACITY FAIL + AT>AF FAIL 산출(생략 아님)\n  PASS R15 절연 미상 케이블(10sq)은 XLPE 낙관 PASS가 아니라 UNKNOWN(CRITICAL false-PASS 차단)\n\nGATE PASS (17/17)\n",
+  "preparedSha": null,
+  "sourceArchive": {
+    "verifiedFiles": 49,
+    "allManifestHashesMatch": true,
+    "paths": [
+      "docs/project/HANDOFFS.md",
+      "docs/project/handoffs/2026-09-10-nonbilling-feature-quality.md",
+      "e2e/frontend-project-controls.spec.ts",
+      "e2e/nonbilling-quality.spec.ts",
+      "e2e/nonbilling-review-forms.spec.ts",
+      "src/app/(with-nav)/admin/page.tsx",
+      "src/app/(with-nav)/community/page.tsx",
+      "src/app/(with-nav)/compare/page.tsx",
+      "src/app/(with-nav)/dashboard/page.tsx",
+      "src/app/(with-nav)/field/page.tsx",
+      "src/app/(with-nav)/history/page.tsx",
+      "src/app/(with-nav)/projects/[id]/page.tsx",
+      "src/app/(with-nav)/projects/page.tsx",
+      "src/app/(with-nav)/search/page.tsx",
+      "src/app/(with-nav)/standards/page.tsx",
+      "src/app/(with-nav)/tools/ocr/page.tsx",
+      "src/app/api/__tests__/body-parse-guard.test.ts",
+      "src/app/api/admin/audit/__tests__/route.test.ts",
+      "src/app/api/admin/audit/route.ts",
+      "src/app/api/admin/route.ts",
+      "src/app/api/dashboard/route.ts",
+      "src/app/api/field/__tests__/safety-persistence.test.ts",
+      "src/app/api/field/complete/route.ts",
+      "src/app/api/field/sos/route.ts",
+      "src/app/api/notifications/route.ts",
+      "src/app/api/search/route.ts",
+      "src/components/FeatureDialog.tsx",
+      "src/components/Header.tsx",
+      "src/components/NotificationBell.tsx",
+      "src/hooks/useFeatureResource.ts",
+      "src/lib/__tests__/feature-auth.test.ts",
+      "src/lib/__tests__/nonbilling-ai-retrieval.test.ts",
+      "src/lib/__tests__/nonbilling-record-contracts.test.ts",
+      "src/lib/__tests__/nonbilling-resource-contracts.test.ts",
+      "src/lib/__tests__/vision-byok-model.test.ts",
+      "src/lib/electrical-chat-client.ts",
+      "src/lib/feature-auth.ts",
+      "src/lib/feature-output.ts",
+      "src/lib/feature-read-models.ts",
+      "src/lib/feature-request.ts",
+      "src/lib/field-record-contract.ts",
+      "src/lib/history-read-model.ts",
+      "src/lib/nameplate-review.ts",
+      "src/lib/rag-pipeline.ts",
+      "src/lib/single-flight-resource.ts",
+      "src/lib/vision-byok.ts",
+      "src/lib/weaviate.ts",
+      "src/search/eng-rank.ts",
+      "src/search/types.ts"
+    ]
+  }
+}
