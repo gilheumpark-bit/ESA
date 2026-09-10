@@ -5,27 +5,27 @@ def rep(name, old, new, count=1):
 
 p='e2e/nonbilling-quality.spec.ts'
 rep(p,"name: '감사로그', exact: true", "name: '감사 로그', exact: true")
-rep(p,"page.getByRole('alert')).toContainText('합성 커뮤니티티 장애')", "page.getByRole('main').getByRole('alert')).toContainText('합성 커뮤니티티 장애')",0) if False else None
 rep(p,"page.getByRole('alert')).toContainText('합성 커뮤니티 장애')", "page.getByRole('main').getByRole('alert')).toContainText('합성 커뮤니티 장애')")
 p='e2e/nonbilling-review-forms.spec.ts'
 rep(p,"page.getByText(/복수 값·범위·미확정 표기/)).toBeVisible()", "page.getByText(/복수 값·범위·미확정 표기/).first()).toBeVisible()")
+rep(p,"page.locator('input[type=\"file\"]').setInputFiles", "page.locator('input[accept=\"image/jpeg,image/png,image/webp\"]').setInputFiles")
 
 p='src/components/Header.tsx'
 rep(p,"import ThemeToggle from '@/components/ThemeToggle';", "import ThemeToggle from '@/components/ThemeToggle';\nimport NotificationBell from '@/components/NotificationBell';")
 rep(p,'<ThemeToggle />','<NotificationBell />\n          <ThemeToggle />')
 rep(p,'mx-auto flex h-14 max-w-7xl items-center gap-3 px-4','mx-auto flex h-14 min-w-0 max-w-7xl items-center gap-1 px-3 sm:gap-3 sm:px-4')
 
-# Preserve the user's explicit local AI selection and propagate cancellation.
+# Distinguish a service-unavailable status from a malformed/unknown response.
+# Both retain contextual guidance and never select another provider silently.
 for name in ['src/lib/electrical-chat-client.ts','src/lib/vision-byok.ts']:
  p=Path(name);s=p.read_text();a=s.index("const status = await requestFeatureJson('/api/settings/chatgpt-local'")
  b=s.index('if (!status.available)',a)
  block=s[a:b];i=block.rfind('});')
  assert i>=0 and not block[i+3:].strip(),name
- block=block[:i]+"}).catch((error: unknown) => {\n      signal?.throwIfAborted();\n      throw new Error(`계정 상태 확인 실패: ${error instanceof Error ? error.message : '로컬 연결을 확인해 주세요.'}`);\n    });"+block[i+3:]
+ block=block[:i]+"}).catch((error: unknown) => {\n      signal?.throwIfAborted();\n      const unavailable = error instanceof Error && 'status' in error && error.status === 503;\n      throw new Error(`계정 상태 확인 실패: ${unavailable ? '로컬 Codex를 사용할 수 없습니다. ' : ''}${error instanceof Error ? error.message : '로컬 연결을 확인해 주세요.'}`);\n    });"+block[i+3:]
  p.write_text(s[:a]+block+s[b:])
 
-# Keep the audit filter controls mounted while their request is pending. A
-# disappearing search input loses focus after the first typed character.
+# Do not unmount audit controls while searching, or fall back to stale rows.
 p='src/app/(with-nav)/admin/page.tsx'
 rep(p,'  entries: initialEntries,','  entries: _initialEntries,')
 rep(p,'  const entries = resource.data?.entries ?? initialEntries;','  const entries = resource.data?.entries ?? [];')
@@ -50,8 +50,6 @@ s=s.replace('className="flex items-center justify-between"','className="flex fle
 s=s.replace('className="flex items-center gap-1"','className="flex flex-wrap items-center gap-1"')
 p.write_text(s)
 
-# Exercise typing while requests are active, not just fill() that changes the
-# complete value in one event. The input must retain focus and the full query.
 p='e2e/nonbilling-quality.spec.ts'
 rep(p,"    const requested: string[] = [];", "    const requested: string[] = [];\n    const searched: string[] = [];")
 rep(p,"      const p = new URL(route.request().url()).searchParams.get('page') ?? '1'; requested.push(p);", "      const params = new URL(route.request().url()).searchParams;\n      const p = params.get('page') ?? '1'; requested.push(p); searched.push(params.get('search') ?? '');")
@@ -68,6 +66,8 @@ p.write_text(p.read_text()+'''
 
 준비 실행 34492070759는 단위 4,632건과 스크립트164/PDF17을 통과한 뒤 브라우저에서 실패했다. 로컬 계정 상태 오류의 문맥 안내가 사라진 경로, 알림 컴포넌트가 실제 헤더에 연결되지 않은 경로, 모바일 관리자 표/필터 넘침을 수리했다. 오류는 계정 상태 확인 실패로 명시하되 다른 공급자로 자동 전환하지 않는다. 알림의 데이터는 기존 인증된 사용자 범위이며 결제 역할·요금제·가격은 변경하지 않았다.
 
-OCR 신규 검사의 반복 안내 선택자는 첫 실제 안내로 한정했고, 원본/수정값·미판독 보완·반출 단언을 유지했다. 감사로그 필터는 조회 중에도 유지해 한 글자를 입력한 뒤 초점이 사라지는 문제를 막고, 미완료/실패 조회를 0건으로 표시하거나 CSV로 반출하지 않는다. 브라우저에서 연속 키 입력과 초점 유지를 검사한다. 모바일 표는 내부 스크롤을 사용하고 문서 바깥 넘침을 숨겨 통과시키지 않는다.
+후속 실행 34495428044는 브라우저130통과/3실패였다. 503 로컬 서비스 사용 불가 안내를 단순 응답 형식 실패와 구분했고, 카메라·파일 업로드가 함께 있는 OCR 시험의 선택자를 실제 파일 선택 입력으로 한정했다. 반복 안내 선택자도 첫 실제 안내로 한정하되 원본/수정값·미판독 보완·반출 단언은 유지했다. 실패한 실행을 최종 성공으로 소급하지 않는다.
+
+감사로그 필터는 조회 중에도 유지해 한 글자를 입력한 뒤 초점이 사라지는 문제를 막고, 미완료/실패 조회를 0건으로 표시하거나 CSV로 반출하지 않는다. 브라우저에서 연속 키 입력과 초점 유지를 검사한다. 모바일 표는 내부 스크롤을 사용하고 문서 바깥 넘침을 숨겨 통과시키지 않는다.
 ''')
-print('Header notification, contextual AI errors, stable audit search, and honest loading/export states connected.')
+print('Local service status, actual OCR picker, stable admin search and all existing negative-path assertions preserved.')
