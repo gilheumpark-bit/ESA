@@ -1,0 +1,59 @@
+name: Non-billing feature validation
+on:
+  push:
+    branches: ['chore/nonbilling-quality-20260910']
+    paths: ['.github/workflows/nonbilling-check.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply exact source integrations
+        run: |
+          python3 .review-patches/connect-resources.py
+          python3 .review-patches/connect-search.py
+          python3 .review-patches/connect-admin.py
+          python3 .review-patches/connect-project-actions.py
+          python3 .review-patches/connect-field.py
+          python3 .review-patches/connect-ocr.py
+          git diff --check
+          npm ci > /tmp/nonbilling-install.log 2>&1 || { tail -60 /tmp/nonbilling-install.log; exit 1; }
+      - name: Types and lint
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+      - name: Complete Jest regression
+        run: |
+          npm test -- --ci --forceExit --json --outputFile=/tmp/nonbilling-jest.json > /tmp/nonbilling-jest.log 2>&1 || { tail -180 /tmp/nonbilling-jest.log; exit 1; }
+          node - <<'JS'
+          const r=require('/tmp/nonbilling-jest.json'); console.log('JEST',JSON.stringify({passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suites:r.numPassedTestSuites,failedSuites:r.numFailedTestSuites}));
+          JS
+      - name: Preserve applied diff and failure diagnostics
+        if: always()
+        run: |
+          git diff -- src scripts e2e docs > /tmp/nonbilling-applied.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: nonbilling-feature-validation
+          path: |
+            /tmp/nonbilling-jest.json
+            /tmp/nonbilling-jest.log
+            /tmp/nonbilling-applied.diff
+          retention-days: 3
+          if-no-files-found: warn
