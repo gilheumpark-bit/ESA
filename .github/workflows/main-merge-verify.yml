@@ -1,0 +1,152 @@
+name: Main merge verification
+on:
+  push:
+    branches: ['chore/main-merge-verify-20260911']
+    paths: ['.github/workflows/main-merge-verify.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+      MERGE_SHA: ea08a41e46bf5429ac1032c94eab1783c73b8aa0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ea08a41e46bf5429ac1032c94eab1783c73b8aa0
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Prove exact merge parents and reproduce the merge tree
+        run: |
+          mkdir -p /tmp/main-merge-evidence
+          python3 - <<'PY'
+          import subprocess,json,os
+          from pathlib import Path
+          def git(*args): return subprocess.check_output(['git',*args],text=True).strip()
+          expected=os.environ['MERGE_SHA']
+          assert git('rev-parse','HEAD')==expected
+          parents=git('show','-s','--format=%P','HEAD').split()
+          assert parents==['4e30ab6d3aa5d63197d61d58fdbe069e507e9d60','4375e40469674ce3bc6d3569af0154e8378138f9'],parents
+          for parent in parents: subprocess.run(['git','merge-base','--is-ancestor',parent,expected],check=True)
+          tree=git('rev-parse','HEAD^{tree}')
+          reconstructed=git('merge-tree','--write-tree',*parents).splitlines()[0]
+          assert reconstructed==tree,(reconstructed,tree)
+          paths=git('diff','--name-only',parents[0],expected).splitlines()
+          assert not any(p.startswith(('.review-patches/','.review-preview/')) for p in paths)
+          assert '.github/workflows/main-merge-verify.yml' not in git('ls-tree','-r','--name-only','HEAD').splitlines()
+          identity={'runId':os.environ['GITHUB_RUN_ID'],'mergeSha':expected,'parents':parents,'tree':tree,
+            'mergeTreeReproduced':True,'featureTree':git('rev-parse',parents[1]+'^{tree}'),
+            'changedFilesFromOldMain':len(paths),'temporaryWorkflowNotInMain':True,
+            'sourceClean':not git('status','--porcelain'),'runtime':subprocess.check_output(['node','--version'],text=True).strip(),
+            'browser':'Playwright Chromium; Browser plugin not available',
+            'scope':'Exact main merge; synthetic account/provider contracts, not external production service certification'}
+          assert identity['sourceClean']
+          Path('/tmp/main-merge-evidence/identity.json').write_text(json.dumps(identity,indent=2)+'\n')
+          print('MERGE_IDENTITY',json.dumps(identity))
+          PY
+      - name: Install exact locked dependencies
+        run: |
+          npm ci > /tmp/main-merge-evidence/install.log 2>&1 || { tail -80 /tmp/main-merge-evidence/install.log; exit 1; }
+          sed -n '1,85p' node_modules/next/dist/docs/01-app/02-guides/testing/playwright.md
+      - name: Repository, documentation, type and strict lint checks
+        run: |
+          npm run gate:hygiene > /tmp/main-merge-evidence/hygiene.log 2>&1 || { cat /tmp/main-merge-evidence/hygiene.log; exit 1; }
+          npm run check:docs > /tmp/main-merge-evidence/docs.log 2>&1 || { cat /tmp/main-merge-evidence/docs.log; exit 1; }
+          npx tsc --noEmit > /tmp/main-merge-evidence/types.log 2>&1 || { cat /tmp/main-merge-evidence/types.log; exit 1; }
+          npm run lint -- --max-warnings=0 > /tmp/main-merge-evidence/lint.log 2>&1 || { cat /tmp/main-merge-evidence/lint.log; exit 1; }
+      - name: Full tests with coverage, scripts and drawing contracts
+        run: |
+          SYMBOL_BENCH_OUTPUT=/tmp/main-merge-evidence/symbol-workload.json npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/main-merge-evidence/jest.json > /tmp/main-merge-evidence/jest.log 2>&1 || { tail -160 /tmp/main-merge-evidence/jest.log; exit 1; }
+          node - <<'JS'
+          const r=require('/tmp/main-merge-evidence/jest.json');console.log('JEST_SUMMARY',JSON.stringify({success:r.success,passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suitesPassed:r.numPassedTestSuites,suitesFailed:r.numFailedTestSuites,suitesSkipped:r.numPendingTestSuites}));
+          JS
+          npm run test:scripts > /tmp/main-merge-evidence/scripts.log 2>&1 || { tail -100 /tmp/main-merge-evidence/scripts.log; exit 1; }
+          tail -15 /tmp/main-merge-evidence/scripts.log
+          npm run gate:sld-v3-contract > /tmp/main-merge-evidence/sld-contract.log 2>&1 || { cat /tmp/main-merge-evidence/sld-contract.log; exit 1; }
+          npm run gate:snapshot > /tmp/main-merge-evidence/snapshot.log 2>&1 || { cat /tmp/main-merge-evidence/snapshot.log; exit 1; }
+      - name: Both audit scopes and production build
+        run: |
+          npm run gate:audit > /tmp/main-merge-evidence/audit-production.log 2>&1 || { cat /tmp/main-merge-evidence/audit-production.log; exit 1; }
+          npm run gate:audit:all > /tmp/main-merge-evidence/audit-all.log 2>&1 || { cat /tmp/main-merge-evidence/audit-all.log; exit 1; }
+          cat /tmp/main-merge-evidence/audit-production.log /tmp/main-merge-evidence/audit-all.log
+          npm run build > /tmp/main-merge-evidence/build.log 2>&1 || { tail -120 /tmp/main-merge-evidence/build.log; exit 1; }
+          npm run gate:chat-live > /tmp/main-merge-evidence/chat-receipt.log 2>&1 || { cat /tmp/main-merge-evidence/chat-receipt.log; exit 1; }
+          npx playwright install --with-deps chromium > /tmp/main-merge-evidence/chromium.log 2>&1 || { tail -60 /tmp/main-merge-evidence/chromium.log; exit 1; }
+      - name: Real PDF and all browser flows on independent servers, zero retries
+        run: |
+          pid=''
+          cleanup() { if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; pid=''; fi; }
+          trap cleanup EXIT
+          start_server() {
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$1" > "$2" 2>&1 &
+            pid=$!
+            for n in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || { cat "$2"; return 1; }
+              if curl -fsS "http://127.0.0.1:$1/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            cat "$2"; return 1
+          }
+          start_server 3010 /tmp/main-merge-evidence/pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010 > /tmp/main-merge-evidence/pdf.log 2>&1 || { cat /tmp/main-merge-evidence/pdf.log; exit 1; }
+          cat /tmp/main-merge-evidence/pdf.log
+          cleanup
+          start_server 3011 /tmp/main-merge-evidence/ui-server.log
+          set +e
+          BASE_URL=http://127.0.0.1:3011 SYMBOL_SCREEN_DIR=/tmp/main-merge-evidence/screens PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/main-merge-evidence/browser.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json > /tmp/main-merge-evidence/browser.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const fs=require('fs'),p='/tmp/main-merge-evidence/browser.json';
+          if(!fs.existsSync(p)){console.log(fs.readFileSync('/tmp/main-merge-evidence/browser.log','utf8').slice(-16000));process.exit(1);}
+          const r=JSON.parse(fs.readFileSync(p,'utf8'));console.log('BROWSER_SUMMARY',JSON.stringify(r.stats));
+          function visit(s){for(const spec of s.specs||[])for(const t of spec.tests||[])if(t.status!=='expected')console.log('BROWSER_FAILURE',spec.title,JSON.stringify(t.results).slice(0,20000));for(const child of s.suites||[])visit(child);}
+          for(const s of r.suites||[])visit(s);for(const e of r.errors||[])console.log('BROWSER_ERROR',e.message);
+          JS
+          test "$status" = 0
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Preserve summary without changing any main source
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,hashlib
+          from pathlib import Path
+          root=Path('/tmp/main-merge-evidence');root.mkdir(exist_ok=True)
+          p=root/'identity.json';summary=json.loads(p.read_text()) if p.exists() else {'mergeSha':os.environ['MERGE_SHA'],'runId':os.environ['GITHUB_RUN_ID']}
+          p=root/'jest.json'
+          if p.exists():
+            j=json.loads(p.read_text());summary['unit']={k:j.get(k) for k in ['success','numPassedTests','numFailedTests','numPendingTests','numPassedTestSuites','numFailedTestSuites','numPendingTestSuites']}
+          p=root/'browser.json'
+          if p.exists():
+            b=json.loads(p.read_text());rows=[];failures=[]
+            def visit(s):
+              for spec in s.get('specs',[]):
+                for test in spec.get('tests',[]):
+                  r={'title':spec['title'],'status':test.get('status'),'attempts':[v.get('status') for v in test.get('results',[])]};rows.append(r)
+                  if r['status']!='expected':failures.append({**r,'errors':[v.get('errors',[]) for v in test.get('results',[])]})
+              for child in s.get('suites',[]):visit(child)
+            for s in b.get('suites',[]):visit(s)
+            summary['browser']={'stats':b.get('stats'),'executions':len(rows),'everyFirstAttemptPassed':bool(rows) and all(r['status']=='expected' and r['attempts']==['passed'] for r in rows),'failures':failures,'errors':b.get('errors',[])}
+          summary['files']={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob('*') if p.is_file() and p.name!='summary.json'}
+          (root/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+          print('MAIN_MERGE_SUMMARY',json.dumps({k:v for k,v in summary.items() if k!='files'},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: main-merge-verification
+          path: |
+            /tmp/main-merge-evidence/
+            test-results/
+          retention-days: 14
+          if-no-files-found: warn
