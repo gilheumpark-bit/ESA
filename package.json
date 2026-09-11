@@ -57,7 +57,7 @@
     "@napi-rs/canvas": "1.0.2",
     "@stripe/stripe-js": "^9.12.1",
     "@supabase/supabase-js": "^2.112.3",
-    "ai": "^7.0.56",
+    "ai": "^7.0.93",
     "clsx": "^2.1.0",
     "dxf-parser": "^1.1.2",
     "exceljs": "^4.4.0",
