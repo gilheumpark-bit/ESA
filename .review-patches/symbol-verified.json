@@ -1,0 +1,179 @@
+{
+  "runId": "34554803586",
+  "sourceHead": "56089e0ba66375d3d3f6bf35811a978b8414f538",
+  "scope": "Original run evidence, not an independent accuracy evaluation",
+  "workload": {
+    "source": "production DXF parser on a declared synthetic family",
+    "scope": "Three workload sizes of the SAME family, not independent drawings. Timings include parsing and are not a service latency SLA.",
+    "results": [
+      {
+        "variantInstances": 1,
+        "originalTypeUnknown": 1,
+        "classifiedWithContext": 1,
+        "classifiedWithoutLibrary": 0,
+        "stats": {
+          "version": "symbol-context-v1",
+          "classified": 4,
+          "inferred": 1,
+          "review": 0,
+          "unread": 0,
+          "shapeComparisons": 1,
+          "reusedShapeComparisons": 0,
+          "uniqueBlockShapes": 3,
+          "additionalModelCalls": 0,
+          "scope": "observed-dxf-symbols"
+        },
+        "parseAndClassificationMs": 12.018
+      },
+      {
+        "variantInstances": 8,
+        "originalTypeUnknown": 8,
+        "classifiedWithContext": 8,
+        "classifiedWithoutLibrary": 0,
+        "stats": {
+          "version": "symbol-context-v1",
+          "classified": 11,
+          "inferred": 8,
+          "review": 0,
+          "unread": 0,
+          "shapeComparisons": 1,
+          "reusedShapeComparisons": 7,
+          "uniqueBlockShapes": 3,
+          "additionalModelCalls": 0,
+          "scope": "observed-dxf-symbols"
+        },
+        "parseAndClassificationMs": 8.167
+      },
+      {
+        "variantInstances": 32,
+        "originalTypeUnknown": 32,
+        "classifiedWithContext": 32,
+        "classifiedWithoutLibrary": 0,
+        "stats": {
+          "version": "symbol-context-v1",
+          "classified": 35,
+          "inferred": 32,
+          "review": 0,
+          "unread": 0,
+          "shapeComparisons": 1,
+          "reusedShapeComparisons": 31,
+          "uniqueBlockShapes": 3,
+          "additionalModelCalls": 0,
+          "scope": "observed-dxf-symbols"
+        },
+        "parseAndClassificationMs": 12.134
+      }
+    ]
+  },
+  "productHashes": {
+    "docs/project/HANDOFFS.md": "7fb4b725bc3a2b8344a04ddb02fe5cb3bd942dbd874285f0298ae5328905fae9",
+    "docs/project/handoffs/2026-09-11-symbol-classification-first.md": "a8d16cad2c2681a181b60cd2f64b3b0e41cda4dedbb6d2ea9a63e4ec716e4683",
+    "e2e/symbol-classification-first.spec.ts": "9c1dfea489796ebee7eeb2b6287df23983db002484e57f5f33a49d0cc52fcc3b",
+    "scripts/lib/ax-precision.node-test.mjs": "9e034b8b7d526bd4e427e4272b2692cbb183edf71971ff2e0bf8b6ea4fcf5464",
+    "scripts/lib/drawing-commercial.node-test.mjs": "6dd0b9789641cb19eb7f647fa5710d8e84d9c839190e534968005820f90b1777",
+    "src/agent/drawing/apply-drawing-correction.ts": "973002faae32fa4f984481625872a9b4c1dbc810795c35953bfcbce67eabd57c",
+    "src/agent/drawing/evidence-deduplicator.ts": "3b1fb25702e06674452d274ed3e6f28eccfab365d08ff0a3089b7f774eb67f9f",
+    "src/agent/drawing/team-result-adapter.ts": "328e4b138b780afc10e1f4f6872cdc1c8c495a97fc7ddd5a5c858652dc56db27",
+    "src/agent/drawing/types-v3.ts": "6bfa9584b06f8bd76660b51206f6dbf42415d709a0b191dc2b45691742a1f472",
+    "src/agent/teams/sld-team.ts": "caf5f4232997c3092cfde5a57b31287a5ac02ba1044b7a33e6019e2e798cded2",
+    "src/agent/teams/types.ts": "076d6fddfcba1b8e2eae66767241cec108324e59cb10b633ed7b34477428268f",
+    "src/app/(with-nav)/tools/sld/page.tsx": "4d4c34573dfcaeedfa08f2feb6b365549e04a45a0508159481c6f7d9780a408c",
+    "src/components/DrawingDocumentV3Report.tsx": "960d35237fd60b638c22ae91007285cacab15b946fca15547dc007a3c39d416b",
+    "src/components/SymbolClassificationResults.tsx": "aba6feceda0cdfba71873cfbfdb94af4cc76c92e4d386bb9820cb084cd5ae652",
+    "src/engine/topology/__tests__/symbol-classification-workload.test.ts": "3567c85cc813fd66fc61b4f22640502c5d2a36c4fb97f1fd19bb49ca475c84e9",
+    "src/engine/topology/__tests__/symbol-classification.test.ts": "650e70a2059032e298b2261b36c732861f215fd7a02495e3cf25e25fb88ab254",
+    "src/engine/topology/dxf-parser.ts": "6f023a691b2f536ac786ea84067913b5f443903b624bd4ab2926bae56da1f46d",
+    "src/engine/topology/symbol-classifier.ts": "703e027e7ed0d79ef52ee58b41e1f6fcc43a0d5e826a76cf7ef3c1d99a3aa614",
+    "src/engine/topology/test-support/symbol-classification-fixture.ts": "2ff0cf2142bdf97f351910de87e5d42ede296e29b11d1d424a86120c478a66d2",
+    "src/lib/__tests__/symbol-shape.test.ts": "d3b4d1ea9d65398454194b8f262db88fea5c8baa66e16c68018a49fdd504bc42",
+    "src/lib/export-drawing-document.ts": "c7311aa72f9567b18cfd17cb434b45e6e6ee31773c068334dc96996a4ed0cbc1",
+    "src/lib/sld-recognition.ts": "4024ba4f620720cd4e84de082baabf44cf01b47980bb9d04c159d22d21d9a107",
+    "src/lib/symbol-classification-correction.ts": "58437fe199b3aad9dac2a668071f0ba8d15ab1e3901a9814a4f34e9ec243dae7",
+    "src/lib/symbol-classification.ts": "8971009156a27259ca69bb906f4cb68652589af6ab3250821817262d60af7b92",
+    "src/lib/symbol-feedback.ts": "ab68ad7bb0047bdf6f00058c7b5abfe0031a019bd08fb44cfa69b12389e4fc6d",
+    "src/lib/symbol-shape.ts": "dc035bf094eaccd032426508e55e2bbf76dcda17ca7869a5fc00655bc46e5427"
+  },
+  "unit": {
+    "success": true,
+    "numPassedTests": 4692,
+    "numFailedTests": 0,
+    "numPendingTests": 7,
+    "numPassedTestSuites": 373,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 2
+  },
+  "browser": {
+    "stats": {
+      "startTime": "2026-09-11T02:33:54.705Z",
+      "duration": 194036.108,
+      "expected": 136,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "executions": 136,
+    "everyFirstAttemptPassed": true,
+    "failures": [],
+    "errors": []
+  },
+  "symbol-production-audit.log": "\n> esva@0.2.0 gate:audit\n> node scripts/audit-baseline-gate.mjs\n\naudit-gate PASS [production] — critical 0 · high 0 · total 0 (critical/high 허용 0)\n",
+  "symbol-all-audit.log": "\n> esva@0.2.0 gate:audit:all\n> node scripts/audit-baseline-gate.mjs --include-dev\n\naudit-gate PASS [all] — critical 0 · high 0 · total 0 (critical/high 허용 0)\n",
+  "symbol-pdf.log": "\n> esva@0.2.0 gate:pdf\n> node scripts/pdf-fixture-gate.mjs http://127.0.0.1:3010\n\nPDF fixture gate → http://127.0.0.1:3010/api/pdf-drawing\n  PASS R1/R2/R5 회로형: 200 + TR/MCCB + 결선≥1 + conf 0.85\n  PASS R3/R3b 표제란만: conf 0.3 + 설비 환각 0\n  PASS R7 표 격자: 결선>0인데 conf 0.55 강등 + 사유 명시\n  PASS 페인트 필터: fill 전용 경로는 선분 0 → conf 0.3\n  PASS R3c 키워드 없는 스펙/표제란 → phantom 0 + 가짜 계산 0\n  PASS R8 단독 G≠발전기 · GEN=발전기 1건\n  PASS R8b 단독 M≠모터(스펙 무) · \"M 5.5KW\"=모터 1건\n  PASS R6 12MB 대용량: 프록시 절단 없이 200 파싱\n  PASS 비PDF: 500이 아니라 400 정직 거부\n  PASS R9 표 문서(표제≥2): conf 0.55 강등 + 사유 명시\n  PASS R10 주석 문장≠장치 · 실라벨 VCB 630A=차단기 1건\n  PASS R11 가공 길이 0 + 길이 의존 계산 0\n  PASS R12 회전 도면: TR/MCCB 검출 + 결선≥1 유지\n  PASS R13 검토 사슬: 200AT vs 4sq → CABLE-AMPACITY FAIL + KEC 출처 결박\n  PASS R13b AT>AF 표기 오류 FAIL 검출\n  PASS R14 표 문서→판정: conf 0.55 강등에도 표 행으로 CABLE-AMPACITY FAIL + AT>AF FAIL 산출(생략 아님)\n  PASS R15 절연 미상 케이블(10sq)은 XLPE 낙관 PASS가 아니라 UNKNOWN(CRITICAL false-PASS 차단)\n\nGATE PASS (17/17)\n",
+  "symbol-scripts.log": "evidence and empty checkpoints (0.315179ms)\n✔ report refuses an oversized export explicitly rather than returning a partial list (18.316303ms)\n✔ 서로 다른 워크스페이스 스냅샷의 모델 결과는 직접 비교 불가로 봉인한다 (1.772179ms)\n✔ 동일 스냅샷 결과만 있으면 모델 비교가 유효하다 (0.199342ms)\n✔ 하한을 크게 넘긴 관계는 종합 점수를 만들어 내지 않는다 (2.016145ms)\n✔ 최소 수량 관문은 기호 정확도를 올리지 않는다 (0.260126ms)\n✔ 하한 미달은 감점이 아니라 관문 실패로 드러난다 (0.221123ms)\n✔ 정답이 0인 환각 축은 하나라도 검출되면 0점이다 (0.269914ms)\n✔ 정확 수량 축이 하나도 없으면 점수를 지어내지 않는다 (0.313155ms)\n✔ 대표값은 평균이 아니라 최저점이다 (2.750065ms)\n✔ 대표 회차는 최저 종합 회차이며 동점이면 먼저 실행한 쪽이다 (1.211362ms)\n✔ 한 회차라도 못 돌면 셀 전체가 그 상태다 (0.29992ms)\n✔ 한 회차라도 PASS 가 아니면 셀은 PASS 가 아니다 (0.266618ms)\n✔ 기호 타입별로 어느 축이 흔들리는지 남긴다 (0.462364ms)\n✔ 1회 실행은 종전과 같은 단일 수치로 적는다 (0.242142ms)\n✔ 2회 이상은 최저~최고로 적어 단발로 오독되지 않게 한다 (0.239928ms)\n✔ 빈 회차 묶음은 조용히 통과시키지 않는다 (0.676203ms)\n✔ benchmark receipt preserves review, KEC proposals, calculations, and topology (3.344756ms)\n✔ skipped or absent review is recorded as HOLD rather than success (0.237313ms)\n✔ empty, warning, unverified scan, or topology-defective reviews never become PASS (0.47654ms)\n✔ V3 도면을 추론 단계별 PASS/HOLD/FAIL 영수증으로 분리한다 (3.604771ms)\n✔ 모호성은 HOLD로 남기고 구조 계약 위반은 FAIL로 구분한다 (1.29026ms)\n✔ 기호 근거 없이 래스터 선만 검출된 결과는 공간 분석 PASS가 아니다 (0.713412ms)\n✔ 근거가 없는 SUPPORTED 제안과 허위 verified95는 최종 단계에서 실패한다 (0.575224ms)\n✔ 사전 고정 라벨과 수량·관계가 다르면 해당 추론 단계를 FAIL로 기록한다 (1.495182ms)\n✔ 동일 차단기 별칭은 같은 기호 유형으로 집계한다 (1.233864ms)\n✔ disconnector·isolator 별칭은 스위치 축으로 집계한다 (1.242637ms)\n✔ VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한다 (0.559415ms)\n✔ cutout_switch는 제품 정본과 같이 fuse 골든 축으로 집계한다 (5.242089ms)\n✔ 모든 닫힌 DeviceType의 골든 축이 계열 접기 규칙과 일치한다 (132.39145ms)\n✔ repeat=3 resume은 같은 설정의 1회 영수증을 재사용하지 않는다 (0.290643ms)\n✔ disconnecting_switch·DS 도 switch 골든 축으로 집계한다 (0.474506ms)\n✔ lightning_arrester·LA 도 arrester 골든 축으로 집계한다 (0.558482ms)\n✔ surge_arrester는 arrester 골든 축으로 집계한다 (3.817258ms)\n✔ 미확정 물리 수량 null은 판독된 기호 수량을 0으로 덮어쓰지 않는다 (0.369349ms)\n✔ 권선 기호 수가 아니라 물리 변압기 대수로 장치 라벨을 판정한다 (0.287096ms)\n✔ 경계 연속선 영수증은 내부 ID와 표시 ID 중 어느 쪽으로도 결박된다 (0.331189ms)\n✔ 실행은 끝났지만 근거가 부족한 부분 페이지와 감사 결과는 FAIL이 아니라 HOLD다 (0.385229ms)\n✔ 래스터 페이지 종류가 미분류여도 판독 실행이 완결되면 페이지 조사는 PASS다 (0.246942ms)\n✔ 실패 뒤 성공한 역할 재시도는 최종 커버리지 실패로 채점하지 않는다 (0.25689ms)\n✔ rejects tracked residue .audit/apply.py (1.891682ms)\n✔ rejects tracked residue .performance-lab/patch.b64 (0.215473ms)\n✔ rejects tracked residue .remaining-support/fix.py (0.267499ms)\n✔ rejects tracked residue .review-patches/0.b64 (0.185296ms)\n✔ rejects tracked residue .cleanup/script.py (0.349102ms)\n✔ rejects tracked residue .tmp-sld-live/file.json (0.430735ms)\n✔ rejects tracked residue test-results/private.json (0.339915ms)\n✔ rejects tracked residue playwright-report/index.html (0.193311ms)\n✔ rejects tracked residue .next/cache/data (0.920088ms)\n✔ rejects tracked residue .env (0.445913ms)\n✔ rejects tracked residue .env.local (0.221413ms)\n✔ rejects tracked residue nested/.env.production (0.16127ms)\n✔ rejects tracked residue src/file.ts.orig (0.188281ms)\n✔ rejects tracked residue types.tsbuildinfo (0.175438ms)\n✔ rejects tracked residue src/file.ts~ (0.158336ms)\n✔ preserves maintained tooling, example config, original fixtures and historical manuals (1.799931ms)\n✔ handles Windows separators, unusual filenames and duplicates deterministically (0.359682ms)\n✔ actual Git inventory excludes untracked output but fails if it is staged (130.830845ms)\n✔ cannot claim a clean repository when Git inventory fails (53.00971ms)\nℹ tests 164\nℹ suites 0\nℹ pass 164\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1462.003124\n",
+  "preparedSha": "9cf1339d910f0120748b938c05a272217836b017",
+  "runConclusion": "success",
+  "collectionScope": "Original run only; no new tests or additional accuracy samples",
+  "jobs": [
+    {
+      "id": 103125114614,
+      "name": "verify",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 10182312809,
+      "name": "symbol-classification-release-evidence",
+      "digest": "sha256:a75a156441f2d8f5afa49b69cbb6346b2ad6724992c89e949167152a18e00c04",
+      "expired": false,
+      "size_in_bytes": 4009155
+    }
+  ],
+  "archiveIntegrity": {
+    "verifiedFiles": 26,
+    "allHashesMatch": true
+  },
+  "productIntegrity": {
+    "sha": "9cf1339d910f0120748b938c05a272217836b017",
+    "allCheckedFilesMatch": true
+  },
+  "screens": [
+    "uncertainty-quick.png",
+    "feedback-revoked.png",
+    "feedback-approved.png",
+    "readable-error.png",
+    "recovered-result.png",
+    "readable-error.png",
+    "uncertainty-corrected.png",
+    "recovered-result.png",
+    "readable-error.png",
+    "feedback-revoked.png",
+    "feedback-approved.png",
+    "classified-390.png",
+    "recovered-result.png",
+    "recovered-result.png",
+    "readable-error.png",
+    "recovered-result.png",
+    "readable-error.png",
+    "recovered-result.png",
+    "readable-error.png",
+    "recovered-result.png",
+    "uncertainty-quick.png",
+    "classified-1440.png",
+    "recovered-result.png",
+    "uncertainty-corrected.png",
+    "classification-corrected-390.png",
+    "classification-corrected-1440.png"
+  ]
+}
