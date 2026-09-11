@@ -1,3 +1,4 @@
+import { readSymbolClassification } from '@/lib/symbol-classification';
 import { readDxfSymbolIdentity } from '@/lib/symbol-feedback';
 import type { TeamResult } from '@/agent/teams/types';
 import type { BoundaryContinuationPlan } from '@/agent/vision/continuity-types';
@@ -340,7 +341,8 @@ export function adaptTeamResult(
       confidence: component.confidence,
       pageIndex: context.pageIndex,
       regionId: 'vector-full',
-      sourceSymbol: readDxfSymbolIdentity({ blockName: component.properties?.blockName, fingerprint: component.properties?.blockFingerprint }),
+      sourceSymbol: readDxfSymbolIdentity({ blockName: component.properties?.blockName, fingerprint: component.properties?.blockFingerprint, shape: component.symbolShape }),
+      ...(context.positionSpace === 'source' && component.classification ? { classification: readSymbolClassification(component.classification) } : {}),
       certainty: component.type === 'unknown' ? 'unread' : component.confidence >= 0.85 ? 'confirmed' : 'ambiguous',
     });
     if (component.label) {

@@ -46,6 +46,9 @@ export { SLD_COMPONENT_TYPES, type SLDComponentType } from '@/lib/sld-component-
  * 한 칸에 담고 있으니 조항을 붙일 때 둘을 섞지 말 것.
  */
 export interface SLDComponent {
+  /** Parser-owned derived metadata; parseSLDResponse does not accept it from model JSON. */
+  symbolShape?: import('./symbol-shape').SymbolShape;
+  classification?: import('./symbol-classification').SymbolClassification;
   id: string;
   type: SLDComponentType;
   /** Unrecognized model vocabulary is preserved, never promoted to a known type. */
@@ -113,6 +116,7 @@ export interface CalcSuggestion {
 }
 
 export interface SLDAnalysis {
+  classificationStats?: import('./symbol-classification').SymbolClassificationStats;
   components: SLDComponent[];
   connections: SLDConnection[];
   /** Parser-originated text anchors in the same coordinate space as components. */

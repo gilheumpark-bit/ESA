@@ -90,6 +90,7 @@ export interface EvidenceRef {
 }
 
 export interface SymbolNode {
+  classification?: import('@/lib/symbol-classification').SymbolClassification;
   /** Only vector-origin metadata; not inferred from model prose. */
   sourceSymbol?: import('@/lib/symbol-feedback').DxfSymbolIdentity;
   id: string;
@@ -389,4 +390,4 @@ export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
 export const PROMPT_VERSION = 'sld-role-v8';
 export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v10';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v11';

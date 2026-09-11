@@ -3,6 +3,7 @@
 import { summarizeDrawingReadState } from '@/lib/drawing-read-summary';
 import { DrawingReadingSummary } from '@/components/DrawingReadingSummary';
 import { useMemo, useState } from 'react';
+import { SymbolClassificationResults } from './SymbolClassificationResults';
 import { DrawingReviewQueue } from './DrawingReviewQueue';
 
 import { describeStandardRefs } from '@/agent/drawing/rule-basis';
@@ -25,16 +26,18 @@ interface DrawingDocumentV3ReportProps {
   correctingDisplayId?: string;
 }
 
-type Tab = 'counts' | 'devices' | 'relations' | 'continuity' | 'values' | 'unresolved' | 'recommendations';
+type Tab = 'classifications' | 'counts' | 'devices' | 'relations' | 'continuity' | 'values' | 'unresolved' | 'recommendations';
 
 export function DrawingDocumentV3Report({ document, selectedDisplayId, onSelectDisplayId, onCorrect, correctingDisplayId }: DrawingDocumentV3ReportProps) {
-  const [tab, setTab] = useState<Tab>(document.unresolvedItems.length ? 'unresolved' : 'counts');
+  const hasClassifications = document.evidenceGraph.symbols.some((node) => node.classification);
+  const [tab, setTab] = useState<Tab>(hasClassifications ? 'classifications' : document.unresolvedItems.length ? 'unresolved' : 'counts');
   const readSummary = useMemo(() => summarizeDrawingReadState(document), [document]);
   const symbolNumbers = new Map(document.evidenceGraph.symbols.map((node) => [node.id, node.displayId]));
   const lineNumbers = new Map(document.evidenceGraph.lines.map((node) => [node.id, node.displayId]));
   const tabs: Array<[Tab, string]> = [
     ['counts', '수량'], ['devices', '기기·선로'], ['relations', '관계'], ['continuity', '경계 연결'], ['values', '정격·계산'], ['unresolved', `미확정 ${document.unresolvedItems.length}`], ['recommendations', '제안'],
   ];
+  if (hasClassifications) tabs.unshift(['classifications', '분류 결과']);
 
   return (
     <section className="min-w-0 overflow-hidden rounded-[10px] border border-[var(--border-default)] bg-[var(--bg-primary)] text-sm shadow-[var(--shadow-card)]">
@@ -51,7 +54,11 @@ export function DrawingDocumentV3Report({ document, selectedDisplayId, onSelectD
         {tabs.map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} aria-pressed={tab === id} className={`min-h-11 rounded-lg px-3 text-xs font-semibold ${tab === id ? 'bg-[var(--color-primary)] text-[var(--drawing-on-primary)]' : 'border border-[var(--border-default)]'}`}>{label}</button>)}
       </nav>
       <div className="p-3 sm:p-4">
-        {tab === 'counts' && (document.equipmentCounts.length > 0 ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-xs tabular-nums"><thead><tr className="border-b border-[var(--border-default)]"><th className="py-2">기기</th><th>확정</th><th>모호</th><th>미판독</th><th>누락 의심</th><th>확인된 고유/출현</th><th>판정</th></tr></thead><tbody>{document.equipmentCounts.map((row) => <tr key={row.equipmentKind} className="border-b border-[var(--border-default)]"><th className="py-2">{row.equipmentKind}</th><td>{row.confirmed}</td><td>{row.ambiguous}</td><td>{row.unread ?? 0}</td><td>{row.missingSuspected}</td><td>{row.physicalEquipmentCount ?? '—'}/{row.symbolOccurrences}</td><td>{labelCountStatus(row.countStatus)}</td></tr>)}</tbody></table></div> : <p className="py-8 text-center text-xs text-[var(--text-secondary)]">확정하거나 검토할 기기 수량이 없습니다.</p>)}
+        {tab === 'classifications' && <SymbolClassificationResults title="심볼 분류 결과"
+          rows={document.evidenceGraph.symbols.map((node) => ({ id: node.displayId, label: node.rawLabel,
+            sourceType: node.confirmedType ?? node.typeCandidates[0] ?? 'unknown', classification: node.classification }))}
+          onSelect={onSelectDisplayId} onCorrect={onCorrect} correcting={Boolean(correctingDisplayId)} />}
+        {tab === 'counts'  && (document.equipmentCounts.length > 0 ? <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-xs tabular-nums"><thead><tr className="border-b border-[var(--border-default)]"><th className="py-2">기기</th><th>확정</th><th>모호</th><th>미판독</th><th>누락 의심</th><th>확인된 고유/출현</th><th>판정</th></tr></thead><tbody>{document.equipmentCounts.map((row) => <tr key={row.equipmentKind} className="border-b border-[var(--border-default)]"><th className="py-2">{row.equipmentKind}</th><td>{row.confirmed}</td><td>{row.ambiguous}</td><td>{row.unread ?? 0}</td><td>{row.missingSuspected}</td><td>{row.physicalEquipmentCount ?? '—'}/{row.symbolOccurrences}</td><td>{labelCountStatus(row.countStatus)}</td></tr>)}</tbody></table></div> : <p className="py-8 text-center text-xs text-[var(--text-secondary)]">확정하거나 검토할 기기 수량이 없습니다.</p>)}
         {tab === 'devices' && <ul className="divide-y divide-[var(--border-default)]">{document.evidenceGraph.symbols.map((node) => <li key={node.id}><button type="button" onClick={() => onSelectDisplayId?.(node.displayId)} className={`min-h-11 w-full py-2 text-left ${selectedDisplayId === node.displayId ? 'font-bold text-[var(--color-primary)]' : ''}`}>{node.displayId} · {node.confirmedType ?? node.typeCandidates.join('/')}{node.rawLabel ? ` · ${node.rawLabel}` : ''} · {labelCertainty(node.certainty)}</button></li>)}{document.evidenceGraph.lines.map((node) => <li key={node.id}><button type="button" onClick={() => onSelectDisplayId?.(node.displayId)} className={`min-h-11 w-full py-2 text-left ${selectedDisplayId === node.displayId ? 'font-bold text-[var(--color-primary)]' : ''}`}>{node.displayId} · {labelLineKind(node.lineKind)} · {labelCertainty(node.certainty)}</button></li>)}</ul>}
         {tab === 'relations' && (document.evidenceGraph.relations.length + document.crossPageRelations.length > 0 ? <ul className="divide-y divide-[var(--border-default)] text-xs">{document.evidenceGraph.relations.map((relation) => <li key={relation.id}><button type="button" className="min-h-11 w-full break-words py-2 text-left text-[var(--color-primary)]" onClick={() => onSelectDisplayId?.(relation.displayId)}>{relation.displayId} · {symbolNumbers.get(relation.from) ?? relation.from} ↔ {symbolNumbers.get(relation.to) ?? relation.to} · 선로 {(relation.lineIds?.length ? relation.lineIds : relation.lineId ? [relation.lineId] : []).map((id) => lineNumbers.get(id) ?? id).join(' → ') || '미확정'}{relation.terminalPath && relation.certainty === 'confirmed' ? ' · 단자 경로 확인' : ''} · {labelCertainty(relation.certainty)}</button></li>)}{document.crossPageRelations.map((relation) => <li key={relation.id}><button type="button" onClick={() => onSelectDisplayId?.(relation.displayId)} className="min-h-11 w-full py-2 text-left">{relation.displayId} · P{relation.fromPage + 1} ↔ P{relation.toPage + 1} · {labelCrossPageStatus(relation.status)}</button></li>)}</ul> : <p className="py-8 text-center text-xs text-[var(--text-secondary)]">표시할 연결 관계가 없습니다. 미확정 탭에서 선로 종단을 확인하세요.</p>)}
         {tab === 'continuity' && <div className="space-y-4 text-xs">

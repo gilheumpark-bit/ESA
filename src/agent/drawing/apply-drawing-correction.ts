@@ -1,3 +1,4 @@
+import { updateClassificationsAfterCorrection } from '@/lib/symbol-classification-correction';
 import { randomUUID } from 'node:crypto';
 
 import { assignPhysicalEquipmentIds, buildEquipmentCounts } from './count-register';
@@ -56,6 +57,7 @@ export function applyDrawingCorrection(
     }
     return { ...item, rawLabel: input.selectedValue };
   });
+  updateClassificationsAfterCorrection(symbols, input, targetPage);
   const lines = current.evidenceGraph.lines.map((item) => ({ ...item }));
   const relations = current.pages.flatMap((page) => buildPageRelations(symbols, lines, page.pageIndex));
   const crossPageRelations = reconcileCrossPage(symbols, texts, extractPageRefHits(texts));

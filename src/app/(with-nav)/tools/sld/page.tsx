@@ -20,6 +20,7 @@ import { buildQuickDrawingReadout, QUICK_READ_REASON_LABELS, type QuickComponent
 import { DRAWING_CERTAINTY_LABELS } from '@/lib/drawing-certainty';
 import { SymbolFeedbackPanel } from '@/components/SymbolFeedbackPanel';
 import { createDrawingWorkspaceGuard } from '@/lib/drawing-workspace-guard';
+import { SymbolClassificationResults } from '@/components/SymbolClassificationResults';
 import { DrawingReadingSummary } from '@/components/DrawingReadingSummary';
 import type { SLDComponent, SLDConnection, CalcChainStep, SLDAnalysis as SLDAnalysisResult } from '@/lib/sld-recognition';
 import { readApiErrorMessage } from '@/lib/error-messages';
@@ -1787,6 +1788,13 @@ export default function SLDAnalysisPage() {
             ]} />
             <p className="text-xs text-[var(--text-secondary)]">빠른 결과는 후보이며 전체 confidence로 확정하지 않습니다. 위 V3의 정밀 근거 결과와 구분해 사용하세요.{quickReadout.completeness === 'partial' ? ' 현재 빠른 응답은 부분 복구된 결과입니다.' : ''}</p>
           </>}
+          <SymbolClassificationResults title="빠른 심볼 분류 결과"
+            rows={analysis.components.map((component) => ({ id: component.id, label: component.label,
+              sourceType: component.type, classification: component.classification }))} />
+          {analysis.classificationStats && <p className="text-xs text-[var(--text-secondary)]">
+            형상 비교 {analysis.classificationStats.shapeComparisons}회 · 반복 형상 결과 재사용 {analysis.classificationStats.reusedShapeComparisons}회.
+            이번 분류 단계의 추가 모델 호출 {analysis.classificationStats.additionalModelCalls}회. 전체 분석 비용 절감률은 별도 실측 대상입니다.
+          </p>}
           <QuickDrawingResultTabs
             activeTab={resultTab}
             counts={quickResultCounts}

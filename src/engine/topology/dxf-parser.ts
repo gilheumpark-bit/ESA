@@ -11,6 +11,8 @@
  * PART 4: Public API
  */
 
+import { describeSymbolShape, type SymbolShape } from '@/lib/symbol-shape';
+import { classifyDxfSymbols } from './symbol-classifier';
 import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 import {
@@ -369,6 +371,16 @@ export function parseDxfToSLD(
   let libraryMatched = 0;
   const unknownSymbols = new Map<string, UnknownSymbolReport>();
   const fingerprintMemo = new Map<string, string | null>();
+  const shapeMemo = new Map<string, SymbolShape | null>();
+  const classificationTexts = new Map<string, string[]>();
+  const blockShape = (name: string): SymbolShape | undefined => {
+    if (shapeMemo.has(name)) return shapeMemo.get(name) ?? undefined;
+    // Exact parsing is not curtailed when the optional comparison budget is exhausted.
+    if (shapeMemo.size >= 512) return undefined;
+    const entities = dxf?.blocks?.[name]?.entities;
+    const shape = entities ? describeSymbolShape(entities) : null;
+    shapeMemo.set(name, shape); return shape ?? undefined;
+  };
   const blockFingerprint = (name: string): string | null => {
     const memo = fingerprintMemo.get(name);
     if (memo !== undefined) return memo;
@@ -417,9 +429,10 @@ export function parseDxfToSLD(
         components.push({
           id: `comp_${++compIdx}`,
           type,
+          symbolShape: blockShape(entity.name),
           label: entity.name,
           position: { x: entity.position.x, y: entity.position.y },
-          properties: { blockName: entity.name, layer: entity.layer ?? '', ...(fingerprint ? { blockFingerprint: fingerprint } : {}),
+          properties: { blockName: entity.name, layer: entity.layer ?? '', symbolRotation: String(entity.rotation ?? 0), ...(fingerprint ? { blockFingerprint: fingerprint } : {}),
             ...(feedback?.status === 'matched' ? { feedbackIds: feedback.feedbackIds.join(','), feedbackRevision: String(libraryIndex?.revision ?? 0) } : {}),
             ...(feedback?.status === 'conflict' ? { feedbackConflict: 'true' } : {}) },
         });
@@ -543,6 +556,17 @@ export function parseDxfToSLD(
     }
 
     if (closestComp) {
+      // Similarity context only uses an unambiguous nearest local text anchor.
+      // Row-based fallback and equal-distance text do not become corroboration.
+      const local = closestDist < textProximityThreshold && !components.some((candidate) => candidate.id !== closestComp!.id
+        && euclideanDist({ x: t.x, y: t.y }, candidate.position) <= closestDist + 1e-6);
+      if (local && !isCableSpec) {
+        const records = classificationTexts.get(closestComp.id) ?? [];
+        if (t.text.length > 1000 || records.length >= 16) {
+          if (!records.includes('__ESA_CONTEXT_TRUNCATED__')) records.push('__ESA_CONTEXT_TRUNCATED__');
+        } else records.push(t.text);
+        classificationTexts.set(closestComp.id, records);
+      }
       if (t.spec.voltage) closestComp.voltage = `${t.spec.voltage}V`;
       if (t.spec.current) closestComp.current = `${t.spec.current}A`;
       if (t.spec.power) closestComp.rating = `${t.spec.power}${t.spec.powerUnit}`;
@@ -626,8 +650,11 @@ export function parseDxfToSLD(
     });
   }
 
+  const classificationStats = classifyDxfSymbols(components, snap.connections,
+    { library: options.symbolLibrary, index: libraryIndex, texts: classificationTexts });
   return {
     components,
+    classificationStats,
     connections: snap.connections,
     sourceTexts: texts.map((item) => ({ text: item.text, position: { x: item.x, y: item.y }, confidence: 0.99 })),
     suggestedCalculations: generateSuggestions({ components, connections: snap.connections }),

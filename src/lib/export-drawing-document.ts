@@ -3,6 +3,7 @@
  * findings and actions. Exports retain uncertainty and original evidence IDs.
  * No model calls or network requests; the document stays in this browser.
  */
+import { SYMBOL_CLASSIFICATION_REASONS } from '@/lib/symbol-classification';
 import { summarizeDrawingReadState } from '@/lib/drawing-read-summary';
 import { escapeHtml } from '@/lib/security-hardening';
 import type { DrawingDocumentV3, EvidenceRef } from '@/agent/drawing/types-v3';
@@ -60,6 +61,12 @@ export function drawingDocumentRows(document: DrawingDocumentV3): DrawingExportR
   const equipment = (id: string | undefined): string => id ? symbolNames.get(id) ?? cell(id) : '소속 미확정';
 
   for (const symbol of symbols) {
+    const classification = symbol.classification;
+    if (classification) add({ section: '심볼 분류', displayId: cell(symbol.displayId),
+      kind: cell(classification.selectedType, classification.candidates.map((candidate) => candidate.type).join('/') || '미판독'),
+      detail: `${classification.method} · ${classification.reasons.map((reason) => SYMBOL_CLASSIFICATION_REASONS[reason]).join(' / ')} · 형상 유사도(확률 아님): ${classification.candidates.map((candidate) => `${candidate.type}=${candidate.similarity.toFixed(3)}`).join(' / ')} · 대조 사례: ${classification.referenceKeys.join(' / ')} · 정격·결선 확정과 별개`,
+      certainty: classification.status === 'classified' ? classification.method === 'family-context' ? '자동 분류' : '분류됨' : classification.status === 'review' ? '예외 검토' : '미판독',
+      ...sourceColumns(symbol.evidence) });
     add({ section: '기기', displayId: cell(symbol.displayId),
       kind: cell(symbol.confirmedType ?? symbol.typeCandidates?.[0]),
       detail: symbol.confirmedType ? cell(symbol.rawLabel, '라벨 없음')

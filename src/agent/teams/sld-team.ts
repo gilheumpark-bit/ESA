@@ -79,6 +79,8 @@ async function extractFromDrawing(
         position: c.position,
         confidence: analysis.confidence ?? 0,
         properties: c.properties,
+        symbolShape: c.symbolShape,
+        classification: c.classification,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
@@ -110,6 +112,8 @@ async function extractFromDrawing(
         position: c.position,
         confidence: 0.85,
         properties: c.properties,
+        symbolShape: c.symbolShape,
+        classification: c.classification,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
