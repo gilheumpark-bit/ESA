@@ -16,21 +16,31 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Preserve this task's previous candidate before final candidate publication
+      - name: Retain the original failed page context without rerunning it
         run: |
-          old='9cf1339d910f0120748b938c05a272217836b017'
-          candidate=$(git ls-remote --heads origin refs/heads/chore/symbol-prepared-20260911 | cut -f1)
-          if [ "$candidate" = "$old" ]; then
-            product=$(git ls-remote --heads origin refs/heads/feat/ax-precision-20260907 | cut -f1)
-            test "$product" = '9327c3afcd8a090be90d699c071b7d59b202700f'
-            git push --atomic --force-with-lease=refs/heads/chore/symbol-prepared-20260911:$old origin "$old":refs/heads/chore/symbol-before-report-20260911 :refs/heads/chore/symbol-prepared-20260911
-          fi
+          gh run download 34555577071 --repo gilheumpark-bit/ESA --name symbol-classification-release-evidence --dir /tmp/symbol-prior
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          root=Path('/tmp/symbol-prior')
+          contexts=[{'path':str(p.relative_to(root)),'dom':p.read_text()[:20000]} for p in root.rglob('error-context.md')]
+          Path('.review-patches/symbol-prior-context.json').write_text(json.dumps({'runId':34555577071,'scope':'Original failed run DOM, not new execution','contexts':contexts},ensure_ascii=False,indent=2)+'\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin chore/symbol-classification-20260911
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          git add -f .review-patches/symbol-prior-context.json
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: preserve original standards readiness failure context' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/symbol-classification-20260911
       - name: Read final original verification without repeating tests
         run: |
           python3 - <<'PY'
           import json,subprocess,time,hashlib,tarfile
           from pathlib import Path
-          repo='gilheumpark-bit/ESA';run_id=34555577071;head='44104de9b21ff32a4d1d55daafd02dcea9380ed7'
+          repo='gilheumpark-bit/ESA';run_id=34556046290;head='a9f2ce03e854b530e2b58d7e0ade572702ba9057'
           def api(path):return json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/{path}'],text=True))
           for n in range(90):
               run=api(f'actions/runs/{run_id}');assert run['head_sha']==head
@@ -69,19 +79,19 @@ jobs:
           PY
       - name: Save evidence only on the isolated work branch
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git fetch origin chore/symbol-classification-20260911
           parent=$(git rev-parse FETCH_HEAD)
           git read-tree "$parent"
           git add -f .review-patches/symbol-verified.json
           tree=$(git write-tree)
-          commit=$(printf '%s\n' 'test: record final original classification evidence and exact product integrity' | git commit-tree "$tree" -p "$parent")
+          commit=$(printf '%s\n' 'test: record final classification evidence and exact product integrity' | git commit-tree "$tree" -p "$parent")
           git push origin "$commit":refs/heads/chore/symbol-classification-20260911
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: symbol-verification-summary
-          path: .review-patches/symbol-verified.json
+          path: |
+            .review-patches/symbol-verified.json
+            .review-patches/symbol-prior-context.json
           retention-days: 7
           if-no-files-found: warn
