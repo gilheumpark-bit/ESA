@@ -1,0 +1,65 @@
+name: Final symbol product evidence
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-final-pr-evidence.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SYMBOL_PR_RUN_ID: '34558582081'
+      SYMBOL_PRODUCT_SHA: '4375e40469674ce3bc6d3569af0154e8378138f9'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Preserve first regular CI failure and collect only the new original run
+        run: |
+          cp .review-patches/symbol-pr-verified.json /tmp/symbol-first-pr-verified.json
+          python3 .review-patches/collect-symbol-pr-ci.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,subprocess,hashlib
+          old=json.loads(Path('/tmp/symbol-first-pr-verified.json').read_text())
+          final=json.loads(Path('.review-patches/symbol-pr-verified.json').read_text())
+          focus=json.loads(Path('.review-patches/symbol-focused-final.json').read_text())
+          assert old['runId']==34556940874
+          assert final['runId']==34558582081 and final['productHead']=='4375e40469674ce3bc6d3569af0154e8378138f9'
+          assert focus['productHead']==final['productHead'] and focus['browser']['everyFirstAttemptPassed']
+          subprocess.run(['git','fetch','origin','feat/ax-precision-20260907'],check=True)
+          changes=subprocess.check_output(['git','diff','--name-only','32fa73a15147d4edb27e917d47e33e3b753b40ab',final['productHead']],text=True).splitlines()
+          assert set(changes)==set(focus['hashes'])
+          for path,expected in focus['hashes'].items():
+              assert hashlib.sha256(subprocess.check_output(['git','show',f'{final["productHead"]}:{path}'])).hexdigest()==expected,path
+          final['refinementIntegrity']={'files':len(changes),'focusedRun':focus['runId'],'allHashesMatch':True}
+          final['priorRegularRun']={'runId':old['runId'],'conclusion':old['conclusion'],'browser':old.get('browser'),'note':'Preserved original failure; no claim the calculator intermittent root cause is repaired.'}
+          Path('.review-patches/symbol-final-pr-verified.json').write_text(json.dumps(final,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(final,ensure_ascii=False))
+          PY
+      - name: Publish exact evidence only on the temporary branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin chore/symbol-classification-20260911
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          git add -f .review-patches/symbol-final-pr-verified.json
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: preserve final PR evidence with prior failures and refinement hashes' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/symbol-classification-20260911
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-final-pr-evidence
+          path: |
+            .review-patches/symbol-final-pr-verified.json
+            .review-patches/symbol-pr-verified.json
+            .review-patches/symbol-focused-final.json
+            .review-patches/symbol-verified.json
+          retention-days: 14
+          if-no-files-found: warn
