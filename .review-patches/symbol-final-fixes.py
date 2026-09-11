@@ -24,8 +24,7 @@ rep(p,"  it('an approved descriptor can support a new-name variation with explic
   });
   it('an approved descriptor can support a new-name variation with explicit type evidence', () => {""")
 
-# An explicit conflict discovered by the classifier must not coexist with a
-# claimsComplete report. Preserve already read values, not a false completion.
+# Keep raw readings while refusing complete claims when new evidence conflicts.
 p='src/agent/drawing/drawing-document-report.ts'
 assert Path(p).read_bytes()==subprocess.check_output(['git','show',f'9327c3afcd8a090be90d699c071b7d59b202700f:{p}'])
 rep(p,"  if (input.evidenceGraph.symbols.some((item) => item.certainty !== 'confirmed')) {", """  if (input.evidenceGraph.symbols.some((item) => item.classification && item.classification.status !== 'classified')) {
@@ -51,8 +50,18 @@ rep(p,"describe('real DXF -> V3 -> feedback and report', () => {", """describe('
     expect(result.verification).toMatchObject({ claimsComplete: false, documentStatus: 'HOLD', holdReasons: ['UNREADABLE_SYMBOL'] });
     expect(result.evidenceGraph.symbols[0]).toMatchObject({ confirmedType: 'breaker', certainty: 'confirmed' });
   });""")
+
+# count() itself does not wait for an asynchronously rendered catalogue.
+# Preserve >20 groups and every detail open/close assertion; do not increase
+# timeouts or retry failed tests. Only synchronize to the existing ready state.
+p='e2e/frontend-public-workflows.spec.ts'
+assert Path(p).read_bytes()==subprocess.check_output(['git','show',f'9327c3afcd8a090be90d699c071b7d59b202700f:{p}'])
+rep(p,"    const groups = await groupButtons.count();", "    await expect.poll(() => groupButtons.count()).toBeGreaterThan(20);\n    const groups = await groupButtons.count();")
+
 p=Path('docs/project/handoffs/2026-09-11-symbol-classification-first.md')
 p.write_text(p.read_text()+'''
 분류기가 원문·회사 사전의 충돌을 발견했지만 이전 종류 판독 자체는 confirmed로 남는 경우, 문서 전체를 완료로 표시하지 않도록 완료 영수증에도 분류 예외를 반영했다. 정상 확정값을 지우거나 미확정이 없는 문서를 함께 강등하지 않는다. 기존 완료 양성 사례와 충돌 음성 사례를 따로 검사한다. 원본과 같은 종류를 다시 확인한 경우에는 연관된 유사도 분류를 불필요하게 되돌리지 않는다.
+
+전체 실행34555577071은 단위·스크립트·PDF와 신규 심볼 브라우저 흐름은 통과했고, 전체 브라우저135통과/1실패였다. 실패한 기존 모바일 기준서 시험은 page.goto 직후 count()를 기다림 없이 읽어0건으로 검사했다. 기존 그룹 수20초과·모든 상세 열기/닫기 조건은 유지하고, 같은 준비 조건을 Playwright의 기본 제한시간 안에서 확인한 뒤 목록을 읽도록 동기화를 추가했다. 페이지 코드·단언 기준·시간 제한·실패 재시도 횟수를 바꾸지 않았으며, 이전 실패를 최종 통과로 소급 표시하지 않는다.
 ''')
-print('No-op confirmations retained; new conflicts prevent false document completion without discarding verified values.')
+print('Classification conflicts remain explicit; existing standards coverage waits for its rendered readiness without relaxed assertions.')
