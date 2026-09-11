@@ -1,0 +1,29 @@
+name: Symbol classification source
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-source.yml']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 9327c3afcd8a090be90d699c071b7d59b202700f
+          persist-credentials: false
+      - run: |
+          git archive --format=tar.gz --output=/tmp/symbol-source.tar.gz HEAD
+          git rev-parse HEAD > /tmp/symbol-source-revision.txt
+          sha256sum /tmp/symbol-source.tar.gz > /tmp/symbol-source.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: symbol-classification-source
+          path: |
+            /tmp/symbol-source.tar.gz
+            /tmp/symbol-source-revision.txt
+            /tmp/symbol-source.sha256
+          retention-days: 3
+          if-no-files-found: error
