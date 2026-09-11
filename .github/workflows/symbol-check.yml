@@ -1,0 +1,69 @@
+name: Symbol classification contract checks
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-check.yml', '.review-patches/symbol-fixes.py']
+concurrency:
+  group: symbol-classification-check
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply guarded integration and load exact framework guidance
+        run: |
+          python3 .review-patches/connect-symbols.py
+          if [ -f .review-patches/symbol-fixes.py ]; then python3 .review-patches/symbol-fixes.py; fi
+          git diff --check
+          npm ci > /tmp/symbol-install.log 2>&1 || { tail -80 /tmp/symbol-install.log; exit 1; }
+          sed -n '1,100p' node_modules/next/dist/docs/01-app/02-guides/testing/jest.md
+          sed -n '1,100p' node_modules/next/dist/docs/01-app/02-guides/testing/playwright.md
+      - name: Static checks
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+      - name: Classification, feedback, parsing and uncertainty contracts
+        run: |
+          npx jest --runInBand --testPathPatterns='symbol-classification|symbol-shape|symbol-feedback|symbol-library|dxf-parser|uncertainty-contract' --json --outputFile=/tmp/symbol-focused.json > /tmp/symbol-focused.log 2>&1
+        continue-on-error: false
+      - name: Existing standalone drawing contracts
+        run: |
+          npm run test:scripts > /tmp/symbol-scripts.log 2>&1 || { tail -120 /tmp/symbol-scripts.log; exit 1; }
+          tail -15 /tmp/symbol-scripts.log
+      - name: Summarize any failures
+        if: always()
+        run: |
+          if [ -f /tmp/symbol-focused.json ]; then
+            node - <<'JS'
+          const r=require('/tmp/symbol-focused.json');console.log('FOCUSED',JSON.stringify({passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suites:r.numPassedTestSuites}));
+          for(const suite of r.testResults||[])if(suite.status==='failed')console.log('FAILURE',suite.name,suite.message);
+          JS
+          fi
+          git diff -- src scripts > /tmp/symbol-applied.diff
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-classification-contract-evidence
+          path: |
+            /tmp/symbol-focused.json
+            /tmp/symbol-focused.log
+            /tmp/symbol-scripts.log
+            /tmp/symbol-applied.diff
+          retention-days: 3
+          if-no-files-found: warn
