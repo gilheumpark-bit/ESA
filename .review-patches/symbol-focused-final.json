@@ -1,0 +1,23 @@
+{
+  "runId": "34558238859",
+  "baseProduct": "32fa73a15147d4edb27e917d47e33e3b753b40ab",
+  "scope": "Focused changed test observation plus new symbol UI; not a full regression or independent accuracy sample",
+  "browser": {
+    "stats": {
+      "startTime": "2026-09-11T03:26:07.630Z",
+      "duration": 9427.388,
+      "expected": 5,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "executions": 5,
+    "everyFirstAttemptPassed": true,
+    "failures": []
+  },
+  "productHead": "4375e40469674ce3bc6d3569af0154e8378138f9",
+  "hashes": {
+    "e2e/nonbilling-quality.spec.ts": "cd05c4ab1c0e08ee94ec70b1b88771299069e1b93b0f422d7e23e7a91d4209a4",
+    "docs/project/handoffs/2026-09-11-symbol-classification-first.md": "93651c561004a126a8c92eb65608c68430739b1cd09b7874a6518bc371cdee32"
+  }
+}
