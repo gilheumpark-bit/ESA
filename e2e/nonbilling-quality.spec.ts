@@ -41,6 +41,10 @@ for (const width of [1440, 390]) {
     await page.getByText('계산 통계 표로 보기', { exact: true }).click();
     await expect(page.getByRole('table', { name: '최근 30일 계산기별 사용 횟수' })).toBeVisible();
     await page.getByRole('button', { name: '다시 시도', exact: true }).click();
+    // Disappearing warnings also occurs during loading. Observe the actual
+    // second request AND the restored result before asserting completion.
+    await expect.poll(() => calls).toBe(2);
+    await expect(page.getByText(/사용량 분포는 일부 기록 기준/)).toBeVisible();
     await expect(page.getByText('업데이트 알림 조회에 실패했습니다. 업데이트가 없다는 뜻이 아닙니다.', { exact: true })).toHaveCount(0);
     expect(calls).toBe(2); await capture(page, `dashboard-${width}`);
   });
