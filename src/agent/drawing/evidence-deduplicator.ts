@@ -2,6 +2,7 @@
  * Merge overlapping region detections into original-coordinate entities.
  */
 
+import { readSymbolClassification, unresolvedClassification } from '@/lib/symbol-classification';
 import { canonicalDeviceType, deviceFamilyOf, type DeviceFamily } from './device-vocabulary';
 import { createHash } from 'node:crypto';
 
@@ -11,6 +12,7 @@ import { buildConductorAdjacency, resolveTerminalPaths } from './terminal-path-r
 import type { Certainty, LineNode, RelationEdge, SymbolNode, TextNode, UnresolvedItem } from './types-v3';
 
 export interface RawSymbolHit {
+  classification?: SymbolNode['classification'];
   sourceSymbol?: SymbolNode['sourceSymbol'];
   localId: string;
   type: string;
@@ -222,10 +224,12 @@ export function deduplicateSymbols(
 
     if (dup) {
       if (hit.sourceSymbol && !conflictingOrigins.has(dup.id)) {
-        if (dup.sourceSymbol && JSON.stringify(dup.sourceSymbol) !== JSON.stringify(hit.sourceSymbol)) {
+        if (dup.sourceSymbol && (dup.sourceSymbol.blockName !== hit.sourceSymbol.blockName
+          || dup.sourceSymbol.fingerprint !== hit.sourceSymbol.fingerprint
+          || (dup.sourceSymbol.shape && hit.sourceSymbol.shape && JSON.stringify(dup.sourceSymbol.shape) !== JSON.stringify(hit.sourceSymbol.shape)))) {
           delete dup.sourceSymbol;
           conflictingOrigins.add(dup.id);
-        } else dup.sourceSymbol = { ...hit.sourceSymbol };
+        } else dup.sourceSymbol = { ...hit.sourceSymbol, ...(hit.sourceSymbol.shape ?? dup.sourceSymbol?.shape ? { shape: hit.sourceSymbol.shape ?? dup.sourceSymbol?.shape } : {}) };
       }
       const previousMaxConfidence = Math.max(...dup.evidence.map((item) => item.confidence));
       // Compare against the existing evidence BEFORE appending the new body.
@@ -239,6 +243,13 @@ export function deduplicateSymbols(
       const typeConflict = establishedTypes.some((candidate) =>
         hitCandidates.some((incomingType) => !typesCompatible(candidate, incomingType)));
       dup.typeCandidates = unique([...dup.typeCandidates, ...hitCandidates]);
+      const incomingClassification = readSymbolClassification(hit.classification);
+      const classificationConflict = typeConflict || conflictingOrigins.has(dup.id)
+        || (dup.classification?.selectedType && incomingClassification?.selectedType
+          && dup.classification.selectedType !== incomingClassification.selectedType);
+      if (classificationConflict && (dup.classification || incomingClassification)) {
+        dup.classification = unresolvedClassification('MERGED_CONFLICT', dup.classification ?? incomingClassification);
+      } else if (incomingClassification && !dup.classification) dup.classification = incomingClassification;
       if (hit.ports?.length) {
         // Do not apply the 24px symbol snap to distinct, closely spaced terminals.
         dup.ports = mergePoints(dup.ports ?? [], hit.ports.filter(finitePoint), 0);
@@ -323,6 +334,7 @@ export function deduplicateSymbols(
       id,
       displayId,
       typeCandidates: hitCandidates,
+      ...(hit.classification ? { classification: readSymbolClassification(hit.classification) } : {}),
       ...(hit.sourceSymbol ? { sourceSymbol: { ...hit.sourceSymbol } } : {}),
       confirmedType: hitConfirmed ? hitType : undefined,
       rawLabel: hit.label,

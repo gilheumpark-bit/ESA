@@ -99,6 +99,9 @@ export function buildDrawingDocumentV3(input: {
   verificationExtra?: Partial<VerificationBlock>;
 }): DrawingDocumentV3 {
   const holdReasons = collectHoldReasons(input.unresolvedItems, input.jobStatus);
+  if (input.evidenceGraph.symbols.some((item) => item.classification && item.classification.status !== 'classified')) {
+    addHoldReason(holdReasons, 'UNREADABLE_SYMBOL');
+  }
   if (input.evidenceGraph.symbols.some((item) => item.certainty !== 'confirmed')) {
     addHoldReason(holdReasons, 'UNREADABLE_SYMBOL');
   }

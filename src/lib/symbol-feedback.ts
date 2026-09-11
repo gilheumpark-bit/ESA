@@ -1,8 +1,11 @@
 /** Explicit, local company knowledge. Not model training or a signed approval. */
+import { readSymbolShape, type SymbolShape } from './symbol-shape';
 import { SLD_COMPONENT_TYPES, type SLDComponentType } from './sld-component-types';
 import type { DrawingDocumentV3 } from '@/agent/drawing/types-v3';
 
 export interface DxfSymbolIdentity {
+  /** Optional on legacy records; produced from original vector geometry, never a hash approximation. */
+  shape?: SymbolShape;
   blockName: string;
   fingerprint: string;
 }
@@ -26,7 +29,9 @@ export const feedbackNameKey = (value: string) => value.trim().toLowerCase();
 export function readDxfSymbolIdentity(value: unknown): DxfSymbolIdentity | undefined {
   if (!record(value) || !text(value.blockName, 120) || typeof value.fingerprint !== 'string'
     || !/^fp2:[a-f0-9]{16}$/.test(value.fingerprint)) return undefined;
-  return { blockName: value.blockName.trim(), fingerprint: value.fingerprint };
+  const shape = value.shape === undefined ? undefined : readSymbolShape(value.shape);
+  if (value.shape !== undefined && !shape) return undefined;
+  return { blockName: value.blockName.trim(), fingerprint: value.fingerprint, ...(shape ? { shape } : {}) };
 }
 /** Revalidate every import/storage/API boundary; never accept arbitrary prompt text. */
 export function parseSymbolFeedback(value: unknown): SymbolFeedback[] {

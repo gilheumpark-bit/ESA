@@ -94,6 +94,8 @@ export interface TeamInput {
 }
 
 export interface ExtractedComponent {
+  symbolShape?: import('@/lib/symbol-shape').SymbolShape;
+  classification?: import('@/lib/symbol-classification').SymbolClassification;
   id: string;
   type: string;           // 'transformer' | 'breaker' | 'cable' | 'load' | 'bus' | ...
   label: string;

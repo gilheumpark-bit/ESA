@@ -28,14 +28,17 @@ for (const name of [
   assert.equal(errors.length, 0, errors.map((item) => ts.flattenDiagnosticMessageText(item.messageText, '\n')).join('\n'));
   writeFileSync(path.join(build, `${name}.js`), compiled.outputText);
 }
-for (const name of ['symbol-feedback', 'sld-component-types']) {
+for (const name of ['symbol-feedback', 'sld-component-types', 'symbol-shape', 'symbol-classification']) {
   const source = readFileSync(path.join(root, 'src/lib', `${name}.ts`), 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } });
   mkdirSync(path.join(build, 'lib'), { recursive: true });
   writeFileSync(path.join(build, 'lib', `${name}.js`), compiled.outputText);
 }
 const adapter = path.join(build, 'team-result-adapter.js');
-writeFileSync(adapter, readFileSync(adapter, 'utf8').replace('require("@/lib/symbol-feedback")', 'require("./lib/symbol-feedback")'));
+for (const file of [adapter, path.join(build, 'evidence-deduplicator.js')]) {
+  writeFileSync(file, readFileSync(file, 'utf8').replace(/require\("@\/lib\/([^"]+)"\)/g,
+    (_, name) => `require("./lib/${name}")`));
+}
 const require = createRequire(import.meta.url);
 const { deduplicateSymbols, deduplicateLines, buildPageRelations } = require(path.join(build, 'evidence-deduplicator.js'));
 const { adaptTeamResult } = require(path.join(build, 'team-result-adapter.js'));

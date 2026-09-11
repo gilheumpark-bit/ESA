@@ -82,6 +82,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/standards');
     const groupButtons = page.locator('main button[aria-expanded]');
+    await expect.poll(() => groupButtons.count()).toBeGreaterThan(20);
     const groups = await groupButtons.count();
     expect(groups).toBeGreaterThan(20);
     let entries = 0;

@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-09-11
+
+- [심볼 분류 우선·유사 형상·반복 문맥·예외 검토](handoffs/2026-09-11-symbol-classification-first.md)
+
 ## 2026-09-10
 
 - [결제 제외 기능 품질·데이터 경계·검색/협업/현장 개선](handoffs/2026-09-10-nonbilling-feature-quality.md)
