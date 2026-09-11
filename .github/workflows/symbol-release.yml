@@ -1,0 +1,191 @@
+name: Classification-first release verification
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-release.yml', '.review-patches/symbol-final-fixes.py']
+concurrency:
+  group: classification-first-release
+  cancel-in-progress: true
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Integrate and stage only the reviewed product paths
+        run: |
+          python3 .review-patches/connect-symbols.py
+          python3 .review-patches/symbol-fixes.py
+          python3 .review-patches/symbol-release-fixes.py
+          if [ -f .review-patches/symbol-final-fixes.py ]; then python3 .review-patches/symbol-final-fixes.py; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,hashlib,subprocess,tarfile,re
+          base='9327c3afcd8a090be90d699c071b7d59b202700f'
+          p=Path('docs/project/HANDOFFS.md');s=p.read_text();anchor='## 2026-09-10\n';assert s.count(anchor)==1
+          p.write_text(s.replace(anchor,'## 2026-09-11\n\n- [심볼 분류 우선·유사 형상·반복 문맥·예외 검토](handoffs/2026-09-11-symbol-classification-first.md)\n\n'+anchor))
+          paths=subprocess.check_output(['git','diff','--name-only',base,'--','src','scripts','docs','e2e'],text=True).splitlines()
+          assert 20<=len(paths)<=40 and all(Path(p).is_file() for p in paths)
+          prohibited=re.compile(r'checkout|billing|stripe|pricing|safety-constants|account/tier',re.I)
+          assert not any(prohibited.search(p) for p in paths)
+          subprocess.run(['git','diff','--exit-code',base,'--','package.json','package-lock.json'],check=True)
+          hashes={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in paths}
+          Path('/tmp/symbol-product-paths.txt').write_text('\n'.join(paths)+'\n')
+          Path('/tmp/symbol-product-hashes.json').write_text(json.dumps(hashes,indent=2))
+          with tarfile.open('/tmp/symbol-product-source.tar.gz','w:gz') as archive:
+              for path in paths:archive.add(path,arcname=path)
+          print('PRODUCT_SCOPE',json.dumps({'base':base,'changedFiles':len(paths),'paymentUnchanged':True,'dependenciesUnchanged':True}))
+          PY
+          git read-tree 9327c3afcd8a090be90d699c071b7d59b202700f
+          while IFS= read -r file; do git add -- "$file"; done < /tmp/symbol-product-paths.txt
+          git diff --cached --check
+          git diff --cached --stat
+          npm run gate:hygiene
+          npm run check:docs
+          npm ci > /tmp/symbol-install.log 2>&1 || { tail -80 /tmp/symbol-install.log; exit 1; }
+      - name: Types, strict lint and both dependency audit scopes
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npm run gate:audit > /tmp/symbol-production-audit.log 2>&1 || { cat /tmp/symbol-production-audit.log; exit 1; }
+          npm run gate:audit:all > /tmp/symbol-all-audit.log 2>&1 || { cat /tmp/symbol-all-audit.log; exit 1; }
+          cat /tmp/symbol-production-audit.log /tmp/symbol-all-audit.log
+      - name: Full unit, actual workload and script regression
+        run: |
+          set +e
+          SYMBOL_BENCH_OUTPUT=/tmp/symbol-workload.json npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/symbol-jest.json > /tmp/symbol-jest.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const r=require('/tmp/symbol-jest.json'); console.log('JEST_SUMMARY',JSON.stringify({success:r.success,passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suites:r.numPassedTestSuites,failedSuites:r.numFailedTestSuites,skippedSuites:r.numPendingTestSuites}));
+          for(const s of r.testResults||[])if(s.status==='failed')console.log('JEST_FAILURE',s.name,s.message);
+          JS
+          test "$status" = 0
+          cat /tmp/symbol-workload.json
+          npm run test:scripts > /tmp/symbol-scripts.log 2>&1 || { tail -100 /tmp/symbol-scripts.log; exit 1; }
+          tail -15 /tmp/symbol-scripts.log
+          npm run gate:sld-v3-contract
+          npm run gate:snapshot
+      - name: Production build, calculator receipt and Chromium
+        run: |
+          npm run build > /tmp/symbol-build.log 2>&1 || { tail -130 /tmp/symbol-build.log; exit 1; }
+          npm run gate:chat-live
+          npx playwright install --with-deps chromium > /tmp/symbol-browser-install.log 2>&1 || { tail -60 /tmp/symbol-browser-install.log; exit 1; }
+      - name: Isolated production PDF and complete browser regression
+        run: |
+          pid=''
+          cleanup() { if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; pid=''; fi; }
+          trap cleanup EXIT
+          start_server() {
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$1" > "$2" 2>&1 &
+            pid=$!
+            for n in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || { cat "$2"; return 1; }
+              if curl -fsS "http://127.0.0.1:$1/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            cat "$2"; return 1
+          }
+          start_server 3010 /tmp/symbol-pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010 > /tmp/symbol-pdf.log 2>&1 || { cat /tmp/symbol-pdf.log; exit 1; }
+          cat /tmp/symbol-pdf.log
+          cleanup
+          start_server 3011 /tmp/symbol-ui-server.log
+          set +e
+          BASE_URL=http://127.0.0.1:3011 SYMBOL_SCREEN_DIR=/tmp/symbol-screens PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/symbol-browser.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json > /tmp/symbol-browser.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const fs=require('fs');
+          if(!fs.existsSync('/tmp/symbol-browser.json')) {console.log(fs.readFileSync('/tmp/symbol-browser.log','utf8').slice(-16000));process.exit(1);}
+          const r=require('/tmp/symbol-browser.json');console.log('BROWSER_SUMMARY',JSON.stringify(r.stats));
+          function visit(s){for(const spec of s.specs||[])for(const t of spec.tests||[])if(t.status!=='expected')console.log('BROWSER_FAILURE',spec.title,JSON.stringify(t.results).slice(0,15000));for(const c of s.suites||[])visit(c);}
+          for(const s of r.suites||[])visit(s);for(const error of r.errors||[])console.log('BROWSER_ERROR',error.message);
+          JS
+          test "$status" = 0
+      - name: Commit only validated product files
+        run: |
+          python3 - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          for path,expected in json.loads(Path('/tmp/symbol-product-hashes.json').read_text()).items():
+              assert hashlib.sha256(Path(path).read_bytes()).hexdigest()==expected,path
+          PY
+          git diff --cached --check
+          npm run gate:hygiene
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'feat: classify repeated DXF symbol families before exception review' '' 'Compare bounded normalized geometry with frozen approved references and independent repeated-role or text context. Show classification, methods and exceptions without per-symbol approval. Preserve original certainty, ratings, topology, calculation holds and feedback approval. Invalidate dependent inference after human correction, export classification separately and test genuine DXF/V3/rendered flows. No model training, extra model calls, payment edits, main merge or deployment.' | git commit-tree "$tree" -p 9327c3afcd8a090be90d699c071b7d59b202700f)
+          git push origin "$commit":refs/heads/chore/symbol-prepared-20260911
+          echo "$commit" > /tmp/symbol-prepared-sha.txt
+          echo "SYMBOL_PREPARED_COMMIT=$commit"
+      - name: Save compact original evidence on any outcome
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,os
+          out={'runId':os.environ['GITHUB_RUN_ID'],'sourceHead':os.environ['GITHUB_SHA'],'scope':'Original run evidence, not an independent accuracy evaluation'}
+          for name,key in [('symbol-workload.json','workload'),('symbol-product-hashes.json','productHashes')]:
+              p=Path('/tmp')/name
+              if p.exists():out[key]=json.loads(p.read_text())
+          p=Path('/tmp/symbol-jest.json')
+          if p.exists():
+              r=json.loads(p.read_text());out['unit']={k:r.get(k) for k in ['success','numPassedTests','numFailedTests','numPendingTests','numPassedTestSuites','numFailedTestSuites','numPendingTestSuites']}
+          p=Path('/tmp/symbol-browser.json')
+          if p.exists():
+              r=json.loads(p.read_text());executions=[];failed=[]
+              def visit(s):
+                  for spec in s.get('specs',[]):
+                      for test in spec.get('tests',[]):
+                          attempts=[item.get('status') for item in test.get('results',[])];executions.append((test.get('status'),attempts))
+                          if test.get('status')!='expected':failed.append({'title':spec['title'],'results':test.get('results',[])})
+                  for child in s.get('suites',[]):visit(child)
+              for s in r.get('suites',[]):visit(s)
+              out['browser']={'stats':r.get('stats'),'executions':len(executions),'everyFirstAttemptPassed':bool(executions) and all(status=='expected' and attempts==['passed'] for status,attempts in executions),'failures':failed,'errors':r.get('errors',[])}
+          for name in ['symbol-production-audit.log','symbol-all-audit.log','symbol-pdf.log','symbol-scripts.log']:
+              p=Path('/tmp')/name
+              if p.exists():out[name]=p.read_text()[-3500:]
+          p=Path('/tmp/symbol-prepared-sha.txt');out['preparedSha']=p.read_text().strip() if p.exists() else None
+          Path('/tmp/symbol-summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
+          print('ORIGINAL_RUN_SUMMARY',json.dumps({k:v for k,v in out.items() if k!='productHashes'},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-classification-release-evidence
+          path: |
+            /tmp/symbol-summary.json
+            /tmp/symbol-product-paths.txt
+            /tmp/symbol-product-hashes.json
+            /tmp/symbol-product-source.tar.gz
+            /tmp/symbol-jest.json
+            /tmp/symbol-jest.log
+            /tmp/symbol-workload.json
+            /tmp/symbol-scripts.log
+            /tmp/symbol-production-audit.log
+            /tmp/symbol-all-audit.log
+            /tmp/symbol-build.log
+            /tmp/symbol-pdf.log
+            /tmp/symbol-ui-server.log
+            /tmp/symbol-browser.json
+            /tmp/symbol-browser.log
+            /tmp/symbol-prepared-sha.txt
+            /tmp/symbol-screens/
+            test-results/
+          retention-days: 5
+          if-no-files-found: warn
