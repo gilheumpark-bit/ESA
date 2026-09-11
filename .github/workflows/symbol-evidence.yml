@@ -16,12 +16,21 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Read original verification without repeating tests
+      - name: Preserve this task's previous candidate before final candidate publication
+        run: |
+          old='9cf1339d910f0120748b938c05a272217836b017'
+          candidate=$(git ls-remote --heads origin refs/heads/chore/symbol-prepared-20260911 | cut -f1)
+          if [ "$candidate" = "$old" ]; then
+            product=$(git ls-remote --heads origin refs/heads/feat/ax-precision-20260907 | cut -f1)
+            test "$product" = '9327c3afcd8a090be90d699c071b7d59b202700f'
+            git push --atomic --force-with-lease=refs/heads/chore/symbol-prepared-20260911:$old origin "$old":refs/heads/chore/symbol-before-report-20260911 :refs/heads/chore/symbol-prepared-20260911
+          fi
+      - name: Read final original verification without repeating tests
         run: |
           python3 - <<'PY'
           import json,subprocess,time,hashlib,tarfile
           from pathlib import Path
-          repo='gilheumpark-bit/ESA';run_id=34554803586;head='56089e0ba66375d3d3f6bf35811a978b8414f538'
+          repo='gilheumpark-bit/ESA';run_id=34555577071;head='44104de9b21ff32a4d1d55daafd02dcea9380ed7'
           def api(path):return json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/{path}'],text=True))
           for n in range(90):
               run=api(f'actions/runs/{run_id}');assert run['head_sha']==head
@@ -54,6 +63,7 @@ jobs:
               for name,digest in manifest.items():assert hashlib.sha256(subprocess.check_output(['git','show',f'{product}:{name}'])).hexdigest()==digest,name
               summary['productIntegrity']={'sha':product,'allCheckedFilesMatch':True}
           summary['screens']=[p.name for p in root.rglob('*.png')]
+          summary['rendering']=[json.loads(p.read_text()) for p in root.rglob('classification-*.json')]
           target=Path('.review-patches/symbol-verified.json');target.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
           print(json.dumps({k:v for k,v in summary.items() if k!='productHashes'},ensure_ascii=False))
           PY
@@ -66,7 +76,7 @@ jobs:
           git read-tree "$parent"
           git add -f .review-patches/symbol-verified.json
           tree=$(git write-tree)
-          commit=$(printf '%s\n' 'test: record original classification verification and product byte integrity' | git commit-tree "$tree" -p "$parent")
+          commit=$(printf '%s\n' 'test: record final original classification evidence and exact product integrity' | git commit-tree "$tree" -p "$parent")
           git push origin "$commit":refs/heads/chore/symbol-classification-20260911
       - uses: actions/upload-artifact@v7
         if: always()
