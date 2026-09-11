@@ -62,7 +62,7 @@ const isNoise = (text: string) => IGNORED.some((p) => p.test(text));
 
 /**
  * 외부 저장소(Supabase)가 있어야 목록이 나오는 화면. 그 설정이 없는 환경에서는
- * API 가 500 을 내는 게 정상이다 — 페이지 결함이 아니다.
+ * API 가 503 을 내는 게 정상이다 — 페이지 결함이 아니다.
  *
  * 그렇다고 오류를 그냥 무시하면 안 된다. 이 화면들에는 더 강한 계약을 건다:
  * **실패했으면 실패했다고 화면에 적어야 한다.** 삼키고 "아직 질문이
@@ -84,6 +84,11 @@ for (const route of ROUTES) {
       if (!isNoise(err.message)) errors.push(`pageerror: ${err.message}`);
     });
 
+    // Bind the failure assertion to this API response, not any console resource error.
+    const backendResponse = BACKEND_DEPENDENT.has(route)
+      ? page.waitForResponse((res) => new URL(res.url()).pathname === '/api/community'
+        && res.request().method() === 'GET')
+      : null;
     const response = await page.goto(route, { waitUntil: 'networkidle' });
     expect(response?.status(), `${route} 응답 상태`).toBeLessThan(400);
 
@@ -108,18 +113,29 @@ for (const route of ROUTES) {
     await expect(page.locator('text=Application error')).toHaveCount(0);
     await expect(page.locator('text=Unhandled Runtime Error')).toHaveCount(0);
 
-    if (BACKEND_DEPENDENT.has(route)) {
-      const serverFailed = errors.some((e) => /50\d|Failed to load resource/i.test(e));
-      if (serverFailed) {
-        // 실패를 삼키지 않았는지만 본다 — 알리고, 다시 해볼 길을 준다.
+    if (backendResponse) {
+      const apiResponse = await backendResponse;
+      if (!apiResponse.ok()) {
+        expect([500, 503]).toContain(apiResponse.status());
+        const body = await apiResponse.json();
+        expect(body.success).toBe(false);
+        expect(body.error?.message).toEqual(expect.any(String));
+        expect(body.error.message.trim().length).toBeGreaterThan(0);
+        // The page intentionally displays the server's specific safe message.
+        // Do not force a generic phrase or accept a blank error/empty-list state.
         await expect(
-          main.getByText(/불러오지 못했습니다/),
+          main.getByText(body.error.message, { exact: true }),
           `${route} 서버 실패를 화면에 알리지 않는다`,
         ).toBeVisible();
         await expect(
           main.getByRole('button', { name: '다시 시도' }),
           `${route} 실패 후 재시도할 길이 없다`,
         ).toBeVisible();
+        await expect(main.getByText('아직 질문이 없습니다')).toHaveCount(0);
+        // A handled HTTP error must not hide unrelated errors or a React crash.
+        expect(errors.filter((error) =>
+          !/^Failed to load resource: the server responded with a status of (500|503)\b/.test(error),
+        ), `${route} 처리되지 않은 콘솔 오류`).toEqual([]);
         return;
       }
     }
@@ -143,3 +159,42 @@ test('페이지마다 다른 제목을 단다', async ({ page }) => {
 
   expect(duplicated).toEqual([]);
 });
+
+// Exercise recovery even when CI has no database; no external service is called.
+for (const [status, message] of [
+  [500, '질문 목록을 불러오지 못했습니다.'],
+  [503, '서버 저장 서비스를 사용할 수 없습니다.'],
+] as const) {
+  test(`커뮤니티 ${status} 오류를 알리고 재시도 후 빈 목록으로 복구`, async ({ page }) => {
+    let requests = 0;
+    const runtimeErrors: string[] = [];
+    page.on('pageerror', (error) => runtimeErrors.push(error.message));
+    await page.route('**/api/community?*', async (route) => {
+      requests += 1;
+      await route.fulfill({
+        status: requests === 1 ? status : 200,
+        contentType: 'application/json',
+        body: JSON.stringify(requests === 1
+          ? { success: false, error: { code: 'ESVA-7050', message } }
+          : { success: true, data: { data: [], totalPages: 1 } }),
+      });
+    });
+
+    await page.goto('/community');
+    const main = page.getByRole('main');
+    const retry = main.getByRole('button', { name: '다시 시도' });
+    await expect(main.getByText(message, { exact: true })).toBeVisible();
+    await expect(main.getByText('아직 질문이 없습니다')).toHaveCount(0);
+    await expect(retry).toBeVisible();
+
+    const recovery = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === '/api/community' && response.status() === 200);
+    await retry.click();
+    await recovery;
+    await expect(main.getByText('아직 질문이 없습니다')).toBeVisible();
+    await expect(main.getByText(message, { exact: true })).toHaveCount(0);
+    await expect(retry).toHaveCount(0);
+    expect(requests).toBe(2);
+    expect(runtimeErrors).toEqual([]);
+  });
+}

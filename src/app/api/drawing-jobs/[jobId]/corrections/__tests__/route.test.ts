@@ -56,7 +56,7 @@ describe('drawing correction API concurrency', () => {
   });
 
   it('returns an already-applied idempotent correction without applying twice', async () => {
-    const existing = { idempotencyKey: 'request-0002', correctionId: 'corr-request-0002' };
+    const existing = { idempotencyKey: 'request-0002', correctionId: 'corr-request-0002', targetDisplayId: 'P01-T001', selectedValue: '100A', correctionKind: 'text' };
     jest.mocked(getOwnedJob).mockReturnValue(job([existing]) as never);
     const response = await POST(request({
       targetDisplayId: 'P01-T001', selectedValue: '100A', correctionKind: 'text',
@@ -87,5 +87,51 @@ describe('drawing correction API concurrency', () => {
     expect(response.status).toBe(409);
     expect(applyDrawingCorrection).not.toHaveBeenCalled();
     expect(updateOwnedJobIfDocumentVersion).not.toHaveBeenCalled();
+  });
+});
+
+describe('correction request boundary and replay safety', () => {
+  const body = { targetDisplayId: 'P01-T001', selectedValue: '100A', correctionKind: 'text', expectedUpdatedAt: updatedAt, idempotencyKey: 'request-new' };
+  const context = { params: Promise.resolve({ jobId: 'job-a' }) };
+  beforeEach(() => {
+    jest.clearAllMocks(); jest.mocked(resolveDrawingOwner).mockResolvedValue(owner);
+    jest.mocked(getOwnedJob).mockReturnValue(job() as never);
+  });
+  it.each([123, [], {}, true, ' '])('rejects a non-string or empty selected value before mutation: %p', async (selectedValue) => {
+    const response = await POST(request({ ...body, selectedValue }), context);
+    expect(response.status).toBe(400); expect(applyDrawingCorrection).not.toHaveBeenCalled();
+    expect(updateOwnedJobIfDocumentVersion).not.toHaveBeenCalled();
+  });
+  it('rejects an idempotency key reused for another action', async () => {
+    jest.mocked(getOwnedJob).mockReturnValue(job([{ ...body, selectedValue: '200A' }]) as never);
+    const response = await POST(request(body), context);
+    expect(response.status).toBe(409); expect((await response.json()).error.code).toBe('IDEMPOTENCY_CONFLICT');
+    expect(applyDrawingCorrection).not.toHaveBeenCalled();
+  });
+  it('rejects oversized input even when the business fields would pass', async () => {
+    const response = await POST(request({ ...body, originalCandidates: ['x'.repeat(20000)] }), context);
+    expect(response.status).toBe(413); expect(applyDrawingCorrection).not.toHaveBeenCalled();
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+  });
+  it('does not parse unauthorized users or disclose jobs before owner checks', async () => {
+    jest.mocked(resolveDrawingOwner).mockResolvedValue(null);
+    const response = await POST(request({ selectedValue: {} }), context);
+    expect(response.status).toBe(401); expect(getOwnedJob).not.toHaveBeenCalled();
+  });
+  it('applies an authorized valid request and still uses atomic version comparison', async () => {
+    const correction = { ...body, correctionId: 'corr-test' };
+    const document = { ...job().document, userCorrections: [correction] };
+    jest.mocked(applyDrawingCorrection).mockReturnValue(document as never);
+    jest.mocked(updateOwnedJobIfDocumentVersion).mockReturnValue({ ...job(), document } as never);
+    const response = await POST(request(body), context);
+    expect(response.status).toBe(200);
+    expect(updateOwnedJobIfDocumentVersion).toHaveBeenCalledWith('job-a', owner.ownerId, updatedAt, { document, status: document.jobStatus });
+  });
+  it('preserves the stale-write rejection at the store boundary', async () => {
+    const document = { ...job().document, userCorrections: [{ ...body, correctionId: 'corr-test' }] };
+    jest.mocked(applyDrawingCorrection).mockReturnValue(document as never);
+    jest.mocked(updateOwnedJobIfDocumentVersion).mockReturnValue(undefined);
+    const response = await POST(request(body), context);
+    expect(response.status).toBe(409); expect((await response.json()).error.code).toBe('STALE_DOCUMENT');
   });
 });

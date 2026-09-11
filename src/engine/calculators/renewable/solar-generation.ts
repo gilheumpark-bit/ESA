@@ -23,7 +23,6 @@ import {
   assertRange,
   round,
 } from '../types';
-import { getRegionalIrradiance, REGIONAL_IRRADIANCE } from '@/lib/solar-irradiance';
 
 // ── Input ───────────────────────────────────────────────────────────────────
 

@@ -64,6 +64,7 @@ describe('POST /api/dxf - ZWCAD compatibility', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body.readout).toMatchObject({ schemaVersion: 1, source: 'quick-extraction', scope: 'observed-records-only', completeness: 'not-verified' });
     expect(body.parserInfo).toEqual(expect.objectContaining({
       inputEncoding: 'euc-kr',
       declaredCodePage: 'ANSI_949',

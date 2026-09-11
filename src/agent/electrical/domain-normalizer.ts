@@ -155,8 +155,6 @@ function parseNumber(token: string): number | undefined {
     }
   } else if (dots.length > 0) {
     if (dots.length === 1) {
-      const index = dots[0];
-      const tail = unsigned.slice(index + 1);
       // A single dot is the engineering decimal separator. Treating three
       // decimal places as grouping turns 0.400 kV into 400 kV and 6.600 kV
       // into 6,600 kV. Grouped-dot locale input remains supported when a

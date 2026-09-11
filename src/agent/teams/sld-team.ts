@@ -28,7 +28,8 @@ import { validateElectricalInvariants, type ElectricalIssue } from '../electrica
 import { routeDrawingCalculations, type DrawingCalculationReceipt } from '../electrical/drawing-calculation-router';
 import { compareLogicToGraph, type LogicConflict } from '../electrical/logic-conflicts';
 import { synthesizeDrawingReview, type DrawingSynthesis } from '../electrical/synthesis';
-import { preparePrecisionRegions as preparePlan1PrecisionRegions, precisionGridSize } from '../vision/vision-splitter';
+import { precisionGridSize } from '../vision/vision-splitter';
+import { prepareLazyPrecisionRegions, createRequestPreparationCache, type PrecisionRegionDescriptor, type MaterializeRegion } from '../vision/lazy-precision-regions';
 import { createDrawingSnapshot, type DrawingSnapshot, type ImageVariant, type PrecisionRegion } from '../vision/evidence-types';
 import type { RescanTargetEvidence, RoleReviewEnvelope, ReviewRole } from '../vision/review-types';
 import { resolveProviderKey, type ResolvedKey } from '@/lib/server-ai';
@@ -78,6 +79,8 @@ async function extractFromDrawing(
         position: c.position,
         confidence: analysis.confidence ?? 0,
         properties: c.properties,
+        symbolShape: c.symbolShape,
+        classification: c.classification,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
@@ -109,6 +112,8 @@ async function extractFromDrawing(
         position: c.position,
         confidence: 0.85,
         properties: c.properties,
+        symbolShape: c.symbolShape,
+        classification: c.classification,
       })),
       connections: (analysis.connections ?? []).map(conn => ({
         from: conn.from,
@@ -124,7 +129,7 @@ async function extractFromDrawing(
   return { components: [], connections: [], confidence: 0 };
 }
 
-type PreparedRaster = { snapshot: DrawingSnapshot; variants: ImageVariant[]; regions: PrecisionRegion[] };
+type PreparedRaster = { snapshot: DrawingSnapshot; variants: ImageVariant[]; regions: PrecisionRegionDescriptor[]; materializeRegion?: MaterializeRegion };
 
 export interface SLDTeamDeps {
   prepareRaster?: (buffer: ArrayBuffer, mimeType: string) => Promise<PreparedRaster>;
@@ -158,12 +163,18 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 async function preparePrecisionRegions(buffer: ArrayBuffer, mimeType: string): Promise<PreparedRaster> {
-  const prepared = await preparePlan1PrecisionRegions(buffer);
+  const prepared = await prepareLazyPrecisionRegions(buffer);
   return {
     snapshot: createDrawingSnapshot(buffer, mimeType, prepared.profile),
     variants: prepared.variants,
     regions: prepared.regions,
+    materializeRegion: prepared.materializeRegion,
   };
+}
+
+/** One prepared page per document run; never share source pixels across users. */
+export function createRasterPreparationCache(): NonNullable<SLDTeamDeps['prepareRaster']> {
+  return createRequestPreparationCache(preparePrecisionRegions);
 }
 
 function safeSnapshot(snapshot: DrawingSnapshot): DrawingReviewArtifact['snapshot'] {
@@ -358,7 +369,9 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
 }> {
   if (!input.fileBuffer || !input.vision) throw new Error('이미지 독립 검토에는 파일과 Vision provider가 필요합니다.');
   throwIfAborted(input.signal);
+  const preparationStarted = performance.now();
   const prepared = await (deps.prepareRaster ?? preparePrecisionRegions)(input.fileBuffer, input.mimeType ?? 'image/png');
+  const preparationMs = performance.now() - preparationStarted;
   throwIfAborted(input.signal);
   const resolved = input.vision.provider === 'chatgpt-local'
     ? { key: '', source: 'byok' as const }
@@ -397,6 +410,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     snapshot: prepared.snapshot,
     variants: prepared.variants,
     regions: reviewRegions,
+    ...(prepared.materializeRegion ? { materializeRegion: prepared.materializeRegion } : {}),
     maxRegionCallsPerRole,
     effortProfile: input.vision.effortProfile,
     // 로컬 CLI 공급자는 프로세스를 띄우므로 동시성을 낮춰 품질을 먼저 확보한다.
@@ -498,6 +512,7 @@ async function reviewRasterDrawing(input: TeamInput, deps: SLDTeamDeps, onResolv
     && Boolean(coverageEnvelope)
     && rescanTargets.length === 0;
   const artifact: DrawingReviewArtifact = {
+    performance: { preparationMs, ...(council.performance ? { council: council.performance } : {}) },
     snapshot: safeSnapshot(prepared.snapshot),
     envelopes: council.envelopes,
     continuityPlan: council.continuityPlan,

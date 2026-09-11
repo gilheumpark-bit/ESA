@@ -62,4 +62,16 @@ describe('applyDrawingCorrection', () => {
     });
     expect(corrected.evidenceGraph.symbols[0]).toMatchObject({ confirmedType: 'mccb', rawLabel: 'VCB-1' });
   });
+
+  it.each(['unknown', ' unread ', '모름', '미판독'])('keeps %s as a review state, not a new type candidate', (selectedValue) => {
+    const source = documentFixture();
+    const originalCandidates = [...source.evidenceGraph.symbols[0].typeCandidates];
+    const corrected = applyDrawingCorrection(source, {
+      targetDisplayId: 'P01-S001', selectedValue, correctionKind: 'type',
+      idempotencyKey: `request-unknown-${selectedValue.trim()}`, correctedBy: 'authenticated-user',
+    });
+    expect(corrected.evidenceGraph.symbols[0]).toMatchObject({ confirmedType: undefined, certainty: 'unread' });
+    expect(corrected.evidenceGraph.symbols[0].typeCandidates).toEqual(originalCandidates);
+    expect(corrected.unresolvedItems.some((item) => item.code === 'UNREADABLE_SYMBOL' && item.displayId === 'P01-S001')).toBe(true);
+  });
 });

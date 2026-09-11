@@ -8,7 +8,9 @@
  * PART 3: Main page component
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { copyTextWithFallback } from '@/lib/clipboard';
+import { requestFeatureJson, requireRecord, FeatureRequestError } from '@/lib/feature-request';
 import Link from 'next/link';
 import {
   BookOpen,
@@ -131,6 +133,7 @@ function DetailPanel({
   }, [ref_]);
 
   const relatedCalcs = STANDARD_CALC_MAP[ref_.id] ?? [];
+  const [copyStatus, setCopyStatus] = useState('');
 
   return (
     <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-5">
@@ -181,6 +184,16 @@ function DetailPanel({
         </span>
       </div>
 
+      <div className="mb-4 rounded-lg border border-[var(--border-default)] p-3 text-sm">
+        <p>이 화면의 참조 판본: {ref_.edition ?? '미기록'} · 최신 개정 여부는 공인 원문 확인이 필요합니다.</p>
+        <button type="button" className="mt-2 min-h-11 rounded-lg border px-3" onClick={async () => {
+          try {
+            const reference = `${ref_.standard} ${ref_.clause ?? ''} | ${ref_.title_ko} | 판본: ${ref_.edition ?? '미기록'} | 출처: ${ref_.url ?? '미기록'}`;
+            setCopyStatus(await copyTextWithFallback(reference, '기준 참조:') ? '참조 정보를 복사했습니다.' : '복사를 완료하지 못했습니다. 표시된 판본과 출처를 직접 확인하세요.');
+          } catch { setCopyStatus('참조 정보 복사에 실패했습니다.'); }
+        }}>판본·출처 복사</button>
+        {copyStatus && <p role="status" className="mt-2 text-xs">{copyStatus}</p>}
+      </div>
       {/* KEC articles (conditions tree) */}
       {kecArticles.length > 0 && (
         <div className="mb-4">
@@ -268,7 +281,7 @@ function DetailPanel({
                 )}
                 {/* 교차 참조 */}
                 {art.crossRef && art.crossRef.length > 0 && (
-                  <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">
+                  <p className="mt-1.5 text-xs text-[var(--text-tertiary)]">
                     참조: {art.crossRef.join(' · ')}
                   </p>
                 )}
@@ -314,7 +327,7 @@ function DetailPanel({
                 )}
                 {/* 교차 참조 */}
                 {art.crossRef && art.crossRef.length > 0 && (
-                  <p className="mt-1.5 text-[10px] text-[var(--text-tertiary)]">
+                  <p className="mt-1.5 text-xs text-[var(--text-tertiary)]">
                     참조: {art.crossRef.join(' · ')}
                   </p>
                 )}
@@ -429,33 +442,28 @@ function StandardConvertWidget() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const active = useRef<AbortController | null>(null);
+  const stop = useCallback(() => { active.current?.abort(); active.current = null; setLoading(false); setResult(null); setError(null); }, []);
+  useEffect(() => () => { active.current?.abort(); }, []);
   const handleConvert = useCallback(async () => {
-    if (!fromClause.trim()) return;
+    if (!fromClause.trim() || active.current) return;
+    const controller = new AbortController(); active.current = controller;
     setLoading(true);
     setError(null);
     setResult(null);
 
     try {
-      const res = await fetch('/api/standard-convert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fromStandard,
-          fromClause: fromClause.trim(),
-          toStandard,
-        }),
+      const data = await requestFeatureJson('/api/standard-convert', { method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromStandard, fromClause: fromClause.trim(), toStandard }),
+      }, (value) => {
+        const row = requireRecord(requireRecord(value).data);
+        if (row.toStandard !== toStandard || typeof row.toClause !== 'string' || typeof row.confidence !== 'number'
+          || !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1) throw new FeatureRequestError('기준 대응 응답을 확인하지 못했습니다.');
+        return row as unknown as ConversionResult;
       });
-      const json = await res.json();
-      if (json.success) {
-        setResult(json.data);
-      } else {
-        setError(json.error?.message ?? '변환 실패');
-      }
-    } catch {
-      setError('네트워크 오류');
-    } finally {
-      setLoading(false);
-    }
+      if (!controller.signal.aborted) setResult(data);
+    } catch (error) { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : '기준 변환 실패'); }
+    finally { if (active.current === controller) { active.current = null; setLoading(false); } }
   }, [fromStandard, fromClause, toStandard]);
 
   return (
@@ -466,7 +474,7 @@ function StandardConvertWidget() {
         기준 변환
       </h2>
       <p className="mb-4 text-xs text-[var(--text-tertiary)]">
-        KEC / NEC / IEC / JIS 조항 번호를 상호 변환합니다
+        저장된 대응표에서 조항 후보를 조회합니다. 같은 효력·요구사항 또는 최신 판본의 일치를 보증하지 않습니다.
       </p>
 
       <div className="space-y-3">
@@ -476,6 +484,7 @@ function StandardConvertWidget() {
             aria-label="변환할 원본 표준"
             value={fromStandard}
             onChange={(e) => {
+              stop();
               const next = e.target.value;
               setFromStandard(next);
               // 원본이 대상과 같아지면 대상 state 도 갱신한다. 안 그러면 대상
@@ -485,7 +494,7 @@ function StandardConvertWidget() {
                 setToStandard(CONVERT_STANDARDS.find((s) => s !== next) ?? toStandard);
               }
             }}
-            className="h-9 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
           >
             {CONVERT_STANDARDS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -493,10 +502,11 @@ function StandardConvertWidget() {
             aria-label="원본 조항 번호"
             type="text"
             value={fromClause}
-            onChange={(e) => setFromClause(e.target.value)}
+            maxLength={120}
+            onChange={(e) => { stop(); setFromClause(e.target.value); }}
             onKeyDown={(e) => { if (e.key === 'Enter') handleConvert(); }}
             placeholder="조항 번호 (예: 232.1)"
-            className="h-9 flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm outline-none focus:border-[var(--color-primary)]"
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm outline-none focus:border-[var(--color-primary)]"
           />
         </div>
 
@@ -506,8 +516,8 @@ function StandardConvertWidget() {
           <select
             aria-label="변환 대상 표준"
             value={toStandard}
-            onChange={(e) => setToStandard(e.target.value)}
-            className="h-9 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
+            onChange={(e) => { stop(); setToStandard(e.target.value); }}
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 text-sm"
           >
             {CONVERT_STANDARDS.filter((s) => s !== fromStandard).map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -516,7 +526,7 @@ function StandardConvertWidget() {
           <button
             onClick={handleConvert}
             disabled={loading || !fromClause.trim()}
-            className="h-9 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40"
+            className="min-h-11 rounded-lg bg-[var(--color-primary)] px-4 text-sm font-medium text-white hover:bg-[var(--color-primary-hover)] disabled:opacity-40"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : '변환'}
           </button>
@@ -524,21 +534,21 @@ function StandardConvertWidget() {
 
         {/* Result */}
         {error && (
-          <p className="text-xs text-[var(--color-error)]">{error}</p>
+          <p role="alert" className="text-sm text-[var(--drawing-error-text)]">{error}</p>
         )}
         {result && (
           <div className="rounded-lg bg-[var(--bg-secondary)] p-3">
             <div className="flex items-baseline gap-2">
               <span className="text-xs text-[var(--text-tertiary)]">{result.toStandard}</span>
               <span className="text-base font-bold text-[var(--text-primary)]">{result.toClause}</span>
-              <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium ${
                 result.confidence >= 0.8
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                   : result.confidence >= 0.5
                     ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                     : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
               }`}>
-                {Math.round(result.confidence * 100)}% 일치
+                대응 후보 지표 {Math.round(result.confidence * 100)}%
               </span>
             </div>
             {result.title && (
@@ -562,6 +572,7 @@ export default function StandardsPage() {
   const [search, setSearch] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
   const [licenseFilter, setLicenseFilter] = useState('');
+  const [editionFilter, setEditionFilter] = useState('');
   const [selectedRef, setSelectedRef] = useState<StandardRef | null>(null);
 
   const filteredRefs = useMemo(() => {
@@ -579,8 +590,9 @@ export default function StandardsPage() {
       refs = refs.filter((r) => r.licenseType === licenseFilter);
     }
 
+    if (editionFilter) refs = refs.filter((ref) => (ref.edition ?? '미기록') === editionFilter);
     return refs;
-  }, [countryFilter, licenseFilter]);
+  }, [countryFilter, licenseFilter, editionFilter]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-secondary)]">
@@ -601,9 +613,15 @@ export default function StandardsPage() {
         <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
           이 화면은 저장소에 명시된 판본 스냅샷을 탐색합니다. 2026년 KEC 개정, NEC 2026 및 IEC 60364 파트별 최신 개정이 자동 반영되는 서비스가 아니므로 설계·시공 전 공인 원문을 확인하세요.
         </div>
+        <label className="mb-4 flex flex-wrap items-center gap-2 text-sm">저장된 참조 판본
+          <select aria-label="저장된 참조 판본" value={editionFilter} onChange={(event) => setEditionFilter(event.target.value)} className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3">
+            <option value="">모든 판본</option>{[...new Set(STANDARD_REFS.map((ref) => ref.edition ?? '미기록'))].sort().map((edition) => <option key={edition} value={edition}>{edition}</option>)}
+          </select>
+          <button type="button" className="min-h-11 rounded-lg border px-3" onClick={() => { setSearch(''); setCountryFilter(''); setLicenseFilter(''); setEditionFilter(''); }}>기준 필터 초기화</button>
+        </label>
         {/* Filters */}
         <div className="mb-6 flex flex-wrap items-center gap-3">
-          <div className="relative min-w-[280px] flex-1">
+          <div className="relative min-w-0 basis-64 flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)]" />
             <input
               aria-label="표준 조항 검색"
@@ -611,7 +629,7 @@ export default function StandardsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="조항 검색 (예: 전압강하, breaker, 232)"
-              className="h-10 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
+              className="min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--color-primary)]"
             />
           </div>
 
@@ -619,7 +637,7 @@ export default function StandardsPage() {
             aria-label="국가 및 표준 체계"
             value={countryFilter}
             onChange={(e) => setCountryFilter(e.target.value)}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
           >
             {COUNTRY_FILTERS.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
@@ -630,7 +648,7 @@ export default function StandardsPage() {
             aria-label="라이선스 유형"
             value={licenseFilter}
             onChange={(e) => setLicenseFilter(e.target.value)}
-            className="h-10 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
+            className="min-h-11 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)]"
           >
             {LICENSE_FILTERS.map((l) => (
               <option key={l.value} value={l.value}>{l.label}</option>

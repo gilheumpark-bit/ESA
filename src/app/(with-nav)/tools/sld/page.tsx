@@ -12,10 +12,19 @@
  * PART 5: Main page component
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { calculatorHref } from '@/lib/calculator-catalog';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES } from '@/lib/calculator-params';
-import { coerceCalculatorInput } from '@/lib/calc-intent-bridge';
+import { prepareDrawingCalculationInputs } from '@/lib/drawing-calculation-inputs';
+import { buildQuickDrawingReadout, QUICK_READ_REASON_LABELS, type QuickComponentRead, type QuickConnectionRead } from '@/lib/quick-drawing-readout';
+import { DRAWING_CERTAINTY_LABELS } from '@/lib/drawing-certainty';
+import { SymbolFeedbackPanel } from '@/components/SymbolFeedbackPanel';
+import { createDrawingWorkspaceGuard } from '@/lib/drawing-workspace-guard';
+import { SymbolClassificationResults } from '@/components/SymbolClassificationResults';
+import { DrawingReadingSummary } from '@/components/DrawingReadingSummary';
+import type { SLDComponent, SLDConnection, CalcChainStep, SLDAnalysis as SLDAnalysisResult } from '@/lib/sld-recognition';
+import { readApiErrorMessage } from '@/lib/error-messages';
+import { openDrawingPrintWindow } from '@/lib/drawing-print-window';
 import { readStoredCountry } from '@/hooks/useSettings';
 import { useRouter } from 'next/navigation';
 import {
@@ -84,61 +93,8 @@ const EMPTY_SYMBOL_LIBRARY_CATALOG: SymbolLibraryCatalog = {
 // PART 1 — Types
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface SLDComponent {
-  id: string;
-  type: string;
-  label?: string;
-  rating?: string;
-  voltage?: string;
-  current?: string;
-  position: { x: number; y: number };
-}
-
-interface SLDConnection {
-  id: string;
-  from: string;
-  to: string;
-  cableType?: string;
-  length?: string;
-  conductorSize?: string;
-  activePower?: string;
-  reactivePower?: string;
-  flowDirection?: 'from_to' | 'to_from' | 'bidirectional' | 'unknown';
-}
-
-interface CalcChainStep {
-  step: number;
-  calculatorId: string;
-  inputs: Record<string, unknown>;
-  dependsOn?: number[];
-  description: string;
-}
-
-interface SLDAnalysisResult {
-  components: SLDComponent[];
-  connections: SLDConnection[];
-  suggestedCalculations: Array<{
-    calculatorId: string;
-    inputs: Record<string, unknown>;
-    reason: string;
-    priority: number;
-  }>;
-  systemVoltage?: string;
-  systemType?: string;
-  confidence: number;
-  rawDescription: string;
-  /** 고객사 심볼 라이브러리 적용 결과 (DXF 벡터 경로 전용) */
-  symbolLibraryApplied?: { organization: string; matched: number; entryCount: number };
-  unknownSymbols?: Array<{
-    blockName: string;
-    fingerprint: string | null;
-    count: number;
-    samplePosition: { x: number; y: number };
-  }>;
-}
-
-
 const COMPONENT_ICONS: Record<string, string> = {
+  unknown: '?',
   transformer: 'TX',
   breaker: 'CB',
   cable: 'CA',
@@ -174,7 +130,8 @@ const COMPONENT_COLORS: Record<string, string> = {
 // PART 2 — Component List
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function ComponentList({ components }: { components: SLDComponent[] }) {
+function ComponentList({ components, reads }: { components: SLDComponent[]; reads: QuickComponentRead[] }) {
+  const byId = new Map(reads.map((item) => [item.id, item]));
   if (!components.length) return null;
 
   return (
@@ -198,8 +155,18 @@ function ComponentList({ components }: { components: SLDComponent[] }) {
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
-                {comp.label ?? comp.type}
+                {comp.label ?? (comp.type === 'unknown' ? '종류 미판독' : comp.type)}
               </p>
+              <p className="text-xs" title={QUICK_READ_REASON_LABELS[byId.get(comp.id)?.type.reason ?? 'QUICK_NOT_VERIFIED']}>
+                종류: {byId.get(comp.id)?.type.certainty === 'unread' ? '미판독' : `${comp.type} · 검토 필요`}
+                {comp.typeCandidates?.length ? ` (미지원 후보: ${comp.typeCandidates.join(' / ')})` : ''}
+              </p>
+              <details className="mt-1 text-xs"><summary className="cursor-pointer">정격·입력 판독 상태</summary>
+                <dl>{(['rating', 'voltage', 'current'] as const).map((field) => <div key={field} className="mt-1">
+                  <dt className="inline">{{ rating: '정격', voltage: '전압', current: '전류' }[field]}: </dt>
+                  <dd className="inline">{comp[field] ?? '미기재/미판독'} · {DRAWING_CERTAINTY_LABELS[byId.get(comp.id)?.fields[field].certainty ?? 'unread']}</dd>
+                </div>)}</dl>
+              </details>
               <div className="flex flex-wrap gap-1.5 text-[10px] opacity-80">
                 {comp.rating && <span>{comp.rating}</span>}
                 {comp.voltage && <span>{comp.voltage}</span>}
@@ -220,12 +187,15 @@ function ComponentList({ components }: { components: SLDComponent[] }) {
 function ConnectionMap({
   connections,
   components,
+  reads,
 }: {
   connections: SLDConnection[];
   components: SLDComponent[];
+  reads: QuickConnectionRead[];
 }) {
   if (!connections.length) return null;
 
+  const byId = new Map(reads.map((item) => [item.id, item]));
   const getLabel = (id: string) => {
     const comp = components.find(c => c.id === id);
     return comp?.label ?? comp?.type ?? id;
@@ -250,11 +220,16 @@ function ConnectionMap({
               <span className="font-medium text-[var(--text-primary)]">
                 {getLabel(ordered.from)}
               </span>
-              {conn.flowDirection === 'bidirectional'
+              {!conn.flowDirection || conn.flowDirection === 'unknown'
+                ? <Link2 size={14} className="shrink-0 text-[var(--text-tertiary)]" aria-label="방향 미판독" />
+                : conn.flowDirection === 'bidirectional'
                 ? <ArrowLeftRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />
                 : <ArrowRight size={14} className="shrink-0 text-[var(--text-tertiary)]" />}
               <span className="font-medium text-[var(--text-primary)]">
                 {getLabel(ordered.to)}
+              </span>
+              <span className="text-xs text-[var(--text-secondary)]" title={QUICK_READ_REASON_LABELS[byId.get(conn.id)?.relation.reason ?? 'QUICK_NOT_VERIFIED']}>
+                {DRAWING_CERTAINTY_LABELS[byId.get(conn.id)?.relation.certainty ?? 'ambiguous']}
               </span>
               {(conn.cableType || conn.length || conn.conductorSize || conn.activePower || conn.reactivePower) && (
                 <span className="ml-auto text-xs text-[var(--text-tertiary)]">
@@ -335,82 +310,63 @@ interface ChainRun {
   note?: string;
 }
 
-/**
- * 순서만 보여주던 체인을 실제로 돌린다.
- *
- * 지금까지 이 패널은 "추천 계산 순서"를 나열하고 단계마다 계산기를 여는 링크만
- * 줬다. 여섯 단계면 여섯 번 열어 여섯 번 입력해야 한다. 도면에서 읽은 값은
- * 이미 있으므로 그대로 돌려서 보여준다.
- *
- * 값을 채우는 방식은 폼과 같다 — 기본값을 **클라이언트에서 채워 보낸다**.
- * /api/calculate 가 대신 채우게 하면 영수증에는 사용자가 준 적 없는 값이
- * 조용히 들어간다. 필수 입력이 비면 돌리지 않고 그 사실을 적는다.
- */
+/** Drawing bulk execution accepts explicit inputs only. Unknown/default assumptions
+ * remain HOLD; the standalone form is the manual completion path. */
 function useChainRunner(steps: CalcChainStep[]) {
   const [runs, setRuns] = useState<Record<number, ChainRun>>({});
   const [running, setRunning] = useState(false);
-
+  const active = useRef<AbortController | null>(null);
+  useEffect(() => () => { active.current?.abort(); }, []);
   const runAll = useCallback(async () => {
+    if (active.current) return;
+    const controller = new AbortController();
+    active.current = controller;
+    const current = () => active.current === controller && !controller.signal.aborted;
+    const settled: Record<number, ChainRun> = {};
+    const publish = (step: number, run: ChainRun) => {
+      settled[step] = run;
+      if (current()) setRuns({ ...settled });
+    };
     setRunning(true);
     setRuns({});
-    const country = readStoredCountry();
-
-    for (const step of steps) {
-      const defs = CALCULATOR_PARAMS[step.calculatorId] ?? [];
-      const { input, invalid } = coerceCalculatorInput(defs, step.inputs as Record<string, unknown>);
-      const missing = defs
-        .filter((d) => d.defaultValue === undefined && input[d.name] === undefined)
-        .map((d) => d.description ?? d.name);
-
-      if (invalid.length > 0 || missing.length > 0) {
-        setRuns((prev) => ({
-          ...prev,
-          [step.step]: {
-            status: 'blocked',
-            note: missing.length > 0
-              ? `도면에서 못 읽은 입력: ${missing.join(', ')}`
-              : `값을 숫자로 읽지 못했습니다: ${invalid.join(', ')}`,
-          },
-        }));
-        continue;
-      }
-
-      try {
-        const res = await fetch('/api/calculate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ calculatorId: step.calculatorId, inputs: input, countryCode: country }),
-        });
-        const body = await res.json();
-        const data = body.data ?? body;
-        if (!res.ok || !data.result) {
-          setRuns((prev) => ({
-            ...prev,
-            [step.step]: { status: 'error', note: body.error?.message ?? `실행 실패 (${res.status})` },
-          }));
-          continue;
+    try {
+      const country = readStoredCountry();
+      for (const step of steps) {
+        if (!current()) break;
+        const prepared = prepareDrawingCalculationInputs(CALCULATOR_PARAMS[step.calculatorId] ?? [], step.inputs);
+        const dependencies = (step.dependsOn ?? []).filter((id) => settled[id]?.status !== 'ok');
+        const reasons = [...(step.holdReasons ?? []),
+          ...(dependencies.length ? [`선행 계산 미완료: ${dependencies.join(', ')}`] : []),
+          ...(prepared.missing.length ? [`미확인 입력: ${prepared.missing.join(', ')}`] : []),
+          ...(prepared.invalid.length ? [`입력 확인 필요: ${prepared.invalid.join(', ')}`] : [])];
+        if (reasons.length) { publish(step.step, { status: 'blocked', note: `HOLD — ${reasons.join(' · ')}` }); continue; }
+        try {
+          const res = await fetch('/api/calculate', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+            body: JSON.stringify({ calculatorId: step.calculatorId, inputs: prepared.input, countryCode: country }),
+          });
+          const body = await res.json().catch(() => null);
+          if (!current()) break;
+          const data = body?.data ?? body;
+          if (!res.ok || !data?.result) {
+            publish(step.step, { status: 'error', note: readApiErrorMessage(body, `실행 실패 (${res.status})`) }); continue;
+          }
+          publish(step.step, { status: 'ok', value: `${data.result.value}${data.result.unit ?? ''}`, note: data.result.judgment?.message });
+        } catch {
+          if (current()) publish(step.step, { status: 'error', note: '서버에 연결하지 못했습니다.' });
         }
-        setRuns((prev) => ({
-          ...prev,
-          [step.step]: {
-            status: 'ok',
-            value: `${data.result.value}${data.result.unit ?? ''}`,
-            note: data.result.judgment?.message,
-          },
-        }));
-      } catch {
-        setRuns((prev) => ({ ...prev, [step.step]: { status: 'error', note: '서버에 연결하지 못했습니다.' } }));
       }
+    } finally {
+      if (current()) setRunning(false);
+      if (active.current === controller) active.current = null;
     }
-
-    setRunning(false);
   }, [steps]);
-
   return { runs, running, runAll };
 }
 
 function CalcChain({ steps }: { steps: CalcChainStep[] }) {
   const { runs, running, runAll } = useChainRunner(steps);
+  const [inputsReviewed, setInputsReviewed] = useState(false);
 
   if (!steps.length) return null;
 
@@ -425,8 +381,8 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
         </div>
         <button
           type="button"
-          onClick={runAll}
-          disabled={running}
+          onClick={() => { if (inputsReviewed) void runAll(); }}
+          disabled={running || !inputsReviewed}
           className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-60"
         >
           <PlayCircle size={13} />
@@ -434,11 +390,15 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
         </button>
       </div>
       <p className="mb-3 text-xs text-[var(--text-tertiary)]">
-        도면에서 읽은 값으로 돌립니다. 판독값이므로 결과는 계산기에서 다시 확인하세요.
+        확인하지 않은 전압·역률 등은 기본값으로 채우지 않고 해당 단계만 보류합니다. 누락 입력은 계산기에서 직접 확인하세요.
       </p>
+      <label className="mb-3 flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+        <input type="checkbox" checked={inputsReviewed} disabled={running} onChange={(event) => setInputsReviewed(event.target.checked)} />
+        표시된 판독 입력을 원본에서 확인했습니다. 이 확인은 AI 확정 상태를 변경하지 않습니다.
+      </label>
       <div className="space-y-3">
         {steps.map((step, idx) => (
-          <div key={step.step} className="flex items-start gap-3">
+          <div key={step.step} className="relative flex items-start gap-3">
             {/* Step number */}
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-xs font-bold text-white">
               {step.step}
@@ -449,6 +409,7 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
               <p className="text-sm font-medium text-[var(--text-primary)]">
                 {step.description}
               </p>
+              <p className="mt-1 break-words text-xs text-[var(--text-tertiary)]">입력: {Object.entries(step.inputs).map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(' · ') || '미입력'}</p>
               {step.dependsOn && step.dependsOn.length > 0 && (
                 <p className="mt-0.5 text-[10px] text-[var(--text-tertiary)]">
                   Step {step.dependsOn.join(', ')} 완료 후 실행
@@ -459,7 +420,7 @@ function CalcChain({ steps }: { steps: CalcChainStep[] }) {
                   className={`mt-1 text-xs ${
                     runs[step.step].status === 'ok'
                       ? 'font-semibold text-[var(--text-primary)]'
-                      : 'text-[var(--color-error)]'
+                      : 'text-[var(--drawing-error-text)]'
                   }`}
                 >
                   {runs[step.step].status === 'ok'
@@ -506,6 +467,8 @@ export default function SLDAnalysisPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
+  const [analysisRevision, setAnalysisRevision] = useState(0);
+  const quickReadout = useMemo(() => analysis ? buildQuickDrawingReadout(analysis) : null, [analysis]);
   const [runComparison, setRunComparison] = useState<SLDRunComparison | null>(null);
   const [calcChain, setCalcChain] = useState<CalcChainStep[]>([]);
   const [review, setReview] = useState<ReviewLike | null>(null);
@@ -536,8 +499,12 @@ export default function SLDAnalysisPage() {
   const [v3PageIndex, setV3PageIndex] = useState(0);
   const [v3Cancelling, setV3Cancelling] = useState(false);
   const [v3JobStatus, setV3JobStatus] = useState<string | null>(null);
+  const [v3Refreshing, setV3Refreshing] = useState(false);
   const [v3CorrectionTarget, setV3CorrectionTarget] = useState<string | null>(null);
   const v3CorrectionInFlightRef = useRef<Set<string>>(new Set());
+  const [workspaceGuard] = useState(createDrawingWorkspaceGuard);
+  const correctionRetryRef = useRef<{ signature: string; id: string } | null>(null);
+  useEffect(() => () => { workspaceGuard.invalidate(); }, [workspaceGuard]);
   const fullDocInputRef = useRef<HTMLInputElement>(null);
   const canResumeV3 = Boolean(
     v3ResumeAvailable
@@ -721,6 +688,8 @@ export default function SLDAnalysisPage() {
   }, [activeSymbolLibrary, drawingFile, rulesFile, router]);
 
   const handleReset = useCallback(() => {
+    workspaceGuard.invalidate();
+    correctionRetryRef.current = null;
     if (preview) URL.revokeObjectURL(preview);
     setImageFile(null);
     setPreview(null);
@@ -732,6 +701,7 @@ export default function SLDAnalysisPage() {
     setReview(null);
     setResultTab('summary');
     setError(null);
+    setV3Loading(false);
     setV3Doc(null);
     setV3JobId(null);
     setV3Error(null);
@@ -741,47 +711,56 @@ export default function SLDAnalysisPage() {
     setV3PageIndex(0);
     setV3Cancelling(false);
     setV3JobStatus(null);
+    setV3Refreshing(false);
     setV3CorrectionTarget(null);
     v3CorrectionInFlightRef.current.clear();
     sessionStorage.removeItem(V3_JOB_SESSION_KEY);
-  }, [preview]);
+  }, [preview, workspaceGuard]);
 
   const handleFullDocumentAnalyze = useCallback(async (
     file: File,
     libraryOverride?: SymbolLibrary | null,
   ) => {
-    const libraryToApply = libraryOverride === undefined ? activeSymbolLibrary : libraryOverride;
-    // V3 입력이 .dwg 를 받도록 넓혔으므로(전체 판독 input) 여기서도 같은
-    // 안내로 멈춘다 — 기본 업로드 경로의 가드만으로는 이 입력이 뚫린다.
-    if (documentKindOf(file) === 'dwg') {
-      setV3Error(DWG_GUIDANCE);
-      return;
-    }
-    // 이미지 + AI 미연결: 서버는 어차피 401 을 준다. 왕복시켜 「키 필요」만
-    // 보여주면 무키 사용자에겐 막다른 골목이다 — 키 없이 되는 길(DXF·벡터
-    // PDF)까지 담은 안내로 여기서 멈춘다(실사용 2026-08-21 회사 환경 보고).
-    if (documentKindOf(file) === 'image' && !(await getFirstAvailableVisionKey())) {
-      setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
-      return;
-    }
-    // 벡터(DXF·PDF) + AI 미연결: vectorOnly 모드로 V3 를 실제로 시작한다 —
-    // 파서·토폴로지·KEC 검토는 기하 연산이라 VLM 없이 성립하고, 서버가 이
-    // 깃발로 익명 무키 실행을 연다. deferred 보관(취소·재개)은 로그인 저장이
-    // 필요하므로 무키에선 요청하지 않는다 — 그 요청이 로그인 401 을 만들어
-    // 성공한 결과 옆에 오류를 띄우던 것이 «AI 없이 안 됨» 오인의 원인이었다.
-    const keylessVector = !(await getFirstAvailableVisionKey());
-    setV3Loading(true);
-    setV3Error(null);
-    setV3Doc(null);
-    setV3JobId(null);
-    setV3JobStatus(null);
-    setV3ResumeAvailable(false);
-    setV3CorrectionTarget(null);
+    workspaceGuard.invalidate();
+    correctionRetryRef.current = null;
+    sessionStorage.removeItem(V3_JOB_SESSION_KEY);
     v3CorrectionInFlightRef.current.clear();
-    setV3SourceFile(file);
-    setV3PageIndex(0);
-    setSelectedDisplayId(undefined);
+    const operation = workspaceGuard.lease();
     try {
+      const libraryToApply = libraryOverride === undefined ? activeSymbolLibrary : libraryOverride;
+      // V3 입력이 .dwg 를 받도록 넓혔으므로(전체 판독 input) 여기서도 같은
+      // 안내로 멈춘다 — 기본 업로드 경로의 가드만으로는 이 입력이 뚫린다.
+      if (documentKindOf(file) === 'dwg') {
+        setV3Error(DWG_GUIDANCE);
+        return;
+      }
+      // 이미지 + AI 미연결: 서버는 어차피 401 을 준다. 왕복시켜 「키 필요」만
+      // 보여주면 무키 사용자에겐 막다른 골목이다 — 키 없이 되는 길(DXF·벡터
+      // PDF)까지 담은 안내로 여기서 멈춘다(실사용 2026-08-21 회사 환경 보고).
+      if (documentKindOf(file) === 'image' && !(await getFirstAvailableVisionKey())) {
+        setV3Error(IMAGE_NEEDS_AI_GUIDANCE);
+        return;
+      }
+      // 벡터(DXF·PDF) + AI 미연결: vectorOnly 모드로 V3 를 실제로 시작한다 —
+      // 파서·토폴로지·KEC 검토는 기하 연산이라 VLM 없이 성립하고, 서버가 이
+      // 깃발로 익명 무키 실행을 연다. deferred 보관(취소·재개)은 로그인 저장이
+      // 필요하므로 무키에선 요청하지 않는다 — 그 요청이 로그인 401 을 만들어
+      // 성공한 결과 옆에 오류를 띄우던 것이 «AI 없이 안 됨» 오인의 원인이었다.
+      const keylessVector = !(await getFirstAvailableVisionKey());
+      if (!operation.isCurrent()) return;
+      setV3Loading(true);
+      setV3Error(null);
+      setV3Doc(null);
+      setV3JobId(null);
+      setV3JobStatus(null);
+      setV3ResumeAvailable(false);
+      setV3CorrectionTarget(null);
+      setV3Refreshing(false);
+      setV3Cancelling(false);
+      v3CorrectionInFlightRef.current.clear();
+      setV3SourceFile(file);
+      setV3PageIndex(0);
+      setSelectedDisplayId(undefined);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('pages', 'all');
@@ -797,12 +776,14 @@ export default function SLDAnalysisPage() {
       }
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
+      if (!operation.isCurrent()) return;
       const createResponse = await fetch('/api/drawing-jobs', {
-        method: 'POST',
+        method: 'POST', signal: operation.signal,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
       });
       const created = await createResponse.json();
+      if (!operation.isCurrent()) return;
       if (!createResponse.ok || !created?.success) {
         throw new Error(created?.error?.message ?? `전체 문서 작업 생성 실패 (${createResponse.status})`);
       }
@@ -820,7 +801,7 @@ export default function SLDAnalysisPage() {
       const visionKey = await getFirstAvailableVisionKey();
       let endpoint: 'run' | 'resume' = 'run';
       let previousSettledPages = 0;
-      for (let chunk = 0; chunk < 500; chunk += 1) {
+      for (let chunk = 0; chunk < 500 && operation.isCurrent(); chunk += 1) {
         const runForm = new FormData();
         if (visionKey) {
           runForm.append('provider', visionKey.provider);
@@ -828,11 +809,12 @@ export default function SLDAnalysisPage() {
           if (visionKey.key) runForm.append('apiKey', visionKey.key);
         }
         const runResponse = await fetch(`/api/drawing-jobs/${jobId}/${endpoint}`, {
-          method: 'POST',
+          method: 'POST', signal: operation.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           body: runForm,
         });
         const result = await runResponse.json();
+        if (!operation.isCurrent()) return;
         if (!runResponse.ok || !result?.success) {
           throw new Error(result?.error?.message ?? `전체 문서 분석 실패 (${runResponse.status})`);
         }
@@ -847,13 +829,22 @@ export default function SLDAnalysisPage() {
         endpoint = 'resume';
       }
     } catch (err) {
-      setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
+      if (operation.isCurrent()) setV3Error(err instanceof Error ? err.message : '전체 문서 분석 오류');
     } finally {
-      setV3Loading(false);
+      if (operation.isCurrent()) setV3Loading(false);
+      operation.release();
     }
-  }, [activeSymbolLibrary]);
+  }, [activeSymbolLibrary, workspaceGuard]);
 
   const handlePublicFixtureCalibration = useCallback(async () => {
+    workspaceGuard.invalidate();
+    sessionStorage.removeItem(V3_JOB_SESSION_KEY);
+    correctionRetryRef.current = null;
+    v3CorrectionInFlightRef.current.clear();
+    setV3CorrectionTarget(null);
+    setV3Refreshing(false);
+    setV3Cancelling(false);
+    const operation = workspaceGuard.lease();
     setV3Loading(true);
     setV3Error(null);
     setV3Doc(null);
@@ -862,10 +853,11 @@ export default function SLDAnalysisPage() {
     setV3ResumeAvailable(false);
     try {
       const response = await fetch('/api/dev/drawing-fixture?id=wiki-oneline', {
-        cache: 'no-store',
+        cache: 'no-store', signal: operation.signal,
       });
       if (!response.ok) throw new Error('공개 교보재를 불러오지 못했습니다.');
       const blob = await response.blob();
+      if (!operation.isCurrent()) return;
       const file = new File([blob], 'wiki-oneline.png', { type: 'image/png' });
       setDrawingFile(file);
       setV3SourceFile(file);
@@ -879,11 +871,13 @@ export default function SLDAnalysisPage() {
         formData.append('model', visionKey.model);
         if (visionKey.key) formData.append('apiKey', visionKey.key);
       }
+      if (!operation.isCurrent()) return;
       const resultResponse = await fetch('/api/drawing-jobs', {
-        method: 'POST',
+        method: 'POST', signal: operation.signal,
         body: formData,
       });
       const result = await resultResponse.json();
+      if (!operation.isCurrent()) return;
       if (!resultResponse.ok || !result?.success || !result.data?.document) {
         throw new Error(result?.error?.message ?? `공개 교보재 분석 실패 (${resultResponse.status})`);
       }
@@ -892,11 +886,12 @@ export default function SLDAnalysisPage() {
       setV3JobId(String(result.data.jobId));
       setV3JobStatus(document.jobStatus);
     } catch (error) {
-      setV3Error(error instanceof Error ? error.message : '공개 교보재 분석을 시작하지 못했습니다.');
+      if (operation.isCurrent()) setV3Error(error instanceof Error ? error.message : '공개 교보재 분석을 시작하지 못했습니다.');
     } finally {
-      setV3Loading(false);
+      if (operation.isCurrent()) setV3Loading(false);
+      operation.release();
     }
-  }, []);
+  }, [workspaceGuard]);
 
   const handlePublicFixtureQuickAnalysis = useCallback(async () => {
     setLoading(true);
@@ -920,11 +915,12 @@ export default function SLDAnalysisPage() {
       formData.append('model', visionKey.model);
       if (visionKey.key) formData.append('apiKey', visionKey.key);
       const resultResponse = await fetch('/api/sld', { method: 'POST', body: formData });
-      const result = await resultResponse.json();
-      if (!resultResponse.ok || !result.success) {
-        throw new Error(result.error ?? `빠른 SLD 분석 실패 (${resultResponse.status})`);
+      const result = await resultResponse.json().catch(() => null);
+      if (!resultResponse.ok || !result?.success) {
+        throw new Error(readApiErrorMessage(result, `빠른 SLD 분석 실패 (${resultResponse.status})`));
       }
       setAnalysis(result.data);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(result.calcChain ?? []);
       setReview(result.review ?? null);
       setResultTab('summary');
@@ -940,15 +936,16 @@ export default function SLDAnalysisPage() {
     const savedJobId = sessionStorage.getItem(V3_JOB_SESSION_KEY);
     if (!savedJobId) return;
     let disposed = false;
+    const operation = workspaceGuard.lease();
     void (async () => {
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
       const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(savedJobId)}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        cache: 'no-store',
+        cache: 'no-store', signal: operation.signal,
       });
       const json = await response.json().catch(() => null);
-      if (disposed) return;
+      if (disposed || !operation.isCurrent()) return;
       if (!response.ok || !json?.success) {
         sessionStorage.removeItem(V3_JOB_SESSION_KEY);
         return;
@@ -961,13 +958,16 @@ export default function SLDAnalysisPage() {
         setV3ResumeAvailable(restored.jobStatus === 'PARTIAL');
       }
       if (!['COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(String(json.data.status))) setV3Loading(true);
-    })();
-    return () => { disposed = true; };
-  }, [v3JobId]);
+    })().catch(() => {
+      if (!disposed && operation.isCurrent()) setV3Error('저장된 작업을 불러오지 못했습니다. 네트워크를 확인하고 다시 시도해 주세요.');
+    });
+    return () => { disposed = true; operation.cancel(); };
+  }, [v3JobId, workspaceGuard]);
 
   useEffect(() => {
     if (!v3Loading || !v3JobId) return;
     let disposed = false;
+    const operation = workspaceGuard.lease();
     // 연속 실패 계수 — 일시 장애 한 번에 세션을 버리지 않되, 계속 실패하면 멈춘다.
     let transientFailures = 0;
 
@@ -995,15 +995,15 @@ export default function SLDAnalysisPage() {
         const token = await getIdToken().catch(() => null);
         response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          cache: 'no-store',
+          cache: 'no-store', signal: operation.signal,
         });
       } catch {
         // 네트워크 단절은 일시적일 수 있다 — 연속 3회까지만 참는다.
-        if (!disposed && ++transientFailures >= 3) stop('서버와의 연결이 끊겼습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.');
+        if (!disposed && operation.isCurrent() && ++transientFailures >= 3) stop('서버와의 연결이 끊겼습니다. 네트워크를 확인한 뒤 다시 시도해 주세요.');
         return;
       }
       const json = await response.json().catch(() => null);
-      if (disposed) return;
+      if (disposed || !operation.isCurrent()) return;
       if (!response.ok || !json?.success) {
         // 4xx 는 확정 실패(세션 만료·권한)라 즉시 멈춘다. 5xx·파싱 실패는
         // 서버가 곧 돌아올 수 있으므로 연속 3회까지 참는다.
@@ -1023,40 +1023,53 @@ export default function SLDAnalysisPage() {
       }
       if (['COMPLETE', 'PARTIAL', 'FAILED', 'CANCELLED'].includes(String(json.data.status))) setV3Loading(false);
     };
-    void poll();
-    const timer = window.setInterval(() => { void poll(); }, 1_500);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      await poll();
+      if (!disposed && operation.isCurrent()) timer = setTimeout(() => { void tick(); }, 1_500);
+    };
+    void tick();
     return () => {
       disposed = true;
-      window.clearInterval(timer);
+      clearTimeout(timer); operation.cancel();
     };
-  }, [v3JobId, v3Loading]);
+  }, [v3JobId, v3Loading, workspaceGuard]);
 
   const handleV3Cancel = useCallback(async () => {
     if (!v3JobId || v3Cancelling) return;
+    const operation = workspaceGuard.lease();
     setV3Cancelling(true);
     setV3Error(null);
     try {
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
+      if (!operation.isCurrent()) return;
       const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
-        method: 'DELETE',
+        method: 'DELETE', signal: operation.signal,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       const json = await response.json();
+      if (!operation.isCurrent()) return;
       if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '취소 요청을 처리하지 못했습니다.');
+      // Successful server cancellation invalidates the older run and poll responses.
+      workspaceGuard.invalidate();
+      setV3Cancelling(false);
+      setV3Loading(false);
       setV3ResumeAvailable(false);
       setV3JobStatus('CANCELLED');
       sessionStorage.removeItem(V3_JOB_SESSION_KEY);
       setV3Error('분석을 취소했습니다. 보안을 위해 서버의 임시 원본도 삭제했습니다.');
     } catch (err) {
-      setV3Error(err instanceof Error ? err.message : '분석 취소 오류');
+      if (operation.isCurrent()) setV3Error(err instanceof Error ? err.message : '분석 취소 오류');
     } finally {
-      setV3Cancelling(false);
+      if (operation.isCurrent()) setV3Cancelling(false);
+      operation.release();
     }
-  }, [v3Cancelling, v3JobId]);
+  }, [v3Cancelling, v3JobId, workspaceGuard]);
 
   const handleV3Resume = useCallback(async () => {
     if (!v3JobId || !canResumeV3) return;
+    const operation = workspaceGuard.lease();
     setV3Loading(true);
     setV3Error(null);
     try {
@@ -1064,19 +1077,21 @@ export default function SLDAnalysisPage() {
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
       let previousSettledPages = v3Doc?.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty' || page.status === 'failed').length ?? -1;
-      for (let chunk = 0; chunk < 500; chunk += 1) {
+      for (let chunk = 0; chunk < 500 && operation.isCurrent(); chunk += 1) {
         const formData = new FormData();
         if (visionKey) {
           formData.append('provider', visionKey.provider);
           formData.append('model', visionKey.model);
           if (visionKey.key) formData.append('apiKey', visionKey.key);
         }
-        const response = await fetch(`/api/drawing-jobs/${v3JobId}/resume`, {
-          method: 'POST',
+        if (!operation.isCurrent()) return;
+      const response = await fetch(`/api/drawing-jobs/${v3JobId}/resume`, {
+          method: 'POST', signal: operation.signal,
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           body: formData,
         });
         const json = await response.json();
+      if (!operation.isCurrent()) return;
         if (!response.ok || !json?.success) throw new Error(json?.error?.message ?? '분석 재개에 실패했습니다.');
         const resumed = json.data.document as DrawingDocumentV3;
         const settledPages = resumed.pages.filter((page) => page.status === 'complete' || page.status === 'skipped-empty' || page.status === 'failed').length;
@@ -1088,11 +1103,12 @@ export default function SLDAnalysisPage() {
         previousSettledPages = settledPages;
       }
     } catch (err) {
-      setV3Error(err instanceof Error ? err.message : '전체 문서 분석 재개 오류');
+      if (operation.isCurrent()) setV3Error(err instanceof Error ? err.message : '전체 문서 분석 재개 오류');
     } finally {
-      setV3Loading(false);
+      if (operation.isCurrent()) setV3Loading(false);
+      operation.release();
     }
-  }, [canResumeV3, v3Doc, v3JobId]);
+  }, [canResumeV3, v3Doc, v3JobId, workspaceGuard]);
 
   /**
    * 판독 결과 반출. 서버를 거치지 않는다 — 도면 문서는 이미 브라우저에
@@ -1101,69 +1117,111 @@ export default function SLDAnalysisPage() {
    */
   const handleV3Export = useCallback(async (kind: 'print' | 'csv') => {
     if (!v3Doc) return;
-    const mod = await import('@/lib/export-drawing-document');
-    const stamp = new Date().toISOString().slice(0, 10);
-    if (kind === 'print') {
-      const win = window.open('', '_blank', 'noopener,noreferrer');
-      if (!win) {
-        setError('팝업이 차단되어 인쇄용 보고서를 열 수 없습니다. 팝업을 허용해 주세요.');
+    setError(null);
+    try {
+      if (kind === 'print') {
+        // Open synchronously during the user gesture; render lazily afterwards.
+        await openDrawingPrintWindow(async () => {
+          const mod = await import('@/lib/export-drawing-document');
+          return mod.drawingDocumentPrintableHtml(v3Doc);
+        });
         return;
       }
-      win.opener = null;
-      win.document.write(mod.drawingDocumentPrintableHtml(v3Doc));
-      win.document.close();
-      return;
+      const mod = await import('@/lib/export-drawing-document');
+      const stamp = new Date().toISOString().slice(0, 10);
+      const csv = mod.drawingDocumentCsv(v3Doc);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement('a');
+      try {
+        anchor.href = url;
+        anchor.download = `esa-drawing-${v3Doc.documentHash.slice(0, 12)}-${stamp}.csv`;
+        anchor.hidden = true;
+        window.document.body.appendChild(anchor);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      }
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : '판독 결과를 반출하지 못했습니다. 다시 시도해주세요.');
     }
-    const blob = new Blob([mod.drawingDocumentCsv(v3Doc)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `esa-drawing-${v3Doc.documentHash.slice(0, 12)}-${stamp}.csv`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   }, [v3Doc]);
 
   const handleV3Correct = useCallback(async (
-    targetDisplayId: string,
-    selectedValue: string,
-    candidates: string[],
+    targetDisplayId: string, selectedValue: string, _candidates: string[],
   ) => {
-    if (!v3JobId || v3CorrectionInFlightRef.current.has(targetDisplayId) || v3CorrectionInFlightRef.current.size > 0) return;
+    if (!v3JobId || !v3Doc) throw new Error('수정할 최신 문서가 없습니다.');
+    if (v3Loading || v3Refreshing || v3CorrectionInFlightRef.current.size > 0) throw new Error('진행 중인 작업이 끝난 뒤 수정하세요.');
+    const operation = workspaceGuard.lease();
+    const kind = targetDisplayId.includes('-T') ? 'text' : 'type';
+    const signature = JSON.stringify([v3JobId, v3Doc.updatedAt, targetDisplayId, kind, selectedValue.trim()]);
+    if (correctionRetryRef.current?.signature !== signature) correctionRetryRef.current = { signature, id: crypto.randomUUID() };
+    const attempt = correctionRetryRef.current;
     v3CorrectionInFlightRef.current.add(targetDisplayId);
     setV3CorrectionTarget(targetDisplayId);
     setV3Error(null);
     try {
       const { getIdToken } = await import('@/lib/firebase');
       const token = await getIdToken().catch(() => null);
+      if (!operation.isCurrent()) throw new Error('다른 도면으로 이동하여 이전 수정 응답을 적용하지 않았습니다.');
       const res = await fetch(`/api/drawing-jobs/${v3JobId}/corrections`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          targetDisplayId,
-          selectedValue,
-          correctionKind: targetDisplayId.includes('-T') ? 'text' : 'type',
-          expectedUpdatedAt: v3Doc?.updatedAt,
-          idempotencyKey: crypto.randomUUID(),
-        }),
+        method: 'POST', signal: operation.signal,
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ targetDisplayId, selectedValue, correctionKind: kind,
+          expectedUpdatedAt: v3Doc.updatedAt, idempotencyKey: attempt.id }),
       });
       const json = await res.json().catch(() => null);
-      if (!res.ok || !json?.data?.document) {
-        throw new Error(json?.error?.message ?? `수정값을 반영하지 못했습니다. (${res.status})`);
+      if (!operation.isCurrent()) throw new Error('다른 도면으로 이동하여 이전 수정 응답을 적용하지 않았습니다.');
+      if (!res.ok || json?.success === false || !json?.data?.document) {
+        throw new Error(readApiErrorMessage(json, `수정값을 반영하지 못했습니다. (${res.status})`));
       }
       const corrected = json.data.document as DrawingDocumentV3;
+      if (corrected.documentHash !== v3Doc.documentHash || !corrected.evidenceGraph || !Array.isArray(corrected.unresolvedItems)) {
+        throw new Error('수정 응답의 문서가 현재 원본과 일치하지 않습니다. 기존 결과를 유지했습니다.');
+      }
       setV3Doc(corrected);
       setV3JobStatus(corrected.jobStatus);
       setV3ResumeAvailable(Boolean(json.data.resumeAvailable) && corrected.jobStatus === 'PARTIAL');
+      correctionRetryRef.current = null;
     } catch (err) {
-      setV3Error(err instanceof Error ? err.message : '수정값 반영 중 오류가 발생했습니다.');
+      const failure = new Error(err instanceof Error && err.name !== 'AbortError' ? err.message : '수정 요청이 중단됐습니다. 최신 결과를 확인하세요.');
+      if (operation.isCurrent()) setV3Error(failure.message);
+      throw failure; // The editor retains input and displays failure; never fake a saved state.
     } finally {
-      v3CorrectionInFlightRef.current.delete(targetDisplayId);
-      setV3CorrectionTarget((current) => current === targetDisplayId ? null : current);
+      if (operation.isCurrent()) {
+        v3CorrectionInFlightRef.current.delete(targetDisplayId);
+        setV3CorrectionTarget(null);
+      }
+      operation.release();
     }
-  }, [v3Doc, v3JobId]);
+  }, [v3Doc, v3JobId, v3Loading, v3Refreshing, workspaceGuard]);
+
+  const handleV3Refresh = useCallback(async () => {
+    if (!v3JobId || !v3Doc || v3Refreshing || v3CorrectionInFlightRef.current.size) return;
+    const operation = workspaceGuard.lease();
+    setV3Refreshing(true);
+    try {
+      const { getIdToken } = await import('@/lib/firebase');
+      const token = await getIdToken().catch(() => null);
+      if (!operation.isCurrent()) return;
+      const response = await fetch(`/api/drawing-jobs?jobId=${encodeURIComponent(v3JobId)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        cache: 'no-store', signal: operation.signal,
+      });
+      const json = await response.json().catch(() => null);
+      if (!operation.isCurrent()) return;
+      if (!response.ok || !json?.success || json.data?.document?.documentHash !== v3Doc.documentHash) {
+        throw new Error(readApiErrorMessage(json, '최신 결과를 불러오지 못했습니다. 기존 결과와 입력을 유지했습니다.'));
+      }
+      const latest = json.data.document as DrawingDocumentV3;
+      setV3Doc(latest); setV3JobStatus(String(json.data.status));
+      setV3ResumeAvailable(Boolean(json.data.resumeAvailable) && latest.jobStatus === 'PARTIAL');
+      correctionRetryRef.current = null; setV3Error(null);
+    } catch (error) {
+      if (operation.isCurrent()) setV3Error(error instanceof Error ? error.message : '최신 결과 조회 실패');
+    } finally { if (operation.isCurrent()) setV3Refreshing(false); operation.release(); }
+  }, [v3JobId, v3Doc, v3Refreshing, workspaceGuard]);
 
   const handleV3Select = useCallback((displayId: string) => {
     setSelectedDisplayId(displayId);
@@ -1205,10 +1263,10 @@ export default function SLDAnalysisPage() {
       if (visionKey.key) formData.append('apiKey', visionKey.key);
 
       const res = await fetch('/api/sld', { method: 'POST', body: formData });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? 'SLD 분석에 실패했습니다');
+      if (!res.ok || !data?.success) {
+        throw new Error(readApiErrorMessage(data, 'SLD 분석에 실패했습니다'));
       }
 
       const nextAnalysis = data.data as SLDAnalysisResult;
@@ -1217,6 +1275,7 @@ export default function SLDAnalysisPage() {
         ? compareSLDAnalysisRuns(analysis, nextAnalysis, [calcChain.length, nextCalcChain.length])
         : null);
       setAnalysis(nextAnalysis);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(nextCalcChain);
       setReview(data.review ?? null);
       setResultTab('summary');
@@ -1249,9 +1308,10 @@ export default function SLDAnalysisPage() {
       formData.append('file', file);
       if (libraryToApply) formData.append('symbolLibrary', JSON.stringify(libraryToApply));
       const res = await fetch('/api/dxf', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'DXF 파싱 실패');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(readApiErrorMessage(data, 'DXF 파싱 실패'));
       setAnalysis(data.data);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
       setResultTab('summary');
@@ -1281,9 +1341,10 @@ export default function SLDAnalysisPage() {
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch('/api/pdf-drawing', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error ?? data.message ?? 'PDF 파싱 실패');
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(readApiErrorMessage(data, 'PDF 파싱 실패'));
       setAnalysis(data.data);
+      setAnalysisRevision((revision) => revision + 1);
       setCalcChain(data.calcChain ?? []);
       setReview(data.review ?? null);
       setResultTab('summary');
@@ -1356,7 +1417,7 @@ export default function SLDAnalysisPage() {
   }, [drawingFile, handlePrimaryDocumentUpload]);
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">
@@ -1427,7 +1488,7 @@ export default function SLDAnalysisPage() {
             </button>
           )}
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -1438,11 +1499,11 @@ export default function SLDAnalysisPage() {
             <Upload size={28} />
             <div className="text-center">
               <p className="font-semibold">DXF 파일 업로드</p>
-              <p className="mt-1 text-xs opacity-70">AutoCAD·ZWCAD·CADian 호환 DXF (최대 50MB) — API 키 불필요 · DWG는 DXF로 저장 후 업로드</p>
+              <p className="mt-1 text-xs opacity-70">AutoCAD·ZWCAD·CADian 호환 DXF (최대 16MB) — API 키 불필요 · DWG는 DXF로 저장 후 업로드</p>
             </div>
           </button>
           <input ref={dxfInputRef} type="file" accept=".dxf,.dwg" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handlePrimaryDocumentUpload(file); }} />
           <SymbolLibraryPanel
             catalog={symbolLibraryCatalog}
             activeLibrary={activeSymbolLibrary}
@@ -1468,7 +1529,7 @@ export default function SLDAnalysisPage() {
             </div>
           </button>
           <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden"
-            onChange={e => { const file = e.target.files?.[0]; if (file) void handlePrimaryDocumentUpload(file); }} />
+            onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void handlePrimaryDocumentUpload(file); }} />
         </>
       )}
 
@@ -1496,10 +1557,10 @@ export default function SLDAnalysisPage() {
 
       {/* Error */}
       {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
+        <div role="alert" aria-label="빠른 도면 분석 오류" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--drawing-error-text)]" />
           <div>
-            <p className="text-sm text-[var(--color-error)]">{error}</p>
+            <p className="text-sm text-[var(--drawing-error-text)]">{error}</p>
             {error.includes('API 키') && (
               <a href="/settings/byok" className="mt-1 inline-block text-sm font-medium text-blue-600 hover:underline">
                 BYOK 설정 페이지로 이동 →
@@ -1511,9 +1572,9 @@ export default function SLDAnalysisPage() {
 
       {/* V3 전체 문서 완전 판독 */}
       <section className="mt-8 rounded-2xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
-        <h2 className="text-base font-bold text-[var(--text-primary)]">전체 문서 판독 (V3)</h2>
+        <h2 className="text-base font-bold text-[var(--text-primary)]">전체 문서 검토</h2>
         <p className="mt-1 text-[12px] text-[var(--text-tertiary)]">
-          모든 페이지 조사 · 역할 분리 심사 · 수량 분리 · 근거 기반 제안. 단일 페이지 `/api/pdf-drawing`과 별도 작업 API입니다.
+          모든 페이지의 기기·정격·결선을 근거와 함께 검토합니다. 빠른 추출과 별도 결과이며, 미확정 항목은 직접 확인할 수 있습니다.
         </p>
         {v3JobStatus && <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]" role="status">작업 상태: {labelJobStatus(v3JobStatus)}</p>}
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1521,7 +1582,7 @@ export default function SLDAnalysisPage() {
             type="button"
             onClick={() => fullDocInputRef.current?.click()}
             disabled={v3Loading}
-            className="rounded-xl bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--drawing-on-primary)] disabled:opacity-50"
           >
             {v3Loading ? '전체 분석 중…' : 'PDF/DXF/이미지 전체 분석'}
           </button>
@@ -1560,7 +1621,7 @@ export default function SLDAnalysisPage() {
               type="button"
               onClick={() => void handleV3Cancel()}
               disabled={v3Cancelling}
-              className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--color-error)] px-4 text-xs font-semibold text-[var(--color-error)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex min-h-11 items-center gap-2 rounded-lg border border-[var(--color-error)] px-4 text-xs font-semibold text-[var(--drawing-error-text)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Square size={13} aria-hidden="true" />
               {v3Cancelling ? '취소 처리 중' : '분석 중단'}
@@ -1573,12 +1634,19 @@ export default function SLDAnalysisPage() {
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
+              e.target.value = '';
               if (file) void handleFullDocumentAnalyze(file);
             }}
           />
         </div>
         {v3Error && (
-          <p className="mt-2 text-sm text-[var(--color-error)]" role="alert">{v3Error}</p>
+          <div className="mt-3 rounded-xl border border-[var(--color-error)] p-3">
+            <p className="text-sm text-[var(--drawing-error-text)]" role="alert">{v3Error}</p>
+            {v3Doc && v3JobId && !v3Loading && <button type="button" onClick={() => void handleV3Refresh()}
+              disabled={v3Refreshing || Boolean(v3CorrectionTarget)} className="mt-2 min-h-11 rounded-lg border border-[var(--border-hover)] px-3 text-sm disabled:opacity-50">
+              {v3Refreshing ? '최신 결과 확인 중…' : '최신 결과 다시 불러오기'}
+            </button>}
+          </div>
         )}
         {v3Loading && (
           <div className="mt-3 flex min-h-11 items-center gap-2 border-y border-[var(--border-default)] py-2 text-sm text-[var(--text-secondary)]" role="status" aria-live="polite">
@@ -1627,13 +1695,16 @@ export default function SLDAnalysisPage() {
                 모호·확인 필요 항목을 포함해 내보냅니다.
               </span>
             </div>
-            <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,.65fr)]">
+            <div className="grid items-start gap-4 mt-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="min-w-0 xl:sticky xl:top-24" aria-label="분석 원본 패널">
               {v3SourceFile ? (
                 <DrawingSourcePreview document={v3Doc} file={v3SourceFile} pageIndex={v3PageIndex} selectedDisplayId={selectedDisplayId} onSelectDisplayId={handleV3Select} />
               ) : (
                 <div className="flex min-h-72 items-center justify-center rounded-[10px] border border-[var(--border-default)] text-sm text-[var(--text-secondary)]">원본 미리보기는 이 브라우저 세션에서만 표시됩니다.</div>
               )}
+              </div>
               <DrawingDocumentV3Report
+                key={`${v3JobId}:${v3Doc.documentHash}`}
                 document={v3Doc}
                 selectedDisplayId={selectedDisplayId}
                 onSelectDisplayId={handleV3Select}
@@ -1644,6 +1715,12 @@ export default function SLDAnalysisPage() {
           </div>
         )}
       </section>
+
+      <SymbolFeedbackPanel key={symbolLibraryCatalog.activeOrganization ?? '__no-company__'} document={v3Doc} catalog={symbolLibraryCatalog}
+        blocked={symbolLibraryRecoveryRequired} onSaved={(catalog) => {
+          setSymbolLibraryCatalog(catalog);
+          setSymbolLibraryStatus('피드백 사전을 갱신했습니다. 새 분석에만 적용됩니다.');
+        }} />
 
       {/* Analysis results */}
       {analysis && (
@@ -1699,11 +1776,25 @@ export default function SLDAnalysisPage() {
 
           {reviewError && (
             <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3" role="alert">
-              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
-              <p className="text-sm text-[var(--color-error)]">{reviewError}</p>
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--drawing-error-text)]" />
+              <p className="text-sm text-[var(--drawing-error-text)]">{reviewError}</p>
             </div>
           )}
 
+          {quickReadout && <>
+            <DrawingReadingSummary title="빠른 추출의 판독 상태" groups={[
+              { kind: 'components', label: '기기 종류', counts: quickReadout.counts.components },
+              { kind: 'connections', label: '결선', counts: quickReadout.counts.connections },
+            ]} />
+            <p className="text-xs text-[var(--text-secondary)]">빠른 결과는 후보이며 전체 confidence로 확정하지 않습니다. 위 V3의 정밀 근거 결과와 구분해 사용하세요.{quickReadout.completeness === 'partial' ? ' 현재 빠른 응답은 부분 복구된 결과입니다.' : ''}</p>
+          </>}
+          <SymbolClassificationResults title="빠른 심볼 분류 결과"
+            rows={analysis.components.map((component) => ({ id: component.id, label: component.label,
+              sourceType: component.type, classification: component.classification }))} />
+          {analysis.classificationStats && <p className="text-xs text-[var(--text-secondary)]">
+            형상 비교 {analysis.classificationStats.shapeComparisons}회 · 반복 형상 결과 재사용 {analysis.classificationStats.reusedShapeComparisons}회.
+            이번 분류 단계의 추가 모델 호출 {analysis.classificationStats.additionalModelCalls}회. 전체 분석 비용 절감률은 별도 실측 대상입니다.
+          </p>}
           <QuickDrawingResultTabs
             activeTab={resultTab}
             counts={quickResultCounts}
@@ -1780,7 +1871,7 @@ export default function SLDAnalysisPage() {
                   />
                 )}
                 {analysis.components.length > 0 ? (
-                  <ComponentList components={analysis.components} />
+                  <ComponentList components={analysis.components} reads={quickReadout?.components ?? []} />
                 ) : (
                   <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
                     <Box size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
@@ -1793,7 +1884,7 @@ export default function SLDAnalysisPage() {
 
             {resultTab === 'connections' && (
               analysis.connections.length > 0 ? (
-                <ConnectionMap connections={analysis.connections} components={analysis.components} />
+                <ConnectionMap connections={analysis.connections} components={analysis.components} reads={quickReadout?.connections ?? []} />
               ) : (
                 <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">
                   <Link2 size={20} aria-hidden="true" className="text-[var(--text-tertiary)]" />
@@ -1807,7 +1898,7 @@ export default function SLDAnalysisPage() {
               quickResultCounts.calculations > 0 ? (
                 <div className="space-y-4">
                   <SuggestedCalcs suggestions={analysis.suggestedCalculations} />
-                  <CalcChain steps={calcChain} />
+                  <CalcChain key={analysisRevision} steps={calcChain} />
                 </div>
               ) : (
                 <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border-default)] px-4 text-center">

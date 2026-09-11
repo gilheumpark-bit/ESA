@@ -43,7 +43,7 @@ describe('도면 픽스처 — 수확', () => {
   });
 
   it('모든 도면이 예외 없이 파싱된다', () => {
-    for (const { label, dxf } of fixtures) {
+    for (const { dxf } of fixtures) {
       expect(() => parse(dxf)).not.toThrow();
       const parsed = parse(dxf);
       expect(parsed).toBeDefined();

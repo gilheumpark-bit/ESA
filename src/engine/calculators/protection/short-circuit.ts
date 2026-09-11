@@ -128,8 +128,6 @@ export function calculateShortCircuit(input: ShortCircuitInput): DetailedCalcRes
 
   // Step 6: Peak short-circuit current (IEC 60909 κ factor)
   const kPeak = getKappaFactor(V);
-  const _Ipeak_kA = kPeak * SQRT3 / 2 * Isc_kA; // simplified: ip = kappa * sqrt(2) * Ik
-  // More accurate: ip = kappa * sqrt(2) * Ik"
   const Ipeak_accurate = kPeak * Math.SQRT2 * Isc_kA;
   steps.push({
     step: 6,

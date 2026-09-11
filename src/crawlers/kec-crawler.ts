@@ -96,23 +96,6 @@ function extractXmlValue(xml: string, tag: string): string {
   return match ? match[1].trim() : '';
 }
 
-/** XML 텍스트에서 반복 태그 배열 추출 */
-function _extractXmlArray(xml: string, wrapperTag: string, itemTag: string): string[] {
-  const wrapperRegex = new RegExp(`<${wrapperTag}>([\\s\\S]*?)</${wrapperTag}>`);
-  const wrapperMatch = xml.match(wrapperRegex);
-  if (!wrapperMatch) return [];
-
-  const itemRegex = new RegExp(`<${itemTag}>([\\s\\S]*?)</${itemTag}>`, 'g');
-  const results: string[] = [];
-  let match: RegExpExecArray | null;
-
-  while ((match = itemRegex.exec(wrapperMatch[1])) !== null) {
-    results.push(match[1].trim());
-  }
-
-  return results;
-}
-
 /** 날짜 문자열 정규화 (YYYYMMDD → ISO) */
 function normalizeLawDate(dateStr: string): string {
   if (!dateStr || dateStr.length < 8) return new Date().toISOString();

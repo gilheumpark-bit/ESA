@@ -38,8 +38,6 @@ const MEASURED_4XX = new Set([
   'community/route.ts',             // 401
   'community/[id]/route.ts',        // 401
   'community/[id]/vote/route.ts',   // 401
-  'field/complete/route.ts',        // 401
-  'field/sos/route.ts',             // 401
   'notarize/route.ts',              // 404
   'notifications/route.ts',         // 401
   'projects/route.ts',              // 401

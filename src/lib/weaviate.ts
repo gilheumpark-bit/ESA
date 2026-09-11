@@ -11,7 +11,8 @@
  * PART 5: Collection management
  */
 
-import type {
+import type {
+
   Collection,
   FilterValue,
   WeaviateClass,
@@ -19,6 +20,7 @@ import type {
   WeaviateField,
 } from 'weaviate-client';
 
+import { createSingleFlightResource } from './single-flight-resource';
 import { createLogger } from '@/lib/logger';
 
 const wlog = createLogger('weaviate');
@@ -81,8 +83,11 @@ const WEAVIATE_DEFAULTS = {
 // PART 2 — Singleton Client
 // ═══════════════════════════════════════════════════════════════════════════════
 
-let _client: WeaviateClient | null = null;
-let _nextConnectionAttemptAt = 0;
+const connection = createSingleFlightResource<WeaviateClient>({
+  connect: connectWeaviate,
+  ready: (client) => client.isReady(), close: (client) => client.close(),
+  onFailure: () => wlog.warn('Vector connection unavailable; no endpoint or credential is logged'),
+});
 
 function parsePort(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -93,17 +98,15 @@ function parsePort(value: string | undefined, fallback: number): number {
  * Get or create a Weaviate client singleton.
  * Gracefully returns null if connection fails.
  */
-export async function getWeaviateClient(): Promise<WeaviateClient | null> {
-  if (_client) return _client;
-  if (Date.now() < _nextConnectionAttemptAt) return null;
+export function getWeaviateClient(): Promise<WeaviateClient | null> { return connection.get(); }
 
-  const url = process.env.WEAVIATE_URL ?? WEAVIATE_DEFAULTS.url;
-  const apiKey = process.env.WEAVIATE_API_KEY;
-
-  try {
+async function connectWeaviate(): Promise<WeaviateClient> {
+    const url = process.env.WEAVIATE_URL ?? WEAVIATE_DEFAULTS.url;
+    const apiKey = process.env.WEAVIATE_API_KEY;
     // Dynamic import keeps the database client out of routes that do not use RAG.
     const weaviate = await import('weaviate-client');
     const endpoint = new URL(url);
+    if (endpoint.username || endpoint.password || endpoint.hash || endpoint.search) throw new Error('Invalid vector endpoint');
     const httpSecure = endpoint.protocol === 'https:';
     if (!httpSecure && endpoint.protocol !== 'http:') {
       throw new Error('WEAVIATE_URL must use http or https');
@@ -134,31 +137,11 @@ export async function getWeaviateClient(): Promise<WeaviateClient | null> {
       timeout: { init: 5, query: 15, insert: 60 },
     });
 
-    // Verify connection
-    const ready = await client.isReady();
-    if (!ready) {
-      wlog.warn('Server not ready', { url });
-      await client.close().catch(() => undefined);
-      _nextConnectionAttemptAt = Date.now() + 30_000;
-      return null;
-    }
-
-    _client = client;
-    _nextConnectionAttemptAt = 0;
-    return _client;
-  } catch (err) {
-    wlog.warn('Connection failed', { error: (err as Error).message });
-    _nextConnectionAttemptAt = Date.now() + 30_000;
-    return null;
-  }
+    return client;
 }
 
-/** Reset client singleton (for testing or reconnection) */
-export function resetWeaviateClient(): void {
-  if (_client) void _client.close().catch(() => undefined);
-  _client = null;
-  _nextConnectionAttemptAt = 0;
-}
+/** Reset also invalidates unresolved connection attempts. */
+export function resetWeaviateClient(): void { connection.reset(); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 3 — Collection Naming
@@ -187,7 +170,8 @@ export function getCollectionName(country: ESACountry, genre: ESAGenre): string 
  */
 export function parseCollectionName(name: string): { country: ESACountry; genre: ESAGenre } | null {
   const match = name.match(/^Esa_([A-Za-z]+)_([A-Za-z]+)$/);
-  if (!match) return null;
+  if (!match || !['kr','us','eu','jp','global'].includes(match[1].toLowerCase())
+    || !['electrical','mechanical','fire','energy','ai','general'].includes(match[2].toLowerCase())) return null;
   return {
     country: match[1].toLowerCase() as ESACountry,
     genre: match[2].toLowerCase() as ESAGenre,
@@ -212,7 +196,9 @@ export function resolveCollections(
   const names: string[] = [];
   for (const c of countries) {
     for (const g of genres) {
-      names.push(getCollectionName(c, g));
+      const name = getCollectionName(c, g);
+      if (!parseCollectionName(name)) throw new Error('Invalid search collection scope');
+      if (!names.includes(name)) names.push(name);
     }
   }
   return names;
@@ -440,35 +426,35 @@ function convertWhereFilter(
   collection: V3Collection,
   where: Record<string, unknown>,
   combiners: FilterCombiners,
-): FilterValue | undefined {
+  depth = 0,
+): FilterValue {
+  if (depth > 4) throw new Error('Search filter nesting limit');
   const operator = typeof where.operator === 'string' ? where.operator : 'Equal';
 
   if ((operator === 'And' || operator === 'Or') && Array.isArray(where.operands)) {
-    const children = where.operands
-      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-      .map((item) => convertWhereFilter(collection, item, combiners))
-      .filter((item): item is FilterValue => Boolean(item));
-    if (children.length === 0) return undefined;
+    if (!where.operands.length || where.operands.length > 32 || !where.operands.every((item) => item && typeof item === 'object' && !Array.isArray(item))) throw new Error('Invalid search operands');
+    const children = where.operands.map((item) => convertWhereFilter(collection, item as Record<string, unknown>, combiners, depth + 1));
     return operator === 'And' ? combiners.and(...children) : combiners.or(...children);
   }
 
   if (operator !== 'Equal' || !Array.isArray(where.path) || where.path.length !== 1) {
-    return undefined;
+    throw new Error('Invalid search filter');
   }
 
   const property = where.path[0];
   const allowedProperties = new Set(ESVA_DOCUMENT_PROPERTIES.map((item) => item.name));
-  if (typeof property !== 'string' || !allowedProperties.has(property)) return undefined;
+  if (typeof property !== 'string' || !allowedProperties.has(property)) throw new Error('Invalid search filter');
 
   const valueKey = ['valueText', 'valueString', 'valueInt', 'valueNumber', 'valueBoolean', 'valueDate']
     .find((key) => Object.hasOwn(where, key));
-  if (!valueKey) return undefined;
+  if (!valueKey) throw new Error('Invalid search filter');
 
   const value = where[valueKey];
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
-    return undefined;
+    throw new Error('Invalid search filter');
   }
 
+  if ((typeof value === 'number' && !Number.isFinite(value)) || (typeof value === 'string' && value.length > 4096)) throw new Error('Invalid filter value');
   return collection.filter.byProperty(property).equal(value);
 }
 
@@ -484,11 +470,14 @@ export async function hybridSearch(
     fields?: string[];
     where?: Record<string, unknown>;
     vector?: number[];
+    failOnError?: boolean;
   } = {},
 ): Promise<WeaviateSearchHit[]> {
   const client = await getWeaviateClient();
-  if (!client) return [];
+  if (!client) { if (opts.failOnError) throw new Error('Vector service unavailable'); return []; }
 
+  if (!Number.isFinite(opts.alpha ?? 0.7) || !Number.isFinite(opts.limit ?? 10)
+    || (opts.vector && (!opts.vector.length || !opts.vector.every(Number.isFinite)))) throw new Error('Invalid hybrid search options');
   const alpha = Math.min(1, Math.max(0, opts.alpha ?? 0.7));
   const limit = Math.min(100, Math.max(1, Math.trunc(opts.limit ?? 10)));
   const fields = opts.fields ?? [
@@ -526,7 +515,9 @@ export async function hybridSearch(
       },
     }));
   } catch (err) {
-    wlog.warn('Hybrid search failed', { collectionName, error: (err as Error).message });
+    void err;
+    wlog.warn('Hybrid search failed', { collectionName });
+    if (opts.failOnError) throw new Error('Vector search unavailable or filter rejected');
     return [];
   }
 }

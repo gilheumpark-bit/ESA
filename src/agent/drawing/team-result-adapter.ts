@@ -1,3 +1,5 @@
+import { readSymbolClassification } from '@/lib/symbol-classification';
+import { readDxfSymbolIdentity } from '@/lib/symbol-feedback';
 import type { TeamResult } from '@/agent/teams/types';
 import type { BoundaryContinuationPlan } from '@/agent/vision/continuity-types';
 import type { EvidenceBounds } from '@/agent/vision/evidence-types';
@@ -219,6 +221,7 @@ function adaptContinuityReview(result: TeamResult, pageIndex: number): AdaptedTe
       const adapted: RawLineHit = {
         localId: line.id,
         lineKind: line.lineKind,
+        geometrySource: 'observed',
         path: line.path.map((point) => ({ ...point })),
         junctions: line.junctions.map((point) => ({ ...point })),
         crossovers: line.crossovers.map((point) => ({ ...point })),
@@ -285,6 +288,8 @@ export function adaptTeamResult(
     .map((symbol) => ({
         localId: symbol.id,
         type: normalizedEquipmentType(symbol.typeCandidates[0] ?? 'other', symbol.rawLabel),
+        typeCandidates: symbol.typeCandidates.map((candidate) => normalizedEquipmentType(candidate, symbol.rawLabel)),
+        ports: (symbol.ports ?? []).map((point) => ({ ...point })),
         label: symbol.rawLabel ?? undefined,
         bounds: { x: symbol.bounds.x, y: symbol.bounds.y, w: symbol.bounds.w, h: symbol.bounds.h },
         confidence: symbol.confidence,
@@ -299,6 +304,7 @@ export function adaptTeamResult(
     .map((line) => ({
         localId: line.id,
         lineKind: line.lineKind,
+        geometrySource: 'observed',
         path: line.path.map((point) => ({ ...point })),
         junctions: line.junctions.map((point) => ({ ...point })),
         crossovers: line.crossovers.map((point) => ({ ...point })),
@@ -335,7 +341,9 @@ export function adaptTeamResult(
       confidence: component.confidence,
       pageIndex: context.pageIndex,
       regionId: 'vector-full',
-      certainty: component.confidence >= 0.85 ? 'confirmed' : 'ambiguous',
+      sourceSymbol: readDxfSymbolIdentity({ blockName: component.properties?.blockName, fingerprint: component.properties?.blockFingerprint, shape: component.symbolShape }),
+      ...(context.positionSpace === 'source' && component.classification ? { classification: readSymbolClassification(component.classification) } : {}),
+      certainty: component.type === 'unknown' ? 'unread' : component.confidence >= 0.85 ? 'confirmed' : 'ambiguous',
     });
     if (component.label) {
       texts.push({
@@ -358,6 +366,7 @@ export function adaptTeamResult(
     if (!from || !to || (from.x === to.x && from.y === to.y)) continue;
     lines.push({
       localId: `vector-line-${index + 1}`,
+      geometrySource: 'synthetic',
       lineKind: 'power',
       path: [{ ...from }, { ...to }],
       junctions: [],

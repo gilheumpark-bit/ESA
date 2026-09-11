@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseDrawingCorrectionRequest } from '@/lib/drawing-correction-request';
 import { applyDrawingCorrection } from '../apply-drawing-correction';
 import type { DrawingDocumentV3 } from '../types-v3';
 
@@ -167,12 +168,19 @@ describe('정정 라우트 관문', () => {
     expect(route).toContain(needle);
   });
 
+  const validRequest = { targetDisplayId: 'P01-S001', selectedValue: 'breaker', correctionKind: 'type',
+    expectedUpdatedAt: '2026-09-10T00:00:00.000Z', idempotencyKey: 'safety-request' };
   it('대상 식별자 형식을 강제한다 — 임의 문자열로 내부를 짚지 못하게', () => {
-    expect(route).toContain('/^P\\d{2,}-[STL]\\d{3,}$/');
+    expect(route).toContain('await readDrawingCorrectionRequest(req)');
+    for (const targetDisplayId of ['../job', 'S001', 'P01-T', 'P01-S001\n']) {
+      expect(() => parseDrawingCorrectionRequest({ ...validRequest, targetDisplayId })).toThrow();
+    }
+    expect(parseDrawingCorrectionRequest(validRequest).targetDisplayId).toBe('P01-S001');
   });
-
   it('정정 값의 길이와 제어문자를 막는다', () => {
-    expect(route).toContain('body.selectedValue.length > 200');
-    expect(route).toContain('\\u0000-\\u001f');
+    for (const selectedValue of ['x'.repeat(201), 'bad\u0000', 'bad\u001f', 'bad\u007f']) {
+      expect(() => parseDrawingCorrectionRequest({ ...validRequest, selectedValue })).toThrow();
+    }
+    expect(parseDrawingCorrectionRequest({ ...validRequest, selectedValue: 'x'.repeat(200) }).selectedValue).toHaveLength(200);
   });
 });

@@ -40,7 +40,9 @@
     "gate:sld-v3-contract": "jest --runInBand src/agent/drawing/__tests__/sld-evaluator-v2.test.ts",
     "test:sld-golden": "npm run gate:sld-golden",
     "gate:audit": "node scripts/audit-baseline-gate.mjs",
-    "gate:snapshot": "node scripts/realworld-snapshot-freshness.mjs"
+    "gate:snapshot": "node scripts/realworld-snapshot-freshness.mjs",
+    "gate:hygiene": "node scripts/check-repository-hygiene.mjs",
+    "gate:audit:all": "node scripts/audit-baseline-gate.mjs --include-dev"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.16",
@@ -52,11 +54,9 @@
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans-kr": "5.3.0",
     "@fontsource/noto-serif-kr": "5.3.0",
-    "@google/genai": "^2.17.1",
     "@napi-rs/canvas": "1.0.2",
     "@stripe/stripe-js": "^9.12.1",
     "@supabase/supabase-js": "^2.112.3",
-    "@tanstack/react-query": "^5.101.4",
     "ai": "^7.0.56",
     "clsx": "^2.1.0",
     "dxf-parser": "^1.1.2",
@@ -65,7 +65,7 @@
     "jose": "^6.2.4",
     "katex": "^0.18.0",
     "lucide-react": "^1.25.0",
-    "next": "^16.2.1",
+    "next": "16.3.3",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -74,7 +74,7 @@
     "rehype-katex": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
     "remark-math": "^6.0.0",
-    "sharp": "0.35.3",
+    "sharp": "0.35.4",
     "stripe": "^22.4.0",
     "tailwind-merge": "^3.0.0",
     "weaviate-client": "^3.14.0",
@@ -91,7 +91,7 @@
     "@types/react-dom": "^19.2.4",
     "@vercel/analytics": "^2.0.1",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.2.1",
+    "eslint-config-next": "16.3.3",
     "jest": "^30.0.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.0.0",
@@ -99,7 +99,7 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "sharp": "0.35.3",
+    "sharp": "0.35.4",
     "exceljs": {
       "uuid": "11.1.1"
     },

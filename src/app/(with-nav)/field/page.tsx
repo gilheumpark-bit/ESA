@@ -10,7 +10,11 @@
  * PART 3: 메인 페이지
  */
 
-import { useState, useCallback, useId, useMemo } from 'react';
+import { useState, useCallback, useId, useMemo, useEffect, useRef } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { requestFeatureJson } from '@/lib/feature-request';
+import { featureAuthenticatedFetch } from '@/lib/feature-auth';
+import { decodeFieldSos, decodeFieldCompletion } from '@/lib/field-record-contract';
 import { SafetyCheckList } from '@/components/SafetyCheckList';
 import { DeadManSwitch } from '@/components/DeadManSwitch';
 import { parseSafetyIntent } from '@/lib/safety-intent-parser';
@@ -64,16 +68,16 @@ function SchedulePanel({ schedule }: { schedule: SafetySchedule }) {
                 {cp.time}
               </span>
               {cp.isGasMeasurement && (
-                <div className="text-[10px] text-orange-400 mt-0.5">가스측정</div>
+                <div className="text-xs text-orange-400 mt-0.5">가스측정</div>
               )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[var(--color-text-primary)]">{cp.title}</p>
               <p className="text-xs text-[var(--color-text-secondary)] truncate">{cp.description}</p>
-              <p className="text-[10px] text-[var(--color-text-muted)]">{cp.regulation}</p>
+              <p className="text-xs text-[var(--color-text-muted)]">{cp.regulation}</p>
             </div>
             {cp.isMandatory && (
-              <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 h-fit rounded bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 font-medium">
+              <span className="flex-shrink-0 text-xs px-1.5 py-0.5 h-fit rounded bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30 font-medium">
                 필수
               </span>
             )}
@@ -89,6 +93,11 @@ function SchedulePanel({ schedule }: { schedule: SafetySchedule }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function FieldSafetyPage() {
+  const { user, loading } = useAuth();
+  if (loading) return <p role="status" className="p-8 text-sm">로그인 상태를 확인하고 있습니다.</p>;
+  return <FieldSafetyContent key={user?.uid ?? 'anonymous'} />;
+}
+function FieldSafetyContent() {
   const inputId = useId();
   const [query, setQuery] = useState('');
   const [step, setStep] = useState<PageStep>('input');
@@ -99,11 +108,22 @@ export default function FieldSafetyPage() {
   const [doneMsg, setDoneMsg] = useState('');
   const [operationError, setOperationError] = useState('');
   const [sosDelivery, setSosDelivery] = useState('');
+  const [recording, setRecording] = useState(false);
+  const requests = useRef(new Set<AbortController>());
+  const completing = useRef<AbortController | null>(null);
+  const completionTime = useRef<string | null>(null);
+  const sosPending = useRef(new Set<number>());
+  const invalidate = useCallback(() => {
+    for (const request of requests.current) request.abort();
+    requests.current.clear(); completing.current = null; completionTime.current = null; sosPending.current.clear();
+  }, []);
+  useEffect(() => invalidate, [invalidate]);
   // 체크리스트에서 실제로 이행한 항목 id. 완료 영수증의 이행률 근거가 된다.
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
 
   const handleAnalyze = useCallback(() => {
     if (!query.trim()) return;
+    invalidate(); setRecording(false);
     const intent = parseSafetyIntent(query);
     const result = analyzeSafety(intent);
     const sched = generateSafetySchedule(intent);
@@ -115,69 +135,44 @@ export default function FieldSafetyPage() {
     setAnalysis(result);
     setSchedule(sched);
     setStep('checklist');
-  }, [query]);
+  }, [query, invalidate]);
 
   const handleExampleClick = (ex: string) => {
     setQuery(ex);
   };
 
   const handleSos = useCallback((ts: number) => {
-    setSosLog(prev => [...prev, ts]);
-    setSosDelivery('SOS 기록을 서버에 전송하는 중입니다.');
-    void (async () => {
-      try {
-        const { getIdToken } = await import('@/lib/firebase');
-        const token = await getIdToken();
-        if (!token) throw new Error('SOS 기록에는 로그인이 필요합니다. 비상 연락망으로 직접 연락하세요.');
-        const response = await fetch('/api/field/sos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            sessionId,
-            workSite: analysis?.intent.location?.ko ?? '현장',
-            sosTimestamp: ts,
-            workers: analysis?.intent.workers ?? 0,
-          }),
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error?.message ?? 'SOS 기록 전송에 실패했습니다.');
-        setSosDelivery(result.data?.message ?? 'SOS 기록이 저장되었습니다.');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'SOS 기록 전송에 실패했습니다.';
-        setSosDelivery(`${message} 화면 경보만 발동된 상태입니다.`);
-        console.error('[ESVA SOS] 전송 실패:', message);
-      }
-    })();
+    if (sosPending.current.has(ts)) return;
+    const controller = new AbortController(); requests.current.add(controller); sosPending.current.add(ts);
+    setSosLog((previous) => [...new Set([...previous, ts])]);
+    setSosDelivery('SOS 기록을 전송 중입니다. 외부 신고는 비상 연락망으로 직접 하세요.');
+    void requestFeatureJson('/api/field/sos', { method: 'POST', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId,
+        workSite: analysis?.intent.location?.ko ?? '현장', sosTimestamp: ts, workers: analysis?.intent.workers ?? 0 }),
+    }, decodeFieldSos, featureAuthenticatedFetch).then((result) => {
+      if (!controller.signal.aborted) setSosDelivery(result.message);
+    }, (error: unknown) => {
+      if (!controller.signal.aborted) setSosDelivery(`${error instanceof Error ? error.message : 'SOS 기록 저장 실패'} 화면 경보만 확인된 상태입니다. 비상 연락망으로 직접 연락하세요.`);
+    }).finally(() => { requests.current.delete(controller); sosPending.current.delete(ts); });
   }, [sessionId, analysis]);
 
   const handleWorkComplete = async () => {
-    if (!analysis) return;
-    setOperationError('');
+    if (!analysis || completing.current) return;
+    const controller = new AbortController(); completing.current = controller; requests.current.add(controller);
+    completionTime.current ??= new Date().toISOString();
+    setRecording(true); setOperationError('');
     try {
-      const { getIdToken } = await import('@/lib/firebase');
-      const token = await getIdToken();
-      if (!token) throw new Error('작업 완료 기록에는 로그인이 필요합니다.');
-      const res = await fetch('/api/field/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          sessionId,
-          workSite: analysis.intent.location?.ko ?? '현장',
-          workerCount: analysis.intent.workers ?? 0,
-          checklistDone: checkedIds,
-          checklistTotal: analysis.checkItems.length,
-          completedAt: new Date().toISOString(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message ?? '작업 완료 기록 저장에 실패했습니다.');
-      const hashText = data.data?.receipt?.hash
-        ? `기록 해시: ${(data.data.receipt.hash as string).slice(0, 16)}…`
-        : '작업 완료 기록이 저장되었습니다.';
-      setDoneMsg(`${data.data?.message ?? '작업 완료 기록이 저장되었습니다.'} ${hashText}`);
-      setStep('done');
+      const receipt = await requestFeatureJson('/api/field/complete', { method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId, workSite: analysis.intent.location?.ko ?? '현장',
+          workerCount: analysis.intent.workers ?? 0, checklistDone: checkedIds, checklistTotal: analysis.checkItems.length, completedAt: completionTime.current }),
+      }, decodeFieldCompletion, featureAuthenticatedFetch);
+      if (controller.signal.aborted) return;
+      setDoneMsg(`${receipt.message} 기록 해시: ${receipt.hash.slice(0, 16)}…`); setStep('done');
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : '완료 처리 중 오류가 발생했습니다. 수동으로 기록해 주세요.');
+      if (!controller.signal.aborted) setOperationError(error instanceof Error ? error.message : '기록 저장을 확인하지 못했습니다. 수동 기록이 필요합니다.');
+    } finally {
+      requests.current.delete(controller); if (completing.current === controller) completing.current = null;
+      if (!controller.signal.aborted) setRecording(false);
     }
   };
 
@@ -204,7 +199,7 @@ export default function FieldSafetyPage() {
         )}
         <button
           type="button"
-          onClick={() => { setStep('input'); setQuery(''); setAnalysis(null); setSchedule(null); setDoneMsg(''); setOperationError(''); }}
+          onClick={() => { invalidate(); setStep('input'); setQuery(''); setAnalysis(null); setSchedule(null); setDoneMsg(''); setOperationError(''); }}
           className="px-6 py-3 rounded-xl bg-[var(--color-primary)] text-white font-semibold hover:bg-[var(--color-primary-hover)] transition-all"
         >
           새 작업 시작
@@ -393,6 +388,8 @@ export default function FieldSafetyPage() {
           <button
             type="button"
             onClick={handleWorkComplete}
+              disabled={recording}
+              aria-busy={recording}
             className="w-full py-4 rounded-xl font-bold text-sm bg-green-700 hover:bg-green-600 text-white transition-all active:scale-95"
           >
             작업 완료 기록 저장

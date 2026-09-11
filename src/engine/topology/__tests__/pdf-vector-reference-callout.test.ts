@@ -10,7 +10,6 @@ import { parsePdfToSLD } from '../pdf-vector-parser';
  *   실기기 "CH" "(표준소비효율)" "MOLD TR-1" "6.6KV/220V" "3∅ 500KVA" …
  */
 
-const PAGE_W = 1000;
 const PAGE_H = 800;
 
 // 텍스트 항목: [문자, x, y]. pdf.js 는 transform[4]=x, transform[5]=y 로 준다.

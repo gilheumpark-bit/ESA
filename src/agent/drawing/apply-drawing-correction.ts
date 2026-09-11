@@ -1,3 +1,4 @@
+import { updateClassificationsAfterCorrection } from '@/lib/symbol-classification-correction';
 import { randomUUID } from 'node:crypto';
 
 import { assignPhysicalEquipmentIds, buildEquipmentCounts } from './count-register';
@@ -27,6 +28,8 @@ export function applyDrawingCorrection(
   if (input.correctionKind === 'text' && !textTarget) throw new Error('DRAWING_CORRECTION_KIND_MISMATCH');
   if (input.correctionKind !== 'text' && !symbolTarget) throw new Error('DRAWING_CORRECTION_KIND_MISMATCH');
 
+  const selectedType = input.correctionKind === 'type' ? input.selectedValue.trim() : input.selectedValue;
+  const unknownType = input.correctionKind === 'type' && /^(unknown|unread|unresolved|모름|미판독|미확정)$/i.test(selectedType);
   const targetEvidenceIds = new Set([
     ...(textTarget?.evidence.map((item) => item.evidenceId) ?? []),
     ...(symbolTarget?.evidence.map((item) => item.evidenceId) ?? []),
@@ -38,7 +41,7 @@ export function applyDrawingCorrection(
       confirmedText: input.selectedValue,
       candidates: [...new Set([...item.candidates, input.selectedValue])],
       certainty: 'confirmed' as const,
-      holdCode: undefined,
+      holdCode: item.holdCode === 'AMBIGUOUS_OCR' || item.holdCode === 'UNREADABLE_TEXT' ? undefined : item.holdCode,
     }
     : { ...item });
   const symbols = current.evidenceGraph.symbols.map((item) => {
@@ -46,13 +49,15 @@ export function applyDrawingCorrection(
     if (input.correctionKind === 'type') {
       return {
         ...item,
-        confirmedType: input.selectedValue,
-        typeCandidates: [...new Set([...item.typeCandidates, input.selectedValue])],
-        certainty: 'confirmed' as const,
+        confirmedType: unknownType ? undefined : selectedType,
+        // 'unknown' is a state chosen by the reviewer, not a new type hypothesis.
+        typeCandidates: unknownType ? [...item.typeCandidates] : [...new Set([...item.typeCandidates, selectedType])],
+        certainty: unknownType ? 'unread' as const : 'confirmed' as const,
       };
     }
     return { ...item, rawLabel: input.selectedValue };
   });
+  updateClassificationsAfterCorrection(symbols, input, targetPage);
   const lines = current.evidenceGraph.lines.map((item) => ({ ...item }));
   const relations = current.pages.flatMap((page) => buildPageRelations(symbols, lines, page.pageIndex));
   const crossPageRelations = reconcileCrossPage(symbols, texts, extractPageRefHits(texts));
@@ -74,9 +79,21 @@ export function applyDrawingCorrection(
       note: '사용자 정정으로 입력 근거가 변경되어 해당 페이지 재분석 후 계산해야 합니다.',
     }
     : { ...calculation });
+  const resolvedCodes = new Set(input.correctionKind === 'text'
+    ? ['AMBIGUOUS_OCR', 'UNREADABLE_TEXT']
+    : input.correctionKind === 'type' && !unknownType ? ['UNREADABLE_SYMBOL'] : []);
+  const regeneratedCrossPageIds = new Set(current.crossPageRelations.map((item) => `cross-page-${item.id}`));
+  const regeneratedUnboundIds = new Set(current.evidenceGraph.lines.map((line) => `unbound-${line.id}`));
   const unresolved: UnresolvedItem[] = current.unresolvedItems
-    .filter((item) => item.displayId !== input.targetDisplayId && item.code !== 'LINE_CONTINUITY_UNCERTAIN')
+    .filter((item) => !(item.displayId === input.targetDisplayId && resolvedCodes.has(item.code))
+      && !(item.code === 'LINE_CONTINUITY_UNCERTAIN' && (regeneratedUnboundIds.has(item.id)
+        || regeneratedCrossPageIds.has(item.id))))
     .map((item) => ({ ...item }));
+  if (unknownType && !unresolved.some((item) => item.displayId === input.targetDisplayId && item.code === 'UNREADABLE_SYMBOL')) {
+    unresolved.push({ id: `unread-${input.targetDisplayId}`, code: 'UNREADABLE_SYMBOL', displayId: input.targetDisplayId,
+      pageIndex: targetPage, bounds: symbolTarget?.evidence[0]?.bounds ?? { x: 0, y: 0, w: 1, h: 1 },
+      note: '기기 종류를 미판독 상태로 유지했습니다. 다른 정격과 결선의 확정을 의미하지 않습니다.' });
+  }
   unresolved.push(...findUnboundLineItems(lines, relations));
   for (const relation of crossPageRelations.filter((item) => item.status !== 'confirmed')) {
     const evidence = relation.evidence[0];
@@ -134,7 +151,7 @@ export function applyDrawingCorrection(
     originalCandidates: textTarget?.candidates
       ?? (input.correctionKind === 'label' ? [symbolTarget?.rawLabel ?? ''].filter(Boolean) : symbolTarget?.typeCandidates)
       ?? [],
-    selectedValue: input.selectedValue,
+    selectedValue: selectedType,
     correctedAt: new Date().toISOString(),
     correctedBy: input.correctedBy,
     affectedEntityIds,
@@ -162,6 +179,7 @@ export function applyDrawingCorrection(
     pages,
     coverageLedger: current.coverageLedger,
     evidenceGraph: { symbols, lines, texts, relations },
+    continuity: current.continuity,
     crossPageRelations,
     equipmentCounts,
     ratedValues,

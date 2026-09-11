@@ -94,6 +94,8 @@ export interface TeamInput {
 }
 
 export interface ExtractedComponent {
+  symbolShape?: import('@/lib/symbol-shape').SymbolShape;
+  classification?: import('@/lib/symbol-classification').SymbolClassification;
   id: string;
   type: string;           // 'transformer' | 'breaker' | 'cable' | 'load' | 'bus' | ...
   label: string;
@@ -112,6 +114,8 @@ export interface ExtractedConnection {
 }
 
 export interface DrawingReviewArtifact {
+  /** Measured execution costs, not a quality score; no source text or credentials. */
+  performance?: { preparationMs: number; council?: import('../vision/drawing-council').DrawingCouncilPerformance };
   snapshot: {
     drawingHash: string;
     mimeType: string;

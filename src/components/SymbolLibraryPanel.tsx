@@ -33,6 +33,7 @@ const DEVICE_TYPE_LABELS: Record<SLDComponentType, string> = {
   grid_connection: '전력망 연결점',
   source: '수전·인입 전원',
   annotation: '타 도면 참조·주석',
+  unknown: '미판독',
 };
 
 interface SymbolLibraryPanelProps {
@@ -112,7 +113,7 @@ export function SymbolLibraryPanel({
             <option value="">적용 안 함</option>
             {catalog.libraries.map((library) => (
               <option key={library.organization} value={library.organization}>
-                {library.organization} · {library.entries.length}종
+                {library.organization} · {library.entries.length}종 · 승인 피드백 {library.feedback?.filter((x) => x.status === 'approved').length ?? 0}건
               </option>
             ))}
           </select>
@@ -148,7 +149,7 @@ export function SymbolLibraryPanel({
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--bg-primary)] px-3 py-2">
           <p className="text-xs text-[var(--text-secondary)]">
             <span className="font-semibold text-[var(--text-primary)]">{activeLibrary.organization}</span>
-            {' · '}등록 {activeLibrary.entries.length}종
+            {' · '}등록 {activeLibrary.entries.length}종 · 승인 피드백 {activeLibrary.feedback?.filter((x) => x.status === 'approved').length ?? 0}건
           </p>
           <div className="flex gap-1">
             <button
@@ -226,7 +227,7 @@ export function UnknownSymbolRegistrar({
         미인식 심볼 {symbols.length}종
       </h3>
       <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-        현재 결과에서는 임시 부하로 표시되지만 확정 판정이 아닙니다. 실제 종류를 아는 항목만 선택하세요. 선택하지 않은 항목은 저장하지 않습니다.
+        현재 결과에서는 미판독 기기로 남습니다. 실제 종류를 아는 항목만 선택하세요. 선택하지 않은 항목은 저장하지 않습니다.
       </p>
 
       <label className="mt-3 block text-xs font-medium text-[var(--text-secondary)]">
@@ -263,7 +264,7 @@ export function UnknownSymbolRegistrar({
                 className="mt-1 min-h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)]"
               >
                 <option value="">모름 · 저장 안 함</option>
-                {SLD_COMPONENT_TYPES.map((type) => (
+                {SLD_COMPONENT_TYPES.filter((type) => type !== 'unknown').map((type) => (
                   <option key={type} value={type}>{DEVICE_TYPE_LABELS[type]}</option>
                 ))}
               </select>

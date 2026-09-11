@@ -5,6 +5,7 @@
  * VLM 불필요. API 키 불필요. 순수 벡터 연산.
  */
 
+import { buildQuickDrawingReadout } from '@/lib/quick-drawing-readout';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile, withApiHandler } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
@@ -173,6 +174,7 @@ async function handlePost(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: analysis,
+      readout: buildQuickDrawingReadout(analysis),
       calcChain,
       review,
       topology: {

@@ -183,6 +183,13 @@ describe('document-orchestrator + evaluator', () => {
     expect(first.document.jobStatus).toBe('PARTIAL');
     expect(executeTeam).toHaveBeenCalledTimes(1);
 
+    // Completed pages preserve the original adjudication, not a new raw read.
+    const checkpoint = structuredClone(first.document);
+    const checkpointSymbol = checkpoint.evidenceGraph.symbols[0];
+    checkpointSymbol.typeCandidates.push('fuse');
+    checkpointSymbol.ports = [{ x: 5, y: 5 }, { x: 15, y: 15 }];
+    updateJob(first.job.jobId, { document: checkpoint });
+
     const resumed = await runDocumentAnalysis({
       bytes: await makePng(), mimeType: 'application/pdf', ownerId: 'owner-a', jobId: first.job.jobId,
       budget: { maxPages: 2, maxVlmCalls: 10, maxPixels: 100_000, deadlineMs: 60_000 },
@@ -194,6 +201,10 @@ describe('document-orchestrator + evaluator', () => {
     expect(resumed.document.jobStatus).toBe('COMPLETE');
     expect(resumed.document.pages.map((page) => page.status)).toEqual(['complete', 'complete']);
     expect(resumed.document.evidenceGraph.symbols.map((symbol) => symbol.rawLabel)).toEqual(['VCB-1', 'VCB-2']);
+    expect(resumed.document.evidenceGraph.symbols[0].typeCandidates).toEqual(checkpointSymbol.typeCandidates);
+    expect(resumed.document.evidenceGraph.symbols[0].ports).toEqual(checkpointSymbol.ports);
+    expect(resumed.document.evidenceGraph.symbols[0].confirmedType).toBe(checkpointSymbol.confirmedType);
+    expect(resumed.document.evidenceGraph.symbols[0].evidence).toEqual(checkpointSymbol.evidence);
     expect(executeTeam).toHaveBeenCalledTimes(2);
     updateJob(first.job.jobId, {
       pageDigests: {

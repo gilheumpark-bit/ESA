@@ -8,7 +8,7 @@
 
 import { isBlockingGraphConflict } from '@/agent/electrical/electrical-invariants';
 import type { LogicConflict } from '@/agent/electrical/logic-conflicts';
-import { executeSLDTeam, type SLDTeamDeps } from '@/agent/teams/sld-team';
+import { executeSLDTeam, createRasterPreparationCache, type SLDTeamDeps } from '@/agent/teams/sld-team';
 import type { TeamInput, TeamResult } from '@/agent/teams/types';
 import { planAdaptiveBounds } from '@/agent/vision/adaptive-regions';
 import type { RescanTargetEvidence, RoleReviewEnvelope } from '@/agent/vision/review-types';
@@ -23,6 +23,7 @@ import {
   type CoverageRegionPlan,
 } from './coverage-ledger';
 import { adaptDrawingCalculations } from './calculation-adapter';
+import { restoreCompletedPageEvidence } from './completed-page-evidence';
 import { assignPhysicalEquipmentIds, buildEquipmentCounts } from './count-register';
 import { extractPageRefHits, reconcileCrossPage } from './cross-page-graph';
 import { buildDrawingDocumentV3 } from './drawing-document-report';
@@ -619,46 +620,6 @@ function mergeAdapted(
   if (adapted.continuity) continuityByPage.set(page.pageIndex, adapted.continuity);
 }
 
-function existingEvidenceSeeds(
-  document: DrawingDocumentV3 | undefined,
-  preservedPages: ReadonlySet<number>,
-): { symbols: RawSymbolHit[]; lines: RawLineHit[]; texts: TextNode[] } {
-  if (!document) return { symbols: [], lines: [], texts: [] };
-  const symbols = document.evidenceGraph.symbols.flatMap((node) => {
-    const evidence = node.evidence.filter((item) => preservedPages.has(item.pageIndex));
-    return evidence.map((item) => ({
-      localId: `${node.id}:${item.evidenceId}`,
-      type: node.confirmedType ?? node.typeCandidates[0] ?? 'other',
-      label: node.rawLabel,
-      bounds: item.bounds,
-      confidence: item.confidence,
-      pageIndex: item.pageIndex,
-      regionId: item.regionId ?? 'resume-preserved',
-      certainty: node.certainty,
-      sourceEvidenceIds: [item.evidenceId],
-    }));
-  });
-  const lines = document.evidenceGraph.lines.flatMap((node) => {
-    const evidence = node.evidence.filter((item) => preservedPages.has(item.pageIndex));
-    const first = evidence[0];
-    return first ? [{
-      localId: node.id,
-      lineKind: node.lineKind,
-      path: node.path.map((point) => ({ ...point })),
-      junctions: node.junctions.map((point) => ({ ...point })),
-      crossovers: node.crossovers.map((point) => ({ ...point })),
-      confidence: Math.max(...evidence.map((item) => item.confidence)),
-      pageIndex: first.pageIndex,
-      regionId: evidence.map((item) => item.regionId).filter(Boolean).join(',') || 'resume-preserved',
-      certainty: node.certainty,
-      sourceEvidenceIds: evidence.map((item) => item.evidenceId),
-    }] : [];
-  });
-  const texts = document.evidenceGraph.texts.filter((node) =>
-    node.evidence.some((item) => preservedPages.has(item.pageIndex)));
-  return { symbols, lines, texts };
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // 페이지 분석 — 문서 단위 문맥과 벡터·래스터 경로
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -853,8 +814,7 @@ function compactRescanTargets(
       if (boundsIntersect(bounds, target.bounds)) matchesByRegion[index].push(target);
     });
   }
-  regions.forEach((bounds, index) => {
-    const matches = matchesByRegion[index];
+  matchesByRegion.forEach((matches, index) => {
     if (matches.length === 0) return;
     const suggestedRoles = roles.filter((role) =>
       matches.some((target) => target.suggestedRoles.includes(role)));
@@ -973,6 +933,9 @@ async function runRasterPass(
       run.deps.teamDeps,
     );
     recordEnvelopeOrigins(run, result);
+    if (result.drawingReview?.performance) {
+      state.recentPerformance = [...(state.recentPerformance ?? []), result.drawingReview.performance].slice(-3);
+    }
     const actualCalls = result.drawingReview?.coverage.actualCalls
       ?? result.drawingReview?.coverage.plannedCalls
       ?? plannedCalls;
@@ -1336,10 +1299,10 @@ export async function runDocumentAnalysis(
     .map((page) => page.pageIndex));
   const retryPages = new Set(requested.filter((pageIndex) => !preservedPages.has(pageIndex)));
   const activeRetryPages = new Set(source.pages.map((page) => page.pageIndex).filter((pageIndex) => retryPages.has(pageIndex)));
-  const previousSeeds = existingEvidenceSeeds(previousJob?.document, preservedPages);
-  const symbolHits: RawSymbolHit[] = [...previousSeeds.symbols, ...(input.seedDetections?.symbols ?? [])];
-  const lineHits: RawLineHit[] = [...previousSeeds.lines, ...(input.seedDetections?.lines ?? [])];
-  const textSeeds: RawTextSeed[] = [...(input.seedDetections?.texts ?? [])];
+  const previousSeeds = restoreCompletedPageEvidence(previousJob?.document, preservedPages);
+  const symbolHits: RawSymbolHit[] = (input.seedDetections?.symbols ?? []).filter((hit) => !preservedPages.has(hit.pageIndex));
+  const lineHits: RawLineHit[] = (input.seedDetections?.lines ?? []).filter((hit) => !preservedPages.has(hit.pageIndex));
+  const textSeeds: RawTextSeed[] = (input.seedDetections?.texts ?? []).filter((hit) => !preservedPages.has(hit.pageIndex));
   const continuityByPage = new Map<number, NonNullable<AdaptedTeamResult['continuity']>>();
   const calculationHits: DrawingDocumentV3['calculations'] = (previousJob?.document?.calculations ?? [])
     .filter((calculation) => {
@@ -1359,7 +1322,11 @@ export async function runDocumentAnalysis(
   const analysisSignal = input.signal
     ? AbortSignal.any([input.signal, deadlineSignal])
     : deadlineSignal;
-  const executeTeam = deps.executeTeam ?? executeSLDTeam;
+  const preparedRaster = createRasterPreparationCache();
+  const executeTeam: typeof executeSLDTeam = deps.executeTeam ?? ((teamInput, teamDeps) => executeSLDTeam(teamInput, {
+    ...teamDeps,
+    prepareRaster: teamDeps?.prepareRaster ?? preparedRaster,
+  }));
   const providersUsed = new Set<string>();
   const modelsUsed = new Set<string>();
   const run: DocumentRun = {
@@ -1448,11 +1415,14 @@ export async function runDocumentAnalysis(
   stitchPageBoundaries(continuity, continuityByPage, lineHits, unresolved);
   // 라스터 원본에는 벡터 앵커가 없다. 판독된 문자 층을 넘겨 명판 다중도를
   // 세게 한다 — 도면이 한 번만 적은 이름은 몇 번을 읽어도 한 대다.
-  const symbols = deduplicateSymbols(symbolHits, undefined, textSeeds);
+  const newSymbols = deduplicateSymbols(symbolHits, undefined, textSeeds);
   // 관계·선 조립 전에 강등한다. 조립은 확정 여부를 보고 판단하므로 순서가 곧 결과다.
-  const containedMarkingItems = demoteContainedMarkings(symbols);
-  await appendRasterLineFallback(source, requested, symbols, textSeeds, lineHits);
-  const lines = deduplicateLines(lineHits);
+  const containedMarkingItems = demoteContainedMarkings(newSymbols);
+  const symbols = [...previousSeeds.symbols, ...newSymbols]
+    .sort((a, b) => a.displayId.localeCompare(b.displayId));
+  await appendRasterLineFallback(source, requested.filter((page) => !preservedPages.has(page)), newSymbols, textSeeds, lineHits);
+  const lines = [...previousSeeds.lines, ...deduplicateLines(lineHits.filter((hit) => !preservedPages.has(hit.pageIndex)))]
+    .sort((a, b) => a.displayId.localeCompare(b.displayId));
   const relations = requested.flatMap((pageIndex) => buildPageRelations(symbols, lines, pageIndex));
   const crossPageRelations = reconcileCrossPage(symbols, texts, extractPageRefHits(texts));
   // 순서가 곧 displayId 다. 미결속 선 → 논리 충돌 → 페이지 간 관계 순서를 바꾸면

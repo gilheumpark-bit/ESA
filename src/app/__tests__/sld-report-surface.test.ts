@@ -52,12 +52,15 @@ describe('source-linked SLD report surface', () => {
     const page = source('src/app/(with-nav)/tools/sld/page.tsx');
     const report = source('src/components/DrawingDocumentV3Report.tsx');
 
-    expect(page).toContain('v3CorrectionInFlightRef.current.has(targetDisplayId)');
+    expect(page).toContain('v3CorrectionInFlightRef.current.size > 0');
+    expect(page).toContain('operation.isCurrent()');
+    expect(report).toContain('<DrawingReviewQueue');
     expect(page).toContain("v3Doc?.jobStatus === 'PARTIAL'");
     expect(page).toContain('labelJobStatus(v3JobStatus)');
     expect(page).toContain('labelDocumentReadStatus(v3Doc.verification.documentStatus)');
-    expect(report).toContain('labelReadFailureCode(item.code)');
-    expect(report).toContain('correctingDisplayId === item.displayId');
+    const queue = source('src/components/DrawingReviewQueue.tsx');
+    expect(queue).toContain('labelReadFailureCode(item.code)');
+    expect(queue).toContain('inFlight.current || correctingDisplayId');
     expect(report).toContain("node.rawLabel ? ` · ${node.rawLabel}` : ''");
   });
 

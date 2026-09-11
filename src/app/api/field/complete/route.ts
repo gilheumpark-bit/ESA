@@ -30,7 +30,15 @@ export const POST = withApiHandler(
     const user = await extractVerifiedUser(req);
     if (!user) return ctx.error('ESVA-1001', '로그인이 필요합니다.', 401);
 
-    const body = await req.json() as FieldCompleteRequest;
+    const raw = await req.json().catch(() => null);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.workSite !== 'string'
+      || raw.workSite.length > 2000 || typeof raw.sessionId !== 'string' || typeof raw.completedAt !== 'string'
+      || (raw.note !== undefined && (typeof raw.note !== 'string' || raw.note.length > 2000))
+      || !Array.isArray(raw.checklistDone) || raw.checklistDone.length > 1000
+      || !raw.checklistDone.every((id: unknown) => typeof id === 'string' && id.length <= 128)) {
+      return ctx.error('ESA-4001', '작업 완료 요청 형식이 올바르지 않습니다.', 400);
+    }
+    const body = raw as FieldCompleteRequest;
     const { sessionId, workSite, workerCount, checklistDone, checklistTotal, completedAt, note } = body;
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(sessionId ?? '') || !workSite || !completedAt) {
       return ctx.error('ESA-4001', '필수 항목이 누락되었거나 sessionId가 유효하지 않습니다.', 400);
@@ -108,7 +116,8 @@ export const POST = withApiHandler(
       notifications: { sent, failed },
       message: sent > 0
         ? `작업 완료를 저장하고 관리자 ${sent}명에게 인앱 알림을 보냈습니다.`
-        : '작업 완료를 저장했습니다. 설정된 관리자 수신자가 없어 알림은 보내지 않았습니다.',
+        : failed > 0 ? '작업 완료는 저장됐지만 관리자 인앱 알림 전달에 실패했습니다. 직접 연락하세요.'
+          : '작업 완료를 저장했습니다. 설정된 관리자 수신자가 없어 알림은 보내지 않았습니다.',
     });
   },
 );

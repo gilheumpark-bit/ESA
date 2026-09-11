@@ -28,3 +28,12 @@
 | Weaviate 벡터 검색 | 검색 라이브러리 | 검색 API | v3 컬렉션 insert 계약 | 외부 Weaviate | hybrid 검색과 재연결 | `/search` | 미구성 시 로컬 검색 폴백 | Weaviate v3 mock 계약 | partial |
 | IPFS 타임스탬프 등록 | `POST /api/notarize` 호환 경로 | 영수증의 플래그 조건부 버튼 | 최소화 데이터 Pinata 고정, 서버 레지스트리 시각 | IPFS와 Supabase 메타데이터 | CID와 레지스트리 증거 조회 | `/receipt/[id]` 조건부 | 기본 OFF, PII 심층 제거, 실패 시 미등록 | 인증 계약, 입력 최소화 | dormant |
 | 수동 검토·배치 계산 API | `/api/review`, `/api/calculate/batch` | 일반 UI 호출처 없음 | 검증 파이프라인 또는 일괄 계산 | 요청별 조건부 | API 응답만 | UI 미노출 | 입력 계약과 제품 흐름 확정 전 비활성 취급 | Route 단위 테스트 | dormant |
+
+
+## 2026-09-08 단자 경로와 업무 보고서
+
+`adaptTeamResult`는 관측 기하와 표시용 합성선을 구분한다. `buildPageRelations`는 `terminal-path-resolver.ts`의 관측 연결 성분을 사용해 유일한 두 기기 단자 경로를 복원하고 전체 `lineIds`와 단자 좌표를 기록한다. `findUnboundLineItems`, 관계 탭과 SVG 오버레이는 같은 전체 선 목록을 소비한다. 갭·충돌·미확정 분기를 새 확정으로 바꾸지 않는다.
+
+`document-orchestrator`의 완료 페이지 복구는 `completed-page-evidence.ts`로 노드를 복제 보존하고 새 페이지의 원시 판독만 재조립한다. 그래프 지문 v8로 이전 결과와 구분한다.
+
+`/tools/sld`의 인쇄 동작은 클릭 중 `openDrawingPrintWindow`로 빈 창을 연 뒤 로컬 보고서 모듈을 읽는다. CSV/HTML 생성기는 정격·계산 영수증까지 출력하며 행 제한 초과 시 명시적으로 실패한다. 새 API·모델 호출·서버 저장 경로는 추가하지 않았다. 검증은 `drawing-commercial-contract.test.ts`, 기존 재개 통합 검사와 `e2e/drawing-report-export.spec.ts`가 담당한다.

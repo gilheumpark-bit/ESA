@@ -96,7 +96,7 @@ export function calculateBusbarVD(input: BusbarVDInput): DetailedCalcResult {
   let cumulativeDropV = 0;
   const sectionResults: Array<{ name: string; dropV: number; dropPercent: number }> = [];
 
-  input.sections.forEach((sec, idx) => {
+  input.sections.forEach((sec) => {
     const L_km = sec.length / 1000;
     const X = sec.reactance ?? 0;
     const dropV = SQRT3 * sec.current * L_km * (sec.resistance * cosPhi + X * sinPhi);

@@ -55,7 +55,7 @@ export type ReadFailureCode =
   // 사후 판정이 불가능했다(08-09 KIMM 3건 · 08-13 교재 6건 모두).
   | 'GRAPH_CONFLICT_LINE';
 
-export type Certainty = 'confirmed' | 'ambiguous' | 'unread';
+export type Certainty = import('@/lib/drawing-certainty').DrawingCertainty;
 export type CountStatus = 'COMPLETE' | 'CONDITIONAL' | 'HOLD';
 export type RecommendationStatus = 'SUPPORTED' | 'CONDITIONAL' | 'HOLD' | 'REJECTED';
 export type OcrAdjudicationStatus =
@@ -90,6 +90,9 @@ export interface EvidenceRef {
 }
 
 export interface SymbolNode {
+  classification?: import('@/lib/symbol-classification').SymbolClassification;
+  /** Only vector-origin metadata; not inferred from model prose. */
+  sourceSymbol?: import('@/lib/symbol-feedback').DxfSymbolIdentity;
   id: string;
   displayId: string;
   equipmentId?: string;
@@ -102,6 +105,8 @@ export interface SymbolNode {
 }
 
 export interface LineNode {
+  /** Synthetic display chords cannot prove an observed conductor path. */
+  geometrySource?: 'observed' | 'synthetic';
   id: string;
   displayId: string;
   lineKind: 'power' | 'control' | 'ground' | 'bus' | 'unknown';
@@ -130,6 +135,9 @@ export interface RelationEdge {
   from: string;
   to: string;
   lineId?: string;
+  /** All original fragments traversed by a proven route, in route order. */
+  lineIds?: string[];
+  terminalPath?: { version: 1; from: { x: number; y: number }; to: { x: number; y: number } };
   certainty: Certainty;
   evidence: EvidenceRef[];
 }
@@ -151,12 +159,17 @@ export interface EquipmentCountRow {
   confirmed: number;
   ambiguous: number;
   missingSuspected: number;
+  /** Present on new counts; absent in older saved documents. */
+  unread?: number;
   physicalEquipmentCount: number | null;
   symbolOccurrences: number;
   countStatus: CountStatus;
 }
 
 export interface RatedValue {
+  /** Reading a number and assigning it to equipment are separate claims. */
+  textSpan?: { start: number; end: number };
+  ownership?: { status: Certainty; candidates: string[]; reason: string };
   id: string;
   displayId: string;
   field: string;
@@ -259,6 +272,8 @@ export interface CoverageLedger {
 }
 
 export interface PageAnalysisState {
+  /** At most three latest raster attempts. Timings do not alter completeness or confidence. */
+  recentPerformance?: Array<NonNullable<import('../teams/types').DrawingReviewArtifact['performance']>>;
   pageIndex: number;
   status: 'pending' | 'surveying' | 'analyzing' | 'complete' | 'failed' | 'skipped-empty';
   drawingKind: DocumentInventoryPage['drawingKind'];
@@ -375,4 +390,4 @@ export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
 export const PROMPT_VERSION = 'sld-role-v8';
 export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v7';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v11';

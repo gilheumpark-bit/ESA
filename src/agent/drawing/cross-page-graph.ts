@@ -2,6 +2,7 @@
  * Cross-page relation merge — label-only matches stay candidates.
  */
 
+import { readRatedMeasurements } from './rated-value-extractor';
 import type { CrossPageRelation, EvidenceRef, SymbolNode, TextNode } from './types-v3';
 
 export interface PageRefHit {
@@ -69,9 +70,9 @@ export function reconcileCrossPage(
     const pair = findCompatiblePair(sourceSymbols, targetSymbols, texts);
     if (!pair) {
       relations.push(makeRel(++seq, ref.pageIndex, ref.targetPageHint, 'candidate', 'ref-no-device-match', {
-        fromRef: sourceSymbols[0].id,
-        toRef: targetSymbols[0].id,
-        evidence: [refEvidence(ref), ...sourceSymbols[0].evidence, ...targetSymbols[0].evidence],
+        fromRef: `page-ref:${ref.text}`,
+        toRef: `page:${ref.targetPageHint}`,
+        evidence: [refEvidence(ref)],
       }));
       continue;
     }
@@ -136,19 +137,17 @@ function findCompatiblePair(
   targets: SymbolNode[],
   texts: TextNode[],
 ): { from: SymbolNode; to: SymbolNode } | null {
+  const pairs: Array<{ from: SymbolNode; to: SymbolNode }> = [];
   for (const from of sources) {
     for (const to of targets) {
-      const typeOk = typesCompatible(
-        from.confirmedType ?? from.typeCandidates[0] ?? '',
-        to.confirmedType ?? to.typeCandidates[0] ?? '',
-      );
-      if (!typeOk) continue;
+      if (!typesCompatible(from.confirmedType ?? '', to.confirmedType ?? '')) continue;
       if (voltageCompatibility(from, to, texts) !== 'compatible') continue;
-      if (from.rawLabel && to.rawLabel && normalize(from.rawLabel) === normalize(to.rawLabel)) {
-        return { from, to };
-      }
+      if (from.rawLabel && to.rawLabel && normalize(from.rawLabel) === normalize(to.rawLabel)) pairs.push({ from, to });
     }
   }
+  if (pairs.length === 1) return pairs[0];
+  if (pairs.length > 1) return null;
+
   // sheet ref with single confirmed device each side
   if (sources.length === 1 && targets.length === 1) {
     const from = sources[0];
@@ -174,19 +173,18 @@ function nearbyVoltage(s: SymbolNode, texts: TextNode[]): number | null {
   const b = s.evidence[0]?.bounds;
   const page = s.evidence[0]?.pageIndex;
   if (!b || page == null) return null;
-  for (const t of texts) {
-    if (t.evidence[0]?.pageIndex !== page) continue;
-    const tb = t.evidence[0].bounds;
-    const cx = b.x + b.w / 2;
-    const cy = b.y + b.h / 2;
-    const tx = tb.x + tb.w / 2;
-    const ty = tb.y + tb.h / 2;
-    if (Math.hypot(cx - tx, cy - ty) > 120) continue;
-    if (t.certainty !== 'confirmed' || !t.confirmedText) continue;
-    const m = t.confirmedText.match(/(\d+(?:\.\d+)?)\s*kV/i);
-    if (m) return Number(m[1]);
+  const voltages = new Set<number>();
+  for (const text of texts) {
+    const e = text.evidence.find((item) => item.pageIndex === page);
+    if (!e || text.certainty !== 'confirmed' || !text.confirmedText || text.holdCode) continue;
+    const tb = e.bounds;
+    if (Math.hypot(b.x + b.w / 2 - tb.x - tb.w / 2, b.y + b.h / 2 - tb.y - tb.h / 2) > 120) continue;
+    for (const measure of readRatedMeasurements(text.confirmedText)) {
+      if (!/^(?:kV|V)$/i.test(measure.unit) || measure.value <= 0) continue;
+      voltages.add(measure.unit.toLowerCase() === 'v' ? measure.value / 1000 : measure.value);
+    }
   }
-  return null;
+  return voltages.size === 1 ? [...voltages][0] : null;
 }
 
 function makeRel(

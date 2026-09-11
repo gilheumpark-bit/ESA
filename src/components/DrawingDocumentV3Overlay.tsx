@@ -76,7 +76,7 @@ export function DrawingDocumentV3Overlay({
         </g>
       ))}
       {lines.map((line) => {
-        const selected = selectedDisplayId === line.displayId || selectedRelation?.lineId === line.id;
+        const selected = selectedDisplayId === line.displayId || (selectedRelation?.lineIds?.includes(line.id) ?? (selectedRelation?.lineId === line.id));
         return (
           <g key={line.id}>
           <polyline
@@ -90,6 +90,7 @@ export function DrawingDocumentV3Overlay({
             role="button"
             tabIndex={0}
             aria-label={`${line.displayId} 선로`}
+            aria-pressed={selected}
             points={line.path.map((point) => `${point.x * sx},${point.y * sy}`).join(' ')}
             fill="none"
             stroke="transparent"

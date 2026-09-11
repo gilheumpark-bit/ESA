@@ -99,6 +99,9 @@ export function buildDrawingDocumentV3(input: {
   verificationExtra?: Partial<VerificationBlock>;
 }): DrawingDocumentV3 {
   const holdReasons = collectHoldReasons(input.unresolvedItems, input.jobStatus);
+  if (input.evidenceGraph.symbols.some((item) => item.classification && item.classification.status !== 'classified')) {
+    addHoldReason(holdReasons, 'UNREADABLE_SYMBOL');
+  }
   if (input.evidenceGraph.symbols.some((item) => item.certainty !== 'confirmed')) {
     addHoldReason(holdReasons, 'UNREADABLE_SYMBOL');
   }
@@ -114,6 +117,15 @@ export function buildDrawingDocumentV3(input: {
   }
   if (input.evidenceGraph.texts.some((item) => item.certainty === 'unread')) {
     addHoldReason(holdReasons, 'UNREADABLE_TEXT');
+  }
+  if (input.ratedValues.some((item) => item.certainty !== 'confirmed' || (item.ownership && item.ownership.status !== 'confirmed'))) {
+    addHoldReason(holdReasons, 'UNREADABLE_TEXT');
+  }
+  if (input.crossPageRelations.some((item) => item.status !== 'confirmed')) {
+    addHoldReason(holdReasons, 'LINE_CONTINUITY_UNCERTAIN');
+  }
+  for (const item of [...input.evidenceGraph.lines, ...input.evidenceGraph.texts]) {
+    if (item.holdCode) addHoldReason(holdReasons, item.holdCode);
   }
   const receipt = buildDocumentReadReceipt({
     drawingHash: input.documentHash,
@@ -140,9 +152,6 @@ export function buildDrawingDocumentV3(input: {
 
   const now = new Date().toISOString();
   const verification: VerificationBlock = {
-    claimsComplete: receipt.claimsComplete,
-    documentStatus: receipt.status,
-    holdReasons,
     evidenceTraceRate,
     verified95: false,
     productionFingerprint: {
@@ -151,6 +160,10 @@ export function buildDrawingDocumentV3(input: {
       preprocessVersion: PREPROCESS_VERSION,
     },
     ...input.verificationExtra,
+    // Completeness is computed, never supplied by optional metadata.
+    claimsComplete: receipt.claimsComplete,
+    documentStatus: receipt.status,
+    holdReasons,
   };
 
   // Never allow verified95 without external signed receipt matching fingerprint

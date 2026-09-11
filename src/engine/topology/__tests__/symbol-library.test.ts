@@ -266,9 +266,9 @@ describe('매칭 우선순위', () => {
 });
 
 describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
-  it('resolveBlockType 의 기존 계약은 유지된다 (미식별 = load, OrNull = null)', () => {
+  it('resolveBlockType도 미식별을 부하로 지어내지 않고 unknown으로 보존한다', () => {
     expect(resolveBlockTypeOrNull('XX-7Q')).toBeNull();
-    expect(resolveBlockType('XX-7Q')).toBe('load');
+    expect(resolveBlockType('XX-7Q')).toBe('unknown');
     expect(resolveBlockType('MCCB-1')).toBe('breaker');
   });
 
@@ -351,4 +351,16 @@ describe('파서 왕복 — 사무소 축적 루프 ①→③', () => {
     // 등록 안 된 TR-2 는 여전히 휴리스틱으로 transformer — 라이브러리가 남을 오염시키지 않는다.
     expect(result.components.find((c) => c.properties?.blockName === 'TR-2')?.type).toBe('transformer');
   });
+});
+
+it('preserves unfamiliar DXF blocks as unknown components rather than invented loads', () => {
+  const parsed = parseDxfToSLD(CUSTOM_DOC);
+  const components = parsed.components.filter((item) => item.properties?.blockName === 'XX-7Q');
+  expect(components).toHaveLength(2);
+  expect(components.every((item) => item.type === 'unknown')).toBe(true);
+  expect(components.every((item) => Number.isFinite(item.position.x) && Number.isFinite(item.position.y))).toBe(true);
+  expect(parsed.unknownSymbols?.[0].count).toBe(2);
+});
+it('cannot publish an unknown answer as a company dictionary classification', () => {
+  expect(parseSymbolLibrary({ schemaVersion: 1, organization: 'Fixture', entries: [{ blockNames: ['X'], deviceType: 'unknown' }] }).ok).toBe(false);
 });

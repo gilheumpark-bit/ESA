@@ -349,5 +349,6 @@ export function upsertSymbolMappings(
     schemaVersion: 1,
     organization: existing?.organization ?? company,
     entries,
+    ...(existing?.feedback ? { feedback: existing.feedback, revision: (existing.revision ?? 0) + 1 } : {}),
   }, storage);
 }

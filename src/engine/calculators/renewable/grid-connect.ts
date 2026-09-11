@@ -106,9 +106,6 @@ export function calculateGridConnect(input: GridConnectInput): DetailedCalcResul
 
   // Step 5: Protection relay settings
   const ovrFreq = 60.5;    // Hz -- over-frequency trip
-  const _undrFreq = 59.3;   // Hz -- under-frequency trip
-  const _ovrVolt = 110;     // % -- over-voltage trip
-  const _undrVolt = 80;     // % -- under-voltage trip
   steps.push({
     step: 5,
     title: '보호계전기 설정 (Protection relay settings)',

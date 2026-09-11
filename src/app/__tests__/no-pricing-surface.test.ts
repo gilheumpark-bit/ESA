@@ -20,7 +20,6 @@ import { join, sep } from 'node:path';
  */
 
 const REPO = join(__dirname, '..', '..', '..');
-const UI_ROOT = join(REPO, 'src');
 
 /** 화면에 뜨면 «결제 체계가 있다» 로 읽히는 표현. */
 const PRICING_WORDS = [

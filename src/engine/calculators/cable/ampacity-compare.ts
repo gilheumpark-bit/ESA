@@ -13,7 +13,7 @@
  */
 
 import { createSource, createJudgment } from '@engine/sjc/types';
-import { CalcValidationError, remapErrorField } from '../types';
+import { remapErrorField } from '../types';
 import {
   DetailedCalcResult,
   CalcStep,

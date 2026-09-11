@@ -21,6 +21,15 @@
 6. [사용자 가이드](USER_GUIDE.md) 또는 [API 계약](API_REFERENCE.md)
 7. 도면 작업이면 [실증 증거 원장](VALIDATION_EVIDENCE.md)과 [SLD V3 추적표](project/SLD_V3_TRACEABILITY.md)
 
+## 회사 AX 제안과 파일럿
+
+| 문서 | 상태 | 책임 |
+|---|---|---|
+| [AX 회사 제출용 아이템 제안](AX_COMPANY_SUBMISSION.md) | 내부 제안·평가 설계 | 설치된 AI의 업무 적용, 이번 정밀도 개선, 시연 흐름과 생산성 측정 조건 |
+| [2026-09-07 AX 정밀도 개선](project/handoffs/2026-09-07-ax-precision.md) | 작업 기록 | 후보·단자 보존, 오병합 수정, 합성 회귀 검증과 미실행 항목 |
+
+도면 업무 제품화의 구현·검증 경계는 [2026-09-08 작업 기록](project/handoffs/2026-09-08-commercial-drawing-workflow.md)을 참조합니다.
+
 ## 현재 정본
 
 | 문서 | 책임 |

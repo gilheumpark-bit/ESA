@@ -2,6 +2,39 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-09-11
+
+- [심볼 분류 우선·유사 형상·반복 문맥·예외 검토](handoffs/2026-09-11-symbol-classification-first.md)
+
+## 2026-09-10
+
+- [결제 제외 기능 품질·데이터 경계·검색/협업/현장 개선](handoffs/2026-09-10-nonbilling-feature-quality.md)
+
+- [프런트·백엔드 연결과 미확정 검토 화면 개선](handoffs/2026-09-10-fullstack-review-workspace.md)
+
+## 2026-09-09
+
+- [사람 피드백의 다음 DXF 연계·정격/페이지 연결 정밀도](handoffs/2026-09-09-feedback-precision.md)
+
+- [미판독 계약 추가 설계 검토·계수·수정·계산·보고서 일관성](handoffs/2026-09-09-uncertainty-contract-review.md)
+
+- [개발 잔재·개발 의존성·기술부채 정리](handoffs/2026-09-09-development-debt-cleanup.md)
+- [정리 전 PROJECT_STATE 보존본](handoffs/2026-09-09-project-state-before-cleanup.md)
+
+- [남은 항목: 보안 취약점 수정·논리 검토 대기 제거](handoffs/2026-09-09-remaining-security-scheduling.md)
+
+- [도면 처리 성능: 선택 구획·재검사 재사용·공간 색인](handoffs/2026-09-09-drawing-performance.md)
+
+## 2026-09-08
+
+- [프런트엔드 전체 목록·버튼 전이·오류 복구 검사](handoffs/2026-09-08-frontend-controls.md)
+
+- [도면 분석 업무 제품화: 단자 경로·재개·보고서](handoffs/2026-09-08-commercial-drawing-workflow.md)
+
+## 2026-09-07
+
+- [AX 도면 정밀도 개선과 회사 제출용 제안](handoffs/2026-09-07-ax-precision.md)
+
 ## 2026-08-26
 
 - [개발 부채·문서 정본화](handoffs/2026-08-26-zzz-development-debt-docs-sync.md)

@@ -1,7 +1,7 @@
 name: CI
 
 # 두 레인으로 나눈다.
-#  - verify    : 모든 push/PR. 저장소 안에서 끝나는 결정론적 게이트만.
+#  - verify    : 모든 push/PR. 코드 검증과 의존성 감사(외부 npm 서비스 필요).
 #  - live-gates: PR·주간 예약·수동 실행. 브라우저 설치와 production 서버 기동이
 #                필요해 run 당 분 소모가 큰 게이트를 여기로 모은다.
 # push 마다 무거운 레인을 돌리지 않는 것이 Actions 분 관리의 핵심이다.
@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Tracked development residue
+        run: npm run gate:hygiene
+
       - name: Documentation contracts
         run: npm run check:docs
 
@@ -64,7 +67,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --max-warnings=0
 
       # --coverage 로 돌려야 jest 설정의 coverageThreshold 가 발화한다.
       # 임계만 선언하고 평소 실행에 --coverage 가 없으면 게이트가 등록만 되고
@@ -75,8 +78,11 @@ jobs:
       - name: SLD V3 contract gate
         run: npm run gate:sld-v3-contract
 
-      - name: Dependency audit ratchet
+      - name: Dependency audit ratchet (production)
         run: npm run gate:audit
+
+      - name: Dependency audit ratchet (including development)
+        run: npm run gate:audit:all
 
       - name: Realworld snapshot freshness
         run: npm run gate:snapshot
@@ -119,22 +125,42 @@ jobs:
       - name: Live PDF pipeline and UI smoke gates
         shell: bash
         run: |
-          npm start -- --hostname 127.0.0.1 --port 3010 > /tmp/esa-next.log 2>&1 &
-          app_pid=$!
-          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://127.0.0.1:3010/ > /dev/null; then
-              break
+          # PDF와 브라우저 검사는 독립된 production 프로세스를 사용한다.
+          # PDF 17건이 같은 dxf rate bucket을 소모해 뒤의 저장·재분석이
+          # 429가 됐던 run 34139438545의 검사 간 상태 누수를 막는다.
+          # 운영 제한·신뢰 헤더·재시도 횟수는 변경하지 않는다.
+          app_pid=''
+          cleanup() {
+            if [ -n "$app_pid" ]; then
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              app_pid=''
             fi
-            if ! kill -0 "$app_pid" 2>/dev/null; then
-              cat /tmp/esa-next.log
-              exit 1
-            fi
-            sleep 1
-          done
-          curl --fail --silent http://127.0.0.1:3010/ > /dev/null
+          }
+          trap cleanup EXIT
+          start_gate_server() {
+            local port="$1"
+            local logfile="$2"
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$port" > "$logfile" 2>&1 &
+            app_pid=$!
+            for attempt in $(seq 1 60); do
+              if ! kill -0 "$app_pid" 2>/dev/null; then
+                cat "$logfile"
+                return 1
+              fi
+              if curl --fail --silent "http://127.0.0.1:$port/" > /dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            cat "$logfile"
+            return 1
+          }
+          start_gate_server 3010 /tmp/esa-pdf-next.log
           npm run gate:pdf -- http://127.0.0.1:3010
-          BASE_URL=http://127.0.0.1:3010 npx playwright test
+          cleanup
+          start_gate_server 3011 /tmp/esa-next.log
+          BASE_URL=http://127.0.0.1:3011 PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/esa-playwright-results.json npx playwright test --trace=retain-on-failure --reporter=line,json
 
       # E2E 실패는 스크린샷과 페이지 스냅샷 없이는 진단할 수 없다. DXF 실주행이
       # CI 에서만 실패하는데(run 30132954958) 로컬은 standalone·next start 양쪽
@@ -148,5 +174,30 @@ jobs:
           path: |
             test-results/
             /tmp/esa-next.log
+            /tmp/esa-pdf-next.log
+          retention-days: 7
+          if-no-files-found: warn
+
+      # 합성 오류 응답의 모바일·데스크톱 표시와 같은 파일 복구 화면도 확인한다.
+      - name: Upload drawing error recovery screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: drawing-error-recovery-evidence
+          path: |
+            test-results/**/readable-error.png
+            test-results/**/recovered-result.png
+          retention-days: 7
+          if-no-files-found: warn
+
+      # A retry can turn the job green without resolving an intermittent defect.
+      - name: Upload browser result and retained traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-execution-evidence
+          path: |
+            /tmp/esa-playwright-results.json
+            test-results/
           retention-days: 7
           if-no-files-found: warn

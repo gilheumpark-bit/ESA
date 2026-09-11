@@ -1,5 +1,6 @@
 'use client';
 
+import { requestFeatureJson, requireRecord } from './feature-request';
 import type { ChatMessage } from '@/lib/ai-providers';
 import { getDefaultModel } from '@/lib/ai-providers';
 import { splitCompleteSseLines } from '@/lib/sse-line-buffer';
@@ -24,7 +25,8 @@ export interface ChatTransport {
   providerBody: Record<string, unknown>;
 }
 
-export async function resolveBrowserChatTransport(): Promise<ChatTransport> {
+export async function resolveBrowserChatTransport(signal?: AbortSignal): Promise<ChatTransport> {
+  signal?.throwIfAborted();
   const onpremiseStorage = await import('@/lib/onpremise-storage');
   const raw = typeof window === 'undefined' ? null : sessionStorage.getItem('esva-onpremise');
   if (raw) {
@@ -49,17 +51,18 @@ export async function resolveBrowserChatTransport(): Promise<ChatTransport> {
   const localSelection = await import('@/lib/chatgpt-local-selection');
   const selectedLocal = localSelection.loadChatGPTLocalSelection();
   if (selectedLocal.enabled) {
-    const response = await fetch('/api/settings/chatgpt-local', {
-      method: 'GET',
-      cache: 'no-store',
+    const status = await requestFeatureJson('/api/settings/chatgpt-local', { signal }, (value) => {
+      const body = requireRecord(requireRecord(value).data);
+      if (typeof body.available !== 'boolean' || typeof body.connected !== 'boolean' || !Array.isArray(body.models)) {
+        throw new Error('로컬 계정 상태 응답을 확인하지 못했습니다.');
+      }
+      return body as unknown as import('@/lib/chatgpt-local-contract').ChatGPTLocalStatus;
+    }).catch((error: unknown) => {
+      signal?.throwIfAborted();
+      const unavailable = error instanceof Error && 'status' in error && error.status === 503;
+      throw new Error(`계정 상태 확인 실패: ${unavailable ? '로컬 Codex를 사용할 수 없습니다. ' : ''}${error instanceof Error ? error.message : '로컬 연결을 확인해 주세요.'}`);
     });
-    const payload = await response.json().catch(() => null) as {
-      data?: import('@/lib/chatgpt-local-contract').ChatGPTLocalStatus;
-    } | null;
-    const status = payload?.data;
-    if (!response.ok || !status?.available) {
-      throw new Error('로컬 Codex를 사용할 수 없습니다. 설치 상태를 확인해 주세요.');
-    }
+    if (!status.available) throw new Error('로컬 Codex를 사용할 수 없습니다. 설치 상태를 확인해 주세요.');
     if (!status.connected) {
       throw new Error('ChatGPT 계정 연결이 끊겼습니다. AI 연결 관리에서 다시 연결해 주세요.');
     }
@@ -121,15 +124,16 @@ export async function readElectricalChatResponse(
   const reader = response.body?.getReader();
   if (!reader) throw new Error('AI 응답 스트림을 열 수 없습니다.');
 
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder('utf-8', { fatal: true });
   let text = '';
   let remainder = '';
   let calculation: ElectricalCalculationReceipt | undefined;
   let doneEvent = false;
 
   const applyLine = (line: string) => {
-    if (!line.startsWith('data: ')) return;
-    const raw = line.slice(6).trim();
+    if (doneEvent || !line.startsWith('data:')) return;
+    const raw = line.slice(5).trim();
+    if (!raw) return;
     if (raw === '[DONE]') {
       doneEvent = true;
       return;
@@ -138,11 +142,10 @@ export async function readElectricalChatResponse(
     let payload: Record<string, unknown>;
     try {
       payload = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      return;
-    }
+    } catch { throw new Error('AI 응답 일부가 손상됐습니다. 완료된 답변으로 처리하지 않았습니다.'); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('AI 응답 형식 오류');
 
-    if (typeof payload.error === 'string') throw new Error(payload.error);
+    if (payload.error) throw new Error(errorMessageFromPayload(payload, 'AI 공급자 응답 오류'));
     if (payload.calculation && typeof payload.calculation === 'object') {
       const receipt = payload.calculation as Record<string, unknown>;
       if (typeof receipt.calculatorId === 'string' && typeof receipt.calculatorName === 'string') {
@@ -150,6 +153,7 @@ export async function readElectricalChatResponse(
       }
     }
     if (typeof payload.text === 'string') {
+      if (text.length + payload.text.length > 1_048_576) throw new Error('AI 응답 크기 제한 초과');
       text += payload.text;
       onUpdate?.(text);
     }
@@ -164,19 +168,24 @@ export async function readElectricalChatResponse(
     }
   };
 
-  while (!doneEvent) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const split = splitCompleteSseLines(remainder, decoder.decode(value, { stream: true }));
-    remainder = split.remainder;
-    for (const line of split.lines) {
-      applyLine(line);
-      if (doneEvent) break;
+  try {
+    while (!doneEvent) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const split = splitCompleteSseLines(remainder, decoder.decode(value, { stream: true }));
+      remainder = split.remainder;
+      if (remainder.length > 1_048_576) throw new Error('AI 응답 프레임 크기 제한 초과');
+      for (const line of split.lines) { applyLine(line); if (doneEvent) break; }
     }
+    if (!doneEvent) {
+      const tail = splitCompleteSseLines(remainder, `${decoder.decode()}\n`);
+      for (const line of tail.lines) { applyLine(line); if (doneEvent) break; }
+    }
+    if (!doneEvent) throw new Error('AI 응답이 완료되기 전에 연결이 끊겼습니다. 일부 답변을 확정 결과로 사용하지 마세요.');
+  } finally {
+    try { await reader.cancel(); } catch { /* Preserve the original provider/transport error. */ }
+    reader.releaseLock();
   }
-
-  const tail = splitCompleteSseLines(remainder, `${decoder.decode()}\n`);
-  for (const line of tail.lines) applyLine(line);
 
   if (!text.trim()) throw new Error('AI가 빈 답변을 반환했습니다. 공급자와 모델 설정을 확인해 주세요.');
   return { text, calculation };
@@ -190,7 +199,9 @@ export async function requestElectricalChat(
     onUpdate?: (text: string) => void;
   } = {},
 ): Promise<ElectricalChatResponse> {
-  const transport = await resolveBrowserChatTransport();
+  options.signal?.throwIfAborted();
+  const transport = await resolveBrowserChatTransport(options.signal);
+  options.signal?.throwIfAborted();
   const response = await transport.fetcher('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

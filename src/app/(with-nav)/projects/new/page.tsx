@@ -32,6 +32,15 @@ export default function NewProjectPage() {
   const [status, setStatus] = useState<SubmitStatus>('idle');
   const [errorMsg, setErrorMsg] = useState('');
 
+  if (authLoading) {
+    return (
+      <div role="status" aria-live="polite" aria-busy="true" className="mx-auto flex min-h-[60vh] max-w-lg items-center justify-center gap-2 px-4 text-sm text-[var(--text-secondary)]">
+        <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+        로그인 상태를 확인하고 있습니다.
+      </div>
+    );
+  }
+
   // 비로그인 사용자에게 **먼저** 안내한다. 이 화면은 인증이 필요한데도 폼을
   // 그대로 열어 두고, 이름·설명을 다 채워 "프로젝트 생성" 을 누른 뒤에야
   // 거부했다(실측 2026-07-26). 같은 성격의 /community/ask 는 이미 사전에
@@ -58,6 +67,7 @@ export default function NewProjectPage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (authLoading || !user || status === 'submitting') return;
     setStatus('submitting');
     setErrorMsg('');
 

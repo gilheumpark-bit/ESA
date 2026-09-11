@@ -11,10 +11,13 @@
  * PART 4: Public API
  */
 
+import { describeSymbolShape, type SymbolShape } from '@/lib/symbol-shape';
+import { classifyDxfSymbols } from './symbol-classifier';
 import DxfParserModule from 'dxf-parser';
 import type { SLDComponent, SLDConnection, SLDAnalysis, SLDComponentType } from '@/lib/sld-recognition';
 import {
   fingerprintBlock,
+  matchSymbolFeedback,
   indexSymbolLibrary,
   matchSymbol,
   type SymbolLibrary,
@@ -144,9 +147,9 @@ export function resolveBlockTypeOrNull(blockName: string): SLDComponentType | nu
   return null;
 }
 
-/** DXF 블록명 → 기기 종류. 사전 공백이 곧 미검출이라 단독 검사 대상이다. */
+/** DXF 블록명 → 기기 종류. 미식별은 실제 부하로 지어내지 않고 unknown으로 남긴다. */
 export function resolveBlockType(blockName: string): SLDComponentType {
-  return resolveBlockTypeOrNull(blockName) ?? 'load'; // 미식별 블록은 부하로 기본 분류
+  return resolveBlockTypeOrNull(blockName) ?? 'unknown';
 }
 
 /**
@@ -368,6 +371,16 @@ export function parseDxfToSLD(
   let libraryMatched = 0;
   const unknownSymbols = new Map<string, UnknownSymbolReport>();
   const fingerprintMemo = new Map<string, string | null>();
+  const shapeMemo = new Map<string, SymbolShape | null>();
+  const classificationTexts = new Map<string, string[]>();
+  const blockShape = (name: string): SymbolShape | undefined => {
+    if (shapeMemo.has(name)) return shapeMemo.get(name) ?? undefined;
+    // Exact parsing is not curtailed when the optional comparison budget is exhausted.
+    if (shapeMemo.size >= 512) return undefined;
+    const entities = dxf?.blocks?.[name]?.entities;
+    const shape = entities ? describeSymbolShape(entities) : null;
+    shapeMemo.set(name, shape); return shape ?? undefined;
+  };
   const blockFingerprint = (name: string): string | null => {
     const memo = fingerprintMemo.get(name);
     if (memo !== undefined) return memo;
@@ -392,12 +405,13 @@ export function parseDxfToSLD(
         // 관례)이 컴포넌트로 승격되고 미식별 블록명은 resolveBlockType 기본 'load'가
         // 되어 phantom load→부하계산 오염이었다. 동일 필터를 적용한다.
         if (isIgnoredLayer(entity.layer)) break;
-        // 우선순위: 고객사 라이브러리(지문→별칭) → 전역 이름 휴리스틱 → 'load' 기본.
+        // 우선순위: 고객사 라이브러리(지문→별칭) → 전역 이름 휴리스틱 → 'unknown'.
         // 라이브러리에도 휴리스틱에도 없는 블록은 unknownSymbols 로 보고한다 —
         // 조용한 'load' 뭉개기가 사용자가 라이브러리를 만들 기회를 없애기 때문.
         const fingerprint = blockFingerprint(entity.name);
         const libraryType = libraryIndex ? matchSymbol(libraryIndex, entity.name, fingerprint) : null;
-        const heuristicType = libraryType ? null : resolveBlockTypeOrNull(entity.name);
+        const feedback = libraryIndex ? matchSymbolFeedback(libraryIndex, entity.name, fingerprint) : undefined;
+        const heuristicType = libraryType || feedback?.status === 'conflict' ? null : resolveBlockTypeOrNull(entity.name);
         if (libraryType) libraryMatched += 1;
         if (!libraryType && !heuristicType) {
           const known = unknownSymbols.get(entity.name);
@@ -411,13 +425,16 @@ export function parseDxfToSLD(
             });
           }
         }
-        const type = libraryType ?? heuristicType ?? 'load';
+        const type = libraryType ?? heuristicType ?? 'unknown';
         components.push({
           id: `comp_${++compIdx}`,
           type,
+          symbolShape: blockShape(entity.name),
           label: entity.name,
           position: { x: entity.position.x, y: entity.position.y },
-          properties: { blockName: entity.name, layer: entity.layer ?? '' },
+          properties: { blockName: entity.name, layer: entity.layer ?? '', symbolRotation: String(entity.rotation ?? 0), ...(fingerprint ? { blockFingerprint: fingerprint } : {}),
+            ...(feedback?.status === 'matched' ? { feedbackIds: feedback.feedbackIds.join(','), feedbackRevision: String(libraryIndex?.revision ?? 0) } : {}),
+            ...(feedback?.status === 'conflict' ? { feedbackConflict: 'true' } : {}) },
         });
         if (components.length > maxComponents) return dxfResourceLimit(`components > ${maxComponents}`);
         break;
@@ -539,6 +556,17 @@ export function parseDxfToSLD(
     }
 
     if (closestComp) {
+      // Similarity context only uses an unambiguous nearest local text anchor.
+      // Row-based fallback and equal-distance text do not become corroboration.
+      const local = closestDist < textProximityThreshold && !components.some((candidate) => candidate.id !== closestComp!.id
+        && euclideanDist({ x: t.x, y: t.y }, candidate.position) <= closestDist + 1e-6);
+      if (local && !isCableSpec) {
+        const records = classificationTexts.get(closestComp.id) ?? [];
+        if (t.text.length > 1000 || records.length >= 16) {
+          if (!records.includes('__ESA_CONTEXT_TRUNCATED__')) records.push('__ESA_CONTEXT_TRUNCATED__');
+        } else records.push(t.text);
+        classificationTexts.set(closestComp.id, records);
+      }
       if (t.spec.voltage) closestComp.voltage = `${t.spec.voltage}V`;
       if (t.spec.current) closestComp.current = `${t.spec.current}A`;
       if (t.spec.power) closestComp.rating = `${t.spec.power}${t.spec.powerUnit}`;
@@ -622,8 +650,40 @@ export function parseDxfToSLD(
     });
   }
 
+  // Text within a block is not part of its geometry hash, but it can change
+  // device meaning (for example an ATS or fuse marking). Compare geometry only
+  // after preserving these literal context checks. Parse each definition once.
+  const blockAnnotationMemo = new Map<string, string[]>();
+  for (const component of components) {
+    const name = component.properties?.blockName;
+    if (!name) continue;
+    let annotations = blockAnnotationMemo.get(name);
+    if (!annotations) {
+      annotations = [];
+      const entities = dxf?.blocks?.[name]?.entities;
+      if (blockAnnotationMemo.size >= 512 || (entities && entities.length > 256)) {
+        annotations.push('__ESA_CONTEXT_TRUNCATED__');
+      } else for (const raw of entities ?? []) {
+        const item = raw as unknown as { type?: unknown; text?: unknown };
+        if (typeof item.type !== 'string' || !['TEXT', 'MTEXT', 'ATTRIB', 'ATTDEF'].includes(item.type)) continue;
+        if (typeof item.text !== 'string' || !item.text.trim()) continue;
+        if (item.text.length > 1000 || annotations.length >= 16) {
+          annotations.push('__ESA_CONTEXT_TRUNCATED__'); break;
+        }
+        annotations.push(item.text);
+      }
+      if (blockAnnotationMemo.size < 512) blockAnnotationMemo.set(name, annotations);
+    }
+    if (!annotations.length) continue;
+    const combined = [...(classificationTexts.get(component.id) ?? []), ...annotations];
+    classificationTexts.set(component.id, combined.length > 16
+      ? [...combined.slice(0, 16), '__ESA_CONTEXT_TRUNCATED__'] : combined);
+  }
+  const classificationStats = classifyDxfSymbols(components, snap.connections,
+    { library: options.symbolLibrary, index: libraryIndex, texts: classificationTexts });
   return {
     components,
+    classificationStats,
     connections: snap.connections,
     sourceTexts: texts.map((item) => ({ text: item.text, position: { x: item.x, y: item.y }, confidence: 0.99 })),
     suggestedCalculations: generateSuggestions({ components, connections: snap.connections }),

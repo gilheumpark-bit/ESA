@@ -75,10 +75,11 @@ async function GET__impl(req: NextRequest) {
 
     // 페이지네이션 NaN·음수·과대 가드(버그 사냥 수리): 미검증 시 range(NaN,NaN)/
     // 음수 오프셋으로 PostgREST 500, 과대 pageSize로 대량 조회. community와 동일 규율.
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1);
+    const page = Math.min(10000, Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1));
     const pageSize = Math.min(Math.max(1, parseInt(searchParams.get('pageSize') ?? '20', 10) || 20), 50);
     const unreadOnly = searchParams.get('unreadOnly') === 'true';
     const type = searchParams.get('type') as NotificationType | null;
+    if (type && !VALID_TYPES.includes(type)) return NextResponse.json({ error: '알림 종류를 확인해 주세요.' }, { status: 400 });
 
     const result = await getUserNotifications(userId, {
       page,
@@ -87,7 +88,7 @@ async function GET__impl(req: NextRequest) {
       type: type ?? undefined,
     });
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, ...result }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     console.error('[ESVA Notifications GET]', err);
     return NextResponse.json({ error: '알림을 불러오지 못했습니다.' }, { status: 500 });
@@ -173,7 +174,12 @@ async function PATCH__impl(req: NextRequest) {
     const auth = await authenticateRequest(req);
     if (auth instanceof NextResponse) return auth;
 
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)
+      || (body.markAll !== undefined && typeof body.markAll !== 'boolean')
+      || (body.notificationId !== undefined && (typeof body.notificationId !== 'string' || body.notificationId.length > 128))) {
+      return NextResponse.json({ error: '읽음 처리 요청 형식이 올바르지 않습니다.' }, { status: 400 });
+    }
     const { notificationId, userId, markAll } = body as {
       notificationId?: string;
       userId?: string;
@@ -196,7 +202,7 @@ async function PATCH__impl(req: NextRequest) {
       );
     }
 
-    if (markAll) {
+    if (markAll === true) {
       await markAllRead(userId);
       return NextResponse.json({ success: true, message: 'All notifications marked as read' });
     }

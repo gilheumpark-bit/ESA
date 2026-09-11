@@ -11,7 +11,9 @@
  * PART 4: Main page component
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { readApiErrorMessage } from '@/lib/error-messages';
+import { decodeNameplateResponse, nameplateInputIssue, nameplateCalculatorInputs, type NameplateReviewData, type NameplateField } from '@/lib/nameplate-review';
 import { calculatorHref } from '@/lib/calculator-catalog';
 import {
   Camera,
@@ -35,33 +37,7 @@ import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 
 // Vision 키·모델 해석은 공유 모듈(@/lib/vision-byok)로 일원화 — 로컬 사본 제거(§2.4).
 
-interface NameplateResult {
-  manufacturer?: string;
-  model?: string;
-  voltage?: string;
-  current?: string;
-  power?: string;
-  frequency?: string;
-  serialNumber?: string;
-  phase?: string;
-  rating?: string;
-  efficiency?: string;
-  powerFactor?: string;
-  rpm?: string;
-  insulation?: string;
-  protection?: string;
-  rawText: string;
-  confidence: number;
-  language: string;
-}
-
-interface OCRResponse {
-  success: boolean;
-  data: NameplateResult;
-  suggestedCalculators: string[];
-  error?: string;
-}
-
+type NameplateResult = NameplateReviewData;
 
 const CALC_LABELS: Record<string, string> = {
   'voltage-drop': '전압강하 계산',
@@ -124,6 +100,8 @@ function ImageUploader({
             style={{ maxHeight: 400 }}
           />
           <button
+            type="button"
+            aria-label="명판 이미지 삭제"
             onClick={onReset}
             className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white hover:bg-black/80"
           >
@@ -204,26 +182,40 @@ function ParameterRow({
         </span>
         <input
           type="text"
+          aria-label={`${label} 수정값`}
+          maxLength={1000}
           value={editValue}
           onChange={e => setEditValue(e.target.value)}
-          className="flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1 text-sm"
+          onKeyDown={event => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+            if (event.key === 'Enter') {
+              event.preventDefault(); onEdit(editValue); setEditing(false);
+            } else if (event.key === 'Escape') {
+              event.preventDefault(); setEditValue(value); setEditing(false);
+            }
+          }}
+          className="min-w-0 flex-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-2 py-1 text-sm"
           autoFocus
         />
         <button
+          type="button"
+          aria-label={`${label} 수정 저장`}
           onClick={() => {
             onEdit(editValue);
             setEditing(false);
           }}
-          className="rounded p-1 text-green-600 hover:bg-green-50"
+          className="min-h-11 min-w-11 rounded p-1 text-green-600 hover:bg-green-50"
         >
           <Check size={14} />
         </button>
         <button
+          type="button"
+          aria-label={`${label} 수정 취소`}
           onClick={() => {
             setEditValue(value);
             setEditing(false);
           }}
-          className="rounded p-1 text-red-500 hover:bg-red-50"
+          className="min-h-11 min-w-11 rounded p-1 text-red-500 hover:bg-red-50"
         >
           <X size={14} />
         </button>
@@ -236,12 +228,14 @@ function ParameterRow({
       <span className="w-24 shrink-0 text-xs font-medium text-[var(--text-tertiary)]">
         {label}
       </span>
-      <span className="flex-1 text-sm font-medium text-[var(--text-primary)]">
-        {value}
+      <span className="min-w-0 flex-1 break-words text-sm font-medium text-[var(--text-primary)]">
+        {value || '미기재/미판독'}
       </span>
       <button
-        onClick={() => setEditing(true)}
-        className="rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
+        type="button"
+        aria-label={`${label} 수정`}
+        onClick={() => { setEditValue(value); setEditing(true); }}
+        className="min-h-11 min-w-11 rounded p-1 text-[var(--text-tertiary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]"
       >
         <Edit3 size={12} />
       </button>
@@ -252,11 +246,12 @@ function ParameterRow({
 function OCRResults({
   result,
   suggestedCalcs,
-  onParamEdit,
+  onParamEdit, original, editedFields,
 }: {
   result: NameplateResult;
   suggestedCalcs: string[];
   onParamEdit: (key: string, value: string) => void;
+  original: NameplateResult; editedFields: string[];
 }) {
   const params = Object.entries(PARAM_LABELS)
     .filter(([key]) => result[key as keyof NameplateResult])
@@ -283,7 +278,7 @@ function OCRResults({
             />
           </div>
           <span className="text-xs font-medium text-[var(--text-secondary)]">
-            인식 정확도 {Math.round(result.confidence * 100)}%
+            모델 추정 확신도 {Math.round(result.confidence * 100)}% (정답률 아님)
           </span>
         </div>
       ) : (
@@ -303,12 +298,11 @@ function OCRResults({
         <div className="space-y-2.5">
           {params.length > 0 ? (
             params.map(({ key, label, value }) => (
-              <ParameterRow
-                key={key}
-                label={label}
-                value={value}
-                onEdit={newVal => onParamEdit(key, newVal)}
-              />
+              <div key={key} className="rounded-lg border border-[var(--border-default)] p-3">
+                <ParameterRow label={label} value={value} onEdit={newVal => onParamEdit(key, newVal)} />
+                <p className="mt-1 text-xs text-[var(--text-secondary)]">{editedFields.includes(key) ? `사람 수정 · 최초 판독: ${original[key as NameplateField] ?? '미판독'}` : 'AI 추출 후보 · 원본 확인 필요'}</p>
+                {nameplateInputIssue(key as NameplateField, value) && <p className="mt-1 text-xs text-[var(--text-secondary)]">{nameplateInputIssue(key as NameplateField, value)}</p>}
+              </div>
             ))
           ) : (
             <p className="text-sm text-[var(--text-tertiary)]">
@@ -318,6 +312,18 @@ function OCRResults({
         </div>
       </div>
 
+      <details className="rounded-xl border border-[var(--border-default)] p-4">
+        <summary className="min-h-11 cursor-pointer text-sm font-semibold">미기재·미판독 항목 보완</summary>
+        <p className="mb-3 text-xs text-[var(--text-secondary)]">값이 없는 항목은 0이 아닙니다. 원본에서 확인한 경우에만 입력하세요.</p>
+        <div className="space-y-3">{Object.entries(PARAM_LABELS).filter(([key]) => !result[key as NameplateField]).map(([key, label]) =>
+          <ParameterRow key={key} label={label} value="" onEdit={(value) => onParamEdit(key, value)} />)}</div>
+      </details>
+      <button type="button" className="min-h-11 rounded-lg border px-4 text-sm" onClick={() => {
+        const url = URL.createObjectURL(new Blob([JSON.stringify({ schemaVersion: 1, source: 'nameplate-review', original,
+          reviewed: result, editedFields, scope: 'This image only; not model training or a verified golden label.' }, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a'); link.href = url; link.download = 'esa-nameplate-review.json'; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }}>원본·수정값 JSON 내보내기</button>
       {/* Raw text */}
       {result.rawText && (
         <details className="rounded-xl border border-[var(--border-default)]">
@@ -334,8 +340,9 @@ function OCRResults({
       {suggestedCalcs.length > 0 && (
         <div className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-primary)] p-4">
           <h3 className="mb-3 text-sm font-semibold text-[var(--text-primary)]">
-            이 데이터로 계산하기
+            확인 가능한 값으로 계산기 열기
           </h3>
+          <p className="mb-3 text-xs text-[var(--text-secondary)]">복수 전압·범위·kA·kVA 등 의미가 다른 값은 자동 입력에서 제외합니다. 계산기에서 원본·단위·필수 입력을 확인하세요.</p>
           <div className="flex flex-wrap gap-2">
             {suggestedCalcs.map(calcId => (
               <Link
@@ -357,16 +364,7 @@ function OCRResults({
 
 /** 명판에서 읽은 값 — 계산기 폼을 미리 채운다. 빈 값은 calculatorHref 가 뺀다. */
 function buildCalcParams(result: NameplateResult, calcId: string): Record<string, unknown> {
-  return {
-    voltage: result.voltage,
-    current: result.current,
-    power: result.power,
-    powerFactor: result.powerFactor,
-    phase: result.phase,
-    frequency: result.frequency,
-    source: 'ocr',
-    calc: calcId,
-  };
+  return nameplateCalculatorInputs(result, calcId);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -377,65 +375,79 @@ export default function OCRNameplatePage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<NameplateResult | null>(null);
+  const [originalResult, setOriginalResult] = useState<NameplateResult | null>(null);
+  const [editedFields, setEditedFields] = useState<string[]>([]);
   const [suggestedCalcs, setSuggestedCalcs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const activeRequest = useRef<AbortController | null>(null);
+  const cancelAnalysis = useCallback(() => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+  }, []);
+  useEffect(() => cancelAnalysis, [cancelAnalysis]);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
   const handleImageSelect = useCallback((file: File) => {
+    cancelAnalysis();
+    setLoading(false);
     setImageFile(file);
     setPreview(URL.createObjectURL(file));
-    setResult(null);
+    setResult(null); setOriginalResult(null); setEditedFields([]);
     setSuggestedCalcs([]);
     setError(null);
-  }, []);
+  }, [cancelAnalysis]);
 
   const handleReset = useCallback(() => {
-    if (preview) URL.revokeObjectURL(preview);
+    cancelAnalysis();
+    setLoading(false);
     setImageFile(null);
     setPreview(null);
-    setResult(null);
+    setResult(null); setOriginalResult(null); setEditedFields([]);
     setSuggestedCalcs([]);
     setError(null);
-  }, [preview]);
+  }, [cancelAnalysis]);
 
   const handleAnalyze = useCallback(async () => {
     if (!imageFile) return;
-
+    cancelAnalysis();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const isCurrent = () => activeRequest.current === controller && !controller.signal.aborted;
     setLoading(true);
     setError(null);
-
     try {
-      const visionKey = await getFirstAvailableVisionKey();
-      if (!visionKey) {
-        setError('AI 연결이 없습니다. 설정에서 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 입력하세요.');
-        setLoading(false);
-        return;
-      }
-
+      const visionKey = await getFirstAvailableVisionKey(undefined, controller.signal);
+      if (!isCurrent()) return;
+      if (!visionKey) throw new Error('AI 연결이 없습니다. 설정에서 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 입력하세요.');
       const formData = new FormData();
       formData.append('image', imageFile);
       formData.append('provider', visionKey.provider);
       formData.append('model', visionKey.model);
       if (visionKey.key) formData.append('apiKey', visionKey.key);
-
-      const res = await fetch('/api/ocr', { method: 'POST', body: formData });
-      const data: OCRResponse = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? 'OCR 처리에 실패했습니다');
-      }
-
-      setResult(data.data);
-      setSuggestedCalcs(data.suggestedCalculators);
+      const res = await fetch('/api/ocr', { method: 'POST', body: formData, signal: controller.signal });
+      const payload: unknown = await res.json().catch(() => null);
+      if (!isCurrent()) return;
+      if (!res.ok) throw new Error(readApiErrorMessage(payload, 'OCR 처리에 실패했습니다'));
+      const data = decodeNameplateResponse(payload);
+      setResult(data.data); setOriginalResult(data.data); setEditedFields([]);
+      setSuggestedCalcs(Array.isArray(data.suggestedCalculators) ? data.suggestedCalculators.filter((id) => typeof id === 'string') : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OCR 처리 중 오류가 발생했습니다');
+      if (isCurrent()) setError(err instanceof Error ? err.message : 'OCR 처리 중 오류가 발생했습니다');
     } finally {
-      setLoading(false);
+      if (activeRequest.current === controller) {
+        activeRequest.current = null;
+        setLoading(false);
+      }
     }
-  }, [imageFile]);
+  }, [imageFile, cancelAnalysis]);
 
   const handleParamEdit = useCallback((key: string, value: string) => {
-    setResult(prev => (prev ? { ...prev, [key]: value } : null));
+    if (!Object.hasOwn(PARAM_LABELS, key)) return;
+    const normalized = value.trim().slice(0, 1000);
+    setResult(prev => (prev ? { ...prev, [key]: normalized || undefined } : null));
+    setEditedFields((previous) => [...new Set([...previous, key])]);
   }, []);
 
   return (
@@ -482,7 +494,7 @@ export default function OCRNameplatePage() {
 
       {/* Error */}
       {error && (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+        <div role="alert" aria-label="명판 분석 오류" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-[var(--color-error)]" />
           <p className="text-sm text-[var(--color-error)]">{error}</p>
         </div>
@@ -505,6 +517,8 @@ export default function OCRNameplatePage() {
           </div>
           <OCRResults
             result={result}
+            original={originalResult ?? result}
+            editedFields={editedFields}
             suggestedCalcs={suggestedCalcs}
             onParamEdit={handleParamEdit}
           />

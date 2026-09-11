@@ -26,6 +26,10 @@ describe('field safety persistence contract', () => {
   });
 
   test('the field page authenticates both safety writes', () => {
-    expect(page.match(/Authorization/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(page).toContain("}, decodeFieldSos, featureAuthenticatedFetch)");
+    expect(page).toContain("}, decodeFieldCompletion, featureAuthenticatedFetch)");
+    const transport = read('src/lib/feature-auth.ts');
+    expect(transport).toContain("headers.set('Authorization'");
+    expect(transport).toContain('await getIdToken()');
   });
 });

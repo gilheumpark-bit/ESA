@@ -78,6 +78,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         const body = await res.json();
         // API returns { success, data: { result, receipt } }
         const data: CalculateApiResponse = body.data ?? body;
+        if (controller.signal.aborted || activeRequestRef.current !== controller) return;
         setResult(data.result);
         setReceipt(data.receipt);
 
