@@ -1,0 +1,40 @@
+name: Symbol product PR evidence
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-pr-evidence.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SYMBOL_PR_RUN_ID: '34556940874'
+      SYMBOL_PRODUCT_SHA: '32fa73a15147d4edb27e917d47e33e3b753b40ab'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Collect original regular CI results without rerunning tests
+        run: python3 .review-patches/collect-symbol-pr-ci.py
+      - name: Preserve the exact result in the isolated work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin chore/symbol-classification-20260911
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          git add -f .review-patches/symbol-pr-verified.json
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: record original PR CI for classification-first product' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/symbol-classification-20260911
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-product-pr-evidence
+          path: .review-patches/symbol-pr-verified.json
+          retention-days: 7
+          if-no-files-found: warn
