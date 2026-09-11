@@ -1,0 +1,141 @@
+name: Symbol final regression closure
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-readiness-closeout.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: 32fa73a15147d4edb27e917d47e33e3b753b40ab
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Correct only the asynchronous test observation and retain the failed-run record
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib,json
+          p=Path('e2e/nonbilling-quality.spec.ts');s=p.read_text()
+          old="    await page.getByRole('button', { name: '다시 시도', exact: true }).click();\n    await expect(page.getByText('업데이트 알림 조회에 실패했습니다. 업데이트가 없다는 뜻이 아닙니다.', { exact: true })).toHaveCount(0);\n    expect(calls).toBe(2);"
+          new="    await page.getByRole('button', { name: '다시 시도', exact: true }).click();\n    // Disappearing warnings also occurs during loading. Observe the actual\n    // second request AND the restored result before asserting completion.\n    await expect.poll(() => calls).toBe(2);\n    await expect(page.getByText(/사용량 분포는 일부 기록 기준/)).toBeVisible();\n    await expect(page.getByText('업데이트 알림 조회에 실패했습니다. 업데이트가 없다는 뜻이 아닙니다.', { exact: true })).toHaveCount(0);\n    expect(calls).toBe(2);"
+          assert s.count(old)==1;p.write_text(s.replace(old,new))
+          p=Path('docs/project/handoffs/2026-09-11-symbol-classification-first.md')
+          p.write_text(p.read_text()+'''\n## 정규 CI 후속 결과와 검사 동기화\n\n제품32fa73a의 정규 실행34556940874는 Verify와 PDF17/17 및 신규 심볼3개는 통과했으나, 전체 브라우저는134통과·1실패·1flaky였다. 대시보드 재시도 검사에서 경고가 사라졌다는 것을 완료로 간주했지만 실제로는 로딩 화면으로 전환한 순간이었다. 실제 두 번째 요청과 결과 재표시까지 확인한 다음, 기존 호출2회·경고없음 단언을 그대로 수행하도록 검사 동기화를 보강했다. 임의 sleep·제한시간 증가·재시도 추가·단언 삭제는 하지 않았다.\n\n같은 실행의 계산기 재계산은 첫 시도 실패 후 재시도에서 통과했다. 이는 기존 UIV-001과 관련된 미종결 관측이며 이번 심볼 구현이나 대시보드 검사 변경으로 원인이 해결됐다고 기록하지 않는다. 후속 검증은 retries=0으로 전체 회귀를 실행하고, 그 실행에서의 미재현과 근본 원인 수리를 구분한다. 실패한 정규 실행의 원시 JSON/trace는34556940874의 artifact10183073650과 PR 증거에 보존했다. 최종 후속 결과는 해당 HEAD의 실행 증거를 따른다.\n''')
+          names=['e2e/nonbilling-quality.spec.ts','docs/project/handoffs/2026-09-11-symbol-classification-first.md']
+          Path('/tmp/symbol-closure-hashes.json').write_text(json.dumps({p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in names},indent=2))
+          PY
+          git add e2e/nonbilling-quality.spec.ts docs/project/handoffs/2026-09-11-symbol-classification-first.md
+          git diff --cached --check
+          npm run gate:hygiene
+          npm run check:docs
+          npm ci > /tmp/symbol-closure-install.log 2>&1 || { tail -80 /tmp/symbol-closure-install.log; exit 1; }
+      - name: Type, lint, audits and full regression
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npm run gate:audit
+          npm run gate:audit:all
+          npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/symbol-closure-jest.json > /tmp/symbol-closure-jest.log 2>&1 || { tail -150 /tmp/symbol-closure-jest.log; exit 1; }
+          npm run test:scripts > /tmp/symbol-closure-scripts.log 2>&1 || { tail -100 /tmp/symbol-closure-scripts.log; exit 1; }
+          npm run gate:sld-v3-contract
+          npm run gate:snapshot
+          npm run build > /tmp/symbol-closure-build.log 2>&1 || { tail -100 /tmp/symbol-closure-build.log; exit 1; }
+          npm run gate:chat-live
+          npx playwright install --with-deps chromium > /tmp/symbol-closure-browser-install.log 2>&1
+      - name: Independent PDF and all browser scenarios without retries
+        run: |
+          pid=''
+          cleanup() { if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; pid=''; fi; }
+          trap cleanup EXIT
+          start_server() {
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$1" > "$2" 2>&1 &
+            pid=$!
+            for n in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || { cat "$2"; return 1; }
+              if curl -fsS "http://127.0.0.1:$1/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          start_server 3010 /tmp/symbol-closure-pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010 > /tmp/symbol-closure-pdf.log 2>&1 || { cat /tmp/symbol-closure-pdf.log; exit 1; }
+          cleanup
+          start_server 3011 /tmp/symbol-closure-ui-server.log
+          BASE_URL=http://127.0.0.1:3011 SYMBOL_SCREEN_DIR=/tmp/symbol-closure-screens PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/symbol-closure-browser.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json > /tmp/symbol-closure-browser.log 2>&1
+      - name: Publish checked test refinement on a descendant candidate
+        run: |
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test: observe completed dashboard retry instead of intermediate loading'
+          git push origin HEAD:refs/heads/chore/symbol-reviewed-20260911
+          git rev-parse HEAD > /tmp/symbol-closure-product.txt
+      - name: Preserve original closure result without changing the product
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          report={'runId':os.environ['GITHUB_RUN_ID'],'baseProduct':'32fa73a15147d4edb27e917d47e33e3b753b40ab','scope':'Original closure execution; no inference accuracy claim; UIV-001 remains open'}
+          for name,key in [('symbol-closure-jest.json','unit'),('symbol-closure-browser.json','browser')]:
+              p=Path('/tmp')/name
+              if not p.exists():report[key]={'missing':True};continue
+              value=json.loads(p.read_text())
+              if key=='unit':value={k:value.get(k) for k in ['success','numPassedTests','numFailedTests','numPendingTests','numPassedTestSuites','numFailedTestSuites','numPendingTestSuites']}
+              else:
+                  attempts=[];failed=[]
+                  def walk(s):
+                      for spec in s.get('specs',[]):
+                          for t in spec.get('tests',[]):
+                              statuses=[r.get('status') for r in t.get('results',[])];attempts.append((t.get('status'),statuses))
+                              if t.get('status')!='expected':failed.append({'title':spec['title'],'results':t.get('results',[])})
+                      for child in s.get('suites',[]):walk(child)
+                  for s in value.get('suites',[]):walk(s)
+                  value={'stats':value.get('stats'),'executions':len(attempts),'everyFirstAttemptPassed':bool(attempts) and all(s=='expected' and a==['passed'] for s,a in attempts),'failures':failed,'errors':value.get('errors',[])}
+              report[key]=value
+          for name in ['symbol-closure-pdf.log','symbol-closure-scripts.log']:
+              p=Path('/tmp')/name
+              if p.exists():report[name]=p.read_text()[-3000:]
+          p=Path('/tmp/symbol-closure-product.txt');report['productHead']=p.read_text().strip() if p.exists() else None
+          p=Path('/tmp/symbol-closure-hashes.json');report['refinementHashes']=json.loads(p.read_text()) if p.exists() else {}
+          Path('/tmp/symbol-final-closure.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(report,ensure_ascii=False))
+          PY
+          git fetch origin chore/symbol-classification-20260911
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          mkdir -p .review-patches
+          cp /tmp/symbol-final-closure.json .review-patches/symbol-final-closure.json
+          git add -f .review-patches/symbol-final-closure.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: record exact closure outcome without repeating tests' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/symbol-classification-20260911
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-regression-closure
+          path: |
+            /tmp/symbol-final-closure.json
+            /tmp/symbol-closure-*.json
+            /tmp/symbol-closure-*.log
+            /tmp/symbol-closure-product.txt
+            /tmp/symbol-closure-screens/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
