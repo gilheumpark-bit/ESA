@@ -1,0 +1,117 @@
+name: Symbol readiness refinement
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-readiness-focused.yml']
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Apply only the previously reviewed two-file test refinement
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import textwrap
+          source=Path('.github/workflows/symbol-readiness-closeout.yml').read_text()
+          script=source.split("python3 - <<'PY'\n",1)[1].split('\n          PY',1)[0]
+          Path('/tmp/symbol-readiness.py').write_text(textwrap.dedent(script))
+          PY
+          git checkout --detach 32fa73a15147d4edb27e917d47e33e3b753b40ab
+          python3 /tmp/symbol-readiness.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('docs/project/handoffs/2026-09-11-symbol-classification-first.md')
+          p.write_text(p.read_text()+'''\n후속 전체 실행34557638593은 정적/단위/스크립트/빌드를 통과했지만 브라우저 단계에서 runner shutdown signal로 종료됐다. 새 후보 생성·artifact 업로드도 수행되지 않아 전체 통과나 새로운 136건 결과로 보고하지 않는다. 후속 테스트 전용 변경의 검증은 대시보드 PC/모바일2건과 새 심볼3건을 재시도 없이 실행하며 전체 앱 회귀 실행과 구분한다.\n''')
+          PY
+          git add e2e/nonbilling-quality.spec.ts docs/project/handoffs/2026-09-11-symbol-classification-first.md
+          git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Static verification and actual production build
+        run: |
+          npm ci > /tmp/symbol-refine-install.log 2>&1 || { tail -60 /tmp/symbol-refine-install.log; exit 1; }
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npm run gate:hygiene
+          npm run check:docs
+          npm run build > /tmp/symbol-refine-build.log 2>&1 || { tail -90 /tmp/symbol-refine-build.log; exit 1; }
+          npx playwright install --with-deps chromium > /tmp/symbol-refine-chromium.log 2>&1
+      - name: Run the changed observations and all new symbol flows, with zero retries
+        run: |
+          node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3011 > /tmp/symbol-refine-server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for n in $(seq 1 60); do
+            kill -0 "$pid" 2>/dev/null || { cat /tmp/symbol-refine-server.log; exit 1; }
+            if curl -fsS http://127.0.0.1:3011/ >/dev/null; then break; fi
+            sleep 1
+          done
+          BASE_URL=http://127.0.0.1:3011 PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/symbol-refine-browser.json npx playwright test e2e/nonbilling-quality.spec.ts e2e/symbol-classification-first.spec.ts --grep 'dashboard shows|classify first|quick results expose' --retries=0 --trace=retain-on-failure --reporter=line,json > /tmp/symbol-refine-browser.log 2>&1
+      - name: Commit validated observation refinement as a descendant, not a replacement
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git diff --cached --check
+          git commit -m 'test: distinguish completed dashboard retry from intermediate loading'
+          git push origin HEAD:refs/heads/chore/symbol-reviewed-20260911
+          git rev-parse HEAD > /tmp/symbol-refine-product.txt
+      - name: Preserve this exact focused result on every available outcome
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,hashlib
+          from pathlib import Path
+          report={'runId':os.environ['GITHUB_RUN_ID'],'baseProduct':'32fa73a15147d4edb27e917d47e33e3b753b40ab','scope':'Focused changed test observation plus new symbol UI; not a full regression or independent accuracy sample'}
+          p=Path('/tmp/symbol-refine-browser.json')
+          if p.exists():
+              r=json.loads(p.read_text());attempts=[];failed=[]
+              def walk(s):
+                  for spec in s.get('specs',[]):
+                      for t in spec.get('tests',[]):
+                          statuses=[x.get('status') for x in t.get('results',[])];attempts.append((t.get('status'),statuses))
+                          if t.get('status')!='expected':failed.append({'title':spec['title'],'results':t.get('results',[])})
+                  for child in s.get('suites',[]):walk(child)
+              for s in r.get('suites',[]):walk(s)
+              report['browser']={'stats':r.get('stats'),'executions':len(attempts),'everyFirstAttemptPassed':bool(attempts) and all(s=='expected' and a==['passed'] for s,a in attempts),'failures':failed}
+          p=Path('/tmp/symbol-refine-product.txt');report['productHead']=p.read_text().strip() if p.exists() else None
+          report['hashes']={p:hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in ['e2e/nonbilling-quality.spec.ts','docs/project/handoffs/2026-09-11-symbol-classification-first.md']}
+          Path('/tmp/symbol-focused-final.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(report,ensure_ascii=False))
+          PY
+          git fetch origin chore/symbol-classification-20260911
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          mkdir -p .review-patches
+          cp /tmp/symbol-focused-final.json .review-patches/symbol-focused-final.json
+          git add -f .review-patches/symbol-focused-final.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: retain exact focused readiness result' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/symbol-classification-20260911
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-readiness-focused-evidence
+          path: |
+            /tmp/symbol-focused-final.json
+            /tmp/symbol-refine-*.json
+            /tmp/symbol-refine-*.log
+            /tmp/symbol-refine-product.txt
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
