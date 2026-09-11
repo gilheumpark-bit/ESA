@@ -1,0 +1,77 @@
+name: Classification verification evidence
+on:
+  push:
+    branches: ['chore/symbol-classification-20260911']
+    paths: ['.github/workflows/symbol-evidence.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Read original verification without repeating tests
+        run: |
+          python3 - <<'PY'
+          import json,subprocess,time,hashlib,tarfile
+          from pathlib import Path
+          repo='gilheumpark-bit/ESA';run_id=34554803586;head='56089e0ba66375d3d3f6bf35811a978b8414f538'
+          def api(path):return json.loads(subprocess.check_output(['gh','api',f'repos/{repo}/{path}'],text=True))
+          for n in range(90):
+              run=api(f'actions/runs/{run_id}');assert run['head_sha']==head
+              if run['status']=='completed':break
+              time.sleep(10)
+          assert run['status']=='completed','original run has not completed'
+          root=Path('/tmp/symbol-original-evidence')
+          subprocess.run(['gh','run','download',str(run_id),'--repo',repo,'--name','symbol-classification-release-evidence','--dir',str(root)],check=True)
+          def one(name):
+              matches=list(root.rglob(name));assert len(matches)==1,(name,len(matches));return matches[0]
+          summary=json.loads(one('symbol-summary.json').read_text())
+          summary.update({'runConclusion':run['conclusion'],'collectionScope':'Original run only; no new tests or additional accuracy samples'})
+          summary['jobs']=[{k:j.get(k) for k in ['id','name','status','conclusion']} for j in api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']]
+          summary['artifacts']=[{k:a.get(k) for k in ['id','name','digest','expired','size_in_bytes']} for a in api(f'actions/runs/{run_id}/artifacts')['artifacts']]
+          manifest=summary.get('productHashes',{});source=one('symbol-product-source.tar.gz');checked=[]
+          with tarfile.open(source) as archive:
+              for member in archive.getmembers():
+                  if not member.isfile():continue
+                  assert member.name in manifest
+                  assert hashlib.sha256(archive.extractfile(member).read()).hexdigest()==manifest[member.name],member.name
+                  checked.append(member.name)
+          assert set(checked)==set(manifest)
+          summary['archiveIntegrity']={'verifiedFiles':len(checked),'allHashesMatch':True}
+          product=summary.get('preparedSha')
+          if product:
+              assert run['conclusion']=='success'
+              subprocess.run(['git','fetch','origin','chore/symbol-prepared-20260911'],check=True)
+              changes=subprocess.check_output(['git','diff','--name-only','9327c3afcd8a090be90d699c071b7d59b202700f',product],text=True).splitlines()
+              assert set(changes)==set(manifest)
+              for name,digest in manifest.items():assert hashlib.sha256(subprocess.check_output(['git','show',f'{product}:{name}'])).hexdigest()==digest,name
+              summary['productIntegrity']={'sha':product,'allCheckedFilesMatch':True}
+          summary['screens']=[p.name for p in root.rglob('*.png')]
+          target=Path('.review-patches/symbol-verified.json');target.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({k:v for k,v in summary.items() if k!='productHashes'},ensure_ascii=False))
+          PY
+      - name: Save evidence only on the isolated work branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin chore/symbol-classification-20260911
+          parent=$(git rev-parse FETCH_HEAD)
+          git read-tree "$parent"
+          git add -f .review-patches/symbol-verified.json
+          tree=$(git write-tree)
+          commit=$(printf '%s\n' 'test: record original classification verification and product byte integrity' | git commit-tree "$tree" -p "$parent")
+          git push origin "$commit":refs/heads/chore/symbol-classification-20260911
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: symbol-verification-summary
+          path: .review-patches/symbol-verified.json
+          retention-days: 7
+          if-no-files-found: warn
