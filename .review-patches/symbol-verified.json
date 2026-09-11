@@ -1,6 +1,6 @@
 {
-  "runId": "34555577071",
-  "sourceHead": "44104de9b21ff32a4d1d55daafd02dcea9380ed7",
+  "runId": "34556046290",
+  "sourceHead": "a9f2ce03e854b530e2b58d7e0ade572702ba9057",
   "scope": "Original run evidence, not an independent accuracy evaluation",
   "workload": {
     "source": "production DXF parser on a declared synthetic family",
@@ -23,7 +23,7 @@
           "additionalModelCalls": 0,
           "scope": "observed-dxf-symbols"
         },
-        "parseAndClassificationMs": 10.9
+        "parseAndClassificationMs": 10.799
       },
       {
         "variantInstances": 8,
@@ -42,7 +42,7 @@
           "additionalModelCalls": 0,
           "scope": "observed-dxf-symbols"
         },
-        "parseAndClassificationMs": 4.351
+        "parseAndClassificationMs": 6.472
       },
       {
         "variantInstances": 32,
@@ -61,13 +61,14 @@
           "additionalModelCalls": 0,
           "scope": "observed-dxf-symbols"
         },
-        "parseAndClassificationMs": 8.54
+        "parseAndClassificationMs": 10.077
       }
     ]
   },
   "productHashes": {
     "docs/project/HANDOFFS.md": "7fb4b725bc3a2b8344a04ddb02fe5cb3bd942dbd874285f0298ae5328905fae9",
-    "docs/project/handoffs/2026-09-11-symbol-classification-first.md": "43a6123800a327ca9395dd1cace31f8104fc114ca1073afa81774080cbdfae36",
+    "docs/project/handoffs/2026-09-11-symbol-classification-first.md": "5b9d64e8421430f21a0cbe6f7a4792042cb3bd0c6f24ff2eb402b3379009c2d4",
+    "e2e/frontend-public-workflows.spec.ts": "0ad80543e62fb829e9f5b7ed91bc920c1d22ad36bdd0c0609828fc50ee57ef83",
     "e2e/symbol-classification-first.spec.ts": "9c1dfea489796ebee7eeb2b6287df23983db002484e57f5f33a49d0cc52fcc3b",
     "scripts/lib/ax-precision.node-test.mjs": "9e034b8b7d526bd4e427e4272b2692cbb183edf71971ff2e0bf8b6ea4fcf5464",
     "scripts/lib/drawing-commercial.node-test.mjs": "6dd0b9789641cb19eb7f647fa5710d8e84d9c839190e534968005820f90b1777",
@@ -103,157 +104,52 @@
     "numFailedTestSuites": 0,
     "numPendingTestSuites": 2
   },
-  "browser": {
-    "stats": {
-      "startTime": "2026-09-11T02:44:34.070Z",
-      "duration": 140541.577,
-      "expected": 135,
-      "skipped": 0,
-      "unexpected": 1,
-      "flaky": 0
-    },
-    "executions": 136,
-    "everyFirstAttemptPassed": false,
-    "failures": [
-      {
-        "title": "every standards group and detail opens and closes (390px)",
-        "results": [
-          {
-            "workerIndex": 0,
-            "parallelIndex": 0,
-            "status": "failed",
-            "duration": 666,
-            "error": {
-              "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m20\u001b[39m\nReceived:   \u001b[31m0\u001b[39m",
-              "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m20\u001b[39m\nReceived:   \u001b[31m0\u001b[39m\n    at /home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts:86:20",
-              "location": {
-                "file": "/home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts",
-                "column": 20,
-                "line": 86
-              },
-              "snippet": "\u001b[0m \u001b[90m 84 |\u001b[39m     \u001b[36mconst\u001b[39m groupButtons \u001b[33m=\u001b[39m page\u001b[33m.\u001b[39mlocator(\u001b[32m'main button[aria-expanded]'\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m 85 |\u001b[39m     \u001b[36mconst\u001b[39m groups \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m groupButtons\u001b[33m.\u001b[39mcount()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 86 |\u001b[39m     expect(groups)\u001b[33m.\u001b[39mtoBeGreaterThan(\u001b[35m20\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                    \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 87 |\u001b[39m     \u001b[36mlet\u001b[39m entries \u001b[33m=\u001b[39m \u001b[35m0\u001b[39m\u001b[33m;\u001b[39m\n \u001b[90m 88 |\u001b[39m     \u001b[36mfor\u001b[39m (\u001b[36mlet\u001b[39m i \u001b[33m=\u001b[39m \u001b[35m0\u001b[39m\u001b[33m;\u001b[39m i \u001b[33m<\u001b[39m groups\u001b[33m;\u001b[39m i\u001b[33m++\u001b[39m) {\n \u001b[90m 89 |\u001b[39m       \u001b[36mconst\u001b[39m group \u001b[33m=\u001b[39m groupButtons\u001b[33m.\u001b[39mnth(i)\u001b[33m;\u001b[39m\u001b[0m"
-            },
-            "errors": [
-              {
-                "location": {
-                  "file": "/home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts",
-                  "column": 20,
-                  "line": 86
-                },
-                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m\n\nExpected: > \u001b[32m20\u001b[39m\nReceived:   \u001b[31m0\u001b[39m\n\n  84 |     const groupButtons = page.locator('main button[aria-expanded]');\n  85 |     const groups = await groupButtons.count();\n> 86 |     expect(groups).toBeGreaterThan(20);\n     |                    ^\n  87 |     let entries = 0;\n  88 |     for (let i = 0; i < groups; i++) {\n  89 |       const group = groupButtons.nth(i);\n    at /home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts:86:20"
-              }
-            ],
-            "stdout": [],
-            "stderr": [],
-            "retry": 0,
-            "startTime": "2026-09-11T02:46:50.309Z",
-            "annotations": [],
-            "attachments": [
-              {
-                "name": "screenshot",
-                "contentType": "image/png",
-                "path": "/home/runner/work/ESA/ESA/test-results/frontend-public-workflows--41c8c-ail-opens-and-closes-390px-/test-failed-1.png"
-              },
-              {
-                "name": "error-context",
-                "contentType": "text/markdown",
-                "path": "/home/runner/work/ESA/ESA/test-results/frontend-public-workflows--41c8c-ail-opens-and-closes-390px-/error-context.md"
-              },
-              {
-                "name": "trace",
-                "contentType": "application/zip",
-                "path": "/home/runner/work/ESA/ESA/test-results/frontend-public-workflows--41c8c-ail-opens-and-closes-390px-/trace.zip"
-              }
-            ],
-            "errorLocation": {
-              "file": "/home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts",
-              "column": 20,
-              "line": 86
-            }
-          }
-        ]
-      }
-    ],
-    "errors": []
-  },
   "symbol-production-audit.log": "\n> esva@0.2.0 gate:audit\n> node scripts/audit-baseline-gate.mjs\n\naudit-gate PASS [production] — critical 0 · high 0 · total 0 (critical/high 허용 0)\n",
   "symbol-all-audit.log": "\n> esva@0.2.0 gate:audit:all\n> node scripts/audit-baseline-gate.mjs --include-dev\n\naudit-gate PASS [all] — critical 0 · high 0 · total 0 (critical/high 허용 0)\n",
   "symbol-pdf.log": "\n> esva@0.2.0 gate:pdf\n> node scripts/pdf-fixture-gate.mjs http://127.0.0.1:3010\n\nPDF fixture gate → http://127.0.0.1:3010/api/pdf-drawing\n  PASS R1/R2/R5 회로형: 200 + TR/MCCB + 결선≥1 + conf 0.85\n  PASS R3/R3b 표제란만: conf 0.3 + 설비 환각 0\n  PASS R7 표 격자: 결선>0인데 conf 0.55 강등 + 사유 명시\n  PASS 페인트 필터: fill 전용 경로는 선분 0 → conf 0.3\n  PASS R3c 키워드 없는 스펙/표제란 → phantom 0 + 가짜 계산 0\n  PASS R8 단독 G≠발전기 · GEN=발전기 1건\n  PASS R8b 단독 M≠모터(스펙 무) · \"M 5.5KW\"=모터 1건\n  PASS R6 12MB 대용량: 프록시 절단 없이 200 파싱\n  PASS 비PDF: 500이 아니라 400 정직 거부\n  PASS R9 표 문서(표제≥2): conf 0.55 강등 + 사유 명시\n  PASS R10 주석 문장≠장치 · 실라벨 VCB 630A=차단기 1건\n  PASS R11 가공 길이 0 + 길이 의존 계산 0\n  PASS R12 회전 도면: TR/MCCB 검출 + 결선≥1 유지\n  PASS R13 검토 사슬: 200AT vs 4sq → CABLE-AMPACITY FAIL + KEC 출처 결박\n  PASS R13b AT>AF 표기 오류 FAIL 검출\n  PASS R14 표 문서→판정: conf 0.55 강등에도 표 행으로 CABLE-AMPACITY FAIL + AT>AF FAIL 산출(생략 아님)\n  PASS R15 절연 미상 케이블(10sq)은 XLPE 낙관 PASS가 아니라 UNKNOWN(CRITICAL false-PASS 차단)\n\nGATE PASS (17/17)\n",
-  "symbol-scripts.log": "dence and empty checkpoints (0.201168ms)\n✔ report refuses an oversized export explicitly rather than returning a partial list (14.072513ms)\n✔ 서로 다른 워크스페이스 스냅샷의 모델 결과는 직접 비교 불가로 봉인한다 (1.098767ms)\n✔ 동일 스냅샷 결과만 있으면 모델 비교가 유효하다 (0.137263ms)\n✔ 하한을 크게 넘긴 관계는 종합 점수를 만들어 내지 않는다 (1.155651ms)\n✔ 최소 수량 관문은 기호 정확도를 올리지 않는다 (0.310249ms)\n✔ 하한 미달은 감점이 아니라 관문 실패로 드러난다 (0.185284ms)\n✔ 정답이 0인 환각 축은 하나라도 검출되면 0점이다 (0.156932ms)\n✔ 정확 수량 축이 하나도 없으면 점수를 지어내지 않는다 (0.200156ms)\n✔ 대표값은 평균이 아니라 최저점이다 (2.067761ms)\n✔ 대표 회차는 최저 종합 회차이며 동점이면 먼저 실행한 쪽이다 (1.469501ms)\n✔ 한 회차라도 못 돌면 셀 전체가 그 상태다 (0.171524ms)\n✔ 한 회차라도 PASS 가 아니면 셀은 PASS 가 아니다 (0.169501ms)\n✔ 기호 타입별로 어느 축이 흔들리는지 남긴다 (0.32434ms)\n✔ 1회 실행은 종전과 같은 단일 수치로 적는다 (0.200907ms)\n✔ 2회 이상은 최저~최고로 적어 단발로 오독되지 않게 한다 (0.180858ms)\n✔ 빈 회차 묶음은 조용히 통과시키지 않는다 (0.446952ms)\n✔ benchmark receipt preserves review, KEC proposals, calculations, and topology (1.442606ms)\n✔ skipped or absent review is recorded as HOLD rather than success (0.164363ms)\n✔ empty, warning, unverified scan, or topology-defective reviews never become PASS (0.386462ms)\n✔ V3 도면을 추론 단계별 PASS/HOLD/FAIL 영수증으로 분리한다 (2.129093ms)\n✔ 모호성은 HOLD로 남기고 구조 계약 위반은 FAIL로 구분한다 (1.086159ms)\n✔ 기호 근거 없이 래스터 선만 검출된 결과는 공간 분석 PASS가 아니다 (0.564366ms)\n✔ 근거가 없는 SUPPORTED 제안과 허위 verified95는 최종 단계에서 실패한다 (0.390368ms)\n✔ 사전 고정 라벨과 수량·관계가 다르면 해당 추론 단계를 FAIL로 기록한다 (0.541942ms)\n✔ 동일 차단기 별칭은 같은 기호 유형으로 집계한다 (0.389596ms)\n✔ disconnector·isolator 별칭은 스위치 축으로 집계한다 (1.940724ms)\n✔ VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한다 (0.372391ms)\n✔ cutout_switch는 제품 정본과 같이 fuse 골든 축으로 집계한다 (0.266815ms)\n✔ 모든 닫힌 DeviceType의 골든 축이 계열 접기 규칙과 일치한다 (91.416445ms)\n✔ repeat=3 resume은 같은 설정의 1회 영수증을 재사용하지 않는다 (0.223131ms)\n✔ disconnecting_switch·DS 도 switch 골든 축으로 집계한다 (6.468047ms)\n✔ lightning_arrester·LA 도 arrester 골든 축으로 집계한다 (0.322147ms)\n✔ surge_arrester는 arrester 골든 축으로 집계한다 (0.198875ms)\n✔ 미확정 물리 수량 null은 판독된 기호 수량을 0으로 덮어쓰지 않는다 (0.306885ms)\n✔ 권선 기호 수가 아니라 물리 변압기 대수로 장치 라벨을 판정한다 (0.241478ms)\n✔ 경계 연속선 영수증은 내부 ID와 표시 ID 중 어느 쪽으로도 결박된다 (0.215148ms)\n✔ 실행은 끝났지만 근거가 부족한 부분 페이지와 감사 결과는 FAIL이 아니라 HOLD다 (0.302398ms)\n✔ 래스터 페이지 종류가 미분류여도 판독 실행이 완결되면 페이지 조사는 PASS다 (0.158064ms)\n✔ 실패 뒤 성공한 역할 재시도는 최종 커버리지 실패로 채점하지 않는다 (0.153577ms)\n✔ rejects tracked residue .audit/apply.py (0.92514ms)\n✔ rejects tracked residue .performance-lab/patch.b64 (0.128991ms)\n✔ rejects tracked residue .remaining-support/fix.py (0.083063ms)\n✔ rejects tracked residue .review-patches/0.b64 (0.072558ms)\n✔ rejects tracked residue .cleanup/script.py (0.241027ms)\n✔ rejects tracked residue .tmp-sld-live/file.json (0.157564ms)\n✔ rejects tracked residue test-results/private.json (0.098707ms)\n✔ rejects tracked residue playwright-report/index.html (0.11491ms)\n✔ rejects tracked residue .next/cache/data (0.144444ms)\n✔ rejects tracked residue .env (0.315768ms)\n✔ rejects tracked residue .env.local (0.157162ms)\n✔ rejects tracked residue nested/.env.production (0.093709ms)\n✔ rejects tracked residue src/file.ts.orig (0.097935ms)\n✔ rejects tracked residue types.tsbuildinfo (0.078275ms)\n✔ rejects tracked residue src/file.ts~ (0.087019ms)\n✔ preserves maintained tooling, example config, original fixtures and historical manuals (0.842167ms)\n✔ handles Windows separators, unusual filenames and duplicates deterministically (0.174188ms)\n✔ actual Git inventory excludes untracked output but fails if it is staged (151.995077ms)\n✔ cannot claim a clean repository when Git inventory fails (39.206786ms)\nℹ tests 164\nℹ suites 0\nℹ pass 164\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1072.507506\n",
+  "symbol-scripts.log": "ss-page evidence and empty checkpoints (0.250731ms)\n✔ report refuses an oversized export explicitly rather than returning a partial list (21.240486ms)\n✔ 서로 다른 워크스페이스 스냅샷의 모델 결과는 직접 비교 불가로 봉인한다 (1.553396ms)\n✔ 동일 스냅샷 결과만 있으면 모델 비교가 유효하다 (0.306204ms)\n✔ 하한을 크게 넘긴 관계는 종합 점수를 만들어 내지 않는다 (3.435759ms)\n✔ 최소 수량 관문은 기호 정확도를 올리지 않는다 (0.314811ms)\n✔ 하한 미달은 감점이 아니라 관문 실패로 드러난다 (0.366969ms)\n✔ 정답이 0인 환각 축은 하나라도 검출되면 0점이다 (0.285085ms)\n✔ 정확 수량 축이 하나도 없으면 점수를 지어내지 않는다 (0.321343ms)\n✔ 대표값은 평균이 아니라 최저점이다 (3.225062ms)\n✔ 대표 회차는 최저 종합 회차이며 동점이면 먼저 실행한 쪽이다 (1.960619ms)\n✔ 한 회차라도 못 돌면 셀 전체가 그 상태다 (0.225203ms)\n✔ 한 회차라도 PASS 가 아니면 셀은 PASS 가 아니다 (0.370185ms)\n✔ 기호 타입별로 어느 축이 흔들리는지 남긴다 (0.589166ms)\n✔ 1회 실행은 종전과 같은 단일 수치로 적는다 (0.27704ms)\n✔ 2회 이상은 최저~최고로 적어 단발로 오독되지 않게 한다 (0.389151ms)\n✔ 빈 회차 묶음은 조용히 통과시키지 않는다 (0.616377ms)\n✔ benchmark receipt preserves review, KEC proposals, calculations, and topology (1.558275ms)\n✔ skipped or absent review is recorded as HOLD rather than success (0.17079ms)\n✔ empty, warning, unverified scan, or topology-defective reviews never become PASS (0.43123ms)\n✔ V3 도면을 추론 단계별 PASS/HOLD/FAIL 영수증으로 분리한다 (2.945759ms)\n✔ 모호성은 HOLD로 남기고 구조 계약 위반은 FAIL로 구분한다 (1.256318ms)\n✔ 기호 근거 없이 래스터 선만 검출된 결과는 공간 분석 PASS가 아니다 (0.546185ms)\n✔ 근거가 없는 SUPPORTED 제안과 허위 verified95는 최종 단계에서 실패한다 (0.521559ms)\n✔ 사전 고정 라벨과 수량·관계가 다르면 해당 추론 단계를 FAIL로 기록한다 (0.843803ms)\n✔ 동일 차단기 별칭은 같은 기호 유형으로 집계한다 (1.164929ms)\n✔ disconnector·isolator 별칭은 스위치 축으로 집계한다 (0.624041ms)\n✔ VCB·ACB 별칭과 최소 수량 라벨을 차단기 축으로 판정한다 (1.590152ms)\n✔ cutout_switch는 제품 정본과 같이 fuse 골든 축으로 집계한다 (0.341ms)\n✔ 모든 닫힌 DeviceType의 골든 축이 계열 접기 규칙과 일치한다 (149.800201ms)\n✔ repeat=3 resume은 같은 설정의 1회 영수증을 재사용하지 않는다 (0.341461ms)\n✔ disconnecting_switch·DS 도 switch 골든 축으로 집계한다 (0.502714ms)\n✔ lightning_arrester·LA 도 arrester 골든 축으로 집계한다 (0.46348ms)\n✔ surge_arrester는 arrester 골든 축으로 집계한다 (0.262903ms)\n✔ 미확정 물리 수량 null은 판독된 기호 수량을 0으로 덮어쓰지 않는다 (0.3996ms)\n✔ 권선 기호 수가 아니라 물리 변압기 대수로 장치 라벨을 판정한다 (0.353965ms)\n✔ 경계 연속선 영수증은 내부 ID와 표시 ID 중 어느 쪽으로도 결박된다 (0.343214ms)\n✔ 실행은 끝났지만 근거가 부족한 부분 페이지와 감사 결과는 FAIL이 아니라 HOLD다 (0.526027ms)\n✔ 래스터 페이지 종류가 미분류여도 판독 실행이 완결되면 페이지 조사는 PASS다 (0.27667ms)\n✔ 실패 뒤 성공한 역할 재시도는 최종 커버리지 실패로 채점하지 않는다 (0.215274ms)\n✔ rejects tracked residue .audit/apply.py (8.995809ms)\n✔ rejects tracked residue .performance-lab/patch.b64 (0.280237ms)\n✔ rejects tracked residue .remaining-support/fix.py (0.259747ms)\n✔ rejects tracked residue .review-patches/0.b64 (0.201939ms)\n✔ rejects tracked residue .cleanup/script.py (0.23433ms)\n✔ rejects tracked residue .tmp-sld-live/file.json (0.427742ms)\n✔ rejects tracked residue test-results/private.json (0.218931ms)\n✔ rejects tracked residue playwright-report/index.html (0.168997ms)\n✔ rejects tracked residue .next/cache/data (0.3727ms)\n✔ rejects tracked residue .env (0.434315ms)\n✔ rejects tracked residue .env.local (0.392547ms)\n✔ rejects tracked residue nested/.env.production (0.15965ms)\n✔ rejects tracked residue src/file.ts.orig (0.194675ms)\n✔ rejects tracked residue types.tsbuildinfo (0.242756ms)\n✔ rejects tracked residue src/file.ts~ (0.148419ms)\n✔ preserves maintained tooling, example config, original fixtures and historical manuals (1.018171ms)\n✔ handles Windows separators, unusual filenames and duplicates deterministically (0.295334ms)\n✔ actual Git inventory excludes untracked output but fails if it is staged (151.42622ms)\n✔ cannot claim a clean repository when Git inventory fails (48.633771ms)\nℹ tests 164\nℹ suites 0\nℹ pass 164\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1446.647995\n",
   "preparedSha": null,
-  "runConclusion": "failure",
+  "runConclusion": "cancelled",
   "collectionScope": "Original run only; no new tests or additional accuracy samples",
   "jobs": [
     {
-      "id": 103127454497,
+      "id": 103128847552,
       "name": "verify",
       "status": "completed",
-      "conclusion": "failure"
+      "conclusion": "cancelled"
     }
   ],
   "artifacts": [
     {
-      "id": 10182542491,
+      "id": 10182712623,
       "name": "symbol-classification-release-evidence",
-      "digest": "sha256:1190149332e62f538caf360b05e6a98e608c49684d4ef507a943ba84227ef2ef",
+      "digest": "sha256:56526324e81426d85d35c7a2f30997f6df4ef91aace46d0a95765a53adc78a6f",
       "expired": false,
-      "size_in_bytes": 4412802
+      "size_in_bytes": 3049352
     }
   ],
   "archiveIntegrity": {
-    "verifiedFiles": 27,
+    "verifiedFiles": 28,
     "allHashesMatch": true
   },
   "screens": [
     "uncertainty-quick.png",
-    "feedback-revoked.png",
-    "feedback-approved.png",
     "readable-error.png",
     "recovered-result.png",
     "readable-error.png",
     "uncertainty-corrected.png",
     "recovered-result.png",
     "readable-error.png",
-    "feedback-revoked.png",
-    "feedback-approved.png",
-    "classified-390.png",
-    "recovered-result.png",
     "recovered-result.png",
     "readable-error.png",
     "recovered-result.png",
+    "readable-error.png",
     "readable-error.png",
     "test-failed-1.png",
-    "readable-error.png",
-    "recovered-result.png",
     "uncertainty-quick.png",
-    "classified-1440.png",
+    "test-failed-1.png",
     "recovered-result.png",
-    "uncertainty-corrected.png",
-    "classification-corrected-390.png",
-    "classification-corrected-1440.png"
+    "uncertainty-corrected.png"
   ],
-  "rendering": [
-    {
-      "url": "/tools/sld",
-      "title": "단선도 검토 · ESVA",
-      "width": 390,
-      "scrollWidth": 390,
-      "textLength": 2254,
-      "errors": [],
-      "correctionCalls": 2,
-      "newModelCalls": 0,
-      "source": "synthetic-http-with-production-classifier"
-    },
-    {
-      "url": "/tools/sld",
-      "title": "단선도 검토 · ESVA",
-      "width": 1440,
-      "scrollWidth": 1440,
-      "textLength": 2254,
-      "errors": [],
-      "correctionCalls": 2,
-      "newModelCalls": 0,
-      "source": "synthetic-http-with-production-classifier"
-    }
-  ]
+  "rendering": []
 }
