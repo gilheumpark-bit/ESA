@@ -1,0 +1,304 @@
+{
+  "runId": 34558582081,
+  "productHead": "4375e40469674ce3bc6d3569af0154e8378138f9",
+  "status": "completed",
+  "conclusion": "success",
+  "scope": "Original regular PR CI only; no tests rerun by this collection",
+  "jobs": [
+    {
+      "id": 103136427100,
+      "name": "Verify (docs, types, lint, tests, build) (24)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-11T03:28:45Z",
+      "completed_at": "2026-09-11T03:31:13Z"
+    },
+    {
+      "id": 103136904622,
+      "name": "Live gates (server, PDF, UI smoke) (24)",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-09-11T03:31:15Z",
+      "completed_at": "2026-09-11T03:35:49Z"
+    }
+  ],
+  "steps": {
+    "Verify (docs, types, lint, tests, build) (24)": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install dependencies",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Tracked development residue",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Documentation contracts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "TypeScript check",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run tests",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "SLD V3 contract gate",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Dependency audit ratchet (production)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Dependency audit ratchet (including development)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Realworld snapshot freshness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "Live gates (server, PDF, UI smoke) (24)": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install dependencies",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Build",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Live AI calculator receipt gate",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Install Chromium for UI smoke",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Live PDF pipeline and UI smoke gates",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Upload E2E failure evidence",
+        "status": "completed",
+        "conclusion": "skipped"
+      },
+      {
+        "name": "Upload drawing error recovery screenshots",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Upload browser result and retained traces",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Setup Node.js 24",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v7",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "id": 10183632990,
+      "name": "browser-execution-evidence",
+      "digest": "sha256:1d60e397b3adffb6ba9299e2ce4ad51da9b3ddb7deab63841ad8ee4a73cd316b",
+      "size_in_bytes": 3110505,
+      "expired": false
+    },
+    {
+      "id": 10183632689,
+      "name": "drawing-error-recovery-evidence",
+      "digest": "sha256:a59e700c64cc6b66a7939845906f863313defa89d85437e4c4694efa2a0af13d",
+      "size_in_bytes": 1197741,
+      "expired": false
+    }
+  ],
+  "browser": {
+    "available": true,
+    "stats": {
+      "startTime": "2026-09-11T03:33:05.006Z",
+      "duration": 161628.868,
+      "expected": 136,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "executions": 136,
+    "everyFirstAttemptPassed": true,
+    "failures": [],
+    "errors": []
+  },
+  "logSummaries": {
+    "Verify (docs, types, lint, tests, build) (24)": {
+      "available": false,
+      "collectionExit": 1
+    },
+    "Live gates (server, PDF, UI smoke) (24)": {
+      "available": false,
+      "collectionExit": 1
+    }
+  },
+  "refinementIntegrity": {
+    "files": 2,
+    "focusedRun": "34558238859",
+    "allHashesMatch": true
+  },
+  "priorRegularRun": {
+    "runId": 34556940874,
+    "conclusion": "failure",
+    "browser": {
+      "available": true,
+      "stats": {
+        "startTime": "2026-09-11T03:07:27.499Z",
+        "duration": 205594.873,
+        "expected": 134,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 1
+      },
+      "executions": 136,
+      "everyFirstAttemptPassed": false,
+      "failures": [
+        {
+          "title": "every calculator in the visible catalog submits, renders a receipt and resets",
+          "status": "flaky",
+          "attempts": [
+            "failed",
+            "passed"
+          ],
+          "errors": [
+            [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts",
+                  "column": 56,
+                  "line": 69
+                },
+                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoHaveCount\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed\n\nLocator:  locator('.receipt-container')\nExpected: \u001b[32m0\u001b[39m\nReceived: \u001b[31m1\u001b[39m\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toHaveCount\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for locator('.receipt-container')\u001b[22m\n\u001b[2m    14 × locator resolved to 1 element\u001b[22m\n\u001b[2m       - unexpected value \"1\"\u001b[22m\n\n\n  67 |       expect(requests).toBe(before + 1);\n  68 |       await page.getByRole('button', { name: '재계산', exact: true }).click();\n> 69 |       await expect(page.locator('.receipt-container')).toHaveCount(0);\n     |                                                        ^\n  70 |       await expect(page.getByRole('button', { name: '계산하기', exact: true })).toBeEnabled();\n  71 |       completed.push(href);\n  72 |     });\n    at /home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts:69:56\n    at /home/runner/work/ESA/ESA/e2e/frontend-public-workflows.spec.ts:59:5"
+              }
+            ],
+            []
+          ]
+        },
+        {
+          "title": "dashboard shows partial-data warnings and retries in place (1440px)",
+          "status": "unexpected",
+          "attempts": [
+            "failed",
+            "failed"
+          ],
+          "errors": [
+            [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/nonbilling-quality.spec.ts",
+                  "column": 19,
+                  "line": 45
+                },
+                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n\n  43 |     await page.getByRole('button', { name: '다시 시도', exact: true }).click();\n  44 |     await expect(page.getByText('업데이트 알림 조회에 실패했습니다. 업데이트가 없다는 뜻이 아닙니다.', { exact: true })).toHaveCount(0);\n> 45 |     expect(calls).toBe(2); await capture(page, `dashboard-${width}`);\n     |                   ^\n  46 |   });\n  47 |\n  48 |   test(`community search has recoverable failure and reset (${width}px)`, async ({ page }) => {\n    at /home/runner/work/ESA/ESA/e2e/nonbilling-quality.spec.ts:45:19"
+              }
+            ],
+            [
+              {
+                "location": {
+                  "file": "/home/runner/work/ESA/ESA/e2e/nonbilling-quality.spec.ts",
+                  "column": 19,
+                  "line": 45
+                },
+                "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32m2\u001b[39m\nReceived: \u001b[31m1\u001b[39m\n\n  43 |     await page.getByRole('button', { name: '다시 시도', exact: true }).click();\n  44 |     await expect(page.getByText('업데이트 알림 조회에 실패했습니다. 업데이트가 없다는 뜻이 아닙니다.', { exact: true })).toHaveCount(0);\n> 45 |     expect(calls).toBe(2); await capture(page, `dashboard-${width}`);\n     |                   ^\n  46 |   });\n  47 |\n  48 |   test(`community search has recoverable failure and reset (${width}px)`, async ({ page }) => {\n    at /home/runner/work/ESA/ESA/e2e/nonbilling-quality.spec.ts:45:19"
+              }
+            ]
+          ]
+        }
+      ],
+      "errors": []
+    },
+    "note": "Preserved original failure; no claim the calculator intermittent root cause is repaired."
+  }
+}
