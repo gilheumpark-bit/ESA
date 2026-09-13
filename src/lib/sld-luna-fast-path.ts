@@ -10,6 +10,7 @@ import {
 const LUNA_MODEL = 'gpt-5.6-luna';
 const LUNA_TIMEOUT_MS = 120_000;
 const LUNA_TYPE_ENUM = SLD_COMPONENT_TYPES.join('|');
+const LUNA_REDUCED_SCOPE_WARNING = 'LUNA_FAST_PATH_REDUCED_SCOPE';
 
 const LUNA_SLD_PROMPT = `You are reading a simple electrical single-line diagram.
 Your first job is reliable extraction, not engineering interpretation.
@@ -107,6 +108,7 @@ function withSuggestions(analysis: SLDAnalysis): SLDAnalysis {
   return {
     ...analysis,
     suggestedCalculations: generateSuggestions(analysis),
+    warnings: [...new Set([...(analysis.warnings ?? []), LUNA_REDUCED_SCOPE_WARNING])],
   };
 }
 
@@ -231,7 +233,7 @@ export async function analyzeSLDWithLunaFastPath(
   if (recovery.components.length > first.components.length) {
     return {
       ...recovery,
-      warnings: [...(recovery.warnings ?? []), 'LUNA_FAST_PATH_RECOVERY_PASS'],
+      warnings: [...new Set([...(recovery.warnings ?? []), 'LUNA_FAST_PATH_RECOVERY_PASS'])],
     };
   }
   return first;
