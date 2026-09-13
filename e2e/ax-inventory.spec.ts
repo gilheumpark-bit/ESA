@@ -10,6 +10,11 @@ for (const width of [1440, 390]) {
     let document = classificationDocument(); let attempts = 0;
     const candidate = document.evidenceGraph.symbols.find((symbol) => symbol.classification?.method === 'family-context')!;
     const id = candidate.displayId;
+    // Mixed/legacy results remain visible but must not link to a nonexistent
+    // classification card. The genuine classifier/correction path stays intact.
+    document.evidenceGraph.symbols.push({ ...candidate, id: 'legacy-unclassified', displayId: 'P01-S999', rawLabel: '',
+      classification: undefined, evidence: candidate.evidence.map((entry) => ({ ...entry, evidenceId: 'legacy-evidence',
+        bounds: { ...entry.bounds, x: entry.bounds.x + 100 } })) });
     await page.route('**/api/drawing-jobs', (route) => route.fulfill({ json: { success: true, data: { jobId: 'ax-inventory-ui', status: 'COMPLETE', document } } }));
     await page.route('**/api/drawing-jobs/ax-inventory-ui/corrections', (route) => {
       attempts++;
@@ -25,12 +30,15 @@ for (const width of [1440, 390]) {
     await expect(inventory.getByRole('status')).toContainText('자동 분류 활용 1건');
     await expect(inventory).toContainText('원본 unknown / unread');
     await expect(inventory).toContainText('물리 장비 대수나 정확도가 아닙니다');
+    await expect(inventory.getByText('P01-S999 · 종류 미확정', { exact: true })).toBeVisible();
+    await expect(inventory.getByRole('button', { name: 'P01-S999 분류·수정 열기', exact: true })).toHaveCount(0);
     expect(attempts).toBe(0);
     await inventory.getByRole('checkbox', { name: '기기표 사용 가능 항목만', exact: true }).check();
+    await expect(inventory.getByText('P01-S999 · 종류 미확정', { exact: true })).toHaveCount(0);
     const pending = page.waitForEvent('download'); await inventory.getByRole('button', { name: '사용 가능 기기표 CSV', exact: true }).click();
     const download = await pending, before = await readFile((await download.path())!, 'utf8');
     expect(before).toContain('자동 분류 활용'); expect(before).toContain('breaker'); expect(before).toContain('unread');
-    expect(before).toContain(document.documentHash); expect(before).toContain('물리 대수 아님');
+    expect(before).toContain(document.documentHash); expect(before).toContain('물리 대수 아님'); expect(before).not.toContain('P01-S999');
     const directory = process.env.AX_SCREEN_DIR ?? info.outputDir; await mkdir(directory, { recursive: true });
     await inventory.scrollIntoViewIfNeeded(); await page.screenshot({ path: `${directory}/ax-inventory-before-${width}.png`, animations: 'disabled' });
     await inventory.getByRole('button', { name: `${id} 분류·수정 열기`, exact: true }).click();
@@ -45,7 +53,7 @@ for (const width of [1440, 390]) {
     await expect(inventory).toContainText(`${id} · fuse`); await expect(inventory.getByRole('status')).toContainText('자동 분류 활용 0건');
     const next = page.waitForEvent('download'); await inventory.getByRole('button', { name: '전체 기기표 CSV', exact: true }).click();
     const file = await next; const after = await readFile((await file.path())!, 'utf8');
-    expect(after).toContain('fuse'); expect(after).not.toContain('자동 분류 활용'); expect(attempts).toBe(2);
+    expect(after).toContain('fuse'); expect(after).not.toContain('자동 분류 활용'); expect(after).toContain('P01-S999'); expect(attempts).toBe(2);
     const state = await page.evaluate(() => ({ pathname: location.pathname, title: window.document.title, width: innerWidth,
       scrollWidth: window.document.documentElement.scrollWidth, mainTextLength: window.document.querySelector('main')?.textContent?.length ?? 0 }));
     expect(state.pathname).toBe('/tools/sld'); expect(state.title.length).toBeGreaterThan(0); expect(state.mainTextLength).toBeGreaterThan(100);

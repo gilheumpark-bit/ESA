@@ -9,6 +9,10 @@ export function DrawingWorkProductPanel({ document, onSelect, onReview }: {
   document: DrawingDocumentV3; onSelect?: (id: string) => void; onReview?: (id: string) => void;
 }) {
   const product = useMemo(() => buildDrawingWorkProduct(document), [document]);
+  // A mixed or legacy document may not have a classification card for every
+  // symbol. Do not offer a shortcut to a card that does not exist.
+  const classificationIds = useMemo(() => new Set(document.evidenceGraph.symbols
+    .filter((symbol) => symbol.classification).map((symbol) => symbol.id)), [document.evidenceGraph.symbols]);
   const [usableOnly, setUsableOnly] = useState(false), [limit, setLimit] = useState(40);
   const [exportError, setExportError] = useState<string | null>(null);
   const rows = product.rows.filter((row) => !usableOnly || row.usableForInventory);
@@ -47,7 +51,7 @@ export function DrawingWorkProductPanel({ document, onSelect, onReview }: {
       <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{row.reason}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {onSelect && <button type="button" className={control} disabled={!row.source} onClick={() => onSelect(row.displayId)}>{row.displayId} 기기표 원본</button>}
-        {onReview && <button type="button" className={control} onClick={() => onReview(row.displayId)}>{row.displayId} 분류·수정 열기</button>}
+        {onReview && classificationIds.has(row.symbolId) && <button type="button" className={control} onClick={() => onReview(row.displayId)}>{row.displayId} 분류·수정 열기</button>}
       </div>
     </li>)}</ul>
     {rows.length > limit && <button type="button" className={`${control} w-full`} onClick={() => setLimit((value) => value + 40)}>기기표 {Math.min(40, rows.length - limit)}건 더 보기</button>}
