@@ -24,7 +24,10 @@ describe('AX inventory is usable work, not a promotion of electrical certainty',
   it('does not silently use a conflicting selected type', () => {
     const { document } = axInventoryFixture();
     document.evidenceGraph.symbols[0].classification = { ...document.evidenceGraph.symbols[1].classification!, selectedType: 'fuse' };
-    expect(buildDrawingWorkProduct(document).rows[0]).toMatchObject({ basis: 'review', interpretedType: undefined });
+    const row = buildDrawingWorkProduct(document).rows[0];
+    expect(row.basis).toBe('review');
+    expect(row.usableForInventory).toBe(false);
+    expect(row).not.toHaveProperty('interpretedType');
   });
   it('requires a usable source location and unique identity', () => {
     const { document } = axInventoryFixture(); document.evidenceGraph.symbols[1].evidence = [];
@@ -116,6 +119,7 @@ describe('AX evaluation counts wrong automation and devices never detected', () 
   });
   it('produces a replayable before/after AX evidence record on the same declared synthetic task', () => {
     const { document, label, context } = axInventoryFixture();
+    context.sourceRevision = process.env.GITHUB_SHA ?? context.sourceRevision;
     const original = structuredClone(document); delete original.evidenceGraph.symbols[1].classification;
     const before = evaluateAxInventory(original, label, context), after = evaluateAxInventory(document, label, context);
     expect(before.metrics.usefulInventoryCoverage.value).toBe(0.25); expect(after.metrics.usefulInventoryCoverage.value).toBe(0.5);
