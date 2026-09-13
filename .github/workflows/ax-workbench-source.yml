@@ -1,0 +1,47 @@
+name: AX workbench source
+on:
+  push:
+    branches: ['chore/ax-workbench-20260913']
+    paths: ['.github/workflows/ax-workbench-source.yml']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ea08a41e46bf5429ac1032c94eab1783c73b8aa0
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Archive original source and locked dependency runtime
+        run: |
+          git archive --format=tar.gz --output=/tmp/ax-source.tar.gz HEAD
+          git rev-parse HEAD > /tmp/ax-source-revision.txt
+          npm ci > /tmp/ax-runtime-install.log 2>&1 || { tail -70 /tmp/ax-runtime-install.log; exit 1; }
+          tar -czf /tmp/ax-node-modules.tar.gz node_modules
+          cp "$(command -v node)" /tmp/ax-node
+          sha256sum /tmp/ax-source.tar.gz /tmp/ax-node-modules.tar.gz /tmp/ax-node > /tmp/ax-runtime.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ax-source
+          path: |
+            /tmp/ax-source.tar.gz
+            /tmp/ax-source-revision.txt
+          retention-days: 3
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ax-locked-runtime
+          path: |
+            /tmp/ax-node-modules.tar.gz
+            /tmp/ax-node
+            /tmp/ax-runtime.sha256
+          compression-level: 0
+          retention-days: 2
+          if-no-files-found: error
