@@ -2,12 +2,14 @@ import type { SLDComponent, SLDConnection } from '@/lib/sld-recognition';
 import type { SLDComponentType } from '@/lib/sld-component-types';
 import type { SymbolLibrary } from '@/lib/symbol-library-contract';
 import { compareSymbolShapes, readSymbolShape, shapeTopology, type SymbolShape } from '@/lib/symbol-shape';
+import { normalizeSymbolLines, SYMBOL_GEOMETRY_POLICY } from '@/lib/symbol-line-normalization';
 import { SYMBOL_CLASSIFICATION_VERSION, symbolReferenceKey, type SymbolClassification, type SymbolClassificationStats } from '@/lib/symbol-classification';
 import { matchSymbol, matchSymbolFeedback, type SymbolLibraryIndex } from './symbol-library';
 
 /** Versioned rule cutoffs, NOT calibrated probabilities or engineering approval. */
 export const SYMBOL_CLASSIFIER_POLICY = Object.freeze({ candidateMinimum: 0.80, automaticMinimum: 0.96,
-  minimumTypeMargin: 0.06, minimumStrokes: 3, minimumRepeatedAnchors: 2, maximumComparisons: 10_000, maximumReferences: 512 });
+  minimumTypeMargin: 0.06, minimumStrokes: 3, minimumRepeatedAnchors: 2, maximumComparisons: 10_000, maximumReferences: 512,
+  geometryPolicy: SYMBOL_GEOMETRY_POLICY });
 interface Reference { key: string; type: SLDComponentType; shape: SymbolShape; componentId?: string }
 interface Ranked { type: SLDComponentType; similarity: number; keys: string[] }
 const special = /\b(?:ATS|ELCB|ELB|RCCB|RCBO|GFCI|SPARE|SPACE|RESERVE|SPECIAL)\d*\b|예비|특수|누전|절체/iu;
@@ -27,6 +29,18 @@ export function classifyDxfSymbols(components: SLDComponent[], connections: SLDC
 }): SymbolClassificationStats {
   const stats: SymbolClassificationStats = { version: SYMBOL_CLASSIFICATION_VERSION, classified: 0, inferred: 0, review: 0, unread: 0,
     shapeComparisons: 0, reusedShapeComparisons: 0, uniqueBlockShapes: 0, additionalModelCalls: 0, scope: 'observed-dxf-symbols' };
+  // Request-local, bounded normalization reuse. Stored original descriptors and
+  // exact hashes remain unchanged; another company's next request cannot reuse it.
+  const normalizationCache = new Map<string, SymbolShape>();
+  const normalizedShape = (raw: unknown): SymbolShape | undefined => {
+    const parsed = readSymbolShape(raw);
+    if (!parsed) return undefined;
+    const key = JSON.stringify(parsed), cached = normalizationCache.get(key);
+    if (cached) return cached;
+    const normalized = normalizeSymbolLines(parsed);
+    if (normalizationCache.size < 1024) normalizationCache.set(key, normalized);
+    return normalized;
+  };
   const byId = new Map(components.map((item) => [item.id, item]));
   const adjacency = new Map<string, Set<string>>();
   for (const connection of connections) {
@@ -46,7 +60,7 @@ export function classifyDxfSymbols(components: SLDComponent[], connections: SLDC
   const conflicts = new Set<string>();
   // Freeze the trusted seed set before inference: a prediction can never seed another prediction.
   for (const component of components) {
-    const shape = readSymbolShape(component.symbolShape);
+    const shape = normalizedShape(component.symbolShape);
     if (shape) { shapeById.set(component.id, shape); shapeKeys.add(symbolKey(component)); }
     if (component.properties?.synthetic) continue;
     const name = component.properties?.blockName, fp = component.properties?.blockFingerprint ?? null;
@@ -77,7 +91,7 @@ export function classifyDxfSymbols(components: SLDComponent[], connections: SLDC
   // Older feedback records contain only a hash. They remain exact-match records;
   // never fabricate a geometry vector from a cryptographic hash.
   for (const feedback of options.library?.feedback ?? []) {
-    const shape = readSymbolShape(feedback.source.shape);
+    const shape = normalizedShape(feedback.source.shape);
     if (feedback.status === 'approved' && shape
       && !special.test(feedback.source.blockName.normalize('NFKC').replace(/[_-]/g, ' '))) refs.push({ key: symbolReferenceKey(feedback.source.blockName, feedback.source.fingerprint), type: feedback.deviceType, shape });
   }

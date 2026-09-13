@@ -390,4 +390,4 @@ export const ENGINE_VERSION = 'drawing-full-read-1.0.0';
 export const PROMPT_VERSION = 'sld-role-v8';
 export const PREPROCESS_VERSION = 'lanczos-regions-continuity-v2';
 export const EVALUATOR_VERSION = 'sld-evaluator-v2.0.0';
-export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v11';
+export const GRAPH_ASSEMBLY_VERSION = 'evidence-graph-continuity-v12';
