@@ -83,6 +83,7 @@ describe('Luna simple SLD fast path', () => {
       type: 'breaker',
       label: 'MCCB 100A',
     });
+    expect(result.warnings).toContain('LUNA_FAST_PATH_REDUCED_SCOPE');
   });
 
   it('retries once with original detail and high effort only after an empty first pass', async () => {
@@ -114,6 +115,9 @@ describe('Luna simple SLD fast path', () => {
       input: expect.arrayContaining([expect.objectContaining({ detail: 'original' })]),
     }));
     expect(result.components).toHaveLength(1);
-    expect(result.warnings).toContain('LUNA_FAST_PATH_RECOVERY_PASS');
+    expect(result.warnings).toEqual(expect.arrayContaining([
+      'LUNA_FAST_PATH_REDUCED_SCOPE',
+      'LUNA_FAST_PATH_RECOVERY_PASS',
+    ]));
   });
 });
