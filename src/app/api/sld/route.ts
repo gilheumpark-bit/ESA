@@ -13,6 +13,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { getFormFile } from '@/lib/api';
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeSLD, generateCalcChainFromSLD, type SLDAnalysis } from '@/lib/sld-recognition';
+import { analyzeSLDWithLunaFastPath, shouldUseLunaSldFastPath } from '@/lib/sld-luna-fast-path';
 import { reviewAnalysis } from '@/engine/review/circuit-review';
 import { buildTopologyFromSLD, type TopologyGraph, type ValidationResult } from '@/engine/topology';
 import { SagaOrchestrator } from '@/lib/saga-transaction';
@@ -143,6 +144,7 @@ async function POST__impl(req: NextRequest) {
     const textQuality = await measureTextQuality(bytes);
 
     const blob = new Blob([bytes], { type: signature.type });
+    const useLunaFastPath = shouldUseLunaSldFastPath(provider, model);
 
     // Saga: VLM 분석 → 토폴로지 변환 → 검증 (3단계 원자적 실행)
     let analysis: SLDAnalysis | null = null;
@@ -154,7 +156,9 @@ async function POST__impl(req: NextRequest) {
     saga.addStep({
       name: 'vlm-analyze',
       execute: async () => {
-        analysis = await analyzeSLD(blob, { provider, model, apiKey });
+        analysis = useLunaFastPath
+          ? await analyzeSLDWithLunaFastPath(blob, { provider, model, apiKey })
+          : await analyzeSLD(blob, { provider, model, apiKey });
         return analysis;
       },
       compensate: async () => { /* VLM 호출은 부작용 없음 */ },
@@ -199,6 +203,7 @@ async function POST__impl(req: NextRequest) {
       meta: {
         sagaStatus: sagaResult.status,
         steps: sagaResult.completedSteps,
+        analysisPath: useLunaFastPath ? 'luna-fast' : 'standard',
         ...(sagaResult.failedStep ? { failedStep: sagaResult.failedStep } : {}),
       },
     });
