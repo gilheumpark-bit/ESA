@@ -3,6 +3,7 @@
 import { summarizeDrawingReadState } from '@/lib/drawing-read-summary';
 import { DrawingReadingSummary } from '@/components/DrawingReadingSummary';
 import { useMemo, useState } from 'react';
+import { DrawingWorkProductPanel } from './DrawingWorkProductPanel';
 import { SymbolClassificationResults } from './SymbolClassificationResults';
 import { DrawingReviewQueue } from './DrawingReviewQueue';
 
@@ -26,7 +27,7 @@ interface DrawingDocumentV3ReportProps {
   correctingDisplayId?: string;
 }
 
-type Tab = 'classifications' | 'counts' | 'devices' | 'relations' | 'continuity' | 'values' | 'unresolved' | 'recommendations';
+type Tab = 'inventory' | 'classifications' | 'counts' | 'devices' | 'relations' | 'continuity' | 'values' | 'unresolved' | 'recommendations';
 
 export function DrawingDocumentV3Report({ document, selectedDisplayId, onSelectDisplayId, onCorrect, correctingDisplayId }: DrawingDocumentV3ReportProps) {
   const hasClassifications = document.evidenceGraph.symbols.some((node) => node.classification);
@@ -35,7 +36,7 @@ export function DrawingDocumentV3Report({ document, selectedDisplayId, onSelectD
   const symbolNumbers = new Map(document.evidenceGraph.symbols.map((node) => [node.id, node.displayId]));
   const lineNumbers = new Map(document.evidenceGraph.lines.map((node) => [node.id, node.displayId]));
   const tabs: Array<[Tab, string]> = [
-    ['counts', '수량'], ['devices', '기기·선로'], ['relations', '관계'], ['continuity', '경계 연결'], ['values', '정격·계산'], ['unresolved', `미확정 ${document.unresolvedItems.length}`], ['recommendations', '제안'],
+    ['inventory', 'AX 기기표'], ['counts', '수량'], ['devices', '기기·선로'], ['relations', '관계'], ['continuity', '경계 연결'], ['values', '정격·계산'], ['unresolved', `미확정 ${document.unresolvedItems.length}`], ['recommendations', '제안'],
   ];
   if (hasClassifications) tabs.unshift(['classifications', '분류 결과']);
 
@@ -54,6 +55,8 @@ export function DrawingDocumentV3Report({ document, selectedDisplayId, onSelectD
         {tabs.map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} aria-pressed={tab === id} className={`min-h-11 rounded-lg px-3 text-xs font-semibold ${tab === id ? 'bg-[var(--color-primary)] text-[var(--drawing-on-primary)]' : 'border border-[var(--border-default)]'}`}>{label}</button>)}
       </nav>
       <div className="p-3 sm:p-4">
+        {tab === 'inventory' && <DrawingWorkProductPanel key={document.documentHash} document={document} onSelect={onSelectDisplayId}
+          onReview={onCorrect ? (id) => { onSelectDisplayId?.(id); setTab(hasClassifications ? 'classifications' : 'unresolved'); } : undefined} />}
         {tab === 'classifications' && <SymbolClassificationResults title="심볼 분류 결과"
           rows={document.evidenceGraph.symbols.map((node) => ({ id: node.displayId, label: node.rawLabel,
             sourceType: node.confirmedType ?? node.typeCandidates[0] ?? 'unknown', classification: node.classification }))}
