@@ -1,0 +1,126 @@
+name: AX committed-code verification
+on:
+  push:
+    branches: ['chore/ax-workbench-20260913']
+    paths: ['src/**', 'e2e/**', '.github/workflows/ax-verification.yml']
+concurrency:
+  group: ax-workbench-verification
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Exact source identity and locked dependencies
+        run: |
+          mkdir -p /tmp/ax-evidence
+          git rev-parse HEAD > /tmp/ax-evidence/revision.txt
+          git diff --check
+          git diff --exit-code ea08a41e46bf5429ac1032c94eab1783c73b8aa0 -- package.json package-lock.json src/app/api/billing src/lib/stripe.ts
+          npm ci > /tmp/ax-evidence/install.log 2>&1 || { tail -80 /tmp/ax-evidence/install.log; exit 1; }
+          sed -n '1,70p' node_modules/next/dist/docs/01-app/02-guides/testing/playwright.md
+      - name: Types, zero-warning lint, documentation and hygiene
+        run: |
+          npx tsc --noEmit
+          npm run lint -- --max-warnings=0
+          npm run check:docs
+          npm run gate:hygiene
+      - name: Full unit regression and AX before-after evidence
+        run: |
+          set +e
+          AX_BENCH_OUTPUT=/tmp/ax-evidence/ax-ablation.json npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/ax-evidence/jest.json > /tmp/ax-evidence/jest.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const fs=require('fs');
+          if (!fs.existsSync('/tmp/ax-evidence/jest.json')) {console.log(fs.readFileSync('/tmp/ax-evidence/jest.log','utf8').slice(-18000));process.exit(1);}
+          const r=require('/tmp/ax-evidence/jest.json');
+          console.log('JEST_SUMMARY',JSON.stringify({success:r.success,passed:r.numPassedTests,failed:r.numFailedTests,skipped:r.numPendingTests,suites:r.numPassedTestSuites,failedSuites:r.numFailedTestSuites}));
+          for(const s of r.testResults||[])if(s.status==='failed')console.log('JEST_FAILURE',s.name,s.message);
+          JS
+          test "$status" = 0
+      - name: Scripts, drawing contracts and security audits
+        run: |
+          npm run test:scripts > /tmp/ax-evidence/scripts.log 2>&1 || { tail -100 /tmp/ax-evidence/scripts.log; exit 1; }
+          tail -15 /tmp/ax-evidence/scripts.log
+          npm run gate:sld-v3-contract
+          npm run gate:snapshot
+          npm run gate:audit > /tmp/ax-evidence/audit-production.log 2>&1 || { cat /tmp/ax-evidence/audit-production.log; exit 1; }
+          npm run gate:audit:all > /tmp/ax-evidence/audit-all.log 2>&1 || { cat /tmp/ax-evidence/audit-all.log; exit 1; }
+          cat /tmp/ax-evidence/audit-production.log /tmp/ax-evidence/audit-all.log
+      - name: Production build and browser runtime
+        run: |
+          npm run build > /tmp/ax-evidence/build.log 2>&1 || { tail -120 /tmp/ax-evidence/build.log; exit 1; }
+          npm run gate:chat-live
+          npx playwright install --with-deps chromium > /tmp/ax-evidence/chromium.log 2>&1
+      - name: Independent PDF and complete browser regression
+        run: |
+          pid=''
+          cleanup() { if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; pid=''; fi; }
+          trap cleanup EXIT
+          start_server() {
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$1" > "$2" 2>&1 &
+            pid=$!
+            for n in $(seq 1 60); do
+              kill -0 "$pid" 2>/dev/null || { cat "$2"; return 1; }
+              if curl -fsS "http://127.0.0.1:$1/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            return 1
+          }
+          start_server 3010 /tmp/ax-evidence/pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010 > /tmp/ax-evidence/pdf.log 2>&1 || { cat /tmp/ax-evidence/pdf.log; exit 1; }
+          cat /tmp/ax-evidence/pdf.log
+          cleanup
+          start_server 3011 /tmp/ax-evidence/ui-server.log
+          set +e
+          BASE_URL=http://127.0.0.1:3011 AX_SCREEN_DIR=/tmp/ax-evidence/screens PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/ax-evidence/browser.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json > /tmp/ax-evidence/browser.log 2>&1
+          status=$?
+          set -e
+          node - <<'JS'
+          const fs=require('fs');
+          if(!fs.existsSync('/tmp/ax-evidence/browser.json')){console.log(fs.readFileSync('/tmp/ax-evidence/browser.log','utf8').slice(-18000));process.exit(1);}
+          const r=require('/tmp/ax-evidence/browser.json');console.log('BROWSER_SUMMARY',JSON.stringify(r.stats));
+          function visit(s){for(const spec of s.specs||[])for(const t of spec.tests||[])if(t.status!=='expected')console.log('BROWSER_FAILURE',spec.title,JSON.stringify(t.results).slice(0,18000));for(const child of s.suites||[])visit(child);}
+          for(const s of r.suites||[])visit(s);
+          JS
+          test "$status" = 0
+          git diff --exit-code
+      - name: Preserve actual results and file identity without source modifications
+        if: always()
+        run: |
+          node - <<'JS'
+          const fs=require('fs'),cp=require('child_process'),crypto=require('crypto');
+          const root='/tmp/ax-evidence';fs.mkdirSync(root,{recursive:true});
+          const summary={runId:process.env.GITHUB_RUN_ID,sourceRevision:process.env.GITHUB_SHA,scope:'Committed source; original run only. Synthetic evidence is not customer accuracy or review-time measurement.'};
+          const load=(name)=>fs.existsSync(`${root}/${name}`)?JSON.parse(fs.readFileSync(`${root}/${name}`,'utf8')):null;
+          const j=load('jest.json');if(j)summary.unit={success:j.success,passed:j.numPassedTests,failed:j.numFailedTests,skipped:j.numPendingTests,suites:j.numPassedTestSuites,failedSuites:j.numFailedTestSuites};
+          const b=load('browser.json');if(b){const rows=[];const visit=(s)=>{for(const spec of s.specs||[])for(const t of spec.tests||[])rows.push({title:spec.title,status:t.status,attempts:t.results.map(r=>r.status)});for(const c of s.suites||[])visit(c);};b.suites.forEach(visit);summary.browser={stats:b.stats,count:rows.length,everyFirstAttemptPassed:rows.length>0&&rows.every(r=>r.status==='expected'&&r.attempts.length===1&&r.attempts[0]==='passed'),failures:rows.filter(r=>r.status!=='expected')};}
+          const paths=cp.execFileSync('git',['diff','--name-only','ea08a41e46bf5429ac1032c94eab1783c73b8aa0','HEAD','--','src','e2e','docs'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          summary.productHashes=Object.fromEntries(paths.map(p=>[p,crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex')]));
+          fs.writeFileSync(`${root}/summary.json`,JSON.stringify(summary,null,2));console.log('AX_VERIFICATION_SUMMARY',JSON.stringify(summary));
+          JS
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ax-inventory-verification
+          path: |
+            /tmp/ax-evidence/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
