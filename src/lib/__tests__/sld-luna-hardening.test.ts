@@ -24,7 +24,7 @@ function completion(text: string, extra: Record<string, unknown> = {}): Response
 function reply(text: string) {
   return { text, model: 'gpt-5.6-luna', durationMs: 1 };
 }
-function fetchMock(response: () => Response) {
+function fetchMock(response: () => Response): jest.Mock {
   const mock = jest.fn(async () => response());
   global.fetch = mock as typeof fetch;
   return mock;
