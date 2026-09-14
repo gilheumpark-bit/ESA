@@ -1,0 +1,82 @@
+name: UI alignment inspection
+on:
+  push:
+    branches: ['qa/ui-alignment-inspect-20260914']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 75beda210f5fc151e9bc94fdf62d84ab5ffcd6a6
+          persist-credentials: false
+      - name: Export exact baseline source
+        run: git archive --format=zip HEAD -o /tmp/esa-ui-baseline-source.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ui-baseline-source
+          path: /tmp/esa-ui-baseline-source.zip
+          retention-days: 7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Capture baseline route geometry
+        shell: bash
+        run: |
+          mkdir -p /tmp/esa-ui-baseline
+          node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3011 > /tmp/esa-ui-baseline/server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 60); do
+            curl --fail --silent http://127.0.0.1:3011/ >/dev/null && break
+            sleep 1
+          done
+          node <<'JS'
+          const { chromium } = require('@playwright/test');
+          const fs = require('node:fs');
+          (async () => {
+            const browser = await chromium.launch();
+            const results = [];
+            for (const width of [360, 390, 768, 1024, 1440]) {
+              for (const route of ['/', '/calc', '/tools/sld', '/tools/ocr', '/tools/studio', '/compare', '/settings', '/projects']) {
+                const page = await browser.newPage({viewport:{width,height:900},colorScheme:'light'});
+                const errors=[];
+                page.on('pageerror', e => errors.push(e.message));
+                page.on('console', m => {if(m.type()==='error')errors.push(m.text());});
+                const response=await page.goto('http://127.0.0.1:3011'+route,{waitUntil:'networkidle'});
+                await page.evaluate(()=>document.fonts.ready);
+                const geometry=await page.evaluate(()=>({
+                  viewport:innerWidth, width:document.documentElement.scrollWidth,
+                  headings:[...document.querySelectorAll('h1,h2')].map(el=>({text:el.textContent,rect:el.getBoundingClientRect().toJSON()})),
+                  overflowing:[...document.querySelectorAll('body *')].filter(el=>{
+                    const r=el.getBoundingClientRect();return r.width>0&&(r.right>innerWidth+1||r.left < -1)&&getComputedStyle(el).position!=='fixed';
+                  }).slice(0,30).map(el=>({tag:el.tagName,cls:el.className,text:el.textContent?.slice(0,100)}))
+                }));
+                const slug=route==='/'?'home':route.slice(1).replaceAll('/','-');
+                await page.screenshot({path:`/tmp/esa-ui-baseline/${slug}-${width}.png`,fullPage:true});
+                results.push({route,width,url:page.url(),title:await page.title(),status:response.status(),errors,geometry});
+                await page.close();
+              }
+            }
+            fs.writeFileSync('/tmp/esa-ui-baseline/geometry.json',JSON.stringify(results,null,2));
+            await browser.close();
+          })().catch(e=>{console.error(e);process.exitCode=1;});
+          JS
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ui-baseline-captures
+          path: /tmp/esa-ui-baseline/
+          retention-days: 7
