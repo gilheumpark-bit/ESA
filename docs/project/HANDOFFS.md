@@ -2,6 +2,10 @@
 
 `handoffs/`의 문서는 작성 시점 Git 상태를 보존한 역사 기록입니다. 현재 제품 상태는 [PROJECT_STATE](../../PROJECT_STATE.md)와 [구현 배선 지도](IMPLEMENTATION_MAP.md)를 먼저 확인하십시오.
 
+## 2026-09-13
+
+- [AX 기기표·누락 포함 평가·선분 정규화](handoffs/2026-09-13-ax-inventory-performance.md)
+
 ## 2026-09-11
 
 - [심볼 분류 우선·유사 형상·반복 문맥·예외 검토](handoffs/2026-09-11-symbol-classification-first.md)
