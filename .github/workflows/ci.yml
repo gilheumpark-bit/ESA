@@ -2,9 +2,9 @@ name: CI
 
 # 두 레인으로 나눈다.
 #  - verify    : 모든 push/PR. 코드 검증과 의존성 감사(외부 npm 서비스 필요).
-#  - live-gates: PR·주간 예약·수동 실행. 브라우저 설치와 production 서버 기동이
-#                필요해 run 당 분 소모가 큰 게이트를 여기로 모은다.
-# push 마다 무거운 레인을 돌리지 않는 것이 Actions 분 관리의 핵심이다.
+#  - live-gates: main push·PR·주간 예약·수동 실행. 병합된 최종 커밋에서도
+#                production 서버·PDF·브라우저 경로를 검증한다.
+# 기능 브랜치 push 에서는 무거운 레인을 생략해 중복 실행 분을 줄인다.
 
 on:
   push:
@@ -93,8 +93,8 @@ jobs:
   live-gates:
     name: Live gates (server, PDF, UI smoke)
     needs: verify
-    # push 이벤트에서는 건너뛴다. PR·예약·수동 실행에서만 돈다.
-    if: github.event_name != 'push'
+    # 기능 브랜치 push 만 생략한다. main 병합 후의 정확한 SHA도 검사한다.
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       matrix:
