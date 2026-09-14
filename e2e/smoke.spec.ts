@@ -437,7 +437,24 @@ test.describe('도면 분석', () => {
       };
     });
     expect(mobileWidths.document).toBeLessThanOrEqual(mobileWidths.viewport);
-    expect(mobileWidths.tabContent).toBeGreaterThan(mobileWidths.tabViewport);
+    // The responsive five-column tab bar must fit, not require horizontal scroll.
+    expect(mobileWidths.tabViewport).toBeGreaterThan(0);
+    expect(mobileWidths.tabContent).toBeLessThanOrEqual(mobileWidths.tabViewport);
+    const mobileTabs = resultTabs.getByRole('tab');
+    await expect(mobileTabs).toHaveCount(5);
+    const boxes = await mobileTabs.evaluateAll(tabs => tabs.map(tab => tab.getBoundingClientRect().toJSON()));
+    for (const box of boxes) {
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(mobileWidths.viewport);
+      expect(box.width).toBeGreaterThan(0);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+    await summaryTab.focus();
+    await summaryTab.press('End');
+    await expect(reviewTab).toBeFocused();
+    await expect(reviewTab).toHaveAttribute('aria-selected', 'true');
+    await reviewTab.press('Home');
+    await expect(summaryTab).toBeFocused();
   });
 
   test('회사 심볼을 화면에서 저장하고 재시작 뒤 다음 DXF에 자동 적용', async ({ page }) => {
