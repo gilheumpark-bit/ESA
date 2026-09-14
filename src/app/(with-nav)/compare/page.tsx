@@ -338,11 +338,11 @@ export default function ComparePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--bg-secondary)]">
+    <div className="min-w-0 flex-1 bg-[var(--bg-secondary)]">
       {/* Header */}
       <header className="border-b border-[var(--border-default)] bg-[var(--bg-primary)]">
-        <div className="mx-auto max-w-6xl px-4 py-6">
-          <h1 className="flex items-center gap-3 text-2xl font-bold text-[var(--text-primary)]">
+        <div className="page-container page-section max-w-6xl">
+          <h1 className="page-title flex items-center gap-3">
             <GitCompareArrows size={28} className="text-[var(--color-primary)]" />
             비교 계산
           </h1>
@@ -352,7 +352,7 @@ export default function ComparePage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-4 py-6">
+      <div className="page-container page-section max-w-6xl">
         {shareWarning && <p role="alert" className="mb-4 rounded-lg border p-3 text-sm">{shareWarning}</p>}
         <p className="mb-4 text-xs text-[var(--text-secondary)]">입력값과 적용 국가를 확인한 뒤 계산하세요. 공유 링크에는 입력값만 포함되며 이전 결과의 검증을 승계하지 않습니다.</p>
         {/* Calculator selector + actions */}

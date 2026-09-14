@@ -1,7 +1,7 @@
 /** Projects loading — 프로젝트 목록 skeleton */
 export default function ProjectsLoading() {
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8" role="status" aria-label="프로젝트 로딩 중">
+    <div className="page-container page-section max-w-5xl" role="status" aria-label="프로젝트 로딩 중">
       <div className="mb-6 flex items-center justify-between">
         <div className="h-8 w-40 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
         <div className="h-10 w-32 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />

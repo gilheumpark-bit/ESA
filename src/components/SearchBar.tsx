@@ -51,7 +51,7 @@ const TYPE_LABEL: Record<SuggestionType, string> = {
 };
 
 const SIZE_CLASSES = {
-  sm: 'h-10 text-sm',
+  sm: 'h-11 text-sm',
   md: 'h-12 text-base',
   lg: 'h-14 text-lg',
 } as const;

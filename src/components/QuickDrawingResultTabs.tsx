@@ -70,15 +70,12 @@ export function QuickDrawingResultTabs({
 
   return (
     <div className="min-w-0 max-w-full">
-      <p className="mb-1 text-right text-[11px] text-[var(--text-tertiary)] sm:hidden">
-        항목을 좌우로 밀어 더 볼 수 있습니다.
-      </p>
       <div className="w-full min-w-0 max-w-full overflow-x-auto border-b border-[var(--border-default)] [scrollbar-width:thin]">
         <div
           role="tablist"
           aria-label="도면 분석 결과 항목"
           aria-orientation="horizontal"
-          className="flex min-w-[430px] items-end sm:min-w-0"
+          className="grid w-full min-w-0 grid-cols-5"
         >
           {QUICK_DRAWING_RESULT_TAB_IDS.map((tab, index) => {
             const selected = tab === activeTab;
@@ -97,7 +94,7 @@ export function QuickDrawingResultTabs({
                 tabIndex={selected ? 0 : -1}
                 onClick={() => onTabChange(tab)}
                 onKeyDown={(event) => handleKeyDown(event, index)}
-                className={`min-h-11 flex-1 touch-manipulation whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-[border-color,color,background-color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-primary)] ${
+                className={`flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 touch-manipulation border-b-2 px-1 py-2 sm:flex-row sm:gap-1 sm:px-3 text-sm font-medium transition-[border-color,color,background-color] duration-150 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-primary)] ${
                   selected
                     ? 'border-[var(--color-primary)] bg-[var(--bg-secondary)] text-[var(--color-primary)]'
                     : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
@@ -105,7 +102,7 @@ export function QuickDrawingResultTabs({
               >
                 <span>{TAB_LABELS[tab]}</span>
                 {count !== null && (
-                  <span className="ml-1 font-[family-name:var(--font-mono)] text-xs tabular-nums">
+                  <span className="max-w-full font-[family-name:var(--font-mono)] text-xs tabular-nums [overflow-wrap:anywhere]">
                     {count}
                   </span>
                 )}
