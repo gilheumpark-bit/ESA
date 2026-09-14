@@ -1,0 +1,127 @@
+name: UI alignment full verification
+on:
+  push:
+    branches: ['qa/ui-alignment-verify-20260914']
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - name: Apply exact reviewed patch on baseline and publish product branch
+        shell: bash
+        run: |
+          cp .github/ui-alignment.patch.xz /tmp/ui-alignment.patch.xz
+          xz -dc /tmp/ui-alignment.patch.xz > /tmp/ui-alignment.patch
+          echo '281927b2a6f3cc1724b12aef40456c772a705b52a2cb7ff47a8120f482f4b039  /tmp/ui-alignment.patch' | sha256sum --check --strict
+          git fetch --depth=1 origin 75beda210f5fc151e9bc94fdf62d84ab5ffcd6a6
+          git checkout --detach 75beda210f5fc151e9bc94fdf62d84ab5ffcd6a6
+          test "$(git rev-parse HEAD)" = 75beda210f5fc151e9bc94fdf62d84ab5ffcd6a6
+          git switch -c fix/ui-alignment-20260914
+          git apply --check --unidiff-zero /tmp/ui-alignment.patch
+          git apply --unidiff-zero /tmp/ui-alignment.patch
+          git diff --check
+          git add src/app src/components e2e/ui-alignment.spec.ts
+          test "$(git diff --cached --name-only | wc -l)" -eq 20
+          git config user.name 'ESA UI alignment'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(ui): align page shells, responsive drawing controls and Studio panels'
+          git push origin HEAD:refs/heads/fix/ui-alignment-20260914
+          mkdir -p /tmp/esa-ui-verification
+          git rev-parse HEAD > /tmp/esa-ui-verification/product-sha.txt
+          git diff 75beda210f5fc151e9bc94fdf62d84ab5ffcd6a6 HEAD --stat > /tmp/esa-ui-verification/changes.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Repository and documentation contracts
+        run: |
+          npm run gate:hygiene
+          npm run check:docs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+      - name: Full Jest with coverage
+        run: npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/esa-ui-verification/jest.json
+      - name: Script regression suite
+        run: npm run test:scripts
+      - name: SLD contracts
+        run: npm run gate:sld-v3-contract
+      - name: Production dependency audit
+        run: npm run gate:audit
+      - name: All dependency audit
+        run: npm run gate:audit:all
+      - name: Snapshot contract
+        run: npm run gate:snapshot
+      - name: Production build
+        run: npm run build
+      - name: Live chat receipt contract
+        run: npm run gate:chat-live
+      - name: Chromium
+        run: npx playwright install --with-deps chromium
+      - name: PDF and complete browser suite, no retries
+        shell: bash
+        env:
+          UI_SCREEN_DIR: /tmp/esa-ui-alignment
+        run: |
+          app_pid=''
+          cleanup() {
+            if [ -n "$app_pid" ]; then
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              app_pid=''
+            fi
+          }
+          trap cleanup EXIT
+          start_server() {
+            local port="$1"
+            local logfile="$2"
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$port" > "$logfile" 2>&1 &
+            app_pid=$!
+            for attempt in $(seq 1 60); do
+              if ! kill -0 "$app_pid" 2>/dev/null; then cat "$logfile"; return 1; fi
+              if curl --fail --silent "http://127.0.0.1:$port/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            cat "$logfile"
+            return 1
+          }
+          start_server 3010 /tmp/esa-ui-verification/pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010
+          cleanup
+          start_server 3011 /tmp/esa-ui-verification/browser-server.log
+          BASE_URL=http://127.0.0.1:3011 PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/esa-ui-verification/playwright.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json
+      - name: Preserve verification results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-alignment-verification
+          path: /tmp/esa-ui-verification/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Preserve layout and interaction screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-alignment-screenshots
+          path: /tmp/esa-ui-alignment/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Preserve browser traces and existing test screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-alignment-browser-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: warn
