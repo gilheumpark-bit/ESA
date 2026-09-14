@@ -104,6 +104,7 @@ async function readBoundedBody(response: Response, signal: AbortSignal): Promise
 
 function classifyLocalFailure(error: unknown): Error {
   const message = error instanceof Error ? error.message : '';
+  if (/LOCAL_CODEX_OUTPUT_LIMIT/.test(message)) return lunaError('LUNA_RESPONSE_LIMIT');
   if (/LOCAL_CODEX_(?:USAGE_LIMIT|RATE_LIMIT)|(?:usage_limit|quota_exceeded|rate_limit)/i.test(message)) return lunaError('LUNA_RATE_LIMIT');
   if (/LOCAL_CODEX_NOT_LOGGED_IN|authentication_required|unauthorized/i.test(message)) return lunaError('LUNA_AUTH_REQUIRED');
   if (/LOCAL_CODEX_TIMEOUT/.test(message)) return lunaError('LUNA_TIMEOUT');
@@ -128,6 +129,7 @@ async function callLuna(base64: string, mimeType: string, options: LunaSldOption
             { type: 'text', text: 'Extract visible evidence only. Return JSON; no calculations.' },
           ],
           outputSchema: LUNA_SLD_SCHEMA, effort, timeoutMs, signal,
+          maxOutputBytes: LUNA_RESPONSE_LIMIT,
         });
       } catch (error) {
         signal.throwIfAborted();
