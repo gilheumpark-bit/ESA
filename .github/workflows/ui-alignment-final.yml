@@ -1,0 +1,147 @@
+name: UI alignment final verification
+on:
+  push:
+    branches: ['qa/ui-alignment-final-20260914']
+permissions:
+  contents: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 1a6a21e9199b09bc2bac1f6ed7e7a85e2a86939b
+      - name: Update obsolete scroll requirement and publish candidate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = 1a6a21e9199b09bc2bac1f6ed7e7a85e2a86939b
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('e2e/smoke.spec.ts')
+          text = p.read_text()
+          old = '    expect(mobileWidths.tabContent).toBeGreaterThan(mobileWidths.tabViewport);'
+          new = '''    // The responsive five-column tab bar must fit, not require horizontal scroll.
+              expect(mobileWidths.tabViewport).toBeGreaterThan(0);
+              expect(mobileWidths.tabContent).toBeLessThanOrEqual(mobileWidths.tabViewport);
+              const mobileTabs = resultTabs.getByRole('tab');
+              await expect(mobileTabs).toHaveCount(5);
+              const boxes = await mobileTabs.evaluateAll(tabs => tabs.map(tab => tab.getBoundingClientRect().toJSON()));
+              for (const box of boxes) {
+                expect(box.left).toBeGreaterThanOrEqual(0);
+                expect(box.right).toBeLessThanOrEqual(mobileWidths.viewport);
+                expect(box.width).toBeGreaterThan(0);
+                expect(box.height).toBeGreaterThanOrEqual(44);
+              }
+              await summaryTab.focus();
+              await summaryTab.press('End');
+              await expect(reviewTab).toBeFocused();
+              await expect(reviewTab).toHaveAttribute('aria-selected', 'true');
+              await reviewTab.press('Home');
+              await expect(summaryTab).toBeFocused();'''
+          assert text.count(old) == 1
+          p.write_text(text.replace(old, new))
+          PY
+          git diff --check
+          git add e2e/smoke.spec.ts
+          test "$(git diff --cached --name-only)" = e2e/smoke.spec.ts
+          git config user.name 'ESA UI alignment'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test(ui): assert visible mobile tabs on the real DXF flow'
+          git push origin HEAD:refs/heads/qa/ui-alignment-candidate-20260914
+          mkdir -p /tmp/esa-ui-verification
+          git rev-parse HEAD > /tmp/esa-ui-verification/product-sha.txt
+          git diff 1a6a21e9199b09bc2bac1f6ed7e7a85e2a86939b HEAD > /tmp/esa-ui-verification/test-contract.patch
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Repository and documentation contracts
+        run: |
+          npm run gate:hygiene
+          npm run check:docs
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+      - name: Full Jest with coverage
+        run: npm test -- --ci --coverage --forceExit --json --outputFile=/tmp/esa-ui-verification/jest.json
+      - name: Script regression suite
+        run: npm run test:scripts
+      - name: SLD contracts
+        run: npm run gate:sld-v3-contract
+      - name: Production dependency audit
+        run: npm run gate:audit
+      - name: All dependency audit
+        run: npm run gate:audit:all
+      - name: Snapshot contract
+        run: npm run gate:snapshot
+      - name: Production build
+        run: npm run build
+      - name: Live chat receipt contract
+        run: npm run gate:chat-live
+      - name: Chromium
+        run: npx playwright install --with-deps chromium
+      - name: PDF and complete browser suite, no retries
+        shell: bash
+        env:
+          UI_SCREEN_DIR: /tmp/esa-ui-alignment
+        run: |
+          app_pid=''
+          cleanup() {
+            if [ -n "$app_pid" ]; then
+              kill "$app_pid" 2>/dev/null || true
+              wait "$app_pid" 2>/dev/null || true
+              app_pid=''
+            fi
+          }
+          trap cleanup EXIT
+          start_server() {
+            local port="$1"
+            local logfile="$2"
+            node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port "$port" > "$logfile" 2>&1 &
+            app_pid=$!
+            for attempt in $(seq 1 60); do
+              if ! kill -0 "$app_pid" 2>/dev/null; then cat "$logfile"; return 1; fi
+              if curl --fail --silent "http://127.0.0.1:$port/" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            cat "$logfile"
+            return 1
+          }
+          start_server 3010 /tmp/esa-ui-verification/pdf-server.log
+          npm run gate:pdf -- http://127.0.0.1:3010
+          cleanup
+          start_server 3011 /tmp/esa-ui-verification/browser-server.log
+          BASE_URL=http://127.0.0.1:3011 PLAYWRIGHT_JSON_OUTPUT_NAME=/tmp/esa-ui-verification/playwright.json npx playwright test --retries=0 --trace=retain-on-failure --reporter=line,json
+      - name: Preserve verification results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-alignment-final-results
+          path: /tmp/esa-ui-verification/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Preserve layout and interaction screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-alignment-final-screenshots
+          path: /tmp/esa-ui-alignment/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Preserve browser traces and existing test screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-alignment-final-browser-evidence
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: warn
