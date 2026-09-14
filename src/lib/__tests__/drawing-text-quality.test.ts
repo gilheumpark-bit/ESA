@@ -87,9 +87,10 @@ describe('글자를 못 찾으면 좋다고 말하지 않는다', () => {
 
 describe('라우트가 이 판정을 실제로 실어 보낸다', () => {
   /**
-   * 재는 것과 **보내는 것**은 다르다. 이 리포에서 "만들었는데 아무도 안 쓰는"
-   * 방어가 반복해서 났다(§2.2). 소스 훑기지만 라우트를 실행하려면 실키가
-   * 필요해 여기서는 배선 존재만 확인한다 — 그 한계를 적어 둔다.
+   * 소스 배선은 줄바꿈과 무관하게 검사한다. 별도의
+   * api/sld/__tests__/luna-extraction-boundary.test.ts에서 실제 POST를 실행해
+   * 표준·Luna 양쪽 응답의 poor 판정 보존과 공급자 호출 전 측정도 검증한다.
+   * 공급자와 품질 측정은 모의 처리하므로 실계정이나 실도면 정확도 검사가 아니다.
    */
   const route = readFileSync(join(process.cwd(), 'src', 'app', 'api', 'sld', 'route.ts'), 'utf8');
 
@@ -101,7 +102,7 @@ describe('라우트가 이 판정을 실제로 실어 보낸다', () => {
     expect(measured).toBeLessThan(analyzed);
   });
 
-  it('응답에 실어 보낸다', () => {
-    expect(route).toMatch(/^\s*textQuality,$/m);
+  it('응답 필드의 배선을 유지한다 — 줄바꿈은 계약이 아니다', () => {
+    expect(route).toMatch(/\btextQuality\s*,/);
   });
 });

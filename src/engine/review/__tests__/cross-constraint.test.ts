@@ -134,9 +134,10 @@ describe('사람이 읽는 문단', () => {
 });
 
 /**
- * **배선 확인** — 만들었는데 아무도 안 쓰는 방어가 이 리포에서 반복해서
- * 났다(§2.2). 라우트를 실행하려면 실키가 필요해 여기서는 배선 존재만
- * 확인한다. 그 한계를 적어 둔다.
+ * 소스 배선 검사와 실제 응답 검사를 함께 유지한다.
+ * api/sld/__tests__/luna-extraction-boundary.test.ts는 공급자·품질·위상 등의
+ * 경계를 모의 처리하고 실제 POST와 구속 엔진을 실행한다. 낮은 confidence의
+ * 표준 경로도 구속을 반환하지만, 축약 판독은 구속 엔진을 호출하지 않는다.
  */
 describe('라우트가 이 구속을 실어 보낸다', () => {
   const route = readFileSync(
@@ -144,11 +145,11 @@ describe('라우트가 이 구속을 실어 보낸다', () => {
     'utf8',
   );
 
-  it('응답에 constraints 를 담는다', () => {
-    expect(route).toMatch(/constraints:\s*deriveConstraints\(/);
+  it('표준 경로에 구속을 담고 축약 판독에서는 도출하지 않는다', () => {
+    expect(route).toMatch(/constraints:\s*extractionOnly\s*\?\s*\[\]\s*:\s*deriveConstraints\(/);
   });
 
-  it('품질이 나빠도 구속을 계산한다 — 조기 반환 뒤에 있지 않다', () => {
+  it('품질이 나빠도 표준 경로의 구속을 계산한다 — 조기 반환 뒤에 있지 않다', () => {
     const wired = route.indexOf('deriveConstraints(');
     const quality = route.indexOf('measureTextQuality(bytes)');
     expect(quality).toBeGreaterThan(-1);

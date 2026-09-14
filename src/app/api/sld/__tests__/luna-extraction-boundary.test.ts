@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 import { POST, classifyProviderFailure } from '@/app/api/sld/route';
-import { analyzeSLD, generateCalcChainFromSLD } from '@/lib/sld-recognition';
+import { analyzeSLD, generateCalcChainFromSLD, type SLDAnalysis } from '@/lib/sld-recognition';
 import { analyzeSLDWithLunaFastPath } from '@/lib/sld-luna-fast-path';
 import { resolveDrawingVisionRequest } from '@/lib/drawing-vision-request';
+import { measureTextQuality, type TextQualityResult } from '@/lib/drawing-text-quality';
 import { buildTopologyFromSLD } from '@/engine/topology';
 import { reviewAnalysis } from '@/engine/review/circuit-review';
 import { deriveConstraints } from '@/engine/review/cross-constraint';
@@ -14,8 +15,11 @@ jest.mock('@/lib/sld-luna-fast-path', () => ({
 jest.mock('@/lib/drawing-vision-request', () => ({ resolveDrawingVisionRequest: jest.fn(), DrawingVisionRequestError: class extends Error {} }));
 jest.mock('@/engine/topology', () => ({ buildTopologyFromSLD: jest.fn() }));
 jest.mock('@/engine/review/circuit-review', () => ({ reviewAnalysis: jest.fn(() => ({})) }));
-jest.mock('@/engine/review/cross-constraint', () => ({ deriveConstraints: jest.fn(() => []) }));
-jest.mock('@/lib/drawing-text-quality', () => ({ measureTextQuality: jest.fn(async () => ({})) }));
+jest.mock('@/engine/review/cross-constraint', () => {
+  const actual = jest.requireActual<typeof import('@/engine/review/cross-constraint')>('@/engine/review/cross-constraint');
+  return { ...actual, deriveConstraints: jest.fn(actual.deriveConstraints) };
+});
+jest.mock('@/lib/drawing-text-quality', () => ({ measureTextQuality: jest.fn() }));
 jest.mock('@/lib/rate-limit', () => ({ applyRateLimit: jest.fn(() => null) }));
 jest.mock('@/lib/request-origin', () => ({ isRequestOriginAllowed: jest.fn(() => true) }));
 jest.mock('@/lib/api-logger', () => ({ apiLog: jest.fn(), createRequestTimer: () => ({ elapsed: () => 1 }) }));
@@ -23,7 +27,12 @@ jest.mock('@/lib/api-logger', () => ({ apiLog: jest.fn(), createRequestTimer: ()
 const fast = analyzeSLDWithLunaFastPath as jest.MockedFunction<typeof analyzeSLDWithLunaFastPath>;
 const standard = analyzeSLD as jest.MockedFunction<typeof analyzeSLD>;
 const vision = resolveDrawingVisionRequest as jest.MockedFunction<typeof resolveDrawingVisionRequest>;
+const quality = jest.mocked(measureTextQuality);
 const priorFlag = process.env.ESVA_LUNA_SLD_FAST_PATH;
+const poorQuality: TextQualityResult = {
+  grade: 'poor', strokeSharpness: 56.8, glyphHeightMedian: 9, glyphCount: 24,
+  reason: '합성 품질 경고: 스펙 수치를 이 결과로 확정하지 마십시오.',
+};
 const analysis = {
   components: [{ id: 'q1', type: 'breaker' as const, position: { x: 20, y: 30 }, label: 'Q1' }],
   connections: [], confidence: 0.99, rawDescription: 'Unverified fixture',
@@ -42,6 +51,7 @@ describe('Luna API extraction boundary', () => {
     vision.mockResolvedValue({ provider: 'openai', model: 'gpt-5.6-luna', apiKey: 'test-key', effort: 'high' });
     fast.mockResolvedValue(analysis);
     standard.mockResolvedValue(analysis);
+    quality.mockResolvedValue(poorQuality);
     (buildTopologyFromSLD as jest.Mock).mockReturnValue({ validate: () => ({
       valid: true, issues: [], stats: { nodeCount: 1, edgeCount: 0, isolatedNodes: 1, connectedComponents: 1 },
     }) });
@@ -92,6 +102,43 @@ describe('Luna API extraction boundary', () => {
     expect(generateCalcChainFromSLD).not.toHaveBeenCalled();
     expect(reviewAnalysis).not.toHaveBeenCalled();
     expect(deriveConstraints).not.toHaveBeenCalled();
+  });
+
+  it.each([0.2, 0.99])('returns real standard-path constraints despite poor text quality at confidence %p', async (confidence) => {
+    // The provider is synthetic; the route and constraint engine are real.
+    // The inconsistent 300kVA / 2000A pair must not disappear at low confidence.
+    const input: SLDAnalysis = {
+      ...analysis, confidence, suggestedCalculations: [],
+      components: [
+        { id: 'tr1', type: 'transformer', label: 'TR-1', rating: '300kVA', position: { x: 20, y: 20 } },
+        { id: 'acb1', type: 'breaker', label: 'ACB-1', rating: '2000A', voltage: '380V', position: { x: 20, y: 40 } },
+      ],
+    };
+    standard.mockResolvedValue(input);
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(deriveConstraints).toHaveBeenCalledTimes(1);
+    expect(deriveConstraints).toHaveBeenCalledWith(input.components);
+    expect(body.constraints).toHaveLength(1);
+    expect(body.constraints[0].consistent).toBe(false);
+    expect(body.constraints[0].basis).toContain('2000');
+    expect(body.textQuality).toEqual(poorQuality);
+    expect(fast).not.toHaveBeenCalled();
+  });
+
+  it.each(['standard', 'luna'] as const)('preserves text-quality warnings in the %s response and measures before the provider call', async (path) => {
+    if (path === 'luna') process.env.ESVA_LUNA_SLD_FAST_PATH = 'true';
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.textQuality).toEqual(poorQuality);
+    expect(body.data.components).toEqual(analysis.components);
+    const selected = path === 'luna' ? fast : standard;
+    expect(selected).toHaveBeenCalledTimes(1);
+    expect(quality).toHaveBeenCalledTimes(1);
+    expect(quality).toHaveBeenCalledWith(expect.any(Uint8Array));
+    expect(quality.mock.invocationCallOrder[0]).toBeLessThan(selected.mock.invocationCallOrder[0]);
   });
 
   it('returns a classified failure rather than success for unusable reads', async () => {
