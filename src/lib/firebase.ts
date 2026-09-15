@@ -5,6 +5,7 @@
  * All Firebase modules are dynamically imported to reduce bundle size.
  */
 
+import { hasFirebaseClientConfig, readFirebaseClientConfig } from './firebase-client-config';
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth, User, Unsubscribe } from 'firebase/auth';
 
@@ -28,9 +29,7 @@ export interface AuthState {
 
 function getFirebaseConfig() {
   return {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? '',
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? '',
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? '',
+    ...readFirebaseClientConfig(),
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? '',
     messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '',
     appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? '',
@@ -38,7 +37,7 @@ function getFirebaseConfig() {
 }
 
 function validateConfig(config: ReturnType<typeof getFirebaseConfig>): void {
-  if (!config.apiKey || !config.authDomain || !config.projectId) {
+  if (!hasFirebaseClientConfig(config)) {
     throw new Error('로그인 서비스를 사용할 수 없습니다. 배포 관리자에게 인증 구성을 확인해 주세요.');
   }
 }

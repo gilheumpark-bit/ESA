@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 // axe-core is already pinned in the existing ESLint accessibility toolchain.
 // No runtime dependency or lockfile version is changed by these checks.
 import axe from 'axe-core';
+import { hasFirebaseClientConfig, readFirebaseClientConfig } from '../src/lib/firebase-client-config';
+import { buildContentSecurityPolicy } from '../src/lib/security-headers';
 
 const routes = ['/', '/calc', '/tools/sld', '/tools/ocr', '/tools/studio', '/compare', '/settings', '/projects'];
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -11,6 +13,11 @@ for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ reducedMotion: 'reduce', colorScheme });
       const errors: string[] = [];
+      const authRequests: string[] = [];
+      page.on('request', (request) => {
+        const target = new URL(request.url());
+        if (target.hostname === 'apis.google.com' || target.pathname.startsWith('/__/auth/')) authRequests.push(target.origin + target.pathname);
+      });
       page.on('pageerror', (error) => errors.push(error.message));
       const response = await page.goto(route);
       expect(response?.status()).toBe(200);
@@ -30,6 +37,7 @@ for (const width of [390, 1440]) {
       await info.attach('accessibility', { body: JSON.stringify(result), contentType: 'application/json' });
       expect(result.violations.map(({ id, impact, nodes }) => ({ id, impact, targets: nodes.map((node) => node.target) }))).toEqual([]);
       expect(errors).toEqual([]);
+      if (!hasFirebaseClientConfig(readFirebaseClientConfig())) expect(authRequests).toEqual([]);
       await info.attach('rendered-page', { body: await page.screenshot(), contentType: 'image/png' });
     });
   }
@@ -97,3 +105,36 @@ for (const system of ['light', 'dark'] as const) {
     }
   });
 }
+
+/** Exercise the real policy builder in the browser without contacting an IdP.
+ * Every external resource below is an explicitly synthetic intercepted fixture. */
+test('configured Firebase CSP permits its resolver and blocks unrelated scripts and frames', async ({ page }, info) => {
+  const authDomain = 'fixture.firebaseapp.com';
+  const policy = buildContentSecurityPolicy(true, { apiKey: 'synthetic-key', projectId: 'fixture', authDomain });
+  await page.route('https://apis.google.com/**', (route) => route.fulfill({ contentType: 'text/javascript', body: 'window.__allowedResolver = true;' }));
+  await page.route(`https://${authDomain}/**`, (route) => route.fulfill({ contentType: 'text/html',
+    body: '<!doctype html><title>Synthetic auth frame</title><script>parent.postMessage("synthetic-auth-frame", "*")</script>' }));
+  await page.route('https://apis.google.com.evil.invalid/**', (route) => route.fulfill({ contentType: 'text/javascript', body: 'window.__unexpectedResolver = true;' }));
+  await page.route('**/csp-policy-fixture', (route) => route.fulfill({ contentType: 'text/html',
+    headers: { 'Content-Security-Policy': policy }, body: `<!doctype html><html lang="en"><title>CSP boundary fixture</title>
+      <h1>Synthetic policy verification — not a login</h1><script>
+      window.__frames = []; window.__cspViolations = [];
+      addEventListener('message', event => { if (event.origin === 'https://${authDomain}') window.__frames.push(event.data); });
+      addEventListener('securitypolicyviolation', event => window.__cspViolations.push(event.effectiveDirective));
+      </script></html>` }));
+  await page.goto('/csp-policy-fixture');
+  const appendScript = (source: string) => page.evaluate((url) => new Promise<string>((resolve) => {
+    const script = document.createElement('script'); script.src = url;
+    script.onload = () => resolve('loaded'); script.onerror = () => resolve('blocked'); document.head.append(script);
+  }), source);
+  expect(await appendScript('https://apis.google.com/js/api.js')).toBe('loaded');
+  expect(await appendScript('https://apis.google.com.evil.invalid/js/api.js')).toBe('blocked');
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__allowedResolver)).toBe(true);
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__unexpectedResolver)).toBeUndefined();
+  await page.evaluate((url) => { const frame = document.createElement('iframe'); frame.src = url; document.body.append(frame); }, `https://${authDomain}/__/auth/iframe`);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __frames: string[] }).__frames)).toEqual(['synthetic-auth-frame']);
+  await page.evaluate((url) => { const frame = document.createElement('iframe'); frame.src = url; document.body.append(frame); }, `https://${authDomain}/outside-auth/`);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations)).toContain('frame-src');
+  expect(await page.evaluate(() => (window as unknown as { __frames: string[] }).__frames)).toEqual(['synthetic-auth-frame']);
+  await info.attach('csp-policy', { body: JSON.stringify({ policy, mode: 'synthetic intercepted resources; no real authentication' }), contentType: 'application/json' });
+});

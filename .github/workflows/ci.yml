@@ -18,9 +18,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy' }}
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'dummy' }}
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'dummy' }}
+  # Unconfigured-app lanes never borrow production credentials.
+  NEXT_PUBLIC_FIREBASE_API_KEY: dummy
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: dummy
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: dummy
 
 jobs:
   verify:
@@ -76,6 +77,12 @@ jobs:
 
   live-gates:
     name: Live gates (server, PDF, UI smoke)
+    # Existing authenticated UI flows restore an invalid-signature fixture in
+    # the real SDK. Its public config is explicit, not an absent/dummy setup.
+    env:
+      NEXT_PUBLIC_FIREBASE_API_KEY: esva-ui-synthetic-key
+      NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: auth.esva-ui.example.invalid
+      NEXT_PUBLIC_FIREBASE_PROJECT_ID: esva-ui-fixture
     needs: verify
     if: github.event_name != 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

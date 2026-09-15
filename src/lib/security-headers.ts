@@ -1,3 +1,5 @@
+import { firebaseAuthOrigin, hasFirebaseClientConfig, readFirebaseClientConfig, type FirebaseClientConfig } from './firebase-client-config';
+
 /**
  * 전역 보안 헤더 — `next.config.ts` 가 그대로 내보낸다.
  *
@@ -20,14 +22,23 @@ export interface SecurityHeader {
  * 본문이 페이지마다 달라 해시로 잠글 수 없고, nonce 를 쓰려면 미들웨어가
  * 필요한데 그러면 전 페이지가 동적 렌더링으로 떨어진다. 알고 남긴 부채다.
  */
-export function buildContentSecurityPolicy(isProduction: boolean): string {
+export function buildContentSecurityPolicy(
+  isProduction: boolean,
+  firebaseConfig: FirebaseClientConfig = readFirebaseClientConfig(),
+): string {
+  const authOrigin = hasFirebaseClientConfig(firebaseConfig) ? firebaseAuthOrigin(firebaseConfig.authDomain) : null;
+  // Firebase's popup resolver uses gapi and the configured /__/auth/ iframe.
+  // Allow only these necessary sources when explicitly configured, never all
+  // Google/Firebase origins or values interpolated without hostname validation.
+  const authScript = authOrigin ? ' https://apis.google.com' : '';
+  const authFrame = authOrigin ? ` ${authOrigin}/__/auth/` : '';
   return [
     "default-src 'self'",
     // dev 는 React Fast Refresh 가 콜스택을 되짚을 때 eval 을 쓴다.
     // 프로덕션에는 절대 새어 들어가면 안 된다.
     isProduction
-      ? "script-src 'self' 'unsafe-inline'"
-      : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      ? `script-src 'self' 'unsafe-inline'${authScript}`
+      : `script-src 'self' 'unsafe-inline' 'unsafe-eval'${authScript}`,
     "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
     // 출처 연결 SLD 리포트는 브라우저 로컬 IndexedDB 의 도면을
     // object URL 로 그린다.
@@ -41,7 +52,7 @@ export function buildContentSecurityPolicy(isProduction: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://*.firebaseio.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.stripe.com",
-    "frame-src 'self' https://js.stripe.com",
+    `frame-src 'self' https://js.stripe.com${authFrame}`,
   ].join('; ');
 }
 
