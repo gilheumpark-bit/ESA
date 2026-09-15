@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* The persisted user preference owns both tokens and dark utility variants. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
 
@@ -209,7 +212,7 @@ html.dark {
   --space-4: 1rem;     /* 16px */
   --space-5: 1.25rem;  /* 20px */
   --space-6: 1.5rem;   /* 24px */
-  --space-8: 2rem;     /* 32px */
+  --space-8: 2rem;    /* 32px */
   --space-10: 2.5rem;  /* 40px */
   --space-12: 3rem;    /* 48px */
   --space-16: 4rem;    /* 64px */
@@ -356,4 +359,16 @@ html {
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+}
+
+/* Upload guidance is essential input information, not disabled content. Keep
+   small captions readable on both themes; hierarchy comes from font size. */
+#main-content .border-dashed .opacity-70 {
+  opacity: 1;
+}
+
+/* Solid primary controls use a paired foreground. The primary surface becomes
+   lighter in dark mode, so a literal white foreground is no longer readable. */
+[class~="bg-[var(--color-primary)]"].text-white {
+  color: var(--drawing-on-primary);
 }

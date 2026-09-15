@@ -130,6 +130,7 @@ function CountrySection({
         내장 안전계수와 단위 변환이 검증 배선된 기준만 선택할 수 있습니다. 다른 국가 비교는 다국가 비교 도구에서 확인하세요.
       </p>
       <select
+        aria-label="계산 기준 국가 / 표준"
         value={current}
         onChange={(e) => onChange(e.target.value as Country)}
         className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200"

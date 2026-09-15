@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import type { Readable, Writable } from 'node:stream';
+import { hasStartId, isRpcRecord, isRpcResponse, LOCAL_RPC_LIMITS, rpcTurnId, type RpcResponse } from './chatgpt-local-rpc';
 
 export interface CodexAppServerProcess {
   readonly stdin: Writable;
@@ -18,13 +19,6 @@ interface PendingRequest {
 interface CodexAppServerClientOptions {
   spawnProcess?: () => CodexAppServerProcess;
   defaultTimeoutMs?: number;
-}
-interface RpcResponse {
-  id?: number;
-  method?: string;
-  params?: unknown;
-  result?: unknown;
-  error?: { message?: string };
 }
 export type LocalTurnInput =
   | { type: 'text'; text: string }
@@ -131,6 +125,8 @@ export class CodexAppServerClient {
   private readonly notificationBacklog: RpcResponse[] = [];
   private nextId = 1;
   private stdoutBuffer = '';
+  private stdoutBytes = 0;
+  private backlogBytes = 0;
   private closed = false;
 
   constructor(options: CodexAppServerClientOptions = {}) {
@@ -140,14 +136,11 @@ export class CodexAppServerClient {
     this.child.stdout.on('data', (chunk) => this.consumeStdout(String(chunk)));
     this.child.stderr.setEncoding('utf8');
     this.child.stderr.on('data', (chunk) => this.consumeStderr(String(chunk)));
-    this.child.on('error', () => {
-      this.rejectPending('LOCAL_CODEX_EXITED');
-      this.rejectActiveTurns('LOCAL_CODEX_EXITED');
-    });
-    this.child.on('exit', () => {
-      this.rejectPending('LOCAL_CODEX_EXITED');
-      this.rejectActiveTurns('LOCAL_CODEX_EXITED');
-    });
+    this.child.stdin.on('error', () => this.shutdown('LOCAL_CODEX_WRITE_FAILED'));
+    this.child.stdout.on('error', () => this.shutdown('LOCAL_CODEX_EXITED'));
+    this.child.stderr.on('error', () => this.shutdown('LOCAL_CODEX_EXITED'));
+    this.child.on('error', () => this.shutdown('LOCAL_CODEX_EXITED'));
+    this.child.on('exit', () => this.shutdown('LOCAL_CODEX_EXITED', false));
   }
 
   request<T>(method: string, params: unknown, options: { timeoutMs?: number } = {}): Promise<T> {
@@ -159,7 +152,7 @@ export class CodexAppServerClient {
         reject(new Error('LOCAL_CODEX_TIMEOUT'));
       }, options.timeoutMs ?? this.defaultTimeoutMs);
       this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timeout });
-      this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
+      try { this.writeMessage({ id, method, params }); } catch { this.shutdown('LOCAL_CODEX_WRITE_FAILED'); }
     });
   }
 
@@ -173,7 +166,7 @@ export class CodexAppServerClient {
     let threadStart: { thread: { id: string } };
     let turnStart: { turn: { id: string } };
     try {
-      threadStart = await this.request<{ thread: { id: string } }>('thread/start', {
+      const threadResult = await this.request<unknown>('thread/start', {
         model: params.model,
         ephemeral: true,
         approvalPolicy: 'untrusted',
@@ -183,16 +176,29 @@ export class CodexAppServerClient {
         dynamicTools: [],
         experimentalRawEvents: false,
       }, { timeoutMs: params.timeoutMs });
+      if (this.closed) throw new Error('LOCAL_CODEX_CLOSED');
+      if (!hasStartId(threadResult, 'thread')) {
+        this.shutdown('LOCAL_CODEX_INVALID_RESPONSE');
+        throw new Error('LOCAL_CODEX_INVALID_RESPONSE');
+      }
+      threadStart = { thread: threadResult.thread };
       // Cancellation while the thread starts must not launch a paid model turn.
       if (params.signal?.aborted) throw new Error('LOCAL_CODEX_ABORTED');
-      turnStart = await this.request<{ turn: { id: string } }>('turn/start', {
+      const turnResult = await this.request<unknown>('turn/start', {
         threadId: threadStart.thread.id,
         input: params.input,
         ...(params.outputSchema === undefined ? {} : { outputSchema: params.outputSchema }),
         ...(params.effort === undefined ? {} : { effort: params.effort }),
       }, { timeoutMs: params.timeoutMs });
+      if (this.closed) throw new Error('LOCAL_CODEX_CLOSED');
+      if (!hasStartId(turnResult, 'turn') || this.activeTurns.has(turnResult.turn.id)) {
+        this.shutdown('LOCAL_CODEX_INVALID_RESPONSE');
+        throw new Error('LOCAL_CODEX_INVALID_RESPONSE');
+      }
+      turnStart = { turn: turnResult.turn };
     } catch (error) {
       this.startingTurns.delete(starting);
+      if (this.startingTurns.size === 0) this.clearBacklog();
       throw error;
     }
     this.startingTurns.delete(starting);
@@ -200,7 +206,7 @@ export class CodexAppServerClient {
       const turnId = turnStart.turn.id;
       const active: ActiveTurn = {
         threadId: threadStart.thread.id, turnId, model: params.model,
-        text: '', outputBytes: 0, maxOutputBytes: params.maxOutputBytes,
+        text: '', outputBytes: 0, maxOutputBytes: Math.min(params.maxOutputBytes ?? LOCAL_RPC_LIMITS.turnBytes, LOCAL_RPC_LIMITS.turnBytes),
         onDelta: params.onDelta, resolve, reject,
         timeout: setTimeout(() => {
           void this.interruptTurn(active);
@@ -222,12 +228,30 @@ export class CodexAppServerClient {
     });
   }
 
-  close(): void {
+  close(): void { this.shutdown('LOCAL_CODEX_CLOSED'); }
+
+  private clearBacklog(): void {
+    this.notificationBacklog.length = 0;
+    this.backlogBytes = 0;
+  }
+  /** Terminal errors are fail-closed: no unresolved timers, retained frames or
+   * accepted writes survive a dead or malformed transport. */
+  private shutdown(code: string, kill = true): void {
     if (this.closed) return;
     this.closed = true;
-    this.rejectPending('LOCAL_CODEX_CLOSED');
-    this.rejectActiveTurns('LOCAL_CODEX_CLOSED');
-    this.child.kill();
+    this.stdoutBuffer = '';
+    this.stdoutBytes = 0;
+    this.clearBacklog();
+    this.startingTurns.clear();
+    this.rejectPending(code);
+    this.rejectActiveTurns(code);
+    if (kill) { try { this.child.kill(); } catch { /* Already exited. */ } }
+  }
+  private writeMessage(message: unknown): void {
+    if (this.closed) return;
+    this.child.stdin.write(`${JSON.stringify(message)}\n`, (error) => {
+      if (error) this.shutdown('LOCAL_CODEX_WRITE_FAILED');
+    });
   }
   /** Classify stderr only when ownership is unambiguous, then discard the prose. */
   private consumeStderr(chunk: string): void {
@@ -237,56 +261,86 @@ export class CodexAppServerClient {
     if (candidates.length === 1) candidates[0].stderrCondition = condition;
   }
   private consumeStdout(chunk: string): void {
-    this.stdoutBuffer += chunk;
-    let newline = this.stdoutBuffer.indexOf('\n');
-    while (newline >= 0) {
-      const line = this.stdoutBuffer.slice(0, newline).trim();
-      this.stdoutBuffer = this.stdoutBuffer.slice(newline + 1);
+    if (this.closed) return;
+    let offset = 0;
+    while (offset < chunk.length && !this.closed) {
+      const newline = chunk.indexOf('\n', offset);
+      const end = newline < 0 ? chunk.length : newline;
+      const fragment = chunk.slice(offset, end);
+      const bytes = Buffer.byteLength(fragment, 'utf8');
+      if (this.stdoutBytes + bytes > LOCAL_RPC_LIMITS.frameBytes) {
+        this.shutdown('LOCAL_CODEX_FRAME_LIMIT');
+        return;
+      }
+      this.stdoutBuffer += fragment;
+      this.stdoutBytes += bytes;
+      if (newline < 0) return;
+      const line = this.stdoutBuffer.trim();
+      this.stdoutBuffer = '';
+      this.stdoutBytes = 0;
       if (line) this.consumeLine(line);
-      newline = this.stdoutBuffer.indexOf('\n');
+      offset = newline + 1;
     }
   }
   private consumeLine(line: string): void {
-    let message: RpcResponse;
-    try { message = JSON.parse(line) as RpcResponse; } catch { return; }
+    let value: unknown;
+    try { value = JSON.parse(line); } catch { this.shutdown('LOCAL_CODEX_INVALID_RESPONSE'); return; }
+    if (!isRpcResponse(value)) { this.shutdown('LOCAL_CODEX_INVALID_RESPONSE'); return; }
+    const message = value;
     if (typeof message.method === 'string') { this.consumeMethodMessage(message); return; }
     if (typeof message.id !== 'number') return;
     const pending = this.pending.get(message.id);
     if (!pending) return;
     this.pending.delete(message.id);
     clearTimeout(pending.timeout);
-    if (message.error) { pending.reject(new Error(message.error.message || 'LOCAL_CODEX_RPC_ERROR')); return; }
+    // Never return provider prose, keys, or stack traces as an RPC error message.
+    if (message.error) {
+      const code = typeof message.error.message === 'string' ? classifyCodexStderr(message.error.message) : null;
+      pending.reject(new Error(code ?? 'LOCAL_CODEX_RPC_ERROR'));
+      return;
+    }
     pending.resolve(message.result);
   }
   private rejectPending(code: string): void {
     for (const pending of this.pending.values()) { clearTimeout(pending.timeout); pending.reject(new Error(code)); }
     this.pending.clear();
   }
-  private consumeNotification(message: RpcResponse): void {
-    const params = message.params as Record<string, unknown> | undefined;
-    const turnId = typeof params?.turnId === 'string' ? params.turnId
-      : params?.turn && typeof params.turn === 'object' && typeof (params.turn as Record<string, unknown>).id === 'string'
-        ? (params.turn as Record<string, unknown>).id as string : null;
-    if (!turnId || !this.activeTurns.has(turnId)) {
-      if (this.notificationBacklog.length >= 100) this.notificationBacklog.shift();
-      this.notificationBacklog.push(message);
+  private queueNotification(message: RpcResponse): void {
+    // Only turn/start races need replay. Unowned/late notifications must not
+    // accumulate forever or evict an early completion belonging to a new turn.
+    if (this.startingTurns.size === 0 || !rpcTurnId(message)) return;
+    const bytes = Buffer.byteLength(JSON.stringify(message), 'utf8');
+    if (this.notificationBacklog.length >= LOCAL_RPC_LIMITS.backlogMessages
+      || this.backlogBytes + bytes > LOCAL_RPC_LIMITS.backlogBytes) {
+      this.shutdown('LOCAL_CODEX_BACKLOG_LIMIT');
       return;
     }
-    this.applyTurnNotification(this.activeTurns.get(turnId)!, message);
+    this.notificationBacklog.push(message);
+    this.backlogBytes += bytes;
+  }
+  private consumeNotification(message: RpcResponse): void {
+    const turnId = rpcTurnId(message);
+    if (!turnId) return;
+    const active = this.activeTurns.get(turnId);
+    if (!active) { this.queueNotification(message); return; }
+    if (message.params?.threadId !== undefined && message.params.threadId !== active.threadId) {
+      this.shutdown('LOCAL_CODEX_INVALID_RESPONSE');
+      return;
+    }
+    this.applyTurnNotification(active, message);
   }
   private consumeMethodMessage(message: RpcResponse): void {
-    if (typeof message.id === 'number') { this.consumeServerRequest(message); return; }
+    if (message.id !== undefined) { this.consumeServerRequest(message); return; }
     this.consumeNotification(message);
   }
   private consumeServerRequest(message: RpcResponse): void {
-    const params = message.params as Record<string, unknown> | undefined;
-    const turnId = typeof params?.turnId === 'string' ? params.turnId : null;
-    if (turnId && !this.activeTurns.has(turnId)) {
-      if (this.notificationBacklog.length >= 100) this.notificationBacklog.shift();
-      this.notificationBacklog.push(message);
+    const turnId = rpcTurnId(message);
+    if (turnId && !this.activeTurns.has(turnId) && this.startingTurns.size > 0) {
+      this.queueNotification(message);
       return;
     }
-    this.child.stdin.write(`${JSON.stringify({ id: message.id, error: { code: -32000, message: 'LOCAL_CODEX_TOOL_BLOCKED' } })}\n`);
+    try { this.writeMessage({ id: message.id, error: { code: -32000, message: 'LOCAL_CODEX_TOOL_BLOCKED' } }); }
+    catch { this.shutdown('LOCAL_CODEX_WRITE_FAILED'); return; }
     if (!turnId) return;
     const active = this.activeTurns.get(turnId);
     if (!active) return;
@@ -295,7 +349,11 @@ export class CodexAppServerClient {
   }
   private replayNotifications(): void {
     const queued = this.notificationBacklog.splice(0);
-    for (const message of queued) this.consumeMethodMessage(message);
+    this.backlogBytes = 0;
+    for (const message of queued) {
+      if (this.closed) break;
+      this.consumeMethodMessage(message);
+    }
   }
   private exceedsOutputLimit(active: ActiveTurn, bytes: number): boolean {
     if (active.maxOutputBytes === undefined || bytes <= active.maxOutputBytes) return false;
@@ -310,7 +368,10 @@ export class CodexAppServerClient {
       if (this.exceedsOutputLimit(active, size)) return;
       active.outputBytes = size;
       active.text += params.delta;
-      active.onDelta?.(params.delta);
+      try { active.onDelta?.(params.delta); } catch {
+        void this.interruptTurn(active);
+        this.finishTurn(active.turnId, new Error('LOCAL_CODEX_DELIVERY_FAILED'));
+      }
       return;
     }
     const item = params.item && typeof params.item === 'object' ? params.item as Record<string, unknown> : null;
@@ -322,6 +383,12 @@ export class CodexAppServerClient {
     }
     if (message.method !== 'turn/completed') return;
     const turn = params.turn as Record<string, unknown>;
+    if (Array.isArray(turn.items) && turn.items.some((item) => isRpcRecord(item)
+      && typeof item.type === 'string' && BLOCKED_ITEM_TYPES.has(item.type))) {
+      void this.interruptTurn(active);
+      this.finishTurn(active.turnId, new Error('LOCAL_CODEX_TOOL_BLOCKED'));
+      return;
+    }
     if (turn.status !== 'completed') {
       this.finishTurn(active.turnId, new Error(turnFailureMessage(turn, active.stderrCondition)));
       return;
@@ -339,7 +406,7 @@ export class CodexAppServerClient {
     }
     this.finishTurn(active.turnId, null, {
       text: active.text, model: active.model,
-      durationMs: typeof turn.durationMs === 'number' ? turn.durationMs : 0,
+      durationMs: typeof turn.durationMs === 'number' && Number.isFinite(turn.durationMs) && turn.durationMs >= 0 ? turn.durationMs : 0,
     });
   }
   private async interruptTurn(active: ActiveTurn): Promise<void> {
