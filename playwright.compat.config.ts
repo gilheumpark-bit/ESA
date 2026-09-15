@@ -5,7 +5,7 @@ import base from './playwright.config';
  * remains unchanged. Separate servers keep rate-limit state isolated. */
 export default defineConfig({
   ...base,
-  testMatch: 'compatibility.spec.ts',
+  testMatch: ['compatibility.spec.ts', 'calculator-ownership.spec.ts'],
   retries: 0,
   workers: 2,
   projects: [

@@ -49,6 +49,9 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
       activeRequestRef.current?.abort();
       const controller = new AbortController();
       activeRequestRef.current = controller;
+      // A new request owns the screen; previous receipts are not its result.
+      setResult(null);
+      setReceipt(null);
       setIsLoading(true);
       setError(null);
 

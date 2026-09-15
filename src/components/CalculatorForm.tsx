@@ -23,6 +23,8 @@ import type { ParamDef } from '@/engine/standards/types';
 interface CalculatorFormProps {
   params: ExtendedParamDef[];
   onSubmit: (values: Record<string, unknown>) => void;
+  /** Invalidate a displayed/in-flight result on every user field or row edit. */
+  onInputChange?: () => void;
   isLoading?: boolean;
   error?: string | null;
   className?: string;
@@ -423,6 +425,7 @@ export function assembleSubmitValues(
 export default function CalculatorForm({
   params,
   onSubmit,
+  onInputChange,
   isLoading = false,
   error,
   className = '',
@@ -464,9 +467,10 @@ export default function CalculatorForm({
   const [fieldErrors, setFieldErrors] = useState<FieldError[]>([]);
 
   const updateValue = useCallback((name: string, val: FieldValue) => {
+    onInputChange?.();
     setValues((prev) => ({ ...prev, [name]: val }));
     setFieldErrors((prev) => prev.filter((e) => e.field !== name));
-  }, []);
+  }, [onInputChange]);
 
   const validate = useCallback((): FieldError[] => {
     const errors: FieldError[] = [];

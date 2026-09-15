@@ -348,6 +348,7 @@ export default function CalculatorPage({
               <CalculatorForm
                 params={calcParams}
                 onSubmit={handleSubmit}
+                onInputChange={reset}
                 isLoading={isLoading}
                 error={error}
                 initialValues={urlDefaults}
