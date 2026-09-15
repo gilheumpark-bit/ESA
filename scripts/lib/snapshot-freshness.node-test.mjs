@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { PIPELINE_SOURCES, SNAPSHOT_DIR, verifySnapshots } from './snapshot-freshness.mjs';
 
@@ -39,7 +40,7 @@ test('source change with identical commit timestamp is stale', (t) => {
 test('depth=1 cannot turn that stale evidence into PASS', (t) => {
   const f = fixture(t); f.write(PIPELINE_SOURCES[0], 'changed'); f.commit();
   const dest = `${f.cwd}-shallow`; t.after(() => rmSync(dest, { recursive: true, force: true }));
-  const result = spawnSync('git', ['clone', '-q', '--depth=1', `file://${f.cwd}`, dest]);
+  const result = spawnSync('git', ['clone', '-q', '--depth=1', pathToFileURL(f.cwd).href, dest]);
   assert.equal(result.status, 0); assert.equal(verifySnapshots({ cwd: dest }).exitCode, 2);
 });
 for (const field of ['input', 'output']) test(`modified ${field} is not current evidence`, (t) => {
@@ -86,8 +87,8 @@ for (const failure of [
 test('CLI returns the gate status (not unconditional exit zero)', (t) => {
   const f = fixture(t); const script = new URL('../realworld-snapshot-freshness.mjs', import.meta.url);
   assert.match(readFileSync(script, 'utf8'), /process.exitCode = result.exitCode/);
-  const result = spawnSync(process.execPath, [script.pathname], { cwd: f.cwd, encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [fileURLToPath(script)], { cwd: f.cwd, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stdout + result.stderr);
   f.write(PIPELINE_SOURCES[0], 'changed'); f.commit();
-  assert.equal(spawnSync(process.execPath, [script.pathname], { cwd: f.cwd }).status, 1);
+  assert.equal(spawnSync(process.execPath, [fileURLToPath(script)], { cwd: f.cwd }).status, 1);
 });

@@ -172,7 +172,7 @@ export default function HomePage() {
       </section>
 
       {/* ═══ 상태 바 ═══ */}
-      <div className="mt-auto flex h-8 items-center gap-4 overflow-x-auto border-t border-[var(--border-default)] bg-[var(--bg-secondary)] px-4 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)] sm:px-5">
+      <div role="region" aria-label="계산 엔진 및 기준서 상태" tabIndex={0} className="mt-auto flex h-8 items-center gap-4 overflow-x-auto border-t border-[var(--border-default)] bg-[var(--bg-secondary)] px-4 font-[family-name:var(--font-mono)] text-[11px] text-[var(--text-tertiary)] sm:px-5">
         <span className="inline-flex shrink-0 items-center gap-1.5 text-[var(--color-success)]">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />
           내장 계산 엔진 준비

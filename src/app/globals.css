@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* The persisted user preference owns both tokens and dark utility variants. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
 
@@ -356,4 +359,10 @@ html {
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+}
+
+/* Upload guidance is essential input information, not disabled content. Keep
+   small captions readable on both themes; hierarchy comes from font size. */
+#main-content .border-dashed .opacity-70 {
+  opacity: 1;
 }
