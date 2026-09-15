@@ -17,7 +17,7 @@ const FOOTER_LINKS = [
 export default function Footer() {
   return (
     <footer className="border-t border-[var(--border-default)] bg-[var(--bg-secondary)]">
-      <div className="mx-auto max-w-7xl px-4 py-8">
+      <div className="page-container max-w-7xl py-8">
         {/* Links row */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {FOOTER_LINKS.map(({ href, label }) => (

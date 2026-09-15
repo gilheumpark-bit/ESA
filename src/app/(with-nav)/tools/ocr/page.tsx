@@ -451,10 +451,10 @@ export default function OCRNameplatePage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="page-container page-section max-w-2xl">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="page-title">
           명판 OCR 인식
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">

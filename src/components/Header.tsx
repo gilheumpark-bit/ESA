@@ -67,15 +67,16 @@ function DesktopNav({ pathname }: { pathname: string }) {
   // max-w-7xl(1280px) 예산 안에 들어가게 한다. 예전엔 아이콘+라벨 9개+검색바가
   // ~1,450px라 어느 해상도에서도 한글 라벨이 글자 단위로 감쌌다(검/색, 계산/기).
   return (
-    <nav className="hidden shrink-0 items-center gap-0.5 xl:flex">
+    <nav aria-label="주 메뉴" className="hidden shrink-0 items-center gap-0.5 xl:flex">
       {NAV_ITEMS.map(({ href, label }) => {
         const isActive = pathname.startsWith(href);
         return (
           <Link
             key={href}
             href={href}
+            aria-current={isActive ? 'page' : undefined}
             className={`
-              whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors
+              inline-flex min-h-11 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors
               ${isActive
                 ? 'bg-[var(--bg-tertiary)] text-[var(--color-primary)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--text-primary)]'
@@ -123,7 +124,7 @@ function LangSelect({ className }: { className: string }) {
 
 function LangSwitcher() {
   return (
-    <LangSelect className="hidden h-8 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-1.5 text-xs font-medium text-[var(--text-secondary)] outline-none focus:border-[var(--color-primary)] sm:block" />
+    <LangSelect className="hidden h-11 min-h-11 shrink-0 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-1.5 text-xs font-medium text-[var(--text-secondary)] outline-none focus:border-[var(--color-primary)] sm:block" />
   );
 }
 
@@ -237,6 +238,7 @@ function MobileMenu({
                 key={href}
                 href={href}
                 onClick={handlePanelClose}
+                aria-current={isActive ? 'page' : undefined}
                 className={`
                   flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors
                   ${isActive
@@ -285,7 +287,7 @@ function UserMenu() {
     return (
       <Link
         href="/login"
-        className="flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] dark:text-[var(--bg-primary)] sm:min-h-0"
+        className="flex min-h-[44px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg bg-[var(--color-primary)] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-primary-hover)] dark:text-[var(--bg-primary)]"
       >
         <LogIn size={16} aria-hidden />
         <span className="sr-only sm:hidden">로그인</span>
@@ -299,7 +301,7 @@ function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex min-h-[44px] items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--bg-secondary)] sm:min-h-0"
+        className="flex min-h-[44px] items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--bg-secondary)]"
         aria-expanded={open}
         aria-haspopup="menu"
       >
@@ -368,6 +370,23 @@ function UserMenu() {
 export default function Header() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const root = document.documentElement;
+    const previous = root.style.getPropertyValue('--app-header-height');
+    const measure = () => root.style.setProperty('--app-header-height', `${header.getBoundingClientRect().height}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      if (previous) root.style.setProperty('--app-header-height', previous);
+      else root.style.removeProperty('--app-header-height');
+    };
+  }, []);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const closeMobile = useCallback(() => {
@@ -376,8 +395,8 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-[var(--z-dropdown)] border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur-sm">
-        <div className="mx-auto flex h-14 min-w-0 max-w-7xl items-center gap-1 px-3 sm:gap-3 sm:px-4">
+      <header ref={headerRef} className="sticky top-0 z-[var(--z-dropdown)] border-b border-[var(--border-default)] bg-[var(--bg-primary)]/95 backdrop-blur-sm">
+        <div className="page-container flex h-14 max-w-7xl items-center gap-1 sm:gap-2">
           <Link
             href="/"
             className="flex shrink-0 items-center gap-1.5 font-bold text-[var(--color-primary)]"
@@ -387,7 +406,7 @@ export default function Header() {
 
           <DesktopNav pathname={pathname} />
 
-          <div className="mx-3 hidden max-w-xs flex-1 lg:block xl:hidden 2xl:block">
+          <div className="mx-3 hidden min-w-0 max-w-xs flex-1 lg:block xl:hidden 2xl:block">
             <SearchBar size="sm" className="w-full" />
           </div>
 
@@ -412,8 +431,10 @@ export default function Header() {
           </button>
         </div>
 
-        <div className="border-t border-[var(--border-default)] px-4 py-2 lg:hidden">
-          <SearchBar size="sm" className="w-full" />
+        <div className="border-t border-[var(--border-default)] lg:hidden">
+          <div className="page-container max-w-7xl py-2">
+            <SearchBar size="sm" className="w-full" />
+          </div>
         </div>
       </header>
 

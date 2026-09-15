@@ -58,7 +58,7 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={cycleTheme}
-      className="flex h-11 min-h-[44px] shrink-0 items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--text-primary)] sm:h-8 sm:min-h-0 sm:px-2"
+      className="flex h-11 min-h-[44px] shrink-0 items-center gap-1 rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] px-3 text-xs font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--text-primary)] sm:px-2"
       aria-label={`테마: ${THEME_LABELS[theme]}`}
       title={`테마: ${THEME_LABELS[theme]}`}
     >

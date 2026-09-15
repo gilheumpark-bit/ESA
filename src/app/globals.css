@@ -97,6 +97,43 @@ html.dark {
   --shadow-glow-primary: 0 0 20px rgba(107, 147, 196, 0.2);
 }
 
+/* Shared page rhythm. Explicit width prevents auto margins in the flex app
+   shell from shrinking pages to the width of their current empty/error text. */
+:root {
+  --page-gutter: 1rem;
+  --page-block-space: 1.5rem;
+  --app-header-height: 7.375rem;
+}
+@media (min-width: 640px) {
+  :root { --page-gutter: 1.5rem; --page-block-space: 2rem; }
+}
+@media (min-width: 1024px) {
+  :root { --app-header-height: 3.5625rem; }
+}
+@layer components {
+  .page-container {
+    width: 100%;
+    min-width: 0;
+    margin-inline: auto;
+    padding-inline: var(--page-gutter);
+  }
+  .page-section { padding-block: var(--page-block-space); }
+  .page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.35;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
+  .studio-workspace { min-height: calc(100dvh - var(--app-header-height)); }
+  @media (min-width: 768px) {
+    .studio-workspace {
+      height: calc(100dvh - var(--app-header-height));
+      min-height: 24rem;
+    }
+  }
+}
+
 /* ═══ Global Animations ═══ */
 
 @keyframes fadeInUp {
@@ -262,6 +299,7 @@ main {
 /* 스크롤 복원 시 부드러운 동작 */
 html {
   scroll-behavior: smooth;
+  scroll-padding-block-start: calc(var(--app-header-height) + 1rem);
   /* viewTransition 크로스페이드(old→opacity0 / new→0에서 페이드인)와 overscroll
      중 두 스냅샷 뒤로 html 기본 흰색이 새어 나오는 플래시 차단.
      --bg-primary는 :root(라이트 #fbfaf7)·html.dark(다크 #17150f) 양쪽에 정의돼
@@ -314,4 +352,8 @@ html {
   stroke: var(--color-primary);
   stroke-width: 4;
   opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }

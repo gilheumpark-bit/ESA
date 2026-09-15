@@ -169,12 +169,12 @@ export default function ProjectsPage() {
   const error = !authLoading && !user ? '로그인이 필요합니다.' : resource.error;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="page-container page-section max-w-5xl">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
-            <FolderOpen className="h-7 w-7 text-[var(--color-primary)]" />
+      <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row">
+        <div className="min-w-0">
+          <h1 className="page-title flex items-center gap-2">
+            <FolderOpen className="h-7 w-7 shrink-0 text-[var(--color-primary)]" />
             프로젝트
           </h1>
           <p className="mt-1 text-sm text-[var(--text-tertiary)]">
@@ -184,7 +184,7 @@ export default function ProjectsPage() {
 
         <Link
           href="/projects/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-[var(--color-primary-hover)] transition-colors"
+          className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-[var(--drawing-on-primary)] shadow-sm hover:bg-[var(--color-primary-hover)] transition-colors"
         >
           <Plus className="h-4 w-4" />
           새 프로젝트

@@ -1,7 +1,7 @@
 /** Settings loading — 설정 페이지 skeleton */
 export default function SettingsLoading() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8" role="status" aria-label="설정 로딩 중">
+    <div className="page-container page-section max-w-2xl" role="status" aria-label="설정 로딩 중">
       <div className="mb-6 h-8 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
       <div className="space-y-4">
         {Array.from({ length: 4 }).map((_, i) => (

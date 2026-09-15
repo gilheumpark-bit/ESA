@@ -12,7 +12,7 @@
  * PART 4: 메인 레이아웃
  */
 
-import { useState, useRef, useCallback, useId, useEffect, type CSSProperties } from 'react';
+import { useState, useRef, useCallback, useId, useEffect, type PointerEvent } from 'react';
 import {
   Bot,
   DraftingCompass,
@@ -124,7 +124,7 @@ function ViewerPanel({ file, onUpload }: ViewerPanelProps) {
           </p>
           <label
             htmlFor={inputId}
-            className="cursor-pointer inline-block px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-all"
+            className="cursor-pointer inline-block px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-[var(--drawing-on-primary)] text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-all"
           >
             파일 선택
           </label>
@@ -311,13 +311,13 @@ function ChatPanel({ file }: ChatPanelProps) {
   }, [file, isLoading, messages]);
 
   return (
-    <div className="flex h-full flex-col bg-[var(--color-surface)]">
+    <div className="flex h-full min-w-0 flex-col bg-[var(--color-surface)]">
       {/* 헤더 */}
-      <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
+      <div className="min-w-0 shrink-0 px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
         <Bot aria-hidden="true" className="h-4 w-4 text-[var(--color-primary)]" />
-        <span className="text-sm font-semibold text-[var(--color-text-primary)]">ESA 전문 검토</span>
+        <span className="shrink-0 text-sm font-semibold text-[var(--color-text-primary)]">ESA 전문 검토</span>
         {file && (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20">
+          <span title={file.name} className="min-w-0 truncate text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20">
             {file.name}
           </span>
         )}
@@ -340,14 +340,14 @@ function ChatPanel({ file }: ChatPanelProps) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
+            <div className={`max-w-[85%] rounded-xl [overflow-wrap:anywhere] px-3 py-2 text-sm ${
               msg.role === 'user'
-                ? 'bg-[var(--color-primary)] text-white'
+                ? 'bg-[var(--color-primary)] text-[var(--drawing-on-primary)]'
                 : 'bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)]'
             }`}>
               <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
               {msg.timestamp && (
-                <p className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-white/60' : 'text-[var(--color-text-muted)]'}`}>
+                <p className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-current opacity-70' : 'text-[var(--color-text-muted)]'}`}>
                   {msg.timestamp}
                 </p>
               )}
@@ -383,7 +383,7 @@ function ChatPanel({ file }: ChatPanelProps) {
           <button
             onClick={() => void sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className="shrink-0 px-3 sm:px-4 rounded-xl bg-[var(--color-primary)] text-white font-semibold text-sm hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+            className="shrink-0 px-3 sm:px-4 rounded-xl bg-[var(--color-primary)] text-[var(--drawing-on-primary)] font-semibold text-sm hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
           >
             전송
           </button>
@@ -403,7 +403,7 @@ function ChatPanel({ file }: ChatPanelProps) {
 export default function StudioPage() {
   const [file, setFile] = useState<UploadedFile | null>(null);
   const [leftWidth, setLeftWidth] = useState(50); // % 기준
-  const isDragging = useRef(false);
+  const resizePointer = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleUpload = useCallback((nextFile: UploadedFile) => {
@@ -417,25 +417,30 @@ export default function StudioPage() {
     if (file) URL.revokeObjectURL(file.url);
   }, [file]);
 
-  // 드래그 리사이즈
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isDragging.current = true;
-
-    const onMove = (ev: MouseEvent) => {
-      if (!isDragging.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
-      setLeftWidth(Math.min(75, Math.max(25, pct)));
-    };
-    const onUp = () => { isDragging.current = false; };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp, { once: true });
+  // Capture the active pointer instead of leaving window listeners after a drag.
+  const resizeFromPointer = useCallback((clientX: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 8) return;
+    const pct = ((clientX - rect.left - 4) / (rect.width - 8)) * 100;
+    setLeftWidth(Math.min(75, Math.max(25, pct)));
+  }, []);
+  const handlePointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    event.preventDefault();
+    resizePointer.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    resizeFromPointer(event.clientX);
+  }, [resizeFromPointer]);
+  const handlePointerEnd = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (resizePointer.current !== event.pointerId) return;
+    resizePointer.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }, []);
 
   return (
-    <div className="flex min-h-[calc(100vh-60px)] flex-col md:h-[calc(100vh-60px)] md:min-h-0">
+    <div className="studio-workspace flex min-w-0 flex-col">
       {/* 상단 툴바 */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
         <h1 className="text-sm font-bold text-[var(--color-text-primary)] flex items-center gap-2">
@@ -445,16 +450,18 @@ export default function StudioPage() {
           </span>
         </h1>
         <p className="hidden text-xs text-[var(--color-text-muted)] md:block">
-          왼쪽 패널을 드래그하여 크기 조정
+          구분선을 드래그하거나 방향키로 크기 조정
         </p>
       </div>
 
       {/* Split 영역 */}
-      <div ref={containerRef} className="flex flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+      <div ref={containerRef}
+        style={{ gridTemplateColumns: `minmax(0, ${leftWidth}fr) 8px minmax(0, ${100 - leftWidth}fr)` }}
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto md:grid md:overflow-hidden">
         {/* 왼쪽: 도면 뷰어 */}
         <div
-          style={{ '--studio-left-width': `${leftWidth}%` } as CSSProperties}
-          className="h-[42vh] w-full flex-shrink-0 overflow-hidden border-b border-[var(--color-border)] md:h-auto md:w-[var(--studio-left-width)] md:border-b-0 md:border-r"
+          id="studio-viewer"
+          className="h-[42vh] min-w-0 flex-shrink-0 overflow-hidden border-b border-[var(--color-border)] md:h-full md:border-b-0"
         >
           <ViewerPanel file={file} onUpload={handleUpload} />
         </div>
@@ -467,17 +474,28 @@ export default function StudioPage() {
           aria-valuemin={25}
           aria-valuemax={75}
           aria-valuenow={Math.round(leftWidth)}
+          aria-valuetext={`도면 ${Math.round(leftWidth)}%, 검토 ${100 - Math.round(leftWidth)}%`}
+          aria-controls="studio-viewer studio-chat"
           tabIndex={0}
-          className="hidden w-1 cursor-col-resize bg-[var(--color-border)] hover:bg-[var(--color-primary)]/50 transition-colors flex-shrink-0 md:block"
-          onMouseDown={handleMouseDown}
+          className="hidden cursor-col-resize touch-none select-none bg-[var(--color-border)] transition-colors hover:bg-[var(--color-primary)]/50 focus-visible:outline-offset-[-2px] md:block"
+          onPointerDown={handlePointerDown}
+          onPointerMove={event => {
+            if (resizePointer.current === event.pointerId) resizeFromPointer(event.clientX);
+          }}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          onLostPointerCapture={() => { resizePointer.current = null; }}
           onKeyDown={event => {
-            if (event.key === 'ArrowLeft') setLeftWidth(width => Math.max(25, width - 5));
-            if (event.key === 'ArrowRight') setLeftWidth(width => Math.min(75, width + 5));
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            if (event.key === 'Home') setLeftWidth(25);
+            else if (event.key === 'End') setLeftWidth(75);
+            else setLeftWidth(width => Math.min(75, Math.max(25, width + (event.key === 'ArrowRight' ? 5 : -5))));
           }}
         />
 
         {/* 오른쪽: AI 채팅 */}
-        <div className="min-h-[50vh] flex-1 overflow-hidden md:min-h-0">
+        <div id="studio-chat" className="min-h-[50vh] min-w-0 flex-1 overflow-hidden md:min-h-0">
           <ChatPanel key={file?.url ?? 'no-file'} file={file} />
         </div>
       </div>

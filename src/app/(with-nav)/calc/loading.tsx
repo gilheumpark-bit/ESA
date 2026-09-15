@@ -1,7 +1,7 @@
 /** Calculator hub loading — 계산기 목록 로딩 skeleton */
 export default function CalcLoading() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="page-container page-section max-w-7xl">
       <div className="mb-6 h-8 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
       <div className="mb-6 h-10 w-full animate-pulse rounded-xl bg-gray-200 dark:bg-gray-700" />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

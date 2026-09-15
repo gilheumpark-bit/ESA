@@ -1417,10 +1417,10 @@ export default function SLDAnalysisPage() {
   }, [drawingFile, handlePrimaryDocumentUpload]);
 
   return (
-    <div className="mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className="page-container page-section max-w-7xl">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+        <h1 className="page-title">
           도면 분석
         </h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -1449,7 +1449,7 @@ export default function SLDAnalysisPage() {
               aria-label={`${tab.label} 탭 선택`}
               aria-pressed={activeTab === tab.id}
               aria-disabled={!tab.enabled}
-              className={`flex-1 rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+              className={`min-h-11 min-w-0 flex-1 rounded-md px-2 py-2 text-xs sm:px-3 font-medium transition-colors ${
                 !tab.enabled
                   ? 'cursor-not-allowed text-[var(--text-tertiary)] opacity-50'
                   : activeTab === tab.id
@@ -1479,8 +1479,8 @@ export default function SLDAnalysisPage() {
           ) : (
             <button type="button" onClick={() => fileInputRef.current?.click()}
               aria-label="단선도 이미지 업로드"
-              className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
-              <Upload size={28} />
+              className="mb-4 flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 sm:flex-row border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
+              <Upload size={28} className="shrink-0" aria-hidden />
               <div className="text-center">
                 <p className="font-semibold">단선도 이미지 업로드</p>
                 <p className="mt-1 text-xs opacity-70">JPEG, PNG, WebP (최대 20MB)</p>
@@ -1495,8 +1495,8 @@ export default function SLDAnalysisPage() {
       {activeTab === 'dxf' && (
         <>
           <button type="button" onClick={() => dxfInputRef.current?.click()}
-            className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
-            <Upload size={28} />
+            className="mb-4 flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 sm:flex-row border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
+            <Upload size={28} className="shrink-0" aria-hidden />
             <div className="text-center">
               <p className="font-semibold">DXF 파일 업로드</p>
               <p className="mt-1 text-xs opacity-70">AutoCAD·ZWCAD·CADian 호환 DXF (최대 16MB) — API 키 불필요 · DWG는 DXF로 저장 후 업로드</p>
@@ -1521,8 +1521,8 @@ export default function SLDAnalysisPage() {
       {activeTab === 'pdf' && (
         <>
           <button type="button" onClick={() => pdfInputRef.current?.click()}
-            className="mb-4 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
-            <Upload size={28} />
+            className="mb-4 flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 sm:flex-row border-dashed border-[var(--border-default)] bg-[var(--bg-secondary)] px-6 py-16 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]">
+            <Upload size={28} className="shrink-0" aria-hidden />
             <div className="text-center">
               <p className="font-semibold">PDF 도면 업로드</p>
               <p className="mt-1 text-xs opacity-70">CAD 출력 PDF 파일 (최대 50MB) — API 키 불필요</p>

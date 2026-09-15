@@ -309,16 +309,16 @@ export default function CalcHubPage() {
   const totalCalcs = categories.reduce((sum, c) => sum + c.calculators.length, 0);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-secondary)]">
+    <div className="min-w-0 flex-1 bg-[var(--bg-secondary)]">
       {/* Header */}
       <header className="border-b border-[var(--border-default)] bg-[var(--bg-primary)]">
-        <div className="mx-auto max-w-7xl px-4 py-6">
+        <div className="page-container page-section max-w-7xl">
           <div className="mb-4 flex items-center gap-3">
             <Link href="/" className="text-xl font-bold text-[var(--color-primary)]">
               ESVA
             </Link>
             <span className="text-[var(--text-tertiary)]">/</span>
-            <h1 className="text-xl font-bold text-[var(--text-primary)]">계산기</h1>
+            <h1 className="page-title">계산기</h1>
           </div>
           <p className="mb-4 text-sm text-[var(--text-secondary)]">
             전기공학 전문 계산기 {totalCalcs}개 | 12개 분야 | KEC/NEC/IEC 기준 기반
@@ -333,14 +333,14 @@ export default function CalcHubPage() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="계산기 검색 (예: 전압강하, cable, breaker)"
-              className="h-10 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[var(--color-primary)]"
+              className="h-11 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[var(--color-primary)]"
             />
           </div>
         </div>
       </header>
 
       {/* Grid */}
-      <div className="mx-auto max-w-7xl px-4 py-6">
+      <div className="page-container page-section max-w-7xl">
         {filteredCategories.length === 0 ? (
           <div className="py-16 text-center text-[var(--text-tertiary)]">
             &ldquo;{filter}&rdquo;에 해당하는 계산기가 없습니다
