@@ -17,9 +17,9 @@ function load(env = {}, sdk) {
     if (name === 'firebase/app' && sdk) return sdk;
     assert.ok(name in modules, `Unexpected SDK import: ${name}`);
     if (cache.has(name)) return cache.get(name).exports;
-    const module = { exports: {} }; cache.set(name, module);
-    vm.runInNewContext(`(function(require,module,exports,process){${modules[name]}\n})`)(get, module, module.exports, { env });
-    return module.exports;
+    const loadedModule = { exports: {} }; cache.set(name, loadedModule);
+    vm.runInNewContext(`(function(require,module,exports,process){${modules[name]}\n})`)(get, loadedModule, loadedModule.exports, { env });
+    return loadedModule.exports;
   };
   return get;
 }
