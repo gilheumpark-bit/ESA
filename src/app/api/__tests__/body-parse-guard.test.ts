@@ -34,16 +34,12 @@ const API = join(__dirname, '..');
  */
 const MEASURED_4XX = new Set([
   'calculate/batch/route.ts',        // 400
-  'checkout/route.ts',              // 400
   'community/route.ts',             // 401
   'community/[id]/route.ts',        // 401
   'community/[id]/vote/route.ts',   // 401
   'notarize/route.ts',              // 404
   'notifications/route.ts',         // 401
-  'projects/route.ts',              // 401
-  'projects/[id]/route.ts',         // 405
   'rules/validate/route.ts',        // 400
-  'settings/onpremise-test/route.ts', // 401
   // 서명·페이로드 오류를 400 으로, 처리 실패만 500 으로 이미 가른다.
   'stripe/webhook/route.ts',
 ]);

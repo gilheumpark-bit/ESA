@@ -16,6 +16,7 @@ import {
   listUserProjectSummaries,
 } from '@/lib/collaboration';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
+import { classifyCollabError } from '@/lib/collaboration-error';
 import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -85,8 +86,9 @@ async function POST__impl(request: NextRequest) {
 
     return NextResponse.json(project, { status: 201 });
   } catch (err) {
-    console.error('[ESVA Projects POST]', err);
-    return NextResponse.json({ error: '프로젝트를 만들지 못했습니다.' }, { status: 500 });
+    const mapped = classifyCollabError(err);
+    console.error('[ESVA Projects POST]', err instanceof Error ? err.name : 'UnknownError');
+    return NextResponse.json({ error: mapped?.message ?? '프로젝트를 만들지 못했습니다.' }, { status: mapped?.status ?? 500 });
   }
 }
 

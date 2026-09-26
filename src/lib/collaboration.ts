@@ -77,7 +77,7 @@ const SHARE_LINKS_TABLE = 'share_links';
 /**
  * Create a new project.
  */
-export async function createProject(name: string, ownerId: string, description?: string, requestId = randomUUID()): Promise<Project> {
+export async function createProject(name: string, ownerId: string, description?: string, requestId: string = randomUUID()): Promise<Project> {
   await ensureUserProfile(ownerId);
   const { data, error } = await getSupabaseAdmin().rpc('create_project_atomic', {
     p_name: name, p_owner_id: ownerId, p_description: description ?? null, p_request_id: requestId,

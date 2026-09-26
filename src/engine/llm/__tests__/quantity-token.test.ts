@@ -1,4 +1,4 @@
-import { filterLLMOutput } from '../output-filter';
+import { filterLLMOutput, applyConfidenceGate } from '../output-filter';
 import { canonicalMagnitude, quantityKey } from '../quantity-token';
 
 describe('quantity evidence is dimension-, sign- and exponent-bound', () => {
@@ -34,3 +34,20 @@ describe('quantity evidence is dimension-, sign- and exponent-bound', () => {
 });
 
 it('does not round a contradictory registered distance into the approved value',()=>{expect(filterLLMOutput('154kV 접근 한계거리 1.7000000000000001m입니다.').passed).toBe(false);});
+
+
+describe('confidence gate retains the established fallback contract', () => {
+  it('blocks insufficient confidence without leaking the original answer', () => {
+    const result = applyConfidenceGate('unverified output', 0.4);
+    expect(result.passed).toBe(false);
+    expect(result.blocked[0].reason).toBe('insufficient_data');
+    expect(result.filtered).not.toContain('unverified output');
+  });
+  it('preserves adequate confidence and missing optional confidence', () => {
+    expect(applyConfidenceGate('answer', 0.8).filtered).toBe('answer');
+    expect(applyConfidenceGate('answer').passed).toBe(true);
+  });
+  it('an out-of-range exponent cannot seed numeric trust', () => {
+    expect(filterLLMOutput('value 175A', [], '1e999999V').passed).toBe(false);
+  });
+});

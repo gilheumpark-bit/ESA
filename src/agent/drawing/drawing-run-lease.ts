@@ -12,6 +12,9 @@ export function maintainDrawingRun(jobId: string, ownerId: string, runId: string
   return {
     signal,
     stop() { clearInterval(timer); },
-    release() { clearInterval(timer); return finishOwnedJobRun(jobId, ownerId, runId); },
+    release() {
+      clearInterval(timer);
+      try { return finishOwnedJobRun(jobId, ownerId, runId); } catch { return false; }
+    },
   };
 }

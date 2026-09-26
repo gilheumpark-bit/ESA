@@ -21,3 +21,11 @@ export ESA_TEST_DATABASE_URL
 seq 1 8 | xargs -P8 -I{} bash -c 'psql "$ESA_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT (public.create_project_atomic('\''concurrent'\'','\''concurrent-owner'\'',NULL,'\''00000000-0000-4000-8000-000000000099'\'')).id"' > /tmp/esa-db-concurrent.txt
 test "$(sort -u /tmp/esa-db-concurrent.txt | wc -l)" = 1
 echo 'PASS: eight real database sessions created one project identity'
+
+# Checkout intent row locking is also exercised from separate real sessions.
+export ESA_CHECKOUT_SQL="SELECT public.acquire_checkout_intent('concurrent-owner','pro_monthly','https://app.example.invalid/settings')->>'id'"
+seq 1 8 | xargs -P8 -I{} bash -c 'psql "$ESA_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "$ESA_CHECKOUT_SQL"' > /tmp/esa-db-checkout-concurrent.txt
+test "$(wc -l < /tmp/esa-db-checkout-concurrent.txt)" = 8
+test "$(sort -u /tmp/esa-db-checkout-concurrent.txt | wc -l)" = 1
+cat /tmp/esa-db-checkout-concurrent.txt
+echo 'PASS: eight real database sessions reused one purchase intent'

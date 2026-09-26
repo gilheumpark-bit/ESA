@@ -50,7 +50,7 @@ DO $$ DECLARE a JSONB; b JSONB; result TEXT;
 BEGIN
  a:=public.acquire_checkout_intent('checkout-owner','pro_monthly','https://app.example.invalid/settings');
  b:=public.acquire_checkout_intent('checkout-owner','pro_monthly','https://app.example.invalid/settings');
- PERFORM pg_temp.assert_true(a->>'id'=b->>'id','concurrent/retried purchase intent keeps the same idempotency identity');
+ PERFORM pg_temp.assert_true(a->>'id'=b->>'id','retried purchase intent keeps the same idempotency identity');
  BEGIN PERFORM public.acquire_checkout_intent('checkout-owner','team_monthly','https://app.example.invalid/settings'); RAISE EXCEPTION 'SECOND_CHECKOUT_ALLOWED';
  EXCEPTION WHEN OTHERS THEN IF SQLERRM<>'BILLING_CHECKOUT_PENDING' THEN RAISE; END IF; END;
  PERFORM pg_temp.assert_true(public.bind_stripe_customer('checkout-owner','cus_checkout')='cus_checkout','customer identity binds to the account');
