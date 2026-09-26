@@ -16,8 +16,8 @@
     { "type": "required_status_checks", "parameters": {
       "strict_required_status_checks_policy": true,
       "required_status_checks": [
-        { "context": "Verify (docs, types, lint, tests, build)" },
-        { "context": "Live gates (server, PDF, UI smoke)" },
+        { "context": "Verify (docs, types, lint, tests, build) (24)" },
+        { "context": "Live gates (server, PDF, UI smoke) (24)" },
         { "context": "Browser compatibility (firefox)" },
         { "context": "Browser compatibility (webkit)" },
         { "context": "Full-source coverage" },
