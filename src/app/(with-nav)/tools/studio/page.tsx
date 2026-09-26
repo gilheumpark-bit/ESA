@@ -24,6 +24,7 @@ import {
 import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import { requestElectricalChat } from '@/lib/electrical-chat-client';
 import { readStoredLanguage } from '@/hooks/useSettings';
+import { useHydrated } from '@/hooks/useHydrated';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
@@ -215,6 +216,7 @@ interface ChatPanelProps {
 }
 
 function ChatPanel({ file }: ChatPanelProps) {
+  const hydrated = useHydrated();
   const inputId = useId();
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -231,7 +233,7 @@ function ChatPanel({ file }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    if (!hydrated || !text.trim() || isLoading) return;
     const userMsg: ChatMessage = {
       role: 'user',
       content: text.trim(),
@@ -308,7 +310,7 @@ function ChatPanel({ file }: ChatPanelProps) {
       setIsLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
-  }, [file, isLoading, messages]);
+  }, [file, hydrated, isLoading, messages]);
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-[var(--color-surface)]">
@@ -329,6 +331,7 @@ function ChatPanel({ file }: ChatPanelProps) {
           <button
             key={p}
             onClick={() => sendMessage(p)}
+            disabled={!hydrated || isLoading}
             className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)] transition-colors whitespace-nowrap"
           >
             {p}
@@ -374,15 +377,16 @@ function ChatPanel({ file }: ChatPanelProps) {
           <label htmlFor={inputId} className="sr-only">메시지 입력</label>
           <input
             id={inputId}
+            disabled={!hydrated}
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void sendMessage(input); } }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); void sendMessage(input); } }}
             placeholder="도면 검토 요청 또는 규정 질의..."
             className="min-w-0 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] px-3 py-2.5 text-sm focus:outline-none focus:border-[var(--color-primary)] transition-colors"
           />
           <button
             onClick={() => void sendMessage(input)}
-            disabled={!input.trim() || isLoading}
+            disabled={!hydrated || !input.trim() || isLoading}
             className="shrink-0 px-3 sm:px-4 rounded-xl bg-[var(--color-primary)] text-[var(--drawing-on-primary)] font-semibold text-sm hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
           >
             전송

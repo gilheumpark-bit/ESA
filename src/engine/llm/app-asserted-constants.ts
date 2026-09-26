@@ -24,11 +24,19 @@ export interface AppAssertedConstant {
   source: string;
 }
 
-/** `Class 0` 은 `Class 00` 의 부분 문자열이다 — 뒤에 숫자가 더 붙으면 다른 등급. */
+/** ASCII identifiers need both boundaries: CO is not CO2, Class 0 is not Class 00. */
+const tokenPatterns = new Map<string, RegExp>();
 function hasToken(context: string, token: string): boolean {
-  const esc = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const tail = /\d$/.test(token) ? '(?!\\d)' : '';
-  return new RegExp(esc + tail, 'i').test(context);
+  let pattern = tokenPatterns.get(token);
+  if (!pattern) {
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\s+/g, '\\s*').replace(/(\d)([A-Za-z])/g, '$1\\s*$2');
+    const head = /^[A-Za-z0-9]/.test(token) ? '(?<![A-Za-z0-9_])' : '';
+    const tail = /[A-Za-z0-9]$/.test(token) ? '(?![A-Za-z0-9_])' : '';
+    pattern = new RegExp(head + escaped + tail, 'i');
+    tokenPatterns.set(token, pattern);
+  }
+  return pattern.test(context);
 }
 
 /**
@@ -80,83 +88,58 @@ function normalize(token: string): string {
   return token.replace(/,/g, '').replace(/\s+/g, '').trim();
 }
 
-/**
- * 앱이 아는 값과 **다른 값**을 말하고 있는가.
- *
- * 출처 태그를 조이는 것만으로는 못 막는 경로가 있다: 사용자가 질문에 숫자를
- * 적으면 그 숫자는 신뢰 입력이 되어 무검사로 통과한다. `"154kV 접근 한계거리
- * 1.6m 맞죠?"` 라고 물으면 모델의 동의가 그대로 나간다 — 실측된 사고가
- * 정확히 이 형태였고, 앱 체크리스트는 같은 값을 **1.7m** 라고 말한다.
- *
- * 그러니 통과 여부를 따지기 전에 **아는 값과 대조**한다. 우리가 정답을 들고
- * 있는데 다른 값이 나가는 것은, 그 숫자를 누가 적었든 막아야 한다.
- *
- * 등재된 값과 **같은 대상·같은 단위**인데 값이 다를 때만 잡는다. 대상 용어가
- * 없으면 무관한 문장이므로 건드리지 않는다.
+/** Resolve one subject and one class/voltage before comparing any value.
+ * A local discriminator wins over remote mentions. A remote discriminator is
+ * used only when it is unique; ambiguity (including unknown classes) fails closed.
+ * Multiple bounds of the SAME subject, such as oxygen, remain valid candidates.
  */
+function resolveCandidates(unit: string | undefined, context: string, scope: string) {
+  const candidates = APP_ASSERTED_CONSTANTS.filter((c) =>
+    normalize(c.unit) === normalize(unit ?? '') && c.terms.some((term) => hasToken(context, term)),
+  );
+  if (!candidates.length) return { candidates, ambiguous: false };
+  const subjects = new Set(candidates.map((c) => c.terms.join('|')));
+  if (subjects.size !== 1) return { candidates, ambiguous: true };
+  if (!candidates.some((c) => c.discriminator)) return { candidates, ambiguous: false };
+
+  const classFamily = candidates.some((c) => c.discriminator?.startsWith('Class'));
+  const identifiers = (text: string) => new Set(
+    [...text.matchAll(classFamily
+      ? /(?<![A-Za-z0-9_])Class\s*\d+(?![A-Za-z0-9_])/gi
+      : /(?<![A-Za-z0-9_.])\d+(?:\.\d+)?\s*kV(?![A-Za-z0-9_])/gi,
+    )].map((m) => normalize(m[0]).toLowerCase()),
+  );
+  const local = identifiers(context);
+  const selected = local.size ? local : identifiers(scope);
+  if (selected.size !== 1) return { candidates, ambiguous: true };
+  const matched = candidates.filter((c) => c.discriminator
+    && selected.has(normalize(c.discriminator).toLowerCase()));
+  return { candidates: matched.length ? matched : candidates, ambiguous: !matched.length };
+}
+
 export function findContradiction(
   value: string,
   unit: string | undefined,
   context: string,
-  /**
-   * 식별자(전압 등)를 찾을 범위. 기본은 `context` 지만, **실제 답변에서는
-   * 전압이 숫자 옆에 없다.** 라이브 실측(2026-07-29 · gemini-3.1-pro):
-   *
-   *   "제시하신 1.6m 가 정확한 접근 한계거리인지 …
-   *    - 계통 전압: 154kV [확인]"
-   *
-   * 대상 용어(`접근 한계거리`)는 숫자 바로 옆에 있는데 `154kV` 는 여섯 줄
-   * 아래 조건 목록에 있었다. ±60자 창으로는 식별자를 못 찾아 후보가 0 이
-   * 되고 1.6m 이 그대로 나갔다 — 단위 검사는 통과하는데 **실전에서 발화하지
-   * 않았다**(§2.2). 그래서 용어는 근처에서, 식별자는 답변 전체에서 찾는다.
-   */
   scope: string = context,
 ): { expected: string; source: string } | null {
-  const v = normalize(value);
-  const u = normalize(unit ?? '');
-
-  // 문맥에 해당하는 후보를 모은다. 같은 단위·같은 대상인 항목들이다.
-  const candidates = APP_ASSERTED_CONSTANTS.filter((c) => {
-    if (normalize(c.unit) !== u) return false;
-    if (c.discriminator && !hasToken(scope, c.discriminator)) return false;
-    return c.terms.some((t) => hasToken(context, t));
-  });
-  if (candidates.length === 0) return null;
-
-  // **하나라도 일치하면 모순이 아니다.** 같은 대상에 값이 여럿인 경우가 있다
-  // (적정공기 산소는 하한 18 과 상한 23.5 둘 다 정당하다). 하나만 보고
-  // 판정하면 정답을 모순으로 잡는다 — 실측에서 실제로 그랬다.
-  if (candidates.some((c) => normalize(c.value) === v)) return null;
-
+  const { candidates, ambiguous } = resolveCandidates(unit, context, scope);
+  if (!candidates.length) return null;
+  if (ambiguous) return { expected: '대상·등급·전압을 하나씩 특정한 뒤 개별 검증 필요', source: candidates[0].source };
+  if (candidates.some((c) => normalize(c.value) === normalize(value))) return null;
   return {
     expected: candidates.map((c) => `${c.value}${c.unit}`).join(' 또는 '),
     source: candidates[0].source,
   };
 }
 
-/**
- * `context` 는 그 숫자의 주변 텍스트 — 대상 용어를 여기서 찾는다.
- *
- * `scope` 는 `findContradiction` 과 같은 이유로 넓다. 좁혀 두면 **앱이 아는
- * 정답조차 못 말한다**: 154kV 답변에서 `1.7m` 옆 60자에 전압이 없으면 등재
- * 조회가 실패해 `[미확인]` 이 된다. 틀린 값을 막는 쪽만 넓히고 맞는 값을
- * 좁혀 두면, 필터는 정답을 지우면서 오답만 통과시키는 방향으로 기운다.
- */
 export function findAssertedSource(
   value: string,
   unit: string | undefined,
   context: string,
   scope: string = context,
 ): string | null {
-  const v = normalize(value);
-  const u = normalize(unit ?? '');
-  for (const c of APP_ASSERTED_CONSTANTS) {
-    if (normalize(c.value) !== v) continue;
-    if (normalize(c.unit) !== u) continue;
-    // 등급·구간이 갈리는 값은 그 식별자가 반드시 있어야 한다.
-    if (c.discriminator && !hasToken(scope, c.discriminator)) continue;
-    if (!c.terms.some((t) => hasToken(context, t))) continue;
-    return c.source;
-  }
-  return null;
+  const { candidates, ambiguous } = resolveCandidates(unit, context, scope);
+  if (ambiguous) return null;
+  return candidates.find((c) => normalize(c.value) === normalize(value))?.source ?? null;
 }

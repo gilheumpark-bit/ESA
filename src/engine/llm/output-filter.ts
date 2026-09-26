@@ -49,9 +49,9 @@ const PROBABILISTIC_PATTERNS = /(?:(?<![가-힣])약(?=\s*[\d.]|\s)|대략|보�
 const NUMBER_PATTERN = /(?<!\d{4}-\d{2}-)(?<!\d\.)(?<![vV]\d+\.)(?<!\w)(?<![\d,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(%|[A-Za-z\u03A9]+(?:\/[A-Za-z]+)?)?/g;
 
 /**
- * Source tag pattern: [SOURCE: ...] that the tool system injects.
+ * Source tags are model-authored labels, never numeric evidence.
  */
-const SOURCE_TAG_PATTERN = /\[SOURCE:\s*([^\]]+)\]/g;
+const SOURCE_TAG_PATTERN = /\[SOURCE\s*:\s*([^\]\r\n]+)\]/gi;
 
 /**
  * Standard citation pattern: mentions of KEC, NEC, IEC, etc. with clause numbers.
@@ -61,7 +61,6 @@ const STANDARD_CITATION_PATTERN = /\b(KEC|NEC|IEC|JIS|GB|VDE|AS\/NZS|KEPIC|IEEE|
 /**
  * Allowed number contexts — numbers in these contexts are NOT blocked:
  *   - Inside source tags [SOURCE: ...]
- *   - Inside tool result markers [RESULT: ...]
  *   - Dates (2021, 2023 etc. when preceded by standard name)
  *   - Version strings (v0.1.0)
  *   - Clause references (232.3.9 after KEC/NEC/etc.)
@@ -69,7 +68,6 @@ const STANDARD_CITATION_PATTERN = /\b(KEC|NEC|IEC|JIS|GB|VDE|AS\/NZS|KEPIC|IEEE|
  */
 const ALLOWED_NUMBER_CONTEXTS = [
   /\[SOURCE:[^\]]*$/,    // inside a SOURCE tag
-  /\[RESULT:[^\]]*$/,    // inside a RESULT tag
   /\b(?:KEC|NEC|IEC|JIS|GB|VDE|NFPA|IEEE|AS\/NZS)\s*$/i,  // standard edition year
   /[vV]$/,                // version prefix
   /Step\s*$/i,            // step ordinals
@@ -89,8 +87,6 @@ interface ExtractedNumber {
   position: number;
   /** The unit if detected */
   unit?: string;
-  /** Whether this number has a source tag nearby */
-  hasSource: boolean;
   /** Whether this number appears in an allowed context */
   isAllowed: boolean;
   /** Whether the value is copied from the user's trusted input. */
@@ -102,7 +98,6 @@ interface ExtractedNumber {
  */
 function extractNumbers(
   output: string,
-  sourcePositions: Set<number>,
   trustedNumbers: Set<string> = new Set(),
 ): ExtractedNumber[] {
   const results: ExtractedNumber[] = [];
@@ -127,19 +122,6 @@ function extractNumbers(
       && /^\s*년/.test(output.slice(pos + numText.length, pos + numText.length + 3));
     const isAllowed = isCalendarYear || ALLOWED_NUMBER_CONTEXTS.some(re => re.test(prefix));
 
-    // 출처 태그는 수치 앞뒤 어디에 와도 그 수치의 출처다. 프로덕션 프롬프트는
-    // 수치 뒤에 붙이라고 지시하지만(lib/chat-calculation-evidence.ts) 모델이 순서를
-    // 뒤집으면 정당한 출처가 무시돼 옳은 답이 [BLOCKED]로 훼손된다. 같은 파일의
-    // 표준 인용 검사는 이미 양방향(Math.abs ≤ 150)이라 한 파일 안에서 규칙이
-    // 갈려 있었다. 방향만 맞추고 창 크기는 유지한다 — 무출처 수치는 계속 차단된다.
-    let hasSource = false;
-    for (const sPos of sourcePositions) {
-      if (Math.abs(sPos - pos) <= 200) {
-        hasSource = true;
-        break;
-      }
-    }
-
     // Skip pure integers 0-10 without units (ordinals, list items)
     const numVal = parseFloat(numText);
     if (Number.isInteger(numVal) && numVal <= 10 && !unit) {
@@ -150,7 +132,6 @@ function extractNumbers(
       text: match[0],
       position: pos,
       unit,
-      hasSource,
       isAllowed,
       isTrustedInput: trustedNumbers.has(normalizeNumericToken(match[0]))
         || trustedNumbers.has(match[1].replace(/,/g, '')),
@@ -193,67 +174,34 @@ function findTrustedNumbers(input: string): Set<string> {
   return numbers;
 }
 
-/**
- * `[SOURCE: ...]` 태그 위치.
- *
- * **이 태그는 모델이 쓴 글자다** — 라우트는 `toolCalls` 로 빈 배열을 넘기고,
- * 태그는 모델 출력 안의 텍스트다. 즉 태그를 적는 것만으로 제 숫자에 근거를
- * 붙일 수 있다.
- *
- * **계산기 태그는 근접 승인을 하지 않는다.** 계산기가 실제로 낸 값은
- * `trustedInput`(= `calculationEvidence.trustedText`)에 있고 값이 정확히
- * 일치할 때 이미 통과하므로, 근접 창이 덮는 것은 계산기가 내지 않은 수치뿐이다.
- * 비용: 모델이 9.93 을 "약 10" 으로 반올림해 쓰면 막힌다 — 10 은 계산기가
- * 말한 값이 아니므로 그게 맞다.
- *
- * **남은 구멍**: 계산기가 아닌 payload(`KEC_TABLE …`)는 여전히 ±200 자 근접
- * 승인이 된다. 모델이 표 번호를 지어낼 수 있는데, 값에 결박할 대상이 없어
- * (표 조회 결과가 응답 경로에 없다) 지금은 못 닫는다.
- */
-function findSourcePositions(output: string, attestedSources?: ReadonlySet<string>): Set<number> {
-  const positions = new Set<number>();
-  let match: RegExpExecArray | null;
-
-  SOURCE_TAG_PATTERN.lastIndex = 0;
-  while ((match = SOURCE_TAG_PATTERN.exec(output)) !== null) {
-    const payload = (match[1] ?? '').trim();
-    // 계산기를 댄 태그는 **근접만으로 근거가 되지 않는다** — 아래 참조.
-    if (namesCalculator(payload)) continue;
-    positions.add(match.index);
-  }
-
-  void attestedSources; // 대조는 `findForgedCalculatorTags` 가 한다.
-  return positions;
+/** Read once: authentic labels remain visible, but never approve nearby values. */
+function readSourceTags(output: string, attestedSources: ReadonlySet<string>) {
+  return [...output.matchAll(new RegExp(SOURCE_TAG_PATTERN))].map((match) => {
+    const payload = match[1].trim();
+    // Anchor the entire payload: an authentic id with a forged suffix is not a receipt.
+    const calculator = /^ESA_CALCULATOR\s*:\s*([A-Za-z0-9_-]+)$/i.exec(payload);
+    return {
+      text: match[0], position: match.index,
+      verified: Boolean(calculator && attestedSources.has(calculator[1])),
+    };
+  });
 }
 
-/** 계산기를 근거로 댄 태그인가 — 대소문자·id 유무와 무관하게 잡는다. */
-function namesCalculator(payload: string): boolean {
-  return /ESA_CALCULATOR/i.test(payload);
-}
-
-/**
- * 모델이 **돌지 않은 계산기**를 근거로 댄 자리들.
- *
- * 근접 승인을 없앤 뒤에도 이 대조가 필요한 이유: 출처를 지어내는 것 자체가
- * 신호다. 수치는 어차피 막히지만, 없는 근거를 만들어 내는 답변은 사용자에게
- * 그대로 나가면 안 되고 로그에도 남아야 한다.
- */
-function findForgedCalculatorTags(
-  output: string,
-  attestedSources?: ReadonlySet<string>,
-): Array<{ index: number; payload: string }> {
-  if (!attestedSources) return [];
-  const found: Array<{ index: number; payload: string }> = [];
-  let match: RegExpExecArray | null;
-  SOURCE_TAG_PATTERN.lastIndex = 0;
-  while ((match = SOURCE_TAG_PATTERN.exec(output)) !== null) {
-    const payload = (match[1] ?? '').trim();
-    if (!namesCalculator(payload)) continue;
-    const id = /ESA_CALCULATOR\s*:\s*([A-Za-z0-9_-]+)/i.exec(payload)?.[1];
-    // id 를 안 밝힌 태그도 위조로 본다 — 어느 계산기인지 대조할 수 없다.
-    if (!id || !attestedSources.has(id)) found.push({ index: match.index, payload });
+/** Sentence/row boundaries; punctuation inside decimal/thousands values is not a boundary. */
+function claimRanges(output: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  let start = 0;
+  for (let i = 0; i < output.length; i++) {
+    const c = output[i];
+    const numericPunctuation = (c === '.' || c === ',')
+      && /\d/.test(output[i - 1] ?? '') && /\d/.test(output[i + 1] ?? '');
+    if ('\n\r;!?。！？.,'.includes(c) && !numericPunctuation) {
+      ranges.push({ start, end: i + 1 });
+      start = i + 1;
+    }
   }
-  return found;
+  if (start < output.length) ranges.push({ start, end: output.length });
+  return ranges;
 }
 
 // ---------------------------------------------------------------------------
@@ -293,18 +241,20 @@ export function filterLLMOutput(
   output: string,
   toolCalls: Array<{ name: string; result?: unknown }> = [],
   trustedInput = '',
-  /** 실제로 돌아서 통과한 계산기 id — 주면 모델이 쓴 근거 태그를 대조한다. */
-  attestedSources?: ReadonlySet<string>,
+  /** Server-attested successful calculator ids; absence grants no trust. */
+  attestedSources: ReadonlySet<string> = new Set(),
 ): FilterResult {
   const blocked: BlockedItem[] = [];
   const hasAnyToolCalls = toolCalls.length > 0;
 
-  // Step 1: Find all source tag positions
-  const sourcePositions = findSourcePositions(output, attestedSources);
-
-  // Step 2: Extract and check all numbers
-  const numbers = extractNumbers(output, sourcePositions, findTrustedNumbers(trustedInput));
+  const tags = readSourceTags(output, attestedSources);
+  // Preserve offsets while excluding tag payloads from numeric and semantic matching.
+  // A fabricated label containing "Class 00" must not change the class of a claim.
+  const semanticOutput = output.replace(SOURCE_TAG_PATTERN, (tag) => ' '.repeat(tag.length));
+  const numbers = extractNumbers(semanticOutput, findTrustedNumbers(trustedInput));
   const trustedCitations = findTrustedCitations(trustedInput);
+  const ranges = claimRanges(semanticOutput);
+  let rangeIndex = 0;
 
   /**
    * 앱이 이미 근거와 함께 내보내는 값은 그 근거를 붙여 남긴다. 통과 조건은
@@ -317,7 +267,11 @@ export function filterLLMOutput(
   for (const num of numbers) {
     if (num.isAllowed) continue;
 
-    const nearby = output.slice(Math.max(0, num.position - 60), num.position + 60);
+    while (rangeIndex < ranges.length - 1 && ranges[rangeIndex].end <= num.position) rangeIndex++;
+    const range = ranges[rangeIndex] ?? { start: 0, end: semanticOutput.length };
+    const nearby = semanticOutput.slice(
+      Math.max(range.start, num.position - 60), Math.min(range.end, num.position + 60),
+    );
 
     /**
      * **아는 값과 다르면 막는다 — 누가 적었든.**
@@ -333,8 +287,8 @@ export function filterLLMOutput(
       num.text.replace(/[^\d.,]/g, ''),
       num.unit ?? '',
       nearby,
-      // 전압 같은 식별자는 답변 어딘가에 한 번만 적힌다 — 전체를 준다.
-      output,
+      // Global fallback is permitted only for one unambiguous subject/discriminator.
+      semanticOutput,
     );
     if (contradiction) {
       blocked.push({
@@ -351,36 +305,20 @@ export function filterLLMOutput(
 
     if (num.isTrustedInput) continue;
 
-    if (!num.hasSource) {
-      // 숫자 앞뒤를 함께 본다 — 용어가 앞에 오기도("산소 18%"), 뒤에 오기도 한다.
-      const asserted = findAssertedSource(
-        num.text.replace(/[^\d.,]/g, ''),
-        num.unit ?? '',
-        nearby,
-        // 식별자(전압·등급)는 답변 어딘가에 한 번만 적힌다 — 전체를 준다.
-        output,
-      );
-      if (asserted) {
-        assertedNotes.set(num.position, asserted);
-        continue;
-      }
+    const asserted = findAssertedSource(
+      num.text.replace(/[^\d.,]/g, ''), num.unit ?? '', nearby, semanticOutput,
+    );
+    if (asserted) {
+      assertedNotes.set(num.position, asserted);
+      continue;
     }
 
-    if (!num.hasSource && !hasAnyToolCalls) {
-      // No tool calls at all — any number is suspicious
-      blocked.push({
-        text: num.text,
-        reason: 'no_tool_call',
-        position: num.position,
-      });
-    } else if (!num.hasSource) {
-      // Tool calls exist but this number has no source
-      blocked.push({
-        text: num.text,
-        reason: 'no_source',
-        position: num.position,
-      });
-    }
+    // Tool names and model-written labels are not evidence of a value or a lookup.
+    blocked.push({
+      text: num.text,
+      reason: hasAnyToolCalls ? 'no_source' : 'no_tool_call',
+      position: num.position,
+    });
   }
 
   // Step 3: Detect probabilistic expressions paired with numbers
@@ -409,25 +347,13 @@ export function filterLLMOutput(
   STANDARD_CITATION_PATTERN.lastIndex = 0;
   let stdMatch: RegExpExecArray | null;
 
-  while ((stdMatch = STANDARD_CITATION_PATTERN.exec(output)) !== null) {
+  while ((stdMatch = STANDARD_CITATION_PATTERN.exec(semanticOutput)) !== null) {
     const pos = stdMatch.index;
-
-    // Check if a lookup_code_article tool call was made
-    const hasLookup = toolCalls.some(tc => tc.name === 'lookup_code_article');
-
-    // Check if this citation has a source tag nearby
-    let hasSourceTag = false;
-    for (const sPos of sourcePositions) {
-      if (Math.abs(sPos - pos) <= 150) {
-        hasSourceTag = true;
-        break;
-      }
-    }
 
     // 질문에 있던 조항을 되받는 것은 대상 지칭이지 근거 주장이 아니다.
     const isTrustedCitation = trustedCitations.has(stdMatch[0].replace(/\s+/g, ' ').trim().toUpperCase());
 
-    if (!hasLookup && !hasSourceTag && !isTrustedCitation) {
+    if (!isTrustedCitation) {
       blocked.push({
         text: stdMatch[0],
         reason: 'direct_citation',
@@ -436,19 +362,11 @@ export function filterLLMOutput(
     }
   }
 
-  /**
-   * Step 5: 돌지 않은 계산기를 근거로 댄 태그.
-   *
-   * 근접 승인을 없앤 뒤에도 이걸 따로 잡는다 — **출처를 지어내는 것 자체가
-   * 신호**다. 수치는 어차피 막히지만, 없는 근거를 만들어 내는 답변을 그대로
-   * 내보내면 사용자는 그 태그를 읽고 믿는다. 로그에도 남아야 한다.
-   */
-  for (const forged of findForgedCalculatorTags(output, attestedSources)) {
-    blocked.push({
-      text: `[SOURCE: ${forged.payload}]`,
-      reason: 'no_tool_call',
-      position: forged.index,
-    });
+  // No model-authored label can vouch for itself, including non-calculator tags.
+  for (const tag of tags) {
+    if (!tag.verified) {
+      blocked.push({ text: tag.text, reason: 'no_source', position: tag.position });
+    }
   }
 
   /**
@@ -477,27 +395,28 @@ export function filterLLMOutput(
     return { original: output, filtered: passedOutput, blocked: [], passed: true };
   }
 
-  // Collapse overlapping findings before replacement. A probabilistic phrase
-  // such as "약 32A" otherwise produces two markers whose offsets corrupt
-  // each other after the first replacement.
-  const nonOverlapping = [...blocked]
-    .sort((a, b) => a.position - b.position || b.text.length - a.text.length)
-    .filter((item, index, items) => !items.slice(0, index).some((kept) => {
-      const keptEnd = kept.position + kept.text.length;
-      const itemEnd = item.position + item.text.length;
-      return kept.position < itemEnd && item.position < keptEnd;
-    }));
-
-  // Sort by position (descending) for safe removal.
-  const sortedBlocked = [...nonOverlapping].sort((a, b) => b.position - a.position);
-
-  let filtered = output;
-  for (const item of sortedBlocked) {
-    const before = filtered.slice(0, item.position);
-    const after = filtered.slice(item.position + item.text.length);
-
-    filtered = before + MARKERS[item.reason] + after;
+  // Merge the union of overlapping spans in one sweep. Dropping a partially
+  // overlapping span could otherwise leave an unverified suffix in the answer.
+  const nonOverlapping: BlockedItem[] = [];
+  for (const item of [...blocked].sort((a, b) => a.position - b.position || b.text.length - a.text.length)) {
+    const previous = nonOverlapping.at(-1);
+    if (previous && item.position < previous.position + previous.text.length) {
+      const end = Math.max(previous.position + previous.text.length, item.position + item.text.length);
+      previous.text = output.slice(previous.position, end);
+    } else {
+      nonOverlapping.push({ ...item });
+    }
   }
+
+  // Join once instead of repeatedly copying the entire answer for every finding.
+  const chunks: string[] = [];
+  let cursor = 0;
+  for (const item of nonOverlapping) {
+    chunks.push(output.slice(cursor, item.position), MARKERS[item.reason]);
+    cursor = item.position + item.text.length;
+  }
+  chunks.push(output.slice(cursor));
+  let filtered = chunks.join('');
 
   // 제거 사유는 문장 안이 아니라 끝에 한 번만 적는다.
   //
@@ -506,7 +425,7 @@ export function filterLLMOutput(
   // "합성 최대수요전력은 **[BLOCKED: Tool 호출 필요 / Tool call required]**입니다"
   // 처럼 읽을 수 없는 문장이 됐다(실측 2026-07-25/26). 필터는 제 일을 했는데
   // 사용자에게는 앱이 고장 난 것으로 보인다.
-  const reasons = [...new Set(sortedBlocked.map((item) => REASON_NOTES[item.reason]))];
+  const reasons = [...new Set(blocked.map((item) => REASON_NOTES[item.reason]))];
   // 안내문에는 마커 리터럴을 넣지 않는다 — 넣으면 본문의 표시와 구분되지 않는다.
   filtered += `
 
@@ -558,38 +477,12 @@ export function applyConfidenceGate(
   };
 }
 
-/**
- * Quick check whether an LLM output would pass the filter.
- * Cheaper than full filterLLMOutput() — no replacement step.
- *
- * `trustedInput` 은 생략하지 말 것 — 빼면 `filterLLMOutput()` 보다 엄격해져
- * 같은 출력에 두 함수가 다른 판정을 낸다. (현재 프로덕션 호출처 0)
- */
+/** Same trust contract as the full filter, including attestation and contradictions. */
 export function isClean(
   output: string,
   toolCalls: Array<{ name: string; result?: unknown }> = [],
   trustedInput = '',
+  attestedSources: ReadonlySet<string> = new Set(),
 ): boolean {
-  // Quick probabilistic check
-  PROBABILISTIC_PATTERNS.lastIndex = 0;
-  let probMatch: RegExpExecArray | null;
-  while ((probMatch = PROBABILISTIC_PATTERNS.exec(output)) !== null) {
-    const afterText = output.slice(probMatch.index + probMatch[0].length, probMatch.index + 80);
-    if (/\d+(?:\.\d+)?/.test(afterText)) {
-      return false;
-    }
-  }
-
-  // Quick unsourced number check
-  if (toolCalls.length === 0) {
-    NUMBER_PATTERN.lastIndex = 0;
-    const numbers = extractNumbers(output, new Set(), findTrustedNumbers(trustedInput));
-    // Filter out small ordinal integers
-    const suspiciousNumbers = numbers.filter(n => !n.isAllowed && !n.isTrustedInput);
-    if (suspiciousNumbers.length > 0) {
-      return false;
-    }
-  }
-
-  return true;
+  return filterLLMOutput(output, toolCalls, trustedInput, attestedSources).passed;
 }

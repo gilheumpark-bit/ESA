@@ -130,3 +130,5 @@ fixtures/kec/.source/
 /blob-report/
 *.orig
 *.rej
+
+/coverage-all-source/

@@ -82,11 +82,12 @@ describe('근거 태그 실증 — 실패한 계산기의 이름표는 근거가
     expect(route).toMatch(/filterLLMOutput\([\s\S]{0,240}attestedSources,/);
   });
 
-  /** 계산기 이름이 아닌 근거 태그(KEC 표 등)는 이 규칙과 무관하다. */
-  it('비-계산기 근거 태그는 실증 대상이 아니다', () => {
+  /** Non-calculator labels also require real lookup evidence; text is not evidence. */
+  it('비-계산기 근거 태그도 지어낸 수치를 승인하지 않는다', () => {
     const text = '허용전류는 100A 입니다. [SOURCE: KEC 232.3 Table 232-1]';
     const r = filterLLMOutput(text, [], '', new Set());
-    expect(r.filtered).toContain('100');
+    expect(r.passed).toBe(false);
+    expect(r.filtered).not.toContain('100A');
   });
 });
 
@@ -136,17 +137,13 @@ describe('실증 우회 — 표기 변형과 근접 편승', () => {
     expect(r.blocked.some((b) => b.text.includes('never-ran'))).toBe(true);
   });
 
-  /**
-   * **남은 구멍을 검사로 고정한다.** 계산기가 아닌 payload 는 여전히 근접
-   * 승인이 된다 — 모델이 표 번호를 지어낼 수 있다. 값에 결박할 대상이
-   * 없어서(표 조회 결과가 응답 경로에 없다) 지금은 못 닫는다. 나중에 누가
-   * "다 막혔다" 고 읽지 않도록 현재 상태를 그대로 적어 둔다.
-   */
-  it('[알려진 구멍] 비-계산기 태그는 아직 근접 승인이 된다', () => {
+  it('비-계산기 태그의 근접 승인 우회가 차단된다', () => {
     const r = filterLLMOutput(
       '접근 한계거리는 1.63m 입니다. [SOURCE: KEC_TABLE 232.3]', [], '', attested,
     );
-    expect(r.passed).toBe(true);
+    expect(r.passed).toBe(false);
+    expect(r.filtered).not.toContain('1.63m');
+    expect(r.filtered).not.toContain('KEC_TABLE');
   });
 });
 

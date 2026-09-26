@@ -35,10 +35,18 @@ export async function verifyIdToken(
     const { payload } = await jwtVerify(token, FIREBASE_JWKS, {
       issuer: `https://securetoken.google.com/${projectId}`,
       audience: projectId,
+      algorithms: ['RS256'],
+      requiredClaims: ['exp', 'iat', 'auth_time', 'sub'],
     });
 
     const sub = payload.sub;
-    if (typeof sub !== 'string' || !sub) return null;
+    if (typeof sub !== 'string' || !sub || sub.length > 128) return null;
+    const now = Math.floor(Date.now() / 1000);
+    // jose checks exp/iss/aud/signature; Firebase additionally requires issued
+    // and authentication times in the past. Never rely on decoding alone.
+    if (![payload.iat, payload.auth_time].every((time) =>
+      typeof time === 'number' && Number.isFinite(time) && time >= 0 && time <= now,
+    )) return null;
 
     return {
       uid: sub,

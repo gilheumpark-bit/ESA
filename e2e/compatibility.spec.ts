@@ -56,7 +56,7 @@ test('portable mobile menu opens, closes and restores keyboard focus', async ({ 
   await expect(dialog).toHaveCount(0); await expect(button).toBeFocused();
 });
 
-test('portable Studio resize preserves typed input and keyboard bounds', async ({ page }) => {
+test('portable Studio resize preserves typed input and keyboard bounds', async ({ page }, info) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/tools/studio');
   const composer = page.getByRole('textbox', { name: '메시지 입력', exact: true });
@@ -68,6 +68,7 @@ test('portable Studio resize preserves typed input and keyboard bounds', async (
   await expect(composer).toHaveValue('compatibility draft — do not send');
   const box = await composer.boundingBox(); expect(box).not.toBeNull();
   expect(box!.y + box!.height).toBeLessThanOrEqual(900);
+  await info.attach('studio-draft-after-resize', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
 
@@ -137,4 +138,51 @@ test('configured Firebase CSP permits its resolver and blocks unrelated scripts 
   await expect.poll(() => page.evaluate(() => (window as unknown as { __cspViolations: string[] }).__cspViolations)).toContain('frame-src');
   expect(await page.evaluate(() => (window as unknown as { __frames: string[] }).__frames)).toEqual(['synthetic-auth-frame']);
   await info.attach('csp-policy', { body: JSON.stringify({ policy, mode: 'synthetic intercepted resources; no real authentication' }), contentType: 'application/json' });
+});
+
+
+/** Deterministic slow-hydration regression: no sleeps or retry masking. */
+test('Studio cannot accept text until its event handlers are attached', async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  let release!: () => void;
+  const scriptsReady = new Promise<void>((resolve) => { release = resolve; });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route(/\/_next\/static\/.*\.js(?:\?|$)/, async (route) => {
+    await scriptsReady;
+    await route.continue();
+  });
+  try {
+    await page.goto('/tools/studio', { waitUntil: 'commit' });
+    const composer = page.getByRole('textbox', { name: '메시지 입력', exact: true });
+    await expect(composer).toBeVisible();
+    await expect(composer).toBeDisabled();
+    await expect(page.getByRole('button', { name: '전송', exact: true })).toBeDisabled();
+  } finally {
+    release();
+  }
+  const composer = page.getByRole('textbox', { name: '메시지 입력', exact: true });
+  await expect(composer).toBeEnabled();
+  await composer.fill('하이드레이션 이후 보존할 초안');
+  const separator = page.getByRole('separator', { name: '도면과 검토 패널 너비 조절' });
+  await separator.focus();
+  await separator.press('End');
+  await expect(composer).toHaveValue('하이드레이션 이후 보존할 초안');
+  expect(errors).toEqual([]);
+  await info.attach('studio-hydration-guard', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
+test('Studio Enter during Korean composition does not send or clear a draft', async ({ page }, info) => {
+  await page.goto('/tools/studio');
+  const composer = page.getByRole('textbox', { name: '메시지 입력', exact: true });
+  await composer.fill('한글 조합 중인 초안');
+  const before = await page.locator('#main-content').innerText();
+  await composer.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
+  await expect(composer).toHaveValue('한글 조합 중인 초안');
+  expect(await page.locator('#main-content').innerText()).toBe(before);
+  // WebKit may signal IME conversion as keyCode 229 even when isComposing is false.
+  await composer.dispatchEvent('keydown', { key: 'Enter', keyCode: 229, which: 229, bubbles: true });
+  await expect(composer).toHaveValue('한글 조합 중인 초안');
+  expect(await page.locator('#main-content').innerText()).toBe(before);
+  await info.attach('studio-ime-preserved', { body: await page.screenshot(), contentType: 'image/png' });
 });
