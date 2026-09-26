@@ -12,8 +12,10 @@ describe('chat deterministic calculation evidence', () => {
     expect(evidence?.promptContext).toContain('새로운 반올림 수치');
 
     const output = `전압강하는 ${evidence?.result.value}${evidence?.result.unit}입니다. [SOURCE: ESA_CALCULATOR:voltage-drop]`;
-    expect(filterLLMOutput(output, [], evidence?.trustedText ?? '').passed).toBe(true);
-    expect(filterLLMOutput('임의 결과는 999A입니다.', [], evidence?.trustedText ?? '').passed).toBe(false);
+    const attested = new Set([evidence!.calculatorId]);
+    expect(filterLLMOutput(output, [], evidence?.trustedText ?? '', attested).passed).toBe(true);
+    expect(filterLLMOutput(output, [], evidence?.trustedText ?? '').passed).toBe(false);
+    expect(filterLLMOutput('임의 결과는 999A입니다.', [], evidence?.trustedText ?? '', attested).passed).toBe(false);
   });
 
   test('does not execute when a required input is missing or the query is not a calculation', () => {

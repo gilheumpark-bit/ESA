@@ -15,6 +15,11 @@ describe('audit repair: model-authored labels cannot attest themselves', () => {
     expect(isClean(output, [], '', new Set(['real']))).toBe(false);
   });
 
+  it.each(['[SOURCE: 175A', '[SOURCE:\n175A]'])('malformed labels do not exempt enclosed values: %s', (output) => {
+    expect(filterLLMOutput(output).passed).toBe(false);
+    expect(filterLLMOutput(output).filtered).not.toContain('175A');
+  });
+
   it('removes the exact original forged span without eating adjacent text', () => {
     const r = filterLLMOutput('앞 [source:fake] 뒤');
     expect(r.filtered).toContain('앞 [미확인] 뒤');

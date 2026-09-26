@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
   // deployments instead of shipping only legacy/build/pdf.mjs.
   outputFileTracingIncludes: {
     '/*': [
+      // The fake worker is loaded dynamically and is absent from default tracing.
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
       './node_modules/pdfjs-dist/wasm/**/*',
       './node_modules/pdfjs-dist/standard_fonts/**/*',
       './node_modules/pdfjs-dist/cmaps/**/*',

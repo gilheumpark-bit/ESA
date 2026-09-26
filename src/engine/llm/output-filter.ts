@@ -60,14 +60,12 @@ const STANDARD_CITATION_PATTERN = /\b(KEC|NEC|IEC|JIS|GB|VDE|AS\/NZS|KEPIC|IEEE|
 
 /**
  * Allowed number contexts — numbers in these contexts are NOT blocked:
- *   - Inside source tags [SOURCE: ...]
  *   - Dates (2021, 2023 etc. when preceded by standard name)
  *   - Version strings (v0.1.0)
  *   - Clause references (232.3.9 after KEC/NEC/etc.)
  *   - Step ordinals (Step 1, Step 2, ...)
  */
 const ALLOWED_NUMBER_CONTEXTS = [
-  /\[SOURCE:[^\]]*$/,    // inside a SOURCE tag
   /\b(?:KEC|NEC|IEC|JIS|GB|VDE|NFPA|IEEE|AS\/NZS)\s*$/i,  // standard edition year
   /[vV]$/,                // version prefix
   /Step\s*$/i,            // step ordinals
@@ -386,7 +384,7 @@ export function filterLLMOutput(
   const correctionFooter = contradictionNotes.size > 0
     ? `
 
-> 지운 수치가 앱이 아는 값과 달랐습니다. 앱 기준 — ${[...new Set(contradictionNotes.values())].join(' · ')}.`
+> 지운 수치는 앱 기준과 다르거나 대상·등급이 불명확해 확인이 필요합니다. 앱 기준 — ${[...new Set(contradictionNotes.values())].join(' · ')}.`
     : '';
 
   // Step 5: Build filtered output
