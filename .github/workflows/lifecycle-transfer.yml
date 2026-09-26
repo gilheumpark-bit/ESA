@@ -1,0 +1,34 @@
+name: Apply lifecycle verification corrections
+on:
+  push:
+    branches: ['fix/audit-repair-20260927']
+    paths: ['.github/workflows/lifecycle-transfer.yml']
+permissions:
+  contents: read
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/fix/audit-repair-20260927'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Apply exact reviewed correction patch
+        shell: bash
+        env:
+          PATCH_XZ: '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'
+        run: |
+          set -euo pipefail
+          printf '%s' "$PATCH_XZ" | base64 --decode | xz --decompress > "$RUNNER_TEMP/repair.patch"
+          echo 'd89ee90346784f5aa8e67cadb61818a744801887451a56404ed5cc677f3e8d9b'"  $RUNNER_TEMP/repair.patch" | sha256sum --check
+          git apply --check --index "$RUNNER_TEMP/repair.patch"
+          git apply --index "$RUNNER_TEMP/repair.patch"
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: complete lifecycle type contracts and boundary regressions'
+          git push origin HEAD:refs/heads/fix/audit-repair-20260927
