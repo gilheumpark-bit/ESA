@@ -59,8 +59,13 @@ jobs:
       - name: SLD V3 contract gate
         run: npm run gate:sld-v3-contract
       - name: Dependency audit ratchet (production)
+        env:
+          ESA_AUDIT_OUTPUT_DIR: /tmp/esa-audit
         run: npm run gate:audit
       - name: Dependency audit ratchet (including development)
+        if: success() || failure()
+        env:
+          ESA_AUDIT_OUTPUT_DIR: /tmp/esa-audit
         run: npm run gate:audit:all
       - name: Realworld snapshot freshness
         run: npm run gate:snapshot
@@ -72,6 +77,90 @@ jobs:
         with:
           name: unit-test-evidence
           path: /tmp/esa-jest-results.json
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Preserve audit JSON and provenance
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dependency-audit-evidence
+          path: /tmp/esa-audit/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Preserve established coverage metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-coverage-evidence
+          path: coverage/
+          retention-days: 7
+          if-no-files-found: warn
+
+  full-source-coverage:
+    name: Full-source coverage
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Include unimported production source in coverage
+        run: npm test -- --config=jest.all-source.config.ts --ci --coverage --maxWorkers=2 --forceExit --json --outputFile=/tmp/esa-full-source-tests.json
+      - name: Preserve full denominator and per-file metrics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: full-source-coverage-evidence
+          path: |
+            coverage-all-source/
+            /tmp/esa-full-source-tests.json
+          retention-days: 7
+          if-no-files-found: error
+
+  docker-runtime:
+    name: Docker runtime and PDF
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Build actual production image
+        run: docker build --progress=plain -t esa-ci:${{ github.sha }} .
+      - name: Non-root container health, static assets and PDF pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker logs esa-ci > /tmp/esa-docker.log 2>&1 || true
+            docker rm -f esa-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker run -d --name esa-ci -p 127.0.0.1:3014:3000 esa-ci:${{ github.sha }}
+          ready=false
+          for attempt in $(seq 1 90); do
+            if [ "$(docker inspect --format '{{.State.Running}}' esa-ci)" != true ]; then break; fi
+            if curl --fail --silent http://127.0.0.1:3014/api/health > /tmp/esa-docker-health.json; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then docker logs esa-ci; exit 1; fi
+          test "$(docker exec esa-ci id -u)" = 1001
+          docker exec esa-ci node -e "const fs=require('node:fs');fs.accessSync('.next/static');fs.accessSync('public');fs.accessSync('/var/lib/esa/drawing-jobs',fs.constants.W_OK);if(fs.existsSync('.env.local'))throw Error('local environment leaked')"
+          curl --fail --silent http://127.0.0.1:3014/tools/studio > /tmp/esa-docker-studio.html
+          node scripts/pdf-fixture-gate.mjs http://127.0.0.1:3014 | tee /tmp/esa-docker-pdf.log
+      - name: Preserve container evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: docker-runtime-evidence
+          path: /tmp/esa-docker*
           retention-days: 7
           if-no-files-found: warn
 
