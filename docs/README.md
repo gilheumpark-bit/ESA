@@ -45,6 +45,7 @@
 | [변경 이력](../CHANGELOG.md) | 릴리스와 Unreleased 변경 요약 |
 | [기여 가이드](../CONTRIBUTING.md) | 개발·검증·문서 갱신 규칙 |
 | [보안 정책](../SECURITY.md) | 제보, 신뢰 경계, 알려진 공백 |
+| [생명주기 수리 배포 계약](LIFECYCLE_REMEDIATION.md) | DB 선적용, 승인 버전·공유 회수·도면 복구·결제 재시도와 미적용 운영 조건 |
 | [운영 RUNBOOK](RUNBOOK.md) | 장애 판단 30초 표, 롤백 원칙, 증상별 대응, 문서 자체의 공백 |
 | [평가 가이드](../EVALUATION_GUIDE.md) | C/D/I/X/V/O 단계별 평가 절차 |
 

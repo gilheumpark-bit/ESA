@@ -5,6 +5,8 @@
  */
 
 import { resolveBillingPlan, type BillingPlanKey } from '@/lib/billing';
+import { createHash } from 'node:crypto';
+import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
 
 // ─── PART 1: Types ────────────────────────────────────────────
 
@@ -89,9 +91,37 @@ export async function getStripeSession(
   const safeBase = sanitizeStripeReturnBase(returnUrl, origin);
   const safeSuccessUrl = `${safeBase}?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
   const safeCancelUrl = `${safeBase}?checkout=cancelled`;
+  await ensureUserProfile(clientId);
+  const db = getSupabaseAdmin();
+  const { data: intent, error: intentError } = await db.rpc('acquire_checkout_intent', {
+    p_user_id: clientId, p_plan: plan.key, p_return_url: safeBase,
+  });
+  if (intentError || !intent || typeof intent.id !== 'string') throw new Error(intentError?.message ?? 'BILLING_INTENT_UNAVAILABLE');
+  if (intent.session_id) {
+    const existing = await stripe.checkout.sessions.retrieve(intent.session_id);
+    if (existing.status === 'open' && existing.url) return { sessionId: existing.id, url: existing.url };
+    // A completed/expired session must be reconciled, never silently create a second subscription.
+    throw new Error('BILLING_CHECKOUT_PENDING');
+  }
+  let customerId: string = intent.customer_id;
+  if (!customerId) {
+    const customer = await stripe.customers.create({ metadata: { esa_user_id: clientId } }, {
+      idempotencyKey: `esa-customer-${createHash('sha256').update(clientId).digest('hex')}`,
+    });
+    const binding = await db.rpc('bind_stripe_customer', { p_user_id: clientId, p_customer_id: customer.id });
+    if (binding.error || binding.data !== customer.id) throw new Error('BILLING_CUSTOMER_CONFLICT');
+    customerId = customer.id;
+  }
+  const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 100 });
+  if (subscriptions.has_more || subscriptions.data.some((subscription) =>
+    !['canceled', 'incomplete_expired'].includes(subscription.status))) throw new Error('BILLING_SUBSCRIPTION_EXISTS');
+  const expiresAt = Math.floor(Date.parse(intent.expires_at) / 1000);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) throw new Error('BILLING_INTENT_INVALID');
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
+    customer: customerId,
+    expires_at: expiresAt,
     payment_method_types: ['card'],
     line_items: [
       {
@@ -113,12 +143,14 @@ export async function getStripeSession(
         esa_plan: plan.key,
       },
     },
-  });
+  }, { idempotencyKey: `esa-checkout-${intent.id}` });
 
   if (!session.url) {
     throw new Error('[ESVA] Stripe session created but no URL returned');
   }
 
+  const saved = await db.rpc('complete_checkout_intent', { p_user_id: clientId, p_intent_id: intent.id, p_session_id: session.id, p_session_url: session.url });
+  if (saved.error || saved.data !== true) throw new Error('BILLING_INTENT_PERSIST_FAILED');
   return {
     sessionId: session.id,
     url: session.url,

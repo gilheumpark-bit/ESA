@@ -56,10 +56,15 @@ export const POST = withApiHandler(
       return ctx.error('ESA-1001', 'Authentication required', 401);
     }
 
-    const body = await req.json() as TestRequest;
+    const raw = await req.json().catch(() => null);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return ctx.error('ESA-4001', '올바른 JSON 요청이 필요합니다.', 400);
+    const body = raw as TestRequest;
     const { serverUrl, apiType, modelName, apiKey, timeout = 10 } = body;
 
-    if (!serverUrl || !apiType || !modelName) {
+    if (typeof serverUrl !== 'string' || serverUrl.length > 2048 || !serverUrl
+      || !Object.hasOwn(HEALTH_ENDPOINTS, apiType) || typeof modelName !== 'string' || !modelName || modelName.length > 256
+      || !Number.isFinite(timeout) || timeout < 1 || timeout > 30
+      || (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 4096))) {
       return ctx.error('ESA-4001', 'serverUrl, apiType, modelName 필수', 400);
     }
 
@@ -85,6 +90,7 @@ export const POST = withApiHandler(
       const healthPath = HEALTH_ENDPOINTS[apiType] ?? '/v1/models';
       const healthRes = await fetch(`${targetBaseUrl}${healthPath}`, {
         method: 'GET',
+        redirect: 'error',
         headers,
         signal: AbortSignal.timeout(timeout * 1000),
       });
@@ -115,6 +121,7 @@ export const POST = withApiHandler(
         const t1 = Date.now();
         const chatRes = await fetch(`${targetBaseUrl}${chatPath}`, {
           method: 'POST',
+          redirect: 'error',
           headers,
           body: JSON.stringify(chatBody),
           signal: AbortSignal.timeout(Math.min(timeout, 15) * 1000),

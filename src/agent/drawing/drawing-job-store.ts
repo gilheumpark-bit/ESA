@@ -49,6 +49,7 @@ export interface DrawingJobRecord {
   error?: string;
   vlmCallsUsed: number;
   cancelRequested: boolean;
+  runLease?: { id: string; expiresAt: number };
 }
 
 const processState = globalThis as typeof globalThis & {
@@ -170,10 +171,11 @@ export function getOwnedJob(jobId: string, ownerId: string): DrawingJobRecord | 
   return job?.ownerId === ownerId ? job : undefined;
 }
 
-export function updateJob(jobId: string, patch: Partial<DrawingJobRecord>): DrawingJobRecord | undefined {
+export function updateJob(jobId: string, patch: Partial<DrawingJobRecord>, expectedRunId?: string): DrawingJobRecord | undefined {
   const root = requireRepository();
   const apply = (cur: DrawingJobRecord | undefined): DrawingJobRecord | undefined => {
     if (!cur) return undefined;
+    if (expectedRunId !== undefined && (cur.runLease?.id !== expectedRunId || cur.runLease.expiresAt <= Date.now())) throw new Error('DRAWING_RUN_LEASE_LOST');
     const effectivePatch = cur.cancelRequested && patch.cancelRequested !== false && patch.status && patch.status !== 'CANCELLED'
       ? { ...patch, status: 'CANCELLED' as const }
       : patch;
@@ -233,25 +235,44 @@ export function cancelOwnedJob(jobId: string, ownerId: string): boolean {
   return Boolean(updateJob(jobId, { status: 'CANCELLED', cancelRequested: true }));
 }
 
-/** Atomically prevents duplicate run/resume requests for the same in-process job. */
-export function claimOwnedJobRun(
-  jobId: string,
-  ownerId: string,
-  allowedStatuses: JobStatus[],
-): DrawingJobRecord | undefined {
+export const DRAWING_RUN_LEASE_MS = 90_000;
+const ACTIVE_RUN_STATUSES: readonly JobStatus[] = ['ENUMERATING', 'SURVEYING', 'ANALYZING_PAGES', 'RESCANNING_GAPS', 'RECONCILING_PAGES', 'SYNTHESIZING'];
+
+/** Reclaim only an expired execution. A fresh fencing token invalidates every previous writer. */
+export function claimOwnedJobRun(jobId: string, ownerId: string, allowedStatuses: JobStatus[]): DrawingJobRecord | undefined {
   const root = requireRepository();
-  if (root) {
-    return withJobLock(root, jobId, () => {
-      const job = readDurableJob(root, jobId);
-      if (job?.ownerId !== ownerId || !allowedStatuses.includes(job.status)) return undefined;
-      const next = { ...job, status: 'ENUMERATING' as const, cancelRequested: false, error: undefined, updatedAt: new Date().toISOString() };
-      writeDurableJob(root, next);
-      return next;
-    });
-  }
-  const job = getOwnedJob(jobId, ownerId);
-  if (!job || !allowedStatuses.includes(job.status)) return undefined;
-  return updateJob(jobId, { status: 'ENUMERATING', cancelRequested: false, error: undefined });
+  const claim = (job: DrawingJobRecord | undefined): DrawingJobRecord | undefined => {
+    if (!job || job.ownerId !== ownerId || job.cancelRequested) return undefined;
+    const stale = ACTIVE_RUN_STATUSES.includes(job.status) && (job.runLease
+      ? job.runLease.expiresAt <= Date.now()
+      : Date.parse(job.updatedAt) + DRAWING_RUN_LEASE_MS <= Date.now());
+    if (!allowedStatuses.includes(job.status) && !stale) return undefined;
+    if (job.runLease && job.runLease.expiresAt > Date.now()) return undefined;
+    return { ...job, status: 'ENUMERATING', cancelRequested: false, error: undefined,
+      runLease: { id: randomBytes(18).toString('base64url'), expiresAt: Date.now() + DRAWING_RUN_LEASE_MS },
+      updatedAt: new Date().toISOString() };
+  };
+  if (root) return withJobLock(root, jobId, () => {
+    const next = claim(readDurableJob(root, jobId));
+    if (next) writeDurableJob(root, next);
+    return next;
+  });
+  const next = claim(jobs.get(jobId));
+  if (next) jobs.set(jobId, next);
+  return next;
+}
+
+export function heartbeatOwnedJobRun(jobId: string, ownerId: string, runId: string): boolean {
+  const current = getOwnedJob(jobId, ownerId);
+  if (!current || current.cancelRequested) return false;
+  try { return Boolean(updateJob(jobId, { runLease: { id: runId, expiresAt: Date.now() + DRAWING_RUN_LEASE_MS } }, runId)); }
+  catch { return false; }
+}
+
+export function finishOwnedJobRun(jobId: string, ownerId: string, runId: string, patch: Partial<DrawingJobRecord> = {}): boolean {
+  if (!getOwnedJob(jobId, ownerId)) return false;
+  try { return Boolean(updateJob(jobId, { ...patch, runLease: undefined }, runId)); }
+  catch { return false; }
 }
 
 export function canReusePage(

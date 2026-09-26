@@ -13,7 +13,7 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   createProject,
-  listUserProjects,
+  listUserProjectSummaries,
 } from '@/lib/collaboration';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { withRequestLog } from '@/lib/api/with-request-log';
@@ -41,21 +41,15 @@ async function GET__impl(request: NextRequest) {
     const url = new URL(request.url);
     const filter = (url.searchParams.get('filter') ?? 'all') as 'all' | 'owned' | 'shared';
 
-    const projects = await listUserProjects(userId, filter);
+    const limit = Number(url.searchParams.get('limit') ?? 50);
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    if (!['all', 'owned', 'shared'].includes(filter) || !Number.isSafeInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0 || offset > 100000) return NextResponse.json({ error: 'Invalid pagination' }, { status: 400 });
+    const page = await listUserProjectSummaries(userId, filter, limit + 1, offset);
+    const projects = page.slice(0, limit);
 
-    // Map to summary format for the list view
-    const summaries = projects.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      status: p.status,
-      memberCount: p.members.length,
-      calculationCount: p.calculations.length,
-      userRole: p.members.find((m) => m.userId === userId)?.role ?? 'viewer',
-      updatedAt: p.updatedAt,
-    }));
+    const summaries = projects;
 
-    return NextResponse.json({ projects: summaries });
+    return NextResponse.json({ projects: summaries, pagination: { limit, offset, hasMore: page.length > limit, nextOffset: page.length > limit ? offset + limit : null } });
   } catch (err) {
     console.error('[ESVA Projects GET]', err);
     return NextResponse.json({ error: '프로젝트 목록을 불러오지 못했습니다.' }, { status: 500 });
@@ -73,7 +67,8 @@ async function POST__impl(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid project request' }, { status: 400 });
     const { name, description } = body;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -83,7 +78,10 @@ async function POST__impl(request: NextRequest) {
       );
     }
 
-    const project = await createProject(name.trim(), userId, description?.trim());
+    const requestId = request.headers.get('idempotency-key') ?? undefined;
+    if (name.length > 200 || (description !== undefined && (typeof description !== 'string' || description.length > 10000))
+      || (requestId !== undefined && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(requestId))) return NextResponse.json({ error: 'Invalid project fields' }, { status: 400 });
+    const project = await createProject(name.trim(), userId, description?.trim(), requestId);
 
     return NextResponse.json(project, { status: 201 });
   } catch (err) {

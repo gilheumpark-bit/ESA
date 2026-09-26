@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { maintainDrawingRun } from '@/agent/drawing/drawing-run-lease';
 
 import { NextRequest, NextResponse } from 'next/server';
 
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
-import { claimOwnedJobRun, getOwnedJob, nextPendingRequestedPage, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { claimOwnedJobRun, finishOwnedJobRun, getOwnedJob, nextPendingRequestedPage, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease, releaseSourceLease } from '@/agent/drawing/source-lease-store';
 import { applyRateLimit } from '@/lib/rate-limit';
@@ -46,6 +47,8 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
   // 안에 있어서, 깨진 본문이 그 catch 로 흘러 **500** 이 나갔다 —
   // "서버 잘못" 이라는 뜻이라 운영 알람을 울리고 호출자에게는 무엇을
   // 고쳐야 하는지 안 알려 준다(실측 2026-07-28).
+  let runId: string | undefined;
+  let lease: ReturnType<typeof maintainDrawingRun> | undefined;
   const form = await req.formData().catch(() => null);
   if (!form) return userError('요청 형식이 올바르지 않습니다.', 400);
 
@@ -64,7 +67,10 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
       updateOwnedJob(jobId, owner.ownerId, { status: 'FAILED', error: 'SOURCE_LEASE_EXPIRED', sourceLease: undefined });
       return userError('암호화된 원본 보관 시간이 만료되었습니다. 원본을 다시 올려주세요.', 410);
     }
-    if (!claimOwnedJobRun(jobId, owner.ownerId, ['PARTIAL'])) return userError('이미 재개 중이거나 재개할 수 없는 작업입니다.', 409);
+    const claimed = claimOwnedJobRun(jobId, owner.ownerId, ['PARTIAL']);
+    if (!claimed?.runLease) return userError('이미 실행 중이거나 재개할 수 없는 작업입니다.', 409);
+    runId = claimed.runLease.id;
+    lease = maintainDrawingRun(jobId, owner.ownerId, runId, req.signal);
 
     const result = await runDocumentAnalysis({
       bytes,
@@ -77,7 +83,8 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
       ownerId: owner.ownerId,
       jobId,
       maxPagesPerRun: 1,
-      signal: req.signal,
+      signal: lease!.signal,
+      runId,
       ...(job.sourceMetadata.symbolLibrary ? { symbolLibrary: job.sourceMetadata.symbolLibrary } : {}),
     });
     if (result.document.jobStatus === 'COMPLETE') {
@@ -95,9 +102,11 @@ async function POST__impl(req: NextRequest, ctx: { params: Promise<{ jobId: stri
     });
   } catch (cause) {
     const reference = randomUUID();
-    updateOwnedJob(jobId, owner.ownerId, { status: 'PARTIAL', error: reference });
+    if (runId) finishOwnedJobRun(jobId, owner.ownerId, runId, { status: 'PARTIAL', error: reference });
     console.error('[drawing-job-resume]', { reference, errorType: cause instanceof Error ? cause.name : 'UnknownError' });
     return privateJson({ success: false, error: { message: '도면 분석을 재개하지 못했습니다.', reference } }, { status: 500 });
+  } finally {
+    lease?.release();
   }
 }
 

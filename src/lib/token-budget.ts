@@ -1,92 +1,64 @@
-/**
- * 서버 키로 나가는 LLM 호출의 **일일 토큰 예산** — IP 단위.
- *
- * 원래 `app/api/chat/route.ts` 안에만 있었다. 그래서 chat 한 라우트만 계량됐고,
- * 훨씬 비싼 다중 에이전트 경로(`team-review`)는 예산 없이 서버 키를 썼다
- * (실측 2026-07-29 · `budget|quota` grep 0 건). 한 사용자의 하루 사용량은
- * 라우트별로 따로 셀 값이 아니라 **한 통에 담아야** 하므로 여기로 옮긴다.
- *
- * 계량 원칙은 chat 이 쓰던 것을 그대로 가져왔다:
- *   ① 예약 — 출력 길이를 모르므로 상한을 먼저 잡는다(안 잡으면 짧은 프롬프트로
- *      긴 답을 뽑는 만큼 새어 나간다)
- *   ② 정산 — 실제 사용량을 알면 차액을 돌려준다(4096 예약하고 300 쓴 사용자가
- *      하루 122 번에 막히지 않게)
- *
- * BYOK 사용자에게는 걸지 않는다. 비용을 본인이 내는데 막으면, 이미 넣은 키를
- * 넣으라는 안내를 받게 된다.
- */
+import { randomUUID } from 'node:crypto';
 
+/** Process-local defense. Multi-instance enforcement requires a trusted shared quota. */
 export const DAILY_TOKEN_BUDGET = 500_000;
-
-/** 최대 엔트리 — 넘으면 오래된 것부터 버린다. */
 const MAX_TOKEN_ENTRIES = 10_000;
+const MAX_RESERVATIONS = 10_000;
+interface Reservation { amount: number; settled: boolean }
+interface Usage { tokens: number; resetAt: number; reservations: Map<string, Reservation> }
+const tokenUsage = new Map<string, Usage>();
+const validCount = (n: number): boolean => Number.isSafeInteger(n) && n >= 0;
+const remaining = (entry?: Usage): number => entry && validCount(entry.tokens)
+  ? Math.max(0, DAILY_TOKEN_BUDGET - entry.tokens) : entry ? 0 : DAILY_TOKEN_BUDGET;
 
-const tokenUsage = new Map<string, { tokens: number; resetAt: number }>();
+/** A heuristic for reservation, not a claim that four characters bound every language. */
+export function estimateTokens(text: string): number { return Math.ceil(text.length / 4); }
 
-/** 문자 수로 토큰을 어림한다 — 정확한 계량이 아니라 상한 잡기용이다. */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-export function checkTokenBudget(
-  ip: string,
-  estimatedTokens: number,
-): { allowed: boolean; remaining: number } {
+export function checkTokenBudget(ip: string, estimatedTokens: number): {
+  allowed: boolean; remaining: number; reservationId?: string;
+} {
   const now = Date.now();
-  const entry = tokenUsage.get(ip);
-
-  // UTC 자정 리셋
-  const midnightUtc = new Date();
-  midnightUtc.setUTCHours(24, 0, 0, 0);
-  const resetAt = midnightUtc.getTime();
-
-  if (!entry || now >= entry.resetAt) {
-    if (estimatedTokens > DAILY_TOKEN_BUDGET) {
-      return { allowed: false, remaining: DAILY_TOKEN_BUDGET };
-    }
-    tokenUsage.set(ip, { tokens: estimatedTokens, resetAt });
-    return { allowed: true, remaining: DAILY_TOKEN_BUDGET - estimatedTokens };
+  let entry = tokenUsage.get(ip);
+  if (entry && now >= entry.resetAt) { tokenUsage.delete(ip); entry = undefined; }
+  if (!validCount(estimatedTokens) || !ip || (entry && !validCount(entry.tokens))) {
+    return { allowed: false, remaining: remaining(entry) };
   }
-
-  if (entry.tokens + estimatedTokens > DAILY_TOKEN_BUDGET) {
-    return { allowed: false, remaining: DAILY_TOKEN_BUDGET - entry.tokens };
+  if (estimatedTokens > remaining(entry)) return { allowed: false, remaining: remaining(entry) };
+  if (!entry) {
+    cleanupTokenUsage();
+    // Never evict a live budget: rotating clients must not reset someone else's usage.
+    if (tokenUsage.size >= MAX_TOKEN_ENTRIES) return { allowed: false, remaining: 0 };
+    const midnight = new Date(now); midnight.setUTCHours(24, 0, 0, 0);
+    entry = { tokens: 0, resetAt: midnight.getTime(), reservations: new Map() };
+    tokenUsage.set(ip, entry);
   }
-
+  if (entry.reservations.size >= MAX_RESERVATIONS) return { allowed: false, remaining: remaining(entry) };
+  const reservationId = randomUUID();
+  entry.reservations.set(reservationId, { amount: estimatedTokens, settled: false });
   entry.tokens += estimatedTokens;
-  return { allowed: true, remaining: DAILY_TOKEN_BUDGET - entry.tokens };
+  return { allowed: true, remaining: remaining(entry), reservationId };
 }
 
-/** 예약분을 실사용량으로 정산한다 — 차액만 돌려준다. */
-export function settleTokenUsage(ip: string, reserved: number, actual: number): void {
+/** Both refunds and overages count. A reservation can settle only once, in its own UTC day. */
+export function settleTokenUsage(ip: string, reserved: number, actual: number, reservationId?: string): void {
+  if (!validCount(reserved) || !validCount(actual)) return;
   const entry = tokenUsage.get(ip);
-  if (!entry || Date.now() >= entry.resetAt) return;
-  const refund = Math.max(0, reserved - actual);
-  entry.tokens = Math.max(0, entry.tokens - refund);
+  if (!entry || Date.now() >= entry.resetAt || !validCount(entry.tokens)) return;
+  // Legacy pure callers are supported; production callers always pass the exact id.
+  const receipt = reservationId ? entry.reservations.get(reservationId)
+    : [...entry.reservations.values()].find((r) => !r.settled && r.amount === reserved);
+  if (!receipt || receipt.settled || receipt.amount !== reserved) return;
+  receipt.settled = true;
+  const next = entry.tokens - reserved + actual;
+  entry.tokens = Number.isSafeInteger(next) ? Math.max(0, next) : Number.MAX_SAFE_INTEGER;
 }
 
-let lastTokenCleanup = Date.now();
-
-/** 10 분마다 지연 청소 — 만료 엔트리 제거 후 상한 초과분 정리. */
 export function cleanupTokenUsage(): void {
   const now = Date.now();
-  if (now - lastTokenCleanup < 600_000 && tokenUsage.size < MAX_TOKEN_ENTRIES) return;
-  lastTokenCleanup = now;
-  for (const [key, entry] of tokenUsage) {
-    if (now >= entry.resetAt) tokenUsage.delete(key);
-  }
-  if (tokenUsage.size > MAX_TOKEN_ENTRIES) {
-    const oldest = [...tokenUsage.entries()]
-      .sort((a, b) => a[1].resetAt - b[1].resetAt)
-      .slice(0, tokenUsage.size - MAX_TOKEN_ENTRIES);
-    for (const [key] of oldest) tokenUsage.delete(key);
-  }
+  for (const [key, entry] of tokenUsage) if (now >= entry.resetAt) tokenUsage.delete(key);
 }
 
-/** 테스트 전용 — 예산 통을 비운다. */
-export function __resetTokenBudget(): void {
-  tokenUsage.clear();
-  lastTokenCleanup = 0;
-}
+export function __resetTokenBudget(): void { tokenUsage.clear(); }
 
 /**
  * 다중 에이전트 1 회 실행의 **출력 상한 어림** — 발명한 숫자가 아니라 코드에

@@ -50,18 +50,43 @@ function serialize(record: LeaseRecord): SerializedLeaseRecord {
 }
 
 function deserialize(record: SerializedLeaseRecord): LeaseRecord {
-  return { ...record, iv: Buffer.from(record.iv, 'base64'), ciphertext: Buffer.from(record.ciphertext, 'base64'), tag: Buffer.from(record.tag, 'base64') };
+  if (!record || typeof record.ownerId !== 'string' || typeof record.documentHash !== 'string'
+    || !Number.isFinite(record.expiresAt) || typeof record.iv !== 'string' || typeof record.ciphertext !== 'string' || typeof record.tag !== 'string') throw new Error('DRAWING_LEASE_CORRUPT');
+  const parsed = { ...record, iv: Buffer.from(record.iv, 'base64'), ciphertext: Buffer.from(record.ciphertext, 'base64'), tag: Buffer.from(record.tag, 'base64') };
+  if (parsed.iv.length !== 12 || parsed.tag.length !== 16) throw new Error('DRAWING_LEASE_CORRUPT');
+  return parsed;
 }
 
 function readLeaseRecord(leaseId: string): LeaseRecord | undefined {
   const root = durableLeaseRoot();
   if (!root) return leases.get(leaseId);
+  leasePath(root, leaseId);
   try {
     return deserialize(JSON.parse(readFileSync(leasePath(root, leaseId), 'utf8')) as SerializedLeaseRecord);
   } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw cause;
+    quarantineLease(root, leaseId);
+    return undefined;
   }
+}
+
+/** Never log source bytes, user identities, or cryptographic material. */
+function quarantineLease(root: string, leaseId: string): void {
+  const quarantine = join(root, 'quarantine');
+  try {
+    mkdirSync(quarantine, { recursive: true, mode: 0o700 });
+    renameSync(leasePath(root, leaseId), join(quarantine, `${leaseId}.${Date.now()}.${randomBytes(4).toString('hex')}.corrupt`));
+    console.warn('[drawing-source-lease] quarantined corrupt record');
+  } catch {
+    console.warn('[drawing-source-lease] corrupt record could not be quarantined');
+  }
+}
+
+let lastAutomaticPurge = 0;
+function maybePurgeExpiredLeases(): void {
+  if (Date.now() - lastAutomaticPurge < 60_000) return;
+  lastAutomaticPurge = Date.now();
+  purgeExpiredLeases();
 }
 
 function writeLeaseRecord(record: LeaseRecord): void {
@@ -109,7 +134,7 @@ export function createSourceLease(
   ownerId: string,
   ttlMs = DEFAULT_SOURCE_LEASE_TTL_MS,
 ): SourceLease | { error: 'LEASE_STORE_UNAVAILABLE' } {
-  purgeExpiredLeases();
+  maybePurgeExpiredLeases();
   const key = getLeaseKey();
   if (!key) return { error: 'LEASE_STORE_UNAVAILABLE' };
   if (!ownerId.trim()) throw new Error('DRAWING_LEASE_OWNER_REQUIRED');
@@ -126,18 +151,25 @@ export function createSourceLease(
 }
 
 export function readSourceLease(leaseId: string, ownerId: string): ArrayBuffer | null {
-  purgeExpiredLeases();
+  maybePurgeExpiredLeases();
   const key = getLeaseKey();
   const rec = readLeaseRecord(leaseId);
   if (!key || !rec || rec.ownerId !== ownerId) return null;
-  if (Date.now() > rec.expiresAt) {
+  if (Date.now() >= rec.expiresAt) {
     deleteLeaseRecord(leaseId);
     return null;
   }
-  const decipher = createDecipheriv('aes-256-gcm', key, rec.iv);
-  decipher.setAuthTag(rec.tag);
-  const plain = Buffer.concat([decipher.update(rec.ciphertext), decipher.final()]);
-  return Uint8Array.from(plain).buffer;
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', key, rec.iv);
+    decipher.setAuthTag(rec.tag);
+    const plain = Buffer.concat([decipher.update(rec.ciphertext), decipher.final()]);
+    return Uint8Array.from(plain).buffer;
+  } catch {
+    const root = durableLeaseRoot();
+    if (root) quarantineLease(root, leaseId);
+    else leases.delete(leaseId);
+    return null;
+  }
 }
 
 export function releaseSourceLease(leaseId: string, ownerId: string): boolean {
@@ -148,6 +180,7 @@ export function releaseSourceLease(leaseId: string, ownerId: string): boolean {
 /** Test helper. */
 export function _resetSourceLeasesForTests(): void {
   leases.clear();
+  lastAutomaticPurge = 0;
 }
 
 export function purgeExpiredLeases(): number {
@@ -156,10 +189,12 @@ export function purgeExpiredLeases(): number {
   const root = durableLeaseRoot();
   if (root) {
     for (const fileName of readdirSync(root)) {
-      if (!fileName.endsWith('.json')) continue;
+      if (!/^lease-[a-zA-Z0-9_-]+\.json$/.test(fileName)) continue;
       const leaseId = fileName.slice(0, -5);
-      const record = readLeaseRecord(leaseId);
-      if (record && record.expiresAt <= now && deleteLeaseRecord(leaseId)) n += 1;
+      try {
+        const record = readLeaseRecord(leaseId);
+        if (record && record.expiresAt <= now && deleteLeaseRecord(leaseId)) n += 1;
+      } catch { console.warn('[drawing-source-lease] cleanup skipped unreadable record'); }
     }
     return n;
   }

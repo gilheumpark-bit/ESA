@@ -23,6 +23,7 @@ import {
   removeMember,
   addCalculationToProject,
   generateShareLink,
+  requestApproval, approveProject, listProjectShareLinks, revokeProjectShareLinks,
 } from '@/lib/collaboration';
 import { loadCalculation } from '@/lib/supabase';
 import { withRequestLog } from '@/lib/api/with-request-log';
@@ -116,11 +117,26 @@ async function PATCH__impl(request: NextRequest) {
     }
 
     const projectId = getProjectId(request);
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid project request' }, { status: 400 });
     const { action } = body;
 
     // Action-based dispatch
     switch (action) {
+      case 'requestApproval': {
+        if (typeof body.approverId !== 'string' || !body.approverId || body.approverId.length > 128) return NextResponse.json({ error: 'Approver is required' }, { status: 400 });
+        return NextResponse.json({ approval: await requestApproval(projectId, userId, body.approverId) });
+      }
+      case 'approveProject': {
+        if (typeof body.approved !== 'boolean' || (body.comment !== undefined && (typeof body.comment !== 'string' || body.comment.length > 10000))) return NextResponse.json({ error: 'Invalid approval' }, { status: 400 });
+        return NextResponse.json({ approval: await approveProject(projectId, userId, body.approved, body.comment) });
+      }
+      case 'listShareLinks': return NextResponse.json({ links: await listProjectShareLinks(projectId, userId) });
+      case 'revokeShareLinks': {
+        if (body.linkId !== undefined && (typeof body.linkId !== 'string' || !/^[a-f0-9-]{36}$/i.test(body.linkId))) return NextResponse.json({ error: 'Invalid link id' }, { status: 400 });
+        await revokeProjectShareLinks(projectId, userId, body.linkId);
+        return NextResponse.json({ success: true });
+      }
       case 'inviteMember': {
         const { email, role } = body;
         if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {

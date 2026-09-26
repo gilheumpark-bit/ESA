@@ -21,7 +21,8 @@
         { "context": "Browser compatibility (firefox)" },
         { "context": "Browser compatibility (webkit)" },
         { "context": "Full-source coverage" },
-        { "context": "Docker runtime and PDF" }
+        { "context": "Docker runtime and PDF" },
+        { "context": "Database lifecycle" }
       ]
     } }
   ]

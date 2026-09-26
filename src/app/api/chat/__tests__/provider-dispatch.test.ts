@@ -141,7 +141,7 @@ describe('POST /api/chat advertised provider dispatch', () => {
    * 배포자의 청구서이므로 자기 키로 부르는 요청은 대상이 아니다 —
    * 그래서 여기서는 **서버 키 경로**로 확인한다.
    */
-  test('서버 키 요청이 하루 예산을 통째로 넘기면 모델을 부르지 않는다', async () => {
+  test('서버 키도 전송 크기 상한을 넘기면 예산 변경 전에 거부한다', async () => {
     const originalKey = process.env.OPENAI_API_KEY;
     const originalHeader = process.env.TRUSTED_CLIENT_IP_HEADER;
     process.env.OPENAI_API_KEY = 'server-side-key';
@@ -161,9 +161,9 @@ describe('POST /api/chat advertised provider dispatch', () => {
         }),
       }));
 
-      expect(response.status).toBe(429);
+      expect(response.status).toBe(413);
       const body = await response.json();
-      expect(body.error.code).toBe('ESVA-3014');
+      expect(body.error.code).toBe('ESVA-3008');
       expect(streamTextMock).not.toHaveBeenCalled();
     } finally {
       if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
@@ -174,14 +174,14 @@ describe('POST /api/chat advertised provider dispatch', () => {
   });
 
   /** 같은 양을 자기 키로 보내면 통과한다 — 예산이 지갑을 따라간다. */
-  test('BYOK 요청은 같은 양이어도 예산에 막히지 않는다', async () => {
+  test('BYOK도 전송 크기 상한은 우회하지 않는다', async () => {
     const response = await POST(request(
       'openai',
       'gpt-5.6-luna',
       '198.51.100.251',
       'a'.repeat(2_000_100),
     ));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(413);
     await response.text();
   });
 });

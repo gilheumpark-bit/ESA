@@ -1,3 +1,5 @@
+import { canonicalMagnitude } from './quantity-token';
+
 /**
  * 앱이 이미 근거와 함께 내보내는 도메인 상수 — 출력 필터가 지우지 않도록.
  *
@@ -52,10 +54,8 @@ export const APP_ASSERTED_CONSTANTS: readonly AppAssertedConstant[] = [
   { value: '10', unit: 'ppm', terms: ['황화수소', 'H2S', 'H₂S'], source: '안전보건규칙 제618조(적정공기)' },
 
   // ── 폭염작업 (2025-06-01 시행 온열질환 예방 조항) ──
-  // 단위가 비어 있는 이유: 필터의 숫자 정규식은 `%`·라틴문자·Ω 만 단위로 잡아
-  // `℃` 는 인식하지 못한다. 용어는 `체감온도` 하나로 좁힌다 — `폭염` 을 넣으면
-  // 폭염 문단의 아무 숫자나 걸린다.
-  { value: '31', unit: '', terms: ['체감온도'], source: '안전보건규칙 온열질환 예방 조항(2025-06-01 시행)' },
+  // 단위 토큰을 ℃로 명시한다. 파서가 °C도 같은 단위로 정규화한다.
+  { value: '31', unit: '℃', terms: ['체감온도'], source: '안전보건규칙 온열질환 예방 조항(2025-06-01 시행)' },
 
   // ── 충전전로 접근 한계거리 (제321조 제1항 표) ──
   // 두 행이 `접근 한계거리` 를 공유하므로 **전압을 식별자로 못 박는다**.
@@ -126,7 +126,7 @@ export function findContradiction(
   const { candidates, ambiguous } = resolveCandidates(unit, context, scope);
   if (!candidates.length) return null;
   if (ambiguous) return { expected: '대상·등급·전압을 하나씩 특정한 뒤 개별 검증 필요', source: candidates[0].source };
-  if (candidates.some((c) => normalize(c.value) === normalize(value))) return null;
+  if (candidates.some((c) => canonicalMagnitude(c.value) === canonicalMagnitude(value))) return null;
   return {
     expected: candidates.map((c) => `${c.value}${c.unit}`).join(' 또는 '),
     source: candidates[0].source,
@@ -141,5 +141,5 @@ export function findAssertedSource(
 ): string | null {
   const { candidates, ambiguous } = resolveCandidates(unit, context, scope);
   if (ambiguous) return null;
-  return candidates.find((c) => normalize(c.value) === normalize(value))?.source ?? null;
+  return candidates.find((c) => canonicalMagnitude(c.value) === canonicalMagnitude(value))?.source ?? null;
 }

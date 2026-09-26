@@ -16,6 +16,7 @@
  */
 
 import type { FilterResult, BlockedItem } from './types';
+import { QUANTITY_PATTERN, canonicalUnit, quantityKey } from './quantity-token';
 import { findAssertedSource, findContradiction } from './app-asserted-constants';
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ const PROBABILISTIC_PATTERNS = /(?:(?<![가-힣])약(?=\s*[\d.]|\s)|대략|보�
  * 천단위 쉼표는 한 덩어리로 읽는다 — 쉼표는 자릿수 표기지 값의 경계가
  * 아니다. 쪼개면 "55,000 W" 가 "55,[미확인]" 으로 나간다.
  */
-const NUMBER_PATTERN = /(?<!\d{4}-\d{2}-)(?<!\d\.)(?<![vV]\d+\.)(?<!\w)(?<![\d,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*(%|[A-Za-z\u03A9]+(?:\/[A-Za-z]+)?)?/g;
+const NUMBER_PATTERN = QUANTITY_PATTERN;
 
 /**
  * Source tags are model-authored labels, never numeric evidence.
@@ -81,6 +82,8 @@ const ALLOWED_NUMBER_CONTEXTS = [
 interface ExtractedNumber {
   /** The numeric string */
   text: string;
+  /** Signed value including its exponent, never digits stripped out of a token. */
+  value: string;
   /** Position in the output */
   position: number;
   /** The unit if detected */
@@ -107,7 +110,7 @@ function extractNumbers(
   while ((match = NUMBER_PATTERN.exec(output)) !== null) {
     const pos = match.index;
     const numText = match[1];
-    const unit = match[2];
+    const unit = canonicalUnit(match[2]);
 
     // Check if in an allowed context
     const prefix = output.slice(Math.max(0, pos - 40), pos);
@@ -118,30 +121,24 @@ function extractNumbers(
     // 같은 수량은 그대로 출처를 요구한다.
     const isCalendarYear = /^(?:19|20)\d\d$/.test(numText)
       && /^\s*년/.test(output.slice(pos + numText.length, pos + numText.length + 3));
-    const isAllowed = isCalendarYear || ALLOWED_NUMBER_CONTEXTS.some(re => re.test(prefix));
+    const linePrefix = output.slice(output.lastIndexOf('\n', pos - 1) + 1, pos);
+    const structuralOrdinal = !unit && (/^\s*$/.test(linePrefix) && /^[.)]\s/.test(output.slice(pos + numText.length))
+      || /(?:Step|단계|第|Class)\s*$/i.test(prefix));
+    const isAllowed = isCalendarYear || structuralOrdinal
+      || (!unit && ALLOWED_NUMBER_CONTEXTS.some(re => re.test(prefix)));
 
-    // Skip pure integers 0-10 without units (ordinals, list items)
-    const numVal = parseFloat(numText);
-    if (Number.isInteger(numVal) && numVal <= 10 && !unit) {
-      continue;
-    }
 
     results.push({
       text: match[0],
+      value: numText.replace(/,/g, "").replace("−", "-"),
       position: pos,
       unit,
       isAllowed,
-      isTrustedInput: trustedNumbers.has(normalizeNumericToken(match[0]))
-        || trustedNumbers.has(match[1].replace(/,/g, '')),
+      isTrustedInput: Boolean(quantityKey(numText, unit)) && trustedNumbers.has(quantityKey(numText, unit)),
     });
   }
 
   return results;
-}
-
-function normalizeNumericToken(value: string): string {
-  // 쉼표는 자릿수 표기다 — 신뢰 목록 대조에서 "55,000" 과 "55000" 은 같은 값이다.
-  return value.replace(/\s+/g, '').replace(/,/g, '').toLowerCase();
 }
 
 /**
@@ -166,8 +163,8 @@ function findTrustedNumbers(input: string): Set<string> {
   const pattern = new RegExp(NUMBER_PATTERN.source, NUMBER_PATTERN.flags);
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(input)) !== null) {
-    numbers.add(normalizeNumericToken(match[0]));
-    numbers.add(match[1].replace(/,/g, ''));
+    const key = quantityKey(match[1], match[2]);
+    if (key) numbers.add(key);
   }
   return numbers;
 }
@@ -282,7 +279,7 @@ export function filterLLMOutput(
      * 우리가 정답을 들고 있는 자리에서만 발화한다(등재된 대상·단위).
      */
     const contradiction = findContradiction(
-      num.text.replace(/[^\d.,]/g, ''),
+      num.value,
       num.unit ?? '',
       nearby,
       // Global fallback is permitted only for one unambiguous subject/discriminator.
@@ -304,7 +301,7 @@ export function filterLLMOutput(
     if (num.isTrustedInput) continue;
 
     const asserted = findAssertedSource(
-      num.text.replace(/[^\d.,]/g, ''), num.unit ?? '', nearby, semanticOutput,
+      num.value, num.unit ?? '', nearby, semanticOutput,
     );
     if (asserted) {
       assertedNotes.set(num.position, asserted);
