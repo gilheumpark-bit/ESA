@@ -122,6 +122,41 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  database-lifecycle:
+    name: Database lifecycle
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: esa_fixture
+          POSTGRES_PASSWORD: esa-ci-only
+          POSTGRES_DB: esa_fixture
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U esa_fixture -d esa_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install PostgreSQL fixture client
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Apply all migrations and verify real transactions, revocation and billing ordering
+        env:
+          ESA_TEST_DATABASE_URL: postgresql://esa_fixture:esa-ci-only@127.0.0.1:5432/esa_fixture
+        run: set -o pipefail; bash scripts/db/lifecycle-gate.sh 2>&1 | tee /tmp/esa-database-lifecycle.log
+      - name: Preserve database lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: database-lifecycle-evidence
+          path: |
+            /tmp/esa-database-lifecycle.log
+            /tmp/esa-db-concurrent.txt
+          retention-days: 7
+          if-no-files-found: warn
+
   docker-runtime:
     name: Docker runtime and PDF
     if: github.event_name != 'push' || github.ref == 'refs/heads/main'
