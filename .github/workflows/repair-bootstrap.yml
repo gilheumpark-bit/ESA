@@ -1,0 +1,21 @@
+name: Repair workspace snapshot
+on:
+  push:
+    branches: ['fix/audit-repair-20260927']
+    paths: ['.github/workflows/repair-bootstrap.yml']
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Archive tracked source for isolated repair workspace
+        run: git archive --format=tar.gz HEAD > /tmp/esa-repair-source.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: repair-source
+          path: /tmp/esa-repair-source.tar.gz
+          retention-days: 1
+          if-no-files-found: error
