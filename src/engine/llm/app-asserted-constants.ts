@@ -16,6 +16,8 @@ export interface AppAssertedConstant {
   unit: string;
   /** 이 값이 무엇의 값인지 — 근처에 하나라도 있어야 통과. */
   terms: readonly string[];
+  /** Explicit identity for linked constants whose aliases differ. */
+  subject?: string;
   /**
    * 등급·구간처럼 같은 대상 안에서 값이 갈릴 때 **반드시** 근처에 있어야
    * 하는 식별자. 없으면 `"Class 4 절연장갑 500V"`(정답 36,000V)가 IEC 60903
@@ -79,8 +81,8 @@ export const APP_ASSERTED_CONSTANTS: readonly AppAssertedConstant[] = [
   { value: '36000', unit: 'V', discriminator: 'Class 4', terms: ['절연장갑', '절연 장갑'], source: 'IEC 60903 등급별 최대 사용전압' },
 
   // ── 이 앱이 쓰는 판 — "어느 표준을 쓰나요" 에 답할 수 있어야 한다 ──
-  { value: '1584', unit: '', terms: ['IEEE', '아크플래시', 'arc flash'], source: '이 앱의 아크플래시 계산기 구현(IEEE 1584-2002)' },
-  { value: '2002', unit: '', terms: ['1584'], source: '이 앱의 아크플래시 계산기 구현(IEEE 1584-2002)' },
+  { value: '1584', unit: '', subject: 'arc-flash-standard-identity', terms: ['IEEE', '아크플래시', 'arc flash'], source: '이 앱의 아크플래시 계산기 구현(IEEE 1584-2002)' },
+  { value: '2002', unit: '', subject: 'arc-flash-standard-identity', terms: ['1584'], source: '이 앱의 아크플래시 계산기 구현(IEEE 1584-2002)' },
 ];
 
 /** 표기 흔들림 흡수 — 쉼표·공백 제거, 전각 기호 통일. */
@@ -98,7 +100,7 @@ function resolveCandidates(unit: string | undefined, context: string, scope: str
     normalize(c.unit) === normalize(unit ?? '') && c.terms.some((term) => hasToken(context, term)),
   );
   if (!candidates.length) return { candidates, ambiguous: false };
-  const subjects = new Set(candidates.map((c) => c.terms.join('|')));
+  const subjects = new Set(candidates.map((c) => c.subject ?? c.terms.join('|')));
   if (subjects.size !== 1) return { candidates, ambiguous: true };
   if (!candidates.some((c) => c.discriminator)) return { candidates, ambiguous: false };
 
