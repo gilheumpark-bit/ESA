@@ -1,6 +1,8 @@
 /** Critical/high zero-tolerance gate; production by default, all scopes explicitly. */
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { auditArguments, auditScopeFromArgs, inspectAuditExecution } from './lib/audit-policy.mjs';
 
 let scope;
@@ -16,6 +18,16 @@ const result = spawnSync(process.execPath, [npmCli, ...auditArguments(scope)], {
   encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 120_000,
 });
 const decision = inspectAuditExecution(result);
+if (process.env.ESA_AUDIT_OUTPUT_DIR) {
+  const directory = process.env.ESA_AUDIT_OUTPUT_DIR;
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, `audit-${scope}.json`), result.stdout ?? '');
+  writeFileSync(join(directory, `audit-${scope}-provenance.json`), JSON.stringify({
+    scope, commit: process.env.GITHUB_SHA ?? null,
+    checkedAt: new Date().toISOString(), node: process.version,
+    status: result.status, signal: result.signal, decision,
+  }, null, 2) + '\n');
+}
 const output = `audit-gate ${decision.code === 0 ? 'PASS' : decision.code === 1 ? 'FAIL' : 'INDETERMINATE'} [${scope}] — ${decision.message}`;
 if (decision.code === 0) console.log(output);
 else console.error(output);

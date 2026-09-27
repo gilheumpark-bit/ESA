@@ -37,21 +37,22 @@ describe('LLM Output Filter - Clean Output', () => {
     expect(result.filtered).toContain('50kW');
     expect(result.filtered).not.toContain('75A');
   });
-  test('Clean output with tool calls -- passes', () => {
-    const output = 'The voltage drop is 2.8%. [SOURCE: KEC 232.3.9]';
+  test('Server-attested value and calculator id -- passes', () => {
+    const output = 'The voltage drop is 2.8%. [SOURCE: ESA_CALCULATOR:voltage-drop]';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 2.8 } }];
 
-    const result = filterLLMOutput(output, toolCalls);
+    const result = filterLLMOutput(output, toolCalls, '2.8%', new Set(['voltage-drop']));
     expect(result.passed).toBe(true);
     expect(result.blocked.length).toBe(0);
   });
 
-  test('KEC 232.3.9 citation with tool call and source tag -- PASS', () => {
+  test('Empty lookup result and a model-written citation -- BLOCK', () => {
     const output = 'KEC 232.3.9 기준, 전압강하는 2.8%입니다. [SOURCE: KEC 232.3.9]';
     const toolCalls = [{ name: 'lookup_code_article', result: {} }];
 
     const result = filterLLMOutput(output, toolCalls);
-    expect(result.passed).toBe(true);
+    expect(result.passed).toBe(false);
+    expect(result.filtered).not.toContain('2.8%');
   });
 
   test('Text with only small ordinals (Step 1, Step 2) -- passes', () => {
@@ -62,10 +63,10 @@ describe('LLM Output Filter - Clean Output', () => {
     expect(result.passed).toBe(true);
   });
 
-  test('isClean returns true for clean output with tool calls', () => {
+  test('isClean does not treat a tool name as proof of a source', () => {
     const output = 'The result is shown above. [SOURCE: KEC 232.3.9]';
     const toolCalls = [{ name: 'calculate_voltage_drop' }];
-    expect(isClean(output, toolCalls)).toBe(true);
+    expect(isClean(output, toolCalls)).toBe(false);
   });
 });
 
@@ -185,20 +186,20 @@ describe('LLM Output Filter - Replacement Markers', () => {
 // 같이 잠근다 — 창을 넓히는 수리는 필터를 무력화하는 방향으로 틀리기 쉽다.
 
 describe('LLM Output Filter - 감사 수리 회귀', () => {
-  test('출처 태그가 수치보다 앞에 와도 그 수치의 출처로 인정한다', () => {
-    const output = '[SOURCE: KEC 232.3.9] 전압강하는 4.14V입니다.';
+  test('검증 영수증은 태그가 수치보다 앞에 와도 통과한다', () => {
+    const output = '[SOURCE: ESA_CALCULATOR:voltage-drop] 전압강하는 4.14V입니다.';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
 
-    const result = filterLLMOutput(output, toolCalls);
+    const result = filterLLMOutput(output, toolCalls, '4.14V', new Set(['voltage-drop']));
     expect(result.passed).toBe(true);
     expect(result.filtered).toContain('4.14V');
   });
 
   test('출처 태그가 수치 뒤에 오는 기존 순서도 그대로 통과한다', () => {
-    const output = '전압강하는 4.14V입니다. [SOURCE: KEC 232.3.9]';
+    const output = '전압강하는 4.14V입니다. [SOURCE: ESA_CALCULATOR:voltage-drop]';
     const toolCalls = [{ name: 'calculate_voltage_drop', result: { value: 4.14 } }];
 
-    expect(filterLLMOutput(output, toolCalls).passed).toBe(true);
+    expect(filterLLMOutput(output, toolCalls, '4.14V', new Set(['voltage-drop'])).passed).toBe(true);
   });
 
   test('창을 양방향으로 넓혀도 출처 없는 수치는 계속 차단한다', () => {

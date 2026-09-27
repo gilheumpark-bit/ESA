@@ -161,10 +161,16 @@ function FilterBar({
 export default function ProjectsPage() {
   const { user, loading: authLoading } = useAuth();
   const [filter, setFilter] = useState<FilterMode>('all');
-  const loader = useCallback((signal: AbortSignal) => requestFeatureJson(`/api/projects?filter=${filter}`,
-    { signal }, decodeProjects, featureAuthenticatedFetch), [filter]);
-  const resource = useFeatureResource(authLoading || !user ? null : `${user.uid}:${filter}`, loader);
-  const projects = resource.data ?? [];
+  const [offset, setOffset] = useState(0);
+  const loader = useCallback((signal: AbortSignal) => requestFeatureJson(`/api/projects?filter=${filter}&limit=50&offset=${offset}`,
+    { signal }, (value) => {
+      const projects = decodeProjects(value);
+      const pagination = (value as { pagination?: { nextOffset?: unknown } }).pagination;
+      const next = pagination?.nextOffset;
+      return { projects, nextOffset: typeof next === 'number' && Number.isSafeInteger(next) && next > offset && next <= 100000 ? next : null };
+    }, featureAuthenticatedFetch), [filter, offset]);
+  const resource = useFeatureResource(authLoading || !user ? null : `${user.uid}:${filter}:${offset}`, loader);
+  const projects = resource.data?.projects ?? [];
   const loading = authLoading || resource.loading;
   const error = !authLoading && !user ? '로그인이 필요합니다.' : resource.error;
 
@@ -193,7 +199,7 @@ export default function ProjectsPage() {
 
       {/* Filter */}
       <div className="mb-6">
-        <FilterBar filter={filter} onFilterChange={setFilter} />
+        <FilterBar filter={filter} onFilterChange={(next) => { setOffset(0); setFilter(next); }} />
       </div>
 
       {/* Content */}
@@ -231,6 +237,13 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
+      {user && (offset > 0 || resource.data?.nextOffset !== null && resource.data?.nextOffset !== undefined) ? (
+        <nav aria-label="프로젝트 페이지" className="mt-6 flex items-center justify-center gap-4">
+          <button type="button" disabled={loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - 50))} className="min-h-11 rounded-lg border px-4 disabled:opacity-50">이전 페이지</button>
+          <span aria-live="polite">{Math.floor(offset / 50) + 1} 페이지</span>
+          <button type="button" disabled={loading || resource.data?.nextOffset == null} onClick={() => { if (resource.data?.nextOffset != null) setOffset(resource.data.nextOffset); }} className="min-h-11 rounded-lg border px-4 disabled:opacity-50">다음 페이지</button>
+        </nav>
+      ) : null}
     </div>
   );
 }

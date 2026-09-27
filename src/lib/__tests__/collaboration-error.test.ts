@@ -47,7 +47,8 @@ describe('협업 오류 → HTTP 상태', () => {
   });
 
   it('분류 규칙이 낡지 않았다 — 매칭 문자열이 실제 메시지에 있다', () => {
-    const stale = COLLAB_ERROR_MATCHES.filter((needle) => !COLLAB.includes(needle));
+    const migration = readFileSync(join(__dirname, '../../../supabase/migrations/009_project_lifecycle.sql'), 'utf8');
+    const stale = COLLAB_ERROR_MATCHES.filter((needle) => !(COLLAB + migration).includes(needle));
     expect(stale).toEqual([]);
   });
 

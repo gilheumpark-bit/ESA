@@ -63,7 +63,9 @@ async function POST__impl(request: NextRequest) {
       );
     }
 
-    const body = await request.json() as Partial<CheckoutRequestBody>;
+    const raw = await request.json().catch(() => null);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return NextResponse.json({ success: false, error: { code: 'ESVA-2011', message: 'Invalid checkout body' } }, { status: 400 });
+    const body = raw as Partial<CheckoutRequestBody>;
     if (!isBillingPlanKey(body.plan)) {
       return NextResponse.json(
         { success: false, error: { code: 'ESVA-2011', message: '지원하지 않는 결제 상품입니다.' } },
@@ -90,7 +92,8 @@ async function POST__impl(request: NextRequest) {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[ESVA /api/checkout] Error:', message);
+    if (/BILLING_SUBSCRIPTION_EXISTS|BILLING_CHECKOUT_PENDING|idempotency_key_in_use/i.test(message)) return NextResponse.json({ success: false, error: { code: 'ESVA-2024', message: '기존 구독 또는 진행 중 결제를 먼저 확인해 주세요.' } }, { status: 409 });
+    console.error('[ESVA /api/checkout] Error:', err instanceof Error ? err.name : 'UnknownError');
 
     // Distinguish Stripe configuration errors
     if (message.includes('Stripe not configured')) {

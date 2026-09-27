@@ -2,6 +2,9 @@ import { test, expect, type Page } from '@playwright/test';
 
 // Only transport/ownership is synthetic; the actual form, hook and receipt UI run.
 const url = '/calc/voltage-drop/voltage-drop?current=100&length=50&cableSize=35';
+// Streaming may retain a hidden server-rendered form outside the active main.
+// Keep strict uniqueness inside the user-facing region; never select .first().
+const calculator = (page: Page) => page.getByRole('main');
 function response(inputs: Record<string, unknown>, id: string) {
   const result = { value: 12.5, unit: 'V' };
   return { success: true, data: { result, receipt: {
@@ -15,7 +18,9 @@ function response(inputs: Record<string, unknown>, id: string) {
 async function prepare(page: Page) {
   await page.route('**/api/**', route => route.fulfill({ status: 503, json: { error: { message: 'Synthetic UI test: ancillary services disconnected' } } }));
   await page.goto(url);
-  await expect(page.locator('form input[id$="-current"]')).toHaveValue('100');
+  await expect(calculator(page)).toHaveCount(1);
+  await expect(calculator(page).getByRole('heading', { name: '전압 강하 계산', exact: true })).toBeVisible();
+  await expect(calculator(page).locator('form input[id$="-current"]')).toHaveValue('100');
 }
 function deferred() {
   let release!: () => void;
@@ -27,15 +32,15 @@ test('editing scalar inputs invalidates the completed receipt without clearing t
   await prepare(page);
   await page.route('**/api/calculate', route => route.fulfill({ json: response(route.request().postDataJSON().inputs, 'ownership-completed') }));
   await page.getByRole('button', { name: '계산하기', exact: true }).click();
-  await expect(page.locator('.receipt-container')).toBeVisible();
-  await page.locator('form input[id$="-current"]').fill('200');
-  await expect(page.locator('.receipt-container')).toHaveCount(0);
-  await expect(page.locator('form input[id$="-current"]')).toHaveValue('200');
+  await expect(calculator(page).locator('.receipt-container')).toBeVisible();
+  await calculator(page).locator('form input[id$="-current"]').fill('200');
+  await expect(calculator(page).locator('.receipt-container')).toHaveCount(0);
+  await expect(calculator(page).locator('form input[id$="-current"]')).toHaveValue('200');
   await expect(page.getByRole('button', { name: '계산하기', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '계산하기', exact: true }).click();
-  await expect(page.locator('.receipt-container')).toBeVisible();
-  await page.locator('form select[id$="-conductor"]').selectOption('Al');
-  await expect(page.locator('.receipt-container')).toHaveCount(0);
+  await expect(calculator(page).locator('.receipt-container')).toBeVisible();
+  await calculator(page).locator('form select[id$="-conductor"]').selectOption('Al');
+  await expect(calculator(page).locator('.receipt-container')).toHaveCount(0);
 });
 
 test('an input edit cancels a pending calculation and its late receipt cannot return', async ({ page }) => {
@@ -49,12 +54,12 @@ test('an input edit cancels a pending calculation and its late receipt cannot re
   });
   await page.getByRole('button', { name: '계산하기', exact: true }).click();
   await sent.promise;
-  await page.locator('form input[id$="-length"]').fill('75');
+  await calculator(page).locator('form input[id$="-length"]').fill('75');
   // Assert cancellation before releasing the provider; a stale-response timeout cannot pass.
   await expect(page.getByRole('button', { name: '계산하기', exact: true })).toBeEnabled();
   gate.release(); await delivered.promise;
-  await expect(page.locator('.receipt-container')).toHaveCount(0);
-  await expect(page.locator('form input[id$="-length"]')).toHaveValue('75');
+  await expect(calculator(page).locator('.receipt-container')).toHaveCount(0);
+  await expect(calculator(page).locator('form input[id$="-length"]')).toHaveValue('75');
 });
 
 test('resubmission hides the old receipt immediately and repeated resets retain form ownership', async ({ page }, info) => {
@@ -67,15 +72,41 @@ test('resubmission hides the old receipt immediately and repeated resets retain 
     await route.fulfill({ json: response(route.request().postDataJSON().inputs, id) }).catch(() => {});
   });
   const submit = page.getByRole('button', { name: '계산하기', exact: true });
-  await submit.click(); await expect(page.locator('.receipt-container')).toBeVisible();
+  await submit.click(); await expect(calculator(page).locator('.receipt-container')).toBeVisible();
   await submit.click(); await second.promise;
-  await expect(page.locator('.receipt-container')).toHaveCount(0);
-  gate.release(); await expect(page.locator('.receipt-container')).toBeVisible();
+  await expect(calculator(page).locator('.receipt-container')).toHaveCount(0);
+  gate.release(); await expect(calculator(page).locator('.receipt-container')).toBeVisible();
   for (let i = 0; i < 5; i++) {
     await page.getByRole('button', { name: '재계산', exact: true }).click();
-    await expect(page.locator('.receipt-container')).toHaveCount(0);
+    await expect(calculator(page).locator('.receipt-container')).toHaveCount(0);
     await expect(submit).toBeEnabled();
-    await submit.click(); await expect(page.locator('.receipt-container')).toBeVisible();
+    await submit.click(); await expect(calculator(page).locator('.receipt-container')).toBeVisible();
   }
   await info.attach('receipt-ownership', { body: await page.screenshot(), contentType: 'image/png' });
+});
+
+test('hidden streamed form residue cannot become the calculator input target', async ({ page }, info) => {
+  await prepare(page);
+  await page.evaluate(() => {
+    const residue = document.createElement('div');
+    residue.hidden = true;
+    residue.id = 'ownership-hidden-stream-fixture';
+    const form = document.createElement('form');
+    const input = document.createElement('input');
+    input.id = 'ownership-hidden-current';
+    input.type = 'number';
+    input.value = '777';
+    form.append(input);
+    residue.append(form);
+    document.body.append(residue);
+  });
+  // Demonstrate the ambiguous global selector rather than relying on a lucky render timing.
+  await expect(page.locator('form input[id$="-current"]')).not.toHaveCount(1);
+  const current = calculator(page).locator('form input[id$="-current"]');
+  await expect(current).toHaveCount(1);
+  await current.fill('200');
+  await expect(current).toHaveValue('200');
+  await expect(page.locator('#ownership-hidden-current')).toHaveValue('777');
+  await expect(page.getByRole('button', { name: '계산하기', exact: true })).toBeEnabled();
+  await info.attach('active-form-with-hidden-stream-residue', { body: await page.screenshot(), contentType: 'image/png' });
 });

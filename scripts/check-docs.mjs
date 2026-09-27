@@ -5,7 +5,7 @@ import process from 'node:process';
 const root = process.cwd();
 const ignoredDirectories = new Set([
   '.bug-hunter', '.claude', '.git', '.next', '.superpowers', '.worktrees', 'worktrees',
-  '.tmp-sld-live', 'coverage', 'node_modules',
+  '.tmp-sld-live', 'coverage', 'coverage-all-source', 'node_modules',
   'output', 'test-results', 'tmp',
 ]);
 

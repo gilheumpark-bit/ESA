@@ -17,6 +17,22 @@ export interface ChatCalculationEvidence {
 }
 
 
+/** Server-created input/result pairs. Arbitrary numbers in JSON do not grant units. */
+function receiptText(calculatorId: string, input: Record<string, unknown>, result: ChatCalculationEvidence['result']): string {
+  const quantities: string[] = [];
+  if (typeof result.value === 'number' && Number.isFinite(result.value) && typeof result.unit === 'string') {
+    quantities.push(`${result.value} ${result.unit}`);
+  }
+  for (const param of CALCULATOR_PARAMS[calculatorId] ?? []) {
+    const value = input[param.name];
+    if (typeof value === 'number' && Number.isFinite(value) && param.unit) quantities.push(`${value} ${param.unit}`);
+  }
+  if (calculatorId === 'unit-converter' && typeof input.value === 'number' && typeof input.fromUnit === 'string') {
+    quantities.push(`${input.value} ${input.fromUnit}`);
+  }
+  return JSON.stringify({ calculatorId, input, result, verifiedQuantities: quantities });
+}
+
 /**
  * 단위 환산 질문만 따로 읽는다.
  *
@@ -74,7 +90,7 @@ function resolveUnitConversion(query: string): ChatCalculationEvidence | null {
       additionalOutputs: calculated.additionalOutputs,
       judgment: calculated.judgment,
     };
-    const trustedText = JSON.stringify({ calculatorId: calculator.id, input, result });
+    const trustedText = receiptText(calculator.id, input, result);
     return {
       calculatorId: calculator.id,
       calculatorName: calculator.name,
@@ -149,7 +165,7 @@ function resolveFollowUp(
         additionalOutputs: calculated.additionalOutputs,
         judgment: calculated.judgment,
       };
-      const trustedText = JSON.stringify({ calculatorId: calculator.id, input: merged, result });
+      const trustedText = receiptText(calculator.id, merged, result);
       return {
         calculatorId: calculator.id,
         calculatorName: calculator.name,
@@ -214,7 +230,7 @@ function resolveSingleTurn(query: string): ChatCalculationEvidence | null {
         return `${def?.description ?? name}=${String(value)}${def?.unit ? ` ${def.unit}` : ''}`;
       });
 
-    const trustedText = JSON.stringify({ calculatorId: calculator.id, input, result });
+    const trustedText = receiptText(calculator.id, input, result);
     return {
       calculatorId: calculator.id,
       calculatorName: intent.calculatorName ?? calculator.name,

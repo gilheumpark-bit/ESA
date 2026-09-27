@@ -50,6 +50,7 @@ export function validateOnpremiseTarget(
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     return { ok: false, reason: 'http/https URL만 허용됩니다.' };
   }
+  if (parsed.search || parsed.hash) return { ok: false, reason: 'On-Premise URL에 query/fragment를 사용할 수 없습니다.' };
   if (parsed.username || parsed.password) {
     return { ok: false, reason: 'URL 사용자 정보는 허용되지 않습니다.' };
   }

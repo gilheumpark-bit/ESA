@@ -13,7 +13,7 @@
  */
 
 import { ensureUserProfile, getSupabaseAdmin } from '@/lib/supabase';
-import { createHash, randomBytes, scrypt, timingSafeEqual } from 'crypto';
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'crypto';
 import { promisify } from 'node:util';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -73,39 +73,17 @@ const PROJECTS_TABLE = 'projects';
 const MEMBERS_TABLE = 'project_members';
 const CALCULATIONS_TABLE = 'project_calculations';
 const SHARE_LINKS_TABLE = 'share_links';
-const APPROVALS_TABLE = 'project_approvals';
 
 /**
  * Create a new project.
  */
-export async function createProject(name: string, ownerId: string, description?: string): Promise<Project> {
+export async function createProject(name: string, ownerId: string, description?: string, requestId: string = randomUUID()): Promise<Project> {
   await ensureUserProfile(ownerId);
-  const client = getSupabaseAdmin();
-  const now = new Date().toISOString();
-
-  const projectData = {
-    name,
-    description: description ?? null,
-    owner_id: ownerId,
-    status: 'active' as ProjectStatus,
-    created_at: now,
-    updated_at: now,
-  };
-
-  const { data, error } = await client
-    .from(PROJECTS_TABLE)
-    .insert(projectData)
-    .select()
-    .single();
-
-  if (error) throw new Error(`[ESVA Collab] Failed to create project: ${error.message}`);
-
-  const project = mapProjectRow(data);
-
-  // Auto-add owner as member
-  await addMemberRow(project.id, ownerId, 'owner', undefined, now);
-
-  return project;
+  const { data, error } = await getSupabaseAdmin().rpc('create_project_atomic', {
+    p_name: name, p_owner_id: ownerId, p_description: description ?? null, p_request_id: requestId,
+  });
+  if (error || !data) throw new Error(`[ESVA Collab] Failed to create project: ${error?.message ?? 'empty result'}`);
+  return mapProjectRow(singleRpcRow(data));
 }
 
 /**
@@ -138,55 +116,25 @@ export async function getProject(projectId: string): Promise<Project | null> {
 export async function listUserProjects(
   userId: string,
   filter: 'all' | 'owned' | 'shared' = 'all',
+  options: { limit?: number; offset?: number } = {},
 ): Promise<Project[]> {
-  const client = getSupabaseAdmin();
+  const limit = options.limit ?? 50;
+  const offset = options.offset ?? 0;
+  if (!['all', 'owned', 'shared'].includes(filter) || !Number.isSafeInteger(limit) || limit < 1 || limit > 101
+    || !Number.isSafeInteger(offset) || offset < 0 || offset > 100000) throw new Error('PROJECT_INPUT_INVALID');
+  const { data, error } = await getSupabaseAdmin().rpc('list_user_project_rows', {
+    p_user_id: userId, p_filter: filter, p_limit: limit, p_offset: offset,
+  });
+  if (error) throw new Error(`[ESVA Collab] Failed to list projects: ${error.message}`);
+  return hydrateProjects((data ?? []) as Record<string, unknown>[]);
+}
 
-  if (filter === 'owned') {
-    const { data, error } = await client
-      .from(PROJECTS_TABLE)
-      .select('*')
-      .eq('owner_id', userId)
-      .order('updated_at', { ascending: false });
-
-    if (error) throw new Error(`[ESVA Collab] Failed to list projects: ${error.message}`);
-    return hydrateProjects(data ?? []);
-  }
-
-  if (filter === 'shared') {
-    // Get project IDs where user is a member but not owner
-    const { data: memberRows, error: memberError } = await client
-      .from(MEMBERS_TABLE)
-      .select('project_id')
-      .eq('user_id', userId)
-      .neq('role', 'owner');
-
-    if (memberError) throw new Error(`[ESVA Collab] Failed to list shared projects: ${memberError.message}`);
-
-    const projectIds = (memberRows ?? []).map((r: { project_id: string }) => r.project_id);
-    if (projectIds.length === 0) return [];
-
-    const { data, error } = await client
-      .from(PROJECTS_TABLE)
-      .select('*')
-      .in('id', projectIds)
-      .order('updated_at', { ascending: false });
-
-    if (error) throw new Error(`[ESVA Collab] Failed to list shared projects: ${error.message}`);
-    return hydrateProjects(data ?? []);
-  }
-
-  // 'all' — owned + shared
-  const owned = await listUserProjects(userId, 'owned');
-  const shared = await listUserProjects(userId, 'shared');
-
-  // Deduplicate and sort by updatedAt
-  const map = new Map<string, Project>();
-  for (const p of [...owned, ...shared]) {
-    map.set(p.id, p);
-  }
-  return Array.from(map.values()).sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+export async function listUserProjectSummaries(userId: string, filter: 'all' | 'owned' | 'shared', limit: number, offset: number) {
+  const { data, error } = await getSupabaseAdmin().rpc('list_user_project_summaries', {
+    p_user_id: userId, p_filter: filter, p_limit: limit, p_offset: offset,
+  });
+  if (error || !Array.isArray(data)) throw new Error('[ESVA Collab] Failed to list project summaries');
+  return data as Array<{ id: string; name: string; description: string; status: ProjectStatus; updatedAt: string; memberCount: number; calculationCount: number; userRole: MemberRole }>;
 }
 
 /**
@@ -197,6 +145,9 @@ export async function updateProject(
   userId: string,
   updates: Partial<Pick<Project, 'name' | 'description' | 'status'>>,
 ): Promise<Project> {
+  if (updates.status !== undefined && !['draft', 'active', 'archived'].includes(updates.status)) throw new Error('PROJECT_APPROVAL_REQUIRED');
+  if ((updates.name !== undefined && (typeof updates.name !== 'string' || !updates.name.trim() || updates.name.length > 200))
+    || (updates.description !== undefined && (typeof updates.description !== 'string' || updates.description.length > 10000))) throw new Error('PROJECT_INPUT_INVALID');
   // Verify the user is owner or editor
   await assertRole(projectId, userId, ['owner', 'editor']);
 
@@ -483,6 +434,8 @@ export async function validateShareLink(
 
   if (error || !data) return { valid: false, error: 'Link not found' };
 
+  if (data.revoked_at) return { valid: false, error: 'Link revoked' };
+
   // Check expiration
   if (data.expires_at && new Date(data.expires_at as string) < new Date()) {
     return { valid: false, error: 'Link expired' };
@@ -511,6 +464,9 @@ export async function validateShareLink(
     }
   }
 
+  const { data: issuer, error: issuerError } = await client.from(MEMBERS_TABLE).select('role')
+    .eq('project_id', data.project_id).eq('user_id', data.created_by).maybeSingle();
+  if (issuerError || !issuer || !['owner', 'editor'].includes(issuer.role)) return { valid: false, error: 'Link revoked' };
   return { valid: true, projectId: data.project_id as string };
 }
 
@@ -521,83 +477,50 @@ export async function validateShareLink(
 /**
  * Request approval for a project.
  */
-export async function requestApproval(
-  projectId: string,
-  requesterId: string,
-  approverId: string,
-): Promise<ApprovalRequest> {
-  await assertRole(projectId, requesterId, ['owner', 'editor']);
-
-  const client = getSupabaseAdmin();
-  const now = new Date().toISOString();
-
-  const approvalData = {
-    project_id: projectId,
-    requester_id: requesterId,
-    approver_id: approverId,
-    status: 'pending' as ApprovalStatus,
-    requested_at: now,
-  };
-
-  const { data, error } = await client
-    .from(APPROVALS_TABLE)
-    .insert(approvalData)
-    .select()
-    .single();
-
-  if (error) throw new Error(`[ESVA Collab] Failed to request approval: ${error.message}`);
-
-  // Update project status
-  await client
-    .from(PROJECTS_TABLE)
-    .update({ status: 'review', updated_at: now })
-    .eq('id', projectId);
-
-  return mapApprovalRow(data);
+export async function requestApproval(projectId: string, requesterId: string, approverId: string): Promise<ApprovalRequest> {
+  const { data, error } = await getSupabaseAdmin().rpc('request_project_approval', {
+    p_project_id: projectId, p_requester: requesterId, p_approver: approverId,
+  });
+  if (error || !data) throw new Error(`[ESVA Collab] Failed to request approval: ${error?.message ?? 'empty result'}`);
+  return mapApprovalRow(singleRpcRow(data));
 }
 
-/**
- * Approve or reject a project.
- */
-export async function approveProject(
-  projectId: string,
-  approverId: string,
-  approved: boolean,
-  comment?: string,
-): Promise<ApprovalRequest> {
-  const client = getSupabaseAdmin();
-  const now = new Date().toISOString();
+export async function approveProject(projectId: string, approverId: string, approved: boolean, comment?: string): Promise<ApprovalRequest> {
+  const { data, error } = await getSupabaseAdmin().rpc('resolve_project_approval', {
+    p_project_id: projectId, p_approver: approverId, p_approved: approved, p_comment: comment ?? null,
+  });
+  if (error || !data) throw new Error(`[ESVA Collab] Failed to approve project: ${error?.message ?? 'empty result'}`);
+  return mapApprovalRow(singleRpcRow(data));
+}
 
-  const status: ApprovalStatus = approved ? 'approved' : 'rejected';
+/** Owners can inspect/revoke every live bearer grant, without exposing password hashes. */
+export async function listProjectShareLinks(projectId: string, userId: string) {
+  await assertRole(projectId, userId, ['owner']);
+  const { data, error } = await getSupabaseAdmin().from(SHARE_LINKS_TABLE)
+    .select('id, created_by, created_at, expires_at, revoked_at').eq('project_id', projectId).order('created_at', { ascending: false }).limit(100);
+  if (error) throw new Error(`[ESVA Collab] Failed to list shares: ${error.message}`);
+  return data ?? [];
+}
 
-  const { data, error } = await client
-    .from(APPROVALS_TABLE)
-    .update({
-      status,
-      comment: comment ?? null,
-      resolved_at: now,
-    })
-    .eq('project_id', projectId)
-    .eq('approver_id', approverId)
-    .eq('status', 'pending')
-    .select()
-    .single();
-
-  if (error) throw new Error(`[ESVA Collab] Failed to approve project: ${error.message}`);
-
-  // Update project status
-  const newProjectStatus: ProjectStatus = approved ? 'approved' : 'active';
-  await client
-    .from(PROJECTS_TABLE)
-    .update({ status: newProjectStatus, updated_at: now })
-    .eq('id', projectId);
-
-  return mapApprovalRow(data);
+export async function revokeProjectShareLinks(projectId: string, userId: string, linkId?: string): Promise<void> {
+  await assertRole(projectId, userId, ['owner']);
+  let query = getSupabaseAdmin().from(SHARE_LINKS_TABLE).update({ revoked_at: new Date().toISOString() }).eq('project_id', projectId).is('revoked_at', null);
+  if (linkId) query = query.eq('id', linkId);
+  const { error } = await query;
+  if (error) throw new Error(`[ESVA Collab] Failed to revoke shares: ${error.message}`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Internal Helpers
 // ═══════════════════════════════════════════════════════════════════════════════
+
+function singleRpcRow(data: unknown): Record<string, unknown> {
+  const row = Array.isArray(data) && data.length === 1 ? data[0] : data;
+  if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.id !== 'string') {
+    throw new Error('[ESVA Collab] Failed to read lifecycle RPC result');
+  }
+  return row as Record<string, unknown>;
+}
 
 function mapProjectRow(row: Record<string, unknown>): Project {
   return {
@@ -689,14 +612,21 @@ async function touchProject(projectId: string): Promise<void> {
 }
 
 async function hydrateProjects(rows: Record<string, unknown>[]): Promise<Project[]> {
-  return Promise.all(rows.map(async (row) => {
-    const projectId = row.id as string;
-    const [members, calculations] = await Promise.all([
-      getProjectMembers(projectId),
-      getProjectCalculations(projectId),
-    ]);
-    return { ...mapProjectRow(row), members, calculations };
-  }));
+  if (!rows.length) return [];
+  const ids = rows.map((row) => String(row.id));
+  const client = getSupabaseAdmin();
+  // Two relationship queries per page instead of two per project.
+  const [members, calculations] = await Promise.all([
+    client.from(MEMBERS_TABLE).select('project_id, user_id, email, role, invited_at, joined_at').in('project_id', ids).order('invited_at'),
+    client.from(CALCULATIONS_TABLE).select('project_id, receipt_id').in('project_id', ids),
+  ]);
+  if (members.error || calculations.error) throw new Error('[ESVA Collab] Failed to hydrate project page');
+  const byId = new Map(rows.map((row) => [String(row.id), mapProjectRow(row)]));
+  for (const row of members.data ?? []) byId.get(row.project_id)?.members.push({
+    userId: row.user_id, email: row.email ?? undefined, role: row.role, invitedAt: row.invited_at, joinedAt: row.joined_at ?? undefined,
+  });
+  for (const row of calculations.data ?? []) byId.get(row.project_id)?.calculations.push(row.receipt_id);
+  return [...byId.values()];
 }
 
 const scryptAsync = promisify(scrypt);

@@ -99,6 +99,8 @@ export interface OrchestrateInput {
     texts?: RawTextSeed[];
   };
   jobId?: string;
+  /** Server-issued execution fencing token, never supplied by the browser. */
+  runId?: string;
   ownerId?: string;
   /** HTTP 실행 한 번에 새로 처리할 페이지 수. 전체 작업 예산과 별개다. */
   maxPagesPerRun?: number;
@@ -946,7 +948,7 @@ async function runRasterPass(
     // 로 되돌려 재시도를 허용한다 — 잊힌 만큼 문서 예산(`maxVlmCalls`)을
     // 매번 넘어설 수 있었다. 예산 검사는 `previousVlmCalls`(= 저장된 값)에서
     // 출발하므로 저장이 늦으면 상한이 늦게 걸린다.
-    updateJob(run.jobId, { vlmCallsUsed: run.previousVlmCalls + run.spent.vlmCalls });
+    updateJob(run.jobId, { vlmCallsUsed: run.previousVlmCalls + run.spent.vlmCalls }, run.input.runId);
 
     if (result.success && result.drawingReview) {
       mergeAdapted(
@@ -1228,6 +1230,7 @@ export async function runDocumentAnalysis(
   input: OrchestrateInput,
   deps: DocumentAnalysisDependencies = {},
 ): Promise<{ job: DrawingJobRecord; document: DrawingDocumentV3 }> {
+  const persist = (jobId: string, patch: Partial<DrawingJobRecord>) => updateJob(jobId, patch, input.runId);
   const budget = normalizeBudget(input.budget);
   const maxPagesPerRun = input.maxPagesPerRun ?? budget.maxPages;
   if (!Number.isSafeInteger(maxPagesPerRun) || maxPagesPerRun < 1 || maxPagesPerRun > budget.maxPages) {
@@ -1262,16 +1265,16 @@ export async function runDocumentAnalysis(
     });
   const previousVlmCalls = previousJob?.vlmCallsUsed ?? 0;
   if (previousJob) {
-    updateJob(job.jobId, { budget, error: undefined });
+    persist(job.jobId, { budget, error: undefined });
   }
-  updateJob(job.jobId, {
+  persist(job.jobId, {
     estimated: {
       ...job.estimated,
       pages: requested.length,
       costRangeNote: `최대 ${budget.maxVlmCalls} VLM 호출 · ${requested.length} 페이지 · 예산 초과 시 PARTIAL`,
     },
   });
-  updateJob(job.jobId, { status: 'ENUMERATING' });
+  persist(job.jobId, { status: 'ENUMERATING' });
 
   const previousPages = new Map(previousJob?.document?.pages.map((page) => [page.pageIndex, page]));
   const pageStates: PageAnalysisState[] = requested.map((pageIndex) => {
@@ -1357,7 +1360,7 @@ export async function runDocumentAnalysis(
     spent,
   };
 
-  updateJob(job.jobId, { status: 'SURVEYING' });
+  persist(job.jobId, { status: 'SURVEYING' });
   for (const state of pageStates) {
     if (state.status === 'complete' || state.status === 'skipped-empty') continue;
     const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
@@ -1379,7 +1382,7 @@ export async function runDocumentAnalysis(
     if (state.drawingKind === 'empty') state.status = 'skipped-empty';
   }
 
-  updateJob(job.jobId, { status: 'ANALYZING_PAGES' });
+  persist(job.jobId, { status: 'ANALYZING_PAGES' });
   for (const state of pageStates) {
     if (state.status === 'complete' || state.status === 'skipped-empty') continue;
     const page = source.pages.find((candidate) => candidate.pageIndex === state.pageIndex);
@@ -1387,7 +1390,7 @@ export async function runDocumentAnalysis(
     await analyzePage(run, state, page);
   }
 
-  updateJob(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: previousVlmCalls + spent.vlmCalls });
+  persist(job.jobId, { status: 'RESCANNING_GAPS', vlmCallsUsed: previousVlmCalls + spent.vlmCalls });
   const texts = [...previousSeeds.texts, ...adjudicateTextSeeds(deduplicateTextSeeds(textSeeds), unresolved)]
     .sort((left, right) => (left.evidence[0]?.pageIndex ?? 0) - (right.evidence[0]?.pageIndex ?? 0)
       || left.displayId.localeCompare(right.displayId));
@@ -1410,7 +1413,7 @@ export async function runDocumentAnalysis(
     });
   }
 
-  updateJob(job.jobId, { status: 'RECONCILING_PAGES' });
+  persist(job.jobId, { status: 'RECONCILING_PAGES' });
   const continuity = restoredContinuity(previousJob?.document, preservedPages);
   stitchPageBoundaries(continuity, continuityByPage, lineHits, unresolved);
   // 라스터 원본에는 벡터 앵커가 없다. 판독된 문자 층을 넘겨 명판 다중도를
@@ -1446,7 +1449,7 @@ export async function runDocumentAnalysis(
   const coverageComplete = coverageLedger.allPlannedFinished
     && coverageLedger.regionsFailed === 0
     && coverageLedger.unresolvedRescans === 0;
-  updateJob(job.jobId, { status: 'SYNTHESIZING' });
+  persist(job.jobId, { status: 'SYNTHESIZING' });
   const equipmentCounts = buildEquipmentCounts(symbols, equipmentLinks, crossPageRelations, unresolved);
   const ratedValues = extractRatedValues(texts, symbols);
   const calculations = [...new Map(calculationHits.map((calculation) => [
@@ -1519,7 +1522,7 @@ export async function runDocumentAnalysis(
       complete: state.status === 'complete' || state.status === 'skipped-empty',
     };
   }
-  const finalJob = updateJob(job.jobId, {
+  const finalJob = persist(job.jobId, {
     status: jobStatus,
     document: safeDocument,
     vlmCallsUsed: previousVlmCalls + spent.vlmCalls,

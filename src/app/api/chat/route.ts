@@ -12,6 +12,7 @@
  */
 
 import { NextRequest } from 'next/server';
+import { readChatBody, validateChatRequest, type ValidatedChatRequest } from '@/lib/chat-request';
 import { esaResponseHeaders, jsonWithEsa } from '@/lib/esa-http';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import {
@@ -26,6 +27,7 @@ import { checkPromptInjectionSafety } from '@/lib/safety-policies';
 import { PROVIDERS, type ChatMessage } from '@/lib/ai-providers';
 import { extractVerifiedUserId } from '@/lib/auth-helpers';
 import { validateOnpremiseTarget } from '@/lib/onpremise-policy';
+import { createOnpremiseFetch } from '@/lib/onpremise-fetch';
 import { filterLLMOutput } from '@/engine/llm/output-filter';
 import { isRequestOriginAllowed } from '@/lib/request-origin';
 import {
@@ -47,22 +49,6 @@ import {
 } from '@/lib/chat-decision-contract';
 
 // ─── PART 1: Types & Constants ──────────────────────────────────
-
-interface ChatRequestBody {
-  messages: ChatMessage[];
-  provider: string;
-  model: string;
-  apiKey?: string;
-  language?: 'ko' | 'en';
-  temperature?: number;
-  maxTokens?: number;
-  /** provider==='onpremise'일 때: settings/onpremise 저장 설정(사설 IP만 허용) */
-  onpremise?: {
-    serverUrl: string;
-    apiType: 'ollama' | 'vllm' | 'localai' | 'openai-compat';
-    apiKey?: string;
-  };
-}
 
 // 토큰 예산은 `@/lib/token-budget` 로 옮겼다 — chat 한 라우트만 계량되고
 // 더 비싼 team-review 는 무계량이었다(실측 2026-07-29). 한 사용자의 하루
@@ -106,6 +92,7 @@ async function generateChatText(
   onpremBaseUrl?: string,
   signal?: AbortSignal,
 ): Promise<ChatGenerationResult> {
+  signal?.throwIfAborted();
   let text = '';
   let finishReason: unknown = 'stop';
 
@@ -134,7 +121,7 @@ async function generateChatText(
       const { createOpenAI } = await import('@ai-sdk/openai');
       const base = (onpremBaseUrl ?? '').replace(/\/+$/, '');
       const baseURL = base.endsWith('/v1') ? base : `${base}/v1`;
-      const compatibleProvider = createOpenAI({ apiKey, baseURL });
+      const compatibleProvider = createOpenAI({ apiKey, baseURL, fetch: createOnpremiseFetch(baseURL) });
       sdkModel = compatibleProvider.chat(model);
       break;
     }
@@ -206,8 +193,12 @@ async function generateChatText(
     })),
     temperature,
     maxOutputTokens: maxTokens,
+    abortSignal: signal,
+    timeout: { totalMs: 120_000, chunkMs: 30_000 },
+    maxRetries: 0,
   });
-  for await (const part of result.textStream) text += part;
+  for await (const part of result.textStream) { signal?.throwIfAborted(); text += part; }
+  signal?.throwIfAborted();
   finishReason = await result.finishReason;
   const usage = await result.usage;
   const totalTokens = usage && Number.isFinite(usage.totalTokens)
@@ -465,7 +456,12 @@ async function POST__impl(request: NextRequest) {
     }
 
     // Parse body
-    const raw = await request.json().catch(() => null);
+    if (request.signal.aborted) return jsonWithEsa({ success: false, error: { code: 'ESVA-3022', message: 'Request cancelled' } }, { status: 499 });
+    let raw: unknown;
+    try { raw = await readChatBody(request); } catch (error) {
+      if (error instanceof RangeError) return jsonWithEsa({ success: false, error: { code: 'ESVA-3008', message: 'Chat body too large' } }, { status: 413 });
+      throw error;
+    }
     // 깨진 JSON·빈 본문은 호출자 잘못이다. 던지게 두면 바깥 catch 가
     // 500 으로 뭉개 "우리 잘못" 으로 보고된다(§ 정직 거부).
     if (!raw || typeof raw !== 'object') {
@@ -474,7 +470,7 @@ async function POST__impl(request: NextRequest) {
         { status: 400 },
       );
     }
-    const body = raw as ChatRequestBody;
+    const body = raw as ValidatedChatRequest;
 
     if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
       return jsonWithEsa(
@@ -495,6 +491,10 @@ async function POST__impl(request: NextRequest) {
         { success: false, error: { code: 'ESVA-3012', message: 'Missing model' } },
         { status: 400 },
       );
+    }
+
+    if (!validateChatRequest(raw)) {
+      return jsonWithEsa({ success: false, error: { code: 'ESVA-3009', message: 'Invalid chat request fields' } }, { status: 400 });
     }
 
     // Validate provider — 'onpremise'는 클라우드 레지스트리(PROVIDERS) 밖의
@@ -646,6 +646,7 @@ async function POST__impl(request: NextRequest) {
      * 스트림이 끝난 뒤 정산한다(아래 `settleTokenUsage`).
      */
     let reservedTokens = 0;
+    let primaryReservationId: string | undefined;
     let budgetRemaining = DAILY_TOKEN_BUDGET;
     if (usesServerKey) {
       cleanupTokenUsage();
@@ -653,6 +654,7 @@ async function POST__impl(request: NextRequest) {
         + Math.ceil(calibratedSystemPrompt.length / 4)
         + maxTokens;
       const budget = checkTokenBudget(ip, reservedTokens);
+      primaryReservationId = budget.reservationId;
       budgetRemaining = budget.remaining;
       if (!budget.allowed) {
         return jsonWithEsa(
@@ -676,7 +678,7 @@ async function POST__impl(request: NextRequest) {
           if (!budget.allowed) return null;
           return (actualTokens) => {
             if (actualTokens !== undefined && Number.isFinite(actualTokens)) {
-              settleTokenUsage(ip, estimatedTokens, actualTokens);
+              settleTokenUsage(ip, estimatedTokens, actualTokens, budget.reservationId);
             }
           };
         }
@@ -696,8 +698,8 @@ async function POST__impl(request: NextRequest) {
         calculationEvidence,
         responseLanguage,
         reserveRepairBudget,
-        usesServerKey ? (used) => settleTokenUsage(ip, reservedTokens, used) : undefined,
-        request.signal,
+        usesServerKey ? (used) => settleTokenUsage(ip, reservedTokens, used, primaryReservationId) : undefined,
+        AbortSignal.any([request.signal, AbortSignal.timeout(150_000)]),
       );
     } catch (error) {
       if (!isChatGPTLocal) throw error;
@@ -731,8 +733,9 @@ async function POST__impl(request: NextRequest) {
       }),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[ESVA /api/chat] Error:', message);
+    if (request.signal.aborted) return jsonWithEsa({ success: false, error: { code: 'ESVA-3022', message: 'Request cancelled' } }, { status: 499 });
+    if (err instanceof Error && /Timeout|Abort/.test(err.name)) return jsonWithEsa({ success: false, error: { code: 'ESVA-3023', message: 'AI request timed out' } }, { status: 504 });
+    console.error('[ESVA /api/chat] Error:', err instanceof Error ? err.name : 'UnknownError');
 
     return jsonWithEsa(
       { success: false, error: { code: 'ESVA-3999', message: 'Internal chat error' } },

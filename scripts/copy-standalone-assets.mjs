@@ -3,7 +3,7 @@
  *
  * `output: 'standalone'` 은 서버 번들과 추적된 node_modules 만 만든다.
  * `.next/static` 과 `public` 은 **복사해 주지 않는다** — Next 가 명시한 동작이고,
- * Dockerfile 은 이미 COPY 두 줄로 처리하고 있다(36~39행).
+ * 이 스크립트가 그 자산을 standalone 안으로 함께 복사한다.
  *
  * 문제는 Docker 밖이다. 로컬이나 비-Docker 배포에서 `node .next/standalone/server.js`
  * 로 띄우면 청크가 전부 404 나고 하이드레이션이 실패한다. 증상이 "페이지가
@@ -11,7 +11,7 @@
  * 재발하는 이 복사 누락이다. 사람이 매번 기억해야 하는 절차는 언젠가 빠진다.
  *
  * 그래서 빌드에 붙인다. Docker 는 이 스크립트가 채워 둔 자리를 그대로 COPY 하므로
- * 중복일 뿐 충돌하지 않는다.
+ * 별도 중복 복사가 필요하지 않다.
  */
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';

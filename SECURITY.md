@@ -1,6 +1,6 @@
 # ESVA 보안 정책
 
-> 최종 확인: 2026-07-31 · 적용 대상: 현재 `main`과 병합 예정 변경
+> 정책 갱신: 2026-09-27 · 실제 검사 결과는 해당 커밋의 CI 증거를 기준으로 확인합니다.
 
 ## 취약점 제보
 
@@ -74,13 +74,37 @@
 - 외부 AI 공급자별 프롬프트 주입·출력 품질은 실제 모델과 반복 표본으로 계속 검증해야 합니다.
 - Supabase, Stripe, Weaviate, Pinata의 운영 자격증명 왕복은 배포 환경마다 별도 확인해야 합니다.
 - 회사 기밀 도면, 실제 고객 개인정보, 운영 결제 데이터로 자동 QA를 실행하지 않습니다.
-- `npm audit` high 33건이 남아 있으며 전부 `brace-expansion <=5.0.7`의 ReDoS 하나에서 파생됩니다(minimatch → readdir-glob → archiver → exceljs, 그리고 eslint·jest 계열). 2026-07-25에 `overrides`로 `brace-expansion@5.0.8` 강제를 실제로 적용해 봤습니다 — `npm audit`은 0건이 됐지만 `minimatch@3`이 `TypeError: expand is not a function`으로 깨졌습니다(5.x가 기본 내보내기를 바꿨습니다). ESLint가 즉시 실패했고, 같은 `minimatch@3`을 `archiver`/`readdir-glob`도 쓰므로 Excel 내보내기가 테스트로는 안 잡히는 방식으로 깨질 수 있어 되돌렸습니다. npm이 제시하는 대안은 `exceljs@4.1.1`로의 semver-major 다운그레이드라 취약점 해소가 아니라 기능 후퇴입니다. ReDoS는 공격자가 glob 패턴을 제어할 때 도달하는데 이 앱의 glob은 전부 저장소 설정과 자체 생성 경로라 현재 도달 경로가 없습니다. 상류 `minimatch`가 patched `brace-expansion`을 받으면 재평가합니다.
+- 의존성 취약점은 커밋과 조회 시점에 따라 달라집니다. 현재 정책은 운영 및 개발 포함 범위 모두 critical/high 0이며, 낮은 심각도까지 0이라고 해석하지 않습니다.
 - RLS 정책이 `auth.uid()`에 묶여 있어, 브라우저 Supabase 클라이언트를 추가하면 Firebase 사용자에게는 `auth.uid()`가 NULL이라 own-row 정책이 전면 차단됩니다. 차단은 안전한 방향이지만 원인을 알기 어려운 장애로 나타납니다. Firebase 주체를 RLS로 실제 집행하려면 `request.jwt.claims` 기준으로 정책을 다시 써야 합니다.
+
+## 의존성 감사 증거와 과거 기록
+
+CI는 운영(`--omit=dev`)과 개발 포함(`--include=dev`) 감사를 각각 실행하고,
+원본 JSON·판정·범위·커밋 SHA·조회 시간을 `dependency-audit-evidence`로 보관합니다.
+조회 실패, 잘못된 JSON, 불일치 집계는 통과가 아니라 판정 불가로 처리합니다.
+아래 과거 건수는 **현재 잔존 건수나 현재 도달 가능성 평가가 아닙니다**.
+
+- 2026-07-25 기록: high 33건이 `brace-expansion` 관련 전이 의존성에서 보고됐습니다.
+  당시 강제 override 시 `minimatch@3`의 `expand is not a function` 오류가 발생해
+  그 변경을 되돌렸습니다. 해당 실험을 현재 lockfile의 검사 결과로 재사용하지 않습니다.
+
+수치 출력에서 모델이 쓴 출처 태그는 근거가 아닙니다. 실제 계산 영수증의 수치와
+앱 등록 상수를 별도로 대조하며, 상수는 같은 문장/표 행의 대상·등급에 연결합니다.
+복수 대상·미등록 등급·모호한 전압은 자동 승인하지 않습니다. 앱 등록 상수 자체의
+법규 최신성, 동의어 및 자연어 의미 전체의 정합성은 이 필터만으로 보증되지 않습니다.
+
+## 병합 통제
+
+`.github/main-ruleset.json`은 main의 필수 검사와 강제 push/삭제 방지를 위한
+적용 템플릿입니다. **파일이 존재해도 GitHub 설정은 바뀌지 않습니다.**
+저장소 관리자가 Administration(write) 권한으로 ruleset을 적용한 뒤,
+저장소 Settings에서 활성화와 필수 검사 이름을 확인해야 합니다.
 
 ## 배포 전 보안 확인
 
 ```bash
-npm audit --omit=dev
+npm run gate:audit
+npm run gate:audit:all
 npm run lint -- --max-warnings=0
 npm test -- --runInBand
 npm run build

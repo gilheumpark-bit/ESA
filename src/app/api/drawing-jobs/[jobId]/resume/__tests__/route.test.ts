@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 
 import { resolveDrawingOwner } from '@/agent/drawing/drawing-api-owner';
-import { claimOwnedJobRun, getOwnedJob, updateOwnedJob } from '@/agent/drawing/drawing-job-store';
+import { claimOwnedJobRun, getOwnedJob, finishOwnedJobRun } from '@/agent/drawing/drawing-job-store';
 import { runDocumentAnalysis } from '@/agent/drawing/document-orchestrator';
 import { readSourceLease } from '@/agent/drawing/source-lease-store';
 import { getChatGPTLocalStatus } from '@/lib/chatgpt-local';
@@ -12,6 +12,7 @@ jest.mock('@/lib/request-origin', () => ({ isRequestOriginAllowed: jest.fn(() =>
 jest.mock('@/agent/drawing/drawing-api-owner', () => ({ resolveDrawingOwner: jest.fn() }));
 jest.mock('@/agent/drawing/document-orchestrator', () => ({ runDocumentAnalysis: jest.fn() }));
 jest.mock('@/agent/drawing/drawing-job-store', () => ({
+  finishOwnedJobRun: jest.fn(() => true), heartbeatOwnedJobRun: jest.fn(() => true),
   claimOwnedJobRun: jest.fn(), getOwnedJob: jest.fn(), nextPendingRequestedPage: jest.fn(() => 0), updateOwnedJob: jest.fn(),
 }));
 jest.mock('@/agent/drawing/source-lease-store', () => ({
@@ -21,6 +22,7 @@ jest.mock('@/lib/chatgpt-local', () => ({ getChatGPTLocalStatus: jest.fn() }));
 
 const owner = { ownerId: 'user:a', authenticated: true };
 const job = {
+  runLease: { id: 'run-test-token', expiresAt: Date.now() + 90_000 },
   jobId: 'job-a',
   ownerId: owner.ownerId,
   status: 'PARTIAL',
@@ -102,7 +104,7 @@ describe('drawing job resume API', () => {
 
       expect(response.status).toBe(500);
       expect(await response.text()).not.toContain(diagnostic);
-      expect(updateOwnedJob).toHaveBeenCalledWith('job-a', owner.ownerId, expect.objectContaining({
+      expect(finishOwnedJobRun).toHaveBeenCalledWith('job-a', owner.ownerId, 'run-test-token', expect.objectContaining({
         status: 'PARTIAL',
         error: expect.any(String),
       }));

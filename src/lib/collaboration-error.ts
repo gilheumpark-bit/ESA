@@ -24,6 +24,13 @@ export interface CollabErrorMapping {
 }
 
 const RULES: Array<{ match: string; status: number; message: string }> = [
+  { match: 'PROJECT_SHARE_FORBIDDEN', status: 403, message: '현재 공유 링크를 발급할 권한이 없습니다.' },
+  { match: 'PROJECT_APPROVAL_REQUIRED', status: 400, message: '승인 상태는 검토 요청과 승인 절차에서만 변경할 수 있습니다.' },
+  { match: 'PROJECT_APPROVAL_FORBIDDEN', status: 403, message: '현재 검토 권한이 없거나 본인 승인 요청입니다.' },
+  { match: 'PROJECT_APPROVAL_STALE', status: 409, message: '검토 대상 버전이 변경되었습니다. 다시 검토 요청하세요.' },
+  { match: 'PROJECT_IDEMPOTENCY_CONFLICT', status: 409, message: '같은 요청 식별자에 다른 내용이 사용되었습니다.' },
+  { match: 'PROJECT_INPUT_INVALID', status: 400, message: '프로젝트 입력 형식이나 범위를 확인하세요.' },
+  { match: 'PROJECT_NOT_FOUND', status: 404, message: '프로젝트를 찾지 못했습니다.' },
   {
     match: 'Insufficient permissions',
     status: 403,

@@ -14,6 +14,7 @@ jest.mock('@/lib/request-origin', () => ({ isRequestOriginAllowed: jest.fn(() =>
 jest.mock('@/agent/drawing/drawing-api-owner', () => ({ resolveDrawingOwner: jest.fn() }));
 jest.mock('@/agent/drawing/document-orchestrator', () => ({ runDocumentAnalysis: jest.fn() }));
 jest.mock('@/agent/drawing/drawing-job-store', () => ({
+  finishOwnedJobRun: jest.fn(() => true), heartbeatOwnedJobRun: jest.fn(() => true),
   claimOwnedJobRun: jest.fn(), getOwnedJob: jest.fn(), nextPendingRequestedPage: jest.fn(() => 0), updateOwnedJob: jest.fn(),
 }));
 jest.mock('@/agent/drawing/source-lease-store', () => ({
@@ -23,6 +24,7 @@ jest.mock('@/lib/chatgpt-local', () => ({ getChatGPTLocalStatus: jest.fn() }));
 
 const owner = { ownerId: 'user:a', authenticated: true };
 const job = {
+  runLease: { id: 'run-test-token', expiresAt: Date.now() + 90_000 },
   jobId: 'job-a', ownerId: owner.ownerId, status: 'QUEUED', sourceLease: { leaseId: 'lease-a', expiresAt: Date.now() + 1000 },
   sourceMetadata: { mimeType: 'image/png', fileName: 'a.png', requestedPages: 'all' },
   budget: { maxPages: 50, maxVlmCalls: 120, maxPixels: 40_000_000, deadlineMs: 60_000 },
@@ -181,8 +183,8 @@ describe('drawing job run API', () => {
     expect(response.status).toBe(500);
     expect(await response.text()).not.toContain(diagnostic);
     expect(releaseSourceLease).not.toHaveBeenCalled();
-    expect(jest.requireMock('@/agent/drawing/drawing-job-store').updateOwnedJob).toHaveBeenCalledWith(
-      'job-a', owner.ownerId, expect.objectContaining({ status: 'QUEUED' }),
+    expect(jest.requireMock('@/agent/drawing/drawing-job-store').finishOwnedJobRun).toHaveBeenCalledWith(
+      'job-a', owner.ownerId, 'run-test-token', expect.objectContaining({ status: 'QUEUED' }),
     );
   });
 });
