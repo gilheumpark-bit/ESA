@@ -151,6 +151,12 @@ export default function CalculatorPage({
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!receipt) return;
+    // The receipt carries its owner (set by the API from the verified bearer).
+    const owner = receipt.userId && receipt.userId !== 'anonymous' ? receipt.userId : null;
+    // A receipt the API could not attribute to the signed-in viewer is neither
+    // saved nor cached (receipt-cache), so a list entry would link to a page
+    // that cannot open it. The list outlives sign-out, so it is not shared either.
+    if (owner !== viewerId) return;
     const rv = receipt.result?.value;
     const unit = receipt.result?.unit ?? '';
     recordRecentCalc({
@@ -161,10 +167,7 @@ export default function CalculatorPage({
       keyResult: rv == null ? '' : `${rv}${unit ? ` ${unit}` : ''}`,
       value: rv == null ? '' : rv,
       unit,
-      // The receipt carries its owner (set by the API from the verified bearer).
-      // If the API could not verify a signed-in viewer, the work is still that
-      // viewer's: this list outlives sign-out and must not show it to others.
-      ownerId: (receipt.userId && receipt.userId !== 'anonymous' ? receipt.userId : null) ?? viewerId,
+      ownerId: owner,
     });
   }, [receipt, calcMeta, category, id, viewerId]);
 

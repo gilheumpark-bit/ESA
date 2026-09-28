@@ -21,7 +21,7 @@ describe('report session cache ownership', () => {
       setItem: (key: string, value: string) => {
         const previous = values.get(key);
         const next = used() - (previous === undefined ? 0 : key.length + previous.length) + key.length + value.length;
-        if (next > capacity) throw new Error('QuotaExceededError');
+        if (next > capacity) throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
         values.set(key, value);
       },
       removeItem: (key: string) => values.delete(key),
@@ -70,6 +70,38 @@ describe('report session cache ownership', () => {
     expect(getCachedReport('newest', 'alice')?.reportId).toBe('newest');
     expect(getCachedReport('older', 'alice')).toBeNull();
     expect(values.has('esva-report-legacy')).toBe(false);
+  });
+
+  test('frees only as many earlier copies as the new report needs', () => {
+    expect(cacheReport(report('first'), 'alice', tokenFor('alice'))).toBe(true);
+    expect(cacheReport(report('second'), 'alice', tokenFor('alice'))).toBe(true);
+    capacity = used() + 10;
+    expect(cacheReport(report('third'), 'alice', tokenFor('alice'))).toBe(true);
+    const kept = ['first', 'second'].filter((id) => getCachedReport(id, 'alice') !== null);
+    expect(kept).toHaveLength(1);
+  });
+
+  test('a report that can never fit leaves the earlier reports in place', () => {
+    expect(cacheReport(report('first'), 'alice', tokenFor('alice'))).toBe(true);
+    expect(cacheReport(report('second'), 'bob', tokenFor('bob'))).toBe(true);
+    capacity = used() + 10;
+    const huge = { ...report('huge'), payload: 'x'.repeat(10_000) } as unknown as ESVAVerifiedReport;
+    expect(cacheReport(huge, 'alice', tokenFor('alice'))).toBe(false);
+    expect(getCachedReport('first', 'alice')?.reportId).toBe('first');
+    expect(getCachedReport('second', 'bob')?.reportId).toBe('second');
+  });
+
+  test('a blocked store (not a full one) does not cost the earlier reports', () => {
+    expect(cacheReport(report('kept'), 'alice', tokenFor('alice'))).toBe(true);
+    const storage = globalThis.sessionStorage as unknown as { setItem: (key: string, value: string) => void };
+    const original = storage.setItem;
+    storage.setItem = () => { throw new DOMException('The operation is insecure.', 'SecurityError'); };
+    try {
+      expect(cacheReport(report('new'), 'alice', tokenFor('alice'))).toBe(false);
+    } finally {
+      storage.setItem = original;
+    }
+    expect(getCachedReport('kept', 'alice')?.reportId).toBe('kept');
   });
 
   test('reports a storage failure instead of losing the report silently', () => {

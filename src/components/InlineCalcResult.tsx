@@ -432,12 +432,27 @@ function MiniField({
   );
 }
 
+/**
+ * Mini-form lead line. Only a query that supplied its own inputs is "ready"
+ * (e.g. its result was cleared because the account changed); a query with no
+ * values would run on defaults, which is not the user's calculation.
+ */
+export function miniFormNotice(unreadNumbers: number[], missingRequiredCount: number, inputsReady: boolean): string {
+  if (unreadNumbers.length > 0) {
+    return `질문의 ${unreadNumbers.join(', ')} 이(가) 어느 입력인지 확정하지 못했습니다. 아래 값을 확인해 주세요.`;
+  }
+  return inputsReady && missingRequiredCount === 0
+    ? '필수 입력값은 준비되어 있습니다. 계산하기를 눌러 결과를 받으세요.'
+    : '추가 입력이 필요합니다. 아래 항목을 입력해 주세요.';
+}
+
 /** 미니 폼 (State B) */
 function MiniForm({
   calculatorName,
   missingRequired,
   missingOptional,
   unreadNumbers,
+  inputsReady,
   onSubmit,
   isLoading,
   error,
@@ -447,6 +462,8 @@ function MiniForm({
   missingRequired: ExtendedParamDef[];
   missingOptional: ExtendedParamDef[];
   unreadNumbers: number[];
+  /** The query supplied the inputs itself (the bridge allowed an automatic run). */
+  inputsReady: boolean;
   onSubmit: (values: Record<string, unknown>) => void;
   isLoading: boolean;
   error: string | null;
@@ -563,13 +580,7 @@ function MiniForm({
 
       {!error && (
         <p className="mb-3 text-xs text-[var(--text-secondary)]">
-          {unreadNumbers.length > 0
-            ? `질문의 ${unreadNumbers.join(', ')} 이(가) 어느 입력인지 확정하지 못했습니다. 아래 값을 확인해 주세요.`
-            : missingRequired.length === 0
-              // Optional fields never block a run (e.g. the result was cleared
-              // because the account changed): nothing is actually missing.
-              ? '필수 입력값은 준비되어 있습니다. 계산하기를 눌러 결과를 받으세요.'
-              : '추가 입력이 필요합니다. 아래 항목을 입력해 주세요.'}
+          {miniFormNotice(unreadNumbers, missingRequired.length, inputsReady)}
         </p>
       )}
 
@@ -725,6 +736,7 @@ export default function InlineCalcResult({
       missingRequired={missingRequired}
       missingOptional={missingOptional}
       unreadNumbers={unreadNumbers}
+      inputsReady={canAutoExecute}
       onSubmit={handleFormSubmit}
       isLoading={isLoading}
       error={error}

@@ -20,21 +20,48 @@ function requestMatchesScope(token: string | null, uid: string | null): boolean 
   } catch { return false; }
 }
 
-/** Drop every other cached report copy (current and pre-scope keys) to make room. */
-function evictOtherReports(keep: string): void {
-  const stale: string[] = [];
+/** Other cached report copies, unreadable pre-scope keys first. */
+function otherReportKeys(keep: string): string[] {
+  const legacy: string[] = [];
+  const scoped: string[] = [];
   for (let index = 0; index < sessionStorage.length; index += 1) {
     const entry = sessionStorage.key(index);
-    if (entry && entry !== keep && entry.startsWith('esva-report-')) stale.push(entry);
+    if (!entry || entry === keep || !entry.startsWith('esva-report-')) continue;
+    (entry.startsWith('esva-report-v2:') ? scoped : legacy).push(entry);
   }
-  for (const entry of stale) sessionStorage.removeItem(entry);
+  return [...legacy, ...scoped];
+}
+
+/**
+ * A tab fills after a few large reports, and the review just paid for is the
+ * one the user is waiting on. Earlier copies are removed one at a time until
+ * it fits; if it never fits, every removed copy is put back.
+ */
+function storeWithEviction(target: string, value: string): boolean {
+  const removed: Array<[string, string]> = [];
+  try {
+    for (const entry of otherReportKeys(target)) {
+      const previous = sessionStorage.getItem(entry);
+      if (previous === null) continue;
+      sessionStorage.removeItem(entry);
+      removed.push([entry, previous]);
+      try {
+        sessionStorage.setItem(target, value);
+        return true;
+      } catch { /* still too large: free the next copy */ }
+    }
+  } catch { /* storage unavailable: restore below */ }
+  for (const [entry, previous] of removed) {
+    try { sessionStorage.setItem(entry, previous); } catch { /* it fit before; nothing else to do */ }
+  }
+  return false;
 }
 
 /**
  * Keep a report for the account that requested it. Returns false when it was
- * not kept (request made under another account, or storage unavailable/too
- * small even after eviction); team-review reports have no server copy, so
- * callers must surface that.
+ * not kept (request made under another account, or storage unavailable or too
+ * small for it); team-review reports have no server copy, so callers must
+ * surface that.
  */
 export function cacheReport(report: ESVAVerifiedReport, uid: string | null, requestToken?: string | null): boolean {
   if (typeof window === 'undefined') return false;
@@ -44,15 +71,16 @@ export function cacheReport(report: ESVAVerifiedReport, uid: string | null, requ
   try {
     sessionStorage.setItem(target, value);
     return true;
-  } catch {
-    // A tab fills after a few large reports. The review just paid for is the
-    // one the user is waiting on, so older copies make room for it.
-    try {
-      evictOtherReports(target);
-      sessionStorage.setItem(target, value);
-      return true;
-    } catch { return false; }
+  } catch (error) {
+    // Only a full tab is fixed by freeing space; a blocked store would lose
+    // the removed copies without ever accepting the new one.
+    return isQuotaError(error) && storeWithEviction(target, value);
   }
+}
+
+function isQuotaError(error: unknown): boolean {
+  const name = (error as { name?: unknown } | null)?.name;
+  return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
 }
 
 function readScope(id: string, uid: string | null): ESVAVerifiedReport | null {
