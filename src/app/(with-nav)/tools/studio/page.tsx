@@ -25,6 +25,8 @@ import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import { requestElectricalChat } from '@/lib/electrical-chat-client';
 import { readStoredLanguage } from '@/hooks/useSettings';
 import { useHydrated } from '@/hooks/useHydrated';
+import { useAuth } from '@/contexts/AuthContext';
+import { cacheReport } from '@/lib/report-session-cache';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — 타입 및 상수
@@ -217,6 +219,7 @@ interface ChatPanelProps {
 
 function ChatPanel({ file }: ChatPanelProps) {
   const hydrated = useHydrated();
+  const { user, loading: authLoading } = useAuth();
   const inputId = useId();
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -233,7 +236,8 @@ function ChatPanel({ file }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!hydrated || !text.trim() || isLoading) return;
+    // A report is filed under the account that requested it; wait for auth.
+    if (!hydrated || !text.trim() || isLoading || authLoading) return;
     const userMsg: ChatMessage = {
       role: 'user',
       content: text.trim(),
@@ -273,7 +277,7 @@ function ChatPanel({ file }: ChatPanelProps) {
         }
         const full = data.data?.reportFull;
         if (full?.reportId) {
-          sessionStorage.setItem(`esva-report-${full.reportId}`, JSON.stringify(full));
+          cacheReport(full, user?.uid ?? null, token);
           const summary = full.summary?.textKo || '전문팀 검토가 완료되었습니다.';
           answer = `${summary}\n\n판정 ${full.verdict} · 등급 ${full.grade} · 점수 ${full.compositeScore}\n보고서: /report/${full.reportId}`;
         } else {
@@ -310,7 +314,7 @@ function ChatPanel({ file }: ChatPanelProps) {
       setIsLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
-  }, [file, hydrated, isLoading, messages]);
+  }, [file, hydrated, isLoading, messages, user?.uid, authLoading]);
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-[var(--color-surface)]">

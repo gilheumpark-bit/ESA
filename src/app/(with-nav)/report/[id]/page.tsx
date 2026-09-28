@@ -12,7 +12,7 @@ import { useParams } from 'next/navigation';
 import { Loader2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import VerificationReport from '@/components/VerificationReport';
-import { CalcResultDashboard } from '@/components/CalcResultGauge';
+import { cacheReport, getCachedReport, removeCachedReport } from '@/lib/report-session-cache';
 import type { ESVAVerifiedReport } from '@/agent/teams/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { verifyReportIntegrity } from '@/lib/report-integrity';
@@ -21,7 +21,22 @@ import { DrawingIntelligenceReport } from '@/components/DrawingIntelligenceRepor
 
 type SourceState = 'idle' | 'loading' | 'ready' | 'missing' | 'unsupported' | 'invalid';
 
+function ReportLoading() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" />
+    </div>
+  );
+}
+
 export default function ReportPage() {
+  // A new account must not inherit the previous account's report state.
+  const { user, loading } = useAuth();
+  if (loading) return <ReportLoading />;
+  return <ScopedReportPage key={user ? `user:${user.uid}` : 'anonymous'} />;
+}
+
+function ScopedReportPage() {
   const params = useParams();
   const reportId = params.id as string;
   const { user, loading: authLoading } = useAuth();
@@ -43,15 +58,15 @@ export default function ReportPage() {
 
       try {
         // 1) 방금 생성한 세션 캐시도 해시를 재계산한 뒤 표시한다.
-        const storageKey = `esva-report-${reportId}`;
-        const cached = sessionStorage.getItem(storageKey);
+        //    해시는 내용만 증명하고 소유는 증명하지 않으므로 계정별로 분리된 사본만 읽는다.
+        const uid = user?.uid ?? null;
+        const cached = getCachedReport(reportId, uid);
         if (cached) {
-          const parsed = JSON.parse(cached) as ESVAVerifiedReport;
-          if (await verifyReportIntegrity(parsed)) {
-            if (!cancelled) setReport(parsed);
+          if (await verifyReportIntegrity(cached)) {
+            if (!cancelled) setReport(cached);
             return;
           }
-          sessionStorage.removeItem(storageKey);
+          removeCachedReport(reportId, uid);
         }
 
         // 2) 로그인 사용자는 소유자 필터가 적용된 영속 API에서 다시 읽는다.
@@ -66,8 +81,10 @@ export default function ReportPage() {
             if (response.ok) {
               const body = await response.json() as { data?: ESVAVerifiedReport };
               if (body.data && await verifyReportIntegrity(body.data)) {
-                sessionStorage.setItem(storageKey, JSON.stringify(body.data));
-                if (!cancelled) setReport(body.data);
+                if (!cancelled) {
+                  cacheReport(body.data, user.uid, token);
+                  setReport(body.data);
+                }
                 return;
               }
             }
@@ -180,26 +197,7 @@ export default function ReportPage() {
     }
   }
 
-  const gaugeResults =
-    report?.teamResults
-      .flatMap((tr) => tr.calculations ?? [])
-      .filter((c) => c.standardRef && Number.isFinite(c.value))
-      .map((c) => ({
-        value: c.value,
-        unit: c.unit,
-        limit: c.unit === '%' ? 3.0 : c.unit === 'A' ? c.value * 1.25 : c.value,
-        label: c.label,
-        standardRef: c.standardRef,
-        direction: (c.unit === '%' ? 'below' : 'above') as 'below' | 'above',
-      })) ?? [];
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 size={32} className="animate-spin text-[var(--color-primary)]" />
-      </div>
-    );
-  }
+  if (loading) return <ReportLoading />;
 
   if (error || !report) {
     return (
@@ -300,15 +298,9 @@ export default function ReportPage() {
         </section>
       )}
 
-      {gaugeResults.length > 0 && (
-        <div className="mx-auto mb-6 max-w-4xl">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
-            계산 결과 시각화
-          </h2>
-          <CalcResultDashboard results={gaugeResults} />
-        </div>
-      )}
-
+      {/* No gauge here: a report calculation carries no limit of its own, and an
+          invented one (3%, 1.25x) would show PASS/FAIL the standard never gave.
+          VerificationReport renders the calculations with their own compliant/HOLD state. */}
       <div className="mx-auto max-w-5xl">
         <VerificationReport report={report} onExport={handleExport} />
       </div>

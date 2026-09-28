@@ -26,6 +26,8 @@ import type { SLDComponent, SLDConnection, CalcChainStep, SLDAnalysis as SLDAnal
 import { readApiErrorMessage } from '@/lib/error-messages';
 import { openDrawingPrintWindow } from '@/lib/drawing-print-window';
 import { readStoredCountry } from '@/hooks/useSettings';
+import { useAuth } from '@/contexts/AuthContext';
+import { cacheReport } from '@/lib/report-session-cache';
 import { useRouter } from 'next/navigation';
 import {
   Upload,
@@ -464,6 +466,7 @@ export default function SLDAnalysisPage() {
   const dxfInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { user: reportUser, loading: reportAuthLoading } = useAuth();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
@@ -630,6 +633,8 @@ export default function SLDAnalysisPage() {
 
   // 정밀 검토: 파싱 결과를 전문팀 리뷰와 별도 합의 단계로 전달한다.
   const handleTeamReview = useCallback(async () => {
+    // The report is filed under the account that requested it; wait for auth.
+    if (reportAuthLoading) return;
     if (!drawingFile) {
       setReviewError('원본 도면 파일이 없습니다 — 파일을 다시 업로드해 주세요.');
       return;
@@ -678,14 +683,14 @@ export default function SLDAnalysisPage() {
         const { storeDrawingAsset } = await import('@/lib/drawing-asset-store');
         await storeDrawingAsset(drawingFile, drawingHash, drawingFile.name);
       }
-      sessionStorage.setItem(`esva-report-${full.reportId}`, JSON.stringify(full));
+      cacheReport(full, reportUser?.uid ?? null, token);
       router.push(`/report/${full.reportId}`);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : '정밀 검증 오류');
     } finally {
       setReviewLoading(false);
     }
-  }, [activeSymbolLibrary, drawingFile, rulesFile, router]);
+  }, [activeSymbolLibrary, drawingFile, rulesFile, router, reportUser, reportAuthLoading]);
 
   const handleReset = useCallback(() => {
     workspaceGuard.invalidate();
