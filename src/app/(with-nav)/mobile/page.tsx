@@ -39,6 +39,7 @@ import {
 import { loadStoredProviderKey } from '@/lib/byok-storage';
 import { resolveSelectedModel } from '@/lib/vision-byok';
 import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types and Constants
@@ -553,14 +554,19 @@ export default function MobileFieldPage() {
     () => true,
   );
   const [recentResults, setRecentResults] = useState<CachedResult[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const uid = user?.uid ?? null;
+  const identityPending = authLoading && !user;
 
-  // Load recent calculations from the shared store (offline-friendly)
+  // Load recent calculations from the shared store (offline-friendly). The
+  // store outlives sign-out, so it is read for the account once it is known.
   useEffect(() => {
+    if (identityPending) return;
     const timer = window.setTimeout(() => {
-      setRecentResults(loadRecentCalcs().slice(0, 10));
+      setRecentResults(loadRecentCalcs(uid).slice(0, 10));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [uid, identityPending]);
 
   // Register service worker
   useEffect(() => {

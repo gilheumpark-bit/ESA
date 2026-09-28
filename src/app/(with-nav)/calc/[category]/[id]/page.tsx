@@ -158,6 +158,8 @@ export default function CalculatorPage({
       keyResult: rv == null ? '' : `${rv}${unit ? ` ${unit}` : ''}`,
       value: rv == null ? '' : rv,
       unit,
+      // The receipt carries its owner (set by the API from the verified bearer).
+      ownerId: receipt.userId && receipt.userId !== 'anonymous' ? receipt.userId : null,
     });
   }, [receipt, calcMeta, category, id]);
 

@@ -9,6 +9,9 @@
  * history was permanently empty ("계산 이력이 없습니다") despite the copy
  * claiming it auto-saves. See bug H3.
  *
+ * Entries record their owner because this store survives sign-out: a reader
+ * sees anonymous work plus its own account's entries, never another account's.
+ *
  * PART 1: Types & constants
  * PART 2: Read / write operations
  */
@@ -45,6 +48,8 @@ export interface RecentCalcEntry {
   value: number | string;
   /** Result unit. */
   unit: string;
+  /** Account that owns the calculation; null for anonymous work. */
+  ownerId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,24 +57,33 @@ export interface RecentCalcEntry {
 // ---------------------------------------------------------------------------
 
 function isEntry(v: unknown): v is RecentCalcEntry {
-  return typeof v === 'object' && v !== null && typeof (v as RecentCalcEntry).id === 'string';
+  if (typeof v !== 'object' || v === null) return false;
+  const entry = v as RecentCalcEntry;
+  // Entries written before ownership was recorded cannot be attributed to an
+  // account, and this store outlives sign-out, so they are not shown to anyone.
+  return typeof entry.id === 'string' && (entry.ownerId === null || typeof entry.ownerId === 'string');
 }
 
-/** Load recent calculations (newest first), trimming any overflow in place. */
-export function loadRecentCalcs(): RecentCalcEntry[] {
+function readAll(): { entries: RecentCalcEntry[]; dirty: boolean } {
+  const raw = localStorage.getItem(RECENT_CALCS_KEY);
+  if (!raw) return { entries: [], dirty: false };
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) return { entries: [], dirty: true };
+  const owned = parsed.filter(isEntry);
+  const entries = owned.slice(0, MAX_RECENT_CALCS);
+  return { entries, dirty: entries.length !== parsed.length };
+}
+
+/**
+ * Load the viewer's recent calculations (newest first): anonymous work plus
+ * the account's own entries. Unattributable and overflow entries are pruned.
+ */
+export function loadRecentCalcs(uid: string | null = null): RecentCalcEntry[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(RECENT_CALCS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const entries = parsed.filter(isEntry);
-    if (entries.length > MAX_RECENT_CALCS) {
-      const trimmed = entries.slice(0, MAX_RECENT_CALCS);
-      localStorage.setItem(RECENT_CALCS_KEY, JSON.stringify(trimmed));
-      return trimmed;
-    }
-    return entries;
+    const { entries, dirty } = readAll();
+    if (dirty) localStorage.setItem(RECENT_CALCS_KEY, JSON.stringify(entries));
+    return entries.filter((entry) => entry.ownerId === null || entry.ownerId === uid);
   } catch {
     return [];
   }
@@ -82,7 +96,8 @@ export function loadRecentCalcs(): RecentCalcEntry[] {
 export function recordRecentCalc(entry: RecentCalcEntry): void {
   if (typeof window === 'undefined') return;
   try {
-    const existing = loadRecentCalcs().filter((e) => e.id !== entry.id);
+    // Every account's entries are kept; only the reader filters by viewer.
+    const existing = readAll().entries.filter((e) => e.id !== entry.id);
     const next = [entry, ...existing].slice(0, MAX_RECENT_CALCS);
     localStorage.setItem(RECENT_CALCS_KEY, JSON.stringify(next));
   } catch {

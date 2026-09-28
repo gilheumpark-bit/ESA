@@ -7,8 +7,9 @@ const page = fs.readFileSync(
 );
 
 describe('receipt protected-client wiring', () => {
-  test('sends an optional Firebase token when loading an owned receipt', () => {
-    expect(page).toContain('optionalAuthenticatedFetch(`/api/receipt/${id}`)');
+  test('sends an optional Firebase token when loading an owned receipt, bypassing the HTTP cache', () => {
+    // The browser cache is not partitioned by account, so it is never consulted.
+    expect(page).toContain("optionalAuthenticatedFetch(`/api/receipt/${id}`, { cache: 'no-store' })");
   });
 
   test('uses mandatory authentication for notarization', () => {

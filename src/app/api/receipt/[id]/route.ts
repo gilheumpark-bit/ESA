@@ -117,9 +117,11 @@ async function GET__impl(
     return NextResponse.json(receipt, {
       status: 200,
       headers: {
+        // A private receipt must not be replayed from the browser cache to the
+        // next account on the same machine (the cache key ignores Authorization).
         'Cache-Control': row.is_public
           ? 'public, max-age=3600, s-maxage=86400'
-          : 'private, max-age=300',
+          : 'private, no-store',
       },
     });
   } catch (error) {

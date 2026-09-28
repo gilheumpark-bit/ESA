@@ -58,9 +58,10 @@ async function GET__impl(
       {
         status: 200,
         headers: {
+          // Same rule as /api/receipt/[id]: private receipts are never stored.
           'Cache-Control': receipt.is_public
             ? 'public, max-age=3600, s-maxage=86400'
-            : 'private, max-age=300',
+            : 'private, no-store',
         },
       },
     );

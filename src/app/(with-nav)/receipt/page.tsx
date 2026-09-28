@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FileText, Clock, ArrowRight, Inbox } from 'lucide-react';
 import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Receipt List Item
@@ -66,17 +67,22 @@ function ReceiptItem({ calc }: { calc: RecentCalcEntry }) {
 export default function ReceiptListPage() {
   const [calcs, setCalcs] = useState<RecentCalcEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const uid = user?.uid ?? null;
+  const identityPending = authLoading && !user;
 
   useEffect(() => {
+    // 이 목록은 로그아웃 뒤에도 남으므로 계정이 확인된 뒤에만 그 계정 몫을 읽는다.
+    if (identityPending) return;
     // 제목은 layout.tsx 의 metadata 가 댄다. 여기서 다시 쓰면 그 값을 덮어
     // 옛 표기("계산 이력 | ESA")로 되돌린다 — SSR 제목만 확인하면 안 보이고,
     // 화면을 띄운 뒤 탭을 봐야 드러난다(실측 2026-07-26).
     const timer = window.setTimeout(() => {
-      setCalcs(loadRecentCalcs());
+      setCalcs(loadRecentCalcs(uid));
       setLoaded(true);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [uid, identityPending]);
 
   if (!loaded) {
     return (

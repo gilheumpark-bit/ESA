@@ -18,7 +18,8 @@
 // PART 1 — Cache Configuration
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CACHE_VERSION = 'esa-v4';
+// v5 stops storing account-bound responses; activating it drops the v4 caches.
+const CACHE_VERSION = 'esa-v5';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
@@ -68,15 +69,17 @@ self.addEventListener('install', (event) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
+  event.waitUntil(Promise.all([
     caches.keys().then((keys) => {
       return Promise.all(
         keys
           .filter((key) => key !== STATIC_CACHE && key !== API_CACHE)
           .map((key) => caches.delete(key))
       );
-    })
-  );
+    }),
+    // Earlier versions stored account history here keyed by URL alone.
+    clearCalcResults(),
+  ]));
   // Claim all clients so the SW is active immediately
   self.clients.claim();
 });
@@ -127,6 +130,16 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
+ * The caches are keyed by URL alone, so a response bound to an account (sent
+ * with Authorization, or marked private/no-store) would be replayed to the next
+ * viewer on this device. Only shareable responses are stored.
+ */
+function isShareable(request, response) {
+  if (!response.ok || request.headers.has('Authorization')) return false;
+  return !/(^|[\s,])(no-store|private)([\s,;]|$)/i.test(response.headers.get('Cache-Control') || '');
+}
+
+/**
  * Cache-first strategy for static assets.
  */
 async function cacheFirst(request) {
@@ -135,7 +148,7 @@ async function cacheFirst(request) {
 
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    if (isShareable(request, response)) {
       const cache = await caches.open(STATIC_CACHE);
       cache.put(request, response.clone());
     }
@@ -151,7 +164,7 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
+    if (isShareable(request, response)) {
       const cache = await caches.open(API_CACHE);
       cache.put(request, response.clone());
 
@@ -249,6 +262,21 @@ async function cacheCalcResult(url, response) {
     });
   } catch {
     // Non-critical: silently ignore IDB write errors
+  }
+}
+
+async function clearCalcResults() {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+      tx.onabort = () => resolve();
+    });
+  } catch {
+    // Non-critical: an unavailable store holds nothing to clear
   }
 }
 

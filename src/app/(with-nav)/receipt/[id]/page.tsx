@@ -487,7 +487,8 @@ function ScopedReceiptPage({ params, uid }: { params: Promise<{ id: string }>; u
       setFetchError(null);
       setIsLoading(true);
       try {
-        const res = await optionalAuthenticatedFetch(`/api/receipt/${id}`);
+        // Never answer from the HTTP cache: it is not partitioned by account.
+        const res = await optionalAuthenticatedFetch(`/api/receipt/${id}`, { cache: 'no-store' });
         if (res.ok) {
           const data: Receipt = await res.json();
           if (!cancelled) setReceipt(data);
