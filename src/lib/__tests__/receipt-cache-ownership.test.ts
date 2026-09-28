@@ -33,10 +33,16 @@ describe('receipt cache ownership', () => {
     expect(getCachedReceipt('owned', null)).toBeNull();
   });
 
-  test('a receipt is not cached for a scope that does not own it', () => {
+  test("another account's receipt is never filed for the viewer", () => {
     cacheReceipt({ id: 'crossed', userId: 'alice' } as Receipt, 'bob');
-    cacheReceipt({ id: 'anonymous-for-alice' } as Receipt, 'alice');
+    cacheReceipt({ id: 'crossed-anonymous', userId: 'alice' } as Receipt, null);
     expect(values.size).toBe(0);
+  });
+
+  test('an ownerless receipt returned to a signed-in viewer stays openable', () => {
+    // The API runs the request as anonymous when the bearer fails verification.
+    cacheReceipt({ id: 'unverified' } as Receipt, 'alice');
+    expect(getCachedReceipt('unverified', 'alice')?.id).toBe('unverified');
   });
 
   test('an entry whose stored id differs from the requested id is ignored', () => {

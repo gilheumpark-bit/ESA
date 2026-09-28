@@ -467,6 +467,9 @@ export default function SLDAnalysisPage() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { user: reportUser, loading: reportAuthLoading } = useAuth();
+  // Team review files its report under the requesting account: it waits until
+  // the account is known (not for the tier lookup that also holds `loading`).
+  const reportIdentityPending = reportAuthLoading && !reportUser;
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<SLDAnalysisResult | null>(null);
@@ -633,8 +636,7 @@ export default function SLDAnalysisPage() {
 
   // 정밀 검토: 파싱 결과를 전문팀 리뷰와 별도 합의 단계로 전달한다.
   const handleTeamReview = useCallback(async () => {
-    // The report is filed under the account that requested it; wait for auth.
-    if (reportAuthLoading) return;
+    if (reportIdentityPending) return;
     if (!drawingFile) {
       setReviewError('원본 도면 파일이 없습니다 — 파일을 다시 업로드해 주세요.');
       return;
@@ -683,14 +685,18 @@ export default function SLDAnalysisPage() {
         const { storeDrawingAsset } = await import('@/lib/drawing-asset-store');
         await storeDrawingAsset(drawingFile, drawingHash, drawingFile.name);
       }
-      cacheReport(full, reportUser?.uid ?? null, token);
+      // Team-review reports have no server copy: if the tab cannot keep it,
+      // say so here instead of opening a report page that cannot find it.
+      if (!cacheReport(full, reportUser?.uid ?? null, token)) {
+        throw new Error('보고서를 이 브라우저에 보관하지 못했습니다(저장 공간 부족 또는 요청 중 계정 변경). 다시 실행해 주세요.');
+      }
       router.push(`/report/${full.reportId}`);
     } catch (err) {
       setReviewError(err instanceof Error ? err.message : '정밀 검증 오류');
     } finally {
       setReviewLoading(false);
     }
-  }, [activeSymbolLibrary, drawingFile, rulesFile, router, reportUser, reportAuthLoading]);
+  }, [activeSymbolLibrary, drawingFile, rulesFile, router, reportUser, reportIdentityPending]);
 
   const handleReset = useCallback(() => {
     workspaceGuard.invalidate();
@@ -1738,7 +1744,7 @@ export default function SLDAnalysisPage() {
               <button
                 type="button"
                 onClick={handleTeamReview}
-                disabled={reviewLoading || !drawingFile}
+                disabled={reviewLoading || !drawingFile || reportIdentityPending}
                 className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {reviewLoading ? (

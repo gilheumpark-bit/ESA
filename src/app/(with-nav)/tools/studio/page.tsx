@@ -220,6 +220,9 @@ interface ChatPanelProps {
 function ChatPanel({ file }: ChatPanelProps) {
   const hydrated = useHydrated();
   const { user, loading: authLoading } = useAuth();
+  // A file review files its report under the requesting account, so it waits
+  // until the account is known (not for the tier lookup); plain chat does not.
+  const reviewBlocked = Boolean(file) && authLoading && !user;
   const inputId = useId();
   const [messages, setMessages] = useState<ChatMessage[]>(() => [
     {
@@ -236,8 +239,7 @@ function ChatPanel({ file }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const sendMessage = useCallback(async (text: string) => {
-    // A report is filed under the account that requested it; wait for auth.
-    if (!hydrated || !text.trim() || isLoading || authLoading) return;
+    if (!hydrated || !text.trim() || isLoading || reviewBlocked) return;
     const userMsg: ChatMessage = {
       role: 'user',
       content: text.trim(),
@@ -277,9 +279,13 @@ function ChatPanel({ file }: ChatPanelProps) {
         }
         const full = data.data?.reportFull;
         if (full?.reportId) {
-          cacheReport(full, user?.uid ?? null, token);
+          // Team-review reports have no server copy; only link one this tab kept.
+          const kept = cacheReport(full, user?.uid ?? null, token);
           const summary = full.summary?.textKo || '전문팀 검토가 완료되었습니다.';
-          answer = `${summary}\n\n판정 ${full.verdict} · 등급 ${full.grade} · 점수 ${full.compositeScore}\n보고서: /report/${full.reportId}`;
+          answer = `${summary}\n\n판정 ${full.verdict} · 등급 ${full.grade} · 점수 ${full.compositeScore}\n`
+            + (kept
+              ? `보고서: /report/${full.reportId}`
+              : '보고서를 이 브라우저에 보관하지 못해 링크를 만들지 않았습니다(저장 공간 부족 또는 요청 중 계정 변경).');
         } else {
           const teams = (data.data?.teamSummary ?? [])
             .filter((team: { success?: boolean }) => team.success)
@@ -314,7 +320,7 @@ function ChatPanel({ file }: ChatPanelProps) {
       setIsLoading(false);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     }
-  }, [file, hydrated, isLoading, messages, user?.uid, authLoading]);
+  }, [file, hydrated, isLoading, messages, user?.uid, reviewBlocked]);
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-[var(--color-surface)]">
@@ -335,7 +341,7 @@ function ChatPanel({ file }: ChatPanelProps) {
           <button
             key={p}
             onClick={() => sendMessage(p)}
-            disabled={!hydrated || isLoading}
+            disabled={!hydrated || isLoading || reviewBlocked}
             className="flex-shrink-0 text-[11px] px-2.5 py-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-primary)] transition-colors whitespace-nowrap"
           >
             {p}
@@ -390,7 +396,7 @@ function ChatPanel({ file }: ChatPanelProps) {
           />
           <button
             onClick={() => void sendMessage(input)}
-            disabled={!hydrated || !input.trim() || isLoading}
+            disabled={!hydrated || !input.trim() || isLoading || reviewBlocked}
             className="shrink-0 px-3 sm:px-4 rounded-xl bg-[var(--color-primary)] text-[var(--drawing-on-primary)] font-semibold text-sm hover:bg-[var(--color-primary-hover)] disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
           >
             전송

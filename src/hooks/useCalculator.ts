@@ -40,6 +40,9 @@ interface CalculateApiResponse {
 export function useCalculator(calculatorId: string): UseCalculatorReturn {
   const { user, loading: authLoading } = useAuth();
   const uid = user?.uid ?? null;
+  // The owner is known once Firebase reports a user, before the tier lookup
+  // that also holds `loading`; a calculation never waits on that lookup.
+  const identityPending = authLoading && !user;
   const [result, setResult] = useState<DetailedCalcResult | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,12 +64,12 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
     setReceipt(null);
     setError(null);
     setIsLoading(false);
-  }, [uid, authLoading]);
+  }, [uid, identityPending]);
 
   const execute = useCallback(
     async (inputs: Record<string, unknown>) => {
-      // Until auth settles the request cannot carry (or deliberately omit) the owner.
-      if (authLoading) {
+      // Until the account is known the request cannot carry (or deliberately omit) the owner.
+      if (identityPending) {
         setPendingInputs(inputs);
         return;
       }
@@ -129,12 +132,12 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         }
       }
     },
-    [calculatorId, uid, authLoading],
+    [calculatorId, uid, identityPending],
   );
 
   // Run the request that arrived while auth was loading, under the settled identity.
   useEffect(() => {
-    if (authLoading || pendingInputs === null) return;
+    if (identityPending || pendingInputs === null) return;
     let cancelled = false;
     void Promise.resolve().then(() => {
       if (cancelled) return;
@@ -142,7 +145,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
       void execute(pendingInputs);
     });
     return () => { cancelled = true; };
-  }, [authLoading, pendingInputs, execute]);
+  }, [identityPending, pendingInputs, execute]);
 
   const reset = useCallback(() => {
     activeRequestRef.current?.abort();
@@ -155,12 +158,12 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
   }, []);
 
   // A result produced for another account (or before auth settled) is not shown.
-  const current = !authLoading && resultScope === uid;
+  const current = !identityPending && resultScope === uid;
   return {
     execute,
     result: current ? result : null,
     receipt: current ? receipt : null,
-    isLoading: (authLoading && pendingInputs !== null) || (current && isLoading),
+    isLoading: (identityPending && pendingInputs !== null) || (current && isLoading),
     error: current ? error : null,
     reset,
   };

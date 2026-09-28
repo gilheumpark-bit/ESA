@@ -7,12 +7,17 @@ const tokenFor = (sub: string) =>
 
 describe('report session cache ownership', () => {
   const values = new Map<string, string>();
+  let full = false;
   beforeEach(() => {
     values.clear();
+    full = false;
     Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
     Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: {
       getItem: (key: string) => values.get(key) ?? null,
-      setItem: (key: string, value: string) => values.set(key, value),
+      setItem: (key: string, value: string) => {
+        if (full) throw new Error('QuotaExceededError');
+        values.set(key, value);
+      },
       removeItem: (key: string) => values.delete(key),
     } });
   });
@@ -21,29 +26,39 @@ describe('report session cache ownership', () => {
     Reflect.deleteProperty(globalThis, 'sessionStorage');
   });
 
-  test('separates anonymous and account copies and ignores ownerless legacy entries', () => {
+  test("keeps account copies apart and ignores ownerless legacy entries", () => {
     values.set('esva-report-item', JSON.stringify({ reportId: 'item' }));
     expect(getCachedReport('item', null)).toBeNull();
-    cacheReport(report('item'), 'alice');
+    expect(cacheReport(report('item'), 'alice')).toBe(true);
     expect(getCachedReport('item', 'alice')?.reportId).toBe('item');
     expect(getCachedReport('item', 'bob')).toBeNull();
     expect(getCachedReport('item', null)).toBeNull();
-    cacheReport(report('public'), null);
-    expect(getCachedReport('public', null)?.reportId).toBe('public');
     removeCachedReport('item', 'alice');
     expect(getCachedReport('item', 'alice')).toBeNull();
   });
 
+  test('anonymous work stays openable after signing in, as with receipts', () => {
+    expect(cacheReport(report('public'), null, null)).toBe(true);
+    expect(getCachedReport('public', null)?.reportId).toBe('public');
+    expect(getCachedReport('public', 'alice')?.reportId).toBe('public');
+    removeCachedReport('public', 'alice');
+    expect(getCachedReport('public', null)).toBeNull();
+  });
+
   test('never files a report produced under another account token', () => {
-    cacheReport(report('crossed'), 'alice', tokenFor('bob'));
+    expect(cacheReport(report('crossed'), 'alice', tokenFor('bob'))).toBe(false);
     expect(getCachedReport('crossed', 'alice')).toBeNull();
-    cacheReport(report('crossed'), null, tokenFor('bob'));
+    expect(cacheReport(report('crossed'), null, tokenFor('bob'))).toBe(false);
     expect(getCachedReport('crossed', null)).toBeNull();
-    cacheReport(report('owned'), 'bob', tokenFor('bob'));
+    expect(cacheReport(report('owned'), 'bob', tokenFor('bob'))).toBe(true);
     expect(getCachedReport('owned', 'bob')?.reportId).toBe('owned');
-    cacheReport(report('anonymous'), null, null);
-    expect(getCachedReport('anonymous', null)?.reportId).toBe('anonymous');
-    cacheReport(report('bad'), 'alice', 'malformed');
+    expect(cacheReport(report('bad'), 'alice', 'malformed')).toBe(false);
     expect(getCachedReport('bad', 'alice')).toBeNull();
+  });
+
+  test('reports a storage failure instead of losing the report silently', () => {
+    full = true;
+    expect(cacheReport(report('large'), 'alice', tokenFor('alice'))).toBe(false);
+    expect(getCachedReport('large', 'alice')).toBeNull();
   });
 });

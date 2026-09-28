@@ -30,16 +30,17 @@ function ReportLoading() {
 }
 
 export default function ReportPage() {
-  // A new account must not inherit the previous account's report state.
+  // A new account must not inherit the previous account's report state. The
+  // account is known once Firebase reports a user, before the tier lookup.
   const { user, loading } = useAuth();
-  if (loading) return <ReportLoading />;
+  if (loading && !user) return <ReportLoading />;
   return <ScopedReportPage key={user ? `user:${user.uid}` : 'anonymous'} />;
 }
 
 function ScopedReportPage() {
   const params = useParams();
   const reportId = params.id as string;
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [report, setReport] = useState<ESVAVerifiedReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,6 @@ function ScopedReportPage() {
   const [activeEvidenceIds, setActiveEvidenceIds] = useState<string[]>([]);
 
   useEffect(() => {
-    if (authLoading) return;
     let cancelled = false;
 
     async function loadReport() {
@@ -107,7 +107,7 @@ function ScopedReportPage() {
 
     void loadReport();
     return () => { cancelled = true; };
-  }, [authLoading, reportId, user]);
+  }, [reportId, user]);
 
   useEffect(() => {
     let cancelled = false;

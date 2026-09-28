@@ -145,10 +145,10 @@ test('StrictMode cleanup/setup cannot let an aborted request reset its replaceme
   assert.equal(render().receipt.id, 'item');
 });
 
-test('a request made while auth is loading waits and then runs under the settled account', async () => {
+test('a request made before the account is known waits and then runs under that account', async () => {
   // InlineCalcResult executes exactly once on mount; dropping this call would
   // leave the inline calculation permanently unexecuted.
-  const h = harness({ uid: 'alice', status: 200 });
+  const h = harness({ status: 200 });
   h.auth.loading = true;
   const { useCalculator } = h.load('src/hooks/useCalculator.ts');
   const render = () => h.render(() => useCalculator('voltage-drop'));
@@ -157,14 +157,29 @@ test('a request made while auth is loading waits and then runs under the settled
   await h.flush();
   assert.equal(h.fetches.length, 0);
   assert.equal(render().isLoading, true);
-  h.auth.loading = false;
+  // Firebase reports the user; the tier lookup (still `loading`) is not awaited.
+  h.auth.user = { uid: 'alice' };
   render(); await h.flush();
   assert.equal(h.fetches.length, 1);
   assert.equal(new Headers(h.fetches[0].init.headers).get('Authorization'), 'Bearer test-token');
   render(); await h.flush();
+  h.auth.loading = false;
+  render(); await h.flush();
   const hook = render();
   assert.equal(hook.isLoading, false);
   assert.equal(hook.result.value, 1);
+});
+
+test('a signed-in calculation does not wait for the tier lookup', async () => {
+  const h = harness({ uid: 'alice', status: 200 });
+  h.auth.loading = true;
+  const { useCalculator } = h.load('src/hooks/useCalculator.ts');
+  const render = () => h.render(() => useCalculator('voltage-drop'));
+  render(); await h.flush();
+  await render().execute({ length: 10 });
+  await h.flush();
+  assert.equal(h.fetches.length, 1);
+  assert.equal(render().result.value, 1);
 });
 
 test('calculator forwards the optional bearer and anonymous calculation stays usable', async () => {
@@ -188,6 +203,8 @@ test('401 and 403 never reveal a cached receipt and invalidate the denied copy',
     const element = Page({ params: Promise.resolve({ id: 'item' }) });
     if (typeof element.type === 'function') element.type(element.props);
     await h.flush();
+    // The browser HTTP cache is not partitioned by account; never answer from it.
+    assert.equal(h.fetches[0].init.cache, 'no-store');
     assert.equal(cache.getCachedReceipt('item', null), null);
     assert.equal(h.state.some((value) => value && typeof value === 'object' && value.id === 'item'), false);
     assert.ok(h.state.some((value) => typeof value === 'string' && /로그인|권한/.test(value)));

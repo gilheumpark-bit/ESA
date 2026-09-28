@@ -466,9 +466,10 @@ export default function ReceiptPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  // A new account must not inherit the previous account's receipt state.
+  // A new account must not inherit the previous account's receipt state. The
+  // account is known once Firebase reports a user, before the tier lookup.
   const { user, loading } = useAuth();
-  if (loading) return <ReceiptSkeleton />;
+  if (loading && !user) return <ReceiptSkeleton />;
   return <ScopedReceiptPage key={user ? `user:${user.uid}` : 'anonymous'} params={params} uid={user?.uid ?? null} />;
 }
 
