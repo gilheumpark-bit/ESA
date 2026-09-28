@@ -12,6 +12,8 @@ import type { Receipt } from '@/engine/receipt/types';
 import type { DetailedCalcResult } from '@/engine/calculators/types';
 import { cacheReceipt } from '@/lib/receipt-cache';
 import { readStoredCountry, readStoredLanguage } from '@/hooks/useSettings';
+import { optionalAuthenticatedFetch } from '@/lib/client-auth';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1 — Types
@@ -36,20 +38,43 @@ interface CalculateApiResponse {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function useCalculator(calculatorId: string): UseCalculatorReturn {
+  const { user, loading: authLoading } = useAuth();
+  const uid = user?.uid ?? null;
   const [result, setResult] = useState<DetailedCalcResult | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The account the visible result belongs to (undefined = no result yet).
+  const [resultScope, setResultScope] = useState<string | null | undefined>(undefined);
+  // A request made before auth settles waits for it instead of being dropped:
+  // callers such as InlineCalcResult execute exactly once on mount.
+  const [pendingInputs, setPendingInputs] = useState<Record<string, unknown> | null>(null);
   const activeRequestRef = useRef<AbortController | null>(null);
 
-  useEffect(() => () => activeRequestRef.current?.abort(), []);
+  useEffect(() => () => {
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    // Reset synchronously with scope disposal, not in the aborted request's
+    // finally: a replacement request may already own the ref when it settles.
+    setResultScope(undefined);
+    setResult(null);
+    setReceipt(null);
+    setError(null);
+    setIsLoading(false);
+  }, [uid, authLoading]);
 
   const execute = useCallback(
     async (inputs: Record<string, unknown>) => {
+      // Until auth settles the request cannot carry (or deliberately omit) the owner.
+      if (authLoading) {
+        setPendingInputs(inputs);
+        return;
+      }
       activeRequestRef.current?.abort();
       const controller = new AbortController();
       activeRequestRef.current = controller;
       // A new request owns the screen; previous receipts are not its result.
+      setResultScope(uid);
       setResult(null);
       setReceipt(null);
       setIsLoading(true);
@@ -58,7 +83,8 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
       try {
         // Forward the user's selected country so the Country/Standard setting
         // actually reaches the engine (bug M2 — was always defaulting to KR).
-        const res = await fetch('/api/calculate', {
+        // A signed-in user's bearer lets the API save the calculation to the account.
+        const res = await optionalAuthenticatedFetch('/api/calculate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,7 +113,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
 
         // Cache receipt client-side for offline export support
         if (data.receipt) {
-          cacheReceipt(data.receipt);
+          cacheReceipt(data.receipt, uid);
         }
       } catch (err) {
         if (controller.signal.aborted) return;
@@ -103,17 +129,39 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         }
       }
     },
-    [calculatorId],
+    [calculatorId, uid, authLoading],
   );
+
+  // Run the request that arrived while auth was loading, under the settled identity.
+  useEffect(() => {
+    if (authLoading || pendingInputs === null) return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setPendingInputs(null);
+      void execute(pendingInputs);
+    });
+    return () => { cancelled = true; };
+  }, [authLoading, pendingInputs, execute]);
 
   const reset = useCallback(() => {
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
+    setPendingInputs(null);
     setResult(null);
     setReceipt(null);
     setError(null);
     setIsLoading(false);
   }, []);
 
-  return { execute, result, receipt, isLoading, error, reset };
+  // A result produced for another account (or before auth settled) is not shown.
+  const current = !authLoading && resultScope === uid;
+  return {
+    execute,
+    result: current ? result : null,
+    receipt: current ? receipt : null,
+    isLoading: (authLoading && pendingInputs !== null) || (current && isLoading),
+    error: current ? error : null,
+    reset,
+  };
 }

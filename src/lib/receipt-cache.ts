@@ -2,7 +2,7 @@
  * Client-side Receipt Cache (sessionStorage)
  *
  * PART 1: Constants & helpers
- * PART 2: Cache operations — save, get, getLastReceipt
+ * PART 2: Cache operations — save, get, getLastReceipt, remove
  *
  * Graceful degradation: allows export API to work without Supabase
  * by keeping receipts in the browser session.
@@ -34,10 +34,16 @@ function getIndex(): string[] {
   if (!isSessionStorageAvailable()) return [];
   try {
     const raw = sessionStorage.getItem(INDEX_KEY);
-    return raw ? (JSON.parse(raw) as string[]) : [];
+    const ids: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
   }
+}
+
+/** Same owner rule as history-read-model: no userId (or 'anonymous') is local anonymous work. */
+function ownerOf(receipt: Receipt): string | null {
+  return receipt.userId && receipt.userId !== 'anonymous' ? receipt.userId : null;
 }
 
 function setIndex(ids: string[]): void {
@@ -49,9 +55,12 @@ function setIndex(ids: string[]): void {
 // PART 2 — Cache operations
 // ---------------------------------------------------------------------------
 
-/** Save a receipt to sessionStorage. Evicts oldest when over MAX_CACHED. */
-export function cacheReceipt(receipt: Receipt): void {
-  if (!isSessionStorageAvailable()) return;
+/**
+ * Save a receipt to sessionStorage. Evicts oldest when over MAX_CACHED.
+ * Only the scope that owns the receipt (`uid`, or null when signed out) may cache it.
+ */
+export function cacheReceipt(receipt: Receipt, uid: string | null = null): void {
+  if (!isSessionStorageAvailable() || ownerOf(receipt) !== uid) return;
 
   try {
     const ids = getIndex().filter((id) => id !== receipt.id);
@@ -72,29 +81,46 @@ export function cacheReceipt(receipt: Receipt): void {
   }
 }
 
-/** Retrieve a cached receipt by ID. */
-export function getCachedReceipt(id?: string): Receipt | null {
+/**
+ * Retrieve a cached receipt by ID for the viewer `uid` (null when signed out).
+ * Another account's receipt is never returned; anonymous work stays readable.
+ */
+export function getCachedReceipt(id?: string, uid: string | null = null): Receipt | null {
   if (!id || !isSessionStorageAvailable()) return null;
 
   try {
     const raw = sessionStorage.getItem(STORAGE_PREFIX + id);
     if (!raw) return null;
-    return JSON.parse(raw) as Receipt;
+    const receipt = JSON.parse(raw) as Receipt;
+    if (receipt?.id !== id) return null;
+    const owner = ownerOf(receipt);
+    return owner === null || owner === uid ? receipt : null;
   } catch {
     return null;
   }
 }
 
-/** Get the most recently cached receipt. */
-export function getLastReceipt(): Receipt | null {
+/** Get the most recently cached receipt readable by `uid`. */
+export function getLastReceipt(uid: string | null = null): Receipt | null {
   if (!isSessionStorageAvailable()) return null;
 
   try {
     const ids = getIndex();
     if (ids.length === 0) return null;
     const lastId = ids[ids.length - 1];
-    return getCachedReceipt(lastId);
+    return getCachedReceipt(lastId, uid);
   } catch {
     return null;
+  }
+}
+
+/** An explicit access denial invalidates the offline copy too. */
+export function removeCachedReceipt(id: string): void {
+  if (!isSessionStorageAvailable()) return;
+  try {
+    sessionStorage.removeItem(STORAGE_PREFIX + id);
+    setIndex(getIndex().filter((entry) => entry !== id));
+  } catch {
+    // Storage can be disabled independently of the API.
   }
 }

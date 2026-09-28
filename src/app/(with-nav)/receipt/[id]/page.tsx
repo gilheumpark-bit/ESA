@@ -29,7 +29,8 @@ import ReceiptCard from '@/components/ReceiptCard';
 import type { Receipt } from '@/engine/receipt/types';
 import { authenticatedFetch, optionalAuthenticatedFetch } from '@/lib/client-auth';
 import { isFeatureEnabled } from '@/lib/feature-flags';
-import { getCachedReceipt } from '@/lib/receipt-cache';
+import { getCachedReceipt, removeCachedReceipt } from '@/lib/receipt-cache';
+import { useAuth } from '@/contexts/AuthContext';
 import { receiptLoadErrorMessage, safeReceiptLoadError } from '@/lib/receipt-load-error';
 import { OPEN_BETA } from '@/lib/tier-gate';
 
@@ -465,6 +466,13 @@ export default function ReceiptPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  // A new account must not inherit the previous account's receipt state.
+  const { user, loading } = useAuth();
+  if (loading) return <ReceiptSkeleton />;
+  return <ScopedReceiptPage key={user ? `user:${user.uid}` : 'anonymous'} params={params} uid={user?.uid ?? null} />;
+}
+
+function ScopedReceiptPage({ params, uid }: { params: Promise<{ id: string }>; uid: string | null }) {
   const { id } = use(params);
 
   const [receipt, setReceipt] = useState<ReceiptWithIntegrity | null>(null);
@@ -475,6 +483,9 @@ export default function ReceiptPage({
     let cancelled = false;
 
     async function loadReceipt() {
+      setReceipt(null);
+      setFetchError(null);
+      setIsLoading(true);
       try {
         const res = await optionalAuthenticatedFetch(`/api/receipt/${id}`);
         if (res.ok) {
@@ -482,9 +493,15 @@ export default function ReceiptPage({
           if (!cancelled) setReceipt(data);
           return;
         }
+        // The server's denial wins over any offline copy of the same receipt.
+        if (res.status === 401 || res.status === 403) {
+          removeCachedReceipt(id);
+          if (!cancelled) setFetchError(receiptLoadErrorMessage(res.status));
+          return;
+        }
         // 서버 미스 — 익명 계산은 서버에 저장되지 않으므로 클라이언트
         // 세션 캐시에서 폴백한다 (bug M5: 비로그인 영수증 링크 404 방지).
-        const cached = getCachedReceipt(id);
+        const cached = getCachedReceipt(id, uid);
         if (cached) {
           if (!cancelled) setReceipt(cached);
           return;
@@ -492,7 +509,7 @@ export default function ReceiptPage({
         throw new Error(receiptLoadErrorMessage(res.status));
       } catch (err) {
         // 네트워크 오류 시에도 세션 캐시를 마지막으로 시도한다.
-        const cached = getCachedReceipt(id);
+        const cached = getCachedReceipt(id, uid);
         if (cached) {
           if (!cancelled) setReceipt(cached);
         } else if (!cancelled) {
@@ -505,7 +522,7 @@ export default function ReceiptPage({
 
     loadReceipt();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, uid]);
 
   const handleShare = useCallback(async () => {
     const url = window.location.href;
