@@ -34,6 +34,7 @@ import { useCalculator } from '@/hooks/useCalculator';
 import { CALCULATOR_PARAMS, CALCULATOR_NAMES, LINKED_CALCS } from '@/lib/calculator-params';
 import { buildCalculatorGauge } from '@/lib/calculator-result-gauge';
 import { recordRecentCalc } from '@/lib/recent-calcs';
+import { useAuth } from '@/contexts/AuthContext';
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -140,6 +141,8 @@ export default function CalculatorPage({
   const linked = LINKED_CALCS[id] ?? [];
 
   const { execute, result: _result, receipt, isLoading, error, reset } = useCalculator(id);
+  const { user } = useAuth();
+  const viewerId = user?.uid ?? null;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // Recent-calc history writer (bug H3)
@@ -159,9 +162,11 @@ export default function CalculatorPage({
       value: rv == null ? '' : rv,
       unit,
       // The receipt carries its owner (set by the API from the verified bearer).
-      ownerId: receipt.userId && receipt.userId !== 'anonymous' ? receipt.userId : null,
+      // If the API could not verify a signed-in viewer, the work is still that
+      // viewer's: this list outlives sign-out and must not show it to others.
+      ownerId: (receipt.userId && receipt.userId !== 'anonymous' ? receipt.userId : null) ?? viewerId,
     });
-  }, [receipt, calcMeta, category, id]);
+  }, [receipt, calcMeta, category, id, viewerId]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // URL Parameter Support — read on mount, write on calculate

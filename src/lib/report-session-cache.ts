@@ -20,18 +20,39 @@ function requestMatchesScope(token: string | null, uid: string | null): boolean 
   } catch { return false; }
 }
 
+/** Drop every other cached report copy (current and pre-scope keys) to make room. */
+function evictOtherReports(keep: string): void {
+  const stale: string[] = [];
+  for (let index = 0; index < sessionStorage.length; index += 1) {
+    const entry = sessionStorage.key(index);
+    if (entry && entry !== keep && entry.startsWith('esva-report-')) stale.push(entry);
+  }
+  for (const entry of stale) sessionStorage.removeItem(entry);
+}
+
 /**
  * Keep a report for the account that requested it. Returns false when it was
- * not kept (request made under another account, or storage full/unavailable);
- * team-review reports have no server copy, so callers must surface that.
+ * not kept (request made under another account, or storage unavailable/too
+ * small even after eviction); team-review reports have no server copy, so
+ * callers must surface that.
  */
 export function cacheReport(report: ESVAVerifiedReport, uid: string | null, requestToken?: string | null): boolean {
   if (typeof window === 'undefined') return false;
   if (requestToken !== undefined && !requestMatchesScope(requestToken, uid)) return false;
+  const target = key(report.reportId, uid);
+  const value = JSON.stringify({ uid, report });
   try {
-    sessionStorage.setItem(key(report.reportId, uid), JSON.stringify({ uid, report }));
+    sessionStorage.setItem(target, value);
     return true;
-  } catch { return false; }
+  } catch {
+    // A tab fills after a few large reports. The review just paid for is the
+    // one the user is waiting on, so older copies make room for it.
+    try {
+      evictOtherReports(target);
+      sessionStorage.setItem(target, value);
+      return true;
+    } catch { return false; }
+  }
 }
 
 function readScope(id: string, uid: string | null): ESVAVerifiedReport | null {

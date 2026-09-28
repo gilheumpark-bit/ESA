@@ -7,15 +7,21 @@ const tokenFor = (sub: string) =>
 
 describe('report session cache ownership', () => {
   const values = new Map<string, string>();
-  let full = false;
+  // Characters the fake tab storage can hold (a real tab holds about 5 MB).
+  let capacity = Infinity;
+  const used = () => [...values.entries()].reduce((sum, [key, value]) => sum + key.length + value.length, 0);
   beforeEach(() => {
     values.clear();
-    full = false;
+    capacity = Infinity;
     Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
     Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: {
+      get length() { return values.size; },
+      key: (index: number) => [...values.keys()][index] ?? null,
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => {
-        if (full) throw new Error('QuotaExceededError');
+        const previous = values.get(key);
+        const next = used() - (previous === undefined ? 0 : key.length + previous.length) + key.length + value.length;
+        if (next > capacity) throw new Error('QuotaExceededError');
         values.set(key, value);
       },
       removeItem: (key: string) => values.delete(key),
@@ -26,7 +32,7 @@ describe('report session cache ownership', () => {
     Reflect.deleteProperty(globalThis, 'sessionStorage');
   });
 
-  test("keeps account copies apart and ignores ownerless legacy entries", () => {
+  test('keeps account copies apart and ignores ownerless legacy entries', () => {
     values.set('esva-report-item', JSON.stringify({ reportId: 'item' }));
     expect(getCachedReport('item', null)).toBeNull();
     expect(cacheReport(report('item'), 'alice')).toBe(true);
@@ -56,8 +62,18 @@ describe('report session cache ownership', () => {
     expect(getCachedReport('bad', 'alice')).toBeNull();
   });
 
+  test('a full tab drops older report copies to keep the new one', () => {
+    expect(cacheReport(report('older'), 'alice', tokenFor('alice'))).toBe(true);
+    values.set('esva-report-legacy', JSON.stringify({ reportId: 'legacy' }));
+    capacity = used() + 20;
+    expect(cacheReport(report('newest'), 'alice', tokenFor('alice'))).toBe(true);
+    expect(getCachedReport('newest', 'alice')?.reportId).toBe('newest');
+    expect(getCachedReport('older', 'alice')).toBeNull();
+    expect(values.has('esva-report-legacy')).toBe(false);
+  });
+
   test('reports a storage failure instead of losing the report silently', () => {
-    full = true;
+    capacity = 10;
     expect(cacheReport(report('large'), 'alice', tokenFor('alice'))).toBe(false);
     expect(getCachedReport('large', 'alice')).toBeNull();
   });

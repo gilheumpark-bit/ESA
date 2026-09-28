@@ -57,13 +57,13 @@ function setIndex(ids: string[]): void {
 
 /**
  * Save a receipt to sessionStorage. Evicts oldest when over MAX_CACHED.
- * Another account's receipt is never filed for `uid`. An ownerless receipt is
- * kept even for a signed-in viewer (the API ran the request as anonymous, e.g.
- * its token failed verification); anonymous work is readable by any viewer.
+ * Only the viewer that owns the receipt may cache it (`uid`, or null when
+ * signed out). An ownerless receipt returned to a signed-in viewer (the API
+ * could not verify the token) is not cached: ownerless entries are readable
+ * by every viewer of this tab, so it would surface for the next account.
  */
 export function cacheReceipt(receipt: Receipt, uid: string | null = null): void {
-  const owner = ownerOf(receipt);
-  if (!isSessionStorageAvailable() || (owner !== null && owner !== uid)) return;
+  if (!isSessionStorageAvailable() || ownerOf(receipt) !== uid) return;
 
   try {
     const ids = getIndex().filter((id) => id !== receipt.id);

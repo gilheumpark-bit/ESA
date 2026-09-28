@@ -39,10 +39,12 @@ describe('receipt cache ownership', () => {
     expect(values.size).toBe(0);
   });
 
-  test('an ownerless receipt returned to a signed-in viewer stays openable', () => {
+  test('an ownerless receipt returned to a signed-in viewer is not cached for the next account', () => {
     // The API runs the request as anonymous when the bearer fails verification.
+    // Ownerless entries are readable by every viewer of the tab, so Bob would see it.
     cacheReceipt({ id: 'unverified' } as Receipt, 'alice');
-    expect(getCachedReceipt('unverified', 'alice')?.id).toBe('unverified');
+    expect(values.size).toBe(0);
+    expect(getCachedReceipt('unverified', 'bob')).toBeNull();
   });
 
   test('an entry whose stored id differs from the requested id is ignored', () => {

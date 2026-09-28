@@ -67,7 +67,9 @@ function isEntry(v: unknown): v is RecentCalcEntry {
 function readAll(): { entries: RecentCalcEntry[]; dirty: boolean } {
   const raw = localStorage.getItem(RECENT_CALCS_KEY);
   if (!raw) return { entries: [], dirty: false };
-  const parsed: unknown = JSON.parse(raw);
+  let parsed: unknown;
+  // A corrupt value is replaced rather than blocking every later write.
+  try { parsed = JSON.parse(raw); } catch { return { entries: [], dirty: true }; }
   if (!Array.isArray(parsed)) return { entries: [], dirty: true };
   const owned = parsed.filter(isEntry);
   const entries = owned.slice(0, MAX_RECENT_CALCS);

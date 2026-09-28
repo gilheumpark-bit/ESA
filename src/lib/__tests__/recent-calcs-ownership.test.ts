@@ -31,6 +31,13 @@ describe('recent calculation ownership', () => {
     expect(loadRecentCalcs('bob').map((item) => item.id)).toEqual(['bob-1', 'anonymous']);
   });
 
+  test('a corrupt stored value is replaced by the next calculation', () => {
+    values.set(RECENT_CALCS_KEY, '{truncated');
+    expect(loadRecentCalcs(null)).toEqual([]);
+    recordRecentCalc(entry('fresh', null));
+    expect(loadRecentCalcs(null).map((item) => item.id)).toEqual(['fresh']);
+  });
+
   test('entries written before ownership was recorded are shown to no one and pruned', () => {
     const legacy = { id: 'legacy', calcName: '전압강하', category: 'voltage-drop', date: '2026-09-01T00:00:00Z',
       keyResult: '4.14 V', value: 4.14, unit: 'V' };
