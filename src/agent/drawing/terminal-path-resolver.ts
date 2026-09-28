@@ -114,18 +114,52 @@ function nearPoint(point: Point): IndexedBounds {
     w: 2 * TERMINAL_TOLERANCE, h: 2 * TERMINAL_TOLERANCE };
 }
 
+function expandBounds(bounds: IndexedBounds, margin: number): IndexedBounds {
+  return { x: bounds.x - margin, y: bounds.y - margin, w: bounds.w + 2 * margin, h: bounds.h + 2 * margin };
+}
+/** Candidate box for the body index: every evidence box, widened by the contact tolerance. */
+function contactBounds(symbol: SymbolNode): IndexedBounds | undefined {
+  const boxes = symbol.evidence.map((ref) => ref.bounds);
+  if (!boxes.length) return undefined;
+  const minX = Math.min(...boxes.map((box) => box.x)), minY = Math.min(...boxes.map((box) => box.y));
+  const maxX = Math.max(...boxes.map((box) => box.x + box.w)), maxY = Math.max(...boxes.map((box) => box.y + box.h));
+  return expandBounds({ x: minX, y: minY, w: maxX - minX, h: maxY - minY }, TERMINAL_TOLERANCE);
+}
+/** Liang–Barsky against a closed rectangle: boundary contact counts. */
+function segmentTouchesBounds(start: Point, end: Point, bounds: IndexedBounds): boolean {
+  let entry = 0, exit = 1;
+  for (const [origin, delta, low, high] of [
+    [start.x, end.x - start.x, bounds.x, bounds.x + bounds.w], [start.y, end.y - start.y, bounds.y, bounds.y + bounds.h],
+  ]) {
+    if (Math.abs(delta) <= EPSILON) {
+      if (origin < low || origin > high) return false;
+    } else {
+      const a = (low - origin) / delta, b = (high - origin) / delta;
+      entry = Math.max(entry, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
+    }
+  }
+  return exit >= entry;
+}
+
 function crossesEquipmentBody(line: LineNode, symbol: SymbolNode): boolean {
-  const unmodelled = !(symbol.ports ?? []).some(finite);
-  if (!unmodelled && hasDeviceClass(symbol, 'bus')) return false;
+  if (!(symbol.ports ?? []).some(finite)) {
+    // Without terminal evidence the device is unmodelled. The relation builder
+    // attaches it to a confirmed line within the same two-pixel contact
+    // tolerance (evidence-deduplicator), so any such contact with any of its
+    // evidence boxes is an obstacle, never permission to prove a bypass.
+    return symbol.evidence.some((ref) => {
+      const touched = expandBounds(ref.bounds, TERMINAL_TOLERANCE);
+      return line.path.some((point, index) => index > 0 && segmentTouchesBounds(line.path[index - 1], point, touched));
+    });
+  }
+  if (hasDeviceClass(symbol, 'bus')) return false;
   // A whole body, not a small crop fragment, is the obstacle to bypassing a device.
   const bounds = [...symbol.evidence].sort((a, b) => b.bounds.w * b.bounds.h - a.bounds.w * a.bounds.h)[0]?.bounds;
   if (!bounds) return false;
-  // Without terminal evidence, even boundary contact is an unmodelled device,
-  // not permission to prove a bypass between the two other terminals.
-  const inset = unmodelled ? 0 : Math.min(TERMINAL_TOLERANCE, bounds.w / 4, bounds.h / 4);
+  const inset = Math.min(TERMINAL_TOLERANCE, bounds.w / 4, bounds.h / 4);
   const minX = bounds.x + inset, maxX = bounds.x + bounds.w - inset;
   const minY = bounds.y + inset, maxY = bounds.y + bounds.h - inset;
-  if (maxX < minX || maxY < minY) return false;
+  if (!(maxX > minX && maxY > minY)) return false;
   // Clip each segment to the interior rectangle, not just its vertices.
   for (let i = 1; i < line.path.length; i += 1) {
     const start = line.path[i - 1], end = line.path[i];
@@ -134,15 +168,13 @@ function crossesEquipmentBody(line: LineNode, symbol: SymbolNode): boolean {
       [start.x, end.x - start.x, minX, maxX], [start.y, end.y - start.y, minY, maxY],
     ]) {
       if (Math.abs(delta) <= EPSILON) {
-        if (unmodelled ? origin < low || origin > high : origin <= low || origin >= high) {
-          entry = 1; exit = 0; break;
-        }
+        if (origin <= low || origin >= high) { entry = 1; exit = 0; break; }
       } else {
         const a = (low - origin) / delta, b = (high - origin) / delta;
         entry = Math.max(entry, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
       }
     }
-    if (unmodelled ? exit >= entry : exit - entry > EPSILON) return true;
+    if (exit - entry > EPSILON) return true;
   }
   return false;
 }
@@ -189,8 +221,8 @@ export function resolveTerminalPaths(symbols: SymbolNode[], lines: LineNode[], p
   if (!pageLines.length || !pageSymbols.some((symbol) => symbol.ports?.length)) return [];
   const boundsByLine = new Map(pageLines.map((line) => [line, lineBounds(line)]));
   const lineIndex = createBoundsIndex(pageLines, (line) => boundsByLine.get(line));
-  const bodyIndex = createBoundsIndex(pageSymbols, (symbol) => [...symbol.evidence]
-    .sort((a, b) => b.bounds.w * b.bounds.h - a.bounds.w * a.bounds.h)[0]?.bounds);
+  // Superset candidates only; crossesEquipmentBody keeps the exact predicate.
+  const bodyIndex = createBoundsIndex(pageSymbols, contactBounds);
   const observed = pageLines.filter((line) => line.certainty === 'confirmed'
     && line.geometrySource !== 'synthetic' && line.lineKind !== 'unknown'
     && line.evidence.length > 0 && line.evidence.every((ref) => ref.pageIndex === pageIndex)

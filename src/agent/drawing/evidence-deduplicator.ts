@@ -471,11 +471,12 @@ export function deduplicateLines(hits: RawLineHit[], tolerance = 18): LineNode[]
     const seq = (pageSequences.get(hit.pageIndex) ?? 0) + 1;
     pageSequences.set(hit.pageIndex, seq);
     const displayId = `P${String(page).padStart(2, '0')}-L${String(seq).padStart(3, '0')}`;
-    // Observed and synthetic lines may share a path; rounding also merged
-    // sub-pixel neighbours. Either collision fused two conductors into one ID.
+    // A synthetic chord may share an observed line's path; without the source
+    // both received one ID and fused into one conductor. Observed IDs keep
+    // their previous form, and rounding keeps IDs stable under float noise.
     const id = stableId('line', [hit.pageIndex, hit.lineKind,
-      hit.geometrySource === 'synthetic' ? 'synthetic' : 'observed',
-      hit.path.map((point) => `${point.x},${point.y}`).join(';')]);
+      ...(hit.geometrySource === 'synthetic' ? ['synthetic'] : []),
+      hit.path.map((point) => `${Math.round(point.x)},${Math.round(point.y)}`).join(';')]);
     kept.push({
       id,
       displayId,

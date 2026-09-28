@@ -36,7 +36,10 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
 
   // Orphan devices
   const connected = new Set<string>();
+  const related = new Set<string>();
   for (const r of input.relations) {
+    related.add(r.from);
+    related.add(r.to);
     if (r.certainty !== 'confirmed') continue;
     connected.add(r.from);
     connected.add(r.to);
@@ -45,7 +48,8 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
   for (const s of confirmed.filter((node) => !connected.has(node.id) && !isBusLike(node))) {
     // 종류가 확정되지 않았으면 «모선 제외» 판정 자체가 추측 위에 서 있다.
     // 소견을 버리지는 않되 SUPPORTED 로 확정하지 않는다.
-    const supported = input.coverageComplete === true && hasConfirmedType(s);
+    // 미확정 관계가 있는 기기는 결선이 «없는» 것이 아니라 «불확실한» 것이다.
+    const supported = input.coverageComplete === true && hasConfirmedType(s) && !related.has(s.id);
     const pageIndex = s.evidence[0]?.pageIndex ?? 0;
     const key = `${pageIndex}:${supported ? 'SUPPORTED' : 'HOLD'}`;
     const group = orphanGroups.get(key) ?? { symbols: [], supported, pageIndex };
@@ -65,9 +69,9 @@ export function buildRecommendations(input: RecommendationInput): Recommendation
       status: group.supported ? 'SUPPORTED' : 'HOLD',
       aiDecision: group.supported
         ? 'ESA 판단: 결선 누락으로 분류합니다.'
-        : 'ESA 잠정 판단: 결선 누락 가능성이 높지만 판독 범위 또는 기기 종류가 미확정입니다.',
+        : 'ESA 잠정 판단: 결선 누락 가능성이 있지만 판독 범위, 기기 종류 또는 결선 확실성이 미확정입니다.',
       recommendedAction: '결선 누락을 우선 보완 대상으로 두고, 구획 경계와 페이지 참조 근거로 결론을 갱신합니다.',
-      requiredInputs: group.supported ? [] : missingSupportInputs(input, group.symbols),
+      requiredInputs: group.supported ? [] : orphanSupportInputs(input, group.symbols, related),
       standardRefs: ['ESA-SLD-RULE:ORPHAN-CONNECTION'],
       calcReceiptIds: [],
     }));
@@ -362,6 +366,14 @@ function hasConfirmedType(s: SymbolNode): boolean {
 }
 
 /** SUPPORTED 로 올리지 못한 사유를 결론 변경 조건으로 돌려준다. */
+/** An orphan finding held back by an unconfirmed relation names that relation. */
+function orphanSupportInputs(input: RecommendationInput, nodes: SymbolNode[], related: Set<string>): string[] {
+  const needed = missingSupportInputs(input, nodes).filter((item) => item !== '원본 근거 재확인');
+  const uncertain = unique(nodes.filter((n) => related.has(n.id)).map((n) => n.displayId));
+  if (uncertain.length > 0) needed.push(`미확정 결선 확인: ${uncertain.join(', ')}`);
+  return needed.length > 0 ? needed : ['원본 근거 재확인'];
+}
+
 function missingSupportInputs(input: RecommendationInput, nodes: SymbolNode[]): string[] {
   const needed: string[] = [];
   if (input.coverageComplete !== true) needed.push('전체 관련 구획 판독 완료');
