@@ -115,14 +115,17 @@ function nearPoint(point: Point): IndexedBounds {
 }
 
 function crossesEquipmentBody(line: LineNode, symbol: SymbolNode): boolean {
-  if (hasDeviceClass(symbol, 'bus')) return false;
+  const unmodelled = !(symbol.ports ?? []).some(finite);
+  if (!unmodelled && hasDeviceClass(symbol, 'bus')) return false;
   // A whole body, not a small crop fragment, is the obstacle to bypassing a device.
   const bounds = [...symbol.evidence].sort((a, b) => b.bounds.w * b.bounds.h - a.bounds.w * a.bounds.h)[0]?.bounds;
   if (!bounds) return false;
-  const inset = Math.min(TERMINAL_TOLERANCE, bounds.w / 4, bounds.h / 4);
+  // Without terminal evidence, even boundary contact is an unmodelled device,
+  // not permission to prove a bypass between the two other terminals.
+  const inset = unmodelled ? 0 : Math.min(TERMINAL_TOLERANCE, bounds.w / 4, bounds.h / 4);
   const minX = bounds.x + inset, maxX = bounds.x + bounds.w - inset;
   const minY = bounds.y + inset, maxY = bounds.y + bounds.h - inset;
-  if (!(maxX > minX && maxY > minY)) return false;
+  if (maxX < minX || maxY < minY) return false;
   // Clip each segment to the interior rectangle, not just its vertices.
   for (let i = 1; i < line.path.length; i += 1) {
     const start = line.path[i - 1], end = line.path[i];
@@ -131,13 +134,15 @@ function crossesEquipmentBody(line: LineNode, symbol: SymbolNode): boolean {
       [start.x, end.x - start.x, minX, maxX], [start.y, end.y - start.y, minY, maxY],
     ]) {
       if (Math.abs(delta) <= EPSILON) {
-        if (origin <= low || origin >= high) { entry = 1; exit = 0; break; }
+        if (unmodelled ? origin < low || origin > high : origin <= low || origin >= high) {
+          entry = 1; exit = 0; break;
+        }
       } else {
         const a = (low - origin) / delta, b = (high - origin) / delta;
         entry = Math.max(entry, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
       }
     }
-    if (exit - entry > EPSILON) return true;
+    if (unmodelled ? exit >= entry : exit - entry > EPSILON) return true;
   }
   return false;
 }
