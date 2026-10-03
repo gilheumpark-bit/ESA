@@ -148,10 +148,16 @@ export function getSupabaseAdmin(): SupabaseClient {
 const USERS_TABLE = 'users';
 
 /** Ensure the external Firebase identity has a local profile row for FK-backed data. */
-export async function ensureUserProfile(userId: string, email?: string): Promise<void> {
+export async function ensureUserProfile(
+  userId: string,
+  email?: string,
+  options?: { signedIn?: boolean },
+): Promise<void> {
   const client = getSupabaseAdmin();
-  const profile: { id: string; email?: string } = { id: userId };
+  const profile: { id: string; email?: string; last_sign_in?: string } = { id: userId };
   if (email) profile.email = email;
+  // 본인 세션에서 온 호출만 찍는다 — 이 함수는 남의 프로필 행을 맞춰 둘 때도 불린다.
+  if (options?.signedIn) profile.last_sign_in = new Date().toISOString();
   const { error } = await client
     .from(USERS_TABLE)
     .upsert(profile, { onConflict: 'id', ignoreDuplicates: false });

@@ -138,7 +138,7 @@ async function POST__impl(req: NextRequest): Promise<NextResponse> {
     }
 
     // Per-route abuse limit.
-    const blocked = applyRateLimit(req, 'default');
+    const blocked = applyRateLimit(req, 'export');
     if (blocked) {
       return NextResponse.json(
         { error: 'ESA-2001: Rate limit exceeded' },

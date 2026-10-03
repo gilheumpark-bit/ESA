@@ -173,7 +173,7 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
 
 async function GET__impl(request: NextRequest) {
   // Per-route abuse limit.
-  const blocked = applyRateLimit(request, 'default');
+  const blocked = applyRateLimit(request, 'admin');
   if (blocked) return blocked;
 
   // ── Auth: require valid Firebase JWT ──

@@ -15,7 +15,7 @@ async function GET__impl(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  await ensureUserProfile(user.uid, user.email);
+  await ensureUserProfile(user.uid, user.email, { signedIn: true });
   if (user.email && user.emailVerified === true) {
     await claimProjectInvitations(user.uid, user.email);
   }

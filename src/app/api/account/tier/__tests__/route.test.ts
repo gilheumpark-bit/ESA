@@ -57,6 +57,15 @@ describe('GET /api/account/tier invitation claim', () => {
     expect(mockClaim).toHaveBeenCalledWith('firebase-a', 'Engineer@Example.com');
   });
 
+  // 이 라우트는 로그인한 본인이 세션을 열 때 불린다 — 관리자 화면의 「마지막 로그인」이 여기서 채워진다.
+  test('stamps the sign-in time for the session owner', async () => {
+    mockUser.mockResolvedValue({ uid: 'firebase-a', email: 'a@example.com', emailVerified: true });
+
+    await GET(request);
+
+    expect(mockEnsure).toHaveBeenCalledWith('firebase-a', 'a@example.com', { signedIn: true });
+  });
+
   test('does not claim invitations using an unverified email claim', async () => {
     mockUser.mockResolvedValue({
       uid: 'firebase-a',
