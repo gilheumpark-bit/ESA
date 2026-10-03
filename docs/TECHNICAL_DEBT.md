@@ -19,7 +19,7 @@
 | `DEBT-CALC-001` | 아크플래시 계산기가 280개 격자점 중 189곳에서 아크 전류를 볼트 단락전류보다 크게 낸다(물리적으로 성립하지 않는 값). 이 값은 PPE 등급 산출에 쓰인다. | `src/engine/calculators/protection/` 아크플래시, `…/__tests__/arc-flash-physics.test.ts`(`VIOLATION_BASELINE = 189`) | 위반 지점 수가 늘지 않게 잠그고, 위반 결과에는 경고를 붙인다. | 적용 판본의 IEEE 1584 원문 식으로 다시 구현하고 원문 예제값으로 대조한 뒤 기준선을 0 으로 내린다. 원문을 확보하지 못하면 계산기를 「참고용」으로 낮추거나 내린다. | `OPEN` · 도메인 검토 필요 |
 | `DEBT-STD-001` | KEC `360.1` 을 인용하지만 그 조항이 조항 목록에서 확인되지 않는다. | `src/engine/standards/kec/__tests__/clause-numbers-exist.test.ts`, `clause-citations-repo-wide.test.ts` 의 선언 잔여 | 두 테스트가 이 한 건만 예외로 두고 새 미확인 조항은 막는다. | 원문에서 조항을 확인해 목록에 넣거나, 인용을 맞는 조항으로 고친다. | `OPEN` · 기준 검토 |
 | `DEBT-API-001` | 요청 본문을 보호 없이 파싱하는 라우트가 8개 남아 있다(`stripe/webhook`·`notarize`·`community/*` 등). 잘못된 본문이 4xx 가 아닌 500 으로 나갈 수 있다. | `src/app/api/__tests__/body-parse-guard.test.ts` 의 `MEASURED_4XX` 기준선 | 기준선 테스트가 새 라우트의 무보호 파싱을 막는다. | 8개 라우트에 본문 파싱 실패 처리를 넣고 기준선을 비운다. | `OPEN` · API |
-| `DEBT-DEP-001` | 선언 없이 쓰는 패키지가 있다: `axe-core`(e2e, 린트 설정 패키지에 딸려 설치됨), `undici`(수동 하네스 2개). `@sentry/nextjs` 는 실행 중에 불리는데 개발 의존성에 있다. | `e2e/compatibility.spec.ts`, `scripts/run-drawing-*.mjs`, `package.json` | 현재는 다른 패키지가 끌어와 설치되고, Docker 이미지는 전체 설치라 동작한다. | 세 패키지를 올바른 칸에 선언하고 잠금 파일을 갱신한다(설치 명령 1회 승인 필요). | `OPEN` · 플랫폼 |
+| `DEBT-DEP-002` | 개발 의존성 감사(`gate:audit:all`)가 high 5건으로 실패한다. 전부 `braces` ≤3.0.3 한 건(GHSA-vfj7-8cjw-p6xm, 깊게 중첩된 패턴의 스택 고갈)에서 나오고 `micromatch`→`fast-glob`→`eslint-config-next` 로 올라온다. 3.0.3 이 최신이라 올릴 버전이 없다. | `package-lock.json` 의 `braces`, `scripts/audit-baseline-gate.mjs` | 린트 도구 안에서만 쓰이고 배포 이미지의 실행 경로에 없다. 운영 의존성 감사(`gate:audit`)는 0건이다. | 고친 `braces` 가 나오면 잠금 파일을 갱신한다. 그 전에 CI 를 초록으로 만들려면 이 권고 하나를 기한부 예외로 둘지 소유자가 정한다(게이트를 임의로 풀지 않았다). | `OPEN` · 상류 대기 / 소유자 결정 |
 | `DEBT-TEST-001` | 실도면 증거에 묶인 테스트가 CI 에서 실행되지 않는다. 보정점 3건은 재배포할 수 없는 래스터가 없어 건너뛰고, 스캔 영수증 대조 1건은 영수증이 gitignore 대상이다. | `src/lib/__tests__/drawing-text-quality.test.ts`, `src/engine/review/__tests__/no-connections-gap.test.ts` | 둘 다 조용한 통과가 아니라 「건너뜀」으로 보고된다(후자는 2026-10-03 에 고침). | 재배포 가능한 합성 열화 쌍과 작은 영수증 fixture 를 저장소에 넣어 CI 에서 실행되게 한다. | `OPEN` · 도면/QA |
 | `DEBT-DRAW-001` | 기기 종류 어휘가 단계마다 다르다. 판독 단계는 48종 정본 이름을 내는데 전기 불변식·규격 소유 판정은 `VCB`·`TR` 같은 약어 정규식으로 찾는다. 맞지 않는 기기는 보호·전원·규격 소유를 인정받지 못해 보류로 남는다. | `src/agent/vision/spatial-graph.ts` ↔ `src/agent/electrical/electrical-invariants.ts`·`domain-normalizer.ts`·`logic-conflicts.ts` | 틀리는 방향이 보류 쪽이라 거짓 합격은 생기지 않는다. | 어휘를 한 정본으로 합치되, **보류가 줄어드는 변경**이므로 실도면 fixture 로 거짓 합격이 생기지 않음을 먼저 보인다. | `OPEN` · 소유자 결정 + 도면 |
 | `DEBT-DRAW-002` | 팀 검토·V3 경로가 받은 것을 쓰지 않는 자리가 남아 있다: ① V3 벡터 문서는 계산·기준·위반을 계산하고도 결과에 싣지 않는다(항상 빈 목록) ② 화면이 PDF 쪽 번호를 보내지 않아 항상 1쪽만 본다 ③ 팀 경로가 PDF 일람표(`scheduleTables`)를 버린다 ④ 토론의 물리법칙 대조가 계산기 이름을 받아 어느 분기에도 걸리지 않는다. | `src/agent/drawing/document-orchestrator.ts`, `team-result-adapter.ts`, `src/agent/teams/sld-team.ts`, `src/agent/debate/debate-protocol.ts`, `tools/sld/page.tsx` | 모두 「덜 말하는」 쪽 결함이다. 2026-10-03 에 같은 경로의 거짓 판정 원인(자기 불일치·확신도 고정·문턱 없음)은 고쳤다. | 항목별로 받은 값을 실제 출력에 연결하고, 화면에서 쪽을 고를 수 있게 한다. | `OPEN` · 도면 |
@@ -48,6 +48,8 @@
 
 고친 것과 남긴 것의 목록은 [전수 감사 인수인계](project/handoffs/2026-10-03-full-wiring-debt-audit.md)에 있다.
 위 표의 `DEBT-CALC-001` 이하 7건은 그때까지 테스트 안의 기준선·예외로만 적혀 있던 것을 이 대장으로 옮긴 것이다.
+
+같은 날 닫은 것: `DEBT-DEP-001` — `axe-core`·`undici` 를 개발 의존성으로 선언하고 `@sentry/nextjs` 를 실행 의존성으로 옮겼다. Next.js 16.3.8(치명 권고 해소), firebase 12.19.0, `@firebase/firestore` 아래 `@grpc/grpc-js` 1.14.5 override(이 앱은 Firestore 를 import 하지 않는다)로 운영 의존성 감사를 0건으로 되돌렸다.
 
 ## 갱신 규칙
 
