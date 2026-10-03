@@ -98,7 +98,7 @@ export function buildDrawingDocumentV3(input: {
   userCorrections?: DrawingDocumentV3['userCorrections'];
   verificationExtra?: Partial<VerificationBlock>;
 }): DrawingDocumentV3 {
-  const holdReasons = collectHoldReasons(input.unresolvedItems, input.jobStatus);
+  const holdReasons = collectHoldReasons(input.unresolvedItems);
   if (input.evidenceGraph.symbols.some((item) => item.classification && item.classification.status !== 'classified')) {
     addHoldReason(holdReasons, 'UNREADABLE_SYMBOL');
   }
@@ -200,31 +200,11 @@ export function buildDrawingDocumentV3(input: {
   };
 }
 
-/** Read-only V2 quantities → V3 equipmentCounts adapter (does not mutate V2). */
-export function adaptV2QuantitiesToV3(
-  quantities: Record<string, number> | undefined,
-): DrawingDocumentV3['equipmentCounts'] {
-  if (!quantities) return [];
-  return Object.entries(quantities).map(([equipmentKind, n]) => ({
-    equipmentKind,
-    confirmed: 0,
-    ambiguous: n,
-    missingSuspected: 0,
-    physicalEquipmentCount: null,
-    symbolOccurrences: n,
-    countStatus: 'HOLD' as const,
-  }));
-}
-
 function collectHoldReasons(
   unresolved: DrawingDocumentV3['unresolvedItems'],
-  jobStatus: JobStatus,
 ): ReadFailureCode[] {
   const codes = new Set<ReadFailureCode>();
   for (const u of unresolved) codes.add(u.code);
-  if (jobStatus === 'PARTIAL') {
-    /* keep unresolved only */
-  }
   return [...codes];
 }
 

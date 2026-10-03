@@ -122,4 +122,44 @@ describe('layout team physical-evidence boundary', () => {
       else process.env.ANTHROPIC_API_KEY = previousAnthropic;
     }
   });
+
+  /**
+   * 사용자가 고른 로컬 공급자를 말없이 원격(Gemini)으로 바꾸던 자리다. 그 결과
+   * ChatGPT 모델 이름이 Gemini 로 갔고, 서버 키가 대신 쓰일 수 있었으며, 도면이
+   * 사용자가 고르지 않은 외부 서비스로 나갔다.
+   */
+  it('사용자가 고른 chatgpt-local 을 원격 공급자로 바꾸지 않는다', async () => {
+    mockSplitAndAnalyze.mockResolvedValue([]);
+
+    await executeLayoutTeam({
+      sessionId: 'local-layout',
+      classification: 'layout_image',
+      fileBuffer: new Uint8Array([1]).buffer,
+      fileName: 'layout.png',
+      mimeType: 'image/png',
+      vision: { provider: 'chatgpt-local', model: 'local-model' },
+    });
+
+    expect(mockSplitAndAnalyze).toHaveBeenCalledWith(expect.any(ArrayBuffer), expect.objectContaining({
+      model: 'chatgpt-local',
+      modelName: 'local-model',
+    }));
+  });
+
+  it('분할 판독이 지원하지 않는 claude-local 은 원격으로 돌리지 않고 이유를 밝히며 실패한다', async () => {
+    mockSplitAndAnalyze.mockResolvedValue([]);
+
+    const result = await executeLayoutTeam({
+      sessionId: 'claude-local-layout',
+      classification: 'layout_image',
+      fileBuffer: new Uint8Array([1]).buffer,
+      fileName: 'layout.png',
+      mimeType: 'image/png',
+      vision: { provider: 'claude-local' },
+    });
+
+    expect(mockSplitAndAnalyze).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/claude-local/);
+  });
 });

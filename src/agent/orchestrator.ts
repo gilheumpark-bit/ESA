@@ -9,7 +9,7 @@
  * PART 4: Report assembly
  */
 
-import type { TeamInput, TeamResult, ESVAVerifiedReport } from './teams/types';
+import type { TeamInput, TeamResult, ESVAVerifiedReport, InputClassification } from './teams/types';
 import { classifyInput, routeToTeams, type TeamRouting } from './teams/team-registry';
 import { executeSLDTeam } from './teams/sld-team';
 import { executeLayoutTeam } from './teams/layout-team';
@@ -33,7 +33,6 @@ export interface OrchestratorRequest {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
-  dxfLayers?: string[];
   /** 이미지 분석용 요청 한정 Vision 자격 증명. 보고서·응답에는 직렬화하지 않는다. */
   vision?: TeamInput['vision'];
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
@@ -87,6 +86,27 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     symbolLibrary: req.symbolLibrary,
     signal: req.signal,
   };
+}
+
+/**
+ * `mixed` 는 "계통도와 평면도를 함께 봐 달라"는 라우팅 신호이지 도면팀이 읽을 수 있는
+ * 입력 종류가 아니다. 도면팀은 `sld_*` / `layout_*` 로만 분기하므로, 파일 형식에 맞는
+ * 자기 분류로 바꿔 넘긴다. 규정팀과 그 밖의 분류는 그대로 둔다.
+ */
+function teamClassification(
+  teamId: string,
+  classification: InputClassification,
+  file: OrchestratorRequest['file'],
+): InputClassification {
+  if (classification !== 'mixed' || !file) return classification;
+  const prefix = teamId === 'TEAM-SLD' ? 'sld' : teamId === 'TEAM-LAYOUT' ? 'layout' : null;
+  if (!prefix) return classification;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const kind = ext === 'dxf' || file.mimeType === 'application/dxf' ? 'dxf'
+    : ext === 'pdf' || file.mimeType === 'application/pdf' ? 'pdf'
+      : file.mimeType.startsWith('image/') ? 'image'
+        : null;
+  return kind ? `${prefix}_${kind}` : classification;
 }
 
 function abortError(): Error {
@@ -186,7 +206,6 @@ export async function runOrchestrator(
       request.file?.mimeType,
       request.file?.name,
       request.query,
-      request.dxfLayers,
     );
 
     // Step 2: 팀 라우팅
@@ -196,15 +215,21 @@ export async function runOrchestrator(
     // Step 3: 병렬 실행 (1차 팀 + 지원 팀)
     const allTeamIds = [routing.primaryTeam, ...routing.supportTeams];
 
-    const teamPromises = allTeamIds.map(teamId =>
-      dispatchWithRetry(teamId, teamInput, deps, routing.classification === 'sld_image' && teamId === 'TEAM-SLD' ? 0 : 2).catch(err => ({
+    const teamPromises = allTeamIds.map(teamId => {
+      const classificationForTeam = teamClassification(teamId, routing.classification, request.file);
+      const input = classificationForTeam === teamInput.classification
+        ? teamInput
+        : { ...teamInput, classification: classificationForTeam };
+      // 이미지 계통도 판독은 호출마다 비용이 든다 — 재시도하지 않는다.
+      const retries = classificationForTeam === 'sld_image' && teamId === 'TEAM-SLD' ? 0 : 2;
+      return dispatchWithRetry(teamId, input, deps, retries).catch(err => ({
         teamId: teamId as TeamResult['teamId'],
         success: false,
         confidence: 0,
         durationMs: 0,
         error: err instanceof Error ? err.message : String(err),
-      } as TeamResult))
-    );
+      } as TeamResult));
+    });
 
     const teamResults = await Promise.all(teamPromises);
     if (request.signal?.aborted) throw abortError();

@@ -44,22 +44,33 @@ export function detectDisagreements(
   teamResults: TeamResult[],
   tolerance: number = 0.1,
 ): DisagreementItem[] {
-  const calcMap = new Map<string, { teamId: TeamId; entry: CalculationEntry }[]>();
+  const calcMap = new Map<string, { calcId: string; teamId: TeamId; entry: CalculationEntry }[]>();
 
-  // 같은 calculatorId별로 그룹핑
+  // 같은 "대상"끼리만 묶는다. 팀이 한 계산기에 값을 하나만 냈으면 계산기 이름이
+  // 곧 대상이고, 장치마다 여러 줄을 냈으면(차단기 N대 등) 줄의 id 가 대상이다.
+  // 계산기 이름만으로 묶으면 서로 다른 장치의 정격이 불일치로 잡힌다.
   for (const tr of teamResults) {
     if (!tr.calculations) continue;
+    const perCalculator = new Map<string, number>();
     for (const calc of tr.calculations) {
-      const key = calc.calculatorId;
-      if (!calcMap.has(key)) calcMap.set(key, []);
-      calcMap.get(key)!.push({ teamId: tr.teamId, entry: calc });
+      perCalculator.set(calc.calculatorId, (perCalculator.get(calc.calculatorId) ?? 0) + 1);
+    }
+    for (const calc of tr.calculations) {
+      const single = perCalculator.get(calc.calculatorId) === 1;
+      const key = single ? calc.calculatorId : `${calc.calculatorId}#${calc.id}`;
+      const bucket = calcMap.get(key);
+      const item = { calcId: calc.calculatorId, teamId: tr.teamId, entry: calc };
+      if (bucket) bucket.push(item);
+      else calcMap.set(key, [item]);
     }
   }
 
   const disagreements: DisagreementItem[] = [];
 
-  for (const [calcId, entries] of calcMap) {
-    if (entries.length < 2) continue;
+  for (const entries of calcMap.values()) {
+    // 불일치는 서로 다른 팀 사이에서만 성립한다.
+    if (new Set(entries.map((e) => e.teamId)).size < 2) continue;
+    const calcId = entries[0].calcId;
 
     const values = entries.map(e => e.entry.value);
     const avg = values.reduce((a, b) => a + b, 0) / values.length;

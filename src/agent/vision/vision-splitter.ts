@@ -309,20 +309,3 @@ export function mergeVisionSplitResults(
     : 0;
   return { components, connections, confidence };
 }
-
-/** Backward-compatible component-only helper. */
-export function deduplicateComponents(
-  allComponents: ExtractedComponent[],
-  positionTolerance = 10,
-): ExtractedComponent[] {
-  return mergeVisionSplitResults([
-    {
-      regionIndex: 0,
-      regionBounds: { x: 0, y: 0, w: 0, h: 0 },
-      components: allComponents,
-      connections: [],
-      texts: [],
-      regionConfidence: 0,
-    },
-  ], positionTolerance).components;
-}

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -17,7 +17,8 @@ import type { DrawingCouncilInput } from '../../vision/drawing-council';
 jest.mock('@/engine/topology/pdf-vector-parser', () => ({ parsePdfToSLD: jest.fn() }));
 
 const DRAWING_HASH = 'd'.repeat(64);
-const KEY = 'sk-independent-review-test-key-123456';
+// 실제 키 모양의 고정 문자열을 저장소에 두지 않는다 — 가림 검사는 값이 무엇이든 성립한다.
+const KEY = `sk-${randomUUID()}`;
 
 function canonicalize(value: unknown): string {
   if (value === undefined || value === null) return 'null';
@@ -806,6 +807,33 @@ describe('SLD raster independent council integration', () => {
     expect(parsePdfToSLD).toHaveBeenCalled();
     expect(runCouncil).not.toHaveBeenCalled();
     expect(result.components).toEqual([expect.objectContaining({ id: 'PDF-TR-01', type: 'transformer', position: { x: 25, y: 75 } })]);
+  });
+
+  /**
+   * 파서는 페이지 상태에 따라 확신도를 낮춘다(스캔본 0.3 · 표 문서나 끝점 미결속 0.55).
+   * 기기별 확신도를 0.85 로 고정해 두면 그 낮춤이 버려지고, 뒤 단계가 0.85 이상을
+   * 「확정」으로 올려 수량 집계에 넣는다. DXF 분기처럼 파서 값을 넘지 않게 한다.
+   */
+  it.each([[0.3], [0.55]])('PDF 기기 확신도는 파서가 낸 페이지 확신도(%s)를 넘지 않는다', async (pageConfidence) => {
+    jest.mocked(parsePdfToSLD).mockResolvedValue({
+      components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR', position: { x: 25, y: 75 } }],
+      connections: [], confidence: pageConfidence, suggestedCalculations: [], rawDescription: '',
+    } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>);
+
+    const result = await executeSLDTeam({ sessionId: 'pdf-low-confidence', classification: 'sld_pdf', fileBuffer: new Uint8Array([37, 80, 68, 70]).buffer });
+
+    expect(result.components?.[0].confidence).toBe(pageConfidence);
+  });
+
+  it('PDF 기기 확신도는 파서가 더 높게 내도 0.85 를 넘지 않는다', async () => {
+    jest.mocked(parsePdfToSLD).mockResolvedValue({
+      components: [{ id: 'PDF-TR-01', type: 'transformer', label: 'PDF TR', position: { x: 25, y: 75 } }],
+      connections: [], confidence: 1, suggestedCalculations: [], rawDescription: '',
+    } as unknown as Awaited<ReturnType<typeof parsePdfToSLD>>);
+
+    const result = await executeSLDTeam({ sessionId: 'pdf-cap', classification: 'sld_pdf', fileBuffer: new Uint8Array([37, 80, 68, 70]).buffer });
+
+    expect(result.components?.[0].confidence).toBe(0.85);
   });
 
   /**

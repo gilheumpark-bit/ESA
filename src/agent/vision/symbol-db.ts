@@ -133,15 +133,3 @@ export function resolveSymbol(raw: string): string {
 export function getSymbolMetadata(type: string): SymbolEntry | undefined {
   return EXPANDED_SYMBOL_DB.find(e => e.type === type);
 }
-
-/**
- * 카테고리별 심볼 목록.
- */
-export function getSymbolsByCategory(category: string): SymbolEntry[] {
-  return EXPANDED_SYMBOL_DB.filter(e => e.category === category);
-}
-
-/** 전체 심볼 수 */
-export function getSymbolCount(): number {
-  return EXPANDED_SYMBOL_DB.length;
-}

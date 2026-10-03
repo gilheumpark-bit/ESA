@@ -110,7 +110,8 @@ async function extractFromDrawing(
         label: c.label ?? c.type,
         rating: c.rating,
         position: c.position,
-        confidence: 0.85,
+        // 페이지 확신도(스캔본·표 문서·미결속에서 파서가 낮춘 값)를 기기에도 물려준다.
+        confidence: Math.min(0.85, analysis.confidence ?? 0),
         properties: c.properties,
         symbolShape: c.symbolShape,
         classification: c.classification,
@@ -612,10 +613,18 @@ async function buildTopology(
 // PART 3 — Calculation Chain Execution
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * 결선 기반 판정을 내도 되는 구조 확신도 문턱. 빠른 경로(/api/dxf·/api/pdf-drawing)와
+ * 같은 값이다 — 표 문서·스캔·끝점 미결속 페이지는 파서가 이보다 낮게 낸다.
+ */
+const STRUCTURE_TRUST_THRESHOLD = 0.85;
+
 async function runCalculations(
   components: ExtractedComponent[],
   connections: ExtractedConnection[],
+  structureConfidence: number,
 ): Promise<{ calculations: CalculationEntry[]; standards: StandardEntry[]; violations: ViolationEntry[] }> {
+  const structureTrusted = structureConfidence >= STRUCTURE_TRUST_THRESHOLD;
   const calculations: CalculationEntry[] = [];
   const standards: StandardEntry[] = [];
   const violations: ViolationEntry[] = [];
@@ -676,8 +685,9 @@ async function runCalculations(
 
       const { vd, currentA, assumed } = vdEstimate;
       const limit = activeDefaults().vdBranch;
-      // 전류가 도면에서 온 경우에만 PASS/FAIL; 추정 전류면 수치만 참고 HOLD
-      const compliant: boolean | null = assumed ? null : vd <= limit;
+      // 전류가 도면에서 온 경우에만 PASS/FAIL; 추정 전류면 수치만 참고 HOLD.
+      // 결선 자체를 믿을 수 없는 페이지면 값은 보여 주되 판정하지 않는다.
+      const compliant: boolean | null = assumed || !structureTrusted ? null : vd <= limit;
       calculations.push({
         id: `calc-vd-${conn.from}-${conn.to}`,
         calculatorId: 'voltage-drop',
@@ -688,7 +698,9 @@ async function runCalculations(
         compliant,
         note: assumed
           ? `참고 추정(I=${currentA}A 미검증). 정밀 계산기 경로 필요.`
-          : `I=${currentA}A, 한도 ${limit}%`,
+          : structureTrusted
+            ? `I=${currentA}A, 한도 ${limit}%`
+            : `I=${currentA}A, 한도 ${limit}% — 구조 확신도 ${structureConfidence} 미달로 결선 기반 판정 보류`,
         standardRef: 'KEC 232.3.9',
       });
 
@@ -801,7 +813,9 @@ async function runCustomRules(
   components: ExtractedComponent[],
   connections: ExtractedConnection[],
   userParams: Record<string, unknown> | undefined,
+  structureConfidence: number,
 ): Promise<{ standards: StandardEntry[]; violations: ViolationEntry[] }> {
+  const structureTrusted = structureConfidence >= STRUCTURE_TRUST_THRESHOLD;
   const { evaluateCustomRules } = await import('@/engine/standards/custom-rules');
 
   const numericParams: Record<string, number> = {};
@@ -820,7 +834,8 @@ async function runCustomRules(
         lengthM: conn.length,
         conductorSizeSq: spec.conductorSize,
         currentA: vd?.currentA,
-        voltageDropPercent: vd && !vd.assumed ? vd.vd : undefined,
+        // 결선을 믿을 수 없는 페이지에서는 값을 주지 않는다 → 사내 기준도 보류로 남는다.
+        voltageDropPercent: vd && !vd.assumed && structureTrusted ? vd.vd : undefined,
       };
     }),
     userParams: numericParams,
@@ -906,11 +921,11 @@ export async function executeSLDTeam(input: TeamInput, deps: SLDTeamDeps = {}): 
     const validation = topology.validate();
 
     // Step 3: 계산 체인 실행
-    const { calculations, standards, violations } = await runCalculations(components, connections);
+    const { calculations, standards, violations } = await runCalculations(components, connections, confidence);
 
     // Step 3.5: 사내 규정 평가 (첨부된 경우) — KEC 행과 나란히 리포트에 합류
     if (input.customRuleSet) {
-      const custom = await runCustomRules(input.customRuleSet, components, connections, input.params);
+      const custom = await runCustomRules(input.customRuleSet, components, connections, input.params, confidence);
       standards.push(...custom.standards);
       violations.push(...custom.violations);
     }

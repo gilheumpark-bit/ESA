@@ -15,9 +15,9 @@ function ruleSet() {
   return parsed.ruleSet;
 }
 
-function parserResult(length?: number) {
+function parserResult(length?: number, confidence = 0.9) {
   return {
-    confidence: 0.9,
+    confidence,
     components: [
       { id: 'CB-1', type: 'breaker', label: 'CB-1', confidence: 0.9 },
       { id: 'LOAD-1', type: 'load', label: 'LOAD-1', confidence: 0.9 },
@@ -32,8 +32,8 @@ function parserResult(length?: number) {
   };
 }
 
-async function run(length?: number) {
-  jest.mocked(parseDxfToSLD).mockReturnValue(parserResult(length) as never);
+async function run(length?: number, confidence?: number) {
+  jest.mocked(parseDxfToSLD).mockReturnValue(parserResult(length, confidence) as never);
   return executeSLDTeam({
     sessionId: 'voltage-drop-evidence',
     classification: 'sld_dxf',
@@ -57,5 +57,30 @@ describe('SLD connection voltage-drop evidence', () => {
 
     expect(finding?.judgment).toBe('FAIL');
     expect(finding?.note).toMatch(/voltageDropPercent=2\./);
+  });
+
+  /**
+   * 빠른 경로(/api/dxf·/api/pdf-drawing)는 구조 확신도가 0.85 에 못 미치면 결선 기반
+   * 판정을 내지 않는다. 팀 경로에는 그 문턱이 없어서, 표 문서나 격자 의심 페이지의
+   * 결선으로도 전압강하 합격·불합격이 나갔다. 같은 문턱을 건다 — 값은 보여 주되 보류.
+   */
+  it('구조 확신도가 0.85 미만이면 결선 기반 전압강하를 판정하지 않고 보류한다', async () => {
+    const result = await run(40, 0.55);
+    const kec = result.standards?.find((item) => item.standard === 'KEC' && item.clause === '232.3.9');
+    const company = result.standards?.find((item) => item.standard === '사내규정' && item.clause === 'EX-3.2.1');
+    const calc = result.calculations?.find((item) => item.calculatorId === 'voltage-drop');
+
+    expect(kec?.judgment).toBe('HOLD');
+    expect(company?.judgment).toBe('HOLD');
+    expect(calc?.compliant).toBeNull();
+    expect(calc?.note).toMatch(/확신도/);
+    expect((result.violations ?? []).some((v) => v.title === '전압강하 기준 초과')).toBe(false);
+  });
+
+  it('구조 확신도가 문턱 이상이면 종전대로 판정한다', async () => {
+    const result = await run(40, 0.9);
+    const kec = result.standards?.find((item) => item.standard === 'KEC' && item.clause === '232.3.9');
+
+    expect(['PASS', 'FAIL']).toContain(kec?.judgment);
   });
 });

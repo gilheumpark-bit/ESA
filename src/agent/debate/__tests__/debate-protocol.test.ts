@@ -43,6 +43,54 @@ describe('detectDisagreements', () => {
     ];
     expect(detectDisagreements(results)).toHaveLength(0);
   });
+
+  /**
+   * 도면팀은 장치마다 한 줄씩 낸다 — 차단기 두 대(100 A·400 A)는 같은 계산기 이름을
+   * 달고 있어도 서로 다른 대상이다. 계산기 이름만으로 묶으면 한 팀이 자기 자신과
+   * "불일치"한 것이 되고, 그 가짜 토론이 합의 실패 → 치명 위반 → FAIL 로 이어졌다.
+   */
+  const breaker = (id: string, value: number): NonNullable<TeamResult['calculations']>[number] => ({
+    id,
+    calculatorId: 'breaker-sizing',
+    label: id,
+    value,
+    unit: 'A',
+    compliant: null,
+  });
+  const teamWith = (teamId: TeamResult['teamId'], calculations: TeamResult['calculations']): TeamResult => ({
+    teamId, success: true, confidence: 0.9, durationMs: 100, calculations,
+  });
+
+  test('한 팀이 낸 서로 다른 장치의 값은 불일치가 아니다', () => {
+    const results = [
+      teamWith('TEAM-SLD', [breaker('calc-br-cb1', 100), breaker('calc-br-cb2', 400)]),
+      teamWith('TEAM-STD', []),
+    ];
+
+    expect(detectDisagreements(results, 0.1)).toEqual([]);
+    expect(runDebate(results)).toEqual([]);
+  });
+
+  test('어느 장치를 가리키는지 알 수 없는 값끼리는 비교하지 않는다', () => {
+    const results = [
+      teamWith('TEAM-SLD', [breaker('calc-br-cb1', 100), breaker('calc-br-cb2', 400)]),
+      teamWith('TEAM-STD', [breaker('calc-breaker', 125)]),
+    ];
+
+    expect(detectDisagreements(results, 0.1)).toEqual([]);
+  });
+
+  test('두 팀이 같은 대상을 같은 id 로 냈으면 장치가 여럿이어도 대상별로 비교한다', () => {
+    const results = [
+      teamWith('TEAM-SLD', [breaker('cb1', 100), breaker('cb2', 400)]),
+      teamWith('TEAM-STD', [breaker('cb1', 100), breaker('cb2', 250)]),
+    ];
+
+    const found = detectDisagreements(results, 0.1);
+    expect(found).toHaveLength(1);
+    expect(found[0].entries.map((e) => e.value).sort((a, b) => a - b)).toEqual([250, 400]);
+    expect(new Set(found[0].entries.map((e) => e.teamId)).size).toBe(2);
+  });
 });
 
 describe('validatePhysicsLaw', () => {

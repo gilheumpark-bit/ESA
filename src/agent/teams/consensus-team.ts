@@ -23,7 +23,6 @@ import {
   runDebate,
   buildEscalation,
 } from '../debate/debate-protocol';
-import type { ConsensusConfig } from '../debate/types';
 import type { DrawingSynthesis } from '../electrical/synthesis';
 import { hashCanonicalValue } from '@/engine/receipt/receipt-hash';
 import { buildDrawingIntelligenceReport } from '../report/drawing-intelligence-report';
@@ -314,7 +313,6 @@ export interface ConsensusTeamInput {
   projectName: string;
   projectType: string;
   teamResults: TeamResult[];
-  consensusConfig?: ConsensusConfig;
   drawingSynthesis?: DrawingSynthesis;
 }
 
@@ -380,7 +378,7 @@ export async function executeConsensusTeam(
   const merged = mergeTeamResults(input.teamResults);
 
   // Step 2: 토론 (불일치 항목이 있을 때만)
-  const debateResults = runDebate(input.teamResults, input.consensusConfig);
+  const debateResults = runDebate(input.teamResults);
   const escalation = buildEscalation(debateResults);
 
   // Step 2.5: 표준 도면 패턴 매칭 + 비용 산출
