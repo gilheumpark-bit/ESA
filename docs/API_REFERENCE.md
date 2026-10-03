@@ -166,7 +166,7 @@ SLD 전체 문서 판독은 작업 리소스를 생성한 뒤 실행·조회·�
 | `/api/community` | GET, POST | 질문 목록·작성 |
 | `/api/community/[id]` | GET, POST | 질문 조회·답변 작성 |
 | `/api/community/[id]/vote` | POST | 인증 사용자 투표 |
-| `/api/notifications` | GET, POST, PATCH | 본인 알림 조회·생성·읽음 처리 |
+| `/api/notifications` | GET, POST, PATCH | 본인 알림 조회·생성(본인 앞으로만)·읽음 처리 |
 | `/api/field/complete` | POST | 본인 현장 체크 완료 기록 |
 | `/api/field/sos` | POST | 본인 안전 이벤트 기록. 긴급 서비스가 아님 |
 
@@ -193,7 +193,8 @@ SLD 전체 문서 판독은 작업 리소스를 생성한 뒤 실행·조회·�
 | `/api/settings/onpremise-test` | POST | 관리자 허용 origin의 온프레미스 연결 시험 |
 | `/api/settings/byok-test` | POST | same-origin 공급자별 고정 엔드포인트 연결 시험. 키는 요청 중에만 사용 |
 | `/api/settings/chatgpt-local` | GET, POST | loopback 전용 Codex 설치·ChatGPT 계정·모델 상태와 공식 로그인·로그아웃. 비밀번호·쿠키·토큰은 반환하지 않음 |
-| `/api/admin` | GET | Enterprise 관리자 전용 |
+| `/api/admin` | GET | 관리자 역할 전용 |
+| `/api/admin/audit` | GET | 관리자 역할 전용 감사 로그 조회(페이지 단위) |
 | `/api/benchmark` | GET | 개발/관리 토큰으로 제한된 운영 도구 |
 | `/api/cron/crawl` | GET | 크롤링 인프라가 연결될 때만 사용하는 조건부 작업 |
 | `/api/dev/drawing-fixture` | POST | 개발 환경 전용 도면 fixture 진입점. production에서는 거부 |
