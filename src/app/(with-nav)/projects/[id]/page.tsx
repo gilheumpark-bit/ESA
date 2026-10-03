@@ -19,6 +19,8 @@ import { featureAuthenticatedFetch as authenticatedFetch } from '@/lib/feature-a
 import { requestFeatureJson, requireRecord, FeatureRequestError } from '@/lib/feature-request';
 import { safeFeatureLink } from '@/lib/feature-output';
 import { FeatureDialog } from '@/components/FeatureDialog';
+import { ProjectCalculationPicker } from '@/components/ProjectCalculationPicker';
+import { ProjectShareLinks } from '@/components/ProjectShareLinks';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ArrowLeft,
@@ -369,6 +371,7 @@ function ShareDialog({
             </p>
           </div>
         )}
+        <ProjectShareLinks projectId={projectId} refreshKey={shareUrl ? 1 : 0} />
     </FeatureDialog>
   );
 }
@@ -393,6 +396,7 @@ function ProjectDetailContent() {
   const [error, setError] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [showAddCalculation, setShowAddCalculation] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'editor' | 'viewer'>('viewer');
   const [actionError, setActionError] = useState<string | null>(null);
@@ -561,7 +565,7 @@ function ProjectDetailContent() {
           <CalculationTimeline
             calculations={project.calculations}
             canEdit={canEdit}
-            onAdd={() => router.push('/calc')}
+            onAdd={() => { setActionError(null); setShowAddCalculation(true); }}
           />
         </div>
 
@@ -650,6 +654,15 @@ function ProjectDetailContent() {
         <ShareDialog
           projectId={project.id}
           onClose={() => setShowShare(false)}
+        />
+      )}
+
+      {showAddCalculation && (
+        <ProjectCalculationPicker
+          projectId={project.id}
+          attachedIds={project.calculations.map((calculation) => calculation.id)}
+          onAdded={() => { setShowAddCalculation(false); void fetchProject(); }}
+          onClose={() => setShowAddCalculation(false)}
         />
       )}
     </div>

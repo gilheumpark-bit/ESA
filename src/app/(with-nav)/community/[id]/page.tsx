@@ -9,6 +9,8 @@ import {
   MessageSquare, ArrowLeft, Calculator,
 } from 'lucide-react';
 import { authenticatedFetch } from '@/lib/client-auth';
+import { useAuth } from '@/contexts/AuthContext';
+import { canAcceptAnswer } from '@/lib/community-accept';
 
 /**
  * ESVA Community — Question Detail Page
@@ -163,12 +165,36 @@ function VoteButtons({
 function AnswerCard({
   answer,
   questionId,
+  canAccept,
   onVoted,
 }: {
   answer: AnswerDetail;
   questionId: string;
+  canAccept: boolean;
   onVoted: () => void;
 }) {
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
+
+  const handleAccept = async () => {
+    setAccepting(true);
+    setAcceptError(null);
+    try {
+      const res = await authenticatedFetch(`/api/community/${questionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'acceptAnswer', answerId: answer.id }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) onVoted();
+      else setAcceptError(json?.error?.message ?? '답변을 채택하지 못했습니다.');
+    } catch {
+      setAcceptError('답변을 채택하지 못했습니다. 연결 상태를 확인해 주세요.');
+    } finally {
+      setAccepting(false);
+    }
+  };
+
   return (
     <div
       className={`flex gap-4 rounded-lg border p-4
@@ -226,6 +252,22 @@ function AnswerCard({
           <span>·</span>
           <span>{formatTimeAgo(answer.createdAt)}</span>
         </div>
+
+        {canAccept && (
+          <div className="mt-3">
+            <button
+              type="button"
+              disabled={accepting}
+              onClick={handleAccept}
+              className="inline-flex items-center gap-1 rounded-lg border border-green-300 px-3 py-1.5 text-xs font-medium
+                         text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-800 dark:text-green-300"
+            >
+              <Check className="h-3 w-3" />
+              {accepting ? '채택 중...' : '이 답변 채택'}
+            </button>
+            {acceptError && <p role="alert" className="mt-1 text-xs text-red-600">{acceptError}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -324,6 +366,7 @@ export default function QuestionDetailPage() {
   const id = params.id as string;
 
   const { question, answers, loading, error, refetch } = useQuestionDetail(id);
+  const { user } = useAuth();
 
   if (loading) {
     return (
@@ -453,7 +496,18 @@ export default function QuestionDetailPage() {
 
         <div className="mt-4 space-y-4">
           {answers.map((a) => (
-            <AnswerCard key={a.id} answer={a} questionId={question.id} onVoted={refetch} />
+            <AnswerCard
+              key={a.id}
+              answer={a}
+              questionId={question.id}
+              canAccept={canAcceptAnswer({
+                viewerId: user?.uid,
+                questionAuthorId: question.authorId,
+                answerAuthorId: a.authorId,
+                alreadyAccepted: answers.some((other) => other.isAccepted),
+              })}
+              onVoted={refetch}
+            />
           ))}
         </div>
       </div>
