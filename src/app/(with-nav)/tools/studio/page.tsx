@@ -13,6 +13,7 @@
  */
 
 import { useState, useRef, useCallback, useId, useEffect, type PointerEvent } from 'react';
+import Link from 'next/link';
 import {
   Bot,
   DraftingCompass,
@@ -36,6 +37,8 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  /** 이 탭이 보관한 전문팀 보고서로 가는 경로. 보관하지 못했으면 없다. */
+  reportHref?: string;
 }
 
 interface UploadedFile {
@@ -251,6 +254,7 @@ function ChatPanel({ file }: ChatPanelProps) {
 
     try {
       let answer: string;
+      let reportHref: string | undefined;
       if (file) {
         const formData = new FormData();
         formData.append('file', file.source);
@@ -284,8 +288,9 @@ function ChatPanel({ file }: ChatPanelProps) {
           const summary = full.summary?.textKo || '전문팀 검토가 완료되었습니다.';
           answer = `${summary}\n\n판정 ${full.verdict} · 등급 ${full.grade} · 점수 ${full.compositeScore}\n`
             + (kept
-              ? `보고서: /report/${full.reportId}`
+              ? ''
               : '보고서를 이 브라우저에 보관하지 못해 링크를 만들지 않았습니다(저장 공간 부족 또는 요청 중 계정 변경).');
+          if (kept) reportHref = `/report/${full.reportId}`;
         } else {
           const teams = (data.data?.teamSummary ?? [])
             .filter((team: { success?: boolean }) => team.success)
@@ -305,7 +310,7 @@ function ChatPanel({ file }: ChatPanelProps) {
       }
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: answer, timestamp: formatTime() },
+        { role: 'assistant', content: answer.trimEnd(), timestamp: formatTime(), reportHref },
       ]);
     } catch (error) {
       setMessages(prev => [
@@ -359,6 +364,11 @@ function ChatPanel({ file }: ChatPanelProps) {
                 : 'bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)]'
             }`}>
               <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+              {msg.reportHref && (
+                <Link href={msg.reportHref} className="mt-2 inline-flex text-sm font-medium text-[var(--color-primary)] underline underline-offset-2">
+                  보고서 열기
+                </Link>
+              )}
               {msg.timestamp && (
                 <p className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-current opacity-70' : 'text-[var(--color-text-muted)]'}`}>
                   {msg.timestamp}

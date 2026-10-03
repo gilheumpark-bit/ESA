@@ -36,8 +36,7 @@ import {
   Shield,
   Share2,
 } from 'lucide-react';
-import { loadStoredProviderKey } from '@/lib/byok-storage';
-import { resolveSelectedModel } from '@/lib/vision-byok';
+import { getFirstAvailableVisionKey } from '@/lib/vision-byok';
 import { loadRecentCalcs, type RecentCalcEntry } from '@/lib/recent-calcs';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -288,6 +287,7 @@ function CameraButton() {
   const [status, setStatus] = useState<'idle' | 'capturing' | 'processing' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<NameplateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [needsAiSetup, setNeedsAiSetup] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -319,6 +319,7 @@ function CameraButton() {
   const handleCapture = async () => {
     setStatus('capturing');
     setError(null);
+    setNeedsAiSetup(false);
     setResult(null);
 
     try {
@@ -342,19 +343,22 @@ function CameraButton() {
       const imageBlob = await captureFrame();
       stopCamera();
 
-      // Decrypt the browser-bound BYOK key before this one request.
-      const apiKey = await loadStoredProviderKey('openai');
-      if (!apiKey) {
-        setError('OpenAI API 키가 필요합니다. BYOK 설정에서 등록하세요. → /settings/byok');
+      // /tools/ocr 와 같은 연결 선택을 쓴다(로컬 ChatGPT 계정 또는 등록된 Vision 키).
+      // 전에는 OpenAI 키만 받아서, 다른 연결만 가진 사용자는 여기서만 막혔다.
+      // 연결 확인이 실패해도 카메라 문제로 알리지 않도록 바깥 catch 와 분리한다.
+      const visionKey = await getFirstAvailableVisionKey().catch(() => null);
+      if (!visionKey) {
+        setError('AI 연결이 없습니다. 설정에서 로컬 ChatGPT 계정을 연결하거나 Vision API 키를 등록하세요.');
+        setNeedsAiSetup(true);
         setStatus('error');
         return;
       }
 
       const formData = new FormData();
       formData.append('image', imageBlob, 'nameplate.jpg');
-      formData.append('provider', 'openai');
-      formData.append('model', resolveSelectedModel('openai'));
-      formData.append('apiKey', apiKey);
+      formData.append('provider', visionKey.provider);
+      formData.append('model', visionKey.model);
+      if (visionKey.key) formData.append('apiKey', visionKey.key);
 
       // 촬영이 끝난 뒤의 실패는 카메라 문제가 아니다. 같은 try 안에 두면
       // 네트워크가 끊겼을 때도 "카메라 접근 권한이 필요합니다" 가 떠서,
@@ -390,6 +394,7 @@ function CameraButton() {
     setStatus('idle');
     setResult(null);
     setError(null);
+    setNeedsAiSetup(false);
   };
 
   // Show OCR results with calculator links
@@ -452,6 +457,11 @@ function CameraButton() {
         <p className="mt-2 flex items-center gap-1 text-xs text-[var(--color-error)]">
           <AlertCircle className="h-3 w-3" /> {error}
         </p>
+      )}
+      {needsAiSetup && (
+        <Link href="/settings/byok" className="mt-1 inline-flex text-xs font-medium text-[var(--color-primary)] underline underline-offset-2">
+          AI 연결 설정 열기
+        </Link>
       )}
     </div>
   );

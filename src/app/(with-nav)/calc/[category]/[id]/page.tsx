@@ -43,6 +43,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 function ResultDisplay({
   receipt,
+  saveFailed,
   onExportPdf,
   onExportExcel,
   onShare,
@@ -50,6 +51,7 @@ function ResultDisplay({
   linkedCalcs,
 }: {
   receipt: NonNullable<ReturnType<typeof useCalculator>['receipt']>;
+  saveFailed: boolean;
   onExportPdf: () => void;
   onExportExcel: () => void;
   onShare: () => void;
@@ -74,6 +76,12 @@ function ResultDisplay({
 
       {/* Receipt card (full view) */}
       <ReceiptCard receipt={receipt} variant="full" />
+
+      {saveFailed && (
+        <p role="status" className="rounded-lg border border-[var(--color-warning)] px-3 py-2 text-sm text-[var(--color-text-primary)]">
+          이 계산은 계정에 저장되지 않았습니다. 지금 화면에서는 볼 수 있지만 이 탭을 닫으면 이력과 영수증 링크에서 찾을 수 없습니다. 필요하면 지금 내보내 두세요.
+        </p>
+      )}
 
       {/* Action buttons */}
       <div className="flex flex-wrap gap-2">
@@ -140,7 +148,7 @@ export default function CalculatorPage({
   const calcParams = CALCULATOR_PARAMS[id];
   const linked = LINKED_CALCS[id] ?? [];
 
-  const { execute, result: _result, receipt, isLoading, error, reset } = useCalculator(id);
+  const { execute, result: _result, receipt, saveFailed, isLoading, error, reset } = useCalculator(id);
   const { user } = useAuth();
   const viewerId = user?.uid ?? null;
 
@@ -396,6 +404,7 @@ export default function CalculatorPage({
               <>
                 <ResultDisplay
                   receipt={receipt}
+                  saveFailed={saveFailed}
                   onExportPdf={handleExportPdf}
                   onExportExcel={handleExportExcel}
                   onShare={handleShare}

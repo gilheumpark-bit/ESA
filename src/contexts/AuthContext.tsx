@@ -28,6 +28,8 @@ export type UserTier = 'free' | 'pro' | 'team' | 'enterprise';
 export interface AuthContextValue {
   user: ESAUser | null;
   tier: UserTier;
+  /** users.role === 'admin'. 요금제와 무관하다. */
+  isAdmin: boolean;
   loading: boolean;
   error: string | null;
   signIn: () => Promise<void>;
@@ -52,6 +54,7 @@ const DEFAULT_TIER: UserTier = OPEN_BETA ? OPEN_BETA_TIER : 'free';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ESAUser | null>(null);
   const [tier, setTier] = useState<UserTier>(DEFAULT_TIER);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,14 +77,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   })
                 : null;
               const body = response?.ok
-                ? await response.json() as { data?: { tier?: UserTier } }
+                ? await response.json() as { data?: { tier?: UserTier; isAdmin?: boolean } }
                 : null;
               setTier(body?.data?.tier ?? 'free');
+              setIsAdmin(body?.data?.isAdmin === true);
             } catch {
               setTier(DEFAULT_TIER);
+              setIsAdmin(false);
             }
           } else {
             setTier(DEFAULT_TIER);
+            setIsAdmin(false);
           }
           setLoading(false);
         });
@@ -120,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await firebaseSignOut();
       setUser(null);
       setTier(DEFAULT_TIER);
+      setIsAdmin(false);
     } catch (err) {
       console.warn('[ESVA Auth] 로그아웃 실패:', err instanceof Error ? err.name : 'UnknownError');
       setError('로그아웃을 완료하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
@@ -131,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         tier,
+        isAdmin,
         loading,
         error,
         signIn: handleSignIn,

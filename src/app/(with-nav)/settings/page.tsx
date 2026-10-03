@@ -305,7 +305,7 @@ function PlanSection({ tier }: { tier: UserTier }) {
 // =============================================================================
 
 export default function SettingsPage() {
-  const { user, tier, loading: authLoading } = useAuth();
+  const { user, tier, isAdmin, loading: authLoading } = useAuth();
   const { language, country, setLanguage, setCountry, loaded } = useSettings();
 
   // 로그인 없이도 바꿀 수 있어야 하는 설정이 있다.
@@ -383,7 +383,7 @@ export default function SettingsPage() {
           <div className="flex flex-wrap gap-2">
             <Link href="/history" className="rounded-lg border border-[var(--border-default)] px-3 py-2 text-sm transition-colors hover:bg-[var(--bg-secondary)]">계산 이력</Link>
             <Link href="/dashboard" className="rounded-lg border border-[var(--border-default)] px-3 py-2 text-sm transition-colors hover:bg-[var(--bg-secondary)]">대시보드</Link>
-            {tier === 'enterprise' && (
+            {isAdmin && (
               <Link href="/admin" className="rounded-lg border border-[var(--border-default)] px-3 py-2 text-sm transition-colors hover:bg-[var(--bg-secondary)]">관리자</Link>
             )}
           </div>

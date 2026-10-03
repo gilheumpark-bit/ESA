@@ -201,6 +201,23 @@ export async function getUserTier(userId: string): Promise<UserTier> {
   }
 }
 
+/**
+ * 관리자 역할 여부. 요금제(tier)와 별개다 — 엔터프라이즈 구독자가 곧 관리자는 아니다.
+ * 프로필 없음·조회 실패는 false 다(fail-closed).
+ */
+export async function isUserAdmin(userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from(USERS_TABLE)
+      .select('role')
+      .eq('id', userId)
+      .single();
+    return !error && data?.role === 'admin';
+  } catch {
+    return false;
+  }
+}
+
 /** Return the Stripe customer bound to this verified Firebase user. */
 export async function getStripeCustomerId(userId: string): Promise<string | null> {
   const client = getSupabaseAdmin();

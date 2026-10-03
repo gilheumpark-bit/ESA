@@ -371,7 +371,7 @@ function DetailPanel({
             Cu/XLPE/conduit 기준 주요 규격:
             4sq→36A, 6sq→46A, 10sq→63A, 16sq→85A, 25sq→112A, 35sq→138A, 50sq→168A, 95sq→258A
           </p>
-          <Link href="/calc?q=허용전류" className="mt-2 inline-flex text-xs font-medium text-blue-700 hover:underline dark:text-blue-300">
+          <Link href="/calc/cable/cable-sizing" className="mt-2 inline-flex text-xs font-medium text-blue-700 hover:underline dark:text-blue-300">
             허용전류 계산기로 이동 →
           </Link>
         </div>
