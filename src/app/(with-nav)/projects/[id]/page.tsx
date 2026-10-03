@@ -243,9 +243,12 @@ function CalculationTimeline({
 
 function ShareDialog({
   projectId,
+  isOwner,
   onClose,
 }: {
   projectId: string;
+  /** 발급한 링크의 목록·회수는 소유자만 할 수 있다(편집자는 링크 생성까지). */
+  isOwner: boolean;
   onClose: () => void;
 }) {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -371,7 +374,7 @@ function ShareDialog({
             </p>
           </div>
         )}
-        <ProjectShareLinks projectId={projectId} refreshKey={shareUrl ? 1 : 0} />
+        {isOwner && <ProjectShareLinks projectId={projectId} refreshKey={shareUrl ? 1 : 0} />}
     </FeatureDialog>
   );
 }
@@ -653,6 +656,7 @@ function ProjectDetailContent() {
       {showShare && (
         <ShareDialog
           projectId={project.id}
+          isOwner={isOwner}
           onClose={() => setShowShare(false)}
         />
       )}

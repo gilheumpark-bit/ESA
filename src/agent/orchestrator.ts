@@ -109,6 +109,23 @@ function teamClassification(
   return kind ? `${prefix}_${kind}` : classification;
 }
 
+/**
+ * 격리 심사 종합 결과가 합의 근거로 쓰일 수 없는 이유. 없으면 null.
+ * 이미지 단독 경로와 mixed 경로가 같은 기준을 쓴다.
+ */
+function synthesisBlockReason(drawingSynthesis: import('./electrical/synthesis').DrawingSynthesis): string | null {
+  const missingRoles = [...drawingSynthesis.missingRoles].sort((left, right) => left.localeCompare(right));
+  if (missingRoles.length > 0) {
+    return `원본 격리 심사 필수 역할 누락: ${missingRoles.join(', ')}. 사람 검토가 필요합니다.`;
+  }
+  if (!drawingSynthesis.reviewIntegrity.coverageComplete
+    || drawingSynthesis.reviewIntegrity.roleFailures.length > 0
+    || drawingSynthesis.stages.normalizer !== 'COMPLETE') {
+    return '원본 격리 심사 무결성이 불완전하여 사람 검토가 필요합니다.';
+  }
+  return null;
+}
+
 function abortError(): Error {
   return new Error('request aborted');
 }
@@ -245,13 +262,9 @@ export async function runOrchestrator(
       let report: ESVAVerifiedReport | undefined;
 
       if (drawingSynthesis) {
-        const missingRoles = [...drawingSynthesis.missingRoles].sort((left, right) => left.localeCompare(right));
-        if (missingRoles.length > 0) {
-          consensus.reason = `원본 격리 심사 필수 역할 누락: ${missingRoles.join(', ')}. 사람 검토가 필요합니다.`;
-        } else if (!drawingSynthesis.reviewIntegrity.coverageComplete
-          || drawingSynthesis.reviewIntegrity.roleFailures.length > 0
-          || drawingSynthesis.stages.normalizer !== 'COMPLETE') {
-          consensus.reason = '원본 격리 심사 무결성이 불완전하여 사람 검토가 필요합니다.';
+        const blocked = synthesisBlockReason(drawingSynthesis);
+        if (blocked) {
+          consensus.reason = blocked;
         } else {
           consensus.executed = true;
           consensus.reason = '원본 격리 심사 4개를 메인 종합 단계에서 대조했습니다.';
@@ -284,6 +297,9 @@ export async function runOrchestrator(
 
     // Step 4: 합의는 서로 다른 전문팀이 2개 이상 성공한 경우에만 실행한다.
     // 같은 TEAM-STD 구현을 두 번 호출해 독립 협의체처럼 세던 경로는 제거했다.
+    // mixed 이미지에서는 계통도팀이 격리 심사를 돌았을 수 있다. 그 종합 결과(불합격·사람 검토
+    // 필요)를 합의 단계와 응답에 그대로 넘긴다 — 버리면 심사 FAIL 이 보고서에서 사라진다.
+    const drawingSynthesis = teamResults.find((result) => result.teamId === 'TEAM-SLD')?.drawingSynthesis;
     let report: ESVAVerifiedReport | undefined;
     const participatingTeams = [...new Set(
       teamResults
@@ -307,13 +323,16 @@ export async function runOrchestrator(
           projectName: request.projectName ?? '미지정 프로젝트',
           projectType: request.projectType ?? '전기 설비',
           teamResults,
+          drawingSynthesis,
         });
       if (request.signal?.aborted) throw abortError();
 
       teamResults.push(consensusResult);
       report = verifiedReport;
-      consensus.executed = true;
-      consensus.reason = '서로 다른 전문팀 결과를 합의·출력 단계에서 병합했습니다.';
+      // 심사 종합 결과가 불완전하면 보고서는 내되 합의 완료로 세지 않는다.
+      const blocked = drawingSynthesis ? synthesisBlockReason(drawingSynthesis) : null;
+      consensus.executed = blocked === null;
+      consensus.reason = blocked ?? '서로 다른 전문팀 결과를 합의·출력 단계에서 병합했습니다.';
     }
 
     return {
@@ -322,6 +341,7 @@ export async function runOrchestrator(
       teamResults,
       consensus,
       report,
+      ...(drawingSynthesis ? { drawingSynthesis } : {}),
       durationMs: Date.now() - start,
     };
   } catch (err) {

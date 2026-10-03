@@ -77,6 +77,22 @@ describe('SLD connection voltage-drop evidence', () => {
     expect((result.violations ?? []).some((v) => v.title === '전압강하 기준 초과')).toBe(false);
   });
 
+  // 전압강하만 막으면 길이·굵기·전류로 판정하는 사내 기준은 같은 결선에서 그대로 합격이 나온다.
+  it.each([[0.55, 'HOLD'], [0.9, 'PASS']])('길이로 판정하는 사내 기준도 구조 확신도 %s 에서는 %s 다', async (confidence, expected) => {
+    const raw = JSON.parse(readFileSync(join(process.cwd(), 'fixtures', 'rules', 'example-company-rules.json'), 'utf8'));
+    raw.articles[0].conditions[0] = { ...raw.articles[0].conditions[0], param: 'lengthM', operator: '<=', value: 100, unit: 'm' };
+    const parsed = parseCustomRuleSet(raw);
+    if (!parsed.ok || !parsed.ruleSet) throw new Error(parsed.errors.join(', '));
+    jest.mocked(parseDxfToSLD).mockReturnValue(parserResult(40, confidence) as never);
+
+    const result = await executeSLDTeam({
+      sessionId: 'length-rule', classification: 'sld_dxf',
+      fileBuffer: new TextEncoder().encode('mock dxf').buffer, customRuleSet: parsed.ruleSet,
+    });
+
+    expect(result.standards?.find((item) => item.standard === '사내규정' && item.clause === 'EX-3.2.1')?.judgment).toBe(expected);
+  });
+
   it('구조 확신도가 문턱 이상이면 종전대로 판정한다', async () => {
     const result = await run(40, 0.9);
     const kec = result.standards?.find((item) => item.standard === 'KEC' && item.clause === '232.3.9');

@@ -826,6 +826,9 @@ async function runCustomRules(
   const findings = evaluateCustomRules(ruleSet, {
     components: components.map(c => ({ id: c.id, type: c.type, label: c.label, rating: c.rating })),
     connections: connections.map(conn => {
+      // 결선을 믿을 수 없는 페이지에서는 결선에서 나온 값을 하나도 주지 않는다 —
+      // 길이·굵기·전류로 판정하는 사내 기준도 보류로 남는다.
+      if (!structureTrusted) return { from: conn.from, to: conn.to };
       const spec = conn.cableType ? parseSpecText(conn.cableType) : {};
       const vd = estimateVoltageDrop(conn); // 실전류 표기가 있을 때만 non-null
       return {
@@ -834,8 +837,7 @@ async function runCustomRules(
         lengthM: conn.length,
         conductorSizeSq: spec.conductorSize,
         currentA: vd?.currentA,
-        // 결선을 믿을 수 없는 페이지에서는 값을 주지 않는다 → 사내 기준도 보류로 남는다.
-        voltageDropPercent: vd && !vd.assumed && structureTrusted ? vd.vd : undefined,
+        voltageDropPercent: vd && !vd.assumed ? vd.vd : undefined,
       };
     }),
     userParams: numericParams,

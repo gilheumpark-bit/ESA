@@ -7,7 +7,8 @@ import { FeatureRequestError, isRecord, requestFeatureJson, requireRecord } from
 export interface ShareLinkRow {
   id: string;
   createdAt: string;
-  expiresAt: string;
+  /** null = 기한 없는 링크. */
+  expiresAt: string | null;
   revokedAt: string | null;
 }
 
@@ -16,6 +17,8 @@ export type ShareLinkState = 'active' | 'expired' | 'revoked';
 /** 회수가 만료보다 먼저다 — 회수한 링크는 기한이 남아 있어도 닫힌 것이다. */
 export function shareLinkState(link: ShareLinkRow, now: number = Date.now()): ShareLinkState {
   if (link.revokedAt) return 'revoked';
+  // 기한이 없는 링크는 회수하기 전까지 열려 있다 — 만료로 보이면 회수 버튼이 사라진다.
+  if (link.expiresAt === null) return 'active';
   const expires = Date.parse(link.expiresAt);
   return Number.isFinite(expires) && expires > now ? 'active' : 'expired';
 }
@@ -24,7 +27,8 @@ export function decodeShareLinks(value: unknown): ShareLinkRow[] {
   const links = requireRecord(value).links;
   if (!Array.isArray(links) || links.length > 100) throw new FeatureRequestError('공유 링크 목록 형식을 확인하지 못했습니다.');
   return links.map((raw) => {
-    if (!isRecord(raw) || typeof raw.id !== 'string' || typeof raw.created_at !== 'string' || typeof raw.expires_at !== 'string'
+    if (!isRecord(raw) || typeof raw.id !== 'string' || typeof raw.created_at !== 'string'
+      || (raw.expires_at !== null && typeof raw.expires_at !== 'string')
       || (raw.revoked_at !== null && typeof raw.revoked_at !== 'string')) {
       throw new FeatureRequestError('공유 링크 목록 형식을 확인하지 못했습니다.');
     }
@@ -95,7 +99,7 @@ export function ProjectShareLinks({ projectId, refreshKey }: { projectId: string
                 <div className="min-w-0 text-[var(--text-secondary)]">
                   <p className="font-medium text-[var(--text-primary)]">{STATE_LABEL[state]}</p>
                   <p>발급 {new Date(link.createdAt).toLocaleString('ko-KR')}</p>
-                  <p>만료 {new Date(link.expiresAt).toLocaleString('ko-KR')}</p>
+                  <p>{link.expiresAt ? `만료 ${new Date(link.expiresAt).toLocaleString('ko-KR')}` : '기한 없음'}</p>
                 </div>
                 {state === 'active' && (
                   <button type="button" disabled={pendingId !== null} onClick={() => { void revoke(link.id); }}

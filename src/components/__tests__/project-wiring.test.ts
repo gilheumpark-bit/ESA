@@ -37,6 +37,18 @@ describe('공유 링크 상태', () => {
     expect(shareLinkState(link({ expiresAt: 'not-a-date' }), NOW)).toBe('expired');
   });
 
+  // 기한 없는 링크(expires_at NULL)가 하나라도 있으면 목록 전체가 형식 오류로 떨어져 아무것도 회수할 수 없었다.
+  it('기한 없는 링크도 읽고, 회수 전까지 사용 중으로 본다', () => {
+    const [row] = decodeShareLinks({ links: [{ id: 'a', created_at: 'c', expires_at: null, revoked_at: null }] });
+    expect(row.expiresAt).toBeNull();
+    expect(shareLinkState(row, NOW)).toBe('active');
+  });
+
+  it('발급한 링크 목록은 소유자에게만 그린다 — 편집자에게 권한 오류를 띄우지 않는다', () => {
+    const page = readFileSync(join(process.cwd(), 'src/app/(with-nav)/projects/[id]/page.tsx'), 'utf8');
+    expect(page).toContain('{isOwner && <ProjectShareLinks');
+  });
+
   it('서버 열 이름을 화면 모델로 옮기고, 형식이 다르면 거절한다', () => {
     expect(decodeShareLinks({ links: [{ id: 'a', created_by: 'u', created_at: 'c', expires_at: 'e', revoked_at: null }] }))
       .toEqual([{ id: 'a', createdAt: 'c', expiresAt: 'e', revokedAt: null }]);
