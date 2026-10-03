@@ -16,7 +16,7 @@
 import { applyRateLimit } from '@/lib/rate-limit';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase-id-token';
-import { getSupabaseAdmin } from '@/lib/supabase';
+import { getSupabaseAdmin, isUserAdmin } from '@/lib/supabase';
 import { withRequestLog } from '@/lib/api/with-request-log';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -171,26 +171,9 @@ async function fetchLiveData(): Promise<AdminDashboardData | null> {
 // PART 4 — GET handler
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Firebase UID와 동기화된 users 테이블에서 관리자 역할을 확인한다.
- */
-async function checkAdminRole(uid: string): Promise<boolean> {
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', uid)
-      .single();
-    return data?.role === 'admin';
-  } catch {
-    return false;
-  }
-}
-
 async function GET__impl(request: NextRequest) {
   // Per-route abuse limit.
-  const blocked = applyRateLimit(request, 'default');
+  const blocked = applyRateLimit(request, 'admin');
   if (blocked) return blocked;
 
   // ── Auth: require valid Firebase JWT ──
@@ -212,7 +195,7 @@ async function GET__impl(request: NextRequest) {
   }
 
   // ── Admin role 검증 ──
-  const isAdmin = await checkAdminRole(uid);
+  const isAdmin = await isUserAdmin(uid);
   if (!isAdmin) {
     return NextResponse.json({ error: 'Forbidden: admin access required' }, { status: 403 });
   }

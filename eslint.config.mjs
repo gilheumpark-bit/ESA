@@ -16,18 +16,6 @@ const config = [
     ],
   },
   ...next,
-  {
-    // eslint-config-next 16이 새로 켠 React Compiler 시대 react-hooks 규칙들.
-    // 정상 동작하는 기존 패턴(effect 내 setState 등)을 error로 잡아 게이트를 막는데,
-    // 코드 재작성은 동작을 깰 위험이 커 별도 React Compiler 준비 작업으로 분리한다.
-    // 숨기지 않고 warn으로 남겨 가시화한다.
-    rules: {
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
-      'react-hooks/preserve-manual-memoization': 'warn',
-      'react-hooks/immutability': 'warn',
-    },
-  },
 ];
 
 export default config;

@@ -30,24 +30,6 @@ export type InputClassification =
   | 'text_query'       // 텍스트 질의 (규정, 계산 등)
   | 'mixed';           // 도면 + 텍스트 혼합
 
-export interface TeamConfig {
-  id: TeamId;
-  name: string;
-  nameKo: string;
-  description: string;
-  acceptedInputs: InputClassification[];
-  requiredForConsensus: boolean;
-  timeoutMs: number;
-  retryCount: number;
-}
-
-export interface TeamCapability {
-  teamId: TeamId;
-  tools: string[];
-  dataScope: string[];
-  canDebate: boolean;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 2 — Input/Output Contracts
 // ═══════════════════════════════════════════════════════════════════════════════

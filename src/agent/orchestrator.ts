@@ -9,7 +9,7 @@
  * PART 4: Report assembly
  */
 
-import type { TeamInput, TeamResult, ESVAVerifiedReport } from './teams/types';
+import type { TeamInput, TeamResult, ESVAVerifiedReport, InputClassification } from './teams/types';
 import { classifyInput, routeToTeams, type TeamRouting } from './teams/team-registry';
 import { executeSLDTeam } from './teams/sld-team';
 import { executeLayoutTeam } from './teams/layout-team';
@@ -33,7 +33,6 @@ export interface OrchestratorRequest {
   params?: Record<string, unknown>;
   countryCode?: string;
   language?: string;
-  dxfLayers?: string[];
   /** 이미지 분석용 요청 한정 Vision 자격 증명. 보고서·응답에는 직렬화하지 않는다. */
   vision?: TeamInput['vision'];
   /** 사내 규정 룰셋 — 라우트에서 린트 통과분만 (engine/standards/custom-rules) */
@@ -87,6 +86,44 @@ function buildTeamInput(req: OrchestratorRequest, routing: TeamRouting): TeamInp
     symbolLibrary: req.symbolLibrary,
     signal: req.signal,
   };
+}
+
+/**
+ * `mixed` 는 "계통도와 평면도를 함께 봐 달라"는 라우팅 신호이지 도면팀이 읽을 수 있는
+ * 입력 종류가 아니다. 도면팀은 `sld_*` / `layout_*` 로만 분기하므로, 파일 형식에 맞는
+ * 자기 분류로 바꿔 넘긴다. 규정팀과 그 밖의 분류는 그대로 둔다.
+ */
+function teamClassification(
+  teamId: string,
+  classification: InputClassification,
+  file: OrchestratorRequest['file'],
+): InputClassification {
+  if (classification !== 'mixed' || !file) return classification;
+  const prefix = teamId === 'TEAM-SLD' ? 'sld' : teamId === 'TEAM-LAYOUT' ? 'layout' : null;
+  if (!prefix) return classification;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  const kind = ext === 'dxf' || file.mimeType === 'application/dxf' ? 'dxf'
+    : ext === 'pdf' || file.mimeType === 'application/pdf' ? 'pdf'
+      : file.mimeType.startsWith('image/') ? 'image'
+        : null;
+  return kind ? `${prefix}_${kind}` : classification;
+}
+
+/**
+ * 격리 심사 종합 결과가 합의 근거로 쓰일 수 없는 이유. 없으면 null.
+ * 이미지 단독 경로와 mixed 경로가 같은 기준을 쓴다.
+ */
+function synthesisBlockReason(drawingSynthesis: import('./electrical/synthesis').DrawingSynthesis): string | null {
+  const missingRoles = [...drawingSynthesis.missingRoles].sort((left, right) => left.localeCompare(right));
+  if (missingRoles.length > 0) {
+    return `원본 격리 심사 필수 역할 누락: ${missingRoles.join(', ')}. 사람 검토가 필요합니다.`;
+  }
+  if (!drawingSynthesis.reviewIntegrity.coverageComplete
+    || drawingSynthesis.reviewIntegrity.roleFailures.length > 0
+    || drawingSynthesis.stages.normalizer !== 'COMPLETE') {
+    return '원본 격리 심사 무결성이 불완전하여 사람 검토가 필요합니다.';
+  }
+  return null;
 }
 
 function abortError(): Error {
@@ -186,7 +223,6 @@ export async function runOrchestrator(
       request.file?.mimeType,
       request.file?.name,
       request.query,
-      request.dxfLayers,
     );
 
     // Step 2: 팀 라우팅
@@ -196,15 +232,21 @@ export async function runOrchestrator(
     // Step 3: 병렬 실행 (1차 팀 + 지원 팀)
     const allTeamIds = [routing.primaryTeam, ...routing.supportTeams];
 
-    const teamPromises = allTeamIds.map(teamId =>
-      dispatchWithRetry(teamId, teamInput, deps, routing.classification === 'sld_image' && teamId === 'TEAM-SLD' ? 0 : 2).catch(err => ({
+    const teamPromises = allTeamIds.map(teamId => {
+      const classificationForTeam = teamClassification(teamId, routing.classification, request.file);
+      const input = classificationForTeam === teamInput.classification
+        ? teamInput
+        : { ...teamInput, classification: classificationForTeam };
+      // 이미지 계통도 판독은 호출마다 비용이 든다 — 재시도하지 않는다.
+      const retries = classificationForTeam === 'sld_image' && teamId === 'TEAM-SLD' ? 0 : 2;
+      return dispatchWithRetry(teamId, input, deps, retries).catch(err => ({
         teamId: teamId as TeamResult['teamId'],
         success: false,
         confidence: 0,
         durationMs: 0,
         error: err instanceof Error ? err.message : String(err),
-      } as TeamResult))
-    );
+      } as TeamResult));
+    });
 
     const teamResults = await Promise.all(teamPromises);
     if (request.signal?.aborted) throw abortError();
@@ -220,13 +262,9 @@ export async function runOrchestrator(
       let report: ESVAVerifiedReport | undefined;
 
       if (drawingSynthesis) {
-        const missingRoles = [...drawingSynthesis.missingRoles].sort((left, right) => left.localeCompare(right));
-        if (missingRoles.length > 0) {
-          consensus.reason = `원본 격리 심사 필수 역할 누락: ${missingRoles.join(', ')}. 사람 검토가 필요합니다.`;
-        } else if (!drawingSynthesis.reviewIntegrity.coverageComplete
-          || drawingSynthesis.reviewIntegrity.roleFailures.length > 0
-          || drawingSynthesis.stages.normalizer !== 'COMPLETE') {
-          consensus.reason = '원본 격리 심사 무결성이 불완전하여 사람 검토가 필요합니다.';
+        const blocked = synthesisBlockReason(drawingSynthesis);
+        if (blocked) {
+          consensus.reason = blocked;
         } else {
           consensus.executed = true;
           consensus.reason = '원본 격리 심사 4개를 메인 종합 단계에서 대조했습니다.';
@@ -259,6 +297,9 @@ export async function runOrchestrator(
 
     // Step 4: 합의는 서로 다른 전문팀이 2개 이상 성공한 경우에만 실행한다.
     // 같은 TEAM-STD 구현을 두 번 호출해 독립 협의체처럼 세던 경로는 제거했다.
+    // mixed 이미지에서는 계통도팀이 격리 심사를 돌았을 수 있다. 그 종합 결과(불합격·사람 검토
+    // 필요)를 합의 단계와 응답에 그대로 넘긴다 — 버리면 심사 FAIL 이 보고서에서 사라진다.
+    const drawingSynthesis = teamResults.find((result) => result.teamId === 'TEAM-SLD')?.drawingSynthesis;
     let report: ESVAVerifiedReport | undefined;
     const participatingTeams = [...new Set(
       teamResults
@@ -282,13 +323,16 @@ export async function runOrchestrator(
           projectName: request.projectName ?? '미지정 프로젝트',
           projectType: request.projectType ?? '전기 설비',
           teamResults,
+          drawingSynthesis,
         });
       if (request.signal?.aborted) throw abortError();
 
       teamResults.push(consensusResult);
       report = verifiedReport;
-      consensus.executed = true;
-      consensus.reason = '서로 다른 전문팀 결과를 합의·출력 단계에서 병합했습니다.';
+      // 심사 종합 결과가 불완전하면 보고서는 내되 합의 완료로 세지 않는다.
+      const blocked = drawingSynthesis ? synthesisBlockReason(drawingSynthesis) : null;
+      consensus.executed = blocked === null;
+      consensus.reason = blocked ?? '서로 다른 전문팀 결과를 합의·출력 단계에서 병합했습니다.';
     }
 
     return {
@@ -297,6 +341,7 @@ export async function runOrchestrator(
       teamResults,
       consensus,
       report,
+      ...(drawingSynthesis ? { drawingSynthesis } : {}),
       durationMs: Date.now() - start,
     };
   } catch (err) {

@@ -70,3 +70,27 @@ BEGIN
  PERFORM pg_temp.assert_true(NOT has_function_privilege('authenticated','public.create_project_atomic(text,text,text,uuid)','EXECUTE'),'browser auth role cannot forge a project owner through RPC');
  PERFORM pg_temp.assert_true(has_function_privilege('service_role','public.resolve_project_approval(uuid,text,boolean,text)','EXECUTE'),'verified server role can resolve a review');
 END $$;
+-- 011: entry points no application path uses stay closed, and the answer counter still works through its trigger.
+DO $$
+BEGIN
+ PERFORM pg_temp.assert_true(NOT has_function_privilege('anon','public.increment_answer_count(uuid)','EXECUTE'),'anonymous role cannot inflate an answer count');
+ PERFORM pg_temp.assert_true(NOT has_function_privilege('authenticated','public.increment_answer_count(uuid)','EXECUTE'),'browser auth role cannot inflate an answer count');
+ PERFORM pg_temp.assert_true(NOT has_table_privilege('anon','public.audit_log','INSERT'),'anonymous role cannot append audit rows');
+ PERFORM pg_temp.assert_true(NOT has_table_privilege('authenticated','public.audit_log','INSERT'),'browser auth role cannot append audit rows');
+ PERFORM pg_temp.assert_true(has_table_privilege('service_role','public.audit_log','INSERT'),'server role can still append audit rows');
+ PERFORM pg_temp.assert_true(NOT EXISTS(SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='audit_log' AND policyname='audit_insert_service'),'permissive audit insert policy is gone');
+ PERFORM pg_temp.assert_true(has_function_privilege('service_role','public.increment_answer_count(uuid)','EXECUTE'),'server role keeps the answer counter');
+END $$;
+-- The insert runs as the application's role, not as the fixture superuser (a superuser skips
+-- EXECUTE checks, so the same insert as superuser could not fail). This fixture has no Supabase
+-- default grants, so the table privileges the application role needs are granted here.
+BEGIN;
+GRANT INSERT ON public.community_questions, public.community_answers TO service_role;
+SET LOCAL ROLE service_role;
+INSERT INTO public.community_questions(id,title,body,author_id) VALUES('00000000-0000-4000-8000-0000000000a1','fixture question','fixture body','owner');
+INSERT INTO public.community_answers(question_id,body,author_id) VALUES('00000000-0000-4000-8000-0000000000a1','fixture answer','editor');
+RESET ROLE;
+COMMIT;
+DO $$ BEGIN
+ PERFORM pg_temp.assert_true((SELECT answer_count=1 FROM public.community_questions WHERE id='00000000-0000-4000-8000-0000000000a1'),'answer inserted by the server role still increments the count through the trigger');
+END $$;

@@ -95,26 +95,18 @@ async function GET__impl(req: NextRequest) {
   }
 }
 
-// ─── POST: 알림 생성 (내부 서버 → 서버 또는 인증된 클라이언트) ─────────────
+// ─── POST: 알림 생성 (인증된 클라이언트 · 본인 앞으로만) ───────────────────
 
 async function POST__impl(req: NextRequest) {
   try {
     const blocked = applyRateLimit(req, 'default');
     if (blocked) return blocked;
 
-    // 내부 서버 간 호출은 공유 시크릿으로 인증. 이전의 고정 문자열('field-complete')은
-    // 누구나 헤더에 넣을 수 있어 JWT를 우회하고 임의 userId 앞 알림을 주입할 수 있었다.
-    // 시크릿 미설정 시 내부 우회를 비활성화하고 항상 JWT를 요구한다(fail-closed).
-    const internalSecret = process.env.INTERNAL_API_SECRET;
-    const isInternal = !!internalSecret &&
-      req.headers.get('x-internal-secret') === internalSecret;
-    let authenticatedUid: string | null = null;
-
-    if (!isInternal) {
-      const auth = await authenticateRequest(req);
-      if (auth instanceof NextResponse) return auth;
-      authenticatedUid = auth.uid;
-    }
+    // 서버 내부는 createNotification 을 직접 부른다. HTTP 로 들어오는 생성은 항상
+    // 로그인한 본인 앞으로만 허용한다 — 헤더로 인증을 건너뛰는 길은 두지 않는다.
+    const auth = await authenticateRequest(req);
+    if (auth instanceof NextResponse) return auth;
+    const authenticatedUid = auth.uid;
 
     const body = await req.json() as {
       userId: string;
@@ -130,7 +122,7 @@ async function POST__impl(req: NextRequest) {
     if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
       return NextResponse.json({ error: 'userId 필수' }, { status: 400 });
     }
-    if (authenticatedUid && userId !== authenticatedUid) {
+    if (userId !== authenticatedUid) {
       return NextResponse.json(
         { error: 'Forbidden: cannot create a notification for another user' },
         { status: 403 },

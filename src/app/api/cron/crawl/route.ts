@@ -44,7 +44,7 @@ async function GET__impl(request: NextRequest): Promise<NextResponse> {
     const results = await runDueJobs();
 
     const jobsRun = results.length;
-    const documentsIngested = results.reduce(
+    const documentsCrawled = results.reduce(
       (sum, r) => sum + r.documentsCount,
       0,
     );
@@ -55,7 +55,7 @@ async function GET__impl(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       ok: true,
       jobsRun,
-      documentsIngested,
+      documentsCrawled,
       errors,
       duration: Date.now() - start,
       timestamp: new Date().toISOString(),
@@ -69,7 +69,7 @@ async function GET__impl(request: NextRequest): Promise<NextResponse> {
       {
         ok: false,
         jobsRun: 0,
-        documentsIngested: 0,
+        documentsCrawled: 0,
         errors: [{ jobId: 'scheduler', error: errorMsg }],
         duration: Date.now() - start,
         timestamp: new Date().toISOString(),

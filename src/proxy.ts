@@ -70,7 +70,9 @@ export function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith('/api/')) {
-    const result = checkRateLimit(getClientIp(request.headers), 'default');
+    const profile = pathname.startsWith('/api/drawing-jobs') ? 'proxy-job' : 'proxy';
+    const limit = String(RATE_LIMIT_PROFILES[profile].maxRequests);
+    const result = checkRateLimit(getClientIp(request.headers), profile);
 
     if (!result.allowed) {
       const response = NextResponse.json(
@@ -85,7 +87,7 @@ export function proxy(request: NextRequest) {
           status: 429,
           headers: {
             'Retry-After': String(result.retryAfter ?? 60),
-            'X-RateLimit-Limit': String(RATE_LIMIT_PROFILES.default.maxRequests),
+            'X-RateLimit-Limit': limit,
             'X-RateLimit-Remaining': '0',
             'x-esa-request-id': requestId,
           },
@@ -96,7 +98,7 @@ export function proxy(request: NextRequest) {
     }
 
     const response = NextResponse.next();
-    response.headers.set('X-RateLimit-Limit', String(RATE_LIMIT_PROFILES.default.maxRequests));
+    response.headers.set('X-RateLimit-Limit', limit);
     response.headers.set('X-RateLimit-Remaining', String(result.remaining));
     response.headers.set('x-esa-request-id', requestId);
     applySecurityHeaders(response);

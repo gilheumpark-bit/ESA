@@ -6,7 +6,7 @@ import { withRequestLog } from '@/lib/api/with-request-log';
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
 async function GET__impl(request: NextRequest) {
-  const blocked = applyRateLimit(request, 'default');
+  const blocked = applyRateLimit(request, 'admin');
   if (blocked) return blocked;
   const uid = await extractVerifiedUserId(request);
   if (!uid) return json({ success: false, error: { message: '로그인이 필요합니다.' } }, 401);

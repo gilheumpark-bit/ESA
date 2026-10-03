@@ -38,6 +38,13 @@ export const RATE_LIMIT_PROFILES: Record<string, RateLimitProfile> = {
   notarize:   { maxRequests: 5,  windowMs: 60_000 },
   admin:      { maxRequests: 30, windowMs: 60_000 },
   default:    { maxRequests: 60, windowMs: 60_000 },
+  // 바깥(proxy) 한도. 라우트의 'default' 와 숫자는 같지만 버킷이 다르다 —
+  // 같은 키를 쓰면 요청 하나가 바깥과 라우트에서 두 번 세어질 수 있다.
+  proxy:      { maxRequests: 60, windowMs: 60_000 },
+  // /api/drawing-jobs 전용 바깥 한도. 화면이 작업 상태를 1.5초마다 조회하므로
+  // 일반 바깥 한도를 같이 쓰면 조회만으로 한도가 차고, 라우트의 'sld-job'(120)은
+  // 닿지 않는다. 작업 생성·정정은 라우트의 'sld'(10)가 그대로 막는다.
+  'proxy-job': { maxRequests: 240, windowMs: 60_000 },
 } as const;
 
 // ─── PART 2: Storage ─────────────────────────────────────────

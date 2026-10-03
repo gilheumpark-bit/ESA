@@ -2,18 +2,18 @@
 schemaVersion: 1
 project: ESA
 status: active
-baselineBranch: feat/ax-precision-20260907
-codeBaselineCommit: 690ad046dd7f77cb84d5517a5b197fa7d8663752
-updatedAt: 2026-09-09T15:00:00+09:00
+baselineBranch: audit/full-20261003
+codeBaselineCommit: 2990de29bbbed94d2d7d8e10ed89c7f45950d7e3
+updatedAt: 2026-10-03T18:00:00+09:00
 trigger: files
-changedDomains: [agent, engine, scripts, config, docs]
+changedDomains: [agent, app, lib, components, supabase, scripts, config, docs]
 ---
 
 # ESA 프로젝트 상태
 
 ## 기준과 제품 경계
 
-위 SHA는 개발 잔재·기술부채 정리의 **출발 코드**이며 이 문서 자신의 커밋이나 main 병합을 뜻하지 않는다. PR #71 작업 브랜치와 main은 별개다. 최종 검증은 정확한 제품 HEAD와 CI를 함께 확인한다.
+위 SHA는 2026-10-03 전수 감사(배선·미연결·부채)의 **출발 코드**이며 이 문서 자신의 커밋이나 main 병합을 뜻하지 않는다. PR #71 작업 브랜치와 main은 별개다. 최종 검증은 정확한 제품 HEAD와 CI를 함께 확인한다.
 
 ESA는 전기 검색·결정론적 계산·도면 분석·전문팀 검토와 근거 보고서 도구다. 설계 승인·법적 적합성 인증서가 아니며 도면에 없는 입력을 추정해 확정하지 않는다. 수량 일치·합성 회귀 통과·모델 확신도와 독립 실도면 정확도를 구분한다.
 
@@ -41,7 +41,8 @@ ESA는 전기 검색·결정론적 계산·도면 분석·전문팀 검토와 �
 | `9e2603a7` | [프런트엔드 목록·버튼·오류 복구](docs/project/handoffs/2026-09-08-frontend-controls.md) |
 | `ea11b447` | [선택 구획·공간 색인·준비 재사용](docs/project/handoffs/2026-09-09-drawing-performance.md) |
 | `690ad046` | [보안 패치·단계 대기·인증 복원](docs/project/handoffs/2026-09-09-remaining-security-scheduling.md) |
-| 이번 정리 | [잔재·의존성·유지보수 검사](docs/project/handoffs/2026-09-09-development-debt-cleanup.md) |
+| 2026-09-09 정리 | [잔재·의존성·유지보수 검사](docs/project/handoffs/2026-09-09-development-debt-cleanup.md) |
+| 2026-10-03 감사 | [배선·미구현·미연결·부채 전수 감사](docs/project/handoffs/2026-10-03-full-wiring-debt-audit.md) |
 
 ## 열린 부채
 
@@ -50,6 +51,7 @@ ESA는 전기 검색·결정론적 계산·도면 분석·전문팀 검토와 �
 - `DEBT-SAFETY-001`: 절연장갑 Class 1~4의 출처·판본·근거 화면 연결. 값이나 필터를 임의 변경하지 않았다.
 - `DEBT-UI-001` / `UIV-001`: 재계산 후 영수증이 남는 간헐 브라우저 실패. 반복 통과만으로 원인 수리로 종결하지 않는다.
 - `DEBT-ARCH-001`: 빠른 분석과 전체 작업의 공통 파싱·상태 공유. 단순 병렬 호출로 사용량을 늘리지 않고 권한·결과·취소·재개 계약부터 통합한다.
+- 2026-10-03 에 등록한 7건(`DEBT-CALC-001` 아크플래시 물리 위반, `DEBT-STD-001`, `DEBT-API-001`, `DEBT-DEP-001`, `DEBT-TEST-001`, `DEBT-DRAW-001`, `DEBT-DRAW-002`)은 대장 본문을 따른다.
 
 ## 검증 상태와 한계
 

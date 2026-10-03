@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { verifyIdToken } from '@/lib/firebase-id-token';
 import { createNotification, markRead } from '@/lib/notifications';
@@ -64,5 +65,32 @@ describe('/api/notifications ownership boundary', () => {
 
     expect(response.status).toBe(403);
     expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 공유 시크릿 헤더로 로그인 없이 임의 사용자 앞 알림을 만들 수 있는 길이 있었다.
+   * 그 헤더를 보내는 호출자는 저장소 어디에도 없었다(서버 내부는 createNotification 을
+   * 직접 부른다). 쓰는 곳 없는 우회로는 시크릿이 새는 날 그대로 공격면이 된다.
+   */
+  test('공유 시크릿 헤더는 로그인을 대신하지 못한다', async () => {
+    const previous = process.env.INTERNAL_API_SECRET;
+    const probe = randomUUID();
+    process.env.INTERNAL_API_SECRET = probe;
+    try {
+      const response = await POST(new NextRequest('http://localhost:3000/api/notifications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': probe,
+        },
+        body: JSON.stringify({ userId: 'user-b', type: 'system', title: 'forged notice' }),
+      }));
+
+      expect(response.status).toBe(401);
+      expect(mockCreateNotification).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.INTERNAL_API_SECRET;
+      else process.env.INTERNAL_API_SECRET = previous;
+    }
   });
 });

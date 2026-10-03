@@ -301,31 +301,3 @@ async function getCalcResult(url) {
     return null;
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Push notification handler (stub for future use)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  try {
-    const payload = event.data.json();
-    event.waitUntil(
-      self.registration.showNotification(payload.title ?? 'ESA', {
-        body: payload.body ?? '',
-        icon: '/icons/icon-192x192.png',
-        badge: '/icons/icon-72x72.png',
-        data: payload.data,
-      })
-    );
-  } catch {
-    // Ignore malformed push payloads
-  }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const url = event.notification.data?.url ?? '/';
-  event.waitUntil(self.clients.openWindow(url));
-});

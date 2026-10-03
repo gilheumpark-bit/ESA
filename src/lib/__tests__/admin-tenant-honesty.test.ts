@@ -21,6 +21,7 @@ import { join } from 'node:path';
 const REPO = join(__dirname, '..', '..', '..');
 const ROUTE = readFileSync(join(REPO, 'src/app/api/admin/route.ts'), 'utf8');
 const PAGE = readFileSync(join(REPO, 'src/app/(with-nav)/admin/page.tsx'), 'utf8');
+const SUPABASE = readFileSync(join(REPO, 'src/lib/supabase.ts'), 'utf8');
 
 describe('관리자 테넌트 — 없는 것을 만들지 않는다', () => {
   it('라우트가 테넌트를 목업으로 채우지 않는다', () => {
@@ -51,7 +52,10 @@ describe('관리자 테넌트 — 없는 것을 만들지 않는다', () => {
   });
 
   it('관리자만 볼 수 있다 — 테넌트 구성이 아무에게나 새지 않는다', () => {
-    expect(ROUTE).toContain("data?.role === 'admin'");
+    // 역할 확인은 `isUserAdmin` 한 곳에 있다(계정 등급 API 도 같은 함수를 쓴다).
+    // 라우트가 그 함수를 거치는지와, 함수가 실제로 역할을 대조하는지를 함께 본다.
+    expect(ROUTE).toContain('await isUserAdmin(uid)');
+    expect(SUPABASE).toMatch(/export async function isUserAdmin[\s\S]{0,400}data\?\.role === 'admin'/);
     expect(ROUTE).toMatch(/status:\s*403/);
     expect(ROUTE).toMatch(/status:\s*401/);
   });

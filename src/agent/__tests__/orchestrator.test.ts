@@ -76,45 +76,6 @@ describe('Team Routing', () => {
   });
 });
 
-describe('Team Registry', () => {
-  test('getAllTeams returns 4 teams', () => {
-    const { getAllTeams } = require('../teams/team-registry');
-    expect(getAllTeams()).toHaveLength(4);
-  });
-
-  test('consensus required teams = 3', () => {
-    const { getConsensusRequiredTeams } = require('../teams/team-registry');
-    const teams = getConsensusRequiredTeams();
-    expect(teams).toHaveLength(3);
-    expect(teams).toContain('TEAM-SLD');
-    expect(teams).toContain('TEAM-LAYOUT');
-    expect(teams).toContain('TEAM-STD');
-  });
-
-  test('each team has config', () => {
-    const { getTeamConfig } = require('../teams/team-registry');
-    const teams = ['TEAM-SLD', 'TEAM-LAYOUT', 'TEAM-STD', 'TEAM-CONSENSUS'] as const;
-    for (const id of teams) {
-      const config = getTeamConfig(id);
-      expect(config.id).toBe(id);
-      expect(config.name).toBeTruthy();
-      expect(config.nameKo).toBeTruthy();
-      expect(config.timeoutMs).toBeGreaterThan(0);
-    }
-  });
-
-  test('each team has capabilities', () => {
-    const { getTeamCapability } = require('../teams/team-registry');
-    const teams = ['TEAM-SLD', 'TEAM-LAYOUT', 'TEAM-STD', 'TEAM-CONSENSUS'] as const;
-    for (const id of teams) {
-      const cap = getTeamCapability(id);
-      expect(cap.teamId).toBe(id);
-      expect(cap.tools.length).toBeGreaterThan(0);
-      expect(cap.dataScope.length).toBeGreaterThan(0);
-    }
-  });
-});
-
 describe('Consensus Team', () => {
   test('computeScore returns 50 for 0 checks', async () => {
     const { executeConsensusTeam } = require('../teams/consensus-team');

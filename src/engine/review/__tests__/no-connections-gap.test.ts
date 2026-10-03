@@ -84,9 +84,10 @@ describe('연결 전무 — 계통 판정 불가 선언', () => {
    * ⑥ 실측 표를 실제로 읽는다. 주석의 숫자가 표와 어긋나면 여기서 깨진다 —
    * 근거를 적어 놓고 표가 바뀌는 것이 이 프로젝트의 실패 모드였다.
    */
-  it('⑥ 실측 영수증에서 연결 0 과 대량 오독이 실제로 겹친다', () => {
-    const p = join(__dirname, '..', '..', '..', '..', 'test-results', 'scan-tier-results.json');
-    if (!existsSync(p)) return; // 영수증은 gitignore 대상일 수 있다 — 없으면 건너뛴다.
+  // 영수증은 gitignore 대상이라 CI 에는 없다. 없을 때 조용히 통과시키지 않고 «건너뜀» 으로 드러낸다.
+  const RECEIPT = join(__dirname, '..', '..', '..', '..', 'test-results', 'scan-tier-results.json');
+  (existsSync(RECEIPT) ? it : it.skip)('⑥ 실측 영수증에서 연결 0 과 대량 오독이 실제로 겹친다', () => {
+    const p = RECEIPT;
 
     const runs = (JSON.parse(readFileSync(p, 'utf8')).results as Array<{
       status: number; connections?: number; breakers?: number; label?: { breakers?: number };

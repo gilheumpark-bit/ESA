@@ -221,7 +221,9 @@ async function POST__impl(request: NextRequest) {
       ip: clientIp,
     }).catch(() => undefined);
 
-    // Save to Supabase if user is authenticated
+    // Save to Supabase if user is authenticated.
+    // null = 저장 대상 아님(비로그인) · true = 계정에 저장됨 · false = 저장 실패.
+    let persisted: boolean | null = null;
     if (userId) {
       try {
         await saveCalculation(userId, {
@@ -265,9 +267,12 @@ async function POST__impl(request: NextRequest) {
             engineVersion: receipt.engineVersion,
           },
         });
+        persisted = true;
       } catch (saveErr) {
-        // Non-blocking: log but don't fail the response
-        console.warn('[ESVA /api/calculate] Save failed:', saveErr);
+        // 계산은 맞게 끝났으므로 응답을 실패시키지 않는다. 대신 저장되지 않았다는
+        // 사실을 응답에 싣는다 — 숨기면 화면이 탭 보관본으로 저장된 것처럼 보여 준다.
+        persisted = false;
+        console.warn('[ESVA /api/calculate] Save failed:', saveErr instanceof Error ? saveErr.message : 'unknown');
       }
     }
 
@@ -284,6 +289,7 @@ async function POST__impl(request: NextRequest) {
           result: calcResult,
           receipt,
           relatedCalculators,
+          persisted,
         },
       },
       {

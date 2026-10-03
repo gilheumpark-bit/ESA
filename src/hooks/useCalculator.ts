@@ -23,6 +23,8 @@ export interface UseCalculatorReturn {
   execute: (inputs: Record<string, unknown>) => Promise<void>;
   result: DetailedCalcResult | null;
   receipt: Receipt | null;
+  /** 로그인 사용자의 계산이 계정에 저장되지 않았을 때만 true. */
+  saveFailed: boolean;
   isLoading: boolean;
   error: string | null;
   reset: () => void;
@@ -31,6 +33,7 @@ export interface UseCalculatorReturn {
 interface CalculateApiResponse {
   result: DetailedCalcResult;
   receipt: Receipt;
+  persisted?: boolean | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -45,6 +48,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
   const identityPending = authLoading && !user;
   const [result, setResult] = useState<DetailedCalcResult | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The account the visible result belongs to (undefined = no result yet).
@@ -62,6 +66,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
     setResultScope(undefined);
     setResult(null);
     setReceipt(null);
+    setSaveFailed(false);
     setError(null);
     setIsLoading(false);
   }, [uid, identityPending]);
@@ -80,6 +85,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
       setResultScope(uid);
       setResult(null);
       setReceipt(null);
+      setSaveFailed(false);
       setIsLoading(true);
       setError(null);
 
@@ -113,6 +119,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         if (controller.signal.aborted || activeRequestRef.current !== controller) return;
         setResult(data.result);
         setReceipt(data.receipt);
+        setSaveFailed(data.persisted === false);
 
         // Cache receipt client-side for offline export support
         if (data.receipt) {
@@ -125,6 +132,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
         setError(message);
         setResult(null);
         setReceipt(null);
+        setSaveFailed(false);
       } finally {
         if (activeRequestRef.current === controller) {
           activeRequestRef.current = null;
@@ -153,6 +161,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
     setPendingInputs(null);
     setResult(null);
     setReceipt(null);
+    setSaveFailed(false);
     setError(null);
     setIsLoading(false);
   }, []);
@@ -163,6 +172,7 @@ export function useCalculator(calculatorId: string): UseCalculatorReturn {
     execute,
     result: current ? result : null,
     receipt: current ? receipt : null,
+    saveFailed: current && saveFailed,
     isLoading: (identityPending && pendingInputs !== null) || (current && isLoading),
     error: current ? error : null,
     reset,
